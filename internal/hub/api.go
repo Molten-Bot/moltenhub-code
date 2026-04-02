@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,15 @@ type apiAttempt struct {
 	Method string
 	Path   string
 	Body   any
+}
+
+var errNoPulledMessage = errors.New("no pulled message")
+
+// PulledOpenClawMessage is one leased inbound message from pull transport.
+type PulledOpenClawMessage struct {
+	DeliveryID string
+	MessageID  string
+	Message    map[string]any
 }
 
 // APIClient wraps hub HTTP interactions.
@@ -37,29 +47,38 @@ func NewAPIClient(baseURL string) APIClient {
 }
 
 // ResolveAgentToken picks a working agent token from init config and bind flow.
-func (c APIClient) ResolveAgentToken(ctx context.Context, cfg InitConfig) (string, error) {
-	if strings.TrimSpace(cfg.AgentToken) != "" {
-		if c.verifyToken(ctx, cfg.AgentToken) {
-			return cfg.AgentToken, nil
+func (c *APIClient) ResolveAgentToken(ctx context.Context, cfg InitConfig) (string, error) {
+	if c == nil {
+		return "", fmt.Errorf("api client is required")
+	}
+
+	agentToken := strings.TrimSpace(cfg.AgentToken)
+	if agentToken != "" {
+		if c.verifyToken(ctx, agentToken) {
+			c.logf("hub.auth source=agent_config status=verified")
+		} else {
+			c.logf("hub.auth source=agent_config status=unverified")
 		}
-		c.logf("hub.auth source=agent_config status=invalid")
+		return agentToken, nil
 	}
 
-	if strings.TrimSpace(cfg.BindToken) == "" {
-		return "", fmt.Errorf("missing bind_token and usable agent_token")
+	bindToken := strings.TrimSpace(cfg.BindToken)
+	if bindToken == "" {
+		return "", fmt.Errorf("missing bind_token and agent_token")
 	}
 
-	bound, err := c.bindTokenFlow(ctx, cfg.BindToken)
+	bound, err := c.bindTokenFlow(ctx, bindToken)
 	if err != nil {
 		return "", err
 	}
 	if c.verifyToken(ctx, bound) {
 		return bound, nil
 	}
-	return "", fmt.Errorf("resolved token failed verification")
+	c.logf("hub.auth source=bind status=unverified")
+	return bound, nil
 }
 
-func (c APIClient) bindTokenFlow(ctx context.Context, bindToken string) (string, error) {
+func (c *APIClient) bindTokenFlow(ctx context.Context, bindToken string) (string, error) {
 	bindToken = strings.TrimSpace(bindToken)
 	if bindToken == "" {
 		return "", fmt.Errorf("bind token is empty")
@@ -90,6 +109,9 @@ func (c APIClient) bindTokenFlow(ctx context.Context, bindToken string) (string,
 
 		if status/100 == 2 {
 			if token := extractTokenFromJSON(body); token != "" {
+				if apiBase := extractAPIBaseFromJSON(body); apiBase != "" {
+					c.BaseURL = strings.TrimRight(apiBase, "/")
+				}
 				c.logf("hub.auth attempt=%s status=ok credential=exchanged", attempt.name)
 				return token, nil
 			}
@@ -160,13 +182,89 @@ func (c APIClient) RegisterRuntime(ctx context.Context, token string, cfg InitCo
 	return nil
 }
 
-// PublishResult posts a skill result fallback when websocket publish fails.
+// PublishResult posts a skill result using OpenClaw publish transport.
 func (c APIClient) PublishResult(ctx context.Context, token string, payload map[string]any) error {
+	body := map[string]any{
+		"message": payload,
+	}
+	if toAgentURI := firstString(payload["to_agent_uri"]); toAgentURI != "" {
+		body["to_agent_uri"] = toAgentURI
+	} else if toAgentUUID := firstString(payload["to_agent_uuid"], payload["to"], payload["reply_to"]); toAgentUUID != "" {
+		body["to_agent_uuid"] = toAgentUUID
+	}
+	if requestID := firstString(payload["request_id"]); requestID != "" {
+		body["client_msg_id"] = requestID
+	}
+
 	ok, trace := c.tryAny(ctx, token, []apiAttempt{
-		{Method: http.MethodPost, Path: "/openclaw/messages/publish", Body: payload},
+		{Method: http.MethodPost, Path: "/openclaw/messages/publish", Body: body},
 	})
 	if !ok {
 		return fmt.Errorf("publish result failed: %s", trace)
+	}
+	return nil
+}
+
+// PullOpenClawMessage claims the next OpenClaw envelope using long-poll transport.
+func (c APIClient) PullOpenClawMessage(ctx context.Context, token string, timeoutMs int) (PulledOpenClawMessage, bool, error) {
+	query := ""
+	if timeoutMs < 0 {
+		timeoutMs = 0
+	}
+	if timeoutMs > 30000 {
+		timeoutMs = 30000
+	}
+	if timeoutMs > 0 {
+		query = fmt.Sprintf("?timeout_ms=%d", timeoutMs)
+	}
+
+	status, body, err := c.doJSON(ctx, http.MethodGet, "/openclaw/messages/pull"+query, token, nil)
+	if err != nil {
+		return PulledOpenClawMessage{}, false, err
+	}
+	switch status {
+	case http.StatusNoContent:
+		return PulledOpenClawMessage{}, false, nil
+	case http.StatusOK:
+		msg, err := parsePulledOpenClawMessage(body)
+		if err != nil {
+			if errors.Is(err, errNoPulledMessage) {
+				return PulledOpenClawMessage{}, false, nil
+			}
+			return PulledOpenClawMessage{}, false, err
+		}
+		return msg, true, nil
+	default:
+		return PulledOpenClawMessage{}, false, fmt.Errorf("pull status=%d", status)
+	}
+}
+
+// AckOpenClawDelivery acknowledges a leased pull delivery.
+func (c APIClient) AckOpenClawDelivery(ctx context.Context, token, deliveryID string) error {
+	deliveryID = strings.TrimSpace(deliveryID)
+	if deliveryID == "" {
+		return fmt.Errorf("delivery id is required")
+	}
+	ok, trace := c.tryAny(ctx, token, []apiAttempt{
+		{Method: http.MethodPost, Path: "/openclaw/messages/ack", Body: map[string]any{"delivery_id": deliveryID}},
+	})
+	if !ok {
+		return fmt.Errorf("ack delivery failed: %s", trace)
+	}
+	return nil
+}
+
+// NackOpenClawDelivery releases a leased pull delivery back to the queue.
+func (c APIClient) NackOpenClawDelivery(ctx context.Context, token, deliveryID string) error {
+	deliveryID = strings.TrimSpace(deliveryID)
+	if deliveryID == "" {
+		return fmt.Errorf("delivery id is required")
+	}
+	ok, trace := c.tryAny(ctx, token, []apiAttempt{
+		{Method: http.MethodPost, Path: "/openclaw/messages/nack", Body: map[string]any{"delivery_id": deliveryID}},
+	})
+	if !ok {
+		return fmt.Errorf("nack delivery failed: %s", trace)
 	}
 	return nil
 }
@@ -292,6 +390,130 @@ func extractTokenFromJSON(body []byte) string {
 	return extractTokenFromAny(parsed)
 }
 
+func extractAPIBaseFromJSON(body []byte) string {
+	if len(bytes.TrimSpace(body)) == 0 {
+		return ""
+	}
+	var parsed any
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return ""
+	}
+	return extractAPIBaseFromAny(parsed)
+}
+
+func parsePulledOpenClawMessage(body []byte) (PulledOpenClawMessage, error) {
+	if len(bytes.TrimSpace(body)) == 0 {
+		return PulledOpenClawMessage{}, errNoPulledMessage
+	}
+
+	var root map[string]any
+	if err := json.Unmarshal(body, &root); err != nil {
+		return PulledOpenClawMessage{}, fmt.Errorf("decode pull body: %w", err)
+	}
+
+	result := root
+	if nested, ok := root["result"].(map[string]any); ok {
+		result = nested
+	}
+
+	deliveryID := firstNonEmpty(
+		stringAt(result, "delivery_id"),
+		stringAt(root, "delivery_id"),
+		stringAtPath(result, "delivery", "id"),
+	)
+	message := extractPulledMessage(result, root)
+	if deliveryID == "" {
+		if len(message) == 0 {
+			return PulledOpenClawMessage{}, errNoPulledMessage
+		}
+		return PulledOpenClawMessage{}, fmt.Errorf("pull response missing delivery_id")
+	}
+	if len(message) == 0 {
+		return PulledOpenClawMessage{}, fmt.Errorf("pull response missing openclaw message")
+	}
+
+	return PulledOpenClawMessage{
+		DeliveryID: deliveryID,
+		MessageID: firstNonEmpty(
+			stringAt(result, "message_id"),
+			stringAt(root, "message_id"),
+			stringAtPath(result, "openclaw_message", "message_id"),
+			stringAt(message, "message_id"),
+			stringAt(message, "id"),
+		),
+		Message: message,
+	}, nil
+}
+
+func extractPulledMessage(result, root map[string]any) map[string]any {
+	candidates := []any{
+		valueAt(result, "openclaw_message", "message"),
+		valueAt(result, "message"),
+		valueAt(result, "openclaw_message"),
+		valueAt(root, "openclaw_message", "message"),
+		valueAt(root, "message"),
+		valueAt(root, "openclaw_message"),
+	}
+	for _, candidate := range candidates {
+		msg := toMap(candidate)
+		if len(msg) == 0 {
+			continue
+		}
+		// Some transports wrap the real envelope under message.message.
+		if nested := toMap(msg["message"]); len(nested) > 0 && looksLikeDispatchEnvelope(nested) {
+			return nested
+		}
+		return msg
+	}
+	return nil
+}
+
+func looksLikeDispatchEnvelope(msg map[string]any) bool {
+	return firstNonEmpty(
+		stringAt(msg, "type"),
+		stringAt(msg, "event"),
+		stringAt(msg, "message_type"),
+		stringAt(msg, "skill"),
+		stringAt(msg, "skill_name"),
+	) != ""
+}
+
+func toMap(v any) map[string]any {
+	switch typed := v.(type) {
+	case map[string]any:
+		return typed
+	case string:
+		trimmed := strings.TrimSpace(typed)
+		if trimmed == "" {
+			return nil
+		}
+		var parsed map[string]any
+		if err := json.Unmarshal([]byte(trimmed), &parsed); err == nil {
+			return parsed
+		}
+	}
+	return nil
+}
+
+func valueAt(root map[string]any, path ...string) any {
+	if len(path) == 0 || root == nil {
+		return root
+	}
+	var current any = root
+	for _, p := range path {
+		m, ok := current.(map[string]any)
+		if !ok {
+			return nil
+		}
+		next, ok := m[p]
+		if !ok {
+			return nil
+		}
+		current = next
+	}
+	return current
+}
+
 func extractTokenFromAny(v any) string {
 	switch typed := v.(type) {
 	case map[string]any:
@@ -318,6 +540,33 @@ func extractTokenFromAny(v any) string {
 		for _, entry := range typed {
 			if token := extractTokenFromAny(entry); token != "" {
 				return token
+			}
+		}
+	}
+	return ""
+}
+
+func extractAPIBaseFromAny(v any) string {
+	switch typed := v.(type) {
+	case map[string]any:
+		for _, key := range []string{"api_base", "apiBase", "base_url", "baseUrl"} {
+			if raw, ok := typed[key]; ok {
+				if base, ok := raw.(string); ok && strings.TrimSpace(base) != "" {
+					return strings.TrimSpace(base)
+				}
+			}
+		}
+		for _, key := range []string{"data", "result", "agent", "payload"} {
+			if nested, ok := typed[key]; ok {
+				if base := extractAPIBaseFromAny(nested); base != "" {
+					return base
+				}
+			}
+		}
+	case []any:
+		for _, entry := range typed {
+			if base := extractAPIBaseFromAny(entry); base != "" {
+				return base
 			}
 		}
 	}

@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -16,7 +17,7 @@ type SkillDispatch struct {
 	Config    config.Config
 }
 
-// ParseSkillDispatch parses a websocket JSON message into a runnable dispatch.
+// ParseSkillDispatch parses an inbound transport JSON message into a runnable dispatch.
 func ParseSkillDispatch(msg map[string]any, expectedType, expectedSkill string) (SkillDispatch, bool, error) {
 	if len(msg) == 0 {
 		return SkillDispatch{}, false, nil
@@ -32,10 +33,6 @@ func ParseSkillDispatch(msg map[string]any, expectedType, expectedSkill string) 
 		stringAtPath(msg, "data", "type"),
 		stringAtPath(msg, "data", "event"),
 	)
-	if strings.TrimSpace(expectedType) != "" && eventType != "" && !strings.EqualFold(eventType, expectedType) {
-		return SkillDispatch{}, false, nil
-	}
-
 	skillName := firstNonEmpty(
 		stringAt(msg, "skill"),
 		stringAt(msg, "skill_name"),
@@ -47,17 +44,14 @@ func ParseSkillDispatch(msg map[string]any, expectedType, expectedSkill string) 
 		stringAtPath(msg, "data", "skill_name"),
 		stringAtPath(msg, "data", "name"),
 	)
-	if strings.TrimSpace(expectedSkill) != "" {
+	expectedSkill = strings.TrimSpace(expectedSkill)
+	if expectedSkill != "" {
 		if skillName == "" {
-			skillName = strings.TrimSpace(expectedSkill)
-		} else if !strings.EqualFold(skillName, expectedSkill) {
 			return SkillDispatch{}, false, nil
 		}
-	}
-
-	configValue, ok := extractConfigValue(msg)
-	if !ok {
-		return SkillDispatch{}, false, nil
+		if !strings.EqualFold(skillName, expectedSkill) {
+			return SkillDispatch{}, false, nil
+		}
 	}
 
 	dispatch := SkillDispatch{
@@ -85,6 +79,21 @@ func ParseSkillDispatch(msg map[string]any, expectedType, expectedSkill string) 
 		),
 	}
 
+	expectedType = strings.TrimSpace(expectedType)
+	if expectedType != "" {
+		if eventType == "" {
+			return dispatch, true, fmt.Errorf("missing dispatch type")
+		}
+		if !strings.EqualFold(eventType, expectedType) {
+			return dispatch, true, fmt.Errorf("unexpected dispatch type %q", eventType)
+		}
+	}
+
+	configValue, ok := extractConfigValue(msg)
+	if !ok {
+		return dispatch, true, fmt.Errorf("missing run config payload")
+	}
+
 	cfg, err := parseRunConfigValue(configValue)
 	if err != nil {
 		return dispatch, true, err
@@ -94,28 +103,25 @@ func ParseSkillDispatch(msg map[string]any, expectedType, expectedSkill string) 
 }
 
 func parseRunConfigValue(v any) (config.Config, error) {
-	if path, ok := v.(string); ok && strings.TrimSpace(path) != "" {
-		return config.Load(strings.TrimSpace(path))
+	m, ok := v.(map[string]any)
+	if !ok {
+		return config.Config{}, fmt.Errorf("run config payload must be a JSON object")
 	}
 
-	if m, ok := v.(map[string]any); ok {
-		if path := firstNonEmpty(stringAt(m, "config_path"), stringAt(m, "path")); path != "" && !looksLikeRunConfigMap(m) {
-			return config.Load(path)
-		}
-	}
-
-	encoded, err := json.Marshal(v)
+	encoded, err := json.Marshal(m)
 	if err != nil {
 		return config.Config{}, fmt.Errorf("marshal run config payload: %w", err)
 	}
 
 	var cfg config.Config
-	if err := json.Unmarshal(encoded, &cfg); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(encoded))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&cfg); err != nil {
 		return config.Config{}, fmt.Errorf("decode run config payload: %w", err)
 	}
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
-		return config.Config{}, err
+		return config.Config{}, fmt.Errorf("validate run config payload: %w", err)
 	}
 	return cfg, nil
 }
@@ -123,17 +129,11 @@ func parseRunConfigValue(v any) (config.Config, error) {
 func extractConfigValue(msg map[string]any) (any, bool) {
 	paths := [][]string{
 		{"config"},
-		{"run_config"},
 		{"input"},
 		{"payload", "config"},
-		{"payload", "run_config"},
 		{"payload", "input"},
 		{"data", "config"},
-		{"data", "run_config"},
 		{"data", "input"},
-		{"config_path"},
-		{"payload", "config_path"},
-		{"data", "config_path"},
 	}
 	for _, path := range paths {
 		if value, ok := valueAtPath(msg, path...); ok {
@@ -158,9 +158,94 @@ func extractConfigValue(msg map[string]any) (any, bool) {
 }
 
 func looksLikeRunConfigMap(v map[string]any) bool {
-	prompt := firstNonEmpty(stringAt(v, "prompt"), stringAtPath(v, "config", "prompt"))
-	repo := firstNonEmpty(stringAt(v, "repo"), stringAt(v, "repo_url"), stringAt(v, "repoUrl"))
+	prompt := firstNonEmpty(stringAt(v, "prompt"))
+	repo := firstNonEmpty(stringAt(v, "repo"), stringAt(v, "repo_url"))
 	return prompt != "" && repo != ""
+}
+
+func requiredSkillPayloadSchema(dispatchType, skillName string) map[string]any {
+	dispatchType = strings.TrimSpace(dispatchType)
+	if dispatchType == "" {
+		dispatchType = "skill_request"
+	}
+	skillName = strings.TrimSpace(skillName)
+	if skillName == "" {
+		skillName = "code_for_me"
+	}
+
+	return map[string]any{
+		"dispatch_envelope": map[string]any{
+			"type":  dispatchType,
+			"skill": skillName,
+		},
+		"accepted_payload_paths": []string{
+			"config",
+			"input",
+			"payload.config",
+			"payload.input",
+			"data.config",
+			"data.input",
+		},
+		"run_config_schema": map[string]any{
+			"type":                 "object",
+			"additionalProperties": false,
+			"required":             []string{"prompt"},
+			"anyOf": []map[string]any{
+				{"required": []string{"repo"}},
+				{"required": []string{"repo_url"}},
+			},
+			"properties": map[string]any{
+				"version": map[string]any{
+					"type": "string",
+					"enum": []string{"v1"},
+				},
+				"repo": map[string]any{
+					"type":      "string",
+					"minLength": 1,
+				},
+				"repo_url": map[string]any{
+					"type":      "string",
+					"minLength": 1,
+				},
+				"base_branch": map[string]any{
+					"type":      "string",
+					"minLength": 1,
+				},
+				"target_subdir": map[string]any{
+					"type":      "string",
+					"minLength": 1,
+				},
+				"prompt": map[string]any{
+					"type":      "string",
+					"minLength": 1,
+				},
+				"commit_message": map[string]any{
+					"type":      "string",
+					"minLength": 1,
+				},
+				"pr_title": map[string]any{
+					"type":      "string",
+					"minLength": 1,
+				},
+				"pr_body": map[string]any{
+					"type":      "string",
+					"minLength": 1,
+				},
+				"labels": map[string]any{
+					"type": "array",
+					"items": map[string]any{
+						"type": "string",
+					},
+				},
+				"reviewers": map[string]any{
+					"type": "array",
+					"items": map[string]any{
+						"type": "string",
+					},
+				},
+			},
+		},
+	}
 }
 
 func valueAtPath(root map[string]any, path ...string) (any, bool) {
