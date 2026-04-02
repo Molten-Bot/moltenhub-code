@@ -1,0 +1,6 @@
+{
+  "repo": "",
+  "base_branch": "main",
+  "target_subdir": ".",
+  "prompt": "You are senior tester, and you need to get 100% test coverage on this repo. Improve unit-test coverage to meet this demand. test locally, and watch the PR and CI/CD to ensure that it passes, before you complete."
+}

@@ -1,0 +1,6 @@
+{
+  "repo": "",
+  "base_branch": "main",
+  "target_subdir": ".",
+  "prompt": "you are a security professional. your goal is to review the security boundaries this code base and document everything that could be a point of compromise. this should be a pr that creates a /docs/ that has the summary of all findings in markdown."
+}
