@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -81,14 +82,14 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 
 	h.logf("stage=preflight status=start")
 	for _, cmd := range preflightCommands() {
-		if _, err := h.Runner.Run(ctx, cmd); err != nil {
+		if _, err := h.runCommand(ctx, "preflight", cmd); err != nil {
 			return h.fail(ExitPreflight, "preflight", err, "")
 		}
 	}
 	h.logf("stage=preflight status=ok")
 
 	h.logf("stage=auth status=start")
-	if _, err := h.Runner.Run(ctx, authCommand()); err != nil {
+	if _, err := h.runCommand(ctx, "auth", authCommand()); err != nil {
 		return h.fail(ExitAuth, "auth", err, "")
 	}
 	h.logf("stage=auth status=ok")
@@ -102,7 +103,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 
 	repoDir := filepath.Join(runDir, "repo")
 	h.logf("stage=clone status=start repo=%s branch=%s", cfg.RepoURL, cfg.BaseBranch)
-	if _, err := h.Runner.Run(ctx, cloneCommand(cfg, repoDir)); err != nil {
+	if _, err := h.runCommand(ctx, "clone", cloneCommand(cfg, repoDir)); err != nil {
 		return h.fail(ExitClone, "clone", err, runDir)
 	}
 	h.logf("stage=clone status=ok")
@@ -117,7 +118,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 
 	branch := slug.BranchName(cfg.Prompt, h.Now(), guid)
 	h.logf("stage=git status=start action=branch branch=%s", branch)
-	if _, err := h.Runner.Run(ctx, branchCommand(repoDir, branch)); err != nil {
+	if _, err := h.runCommand(ctx, "git", branchCommand(repoDir, branch)); err != nil {
 		return h.fail(ExitGit, "git", err, runDir)
 	}
 
@@ -128,7 +129,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 	h.logf("stage=codex status=ok elapsed_s=%d", int(time.Since(codexStart).Seconds()))
 
-	statusRes, err := h.Runner.Run(ctx, statusCommand(repoDir))
+	statusRes, err := h.runCommand(ctx, "git", statusCommand(repoDir))
 	if err != nil {
 		return h.fail(ExitGit, "git", err, runDir)
 	}
@@ -138,19 +139,19 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 
 	h.logf("stage=git status=start action=commit")
-	if _, err := h.Runner.Run(ctx, addCommand(repoDir)); err != nil {
+	if _, err := h.runCommand(ctx, "git", addCommand(repoDir)); err != nil {
 		return h.fail(ExitGit, "git", err, runDir)
 	}
-	if _, err := h.Runner.Run(ctx, commitCommand(repoDir, cfg.CommitMessage)); err != nil {
+	if _, err := h.runCommand(ctx, "git", commitCommand(repoDir, cfg.CommitMessage)); err != nil {
 		return h.fail(ExitGit, "git", err, runDir)
 	}
-	if _, err := h.Runner.Run(ctx, pushCommand(repoDir, branch)); err != nil {
+	if _, err := h.runCommand(ctx, "git", pushCommand(repoDir, branch)); err != nil {
 		return h.fail(ExitGit, "git", err, runDir)
 	}
 	h.logf("stage=git status=ok action=commit")
 
 	h.logf("stage=pr status=start")
-	prRes, err := h.Runner.Run(ctx, prCreateCommand(repoDir, cfg, branch))
+	prRes, err := h.runCommand(ctx, "pr", prCreateCommand(repoDir, cfg, branch))
 	if err != nil {
 		return h.fail(ExitPR, "pr", err, runDir)
 	}
@@ -174,10 +175,55 @@ func (h Harness) logf(format string, args ...any) {
 	h.Logf(format, args...)
 }
 
+func (h Harness) runCommand(ctx context.Context, phase string, cmd execx.Command) (execx.Result, error) {
+	onLine := func(stream, line string) {
+		h.logf("cmd phase=%s name=%s stream=%s b64=%s", phase, cmd.Name, stream, encodeLogLine(line))
+	}
+
+	if streamRunner, ok := h.Runner.(execx.StreamRunner); ok {
+		return streamRunner.RunStream(ctx, cmd, onLine)
+	}
+
+	res, err := h.Runner.Run(ctx, cmd)
+	emitBufferedOutput(res, onLine)
+	return res, err
+}
+
+func emitBufferedOutput(res execx.Result, onLine execx.StreamLineHandler) {
+	if onLine == nil {
+		return
+	}
+	for _, line := range splitOutputLines(res.Stdout) {
+		onLine("stdout", line)
+	}
+	for _, line := range splitOutputLines(res.Stderr) {
+		onLine("stderr", line)
+	}
+}
+
+func splitOutputLines(text string) []string {
+	if text == "" {
+		return nil
+	}
+
+	lines := strings.Split(text, "\n")
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	for i := range lines {
+		lines[i] = strings.TrimSuffix(lines[i], "\r")
+	}
+	return lines
+}
+
+func encodeLogLine(line string) string {
+	return base64.StdEncoding.EncodeToString([]byte(line))
+}
+
 func (h Harness) runCodexWithHeartbeat(ctx context.Context, targetDir, prompt string) error {
 	done := make(chan error, 1)
 	go func() {
-		_, err := h.Runner.Run(ctx, codexCommand(targetDir, prompt))
+		_, err := h.runCommand(ctx, "codex", codexCommand(targetDir, prompt))
 		done <- err
 	}()
 
@@ -200,7 +246,6 @@ func (h Harness) runCodexWithHeartbeat(ctx context.Context, targetDir, prompt st
 		}
 	}
 }
-
 func resolveTargetDir(repoDir, targetSubdir string) (string, error) {
 	targetDir := filepath.Join(repoDir, filepath.Clean(targetSubdir))
 	rel, err := filepath.Rel(repoDir, targetDir)

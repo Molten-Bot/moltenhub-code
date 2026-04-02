@@ -50,6 +50,21 @@ Use the template at [`templates/init.example.json`](templates/init.example.json)
 This mode keeps one local process running, listens on hub OpenClaw websocket transport, and falls back to HTTP pull transport if websocket has an issue.
 After successful auth, it saves `./.moltenhub/config.json` with `{baseUrl, token, sessionKey, timeoutMs}` and reuses that saved token on subsequent starts (so a fresh bind token is not required every run).
 
+Hub mode now also starts a local monitor web UI by default at:
+
+```bash
+http://127.0.0.1:7777
+```
+
+Override or disable with:
+
+```bash
+./bin/harness hub --init templates/init.example.json --ui-listen :8088
+./bin/harness hub --init templates/init.example.json --ui-listen \"\"
+```
+
+The UI shows inbound hub events, per-request status, and line-by-line subprocess output (including Codex stdout/stderr) for each running dispatch.
+
 ## Multiplex Run
 
 Run multiple task configs concurrently:

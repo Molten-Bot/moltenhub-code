@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hub Monitor</title>
+  <style>
+    :root {
+      --bg: #0b111a;
+      --panel: #111c2a;
+      --panel-soft: #16263a;
+      --border: #29405b;
+      --text: #dfe7ef;
+      --muted: #94a6ba;
+      --good: #4fd38c;
+      --warn: #ffbe55;
+      --bad: #f27171;
+      --running: #51b8ff;
+      --meta: #88a2bd;
+      --accent: #f6b36a;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 0% 0%, rgba(246, 179, 106, 0.16), transparent 48%),
+        radial-gradient(circle at 100% 100%, rgba(81, 184, 255, 0.14), transparent 52%),
+        var(--bg);
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      min-height: 100vh;
+    }
+
+    .app {
+      width: min(1500px, 100%);
+      margin: 0 auto;
+      padding: 20px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .title {
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .sub {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--warn);
+      box-shadow: 0 0 0 0 rgba(255, 190, 85, 0.45);
+      animation: pulse 1.7s infinite;
+    }
+
+    .dot.online {
+      background: var(--good);
+      box-shadow: 0 0 0 0 rgba(79, 211, 140, 0.42);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(320px, 35%) minmax(420px, 1fr);
+      gap: 16px;
+      min-height: calc(100vh - 130px);
+    }
+
+    .panel {
+      border: 1px solid var(--border);
+      background: linear-gradient(170deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01)) var(--panel);
+      border-radius: 14px;
+      overflow: hidden;
+      min-height: 220px;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.14);
+      font-weight: 600;
+      font-size: 0.92rem;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .counter {
+      color: var(--accent);
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+
+    .scroll {
+      height: calc(100% - 48px);
+      overflow: auto;
+    }
+
+    .event-list,
+    .task-list {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+    }
+
+    .event {
+      border: 1px solid var(--border);
+      background: var(--panel-soft);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 0.8rem;
+      line-height: 1.35;
+    }
+
+    .event-head {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .event-kind {
+      padding: 2px 7px;
+      border-radius: 12px;
+      background: #20324a;
+      color: #abcbef;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .event-time {
+      color: var(--muted);
+      font-size: 0.72rem;
+    }
+
+    .event-line {
+      color: #c7d4e2;
+      font-family: "IBM Plex Mono", "Consolas", monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .right-col {
+      display: grid;
+      grid-template-rows: minmax(200px, 38%) minmax(260px, 1fr);
+      gap: 16px;
+    }
+
+    .task {
+      border: 1px solid var(--border);
+      background: var(--panel-soft);
+      border-radius: 10px;
+      padding: 9px 10px;
+      cursor: pointer;
+      transition: border-color .12s ease, transform .12s ease;
+    }
+
+    .task:hover {
+      border-color: #4f6f93;
+      transform: translateY(-1px);
+    }
+
+    .task.active {
+      border-color: var(--accent);
+      box-shadow: inset 0 0 0 1px rgba(246, 179, 106, 0.3);
+    }
+
+    .task-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .task-id {
+      font-family: "IBM Plex Mono", "Consolas", monospace;
+      font-size: 0.8rem;
+      color: #d9e3ee;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .badge {
+      font-size: 0.66rem;
+      letter-spacing: 0.04em;
+      font-weight: 700;
+      text-transform: uppercase;
+      border-radius: 10px;
+      padding: 3px 7px;
+      color: #10232f;
+      background: #8a9bad;
+    }
+
+    .badge.running { background: var(--running); }
+    .badge.ok { background: var(--good); }
+    .badge.no_changes { background: var(--warn); }
+    .badge.error, .badge.invalid { background: var(--bad); color: #2d1515; }
+
+    .task-meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 4px 10px;
+      color: var(--muted);
+      font-size: 0.74rem;
+    }
+
+    .log-wrap {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      height: 100%;
+    }
+
+    .task-head {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.84rem;
+      color: var(--muted);
+    }
+
+    .term {
+      margin: 0;
+      padding: 12px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.79rem;
+      line-height: 1.35;
+      font-family: "IBM Plex Mono", "Consolas", monospace;
+      color: #dbe6f2;
+      background: #0c1724;
+      height: 100%;
+    }
+
+    .meta-line {
+      color: var(--meta);
+    }
+
+    .stderr-line {
+      color: #f2b5b5;
+    }
+
+    .stdout-line {
+      color: #dbe6f2;
+    }
+
+    .placeholder {
+      color: var(--muted);
+      padding: 20px;
+      font-size: 0.9rem;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(255, 190, 85, 0.45); }
+      70% { box-shadow: 0 0 0 8px rgba(255, 190, 85, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 190, 85, 0); }
+    }
+
+    @media (max-width: 980px) {
+      .layout {
+        grid-template-columns: 1fr;
+        min-height: auto;
+      }
+      .right-col {
+        grid-template-rows: minmax(220px, 38vh) minmax(260px, 46vh);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <div>
+        <div class="title">Codex Hub Monitor</div>
+        <div class="sub">Inbound hub events + live task status + terminal output</div>
+      </div>
+      <div class="status-row">
+        <span id="conn-dot" class="dot"></span>
+        <span id="conn-text">Connecting...</span>
+      </div>
+    </div>
+
+    <div class="layout">
+      <section class="panel">
+        <div class="panel-header">
+          <span>Hub Events</span>
+          <span class="counter" id="event-count">0</span>
+        </div>
+        <div class="scroll">
+          <div id="event-list" class="event-list"></div>
+        </div>
+      </section>
+
+      <div class="right-col">
+        <section class="panel">
+          <div class="panel-header">
+            <span>Tasks</span>
+            <span class="counter" id="task-count">0</span>
+          </div>
+          <div class="scroll">
+            <div id="task-list" class="task-list"></div>
+          </div>
+        </section>
+
+        <section class="panel log-wrap">
+          <div id="task-head" class="task-head">Select a task to inspect logs</div>
+          <pre id="terminal" class="term"></pre>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      snapshot: null,
+      selectedTaskId: "",
+    };
+
+    const connDot = document.getElementById("conn-dot");
+    const connText = document.getElementById("conn-text");
+    const eventCount = document.getElementById("event-count");
+    const taskCount = document.getElementById("task-count");
+    const eventList = document.getElementById("event-list");
+    const taskList = document.getElementById("task-list");
+    const taskHead = document.getElementById("task-head");
+    const terminal = document.getElementById("terminal");
+
+    function setConnection(online, text) {
+      connDot.classList.toggle("online", online);
+      connText.textContent = text;
+    }
+
+    function relativeTime(iso) {
+      if (!iso) return "";
+      const ts = new Date(iso).getTime();
+      if (Number.isNaN(ts)) return iso;
+      const delta = Date.now() - ts;
+      const sec = Math.floor(delta / 1000);
+      if (sec < 2) return "just now";
+      if (sec < 60) return `${sec}s ago`;
+      const min = Math.floor(sec / 60);
+      if (min < 60) return `${min}m ago`;
+      const hr = Math.floor(min / 60);
+      if (hr < 24) return `${hr}h ago`;
+      return new Date(iso).toLocaleString();
+    }
+
+    function statusClass(status) {
+      if (!status) return "";
+      return status.replace(/[^a-z_]/g, "");
+    }
+
+    function renderEvents(snapshot) {
+      const events = [...(snapshot.events || [])].slice(-120).reverse();
+      eventCount.textContent = String(snapshot.events?.length || 0);
+      eventList.replaceChildren();
+
+      if (!events.length) {
+        const empty = document.createElement("div");
+        empty.className = "placeholder";
+        empty.textContent = "No inbound events yet.";
+        eventList.appendChild(empty);
+        return;
+      }
+
+      for (const event of events) {
+        const node = document.createElement("article");
+        node.className = "event";
+
+        const head = document.createElement("div");
+        head.className = "event-head";
+
+        const kind = document.createElement("span");
+        kind.className = "event-kind";
+        kind.textContent = event.kind || "log";
+        head.appendChild(kind);
+
+        const time = document.createElement("span");
+        time.className = "event-time";
+        time.textContent = relativeTime(event.time);
+        head.appendChild(time);
+
+        if (event.request_id) {
+          const req = document.createElement("span");
+          req.className = "event-time";
+          req.textContent = `req=${event.request_id}`;
+          head.appendChild(req);
+        }
+
+        const line = document.createElement("div");
+        line.className = "event-line";
+        line.textContent = event.line || "";
+
+        node.append(head, line);
+        eventList.appendChild(node);
+      }
+    }
+
+    function selectTask(id) {
+      state.selectedTaskId = id || "";
+      render(state.snapshot);
+    }
+
+    function renderTasks(snapshot) {
+      const tasks = snapshot.tasks || [];
+      taskCount.textContent = String(tasks.length);
+      taskList.replaceChildren();
+
+      if (!tasks.length) {
+        const empty = document.createElement("div");
+        empty.className = "placeholder";
+        empty.textContent = "No tasks started yet.";
+        taskList.appendChild(empty);
+        return;
+      }
+
+      if (!state.selectedTaskId || !tasks.some(t => t.request_id === state.selectedTaskId)) {
+        state.selectedTaskId = tasks[0].request_id;
+      }
+
+      for (const task of tasks) {
+        const node = document.createElement("article");
+        node.className = "task" + (task.request_id === state.selectedTaskId ? " active" : "");
+        node.addEventListener("click", () => selectTask(task.request_id));
+
+        const top = document.createElement("div");
+        top.className = "task-top";
+
+        const id = document.createElement("div");
+        id.className = "task-id";
+        id.textContent = task.request_id;
+
+        const badge = document.createElement("span");
+        badge.className = `badge ${statusClass(task.status)}`;
+        badge.textContent = task.status || "pending";
+
+        top.append(id, badge);
+
+        const meta = document.createElement("div");
+        meta.className = "task-meta";
+
+        const stage = document.createElement("div");
+        stage.textContent = `stage: ${task.stage || "-"}`;
+        const skill = document.createElement("div");
+        skill.textContent = `skill: ${task.skill || "-"}`;
+        const repo = document.createElement("div");
+        repo.textContent = `repo: ${task.repo || "-"}`;
+        const update = document.createElement("div");
+        update.textContent = `updated: ${relativeTime(task.updated_at)}`;
+        meta.append(stage, skill, repo, update);
+
+        node.append(top, meta);
+        taskList.appendChild(node);
+      }
+    }
+
+    function renderTerminal(snapshot) {
+      const tasks = snapshot.tasks || [];
+      const selected = tasks.find(t => t.request_id === state.selectedTaskId);
+      if (!selected) {
+        taskHead.textContent = "Select a task to inspect logs";
+        terminal.textContent = "";
+        return;
+      }
+
+      taskHead.textContent = `${selected.request_id} | ${selected.status || "pending"} | ${selected.stage || "-"}`;
+      terminal.replaceChildren();
+
+      if (!selected.logs?.length) {
+        terminal.textContent = "No output captured yet.";
+        return;
+      }
+
+      const frag = document.createDocumentFragment();
+      for (const row of selected.logs) {
+        const line = document.createElement("div");
+        const stream = row.stream || "meta";
+        line.className = stream === "stderr" ? "stderr-line" : (stream === "stdout" ? "stdout-line" : "meta-line");
+        line.textContent = `[${relativeTime(row.time)}] [${stream}] ${row.text}`;
+        frag.appendChild(line);
+      }
+      terminal.appendChild(frag);
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    function render(snapshot) {
+      if (!snapshot) return;
+      state.snapshot = snapshot;
+      renderEvents(snapshot);
+      renderTasks(snapshot);
+      renderTerminal(snapshot);
+    }
+
+    async function loadInitial() {
+      try {
+        const response = await fetch("/api/state", { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`state http ${response.status}`);
+        }
+        const snapshot = await response.json();
+        render(snapshot);
+      } catch (err) {
+        setConnection(false, `Unable to load state: ${err.message}`);
+      }
+    }
+
+    function startStream() {
+      const stream = new EventSource("/api/stream");
+
+      stream.onopen = () => {
+        setConnection(true, "Live stream connected");
+      };
+
+      stream.onmessage = (event) => {
+        try {
+          const snapshot = JSON.parse(event.data);
+          render(snapshot);
+        } catch (_err) {
+          // Ignore malformed event packets.
+        }
+      };
+
+      stream.onerror = () => {
+        setConnection(false, "Reconnecting...");
+      };
+    }
+
+    loadInitial();
+    startStream();
+  </script>
+</body>
+</html>

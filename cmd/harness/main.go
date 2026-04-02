@@ -16,6 +16,7 @@ import (
 	"github.com/jef/how-i-want-to-code/internal/execx"
 	"github.com/jef/how-i-want-to-code/internal/harness"
 	"github.com/jef/how-i-want-to-code/internal/hub"
+	"github.com/jef/how-i-want-to-code/internal/hubui"
 	"github.com/jef/how-i-want-to-code/internal/multiplex"
 )
 
@@ -45,7 +46,7 @@ func run() int {
 func printUsage() {
 	fmt.Fprintln(os.Stderr, "usage: harness run --config <path-to-json>")
 	fmt.Fprintln(os.Stderr, "   or: harness multiplex --config <path-or-dir> [--config <path-or-dir> ...] [--parallel <n>]")
-	fmt.Fprintln(os.Stderr, "   or: harness hub --init <path-to-init-json> [--parallel <n>]")
+	fmt.Fprintln(os.Stderr, "   or: harness hub --init <path-to-init-json> [--parallel <n>] [--ui-listen <host:port>]")
 }
 
 func runSingle(args []string) int {
@@ -165,6 +166,7 @@ func runHub(args []string) int {
 
 	initPath := fs.String("init", "", "Path to hub init JSON")
 	parallel := fs.Int("parallel", 0, "Optional override for dispatcher max parallel workers")
+	uiListen := fs.String("ui-listen", "127.0.0.1:7777", "Optional monitor web UI listen address (empty to disable)")
 
 	if err := fs.Parse(args); err != nil {
 		return harness.ExitUsage
@@ -184,17 +186,49 @@ func runHub(args []string) int {
 	}
 
 	logger := log.New(os.Stderr, "", 0)
-	daemon := hub.NewDaemon(execx.OSRunner{})
-	daemon.Logf = logger.Printf
+	monitorBroker := hubui.NewBroker()
+	daemonLogger := func(format string, args ...any) {
+		line := fmt.Sprintf(format, args...)
+		logger.Print(line)
+		monitorBroker.IngestLog(line)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	if strings.TrimSpace(*uiListen) != "" {
+		uiServer := hubui.NewServer(*uiListen, monitorBroker)
+		uiServer.Logf = logger.Printf
+		logger.Printf("hub.ui status=ready url=%s", monitorURL(*uiListen))
+		go func() {
+			if err := uiServer.Run(ctx); err != nil {
+				logger.Printf("hub.ui status=error err=%q", err)
+			}
+		}()
+	}
+
+	daemon := hub.NewDaemon(execx.OSRunner{})
+	daemon.Logf = daemonLogger
 
 	if err := daemon.Run(ctx, cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return hubExitCode(err)
 	}
 	return harness.ExitSuccess
+}
+
+func monitorURL(addr string) string {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		return ""
+	}
+	if strings.HasPrefix(addr, "http://") || strings.HasPrefix(addr, "https://") {
+		return addr
+	}
+	if strings.HasPrefix(addr, ":") {
+		return "http://127.0.0.1" + addr
+	}
+	return "http://" + addr
 }
 
 func hubExitCode(err error) int {

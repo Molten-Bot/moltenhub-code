@@ -70,6 +70,26 @@ func TestRunHubUsageMissingInitFlag(t *testing.T) {
 	}
 }
 
+func TestMonitorURL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{in: "", want: ""},
+		{in: ":7777", want: "http://127.0.0.1:7777"},
+		{in: "127.0.0.1:7777", want: "http://127.0.0.1:7777"},
+		{in: "http://localhost:8080", want: "http://localhost:8080"},
+	}
+
+	for _, tt := range tests {
+		if got := monitorURL(tt.in); got != tt.want {
+			t.Fatalf("monitorURL(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
 func TestCollectConfigPathsFilesAndDirs(t *testing.T) {
 	t.Parallel()
 
