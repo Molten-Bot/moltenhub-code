@@ -32,7 +32,7 @@ func TestLoadInitDefaults(t *testing.T) {
 	if cfg.SessionKey != "main" {
 		t.Fatalf("SessionKey = %q", cfg.SessionKey)
 	}
-	if cfg.Skill.Name != "codex_harness_run" {
+	if cfg.Skill.Name != "code_for_me" {
 		t.Fatalf("Skill.Name = %q", cfg.Skill.Name)
 	}
 	if cfg.Skill.DispatchType != "skill_request" {

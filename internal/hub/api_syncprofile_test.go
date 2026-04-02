@@ -218,7 +218,7 @@ func TestNormalizeSkillName(t *testing.T) {
 	if got := normalizeSkillName("CODEx Harness RUN!!"); got != "codex-harness-run" {
 		t.Fatalf("normalizeSkillName() = %q", got)
 	}
-	if got := normalizeSkillName("@"); got != "codex_harness_run" {
+	if got := normalizeSkillName("@"); got != "code_for_me" {
 		t.Fatalf("normalizeSkillName() fallback = %q", got)
 	}
 }

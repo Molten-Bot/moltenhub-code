@@ -81,7 +81,7 @@ Optional fields (with defaults):
 - `profile.emoji`
 - `profile.bio`
 - `profile.metadata` (merged into agent metadata patch)
-- `skill.name` (default: `codex_harness_run`)
+- `skill.name` (default: `code_for_me`)
 - `skill.dispatch_type` (default: `skill_request`)
 - `skill.result_type` (default: `skill_result`)
 - `dispatcher.max_parallel` (default: `2`)

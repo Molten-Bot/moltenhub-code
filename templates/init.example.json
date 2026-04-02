@@ -12,7 +12,7 @@
   },
 
   "skill": {
-    "name": "codex_harness_run",
+    "name": "code_for_me",
     "dispatch_type": "skill_request",
     "result_type": "skill_result"
   },

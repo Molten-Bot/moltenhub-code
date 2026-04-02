@@ -93,7 +93,7 @@ func (c *InitConfig) ApplyDefaults() {
 
 	c.Skill.Name = strings.TrimSpace(c.Skill.Name)
 	if c.Skill.Name == "" {
-		c.Skill.Name = "codex_harness_run"
+		c.Skill.Name = "code_for_me"
 	}
 	c.Skill.DispatchType = strings.TrimSpace(c.Skill.DispatchType)
 	if c.Skill.DispatchType == "" {

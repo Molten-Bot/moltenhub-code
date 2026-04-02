@@ -130,8 +130,78 @@ func TestParseSkillDispatchRequiresInlineConfigObject(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "must be a JSON object") {
+	if !strings.Contains(err.Error(), "decode run config payload string") &&
+		!strings.Contains(err.Error(), "must be a JSON object") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseSkillDispatchAcceptsJSONStringInputAndSourceRouting(t *testing.T) {
+	t.Parallel()
+
+	msg := map[string]any{
+		"kind":         "skill_request",
+		"skill_name":   "code_for_me",
+		"request_id":   "req-json-input",
+		"from_agent_uri": "https://na.hub.molten.bot/acme/sender",
+		"input": `{
+			"repo":"git@github.com:acme/repo.git",
+			"prompt":"do the thing"
+		}`,
+	}
+
+	dispatch, matched, err := ParseSkillDispatch(msg, "skill_request", "code_for_me")
+	if err != nil {
+		t.Fatalf("ParseSkillDispatch() error = %v", err)
+	}
+	if !matched {
+		t.Fatal("matched = false, want true")
+	}
+	if dispatch.RequestID != "req-json-input" {
+		t.Fatalf("RequestID = %q", dispatch.RequestID)
+	}
+	if dispatch.ReplyTo != "https://na.hub.molten.bot/acme/sender" {
+		t.Fatalf("ReplyTo = %q", dispatch.ReplyTo)
+	}
+	if dispatch.Config.RepoURL != "git@github.com:acme/repo.git" {
+		t.Fatalf("RepoURL = %q", dispatch.Config.RepoURL)
+	}
+	if dispatch.Config.Prompt != "do the thing" {
+		t.Fatalf("Prompt = %q", dispatch.Config.Prompt)
+	}
+}
+
+func TestParseSkillDispatchMatchesLegacyAndCurrentSkillAliases(t *testing.T) {
+	t.Parallel()
+
+	msgCurrent := map[string]any{
+		"type":  "skill_request",
+		"skill": "code_for_me",
+		"config": map[string]any{
+			"repo":   "git@github.com:acme/repo.git",
+			"prompt": "x",
+		},
+	}
+
+	if _, matched, err := ParseSkillDispatch(msgCurrent, "skill_request", "codex_harness_run"); err != nil {
+		t.Fatalf("ParseSkillDispatch() current->legacy error = %v", err)
+	} else if !matched {
+		t.Fatal("matched = false for current->legacy alias")
+	}
+
+	msgLegacy := map[string]any{
+		"type":  "skill_request",
+		"skill": "codex_harness_run",
+		"config": map[string]any{
+			"repo":   "git@github.com:acme/repo.git",
+			"prompt": "x",
+		},
+	}
+
+	if _, matched, err := ParseSkillDispatch(msgLegacy, "skill_request", "code_for_me"); err != nil {
+		t.Fatalf("ParseSkillDispatch() legacy->current error = %v", err)
+	} else if !matched {
+		t.Fatal("matched = false for legacy->current alias")
 	}
 }
 

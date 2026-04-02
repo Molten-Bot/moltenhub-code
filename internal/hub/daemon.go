@@ -98,12 +98,16 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 
 		if err := d.runWebsocketLoop(ctx, wsURL, api, token, cfg, workerSem, &workers); err == nil {
 			return nil
-		} else if ctx.Err() == nil {
-			d.logf("hub.ws status=error err=%q", err)
-		}
-
-		if ctx.Err() != nil {
+		} else if ctx.Err() != nil {
 			return nil
+		} else if !shouldFallbackToPull(err) {
+			d.logf("hub.ws status=disconnected err=%q", err)
+			if !sleepWithContext(ctx, d.ReconnectDelay) {
+				return nil
+			}
+			continue
+		} else {
+			d.logf("hub.ws status=error err=%q", err)
 		}
 
 		d.logf("hub.transport mode=openclaw_pull")
@@ -188,6 +192,23 @@ func (d Daemon) runWebsocketLoop(
 		case <-done:
 		}
 	}()
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			case <-ticker.C:
+				if err := ws.WritePing([]byte("hb")); err != nil {
+					_ = ws.Close()
+					return
+				}
+			}
+		}
+	}()
 
 	for {
 		if ctx.Err() != nil {
@@ -262,6 +283,26 @@ func (d Daemon) processInboundMessage(
 		defer func() { <-workerSem }()
 		d.handleDispatch(ctx, api, token, cfg, dispatch, deliveryID)
 	}(dispatch, deliveryID)
+}
+
+func shouldFallbackToPull(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, io.EOF) {
+		return false
+	}
+	text := strings.ToLower(strings.TrimSpace(err.Error()))
+	for _, marker := range []string{
+		"use of closed network connection",
+		"connection reset by peer",
+		"broken pipe",
+	} {
+		if strings.Contains(text, marker) {
+			return false
+		}
+	}
+	return true
 }
 
 func (d Daemon) handleDispatch(
