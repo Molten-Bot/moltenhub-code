@@ -48,6 +48,7 @@ Use the template at [`templates/init.example.json`](templates/init.example.json)
 ```
 
 This mode keeps one local process running, listens on hub websocket events, and spins worker harness sessions as matching skill requests arrive.
+After successful auth, it saves `./moltenhub/config.json` with `{baseUrl, token, sessionKey, timeoutMs}` and reuses that saved token on subsequent starts (so a fresh bind token is not required every run).
 
 ## Multiplex Run
 

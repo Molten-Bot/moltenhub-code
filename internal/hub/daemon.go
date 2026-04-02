@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -41,6 +43,13 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	}
 
 	cfg.ApplyDefaults()
+	if stored, err := LoadRuntimeConfig(defaultRuntimeConfigPath); err == nil {
+		if applied := applyStoredRuntimeConfig(&cfg, stored); applied {
+			d.logf("hub.runtime_config status=loaded path=%s", defaultRuntimeConfigPath)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		d.logf("hub.runtime_config status=warn err=%q", err)
+	}
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("init config: %w", err)
 	}
@@ -53,6 +62,10 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 		return fmt.Errorf("hub auth: %w", err)
 	}
 	d.logf("hub.auth status=ok")
+	if err := SaveRuntimeConfig(defaultRuntimeConfigPath, cfg.BaseURL, token, cfg.SessionKey); err != nil {
+		return fmt.Errorf("hub runtime config: %w", err)
+	}
+	d.logf("hub.runtime_config status=saved path=%s", defaultRuntimeConfigPath)
 
 	if err := api.SyncProfile(ctx, token, cfg); err != nil {
 		return fmt.Errorf("hub profile: %w", err)
@@ -250,4 +263,30 @@ func (d Daemon) logf(format string, args ...any) {
 		return
 	}
 	d.Logf(format, args...)
+}
+
+func applyStoredRuntimeConfig(cfg *InitConfig, stored RuntimeConfig) bool {
+	if cfg == nil {
+		return false
+	}
+
+	token := strings.TrimSpace(stored.Token)
+	if token == "" {
+		return false
+	}
+
+	cfg.AgentToken = token
+	cfg.BindToken = ""
+
+	baseURL := strings.TrimSpace(stored.BaseURL)
+	if baseURL != "" {
+		cfg.BaseURL = strings.TrimRight(baseURL, "/")
+	}
+
+	sessionKey := strings.TrimSpace(stored.SessionKey)
+	if sessionKey != "" {
+		cfg.SessionKey = sessionKey
+	}
+
+	return true
 }
