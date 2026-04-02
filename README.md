@@ -3,7 +3,7 @@
 Minimal Go harness for repeatable Codex dispatch against a single directory in a target repository.
 
 Also supports multiplexed execution across many task configs in parallel.
-Also supports a persistent Hub listener mode that binds to MoltenHub and launches harness runs from websocket skill dispatches.
+Also supports a persistent Hub listener mode that binds to MoltenHub and launches harness runs from pull-transport skill dispatches.
 
 ## What It Does
 
@@ -47,7 +47,7 @@ Use the template at [`templates/init.example.json`](templates/init.example.json)
 ./bin/harness hub --init templates/init.example.json
 ```
 
-This mode keeps one local process running, listens on hub websocket events, and spins worker harness sessions as matching skill requests arrive.
+This mode keeps one local process running, long-polls hub OpenClaw pull transport, and spins worker harness sessions as matching skill requests arrive.
 After successful auth, it saves `./.moltenhub/config.json` with `{baseUrl, token, sessionKey, timeoutMs}` and reuses that saved token on subsequent starts (so a fresh bind token is not required every run).
 
 ## Multiplex Run
@@ -98,10 +98,10 @@ Optional fields (with defaults):
    - one-time handle update via `/v1/agents/me/metadata` / `/v1/agents/me`
    - metadata patch only, with OpenAPI-compatible `metadata.skills` entries (`name` + `description`)
    - profile values are embedded in metadata (`display_name`, `emoji`, `bio`, `profile_markdown`)
-3. Register runtime at `/v1/openclaw/messages/register-plugin` (non-fatal warning on failure).
-4. Connect websocket at `/v1/openclaw/messages/ws`.
-5. For each matching skill dispatch, parse run config JSON and execute a harness run in a worker goroutine.
-6. Send `skill_result` back over websocket (HTTP publish fallback if websocket send fails).
+3. Start OpenClaw pull transport loop via `/v1/openclaw/messages/pull` (`timeout_ms` long-poll).
+4. For each pulled message lease, parse run config JSON and execute a harness run in a worker goroutine.
+5. Publish `skill_result` via `/v1/openclaw/messages/publish`.
+6. Ack/Nack leases via `/v1/openclaw/messages/ack` and `/v1/openclaw/messages/nack`.
 
 ## Hub Skill Payload
 
@@ -110,9 +110,14 @@ Inbound dispatch must match the configured skill and include run config JSON. Su
 - top-level `config` or `input`
 - `payload.config` or `payload.input`
 - `data.config` or `data.input`
-- `config_path` (path to a run config file)
 
-Run config schema is the same as standard harness `run` config (`repo`/`repo_url`, `prompt`, and optional branch/subdir/PR metadata).
+Run config is validated strictly against the harness run schema:
+
+- Required: `prompt` and one of `repo` or `repo_url`
+- Optional: `version`, `base_branch`, `target_subdir`, `commit_message`, `pr_title`, `pr_body`, `labels`, `reviewers`
+- Additional/unknown fields are rejected
+
+If a matching dispatch fails validation, the daemon responds with `status=error`, parse error details, and `result.required_schema` containing the exact payload schema contract.
 
 ## Config (v1)
 

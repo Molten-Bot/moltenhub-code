@@ -24,3 +24,13 @@ func TestExtractTokenFromJSONNested(t *testing.T) {
 		t.Fatalf("extractTokenFromJSON() = %q", got)
 	}
 }
+
+func TestExtractAPIBaseFromJSONNested(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{"result":{"api_base":"https://na.hub.molten.bot/v1"}}`)
+	got := extractAPIBaseFromJSON(body)
+	if got != "https://na.hub.molten.bot/v1" {
+		t.Fatalf("extractAPIBaseFromJSON() = %q", got)
+	}
+}
