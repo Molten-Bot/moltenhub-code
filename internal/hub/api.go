@@ -52,25 +52,30 @@ func (c *APIClient) ResolveAgentToken(ctx context.Context, cfg InitConfig) (stri
 		return "", fmt.Errorf("api client is required")
 	}
 
-	if strings.TrimSpace(cfg.AgentToken) != "" {
-		if c.verifyToken(ctx, cfg.AgentToken) {
-			return cfg.AgentToken, nil
+	agentToken := strings.TrimSpace(cfg.AgentToken)
+	if agentToken != "" {
+		if c.verifyToken(ctx, agentToken) {
+			c.logf("hub.auth source=agent_config status=verified")
+		} else {
+			c.logf("hub.auth source=agent_config status=unverified")
 		}
-		c.logf("hub.auth source=agent_config status=invalid")
+		return agentToken, nil
 	}
 
-	if strings.TrimSpace(cfg.BindToken) == "" {
-		return "", fmt.Errorf("missing bind_token and usable agent_token")
+	bindToken := strings.TrimSpace(cfg.BindToken)
+	if bindToken == "" {
+		return "", fmt.Errorf("missing bind_token and agent_token")
 	}
 
-	bound, err := c.bindTokenFlow(ctx, cfg.BindToken)
+	bound, err := c.bindTokenFlow(ctx, bindToken)
 	if err != nil {
 		return "", err
 	}
 	if c.verifyToken(ctx, bound) {
 		return bound, nil
 	}
-	return "", fmt.Errorf("resolved token failed verification")
+	c.logf("hub.auth source=bind status=unverified")
+	return bound, nil
 }
 
 func (c *APIClient) bindTokenFlow(ctx context.Context, bindToken string) (string, error) {
