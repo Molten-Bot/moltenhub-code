@@ -1,4 +1,8 @@
 /templates/
 !/templates/*.example.json
 .*
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml
+!.github/workflows/*.yaml
 bin/*

@@ -421,26 +421,6 @@ func (d *dispatchDeduper) gcLocked(now time.Time) {
 	}
 }
 
-func shouldFallbackToPull(err error) bool {
-	if err == nil {
-		return false
-	}
-	if errors.Is(err, io.EOF) {
-		return false
-	}
-	text := strings.ToLower(strings.TrimSpace(err.Error()))
-	for _, marker := range []string{
-		"use of closed network connection",
-		"connection reset by peer",
-		"broken pipe",
-	} {
-		if strings.Contains(text, marker) {
-			return false
-		}
-	}
-	return true
-}
-
 func (d Daemon) handleDispatch(
 	ctx context.Context,
 	api APIClient,
