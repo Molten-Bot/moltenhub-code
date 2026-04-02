@@ -190,8 +190,14 @@ func (c APIClient) PublishResult(ctx context.Context, token string, payload map[
 	}
 	if toAgentURI := firstString(payload["to_agent_uri"]); toAgentURI != "" {
 		body["to_agent_uri"] = toAgentURI
-	} else if toAgentUUID := firstString(payload["to_agent_uuid"], payload["to"], payload["reply_to"]); toAgentUUID != "" {
+	} else if toAgentUUID := firstString(payload["to_agent_uuid"]); toAgentUUID != "" {
 		body["to_agent_uuid"] = toAgentUUID
+	} else if routeTarget := firstString(payload["to"], payload["reply_to"]); routeTarget != "" {
+		if looksLikeAgentURI(routeTarget) {
+			body["to_agent_uri"] = routeTarget
+		} else {
+			body["to_agent_uuid"] = routeTarget
+		}
 	}
 	if requestID := firstString(payload["request_id"]); requestID != "" {
 		body["client_msg_id"] = requestID
@@ -470,6 +476,7 @@ func extractInboundOpenClawMessage(root map[string]any) PulledOpenClawMessage {
 			message = root
 		}
 	}
+	message = enrichInboundMessageRouting(message, result, root)
 
 	return PulledOpenClawMessage{
 		DeliveryID: firstNonEmpty(
@@ -500,6 +507,41 @@ func extractInboundOpenClawMessage(root map[string]any) PulledOpenClawMessage {
 		),
 		Message: message,
 	}
+}
+
+func enrichInboundMessageRouting(message, result, root map[string]any) map[string]any {
+	if len(message) == 0 {
+		return message
+	}
+
+	transportMessage := firstNonEmptyMap(
+		toMap(valueAt(result, "message")),
+		toMap(valueAt(root, "message")),
+	)
+	if len(transportMessage) == 0 {
+		return message
+	}
+
+	copyIfMissing := func(key string, candidates ...string) {
+		if strings.TrimSpace(stringAt(message, key)) != "" {
+			return
+		}
+		for _, candidate := range candidates {
+			if value := stringAt(transportMessage, candidate); value != "" {
+				message[key] = value
+				return
+			}
+		}
+	}
+
+	copyIfMissing("from_agent_uri", "from_agent_uri")
+	copyIfMissing("from_agent_uuid", "from_agent_uuid")
+	copyIfMissing("from_agent_id", "from_agent_id")
+	copyIfMissing("source_agent_uri", "from_agent_uri")
+	copyIfMissing("source_agent_uuid", "from_agent_uuid")
+	copyIfMissing("source_agent_id", "from_agent_id")
+	copyIfMissing("reply_to", "from_agent_uri", "from_agent_uuid", "from_agent_id")
+	return message
 }
 
 func looksLikeDispatchEnvelope(msg map[string]any) bool {
@@ -546,6 +588,23 @@ func valueAt(root map[string]any, path ...string) any {
 		current = next
 	}
 	return current
+}
+
+func firstNonEmptyMap(values ...map[string]any) map[string]any {
+	for _, value := range values {
+		if len(value) > 0 {
+			return value
+		}
+	}
+	return nil
+}
+
+func looksLikeAgentURI(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return false
+	}
+	return strings.HasPrefix(trimmed, "http://") || strings.HasPrefix(trimmed, "https://")
 }
 
 func extractTokenFromAny(v any) string {

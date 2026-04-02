@@ -125,6 +125,42 @@ func TestExtractInboundOpenClawMessageForWebsocketEnvelope(t *testing.T) {
 	}
 }
 
+func TestExtractInboundOpenClawMessageCopiesReplyRoutingFromTransportMessage(t *testing.T) {
+	t.Parallel()
+
+	root := map[string]any{
+		"result": map[string]any{
+			"delivery": map[string]any{
+				"delivery_id": "d-22",
+			},
+			"message": map[string]any{
+				"from_agent_uri":  "https://na.hub.molten.bot/acme/sender",
+				"from_agent_uuid": "8b9bc0a9-3e36-49aa-a097-7ba8fe5f0b18",
+			},
+			"openclaw_message": map[string]any{
+				"kind":       "skill_request",
+				"skill_name": "code_for_me",
+				"request_id": "req-ws-2",
+				"input": `{
+					"repo":"git@github.com:acme/repo.git",
+					"prompt":"x"
+				}`,
+			},
+		},
+	}
+
+	got := extractInboundOpenClawMessage(root)
+	if got.DeliveryID != "d-22" {
+		t.Fatalf("DeliveryID = %q", got.DeliveryID)
+	}
+	if replyTo := got.Message["reply_to"]; replyTo != "https://na.hub.molten.bot/acme/sender" {
+		t.Fatalf("message.reply_to = %#v", replyTo)
+	}
+	if fromURI := got.Message["from_agent_uri"]; fromURI != "https://na.hub.molten.bot/acme/sender" {
+		t.Fatalf("message.from_agent_uri = %#v", fromURI)
+	}
+}
+
 func TestPullOpenClawMessageNoContent(t *testing.T) {
 	t.Parallel()
 
@@ -209,6 +245,49 @@ func TestPublishResultUsesOpenClawEnvelope(t *testing.T) {
 	}
 	if msg["type"] != "skill_result" {
 		t.Fatalf("message.type = %#v", msg["type"])
+	}
+}
+
+func TestPublishResultUsesURIReplyTarget(t *testing.T) {
+	t.Parallel()
+
+	type captured struct {
+		Path string
+		Body map[string]any
+	}
+	var got captured
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		data, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(data, &body)
+		got = captured{Path: r.URL.Path, Body: body}
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"ok":true,"result":{"status":"queued"}}`))
+	}))
+	defer ts.Close()
+
+	client := NewAPIClient(ts.URL + "/v1")
+	payload := map[string]any{
+		"type":       "skill_result",
+		"request_id": "req-uri",
+		"reply_to":   "https://na.hub.molten.bot/acme/sender",
+		"status":     "error",
+		"result":     map[string]any{"error": "bad payload"},
+	}
+	if err := client.PublishResult(context.Background(), "token", payload); err != nil {
+		t.Fatalf("PublishResult() error = %v", err)
+	}
+
+	if got.Path != "/v1/openclaw/messages/publish" {
+		t.Fatalf("path = %q", got.Path)
+	}
+	if got.Body["to_agent_uri"] != "https://na.hub.molten.bot/acme/sender" {
+		t.Fatalf("to_agent_uri = %#v", got.Body["to_agent_uri"])
+	}
+	if _, hasUUID := got.Body["to_agent_uuid"]; hasUUID {
+		t.Fatalf("unexpected to_agent_uuid in body: %#v", got.Body["to_agent_uuid"])
 	}
 }
 

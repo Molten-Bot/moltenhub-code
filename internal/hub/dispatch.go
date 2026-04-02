@@ -69,9 +69,16 @@ func ParseSkillDispatch(msg map[string]any, expectedType, expectedSkill string) 
 		ReplyTo: firstNonEmpty(
 			stringAt(msg, "reply_to"),
 			stringAt(msg, "replyTo"),
+			stringAt(msg, "to_agent_uri"),
+			stringAt(msg, "to_agent_uuid"),
 			stringAt(msg, "from"),
 			stringAt(msg, "source"),
+			stringAt(msg, "source_agent_uri"),
+			stringAt(msg, "source_agent_uuid"),
 			stringAt(msg, "source_agent_id"),
+			stringAt(msg, "from_agent_uri"),
+			stringAt(msg, "from_agent_uuid"),
+			stringAt(msg, "from_agent_id"),
 			stringAtPath(msg, "payload", "reply_to"),
 			stringAtPath(msg, "payload", "from"),
 			stringAtPath(msg, "data", "reply_to"),
@@ -103,9 +110,9 @@ func ParseSkillDispatch(msg map[string]any, expectedType, expectedSkill string) 
 }
 
 func parseRunConfigValue(v any) (config.Config, error) {
-	m, ok := v.(map[string]any)
-	if !ok {
-		return config.Config{}, fmt.Errorf("run config payload must be a JSON object")
+	m, err := normalizeRunConfigMap(v)
+	if err != nil {
+		return config.Config{}, err
 	}
 
 	encoded, err := json.Marshal(m)
@@ -124,6 +131,29 @@ func parseRunConfigValue(v any) (config.Config, error) {
 		return config.Config{}, fmt.Errorf("validate run config payload: %w", err)
 	}
 	return cfg, nil
+}
+
+func normalizeRunConfigMap(v any) (map[string]any, error) {
+	switch typed := v.(type) {
+	case map[string]any:
+		return typed, nil
+	case string:
+		trimmed := strings.TrimSpace(typed)
+		if trimmed == "" {
+			return nil, fmt.Errorf("run config payload must be a JSON object")
+		}
+		var parsed any
+		if err := json.Unmarshal([]byte(trimmed), &parsed); err != nil {
+			return nil, fmt.Errorf("decode run config payload string: %w", err)
+		}
+		m, ok := parsed.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("run config payload must be a JSON object")
+		}
+		return m, nil
+	default:
+		return nil, fmt.Errorf("run config payload must be a JSON object")
+	}
 }
 
 func extractConfigValue(msg map[string]any) (any, bool) {
