@@ -122,10 +122,11 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 
 	h.logf("stage=codex status=start target=%s", cfg.TargetSubdir)
-	if _, err := h.Runner.Run(ctx, codexCommand(targetDir, cfg.Prompt)); err != nil {
+	codexStart := time.Now()
+	if err := h.runCodexWithHeartbeat(ctx, targetDir, cfg.Prompt); err != nil {
 		return h.fail(ExitCodex, "codex", err, runDir)
 	}
-	h.logf("stage=codex status=ok")
+	h.logf("stage=codex status=ok elapsed_s=%d", int(time.Since(codexStart).Seconds()))
 
 	statusRes, err := h.Runner.Run(ctx, statusCommand(repoDir))
 	if err != nil {
@@ -171,6 +172,33 @@ func (h Harness) fail(exitCode int, stage string, err error, runDir string) Resu
 
 func (h Harness) logf(format string, args ...any) {
 	h.Logf(format, args...)
+}
+
+func (h Harness) runCodexWithHeartbeat(ctx context.Context, targetDir, prompt string) error {
+	done := make(chan error, 1)
+	go func() {
+		_, err := h.Runner.Run(ctx, codexCommand(targetDir, prompt))
+		done <- err
+	}()
+
+	start := time.Now()
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case err := <-done:
+			return err
+		case <-ticker.C:
+			h.logf("stage=codex status=running elapsed_s=%d", int(time.Since(start).Seconds()))
+		case <-ctx.Done():
+			err := <-done
+			if err != nil {
+				return err
+			}
+			return ctx.Err()
+		}
+	}
 }
 
 func resolveTargetDir(repoDir, targetSubdir string) (string, error) {

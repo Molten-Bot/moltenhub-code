@@ -22,6 +22,7 @@ type Daemon struct {
 }
 
 const wsFallbackWindow = 30 * time.Second
+const dispatchDedupTTL = 2 * time.Hour
 
 // NewDaemon returns a hub daemon with defaults.
 func NewDaemon(runner execx.Runner) Daemon {
@@ -83,12 +84,13 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	workerSem := make(chan struct{}, cfg.Dispatcher.MaxParallel)
 	var workers sync.WaitGroup
 	defer workers.Wait()
+	deduper := newDispatchDeduper(dispatchDedupTTL)
 
 	wsURL, wsURLErr := WebsocketURL(cfg.BaseURL, cfg.SessionKey)
 	if wsURLErr != nil {
 		d.logf("hub.ws status=disabled err=%q", wsURLErr)
 		d.logf("hub.transport mode=openclaw_pull")
-		return d.runPullLoop(ctx, api, token, cfg, workerSem, &workers)
+			return d.runPullLoop(ctx, api, token, cfg, workerSem, &workers, deduper)
 	}
 
 	for {
@@ -96,7 +98,7 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 			return nil
 		}
 
-		if err := d.runWebsocketLoop(ctx, wsURL, api, token, cfg, workerSem, &workers); err == nil {
+		if err := d.runWebsocketLoop(ctx, wsURL, api, token, cfg, workerSem, &workers, deduper); err == nil {
 			return nil
 		} else if ctx.Err() != nil {
 			return nil
@@ -116,7 +118,7 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 			if ctx.Err() != nil {
 				return nil
 			}
-			if err := d.pullOnce(ctx, api, token, cfg, workerSem, &workers); err != nil {
+			if err := d.pullOnce(ctx, api, token, cfg, workerSem, &workers, deduper); err != nil {
 				d.logf("hub.pull status=error err=%q", err)
 				if !sleepWithContext(ctx, d.ReconnectDelay) {
 					return nil
@@ -133,12 +135,13 @@ func (d Daemon) runPullLoop(
 	cfg InitConfig,
 	workerSem chan struct{},
 	workers *sync.WaitGroup,
+	deduper *dispatchDeduper,
 ) error {
 	for {
 		if ctx.Err() != nil {
 			return nil
 		}
-		if err := d.pullOnce(ctx, api, token, cfg, workerSem, workers); err != nil {
+		if err := d.pullOnce(ctx, api, token, cfg, workerSem, workers, deduper); err != nil {
 			d.logf("hub.pull status=error err=%q", err)
 			if !sleepWithContext(ctx, d.ReconnectDelay) {
 				return nil
@@ -154,6 +157,7 @@ func (d Daemon) pullOnce(
 	cfg InitConfig,
 	workerSem chan struct{},
 	workers *sync.WaitGroup,
+	deduper *dispatchDeduper,
 ) error {
 	pulled, found, err := api.PullOpenClawMessage(ctx, token, runtimeTimeoutMs)
 	if err != nil {
@@ -162,7 +166,7 @@ func (d Daemon) pullOnce(
 	if !found {
 		return nil
 	}
-	d.processInboundMessage(ctx, api, token, cfg, pulled.Message, pulled.DeliveryID, workerSem, workers)
+	d.processInboundMessage(ctx, api, token, cfg, pulled.Message, pulled.DeliveryID, pulled.MessageID, workerSem, workers, deduper)
 	return nil
 }
 
@@ -174,6 +178,7 @@ func (d Daemon) runWebsocketLoop(
 	cfg InitConfig,
 	workerSem chan struct{},
 	workers *sync.WaitGroup,
+	deduper *dispatchDeduper,
 ) error {
 	ws, err := DialWebsocket(ctx, wsURL, token)
 	if err != nil {
@@ -227,7 +232,7 @@ func (d Daemon) runWebsocketLoop(
 		if len(inbound.Message) == 0 {
 			continue
 		}
-		d.processInboundMessage(ctx, api, token, cfg, inbound.Message, inbound.DeliveryID, workerSem, workers)
+		d.processInboundMessage(ctx, api, token, cfg, inbound.Message, inbound.DeliveryID, inbound.MessageID, workerSem, workers, deduper)
 	}
 }
 
@@ -238,8 +243,10 @@ func (d Daemon) processInboundMessage(
 	cfg InitConfig,
 	msg map[string]any,
 	deliveryID string,
+	messageID string,
 	workerSem chan struct{},
 	workers *sync.WaitGroup,
+	deduper *dispatchDeduper,
 ) {
 	dispatch, matched, parseErr := ParseSkillDispatch(msg, cfg.Skill.DispatchType, cfg.Skill.Name)
 	if !matched {
@@ -271,18 +278,49 @@ func (d Daemon) processInboundMessage(
 		return
 	}
 
+	dupKey := dedupeKeyForDispatch(dispatch, messageID, deliveryID)
+	if deduper != nil && dupKey != "" {
+		if accepted, state := deduper.Begin(dupKey); !accepted {
+			d.logf("dispatch status=duplicate request_id=%s state=%s", firstNonEmpty(dispatch.RequestID, dupKey), state)
+			if strings.TrimSpace(deliveryID) != "" {
+				if err := api.AckOpenClawDelivery(ctx, token, deliveryID); err != nil {
+					d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
+				}
+			}
+			return
+		}
+	}
+
+	ackedEarly := false
+	if strings.TrimSpace(deliveryID) != "" {
+		if err := api.AckOpenClawDelivery(ctx, token, deliveryID); err != nil {
+			d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
+		} else {
+			ackedEarly = true
+			d.logf("dispatch status=ack request_id=%s delivery_id=%s", firstNonEmpty(dispatch.RequestID, dupKey), deliveryID)
+		}
+	}
+
 	select {
 	case workerSem <- struct{}{}:
 	case <-ctx.Done():
+		if deduper != nil {
+			deduper.Done(dupKey)
+		}
 		return
 	}
 
 	workers.Add(1)
-	go func(dispatch SkillDispatch, deliveryID string) {
+	go func(dispatch SkillDispatch, deliveryID, dedupeKey string, ackedEarly bool) {
 		defer workers.Done()
 		defer func() { <-workerSem }()
-		d.handleDispatch(ctx, api, token, cfg, dispatch, deliveryID)
-	}(dispatch, deliveryID)
+		defer func() {
+			if deduper != nil {
+				deduper.Done(dedupeKey)
+			}
+		}()
+		d.handleDispatch(ctx, api, token, cfg, dispatch, deliveryID, ackedEarly)
+	}(dispatch, deliveryID, dupKey, ackedEarly)
 }
 
 func shouldFallbackToPull(err error) bool {
@@ -305,6 +343,84 @@ func shouldFallbackToPull(err error) bool {
 	return true
 }
 
+func dedupeKeyForDispatch(dispatch SkillDispatch, messageID, deliveryID string) string {
+	return firstNonEmpty(
+		dispatch.RequestID,
+		strings.TrimSpace(messageID),
+		strings.TrimSpace(deliveryID),
+	)
+}
+
+type dispatchDeduper struct {
+	mu        sync.Mutex
+	inFlight  map[string]struct{}
+	completed map[string]time.Time
+	ttl       time.Duration
+}
+
+func newDispatchDeduper(ttl time.Duration) *dispatchDeduper {
+	if ttl <= 0 {
+		ttl = 30 * time.Minute
+	}
+	return &dispatchDeduper{
+		inFlight:  map[string]struct{}{},
+		completed: map[string]time.Time{},
+		ttl:       ttl,
+	}
+}
+
+func (d *dispatchDeduper) Begin(key string) (bool, string) {
+	if d == nil {
+		return true, ""
+	}
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return true, ""
+	}
+
+	now := time.Now()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.gcLocked(now)
+
+	if _, exists := d.inFlight[key]; exists {
+		return false, "in_flight"
+	}
+	if _, exists := d.completed[key]; exists {
+		return false, "completed"
+	}
+	d.inFlight[key] = struct{}{}
+	return true, "accepted"
+}
+
+func (d *dispatchDeduper) Done(key string) {
+	if d == nil {
+		return
+	}
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return
+	}
+
+	now := time.Now()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	delete(d.inFlight, key)
+	d.completed[key] = now
+	d.gcLocked(now)
+}
+
+func (d *dispatchDeduper) gcLocked(now time.Time) {
+	if d == nil || d.ttl <= 0 {
+		return
+	}
+	for key, ts := range d.completed {
+		if now.Sub(ts) > d.ttl {
+			delete(d.completed, key)
+		}
+	}
+}
+
 func (d Daemon) handleDispatch(
 	ctx context.Context,
 	api APIClient,
@@ -312,6 +428,7 @@ func (d Daemon) handleDispatch(
 	cfg InitConfig,
 	dispatch SkillDispatch,
 	deliveryID string,
+	ackedEarly bool,
 ) {
 	d.logf("dispatch status=start request_id=%s skill=%s repo=%s", dispatch.RequestID, dispatch.Skill, dispatch.Config.RepoURL)
 
@@ -329,14 +446,14 @@ func (d Daemon) handleDispatch(
 	payload := dispatchResultPayload(cfg, dispatch, res)
 	if err := api.PublishResult(ctx, token, payload); err != nil {
 		d.logf("dispatch status=publish_error request_id=%s err=%q", dispatch.RequestID, err)
-		if strings.TrimSpace(deliveryID) != "" {
+		if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
 			if nackErr := api.NackOpenClawDelivery(ctx, token, deliveryID); nackErr != nil {
 				d.logf("dispatch status=nack_error delivery_id=%s err=%q", deliveryID, nackErr)
 			}
 		}
 		return
 	}
-	if strings.TrimSpace(deliveryID) != "" {
+	if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
 		if err := api.AckOpenClawDelivery(ctx, token, deliveryID); err != nil {
 			d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
 		}
