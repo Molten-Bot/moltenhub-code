@@ -2,6 +2,8 @@
 
 Minimal Go harness for repeatable Codex dispatch against a single directory in a target repository.
 
+Also supports multiplexed execution across many task configs in parallel.
+
 ## What It Does
 
 For each run, the harness performs this flow:
@@ -35,6 +37,21 @@ Use the template at [`templates/run.example.json`](templates/run.example.json):
 ```bash
 ./bin/harness run --config templates/run.example.json
 ```
+
+## Multiplex Run
+
+Run multiple task configs concurrently:
+
+```bash
+./bin/harness multiplex --config ./tasks --parallel 4
+```
+
+You can provide `--config` multiple times. Each value may be:
+
+- a single JSON file
+- a directory (all `*.json` files under it, recursively)
+
+Per-session logs are emitted to stderr with `session=<id>` prefixes, and a final per-session status summary is printed to stdout.
 
 ## Config (v1)
 
