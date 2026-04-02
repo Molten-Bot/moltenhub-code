@@ -1,4 +1,5 @@
 .codex
 .env*
-/templates/*.json
+/templates/
 !/templates/*.example.json
+moltenhub/
