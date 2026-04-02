@@ -60,6 +60,16 @@ func TestRunMultiplexUsageMissingConfigFlag(t *testing.T) {
 	}
 }
 
+func TestRunHubUsageMissingInitFlag(t *testing.T) {
+	orig := os.Args
+	t.Cleanup(func() { os.Args = orig })
+	os.Args = []string{"harness", "hub"}
+
+	if code := run(); code != 2 {
+		t.Fatalf("run() = %d, want 2", code)
+	}
+}
+
 func TestCollectConfigPathsFilesAndDirs(t *testing.T) {
 	t.Parallel()
 

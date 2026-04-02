@@ -3,6 +3,7 @@
 Minimal Go harness for repeatable Codex dispatch against a single directory in a target repository.
 
 Also supports multiplexed execution across many task configs in parallel.
+Also supports a persistent Hub listener mode that binds to MoltenHub and launches harness runs from websocket skill dispatches.
 
 ## What It Does
 
@@ -38,6 +39,16 @@ Use the template at [`templates/run.example.json`](templates/run.example.json):
 ./bin/harness run --config templates/run.example.json
 ```
 
+## Hub Run
+
+Use the template at [`templates/init.example.json`](templates/init.example.json):
+
+```bash
+./bin/harness hub --init templates/init.example.json
+```
+
+This mode keeps one local process running, listens on hub websocket events, and spins worker harness sessions as matching skill requests arrive.
+
 ## Multiplex Run
 
 Run multiple task configs concurrently:
@@ -52,6 +63,54 @@ You can provide `--config` multiple times. Each value may be:
 - a directory (all `*.json` files under it, recursively)
 
 Per-session logs are emitted to stderr with `session=<id>` prefixes, and a final per-session status summary is printed to stdout.
+
+## Hub Init Config (v1)
+
+Required fields:
+
+- `bind_token` or `agent_token`
+
+Optional fields (with defaults):
+
+- `version` (default: `v1`)
+- `base_url` (default: `https://na.hub.molten.bot/v1`)
+- `session_key` (default: `main`)
+- `handle`
+- `profile.display_name`
+- `profile.emoji`
+- `profile.bio`
+- `profile.metadata` (merged into agent metadata patch)
+- `skill.name` (default: `codex_harness_run`)
+- `skill.dispatch_type` (default: `skill_request`)
+- `skill.result_type` (default: `skill_result`)
+- `dispatcher.max_parallel` (default: `2`)
+
+## Hub Bootstrap Flow
+
+`harness hub` uses a hard-coded startup flow:
+
+1. Resolve an agent token:
+   - verify `agent_token` (if present), else
+   - attempt bind exchange against `/v1/agents/bind-tokens` and `/v1/agents/bind` using `bind_token`.
+2. Sync profile:
+   - handle finalize/update attempts
+   - profile patch (`display_name`, `emoji`, `bio`)
+   - metadata patch (includes runtime + skill metadata)
+3. Register runtime at `/v1/openclaw/messages/register-plugin` (non-fatal warning on failure).
+4. Connect websocket at `/v1/openclaw/messages/ws`.
+5. For each matching skill dispatch, parse run config JSON and execute a harness run in a worker goroutine.
+6. Send `skill_result` back over websocket (HTTP publish fallback if websocket send fails).
+
+## Hub Skill Payload
+
+Inbound dispatch must match the configured skill and include run config JSON. Supported payload locations include:
+
+- top-level `config` or `input`
+- `payload.config` or `payload.input`
+- `data.config` or `data.input`
+- `config_path` (path to a run config file)
+
+Run config schema is the same as standard harness `run` config (`repo`/`repo_url`, `prompt`, and optional branch/subdir/PR metadata).
 
 ## Config (v1)
 

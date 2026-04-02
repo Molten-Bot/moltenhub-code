@@ -6,13 +6,16 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 
 	"github.com/jef/how-i-want-to-code/internal/config"
 	"github.com/jef/how-i-want-to-code/internal/execx"
 	"github.com/jef/how-i-want-to-code/internal/harness"
+	"github.com/jef/how-i-want-to-code/internal/hub"
 	"github.com/jef/how-i-want-to-code/internal/multiplex"
 )
 
@@ -31,6 +34,8 @@ func run() int {
 		return runSingle(os.Args[2:])
 	case "multiplex":
 		return runMultiplex(os.Args[2:])
+	case "hub":
+		return runHub(os.Args[2:])
 	default:
 		printUsage()
 		return harness.ExitUsage
@@ -40,6 +45,7 @@ func run() int {
 func printUsage() {
 	fmt.Fprintln(os.Stderr, "usage: harness run --config <path-to-json>")
 	fmt.Fprintln(os.Stderr, "   or: harness multiplex --config <path-or-dir> [--config <path-or-dir> ...] [--parallel <n>]")
+	fmt.Fprintln(os.Stderr, "   or: harness hub --init <path-to-init-json> [--parallel <n>]")
 }
 
 func runSingle(args []string) int {
@@ -151,6 +157,60 @@ func runMultiplex(args []string) int {
 	}
 
 	return result.ExitCode()
+}
+
+func runHub(args []string) int {
+	fs := flag.NewFlagSet("hub", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+
+	initPath := fs.String("init", "", "Path to hub init JSON")
+	parallel := fs.Int("parallel", 0, "Optional override for dispatcher max parallel workers")
+
+	if err := fs.Parse(args); err != nil {
+		return harness.ExitUsage
+	}
+	if *initPath == "" {
+		fmt.Fprintln(os.Stderr, "missing required --init flag")
+		return harness.ExitUsage
+	}
+
+	cfg, err := hub.LoadInit(*initPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "init config error: %v\n", err)
+		return harness.ExitConfig
+	}
+	if *parallel > 0 {
+		cfg.Dispatcher.MaxParallel = *parallel
+	}
+
+	logger := log.New(os.Stderr, "", 0)
+	daemon := hub.NewDaemon(execx.OSRunner{})
+	daemon.Logf = logger.Printf
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := daemon.Run(ctx, cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return hubExitCode(err)
+	}
+	return harness.ExitSuccess
+}
+
+func hubExitCode(err error) int {
+	text := strings.ToLower(strings.TrimSpace(err.Error()))
+	switch {
+	case strings.HasPrefix(text, "init config:"):
+		return harness.ExitConfig
+	case strings.HasPrefix(text, "hub auth:"):
+		return harness.ExitAuth
+	case strings.HasPrefix(text, "hub profile:"):
+		return harness.ExitAuth
+	case strings.HasPrefix(text, "hub websocket url:"):
+		return harness.ExitConfig
+	default:
+		return harness.ExitPreflight
+	}
 }
 
 func collectConfigPaths(inputs []string) ([]string, error) {

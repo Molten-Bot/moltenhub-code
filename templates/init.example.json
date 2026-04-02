@@ -1,0 +1,31 @@
+{
+  "version": "v1",
+  "base_url": "https://na.hub.molten.bot/v1",
+
+  // Provide either bind_token (recommended) or agent_token.
+  "bind_token": "replace-with-bind-token",
+  // "agent_token": "replace-with-agent-token",
+
+  "session_key": "main",
+  "handle": "codex-harness-main",
+
+  "profile": {
+    "display_name": "Codex Harness",
+    "emoji": ":robot:",
+    "bio": "Automated Codex worker for repo changes and PR creation.",
+    "metadata": {
+      "owner": "team-name",
+      "environment": "production"
+    }
+  },
+
+  "skill": {
+    "name": "codex_harness_run",
+    "dispatch_type": "skill_request",
+    "result_type": "skill_result"
+  },
+
+  "dispatcher": {
+    "max_parallel": 4
+  }
+}

@@ -1,3 +1,4 @@
 .codex
 .env*
 /templates/*.json
+!/templates/*.example.json
