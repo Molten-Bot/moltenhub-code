@@ -1,0 +1,8 @@
+{
+  "repos": [
+    "git@github.com:acme/target-repo.git"
+  ],
+  "base_branch": "<SET YOUR BRANCH>",
+  "target_subdir": ".",
+  "prompt": "Fix the conflict of this branch with main, watch for CI/CD success and that there are no more merge conflicts for main"
+}

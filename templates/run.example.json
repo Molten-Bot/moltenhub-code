@@ -6,28 +6,3 @@
   "target_subdir": ".",
   "prompt": "Add your prompt here."
 }
-
-
-{
-  "repos": [
-    "git@github.com:Molten-Bot/admin-portal.git",
-    "git@github.com:Molten-Bot/moltenhub.git"
-  ],
-  "base_branch": "main",
-  "target_subdir": ".",
-  "prompt": "as an admin, I want to be able to login to all regions in moltenhub -> for qa we have: na.hub.molten-qa.site and eu.hub.molten-qa.site and for production we have na.hub.molten.bot and eu.hub.molten.bot. As an admin with access to ./admin-portal -> I am an admin on hub ./moltenhub -> we need a new page /hub on admin site wich should show up on the left hand nav. qa is connected to qa and prod is connected to prod. There should be a button, to submit my auth to both regions; and create my handle."
-}
-bind agent to company
-peer two regions
-
-local-1775248966-000001
-
-
-{
-  "repos": [
-    "git@github.com:jefking/how-i-want-to-code.git"
-  ],
-  "base_branch": "main",
-  "target_subdir": ".",
-  "prompt": "codex/codex-only-needs-to-create-a-branch-when-20260403-212429-8daf2c9c fix this branch, fix the merge and make sure ci is gtg"
-}
