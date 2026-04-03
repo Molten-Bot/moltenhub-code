@@ -206,12 +206,13 @@ func runHub(args []string) int {
 		logger.Print(line)
 		monitorBroker.IngestLog(line)
 	}
-	localDispatchSem := make(chan struct{}, cfg.Dispatcher.MaxParallel)
 	localSubmitDeduper := newLocalSubmissionDeduper(localSubmissionDedupTTL)
 	var localDispatchSeq uint64
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	dispatchController := hub.NewAdaptiveDispatchController(cfg.Dispatcher, daemonLogger)
+	dispatchController.Start(ctx)
 
 	if strings.TrimSpace(*uiListen) != "" {
 		uiServer := hubui.NewServer(*uiListen, monitorBroker)
@@ -238,13 +239,10 @@ func runHub(args []string) int {
 				return "", fmt.Errorf("service is shutting down")
 			default:
 			}
-
 			select {
-			case localDispatchSem <- struct{}{}:
 			case <-reqCtx.Done():
 				return "", fmt.Errorf("request canceled")
 			default:
-				return "", fmt.Errorf("dispatcher is busy (max_parallel=%d)", cap(localDispatchSem))
 			}
 
 			requestID := fmt.Sprintf(
@@ -259,7 +257,6 @@ func runHub(args []string) int {
 						state,
 						duplicateOf,
 					)
-					<-localDispatchSem
 					return "", newDuplicateSubmissionError(duplicateOf, state)
 				}
 			}
@@ -267,13 +264,19 @@ func runHub(args []string) int {
 				monitorBroker.RecordTaskRunConfig(requestID, runConfigJSON)
 			}
 			go func(requestID string, runCfg config.Config, dedupeKey string) {
-				defer func() { <-localDispatchSem }()
 				finalState := ""
 				if dedupeKey != "" {
 					defer func() {
 						localSubmitDeduper.Done(dedupeKey, requestID, finalState)
 					}()
 				}
+				release, acquireErr := dispatchController.Acquire(ctx, requestID)
+				if acquireErr != nil {
+					finalState = "error"
+					daemonLogger("dispatch status=error request_id=%s err=%q", requestID, acquireErr)
+					return
+				}
+				defer release()
 				finalState = runLocalDispatch(ctx, runner, daemonLogger, cfg.Skill.Name, requestID, runCfg)
 			}(requestID, runCfg, dedupeKey)
 
@@ -289,6 +292,7 @@ func runHub(args []string) int {
 
 	daemon := hub.NewDaemon(runner)
 	daemon.Logf = daemonLogger
+	daemon.DispatchController = dispatchController
 	daemon.OnDispatchQueued = func(requestID string, runCfg config.Config) {
 		if runConfigJSON, ok := marshalRunConfigJSON(runCfg); ok {
 			monitorBroker.RecordTaskRunConfig(requestID, runConfigJSON)

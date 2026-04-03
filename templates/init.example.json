@@ -15,9 +15,5 @@
     "name": "code_for_me",
     "dispatch_type": "skill_request",
     "result_type": "skill_result"
-  },
-
-  "dispatcher": {
-    "max_parallel": 10
   }
 }

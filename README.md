@@ -116,7 +116,15 @@ Optional fields (with defaults):
 - `skill.name` (default: `code_for_me`)
 - `skill.dispatch_type` (default: `skill_request`)
 - `skill.result_type` (default: `skill_result`)
-- `dispatcher.max_parallel` (default: `2`)
+- `dispatcher.max_parallel` (optional cap; default: auto from CPU cores)
+- `dispatcher.min_parallel` (default: `1`)
+- `dispatcher.sample_window` (default: `5`)
+- `dispatcher.sample_interval_ms` (default: `1500`)
+- `dispatcher.cpu_high_watermark` (default: `85`)
+- `dispatcher.memory_high_watermark` (default: `90`)
+- `dispatcher.disk_io_high_watermark_mb_s` (default: `120`)
+
+Dispatcher concurrency is adaptive: inbound work is queued FIFO, and when sampled CPU/memory/disk I/O pressure exceeds watermarks, the controller lowers active parallelism. Running tasks are not preempted; the most recent queued tasks wait until pressure recovers.
 
 ## Hub Bootstrap Flow
 

@@ -202,9 +202,9 @@ func TestProcessInboundMessageInvokesOnDispatchQueued(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	workerSem := make(chan struct{}, cfg.Dispatcher.MaxParallel)
-	workerSem <- struct{}{}
 	var workers sync.WaitGroup
+	dispatchController := NewAdaptiveDispatchController(cfg.Dispatcher, nil)
+	dispatchController.Start(ctx)
 
 	msg := map[string]any{
 		"type":       "skill_request",
@@ -215,7 +215,7 @@ func TestProcessInboundMessageInvokesOnDispatchQueued(t *testing.T) {
 			"prompt": "ship rerun button",
 		},
 	}
-	d.processInboundMessage(ctx, APIClient{}, "", cfg, msg, "", "", workerSem, &workers, nil)
+	d.processInboundMessage(ctx, APIClient{}, "", cfg, msg, "", "", dispatchController, &workers, nil)
 
 	mu.Lock()
 	defer mu.Unlock()

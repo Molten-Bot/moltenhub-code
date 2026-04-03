@@ -17,10 +17,11 @@ import (
 
 // Daemon listens for hub skill dispatches and runs harness jobs.
 type Daemon struct {
-	Runner           execx.Runner
-	Logf             func(string, ...any)
-	OnDispatchQueued func(requestID string, runCfg config.Config)
-	ReconnectDelay   time.Duration
+	Runner             execx.Runner
+	Logf               func(string, ...any)
+	OnDispatchQueued   func(requestID string, runCfg config.Config)
+	DispatchController *AdaptiveDispatchController
+	ReconnectDelay     time.Duration
 }
 
 const wsFallbackWindow = 30 * time.Second
@@ -99,7 +100,12 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 
 	d.logf("hub.transport primary=openclaw_ws fallback=openclaw_pull")
 
-	workerSem := make(chan struct{}, cfg.Dispatcher.MaxParallel)
+	dispatchController := d.DispatchController
+	if dispatchController == nil {
+		dispatchController = NewAdaptiveDispatchController(cfg.Dispatcher, d.logf)
+	}
+	dispatchController.Start(ctx)
+
 	var workers sync.WaitGroup
 	defer workers.Wait()
 	deduper := newDispatchDeduper(dispatchDedupTTL)
@@ -108,7 +114,7 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	if wsURLErr != nil {
 		d.logf("hub.ws status=disabled err=%q", wsURLErr)
 		d.logf("hub.transport mode=openclaw_pull")
-		return d.runPullLoop(ctx, api, token, cfg, workerSem, &workers, deduper)
+		return d.runPullLoop(ctx, api, token, cfg, dispatchController, &workers, deduper)
 	}
 
 	for {
@@ -116,7 +122,7 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 			return nil
 		}
 
-		if err := d.runWebsocketLoop(ctx, wsURL, api, token, cfg, workerSem, &workers, deduper); err == nil {
+		if err := d.runWebsocketLoop(ctx, wsURL, api, token, cfg, dispatchController, &workers, deduper); err == nil {
 			return nil
 		} else if ctx.Err() != nil {
 			return nil
@@ -136,7 +142,7 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 			if ctx.Err() != nil {
 				return nil
 			}
-			if err := d.pullOnce(ctx, api, token, cfg, workerSem, &workers, deduper); err != nil {
+			if err := d.pullOnce(ctx, api, token, cfg, dispatchController, &workers, deduper); err != nil {
 				d.logf("hub.pull status=error err=%q", err)
 				if !sleepWithContext(ctx, d.ReconnectDelay) {
 					return nil
@@ -151,7 +157,7 @@ func (d Daemon) runPullLoop(
 	api APIClient,
 	token string,
 	cfg InitConfig,
-	workerSem chan struct{},
+	dispatchController *AdaptiveDispatchController,
 	workers *sync.WaitGroup,
 	deduper *dispatchDeduper,
 ) error {
@@ -159,7 +165,7 @@ func (d Daemon) runPullLoop(
 		if ctx.Err() != nil {
 			return nil
 		}
-		if err := d.pullOnce(ctx, api, token, cfg, workerSem, workers, deduper); err != nil {
+		if err := d.pullOnce(ctx, api, token, cfg, dispatchController, workers, deduper); err != nil {
 			d.logf("hub.pull status=error err=%q", err)
 			if !sleepWithContext(ctx, d.ReconnectDelay) {
 				return nil
@@ -173,7 +179,7 @@ func (d Daemon) pullOnce(
 	api APIClient,
 	token string,
 	cfg InitConfig,
-	workerSem chan struct{},
+	dispatchController *AdaptiveDispatchController,
 	workers *sync.WaitGroup,
 	deduper *dispatchDeduper,
 ) error {
@@ -184,7 +190,7 @@ func (d Daemon) pullOnce(
 	if !found {
 		return nil
 	}
-	d.processInboundMessage(ctx, api, token, cfg, pulled.Message, pulled.DeliveryID, pulled.MessageID, workerSem, workers, deduper)
+	d.processInboundMessage(ctx, api, token, cfg, pulled.Message, pulled.DeliveryID, pulled.MessageID, dispatchController, workers, deduper)
 	return nil
 }
 
@@ -194,7 +200,7 @@ func (d Daemon) runWebsocketLoop(
 	api APIClient,
 	token string,
 	cfg InitConfig,
-	workerSem chan struct{},
+	dispatchController *AdaptiveDispatchController,
 	workers *sync.WaitGroup,
 	deduper *dispatchDeduper,
 ) error {
@@ -250,7 +256,7 @@ func (d Daemon) runWebsocketLoop(
 		if len(inbound.Message) == 0 {
 			continue
 		}
-		d.processInboundMessage(ctx, api, token, cfg, inbound.Message, inbound.DeliveryID, inbound.MessageID, workerSem, workers, deduper)
+		d.processInboundMessage(ctx, api, token, cfg, inbound.Message, inbound.DeliveryID, inbound.MessageID, dispatchController, workers, deduper)
 	}
 }
 
@@ -262,7 +268,7 @@ func (d Daemon) processInboundMessage(
 	msg map[string]any,
 	deliveryID string,
 	messageID string,
-	workerSem chan struct{},
+	dispatchController *AdaptiveDispatchController,
 	workers *sync.WaitGroup,
 	deduper *dispatchDeduper,
 ) {
@@ -311,6 +317,10 @@ func (d Daemon) processInboundMessage(
 	if d.OnDispatchQueued != nil {
 		d.OnDispatchQueued(dispatch.RequestID, dispatch.Config)
 	}
+	if dispatchController == nil {
+		dispatchController = NewAdaptiveDispatchController(cfg.Dispatcher, d.logf)
+		dispatchController.Start(ctx)
+	}
 
 	ackedEarly := false
 	if strings.TrimSpace(deliveryID) != "" {
@@ -322,19 +332,25 @@ func (d Daemon) processInboundMessage(
 		}
 	}
 
-	select {
-	case workerSem <- struct{}{}:
-	case <-ctx.Done():
-		if deduper != nil {
-			deduper.Done(dupKey)
-		}
-		return
-	}
-
 	workers.Add(1)
 	go func(dispatch SkillDispatch, deliveryID, dedupeKey string, ackedEarly bool) {
 		defer workers.Done()
-		defer func() { <-workerSem }()
+
+		release, acquireErr := dispatchController.Acquire(ctx, dispatch.RequestID)
+		if acquireErr != nil {
+			if !errors.Is(acquireErr, context.Canceled) && !errors.Is(acquireErr, errDispatchControllerClosed) {
+				d.logf(
+					"dispatch status=error request_id=%s err=%q",
+					firstNonEmpty(dispatch.RequestID, dedupeKey),
+					acquireErr,
+				)
+			}
+			if deduper != nil {
+				deduper.Done(dedupeKey)
+			}
+			return
+		}
+		defer release()
 		defer func() {
 			if deduper != nil {
 				deduper.Done(dedupeKey)

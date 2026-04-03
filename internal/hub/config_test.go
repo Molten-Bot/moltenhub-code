@@ -41,8 +41,26 @@ func TestLoadInitDefaults(t *testing.T) {
 	if cfg.Skill.ResultType != "skill_result" {
 		t.Fatalf("Skill.ResultType = %q", cfg.Skill.ResultType)
 	}
-	if cfg.Dispatcher.MaxParallel != 2 {
-		t.Fatalf("Dispatcher.MaxParallel = %d", cfg.Dispatcher.MaxParallel)
+	if cfg.Dispatcher.MaxParallel < 1 {
+		t.Fatalf("Dispatcher.MaxParallel = %d, want >= 1", cfg.Dispatcher.MaxParallel)
+	}
+	if cfg.Dispatcher.MinParallel != 1 {
+		t.Fatalf("Dispatcher.MinParallel = %d, want 1", cfg.Dispatcher.MinParallel)
+	}
+	if cfg.Dispatcher.SampleWindow != 5 {
+		t.Fatalf("Dispatcher.SampleWindow = %d, want 5", cfg.Dispatcher.SampleWindow)
+	}
+	if cfg.Dispatcher.SampleIntervalMS != 1500 {
+		t.Fatalf("Dispatcher.SampleIntervalMS = %d, want 1500", cfg.Dispatcher.SampleIntervalMS)
+	}
+	if cfg.Dispatcher.CPUHighWatermark != 85 {
+		t.Fatalf("Dispatcher.CPUHighWatermark = %.2f, want 85", cfg.Dispatcher.CPUHighWatermark)
+	}
+	if cfg.Dispatcher.MemoryHighWatermark != 90 {
+		t.Fatalf("Dispatcher.MemoryHighWatermark = %.2f, want 90", cfg.Dispatcher.MemoryHighWatermark)
+	}
+	if cfg.Dispatcher.DiskIOHighWatermarkMBs != 120 {
+		t.Fatalf("Dispatcher.DiskIOHighWatermarkMBs = %.2f, want 120", cfg.Dispatcher.DiskIOHighWatermarkMBs)
 	}
 }
 
@@ -117,5 +135,33 @@ func TestLoadInitAllowsAgentTokenWithoutBindToken(t *testing.T) {
 	}
 	if cfg.Dispatcher.MaxParallel != 4 {
 		t.Fatalf("Dispatcher.MaxParallel = %d", cfg.Dispatcher.MaxParallel)
+	}
+}
+
+func TestValidateRejectsInvalidDispatcherThresholds(t *testing.T) {
+	t.Parallel()
+
+	cfg := InitConfig{
+		Version:    "v1",
+		BaseURL:    "https://na.hub.molten.bot/v1",
+		BindToken:  "token",
+		SessionKey: "main",
+		Skill: SkillConfig{
+			Name:         "codex_harness_run",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+		Dispatcher: DispatcherConfig{
+			MaxParallel:            2,
+			MinParallel:            1,
+			SampleWindow:           5,
+			SampleIntervalMS:       500,
+			CPUHighWatermark:       0,
+			MemoryHighWatermark:    90,
+			DiskIOHighWatermarkMBs: 100,
+		},
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error")
 	}
 }

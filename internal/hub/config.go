@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 )
 
@@ -39,7 +40,13 @@ type SkillConfig struct {
 
 // DispatcherConfig controls local worker behavior.
 type DispatcherConfig struct {
-	MaxParallel int `json:"max_parallel"`
+	MaxParallel            int     `json:"max_parallel"`
+	MinParallel            int     `json:"min_parallel"`
+	SampleWindow           int     `json:"sample_window"`
+	SampleIntervalMS       int     `json:"sample_interval_ms"`
+	CPUHighWatermark       float64 `json:"cpu_high_watermark"`
+	MemoryHighWatermark    float64 `json:"memory_high_watermark"`
+	DiskIOHighWatermarkMBs float64 `json:"disk_io_high_watermark_mb_s"`
 }
 
 // LoadInit reads and validates JSON/JSONC init config.
@@ -104,8 +111,29 @@ func (c *InitConfig) ApplyDefaults() {
 		c.Skill.ResultType = "skill_result"
 	}
 
+	if c.Dispatcher.MinParallel < 1 {
+		c.Dispatcher.MinParallel = 1
+	}
 	if c.Dispatcher.MaxParallel < 1 {
-		c.Dispatcher.MaxParallel = 2
+		c.Dispatcher.MaxParallel = defaultDispatcherMaxParallel()
+	}
+	if c.Dispatcher.MaxParallel < c.Dispatcher.MinParallel {
+		c.Dispatcher.MaxParallel = c.Dispatcher.MinParallel
+	}
+	if c.Dispatcher.SampleWindow < 1 {
+		c.Dispatcher.SampleWindow = 5
+	}
+	if c.Dispatcher.SampleIntervalMS < 250 {
+		c.Dispatcher.SampleIntervalMS = 1500
+	}
+	if c.Dispatcher.CPUHighWatermark <= 0 {
+		c.Dispatcher.CPUHighWatermark = 85
+	}
+	if c.Dispatcher.MemoryHighWatermark <= 0 {
+		c.Dispatcher.MemoryHighWatermark = 90
+	}
+	if c.Dispatcher.DiskIOHighWatermarkMBs <= 0 {
+		c.Dispatcher.DiskIOHighWatermarkMBs = 120
 	}
 }
 
@@ -139,7 +167,40 @@ func (c InitConfig) Validate() error {
 	if c.Dispatcher.MaxParallel < 1 {
 		return fmt.Errorf("dispatcher.max_parallel must be >= 1")
 	}
+	if c.Dispatcher.MinParallel < 1 {
+		return fmt.Errorf("dispatcher.min_parallel must be >= 1")
+	}
+	if c.Dispatcher.MinParallel > c.Dispatcher.MaxParallel {
+		return fmt.Errorf("dispatcher.min_parallel must be <= dispatcher.max_parallel")
+	}
+	if c.Dispatcher.SampleWindow < 1 {
+		return fmt.Errorf("dispatcher.sample_window must be >= 1")
+	}
+	if c.Dispatcher.SampleIntervalMS < 250 {
+		return fmt.Errorf("dispatcher.sample_interval_ms must be >= 250")
+	}
+	if c.Dispatcher.CPUHighWatermark <= 0 || c.Dispatcher.CPUHighWatermark > 100 {
+		return fmt.Errorf("dispatcher.cpu_high_watermark must be > 0 and <= 100")
+	}
+	if c.Dispatcher.MemoryHighWatermark <= 0 || c.Dispatcher.MemoryHighWatermark > 100 {
+		return fmt.Errorf("dispatcher.memory_high_watermark must be > 0 and <= 100")
+	}
+	if c.Dispatcher.DiskIOHighWatermarkMBs <= 0 {
+		return fmt.Errorf("dispatcher.disk_io_high_watermark_mb_s must be > 0")
+	}
 	return nil
+}
+
+func defaultDispatcherMaxParallel() int {
+	cores := runtime.NumCPU()
+	switch {
+	case cores <= 1:
+		return 1
+	case cores == 2:
+		return 2
+	default:
+		return cores
+	}
 }
 
 func stripLineComments(data []byte) []byte {
