@@ -29,5 +29,5 @@ local-1775248966-000001
   ],
   "base_branch": "main",
   "target_subdir": ".",
-  "prompt": "add in the seed ./library/AGENTS.md with 'you are ./AGENTS.md' ... the the prompt. this file(contents) should be included in the root/temp folder we create so that codex always leverages this as how to go about making changes."
+  "prompt": "codex/codex-only-needs-to-create-a-branch-when-20260403-212429-8daf2c9c fix this branch, fix the merge and make sure ci is gtg"
 }
