@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -14,6 +15,7 @@ const (
 	defaultRunRoot  = "temp"
 	agentsSeedPath  = "library/AGENTS.md"
 	agentsFileName  = "AGENTS.md"
+	agentsSeedEnv   = "HARNESS_AGENTS_SEED_PATH"
 )
 
 // Manager creates isolated run directories.
@@ -104,7 +106,13 @@ func (m Manager) SeedAgentsFile(runDir string) (string, error) {
 
 	content, err := readFile(agentsSeedPath)
 	if err != nil {
-		return "", fmt.Errorf("read agents seed: %w", err)
+		fallbackPath := resolveAgentsSeedPath()
+		if fallbackPath != "" && fallbackPath != agentsSeedPath {
+			content, err = readFile(fallbackPath)
+		}
+		if err != nil {
+			return "", fmt.Errorf("read agents seed: %w", err)
+		}
 	}
 	dst := filepath.Join(runDir, agentsFileName)
 	if err := writeFile(dst, content, 0o644); err != nil {
@@ -125,4 +133,44 @@ func newGUID() string {
 	var b [16]byte
 	_, _ = rand.Read(b[:])
 	return hex.EncodeToString(b[:])
+}
+
+func resolveAgentsSeedPath() string {
+	if configured := strings.TrimSpace(os.Getenv(agentsSeedEnv)); configured != "" {
+		if st, err := os.Stat(configured); err == nil && !st.IsDir() {
+			return configured
+		}
+	}
+	if wd, err := os.Getwd(); err == nil {
+		if path, ok := findPathUpward(wd, agentsSeedPath); ok {
+			return path
+		}
+	}
+	if exePath, err := os.Executable(); err == nil {
+		if path, ok := findPathUpward(filepath.Dir(exePath), agentsSeedPath); ok {
+			return path
+		}
+	}
+	return ""
+}
+
+func findPathUpward(startDir, relPath string) (string, bool) {
+	startDir = strings.TrimSpace(startDir)
+	relPath = strings.TrimSpace(relPath)
+	if startDir == "" || relPath == "" {
+		return "", false
+	}
+
+	current := filepath.Clean(startDir)
+	for {
+		candidate := filepath.Join(current, relPath)
+		if st, err := os.Stat(candidate); err == nil && !st.IsDir() {
+			return candidate, true
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", false
+		}
+		current = parent
+	}
 }

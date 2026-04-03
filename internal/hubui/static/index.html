@@ -373,6 +373,7 @@
     .badge.active { background: #7eb8eb; }
     .badge.ok { background: var(--good); }
     .badge.no_changes { background: var(--warn); }
+    .badge.duplicate { background: var(--warn); color: #2e2620; }
     .badge.error, .badge.invalid { background: var(--bad); color: #2d1515; }
 
     .task-meta {
@@ -510,6 +511,11 @@
     }
 
     .task-result.no_changes {
+      color: #ffe2ad;
+      background: rgba(255, 190, 85, 0.14);
+    }
+
+    .task-result.duplicate {
       color: #ffe2ad;
       background: rgba(255, 190, 85, 0.14);
     }
@@ -661,7 +667,7 @@
     const MAIN_TASK_LABEL = "main";
     const TASK_PROMPT_PREVIEW_MAX = 30;
     const DISMISSED_TASKS_KEY = "hubui.dismissedTaskIds";
-    const COMPLETED_STATUSES = new Set(["ok", "no_changes", "error", "invalid"]);
+    const COMPLETED_STATUSES = new Set(["ok", "no_changes", "error", "invalid", "duplicate"]);
     const TASK_PROGRESS_STEPS = [
       { id: "received", label: "Task Received", detail: "Dispatch accepted by hub." },
       { id: "run", label: "Run Started", detail: "Harness run initialized." },
@@ -795,6 +801,15 @@
       localPromptStatus.textContent = text;
     }
 
+    function duplicateNotice(body) {
+      const requestID = body?.request_id || "(unknown)";
+      const rawState = String(body?.state || "").trim();
+      if (!rawState) {
+        return `Duplicate ignored; existing request ${requestID}.`;
+      }
+      return `Duplicate ignored; existing request ${requestID} (${rawState.replace(/_/g, " ")}).`;
+    }
+
     function persistDismissedTaskIDs() {
       try {
         localStorage.setItem(DISMISSED_TASKS_KEY, JSON.stringify(Array.from(state.dismissedTaskIDs)));
@@ -851,6 +866,10 @@
         }
 
         if (!response.ok) {
+          if (response.status === 409 && body?.duplicate) {
+            setLocalPromptStatus("warn", duplicateNotice(body));
+            return;
+          }
           throw new Error(body?.error || `rerun http ${response.status}`);
         }
 
@@ -1046,7 +1065,7 @@
       }
 
       const status = task.status || "";
-      if (status !== "ok" && status !== "no_changes" && status !== "error" && status !== "invalid") {
+      if (status !== "ok" && status !== "no_changes" && status !== "error" && status !== "invalid" && status !== "duplicate") {
         return;
       }
 
@@ -1065,6 +1084,9 @@
       } else if (status === "no_changes") {
         title.textContent = "Task Complete";
         detail.textContent = "No code changes were detected.";
+      } else if (status === "duplicate") {
+        title.textContent = "Duplicate Ignored";
+        detail.textContent = task.error ? task.error : "An equivalent prompt/repo/branch submission was ignored.";
       } else {
         title.textContent = "Task Failed";
         detail.textContent = task.error ? task.error : "See logs for failure details.";
@@ -1300,6 +1322,10 @@
         }
 
         if (!response.ok) {
+          if (response.status === 409 && body?.duplicate) {
+            setLocalPromptStatus("warn", duplicateNotice(body));
+            return;
+          }
           throw new Error(body?.error || `submit http ${response.status}`);
         }
 

@@ -191,6 +191,16 @@ func (s Server) handleLocalPrompt(w http.ResponseWriter, r *http.Request) {
 
 	requestID, err := s.SubmitLocalPrompt(r.Context(), body)
 	if err != nil {
+		if duplicateRequestID, duplicateState, ok := duplicateSubmissionDetails(err); ok {
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"ok":         false,
+				"error":      err.Error(),
+				"duplicate":  true,
+				"request_id": duplicateRequestID,
+				"state":      duplicateState,
+			})
+			return
+		}
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":    false,
 			"error": err.Error(),
@@ -266,6 +276,17 @@ func (s Server) handleTaskRerun(w http.ResponseWriter, r *http.Request, requestI
 
 	newRequestID, err := s.SubmitLocalPrompt(r.Context(), runConfigJSON)
 	if err != nil {
+		if duplicateRequestID, duplicateState, ok := duplicateSubmissionDetails(err); ok {
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"ok":           false,
+				"error":        err.Error(),
+				"duplicate":    true,
+				"request_id":   duplicateRequestID,
+				"state":        duplicateState,
+				"duplicate_of": requestID,
+			})
+			return
+		}
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":    false,
 			"error": err.Error(),
@@ -297,4 +318,21 @@ func (s Server) logf(format string, args ...any) {
 		return
 	}
 	s.Logf(format, args...)
+}
+
+type duplicateSubmission interface {
+	error
+	DuplicateRequestID() string
+	DuplicateState() string
+}
+
+func duplicateSubmissionDetails(err error) (requestID string, state string, ok bool) {
+	if err == nil {
+		return "", "", false
+	}
+	var duplicateErr duplicateSubmission
+	if !errors.As(err, &duplicateErr) {
+		return "", "", false
+	}
+	return strings.TrimSpace(duplicateErr.DuplicateRequestID()), strings.TrimSpace(duplicateErr.DuplicateState()), true
 }

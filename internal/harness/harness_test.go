@@ -344,6 +344,7 @@ func TestRunNoChecksReportedRetriesBeforePassing(t *testing.T) {
 		{cmd: pushCommand(repoDir, branch)},
 		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
 		{cmd: prChecksCommand(repoDir, prURL), res: execx.Result{Stderr: noChecks + "\n"}, err: errors.New("checks unavailable")},
+		{cmd: workflowDispatchCommand(repoDir, branch)},
 		{cmd: prChecksCommand(repoDir, prURL), res: execx.Result{Stderr: noChecks + "\n"}, err: errors.New("checks unavailable")},
 		{cmd: prChecksCommand(repoDir, prURL)},
 	}}
@@ -403,8 +404,10 @@ func TestRunNoChecksReportedAfterRetryWindowTriggersRemediation(t *testing.T) {
 		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
 		{cmd: pushCommand(repoDir, branch)},
 		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL), res: execx.Result{Stderr: noChecks + "\n"}, err: errors.New("checks unavailable")},
+		{cmd: workflowDispatchCommand(repoDir, branch)},
 	}
-	for i := 0; i <= maxPRChecksNoReportRetries; i++ {
+	for i := 1; i <= maxPRChecksNoReportRetries; i++ {
 		exps = append(exps, expectedRun{
 			cmd: prChecksCommand(repoDir, prURL),
 			res: execx.Result{Stderr: noChecks + "\n"},
@@ -821,6 +824,15 @@ func TestCommandBuilders(t *testing.T) {
 	if !shouldCreateWorkBranch("main") {
 		t.Fatal("shouldCreateWorkBranch(main) = false, want true")
 	}
+	if !shouldCreateWorkBranch(" refs/heads/main ") {
+		t.Fatal("shouldCreateWorkBranch(\" refs/heads/main \") = false, want true")
+	}
+	if !shouldCreateWorkBranch("origin/main") {
+		t.Fatal("shouldCreateWorkBranch(origin/main) = false, want true")
+	}
+	if shouldCreateWorkBranch("Main") {
+		t.Fatal("shouldCreateWorkBranch(Main) = true, want false")
+	}
 	if shouldCreateWorkBranch("release/fix-ci") {
 		t.Fatal("shouldCreateWorkBranch(non-main) = true, want false")
 	}
@@ -835,6 +847,12 @@ func TestCommandBuilders(t *testing.T) {
 	wantAllChecks := []string{"pr", "checks", "https://github.com/acme/repo/pull/42", "--watch", "--interval", "10"}
 	if allChecks.Name != "gh" || allChecks.Dir != repoDir || !reflect.DeepEqual(allChecks.Args, wantAllChecks) {
 		t.Fatalf("pr checks any command unexpected: %+v", allChecks)
+	}
+
+	workflowDispatch := workflowDispatchCommand(repoDir, branch)
+	wantWorkflowDispatch := []string{"workflow", "run", defaultCIWorkflowPath, "--ref", branch}
+	if workflowDispatch.Name != "gh" || workflowDispatch.Dir != repoDir || !reflect.DeepEqual(workflowDispatch.Args, wantWorkflowDispatch) {
+		t.Fatalf("workflow dispatch command unexpected: %+v", workflowDispatch)
 	}
 }
 

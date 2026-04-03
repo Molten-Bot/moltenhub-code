@@ -335,6 +335,29 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 		t.Error = firstNonEmpty(parseFieldValue(line, "err"), parseFieldValue(line, "error"), t.Error)
 	}
 
+	if strings.HasPrefix(line, "dispatch status=duplicate") {
+		if t.Status == "" || t.Status == "pending" || t.Status == "duplicate" {
+			t.Status = "duplicate"
+			t.Stage = firstNonEmpty(t.Stage, "dispatch")
+			t.StageStatus = firstNonEmpty(fields["state"], t.StageStatus)
+			t.Error = firstNonEmpty(parseFieldValue(line, "err"), parseFieldValue(line, "error"), t.Error)
+			if t.Error == "" {
+				var details []string
+				if state := strings.TrimSpace(fields["state"]); state != "" {
+					details = append(details, "state="+state)
+				}
+				if duplicateOf := strings.TrimSpace(fields["duplicate_of"]); duplicateOf != "" {
+					details = append(details, "duplicate_of="+duplicateOf)
+				}
+				if len(details) == 0 {
+					t.Error = "duplicate submission ignored"
+				} else {
+					t.Error = "duplicate submission ignored (" + strings.Join(details, ", ") + ")"
+				}
+			}
+		}
+	}
+
 	if strings.HasPrefix(line, "dispatch request_id=") {
 		if stage := fields["stage"]; stage != "" {
 			t.Stage = stage

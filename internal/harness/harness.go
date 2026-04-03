@@ -33,6 +33,7 @@ const (
 	maxPRChecksNoReportRetries    = 6
 	prChecksNoReportRetryDelay    = 10 * time.Second
 	maxCheckSummaryChars          = 4000
+	defaultCIWorkflowPath         = ".github/workflows/ci.yml"
 )
 
 type logFn func(string, ...any)
@@ -135,7 +136,8 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 	agentsPath, err := h.Workspace.SeedAgentsFile(runDir)
 	if err != nil {
-		return h.fail(ExitWorkspace, "workspace", err, runDir)
+		h.logf("stage=workspace status=warn action=seed_agents err=%q", err)
+		agentsPath = ""
 	}
 	h.logf("stage=workspace status=ok run_dir=%s guid=%s agents=%s", runDir, guid, agentsPath)
 
@@ -198,7 +200,9 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 	codexOpts := codexRunOptions{SkipGitRepoCheck: len(repos) > 1}
 	codexBasePrompt := workspaceCodexPrompt(cfg.Prompt, cfg.TargetSubdir, repos)
-	codexBasePrompt = withAgentsPrompt(codexBasePrompt, agentsPath)
+	if strings.TrimSpace(agentsPath) != "" {
+		codexBasePrompt = withAgentsPrompt(codexBasePrompt, agentsPath)
+	}
 	codexTargetLabel := codexTargetLabel(cfg.TargetSubdir, len(repos) > 1)
 
 	h.logf("stage=codex status=start target=%s", codexTargetLabel)
@@ -334,7 +338,38 @@ func (h Harness) processChangedRepo(
 			}
 
 			checkSummary = summarizeCheckOutput(checkRes)
-			if noReportRetry >= maxPRChecksNoReportRetries || !isNoChecksReported(checkRes, checkErr) {
+			noChecksReported := isNoChecksReported(checkRes, checkErr)
+			if noChecksReported && noReportRetry == 0 {
+				h.logf(
+					"stage=checks status=start action=workflow_dispatch reason=no_checks_reported repo=%s repo_dir=%s branch=%s workflow=%s attempt=%d",
+					repo.URL,
+					repo.RelDir,
+					repo.Branch,
+					defaultCIWorkflowPath,
+					attempt+1,
+				)
+				if _, dispatchErr := h.runCommand(ctx, "checks", workflowDispatchCommand(repo.Dir, repo.Branch)); dispatchErr != nil {
+					h.logf(
+						"stage=checks status=warn action=workflow_dispatch reason=failed repo=%s repo_dir=%s branch=%s workflow=%s attempt=%d err=%q",
+						repo.URL,
+						repo.RelDir,
+						repo.Branch,
+						defaultCIWorkflowPath,
+						attempt+1,
+						dispatchErr,
+					)
+				} else {
+					h.logf(
+						"stage=checks status=ok action=workflow_dispatch repo=%s repo_dir=%s branch=%s workflow=%s attempt=%d",
+						repo.URL,
+						repo.RelDir,
+						repo.Branch,
+						defaultCIWorkflowPath,
+						attempt+1,
+					)
+				}
+			}
+			if noReportRetry >= maxPRChecksNoReportRetries || !noChecksReported {
 				break
 			}
 
@@ -702,7 +737,14 @@ func cloneRepoCommand(repoURL, baseBranch, repoDir string) execx.Command {
 }
 
 func shouldCreateWorkBranch(baseBranch string) bool {
-	return strings.EqualFold(strings.TrimSpace(baseBranch), "main")
+	return normalizeBranchRef(baseBranch) == "main"
+}
+
+func normalizeBranchRef(branch string) string {
+	branch = strings.TrimSpace(branch)
+	branch = strings.TrimPrefix(branch, "refs/heads/")
+	branch = strings.TrimPrefix(branch, "origin/")
+	return branch
 }
 
 func branchCommand(repoDir, branch string) execx.Command {
@@ -822,6 +864,14 @@ func prChecksAnyCommand(repoDir, prURL string) execx.Command {
 			"--watch",
 			"--interval", fmt.Sprintf("%d", prChecksWatchIntervalSeconds),
 		},
+	}
+}
+
+func workflowDispatchCommand(repoDir, branch string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: []string{"workflow", "run", defaultCIWorkflowPath, "--ref", branch},
 	}
 }
 

@@ -187,6 +187,28 @@ func TestBrokerCapturesWorkspaceAndBranchFromErrorStatus(t *testing.T) {
 	}
 }
 
+func TestBrokerCapturesDuplicateStatus(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog("dispatch status=duplicate request_id=req-dup state=in_flight duplicate_of=req-100")
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	task := snap.Tasks[0]
+	if task.Status != "duplicate" {
+		t.Fatalf("status = %q, want duplicate", task.Status)
+	}
+	if task.StageStatus != "in_flight" {
+		t.Fatalf("stage status = %q, want in_flight", task.StageStatus)
+	}
+	if task.Error != "duplicate submission ignored (state=in_flight, duplicate_of=req-100)" {
+		t.Fatalf("error = %q", task.Error)
+	}
+}
+
 func TestBrokerSubscribeSignalsChanges(t *testing.T) {
 	t.Parallel()
 

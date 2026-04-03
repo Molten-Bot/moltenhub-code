@@ -207,6 +207,7 @@ func runHub(args []string) int {
 		monitorBroker.IngestLog(line)
 	}
 	localDispatchSem := make(chan struct{}, cfg.Dispatcher.MaxParallel)
+	localSubmitDeduper := newLocalSubmissionDeduper(localSubmissionDedupTTL)
 	var localDispatchSeq uint64
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -219,6 +220,17 @@ func runHub(args []string) int {
 			runCfg, err := hub.ParseRunConfigJSON(body)
 			if err != nil {
 				return "", fmt.Errorf("invalid run config: %w", err)
+			}
+			dedupeKey := dedupeKeyForRunConfig(runCfg)
+			if dedupeKey != "" {
+				if duplicate, state, duplicateOf := localSubmitDeduper.Check(dedupeKey); duplicate {
+					daemonLogger(
+						"dispatch status=duplicate source=local_submit state=%s duplicate_of=%s",
+						state,
+						duplicateOf,
+					)
+					return "", newDuplicateSubmissionError(duplicateOf, state)
+				}
 			}
 
 			select {
@@ -240,13 +252,27 @@ func runHub(args []string) int {
 				time.Now().UTC().Unix(),
 				atomic.AddUint64(&localDispatchSeq, 1),
 			)
+			if dedupeKey != "" {
+				if accepted, state, duplicateOf := localSubmitDeduper.Begin(dedupeKey, requestID); !accepted {
+					daemonLogger(
+						"dispatch status=duplicate source=local_submit state=%s duplicate_of=%s",
+						state,
+						duplicateOf,
+					)
+					<-localDispatchSem
+					return "", newDuplicateSubmissionError(duplicateOf, state)
+				}
+			}
 			if runConfigJSON, ok := marshalRunConfigJSON(runCfg); ok {
 				monitorBroker.RecordTaskRunConfig(requestID, runConfigJSON)
 			}
-			go func(requestID string, runCfg config.Config) {
+			go func(requestID string, runCfg config.Config, dedupeKey string) {
 				defer func() { <-localDispatchSem }()
+				if dedupeKey != "" {
+					defer localSubmitDeduper.Done(dedupeKey, requestID)
+				}
 				runLocalDispatch(ctx, runner, daemonLogger, cfg.Skill.Name, requestID, runCfg)
-			}(requestID, runCfg)
+			}(requestID, runCfg, dedupeKey)
 
 			return requestID, nil
 		}

@@ -209,3 +209,41 @@ func TestSeedAgentsFileWriteError(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 }
+
+func TestFindPathUpwardFindsSeedFromNestedDirectory(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join(t.TempDir(), "repo")
+	startDir := filepath.Join(root, "internal", "harness")
+	seedPath := filepath.Join(root, "library", "AGENTS.md")
+
+	if err := os.MkdirAll(startDir, 0o755); err != nil {
+		t.Fatalf("mkdir start dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(seedPath), 0o755); err != nil {
+		t.Fatalf("mkdir seed dir: %v", err)
+	}
+	if err := os.WriteFile(seedPath, []byte("seed"), 0o644); err != nil {
+		t.Fatalf("write seed file: %v", err)
+	}
+
+	got, ok := findPathUpward(startDir, agentsSeedPath)
+	if !ok {
+		t.Fatal("findPathUpward() found = false, want true")
+	}
+	if got != seedPath {
+		t.Fatalf("findPathUpward() = %q, want %q", got, seedPath)
+	}
+}
+
+func TestResolveAgentsSeedPathUsesEnvOverride(t *testing.T) {
+	seedPath := filepath.Join(t.TempDir(), "AGENTS.md")
+	if err := os.WriteFile(seedPath, []byte("seed"), 0o644); err != nil {
+		t.Fatalf("write seed file: %v", err)
+	}
+
+	t.Setenv(agentsSeedEnv, seedPath)
+	if got := resolveAgentsSeedPath(); got != seedPath {
+		t.Fatalf("resolveAgentsSeedPath() = %q, want %q", got, seedPath)
+	}
+}

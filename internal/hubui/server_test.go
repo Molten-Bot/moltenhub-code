@@ -12,6 +12,23 @@ import (
 	"testing"
 )
 
+type duplicateSubmissionStubError struct {
+	requestID string
+	state     string
+}
+
+func (e duplicateSubmissionStubError) Error() string {
+	return "duplicate submission ignored"
+}
+
+func (e duplicateSubmissionStubError) DuplicateRequestID() string {
+	return e.requestID
+}
+
+func (e duplicateSubmissionStubError) DuplicateState() string {
+	return e.state
+}
+
 func TestHandlerStateEndpointReturnsSnapshot(t *testing.T) {
 	t.Parallel()
 
@@ -176,6 +193,45 @@ func TestHandlerLocalPromptSubmitUnavailable(t *testing.T) {
 	}
 }
 
+func TestHandlerLocalPromptSubmitDuplicate(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	srv.SubmitLocalPrompt = func(_ context.Context, _ []byte) (string, error) {
+		return "", duplicateSubmissionStubError{
+			requestID: "local-111",
+			state:     "in_flight",
+		}
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/local-prompt", "application/json", bytes.NewBufferString(`{"repo":"x","prompt":"x"}`))
+	if err != nil {
+		t.Fatalf("POST /api/local-prompt error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusConflict)
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if duplicate, _ := body["duplicate"].(bool); !duplicate {
+		t.Fatalf("duplicate = %#v, want true", body["duplicate"])
+	}
+	if gotRequestID, _ := body["request_id"].(string); gotRequestID != "local-111" {
+		t.Fatalf("request_id = %q, want %q", gotRequestID, "local-111")
+	}
+	if gotState, _ := body["state"].(string); gotState != "in_flight" {
+		t.Fatalf("state = %q, want %q", gotState, "in_flight")
+	}
+}
+
 func TestHandlerLocalPromptMethodNotAllowed(t *testing.T) {
 	t.Parallel()
 
@@ -260,6 +316,48 @@ func TestHandlerTaskRerunUnavailable(t *testing.T) {
 
 	if resp.StatusCode != http.StatusNotImplemented {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotImplemented)
+	}
+}
+
+func TestHandlerTaskRerunDuplicate(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.RecordTaskRunConfig("req-dup-rerun", []byte(`{"repo":"x","prompt":"x"}`))
+
+	srv := NewServer("", b)
+	srv.SubmitLocalPrompt = func(_ context.Context, _ []byte) (string, error) {
+		return "", duplicateSubmissionStubError{
+			requestID: "local-222",
+			state:     "completed",
+		}
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/req-dup-rerun/rerun", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/req-dup-rerun/rerun error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusConflict)
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if duplicate, _ := body["duplicate"].(bool); !duplicate {
+		t.Fatalf("duplicate = %#v, want true", body["duplicate"])
+	}
+	if gotRequestID, _ := body["request_id"].(string); gotRequestID != "local-222" {
+		t.Fatalf("request_id = %q, want %q", gotRequestID, "local-222")
+	}
+	if gotState, _ := body["state"].(string); gotState != "completed" {
+		t.Fatalf("state = %q, want %q", gotState, "completed")
 	}
 }
 
