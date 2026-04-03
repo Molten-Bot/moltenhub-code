@@ -27,6 +27,10 @@ const (
 	ExitCodex     = 50
 	ExitGit       = 60
 	ExitPR        = 70
+
+	maxPRCheckRemediationAttempts = 3
+	prChecksWatchIntervalSeconds  = 10
+	maxCheckSummaryChars          = 4000
 )
 
 type logFn func(string, ...any)
@@ -156,7 +160,53 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		return h.fail(ExitPR, "pr", err, runDir)
 	}
 	prURL := extractFirstURL(prRes.Stdout)
+	if prURL == "" {
+		return h.fail(ExitPR, "pr", fmt.Errorf("gh pr create did not return a PR URL"), runDir)
+	}
 	h.logf("stage=pr status=ok pr_url=%s", prURL)
+
+	for attempt := 0; ; attempt++ {
+		h.logf("stage=checks status=start pr_url=%s attempt=%d", prURL, attempt+1)
+		checkRes, checkErr := h.runCommand(ctx, "checks", prChecksCommand(repoDir, prURL))
+		if checkErr == nil {
+			h.logf("stage=checks status=ok pr_url=%s attempt=%d", prURL, attempt+1)
+			break
+		}
+
+		checkSummary := summarizeCheckOutput(checkRes)
+		h.logf("stage=checks status=failed pr_url=%s attempt=%d", prURL, attempt+1)
+		if attempt >= maxPRCheckRemediationAttempts {
+			return h.fail(ExitPR, "checks", fmt.Errorf("required PR checks failed after %d remediation attempt(s): %s", maxPRCheckRemediationAttempts, checkSummary), runDir)
+		}
+
+		repairPrompt := remediationPrompt(cfg.Prompt, prURL, checkSummary, attempt+1)
+		h.logf("stage=codex status=start target=%s mode=remediation attempt=%d", cfg.TargetSubdir, attempt+1)
+		codexStart = time.Now()
+		if err := h.runCodexWithHeartbeat(ctx, targetDir, repairPrompt); err != nil {
+			return h.fail(ExitCodex, "codex", err, runDir)
+		}
+		h.logf("stage=codex status=ok elapsed_s=%d mode=remediation attempt=%d", int(time.Since(codexStart).Seconds()), attempt+1)
+
+		statusRes, err := h.runCommand(ctx, "git", statusCommand(repoDir))
+		if err != nil {
+			return h.fail(ExitGit, "git", err, runDir)
+		}
+		if strings.TrimSpace(statusRes.Stdout) == "" {
+			return h.fail(ExitPR, "checks", fmt.Errorf("required PR checks failed and codex produced no remediation changes"), runDir)
+		}
+
+		h.logf("stage=git status=start action=repair_commit attempt=%d", attempt+1)
+		if _, err := h.runCommand(ctx, "git", addCommand(repoDir)); err != nil {
+			return h.fail(ExitGit, "git", err, runDir)
+		}
+		if _, err := h.runCommand(ctx, "git", commitCommand(repoDir, remediationCommitMessage(cfg.CommitMessage, attempt+1))); err != nil {
+			return h.fail(ExitGit, "git", err, runDir)
+		}
+		if _, err := h.runCommand(ctx, "git", pushCommand(repoDir, branch)); err != nil {
+			return h.fail(ExitGit, "git", err, runDir)
+		}
+		h.logf("stage=git status=ok action=repair_commit attempt=%d", attempt+1)
+	}
 
 	return Result{
 		ExitCode:     ExitSuccess,
@@ -304,7 +354,7 @@ func codexCommand(targetDir, prompt string) execx.Command {
 	return execx.Command{
 		Dir:  targetDir,
 		Name: "codex",
-		Args: []string{"exec", "--sandbox", "workspace-write", prompt},
+		Args: []string{"exec", "--sandbox", "workspace-write", withCompletionGatePrompt(prompt)},
 	}
 }
 
@@ -345,4 +395,61 @@ func prCreateCommand(repoDir string, cfg config.Config, branch string) execx.Com
 		args = append(args, "--reviewer", reviewer)
 	}
 	return execx.Command{Dir: repoDir, Name: "gh", Args: args}
+}
+
+func prChecksCommand(repoDir, prURL string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: []string{
+			"pr", "checks", prURL,
+			"--watch",
+			"--required",
+			"--interval", fmt.Sprintf("%d", prChecksWatchIntervalSeconds),
+		},
+	}
+}
+
+func withCompletionGatePrompt(prompt string) string {
+	base := strings.TrimSpace(prompt)
+	if base == "" {
+		base = "Improve this repository in a minimal, production-ready way."
+	}
+
+	return base + `
+
+Completion requirements:
+- Keep working until there is a PR for your changes and required CI/CD checks are green.
+- If CI/CD fails, continue fixing code/tests/workflows until checks pass.
+- Optimize for the highest-quality PR you can produce with focused, production-ready changes.`
+}
+
+func remediationPrompt(basePrompt, prURL, checkSummary string, attempt int) string {
+	return fmt.Sprintf(
+		"%s\n\nRemediation round %d/%d.\nAn open PR already exists: %s\n\nRequired CI/CD checks are failing right now.\nLatest check output:\n%s\n\nFix the underlying issues, update tests/workflows as needed, and keep the PR high quality.",
+		strings.TrimSpace(basePrompt),
+		attempt,
+		maxPRCheckRemediationAttempts,
+		prURL,
+		checkSummary,
+	)
+}
+
+func summarizeCheckOutput(res execx.Result) string {
+	text := strings.TrimSpace(strings.Join([]string{res.Stdout, res.Stderr}, "\n"))
+	if text == "" {
+		return "No check output was provided by gh."
+	}
+	if len(text) <= maxCheckSummaryChars {
+		return text
+	}
+	return strings.TrimSpace(text[:maxCheckSummaryChars]) + "...(truncated)"
+}
+
+func remediationCommitMessage(base string, attempt int) string {
+	base = strings.TrimSpace(base)
+	if base == "" {
+		base = "chore: codex automated update"
+	}
+	return fmt.Sprintf("%s (ci remediation %d)", base, attempt)
 }

@@ -14,7 +14,9 @@ For each run, the harness performs this flow:
 3. Create isolated run workspace: `/dev/shm/<guid>` (fallback `/tmp/<guid>`)
 4. Clone target repo + base branch
 5. Run Codex in exactly one configured subdirectory
-6. If changes exist: commit, push, and create PR (always the final step)
+6. If changes exist: commit, push, and create PR
+7. Wait for required PR checks (`gh pr checks --watch --required`)
+8. If required checks fail, re-run Codex with remediation context, push fixes, and re-check until green or retry limit is reached
 
 If Codex fails, no PR is created and the workspace path is printed for inspection.
 
@@ -157,7 +159,7 @@ Optional fields (with defaults):
 
 ## Exit Codes
 
-- `0`: success (PR created or no changes)
+- `0`: success (PR created with required checks passing, or no changes)
 - `2`: usage error
 - `10`: config error
 - `20`: preflight/tooling error
@@ -166,7 +168,7 @@ Optional fields (with defaults):
 - `40`: clone error
 - `50`: codex execution error
 - `60`: git workflow error
-- `70`: PR creation error
+- `70`: PR/checks error
 
 ## Test
 

@@ -2,5 +2,5 @@
   "repo": "",
   "base_branch": "main",
   "target_subdir": ".",
-  "prompt": "You are senior tester, and you need to get 100% test coverage on this repo. Improve unit-test coverage to meet this demand. test locally, and watch the PR and CI/CD to ensure that it passes, before you complete."
+  "prompt": "You are a senior tester and need to reach 100% unit-test coverage for this repository. Improve coverage, test locally, and only finish when the PR exists and required CI/CD checks are green. If checks fail, keep iterating with focused fixes until they pass."
 }
