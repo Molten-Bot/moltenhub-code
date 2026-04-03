@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -91,6 +92,18 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "text/html") {
 		t.Fatalf("content-type = %q", ct)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	markup := string(body)
+	if !strings.Contains(markup, ".task-close") {
+		t.Fatalf("expected index html to include task close styles")
+	}
+	if !strings.Contains(markup, "function dismissTask(") {
+		t.Fatalf("expected index html to include dismissTask handler")
 	}
 }
 

@@ -283,6 +283,12 @@
       margin-bottom: 6px;
     }
 
+    .task-top-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     .task-id {
       font-family: "IBM Plex Mono", "Consolas", monospace;
       font-size: 0.8rem;
@@ -290,6 +296,31 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .task-close {
+      border: 1px solid rgba(136, 162, 189, 0.42);
+      background: rgba(12, 23, 36, 0.7);
+      color: #b7c7d8;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: border-color .12s ease, color .12s ease, transform .12s ease;
+    }
+
+    .task-close:hover {
+      border-color: #9fb8d1;
+      color: #e1edf9;
+      transform: translateY(-1px);
+    }
+
+    .task-close:focus-visible {
+      outline: 1px solid #9fb8d1;
+      outline-offset: 1px;
     }
 
     .badge {
@@ -528,10 +559,25 @@
   <script>
     const MAIN_TASK_ID = "__main__";
     const MAIN_TASK_LABEL = "main";
+    const DISMISSED_TASKS_KEY = "hubui.dismissedTaskIds";
+    const COMPLETED_STATUSES = new Set(["ok", "no_changes", "error", "invalid"]);
+
+    function loadDismissedTaskIDs() {
+      try {
+        const raw = localStorage.getItem(DISMISSED_TASKS_KEY);
+        if (!raw) return new Set();
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return new Set();
+        return new Set(parsed.filter((id) => typeof id === "string" && id));
+      } catch (_err) {
+        return new Set();
+      }
+    }
 
     const state = {
       snapshot: null,
       selectedTaskId: "",
+      dismissedTaskIDs: loadDismissedTaskIDs(),
     };
 
     const connDot = document.getElementById("conn-dot");
@@ -574,6 +620,31 @@
     function setLocalPromptStatus(kind, text) {
       localPromptStatus.className = kind ? `submit-status ${kind}` : "submit-status";
       localPromptStatus.textContent = text;
+    }
+
+    function persistDismissedTaskIDs() {
+      try {
+        localStorage.setItem(DISMISSED_TASKS_KEY, JSON.stringify(Array.from(state.dismissedTaskIDs)));
+      } catch (_err) {
+        // Ignore localStorage failures.
+      }
+    }
+
+    function isCompletedTask(task) {
+      if (!task || task.request_id === MAIN_TASK_ID) {
+        return false;
+      }
+      return COMPLETED_STATUSES.has(task.status || "");
+    }
+
+    function dismissTask(requestID) {
+      if (!requestID) return;
+      state.dismissedTaskIDs.add(requestID);
+      persistDismissedTaskIDs();
+      if (state.selectedTaskId === requestID) {
+        state.selectedTaskId = "";
+      }
+      render(state.snapshot);
     }
 
     function extractField(line, key) {
@@ -630,7 +701,17 @@
         logs: mainLogs,
       };
 
-      return [mainTask, ...(snapshot.tasks || [])];
+      const taskItems = (snapshot.tasks || []).filter((task) => {
+        if (!task || !task.request_id) {
+          return false;
+        }
+        if (!state.dismissedTaskIDs.has(task.request_id)) {
+          return true;
+        }
+        return !isCompletedTask(task);
+      });
+
+      return [mainTask, ...taskItems];
     }
 
     function taskPreviewLines(task) {
@@ -739,7 +820,24 @@
         badge.className = `badge ${statusClass(task.status)}`;
         badge.textContent = task.status || "pending";
 
-        top.append(id, badge);
+        const topActions = document.createElement("div");
+        topActions.className = "task-top-actions";
+        topActions.appendChild(badge);
+
+        if (isCompletedTask(task)) {
+          const close = document.createElement("button");
+          close.type = "button";
+          close.className = "task-close";
+          close.textContent = "Close";
+          close.title = "Abandon completed task";
+          close.addEventListener("click", (event) => {
+            event.stopPropagation();
+            dismissTask(task.request_id);
+          });
+          topActions.appendChild(close);
+        }
+
+        top.append(id, topActions);
 
         const meta = document.createElement("div");
         meta.className = "task-meta";
