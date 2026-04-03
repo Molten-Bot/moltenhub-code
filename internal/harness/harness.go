@@ -129,7 +129,11 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	if err != nil {
 		return h.fail(ExitWorkspace, "workspace", err, "")
 	}
-	h.logf("stage=workspace status=ok run_dir=%s guid=%s", runDir, guid)
+	agentsPath, err := h.Workspace.SeedAgentsFile(runDir)
+	if err != nil {
+		return h.fail(ExitWorkspace, "workspace", err, runDir)
+	}
+	h.logf("stage=workspace status=ok run_dir=%s guid=%s agents=%s", runDir, guid, agentsPath)
 
 	repoURLs := cfg.RepoList()
 	if len(repoURLs) == 0 {
@@ -175,6 +179,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		codexDir = runDir
 	}
 	codexBasePrompt := workspaceCodexPrompt(cfg.Prompt, cfg.TargetSubdir, repos)
+	codexBasePrompt = withAgentsPrompt(codexBasePrompt, agentsPath)
 	codexTargetLabel := codexTargetLabel(cfg.TargetSubdir, len(repos) > 1)
 
 	h.logf("stage=codex status=start target=%s", codexTargetLabel)
@@ -428,6 +433,25 @@ func workspaceCodexPrompt(prompt, targetSubdir string, repos []repoWorkspace) st
 	b.WriteString("- If you modify files in any repository, keep each changed repository on its own branch and PR.\n")
 	b.WriteString("- Start every branch name and PR title with 'moltenhub-'.\n")
 	return strings.TrimSpace(b.String())
+}
+
+func withAgentsPrompt(prompt, agentsPath string) string {
+	base := strings.TrimSpace(prompt)
+	agentsPath = strings.TrimSpace(agentsPath)
+
+	location := "./AGENTS.md"
+	if agentsPath != "" {
+		location = agentsPath
+	}
+
+	directive := fmt.Sprintf(
+		"you are ./AGENTS.md\nUse %s as your primary implementation instructions before making any changes.",
+		location,
+	)
+	if base == "" {
+		return directive
+	}
+	return directive + "\n\n" + base
 }
 
 func repoWorkspaceDirName(repoURL string, index, total int) string {

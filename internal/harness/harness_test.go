@@ -57,6 +57,18 @@ func sampleConfig() config.Config {
 	}
 }
 
+func testWorkspaceManager(guid string) workspace.Manager {
+	return workspace.Manager{
+		PathExists: func(string) bool { return false },
+		NewGUID:    func() string { return guid },
+		MkdirAll:   func(string, os.FileMode) error { return nil },
+		ReadFile: func(string) ([]byte, error) {
+			return []byte("seeded agents instructions"), nil
+		},
+		WriteFile: func(string, []byte, os.FileMode) error { return nil },
+	}
+}
+
 func TestRunHappyPathCreatesPR(t *testing.T) {
 	t.Parallel()
 
@@ -64,6 +76,7 @@ func TestRunHappyPathCreatesPR(t *testing.T) {
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
 	runDir := filepath.Join("/tmp", "temp", guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
 	branch := "moltenhub-build-api-20260402-150405-abcdef12"
@@ -75,7 +88,7 @@ func TestRunHappyPathCreatesPR(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
-		{cmd: codexCommand(targetDir, cfg.Prompt)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
 		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
@@ -86,11 +99,7 @@ func TestRunHappyPathCreatesPR(t *testing.T) {
 
 	h := New(fake)
 	h.Now = func() time.Time { return now }
-	h.Workspace = workspace.Manager{
-		PathExists: func(string) bool { return false },
-		NewGUID:    func() string { return guid },
-		MkdirAll:   func(string, os.FileMode) error { return nil },
-	}
+	h.Workspace = testWorkspaceManager(guid)
 	h.TargetDirOK = func(path string) bool { return path == targetDir }
 
 	res := h.Run(context.Background(), cfg)
@@ -118,6 +127,7 @@ func TestRunCodexFailureStopsBeforeCommitAndPR(t *testing.T) {
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
 	runDir := filepath.Join("/tmp", "temp", guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
 	branch := "moltenhub-build-api-20260402-150405-abcdef12"
@@ -129,16 +139,12 @@ func TestRunCodexFailureStopsBeforeCommitAndPR(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
-		{cmd: codexCommand(targetDir, cfg.Prompt), err: errors.New("codex failed")},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath)), err: errors.New("codex failed")},
 	}}
 
 	h := New(fake)
 	h.Now = func() time.Time { return now }
-	h.Workspace = workspace.Manager{
-		PathExists: func(string) bool { return false },
-		NewGUID:    func() string { return guid },
-		MkdirAll:   func(string, os.FileMode) error { return nil },
-	}
+	h.Workspace = testWorkspaceManager(guid)
 	h.TargetDirOK = func(path string) bool { return path == targetDir }
 
 	res := h.Run(context.Background(), cfg)
@@ -163,6 +169,7 @@ func TestRunNoChangesSkipsPR(t *testing.T) {
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
 	runDir := filepath.Join("/tmp", "temp", guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
 	branch := "moltenhub-build-api-20260402-150405-abcdef12"
@@ -174,17 +181,13 @@ func TestRunNoChangesSkipsPR(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
-		{cmd: codexCommand(targetDir, cfg.Prompt)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "\n"}},
 	}}
 
 	h := New(fake)
 	h.Now = func() time.Time { return now }
-	h.Workspace = workspace.Manager{
-		PathExists: func(string) bool { return false },
-		NewGUID:    func() string { return guid },
-		MkdirAll:   func(string, os.FileMode) error { return nil },
-	}
+	h.Workspace = testWorkspaceManager(guid)
 	h.TargetDirOK = func(path string) bool { return path == targetDir }
 
 	res := h.Run(context.Background(), cfg)
@@ -212,6 +215,7 @@ func TestRunFailedChecksTriggersCodexRemediation(t *testing.T) {
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
 	runDir := filepath.Join("/tmp", "temp", guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
 	branch := "moltenhub-build-api-20260402-150405-abcdef12"
@@ -225,14 +229,14 @@ func TestRunFailedChecksTriggersCodexRemediation(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
-		{cmd: codexCommand(targetDir, cfg.Prompt)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
 		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
 		{cmd: pushCommand(repoDir, branch)},
 		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
 		{cmd: prChecksCommand(repoDir, prURL), res: execx.Result{Stdout: checkSummary + "\n"}, err: errors.New("checks failed")},
-		{cmd: codexCommand(targetDir, remediationPrompt(cfg.Prompt, prURL, checkSummary, 1))},
+		{cmd: codexCommand(targetDir, remediationPrompt(withAgentsPrompt(cfg.Prompt, agentsPath), prURL, checkSummary, 1))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
 		{cmd: commitCommand(repoDir, remediationCommitMessage(cfg.CommitMessage, 1))},
@@ -242,11 +246,7 @@ func TestRunFailedChecksTriggersCodexRemediation(t *testing.T) {
 
 	h := New(fake)
 	h.Now = func() time.Time { return now }
-	h.Workspace = workspace.Manager{
-		PathExists: func(string) bool { return false },
-		NewGUID:    func() string { return guid },
-		MkdirAll:   func(string, os.FileMode) error { return nil },
-	}
+	h.Workspace = testWorkspaceManager(guid)
 	h.TargetDirOK = func(path string) bool { return path == targetDir }
 
 	res := h.Run(context.Background(), cfg)
@@ -271,6 +271,7 @@ func TestRunFailedChecksWithNoRemediationChangesFails(t *testing.T) {
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
 	runDir := filepath.Join("/tmp", "temp", guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
 	branch := "moltenhub-build-api-20260402-150405-abcdef12"
@@ -284,24 +285,20 @@ func TestRunFailedChecksWithNoRemediationChangesFails(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
-		{cmd: codexCommand(targetDir, cfg.Prompt)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
 		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
 		{cmd: pushCommand(repoDir, branch)},
 		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
 		{cmd: prChecksCommand(repoDir, prURL), res: execx.Result{Stdout: checkSummary + "\n"}, err: errors.New("checks failed")},
-		{cmd: codexCommand(targetDir, remediationPrompt(cfg.Prompt, prURL, checkSummary, 1))},
+		{cmd: codexCommand(targetDir, remediationPrompt(withAgentsPrompt(cfg.Prompt, agentsPath), prURL, checkSummary, 1))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "\n"}},
 	}}
 
 	h := New(fake)
 	h.Now = func() time.Time { return now }
-	h.Workspace = workspace.Manager{
-		PathExists: func(string) bool { return false },
-		NewGUID:    func() string { return guid },
-		MkdirAll:   func(string, os.FileMode) error { return nil },
-	}
+	h.Workspace = testWorkspaceManager(guid)
 	h.TargetDirOK = func(path string) bool { return path == targetDir }
 
 	res := h.Run(context.Background(), cfg)
@@ -326,6 +323,7 @@ func TestRunNoChecksReportedRetriesBeforePassing(t *testing.T) {
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
 	runDir := filepath.Join("/tmp", "temp", guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
 	branch := "moltenhub-build-api-20260402-150405-abcdef12"
@@ -339,7 +337,7 @@ func TestRunNoChecksReportedRetriesBeforePassing(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
-		{cmd: codexCommand(targetDir, cfg.Prompt)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
 		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
@@ -353,11 +351,7 @@ func TestRunNoChecksReportedRetriesBeforePassing(t *testing.T) {
 	sleepCalls := 0
 	h := New(fake)
 	h.Now = func() time.Time { return now }
-	h.Workspace = workspace.Manager{
-		PathExists: func(string) bool { return false },
-		NewGUID:    func() string { return guid },
-		MkdirAll:   func(string, os.FileMode) error { return nil },
-	}
+	h.Workspace = testWorkspaceManager(guid)
 	h.TargetDirOK = func(path string) bool { return path == targetDir }
 	h.Sleep = func(_ context.Context, d time.Duration) error {
 		sleepCalls++
@@ -389,6 +383,7 @@ func TestRunNoChecksReportedAfterRetryWindowTriggersRemediation(t *testing.T) {
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
 	runDir := filepath.Join("/tmp", "temp", guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
 	branch := "moltenhub-build-api-20260402-150405-abcdef12"
@@ -402,7 +397,7 @@ func TestRunNoChecksReportedAfterRetryWindowTriggersRemediation(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
-		{cmd: codexCommand(targetDir, cfg.Prompt)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
 		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
@@ -417,7 +412,7 @@ func TestRunNoChecksReportedAfterRetryWindowTriggersRemediation(t *testing.T) {
 		})
 	}
 	exps = append(exps,
-		expectedRun{cmd: codexCommand(targetDir, remediationPrompt(cfg.Prompt, prURL, noChecks, 1))},
+		expectedRun{cmd: codexCommand(targetDir, remediationPrompt(withAgentsPrompt(cfg.Prompt, agentsPath), prURL, noChecks, 1))},
 		expectedRun{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		expectedRun{cmd: addCommand(repoDir)},
 		expectedRun{cmd: commitCommand(repoDir, remediationCommitMessage(cfg.CommitMessage, 1))},
@@ -430,11 +425,7 @@ func TestRunNoChecksReportedAfterRetryWindowTriggersRemediation(t *testing.T) {
 
 	h := New(fake)
 	h.Now = func() time.Time { return now }
-	h.Workspace = workspace.Manager{
-		PathExists: func(string) bool { return false },
-		NewGUID:    func() string { return guid },
-		MkdirAll:   func(string, os.FileMode) error { return nil },
-	}
+	h.Workspace = testWorkspaceManager(guid)
 	h.TargetDirOK = func(path string) bool { return path == targetDir }
 	h.Sleep = func(_ context.Context, d time.Duration) error {
 		sleepCalls++
@@ -466,6 +457,7 @@ func TestRunNoRequiredChecksFallsBackToAllChecks(t *testing.T) {
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
 	runDir := filepath.Join("/tmp", "temp", guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
 	branch := "moltenhub-build-api-20260402-150405-abcdef12"
@@ -479,7 +471,7 @@ func TestRunNoRequiredChecksFallsBackToAllChecks(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
-		{cmd: codexCommand(targetDir, cfg.Prompt)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
 		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
@@ -492,11 +484,7 @@ func TestRunNoRequiredChecksFallsBackToAllChecks(t *testing.T) {
 	sleepCalls := 0
 	h := New(fake)
 	h.Now = func() time.Time { return now }
-	h.Workspace = workspace.Manager{
-		PathExists: func(string) bool { return false },
-		NewGUID:    func() string { return guid },
-		MkdirAll:   func(string, os.FileMode) error { return nil },
-	}
+	h.Workspace = testWorkspaceManager(guid)
 	h.TargetDirOK = func(path string) bool { return path == targetDir }
 	h.Sleep = func(_ context.Context, _ time.Duration) error {
 		sleepCalls++
@@ -533,6 +521,7 @@ func TestRunMultiRepoCreatesPRsForEachChangedRepo(t *testing.T) {
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
 	runDir := filepath.Join("/tmp", "temp", guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	branch := "moltenhub-build-api-20260402-150405-abcdef12"
 
 	repoRelA := repoWorkspaceDirName(cfg.Repos[0], 0, len(cfg.Repos))
@@ -543,6 +532,7 @@ func TestRunMultiRepoCreatesPRsForEachChangedRepo(t *testing.T) {
 		{URL: cfg.Repos[0], RelDir: repoRelA},
 		{URL: cfg.Repos[1], RelDir: repoRelB},
 	})
+	codexPrompt = withAgentsPrompt(codexPrompt, agentsPath)
 
 	fake := &fakeRunner{t: t, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
@@ -570,11 +560,7 @@ func TestRunMultiRepoCreatesPRsForEachChangedRepo(t *testing.T) {
 
 	h := New(fake)
 	h.Now = func() time.Time { return now }
-	h.Workspace = workspace.Manager{
-		PathExists: func(string) bool { return false },
-		NewGUID:    func() string { return guid },
-		MkdirAll:   func(string, os.FileMode) error { return nil },
-	}
+	h.Workspace = testWorkspaceManager(guid)
 	h.TargetDirOK = func(path string) bool { return path == repoDirA }
 
 	res := h.Run(context.Background(), cfg)
