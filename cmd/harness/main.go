@@ -286,7 +286,15 @@ func runLocalDispatch(
 
 	res := h.Run(ctx, runCfg)
 	if res.Err != nil {
-		logf("dispatch status=error request_id=%s exit_code=%d err=%q", requestID, res.ExitCode, res.Err)
+		logf(
+			"dispatch status=error request_id=%s exit_code=%d workspace=%s branch=%s pr_url=%s err=%q",
+			requestID,
+			res.ExitCode,
+			res.WorkspaceDir,
+			res.Branch,
+			res.PRURL,
+			res.Err,
+		)
 		return
 	}
 	if res.NoChanges {

@@ -83,6 +83,43 @@ func TestBrokerParsesQuotedErrorText(t *testing.T) {
 	}
 }
 
+func TestBrokerParsesQuotedErrorTextWithEscapedQuotes(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog(`dispatch status=error request_id=req-err-escaped exit_code=10 err="decode run config payload: json: unknown field \"branch\""`)
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	if snap.Tasks[0].Error != `decode run config payload: json: unknown field "branch"` {
+		t.Fatalf("error = %q", snap.Tasks[0].Error)
+	}
+}
+
+func TestBrokerCapturesWorkspaceAndBranchFromErrorStatus(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog(`dispatch status=error request_id=req-err-ws exit_code=40 workspace=/tmp/run-x branch=codex/fix pr_url=https://github.com/acme/repo/pull/55 err="clone failed"`)
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	task := snap.Tasks[0]
+	if task.WorkspaceDir != "/tmp/run-x" {
+		t.Fatalf("workspace = %q, want /tmp/run-x", task.WorkspaceDir)
+	}
+	if task.Branch != "codex/fix" {
+		t.Fatalf("branch = %q, want codex/fix", task.Branch)
+	}
+	if task.PRURL != "https://github.com/acme/repo/pull/55" {
+		t.Fatalf("pr_url = %q", task.PRURL)
+	}
+}
+
 func TestBrokerSubscribeSignalsChanges(t *testing.T) {
 	t.Parallel()
 

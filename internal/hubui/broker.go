@@ -250,6 +250,9 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 		if code, ok := parseIntField(fields["exit_code"]); ok {
 			t.ExitCode = code
 		}
+		t.WorkspaceDir = firstNonEmpty(fields["workspace"], fields["workspace_dir"], t.WorkspaceDir)
+		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
+		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
 		t.Error = firstNonEmpty(parseFieldValue(line, "err"), parseFieldValue(line, "error"), t.Error)
 	}
 
@@ -346,12 +349,14 @@ func parseFieldValue(line, key string) string {
 	}
 
 	if strings.HasPrefix(rest, "\"") {
-		rest = strings.TrimPrefix(rest, "\"")
-		end := strings.IndexByte(rest, '"')
-		if end < 0 {
-			return strings.TrimSpace(rest)
+		if token, ok := parseQuotedToken(rest); ok {
+			decoded, err := strconv.Unquote(token)
+			if err == nil {
+				return strings.TrimSpace(decoded)
+			}
+			return strings.TrimSpace(strings.Trim(token, "\""))
 		}
-		return strings.TrimSpace(rest[:end])
+		return strings.TrimSpace(strings.Trim(rest, "\""))
 	}
 
 	end := strings.IndexAny(rest, " \t")
@@ -359,6 +364,28 @@ func parseFieldValue(line, key string) string {
 		return strings.TrimSpace(rest)
 	}
 	return strings.TrimSpace(rest[:end])
+}
+
+func parseQuotedToken(text string) (string, bool) {
+	if !strings.HasPrefix(text, "\"") {
+		return "", false
+	}
+
+	for i := 1; i < len(text); i++ {
+		if text[i] != '"' {
+			continue
+		}
+
+		backslashes := 0
+		for j := i - 1; j >= 0 && text[j] == '\\'; j-- {
+			backslashes++
+		}
+		if backslashes%2 == 0 {
+			return text[:i+1], true
+		}
+	}
+
+	return "", false
 }
 
 func parseIntField(v string) (int, bool) {

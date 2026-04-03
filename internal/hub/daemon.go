@@ -482,7 +482,15 @@ func (d Daemon) handleDispatch(
 	}
 
 	if res.Err != nil {
-		d.logf("dispatch status=error request_id=%s exit_code=%d err=%q", dispatch.RequestID, res.ExitCode, res.Err)
+		d.logf(
+			"dispatch status=error request_id=%s exit_code=%d workspace=%s branch=%s pr_url=%s err=%q",
+			dispatch.RequestID,
+			res.ExitCode,
+			res.WorkspaceDir,
+			res.Branch,
+			res.PRURL,
+			res.Err,
+		)
 		return
 	}
 	if res.NoChanges {
