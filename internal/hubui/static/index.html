@@ -687,6 +687,43 @@
       return new Date(iso).toLocaleString();
     }
 
+    function cleanRepoName(value) {
+      let repo = String(value || "").trim();
+      if (!repo) return "";
+
+      repo = repo.replace(/^git@github\.com:/, "");
+      repo = repo.replace(/^ssh:\/\/git@github\.com\//, "");
+      repo = repo.replace(/^https?:\/\/github\.com\//, "");
+      repo = repo.replace(/\.git$/, "");
+      return repo;
+    }
+
+    function normalizedTaskRepos(task) {
+      const raw = [];
+      if (Array.isArray(task?.repos)) {
+        raw.push(...task.repos);
+      }
+      if (typeof task?.repo === "string" && task.repo.trim()) {
+        raw.unshift(task.repo);
+      }
+
+      const seen = new Set();
+      const out = [];
+      for (const value of raw) {
+        const cleaned = cleanRepoName(value);
+        if (!cleaned || seen.has(cleaned)) continue;
+        seen.add(cleaned);
+        out.push(cleaned);
+      }
+      return out;
+    }
+
+    function formatTaskRepos(task) {
+      const repos = normalizedTaskRepos(task);
+      if (!repos.length) return "-";
+      return `[${repos.join(", ")}]`;
+    }
+
     function statusClass(status) {
       if (!status) return "";
       return status.replace(/[^a-z_]/g, "");
@@ -771,6 +808,7 @@
         stage: "default thread",
         skill: "-",
         repo: "-",
+        repos: [],
         started_at: startedAt || snapshot.generated_at,
         updated_at: mainLogs.length ? mainLogs[mainLogs.length - 1].time : snapshot.generated_at,
         logs: mainLogs,
@@ -1004,11 +1042,11 @@
         stage.textContent = `stage: ${stageLabel}`;
         const skill = document.createElement("div");
         skill.textContent = `skill: ${task.skill || "-"}`;
-        const repo = document.createElement("div");
-        repo.textContent = `repo: ${task.repo || "-"}`;
+        const repos = document.createElement("div");
+        repos.textContent = `repos: ${formatTaskRepos(task)}`;
         const update = document.createElement("div");
         update.textContent = `updated: ${relativeTime(task.updated_at)}`;
-        meta.append(stage, skill, repo, update);
+        meta.append(stage, skill, repos, update);
 
         const progress = renderTaskProgress(task);
 
