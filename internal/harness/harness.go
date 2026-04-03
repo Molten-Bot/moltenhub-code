@@ -34,6 +34,7 @@ const (
 	prChecksNoReportRetryDelay    = 10 * time.Second
 	maxCheckSummaryChars          = 4000
 	defaultCIWorkflowPath         = ".github/workflows/ci.yml"
+	maxPushSyncAttempts           = 3
 )
 
 type logFn func(string, ...any)
@@ -272,7 +273,7 @@ func (h Harness) processChangedRepo(
 	if _, err := h.runCommand(ctx, "git", commitCommand(repo.Dir, cfg.CommitMessage)); err != nil {
 		return ExitGit, "git", err
 	}
-	if _, err := h.runCommand(ctx, "git", pushCommand(repo.Dir, repo.Branch)); err != nil {
+	if err := h.pushWithSync(ctx, *repo, 0); err != nil {
 		return ExitGit, "git", err
 	}
 	h.logf("stage=git status=ok action=commit repo=%s repo_dir=%s", repo.URL, repo.RelDir)
@@ -431,11 +432,47 @@ func (h Harness) processChangedRepo(
 		if _, err := h.runCommand(ctx, "git", commitCommand(repo.Dir, remediationCommitMessage(cfg.CommitMessage, attempt+1))); err != nil {
 			return ExitGit, "git", err
 		}
-		if _, err := h.runCommand(ctx, "git", pushCommand(repo.Dir, repo.Branch)); err != nil {
+		if err := h.pushWithSync(ctx, *repo, attempt+1); err != nil {
 			return ExitGit, "git", err
 		}
 		h.logf("stage=git status=ok action=repair_commit attempt=%d repo=%s repo_dir=%s", attempt+1, repo.URL, repo.RelDir)
 	}
+}
+
+func (h Harness) pushWithSync(ctx context.Context, repo repoWorkspace, remediationAttempt int) error {
+	for pushAttempt := 1; pushAttempt <= maxPushSyncAttempts; pushAttempt++ {
+		res, err := h.runCommand(ctx, "git", pushCommand(repo.Dir, repo.Branch))
+		if err == nil {
+			return nil
+		}
+		if !isNonFastForwardPush(res, err) || pushAttempt >= maxPushSyncAttempts {
+			return err
+		}
+		if remediationAttempt > 0 {
+			h.logf(
+				"stage=git status=retry action=push_sync reason=non_fast_forward repo=%s repo_dir=%s branch=%s remediation_attempt=%d retry=%d/%d",
+				repo.URL,
+				repo.RelDir,
+				repo.Branch,
+				remediationAttempt,
+				pushAttempt,
+				maxPushSyncAttempts-1,
+			)
+		} else {
+			h.logf(
+				"stage=git status=retry action=push_sync reason=non_fast_forward repo=%s repo_dir=%s branch=%s retry=%d/%d",
+				repo.URL,
+				repo.RelDir,
+				repo.Branch,
+				pushAttempt,
+				maxPushSyncAttempts-1,
+			)
+		}
+		if _, syncErr := h.runCommand(ctx, "git", pullRebaseCommand(repo.Dir, repo.Branch)); syncErr != nil {
+			return fmt.Errorf("sync branch %q before push retry: %w", repo.Branch, syncErr)
+		}
+	}
+	return fmt.Errorf("push retries exhausted for branch %q", repo.Branch)
 }
 
 func buildResult(runDir string, repos []repoWorkspace, noChanges bool) Result {
@@ -635,6 +672,14 @@ func isNoRequiredChecksReported(res execx.Result, err error) bool {
 	return strings.Contains(text, "no required checks")
 }
 
+func isNonFastForwardPush(res execx.Result, err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
+	return strings.Contains(text, "non-fast-forward") || strings.Contains(text, "fetch first")
+}
+
 func (h Harness) runCodexWithHeartbeat(ctx context.Context, targetDir, prompt string, opts codexRunOptions) error {
 	done := make(chan error, 1)
 	go func() {
@@ -781,6 +826,10 @@ func commitCommand(repoDir, msg string) execx.Command {
 
 func pushCommand(repoDir, branch string) execx.Command {
 	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"push", "-u", "origin", branch}}
+}
+
+func pullRebaseCommand(repoDir, branch string) execx.Command {
+	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"pull", "--rebase", "origin", branch}}
 }
 
 func prCreateCommand(repoDir string, cfg config.Config, branch string) execx.Command {

@@ -171,6 +171,63 @@ func TestRunNonMainBranchReusesExistingBranchAndPR(t *testing.T) {
 	}
 }
 
+func TestRunNonMainBranchPushNonFastForwardRetriesWithRebase(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.BaseBranch = "release/2026.04-hotfix"
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := filepath.Join("/tmp", "temp", guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	prURL := "https://github.com/acme/repo/pull/77"
+
+	pushRejected := execx.Result{
+		Stderr: "! [rejected]        release/2026.04-hotfix -> release/2026.04-hotfix (fetch first)\n",
+	}
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, cfg.BaseBranch), res: pushRejected, err: errors.New("push rejected")},
+		{cmd: pullRebaseCommand(repoDir, cfg.BaseBranch)},
+		{cmd: pushCommand(repoDir, cfg.BaseBranch)},
+		{cmd: prLookupCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL)},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if got, want := res.Branch, cfg.BaseBranch; got != want {
+		t.Fatalf("Branch = %q, want %q", got, want)
+	}
+	if got, want := res.PRURL, prURL; got != want {
+		t.Fatalf("PRURL = %q, want %q", got, want)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
 func TestRunNonMainBranchWithoutOpenPRFails(t *testing.T) {
 	t.Parallel()
 
@@ -813,6 +870,12 @@ func TestCommandBuilders(t *testing.T) {
 	if workflowDispatch.Name != "gh" || workflowDispatch.Dir != repoDir || !reflect.DeepEqual(workflowDispatch.Args, wantWorkflowDispatch) {
 		t.Fatalf("workflow dispatch command unexpected: %+v", workflowDispatch)
 	}
+
+	pullRebase := pullRebaseCommand(repoDir, branch)
+	wantPullRebase := []string{"pull", "--rebase", "origin", branch}
+	if pullRebase.Name != "git" || pullRebase.Dir != repoDir || !reflect.DeepEqual(pullRebase.Args, wantPullRebase) {
+		t.Fatalf("pull rebase command unexpected: %+v", pullRebase)
+	}
 }
 
 func TestShouldCreateBranch(t *testing.T) {
@@ -846,6 +909,23 @@ func TestSameBranchName(t *testing.T) {
 	}
 	if sameBranchName("Main", "main") {
 		t.Fatal("sameBranchName(Main, main) = true, want false")
+	}
+}
+
+func TestIsNonFastForwardPush(t *testing.T) {
+	t.Parallel()
+
+	if !isNonFastForwardPush(execx.Result{Stderr: "! [rejected] branch -> branch (fetch first)"}, errors.New("push failed")) {
+		t.Fatal("isNonFastForwardPush(fetch first) = false, want true")
+	}
+	if !isNonFastForwardPush(execx.Result{Stderr: "non-fast-forward"}, errors.New("push failed")) {
+		t.Fatal("isNonFastForwardPush(non-fast-forward) = false, want true")
+	}
+	if isNonFastForwardPush(execx.Result{Stderr: "permission denied"}, errors.New("push failed")) {
+		t.Fatal("isNonFastForwardPush(permission denied) = true, want false")
+	}
+	if isNonFastForwardPush(execx.Result{}, nil) {
+		t.Fatal("isNonFastForwardPush(nil err) = true, want false")
 	}
 }
 
