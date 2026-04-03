@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -74,6 +75,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/api/state", s.handleState)
 	mux.HandleFunc("/api/stream", s.handleStream)
 	mux.HandleFunc("/api/local-prompt", s.handleLocalPrompt)
+	mux.HandleFunc("/api/tasks/", s.handleTaskAction)
 	mux.HandleFunc("/healthz", s.handleHealth)
 	return mux
 }
@@ -199,6 +201,82 @@ func (s Server) handleLocalPrompt(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"ok":         true,
 		"request_id": requestID,
+	})
+}
+
+func (s Server) handleTaskAction(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/tasks/")
+	if path == r.URL.Path || path == "" {
+		http.NotFound(w, r)
+		return
+	}
+	if !strings.HasSuffix(path, "/rerun") {
+		http.NotFound(w, r)
+		return
+	}
+
+	requestID := strings.TrimSuffix(path, "/rerun")
+	requestID = strings.TrimSuffix(requestID, "/")
+	decoded, err := url.PathUnescape(requestID)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": "invalid request id",
+		})
+		return
+	}
+	decoded = strings.TrimSpace(decoded)
+	if decoded == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": "request id is required",
+		})
+		return
+	}
+
+	s.handleTaskRerun(w, r, decoded)
+}
+
+func (s Server) handleTaskRerun(w http.ResponseWriter, r *http.Request, requestID string) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.Broker == nil {
+		http.Error(w, "monitor broker is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if s.SubmitLocalPrompt == nil {
+		writeJSON(w, http.StatusNotImplemented, map[string]any{
+			"ok":    false,
+			"error": "task rerun is unavailable",
+		})
+		return
+	}
+
+	runConfigJSON, ok := s.Broker.TaskRunConfig(requestID)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{
+			"ok":    false,
+			"error": "run config for task is unavailable",
+		})
+		return
+	}
+
+	newRequestID, err := s.SubmitLocalPrompt(r.Context(), runConfigJSON)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": err.Error(),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"ok":         true,
+		"request_id": newRequestID,
+		"rerun_of":   requestID,
 	})
 }
 

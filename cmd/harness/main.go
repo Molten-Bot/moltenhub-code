@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -237,6 +238,9 @@ func runHub(args []string) int {
 				time.Now().UTC().Unix(),
 				atomic.AddUint64(&localDispatchSeq, 1),
 			)
+			if runConfigJSON, ok := marshalRunConfigJSON(runCfg); ok {
+				monitorBroker.RecordTaskRunConfig(requestID, runConfigJSON)
+			}
 			go func(requestID string, runCfg config.Config) {
 				defer func() { <-localDispatchSem }()
 				runLocalDispatch(ctx, runner, daemonLogger, cfg.Skill.Name, requestID, runCfg)
@@ -254,6 +258,11 @@ func runHub(args []string) int {
 
 	daemon := hub.NewDaemon(runner)
 	daemon.Logf = daemonLogger
+	daemon.OnDispatchQueued = func(requestID string, runCfg config.Config) {
+		if runConfigJSON, ok := marshalRunConfigJSON(runCfg); ok {
+			monitorBroker.RecordTaskRunConfig(requestID, runConfigJSON)
+		}
+	}
 
 	if err := daemon.Run(ctx, cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -364,6 +373,14 @@ func countChangedRepos(results []harness.RepoResult) int {
 		}
 	}
 	return count
+}
+
+func marshalRunConfigJSON(cfg config.Config) ([]byte, bool) {
+	payload, err := json.Marshal(cfg)
+	if err != nil {
+		return nil, false
+	}
+	return payload, true
 }
 
 func collectConfigPaths(inputs []string) ([]string, error) {

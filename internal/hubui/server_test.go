@@ -102,8 +102,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, ".task-close") {
 		t.Fatalf("expected index html to include task close styles")
 	}
+	if !strings.Contains(markup, ".task-rerun") {
+		t.Fatalf("expected index html to include task rerun styles")
+	}
 	if !strings.Contains(markup, "function dismissTask(") {
 		t.Fatalf("expected index html to include dismissTask handler")
+	}
+	if !strings.Contains(markup, "function rerunTask(") {
+		t.Fatalf("expected index html to include rerunTask handler")
 	}
 	if !strings.Contains(markup, ".task-progress") {
 		t.Fatalf("expected index html to include task progress styles")
@@ -180,6 +186,121 @@ func TestHandlerLocalPromptMethodNotAllowed(t *testing.T) {
 	resp, err := http.Get(ts.URL + "/api/local-prompt")
 	if err != nil {
 		t.Fatalf("GET /api/local-prompt error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusMethodNotAllowed)
+	}
+	if allow := resp.Header.Get("Allow"); allow != http.MethodPost {
+		t.Fatalf("Allow = %q, want %q", allow, http.MethodPost)
+	}
+}
+
+func TestHandlerTaskRerunAccepted(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-100"
+	payload := `{"repo":"git@github.com:acme/repo.git","base_branch":"main","target_subdir":".","prompt":"rerun this"}`
+	b.RecordTaskRunConfig(requestID, []byte(payload))
+
+	var gotBody string
+	srv := NewServer("", b)
+	srv.SubmitLocalPrompt = func(_ context.Context, body []byte) (string, error) {
+		gotBody = string(body)
+		return "local-456", nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/"+requestID+"/rerun", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/%s/rerun error = %v", requestID, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusAccepted)
+	}
+	if gotBody != payload {
+		t.Fatalf("submitted body = %q, want %q", gotBody, payload)
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if ok, _ := body["ok"].(bool); !ok {
+		t.Fatalf("ok = %#v, want true", body["ok"])
+	}
+	if gotRequestID, _ := body["request_id"].(string); gotRequestID != "local-456" {
+		t.Fatalf("request_id = %q, want %q", gotRequestID, "local-456")
+	}
+	if gotRerunOf, _ := body["rerun_of"].(string); gotRerunOf != requestID {
+		t.Fatalf("rerun_of = %q, want %q", gotRerunOf, requestID)
+	}
+}
+
+func TestHandlerTaskRerunUnavailable(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.RecordTaskRunConfig("req-1", []byte(`{"repo":"x","prompt":"x"}`))
+	srv := NewServer("", b)
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/req-1/rerun", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/req-1/rerun error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNotImplemented {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotImplemented)
+	}
+}
+
+func TestHandlerTaskRerunMissingConfig(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	srv.SubmitLocalPrompt = func(_ context.Context, body []byte) (string, error) {
+		return "local-777", nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/req-missing/rerun", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/req-missing/rerun error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+	}
+}
+
+func TestHandlerTaskRerunMethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.RecordTaskRunConfig("req-2", []byte(`{"repo":"x","prompt":"x"}`))
+	srv := NewServer("", b)
+	srv.SubmitLocalPrompt = func(_ context.Context, body []byte) (string, error) {
+		return "local-789", nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/tasks/req-2/rerun")
+	if err != nil {
+		t.Fatalf("GET /api/tasks/req-2/rerun error = %v", err)
 	}
 	defer resp.Body.Close()
 

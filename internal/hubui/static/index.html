@@ -312,15 +312,46 @@
       transition: border-color .12s ease, color .12s ease, transform .12s ease;
     }
 
+    .task-rerun {
+      border: 1px solid rgba(81, 184, 255, 0.48);
+      background: rgba(21, 49, 78, 0.72);
+      color: #bfe2ff;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: border-color .12s ease, color .12s ease, transform .12s ease, opacity .12s ease;
+    }
+
     .task-close:hover {
       border-color: #9fb8d1;
       color: #e1edf9;
       transform: translateY(-1px);
     }
 
+    .task-rerun:hover {
+      border-color: #8ecfff;
+      color: #e6f4ff;
+      transform: translateY(-1px);
+    }
+
     .task-close:focus-visible {
       outline: 1px solid #9fb8d1;
       outline-offset: 1px;
+    }
+
+    .task-rerun:focus-visible {
+      outline: 1px solid #8ecfff;
+      outline-offset: 1px;
+    }
+
+    .task-rerun:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+      transform: none;
     }
 
     .badge {
@@ -653,6 +684,7 @@
       snapshot: null,
       selectedTaskId: "",
       dismissedTaskIDs: loadDismissedTaskIDs(),
+      rerunInFlight: new Set(),
     };
 
     const connDot = document.getElementById("conn-dot");
@@ -720,6 +752,50 @@
         state.selectedTaskId = "";
       }
       render(state.snapshot);
+    }
+
+    function canRerunTask(task) {
+      if (!task || task.request_id === MAIN_TASK_ID) {
+        return false;
+      }
+      if (!isCompletedTask(task)) {
+        return false;
+      }
+      return Boolean(task.can_rerun);
+    }
+
+    async function rerunTask(requestID) {
+      if (!requestID || state.rerunInFlight.has(requestID)) {
+        return;
+      }
+      state.rerunInFlight.add(requestID);
+      render(state.snapshot);
+      setLocalPromptStatus("warn", `Re-running ${requestID}...`);
+
+      try {
+        const response = await fetch(`/api/tasks/${encodeURIComponent(requestID)}/rerun`, {
+          method: "POST",
+        });
+
+        let body = null;
+        try {
+          body = await response.json();
+        } catch (_err) {
+          body = null;
+        }
+
+        if (!response.ok) {
+          throw new Error(body?.error || `rerun http ${response.status}`);
+        }
+
+        const newRequestID = body?.request_id || "(unknown)";
+        setLocalPromptStatus("ok", `Queued request ${newRequestID} (re-run of ${requestID})`);
+      } catch (err) {
+        setLocalPromptStatus("error", `Re-run failed: ${err.message}`);
+      } finally {
+        state.rerunInFlight.delete(requestID);
+        render(state.snapshot);
+      }
     }
 
     function extractField(line, key) {
@@ -980,6 +1056,20 @@
         const topActions = document.createElement("div");
         topActions.className = "task-top-actions";
         topActions.appendChild(badge);
+
+        if (canRerunTask(task)) {
+          const rerun = document.createElement("button");
+          rerun.type = "button";
+          rerun.className = "task-rerun";
+          rerun.textContent = "Re-run";
+          rerun.title = "Queue this task configuration again";
+          rerun.disabled = state.rerunInFlight.has(task.request_id);
+          rerun.addEventListener("click", (event) => {
+            event.stopPropagation();
+            rerunTask(task.request_id);
+          });
+          topActions.appendChild(rerun);
+        }
 
         if (isCompletedTask(task)) {
           const close = document.createElement("button");
