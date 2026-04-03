@@ -35,6 +35,7 @@ type Task struct {
 	RequestID    string    `json:"request_id"`
 	Skill        string    `json:"skill,omitempty"`
 	Repo         string    `json:"repo,omitempty"`
+	Repos        []string  `json:"repos,omitempty"`
 	Status       string    `json:"status"`
 	Stage        string    `json:"stage,omitempty"`
 	StageStatus  string    `json:"stage_status,omitempty"`
@@ -73,6 +74,7 @@ type taskState struct {
 	RequestID    string
 	Skill        string
 	Repo         string
+	Repos        []string
 	Status       string
 	Stage        string
 	StageStatus  string
@@ -165,6 +167,7 @@ func (b *Broker) Snapshot() Snapshot {
 			RequestID:    t.RequestID,
 			Skill:        t.Skill,
 			Repo:         t.Repo,
+			Repos:        append([]string(nil), t.Repos...),
 			Status:       t.Status,
 			Stage:        t.Stage,
 			StageStatus:  t.StageStatus,
@@ -229,7 +232,12 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 	if strings.HasPrefix(line, "dispatch status=start") {
 		t.Status = "running"
 		t.Skill = firstNonEmpty(t.Skill, fields["skill"])
-		t.Repo = firstNonEmpty(t.Repo, fields["repo"])
+		t.Repos = appendNonEmptyUnique(t.Repos, reposFromFields(fields)...)
+		if len(t.Repos) > 0 {
+			t.Repo = t.Repos[0]
+		} else {
+			t.Repo = firstNonEmpty(t.Repo, fields["repo"])
+		}
 	}
 
 	if strings.HasPrefix(line, "dispatch status=ok") {
@@ -406,4 +414,60 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func reposFromFields(fields map[string]string) []string {
+	primary := strings.TrimSpace(fields["repo"])
+	list := splitCommaSeparatedNonEmpty(fields["repos"])
+	merged := make([]string, 0, len(list)+1)
+	if primary != "" {
+		merged = append(merged, primary)
+	}
+	merged = append(merged, list...)
+	return appendNonEmptyUnique(nil, merged...)
+}
+
+func splitCommaSeparatedNonEmpty(value string) []string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
+func appendNonEmptyUnique(dst []string, values ...string) []string {
+	out := make([]string, 0, len(dst)+len(values))
+	seen := make(map[string]struct{}, len(dst)+len(values))
+
+	for _, current := range dst {
+		trimmed := strings.TrimSpace(current)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		out = append(out, trimmed)
+	}
+
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		out = append(out, trimmed)
+	}
+
+	return out
 }
