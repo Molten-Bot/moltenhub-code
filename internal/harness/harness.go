@@ -273,6 +273,16 @@ func (h Harness) processChangedRepo(
 		for noReportRetry := 0; ; noReportRetry++ {
 			h.logf("stage=checks status=start repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt+1)
 			checkRes, checkErr = h.runCommand(ctx, "checks", prChecksCommand(repo.Dir, repo.PRURL))
+			if checkErr != nil && isNoRequiredChecksReported(checkRes, checkErr) {
+				h.logf(
+					"stage=checks status=fallback reason=no_required_checks repo=%s repo_dir=%s pr_url=%s attempt=%d",
+					repo.URL,
+					repo.RelDir,
+					repo.PRURL,
+					attempt+1,
+				)
+				checkRes, checkErr = h.runCommand(ctx, "checks", prChecksAnyCommand(repo.Dir, repo.PRURL))
+			}
 			if checkErr == nil {
 				h.logf("stage=checks status=ok repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt+1)
 				return ExitSuccess, "", nil
@@ -523,7 +533,15 @@ func isNoChecksReported(res execx.Result, err error) bool {
 		return false
 	}
 	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
-	return strings.Contains(text, "no checks reported") || strings.Contains(text, "no required checks")
+	return strings.Contains(text, "no checks reported")
+}
+
+func isNoRequiredChecksReported(res execx.Result, err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
+	return strings.Contains(text, "no required checks")
 }
 
 func (h Harness) runCodexWithHeartbeat(ctx context.Context, targetDir, prompt string) error {
@@ -680,6 +698,18 @@ func prChecksCommand(repoDir, prURL string) execx.Command {
 			"pr", "checks", prURL,
 			"--watch",
 			"--required",
+			"--interval", fmt.Sprintf("%d", prChecksWatchIntervalSeconds),
+		},
+	}
+}
+
+func prChecksAnyCommand(repoDir, prURL string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: []string{
+			"pr", "checks", prURL,
+			"--watch",
 			"--interval", fmt.Sprintf("%d", prChecksWatchIntervalSeconds),
 		},
 	}
