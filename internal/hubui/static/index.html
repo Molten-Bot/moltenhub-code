@@ -635,7 +635,7 @@
   "target_subdir": ".",
   "prompt": "Describe the change you want"
 }'></textarea>
-            <div class="prompt-hint">Paste one JSON object with: prompt and one of repo, repo_url, or repos.</div>
+            <div class="prompt-hint">Paste one JSON object with: prompt and one of repo, repo_url, or repos. The UI normalizes JSON before submit.</div>
             <div class="prompt-actions">
               <button id="local-prompt-submit" class="prompt-submit" type="submit">Run Local Prompt</button>
               <span id="local-prompt-status" class="submit-status">Idle</span>
@@ -707,6 +707,80 @@
     const localPromptInput = document.getElementById("local-prompt-input");
     const localPromptSubmit = document.getElementById("local-prompt-submit");
     const localPromptStatus = document.getElementById("local-prompt-status");
+
+    function escapeLiteralNewlinesInJSONStrings(raw) {
+      let out = "";
+      let inString = false;
+      let escaped = false;
+      for (let i = 0; i < raw.length; i += 1) {
+        const ch = raw[i];
+        if (!inString) {
+          out += ch;
+          if (ch === "\"") {
+            inString = true;
+          }
+          continue;
+        }
+
+        if (escaped) {
+          out += ch;
+          escaped = false;
+          continue;
+        }
+        if (ch === "\\") {
+          out += ch;
+          escaped = true;
+          continue;
+        }
+        if (ch === "\"") {
+          out += ch;
+          inString = false;
+          continue;
+        }
+        if (ch === "\r") {
+          if (raw[i + 1] === "\n") {
+            i += 1;
+          }
+          out += "\\n";
+          continue;
+        }
+        if (ch === "\n") {
+          out += "\\n";
+          continue;
+        }
+
+        out += ch;
+      }
+      return out;
+    }
+
+    function parseLocalPromptPayload(raw) {
+      const trimmed = String(raw || "").trim();
+      if (!trimmed) {
+        throw new Error("Paste a JSON payload first.");
+      }
+
+      try {
+        return JSON.parse(trimmed);
+      } catch (primaryErr) {
+        const escaped = escapeLiteralNewlinesInJSONStrings(trimmed);
+        if (escaped === trimmed) {
+          throw primaryErr;
+        }
+        return JSON.parse(escaped);
+      }
+    }
+
+    function normalizedLocalPromptPayload(raw) {
+      const parsed = parseLocalPromptPayload(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Payload must be one JSON object.");
+      }
+      return {
+        compact: JSON.stringify(parsed),
+        pretty: JSON.stringify(parsed, null, 2),
+      };
+    }
 
     function setConnection(online, text) {
       connDot.classList.toggle("online", online);
@@ -1298,11 +1372,14 @@
 
     async function submitLocalPrompt(event) {
       event.preventDefault();
-      const payload = localPromptInput.value.trim();
-      if (!payload) {
-        setLocalPromptStatus("error", "Paste a JSON payload first.");
+      let normalized = null;
+      try {
+        normalized = normalizedLocalPromptPayload(localPromptInput.value);
+      } catch (err) {
+        setLocalPromptStatus("error", `Invalid JSON: ${err.message}`);
         return;
       }
+      localPromptInput.value = normalized.pretty;
 
       localPromptSubmit.disabled = true;
       setLocalPromptStatus("warn", "Submitting...");
@@ -1311,7 +1388,7 @@
         const response = await fetch("/api/local-prompt", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: payload,
+          body: normalized.compact,
         });
 
         let body = null;
