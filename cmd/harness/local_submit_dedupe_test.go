@@ -26,6 +26,53 @@ func TestDedupeKeyForRunConfigDefaultsBranchAndNormalizesRepos(t *testing.T) {
 	}
 }
 
+func TestDedupeKeyForRunConfigNonMainUsesTargetBranchScope(t *testing.T) {
+	t.Parallel()
+
+	cfgA := config.Config{
+		Prompt:     "fix flaky test",
+		Repos:      []string{"git@github.com:acme/repo.git"},
+		BaseBranch: "release/2026.04-hotfix",
+	}
+	cfgB := config.Config{
+		Prompt:     "fix prod panic",
+		Repos:      []string{"git@github.com:acme/repo.git"},
+		BaseBranch: "release/2026.04-hotfix",
+	}
+
+	keyA := dedupeKeyForRunConfig(cfgA)
+	keyB := dedupeKeyForRunConfig(cfgB)
+	if keyA != keyB {
+		t.Fatalf("dedupe keys should match for same non-main target branch\nA: %q\nB: %q", keyA, keyB)
+	}
+
+	want := `{"repos":["git@github.com:acme/repo.git"],"target_branch":"release/2026.04-hotfix"}`
+	if keyA != want {
+		t.Fatalf("dedupeKeyForRunConfig() = %q, want %q", keyA, want)
+	}
+}
+
+func TestDedupeKeyForRunConfigNonMainNormalizesBranchRefs(t *testing.T) {
+	t.Parallel()
+
+	cfgRef := config.Config{
+		Prompt:     "fix release issue",
+		Repos:      []string{"git@github.com:acme/repo.git"},
+		BaseBranch: "refs/heads/release/2026.04-hotfix",
+	}
+	cfgOrigin := config.Config{
+		Prompt:     "another prompt",
+		Repos:      []string{"git@github.com:acme/repo.git"},
+		BaseBranch: "origin/release/2026.04-hotfix",
+	}
+
+	keyRef := dedupeKeyForRunConfig(cfgRef)
+	keyOrigin := dedupeKeyForRunConfig(cfgOrigin)
+	if keyRef != keyOrigin {
+		t.Fatalf("normalized non-main branch keys differ\nrefs: %q\norigin: %q", keyRef, keyOrigin)
+	}
+}
+
 func TestLocalSubmissionDeduperCheckBeginDone(t *testing.T) {
 	t.Parallel()
 

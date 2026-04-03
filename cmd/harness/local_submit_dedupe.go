@@ -173,24 +173,48 @@ func (d *localSubmissionDeduper) gcLocked(now time.Time) {
 }
 
 func dedupeKeyForRunConfig(cfg config.Config) string {
-	payload := struct {
-		Prompt     string   `json:"prompt"`
-		Repos      []string `json:"repos"`
-		BaseBranch string   `json:"base_branch"`
-	}{
-		Prompt:     strings.TrimSpace(cfg.Prompt),
-		Repos:      normalizeRepoList(cfg.RepoList()),
-		BaseBranch: strings.TrimSpace(cfg.BaseBranch),
-	}
-	if payload.BaseBranch == "" {
-		payload.BaseBranch = "main"
+	baseBranch := normalizeBranchRefForDeduper(cfg.BaseBranch)
+	if baseBranch == "" {
+		baseBranch = "main"
 	}
 
-	encoded, err := json.Marshal(payload)
+	repos := normalizeRepoList(cfg.RepoList())
+	var (
+		encoded []byte
+		err     error
+	)
+	if baseBranch == "main" {
+		payload := struct {
+			Prompt     string   `json:"prompt"`
+			Repos      []string `json:"repos"`
+			BaseBranch string   `json:"base_branch"`
+		}{
+			Prompt:     strings.TrimSpace(cfg.Prompt),
+			Repos:      repos,
+			BaseBranch: baseBranch,
+		}
+		encoded, err = json.Marshal(payload)
+	} else {
+		payload := struct {
+			Repos        []string `json:"repos"`
+			TargetBranch string   `json:"target_branch"`
+		}{
+			Repos:        repos,
+			TargetBranch: baseBranch,
+		}
+		encoded, err = json.Marshal(payload)
+	}
 	if err != nil {
 		return ""
 	}
 	return string(encoded)
+}
+
+func normalizeBranchRefForDeduper(branch string) string {
+	branch = strings.TrimSpace(branch)
+	branch = strings.TrimPrefix(branch, "refs/heads/")
+	branch = strings.TrimPrefix(branch, "origin/")
+	return branch
 }
 
 func normalizeRepoList(repos []string) []string {
