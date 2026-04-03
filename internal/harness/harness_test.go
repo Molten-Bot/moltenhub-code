@@ -120,109 +120,6 @@ func TestRunHappyPathCreatesPR(t *testing.T) {
 	}
 }
 
-func TestRunNonMainBranchReusesExistingBranchAndPR(t *testing.T) {
-	t.Parallel()
-
-	cfg := sampleConfig()
-	cfg.BaseBranch = "release/2026.04-hotfix"
-	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
-	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
-	repoDir := filepath.Join(runDir, "repo")
-	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	prURL := "https://github.com/acme/repo/pull/77"
-
-	fake := &fakeRunner{t: t, exps: []expectedRun{
-		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
-		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
-		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
-		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
-		{cmd: cloneCommand(cfg, repoDir)},
-		{cmd: codexCommand(targetDir, cfg.Prompt)},
-		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
-		{cmd: addCommand(repoDir)},
-		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
-		{cmd: pushCommand(repoDir, cfg.BaseBranch)},
-		{cmd: prLookupCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: prURL + "\n"}},
-		{cmd: prChecksCommand(repoDir, prURL)},
-	}}
-
-	h := New(fake)
-	h.Now = func() time.Time { return now }
-	h.Workspace = workspace.Manager{
-		PathExists: func(string) bool { return false },
-		NewGUID:    func() string { return guid },
-		MkdirAll:   func(string, os.FileMode) error { return nil },
-	}
-	h.TargetDirOK = func(path string) bool { return path == targetDir }
-
-	res := h.Run(context.Background(), cfg)
-	if res.Err != nil {
-		t.Fatalf("Run() err = %v", res.Err)
-	}
-	if res.ExitCode != ExitSuccess {
-		t.Fatalf("ExitCode = %d", res.ExitCode)
-	}
-	if got, want := res.Branch, cfg.BaseBranch; got != want {
-		t.Fatalf("Branch = %q, want %q", got, want)
-	}
-	if got, want := res.PRURL, prURL; got != want {
-		t.Fatalf("PRURL = %q, want %q", got, want)
-	}
-	if len(fake.exps) != 0 {
-		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
-	}
-}
-
-func TestRunNonMainBranchWithoutOpenPRFails(t *testing.T) {
-	t.Parallel()
-
-	cfg := sampleConfig()
-	cfg.BaseBranch = "release/2026.04-hotfix"
-	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
-	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
-	repoDir := filepath.Join(runDir, "repo")
-	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-
-	fake := &fakeRunner{t: t, exps: []expectedRun{
-		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
-		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
-		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
-		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
-		{cmd: cloneCommand(cfg, repoDir)},
-		{cmd: codexCommand(targetDir, cfg.Prompt)},
-		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
-		{cmd: addCommand(repoDir)},
-		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
-		{cmd: pushCommand(repoDir, cfg.BaseBranch)},
-		{cmd: prLookupCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "\n"}},
-	}}
-
-	h := New(fake)
-	h.Now = func() time.Time { return now }
-	h.Workspace = workspace.Manager{
-		PathExists: func(string) bool { return false },
-		NewGUID:    func() string { return guid },
-		MkdirAll:   func(string, os.FileMode) error { return nil },
-	}
-	h.TargetDirOK = func(path string) bool { return path == targetDir }
-
-	res := h.Run(context.Background(), cfg)
-	if res.Err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if res.ExitCode != ExitPR {
-		t.Fatalf("ExitCode = %d, want %d", res.ExitCode, ExitPR)
-	}
-	if !strings.Contains(res.Err.Error(), "no open PR found") {
-		t.Fatalf("error = %v", res.Err)
-	}
-	if len(fake.exps) != 0 {
-		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
-	}
-}
-
 func TestRunCodexFailureStopsBeforeCommitAndPR(t *testing.T) {
 	t.Parallel()
 
@@ -757,6 +654,108 @@ func TestRunMultiRepoRemediationUsesWorkspaceCodexOptions(t *testing.T) {
 	}
 }
 
+func TestRunNonMainBranchReusesExistingPR(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.BaseBranch = "release/fix-ci"
+
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := filepath.Join("/tmp", "temp", guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	prURL := "https://github.com/acme/repo/pull/77"
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, cfg.BaseBranch)},
+		{cmd: prLookupByHeadCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "[{\"url\":\"" + prURL + "\"}]\n"}},
+		{cmd: prChecksCommand(repoDir, prURL)},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if got, want := res.Branch, cfg.BaseBranch; got != want {
+		t.Fatalf("Branch = %q, want %q", got, want)
+	}
+	if got, want := res.PRURL, prURL; got != want {
+		t.Fatalf("PRURL = %q, want %q", got, want)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunNonMainBranchCreatesPRWithoutExplicitBaseWhenNoOpenPR(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.BaseBranch = "release/fix-ci"
+
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := filepath.Join("/tmp", "temp", guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	prURL := "https://github.com/acme/repo/pull/88"
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, cfg.BaseBranch)},
+		{cmd: prLookupByHeadCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "[]\n"}},
+		{cmd: prCreateWithoutBaseCommand(repoDir, cfg, cfg.BaseBranch), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL)},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if got, want := res.PRURL, prURL; got != want {
+		t.Fatalf("PRURL = %q, want %q", got, want)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
 func TestCommandBuilders(t *testing.T) {
 	t.Parallel()
 
@@ -795,6 +794,37 @@ func TestCommandBuilders(t *testing.T) {
 		t.Fatalf("pr args missing reviewer: %v", pr.Args)
 	}
 
+	prNoBase := prCreateWithoutBaseCommand(repoDir, cfg, branch)
+	wantNoBasePrefix := []string{"pr", "create", "--head", branch, "--title", cfg.PRTitle, "--body", cfg.PRBody}
+	if prNoBase.Name != "gh" || prNoBase.Dir != repoDir {
+		t.Fatalf("pr without base command unexpected: %+v", prNoBase)
+	}
+	if !reflect.DeepEqual(prNoBase.Args[:len(wantNoBasePrefix)], wantNoBasePrefix) {
+		t.Fatalf("pr without base command prefix unexpected: %v", prNoBase.Args)
+	}
+	if containsSequence(prNoBase.Args, []string{"--base", "main"}) {
+		t.Fatalf("pr without base should not include --base: %v", prNoBase.Args)
+	}
+	if !containsSequence(prNoBase.Args, []string{"--label", "automation"}) {
+		t.Fatalf("pr without base args missing label: %v", prNoBase.Args)
+	}
+	if !containsSequence(prNoBase.Args, []string{"--reviewer", "octocat"}) {
+		t.Fatalf("pr without base args missing reviewer: %v", prNoBase.Args)
+	}
+
+	prLookup := prLookupByHeadCommand(repoDir, branch)
+	wantLookup := []string{"pr", "list", "--state", "open", "--head", branch, "--json", "url", "--limit", "1"}
+	if prLookup.Name != "gh" || prLookup.Dir != repoDir || !reflect.DeepEqual(prLookup.Args, wantLookup) {
+		t.Fatalf("pr lookup command unexpected: %+v", prLookup)
+	}
+
+	if !shouldCreateWorkBranch("main") {
+		t.Fatal("shouldCreateWorkBranch(main) = false, want true")
+	}
+	if shouldCreateWorkBranch("release/fix-ci") {
+		t.Fatal("shouldCreateWorkBranch(non-main) = true, want false")
+	}
+
 	checks := prChecksCommand(repoDir, "https://github.com/acme/repo/pull/42")
 	wantChecks := []string{"pr", "checks", "https://github.com/acme/repo/pull/42", "--watch", "--required", "--interval", "10"}
 	if checks.Name != "gh" || checks.Dir != repoDir || !reflect.DeepEqual(checks.Args, wantChecks) {
@@ -805,26 +835,6 @@ func TestCommandBuilders(t *testing.T) {
 	wantAllChecks := []string{"pr", "checks", "https://github.com/acme/repo/pull/42", "--watch", "--interval", "10"}
 	if allChecks.Name != "gh" || allChecks.Dir != repoDir || !reflect.DeepEqual(allChecks.Args, wantAllChecks) {
 		t.Fatalf("pr checks any command unexpected: %+v", allChecks)
-	}
-
-	lookup := prLookupCommand(repoDir, branch)
-	wantLookup := []string{"pr", "list", "--head", branch, "--state", "open", "--json", "url", "--jq", ".[0].url"}
-	if lookup.Name != "gh" || lookup.Dir != repoDir || !reflect.DeepEqual(lookup.Args, wantLookup) {
-		t.Fatalf("pr lookup command unexpected: %+v", lookup)
-	}
-}
-
-func TestShouldCreateBranch(t *testing.T) {
-	t.Parallel()
-
-	if !shouldCreateBranch("main") {
-		t.Fatal("shouldCreateBranch(main) = false, want true")
-	}
-	if !shouldCreateBranch(" Main ") {
-		t.Fatal("shouldCreateBranch(\" Main \") = false, want true")
-	}
-	if shouldCreateBranch("release/hotfix") {
-		t.Fatal("shouldCreateBranch(non-main) = true, want false")
 	}
 }
 
