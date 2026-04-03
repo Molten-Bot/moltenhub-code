@@ -125,6 +125,7 @@ func (c *AdaptiveDispatchController) Acquire(ctx context.Context, requestID stri
 		queueDepth int
 		running    int
 		allowed    int
+		granted    bool
 	)
 
 	c.mu.Lock()
@@ -134,7 +135,8 @@ func (c *AdaptiveDispatchController) Acquire(ctx context.Context, requestID stri
 	}
 	c.waiters = append(c.waiters, waiter)
 	c.tryGrantLocked()
-	queued = !waiter.granted
+	granted = waiter.granted
+	queued = !granted
 	if queued {
 		queueDepth = len(c.waiters)
 		running = c.running
@@ -152,7 +154,7 @@ func (c *AdaptiveDispatchController) Acquire(ctx context.Context, requestID stri
 		)
 	}
 
-	if waiter.granted {
+	if granted {
 		return c.releaseFunc(), nil
 	}
 
@@ -265,9 +267,15 @@ func (c *AdaptiveDispatchController) sampleAndUpdate() {
 	}
 
 	c.mu.Lock()
-	c.window = append(c.window, sample)
-	if len(c.window) > c.cfg.SampleWindow {
-		c.window = append([]resourceSample(nil), c.window[len(c.window)-c.cfg.SampleWindow:]...)
+	windowSize := c.cfg.SampleWindow
+	if windowSize <= 0 {
+		windowSize = 1
+	}
+	if len(c.window) < windowSize {
+		c.window = append(c.window, sample)
+	} else {
+		copy(c.window, c.window[1:])
+		c.window[len(c.window)-1] = sample
 	}
 	avg := averageResourceSample(c.window)
 
