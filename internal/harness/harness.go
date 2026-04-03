@@ -33,6 +33,7 @@ const (
 	maxPRChecksNoReportRetries    = 6
 	prChecksNoReportRetryDelay    = 10 * time.Second
 	maxCheckSummaryChars          = 4000
+	defaultCIWorkflowPath         = ".github/workflows/ci.yml"
 )
 
 type logFn func(string, ...any)
@@ -328,7 +329,38 @@ func (h Harness) processChangedRepo(
 			}
 
 			checkSummary = summarizeCheckOutput(checkRes)
-			if noReportRetry >= maxPRChecksNoReportRetries || !isNoChecksReported(checkRes, checkErr) {
+			noChecksReported := isNoChecksReported(checkRes, checkErr)
+			if noChecksReported && noReportRetry == 0 {
+				h.logf(
+					"stage=checks status=start action=workflow_dispatch reason=no_checks_reported repo=%s repo_dir=%s branch=%s workflow=%s attempt=%d",
+					repo.URL,
+					repo.RelDir,
+					repo.Branch,
+					defaultCIWorkflowPath,
+					attempt+1,
+				)
+				if _, dispatchErr := h.runCommand(ctx, "checks", workflowDispatchCommand(repo.Dir, repo.Branch)); dispatchErr != nil {
+					h.logf(
+						"stage=checks status=warn action=workflow_dispatch reason=failed repo=%s repo_dir=%s branch=%s workflow=%s attempt=%d err=%q",
+						repo.URL,
+						repo.RelDir,
+						repo.Branch,
+						defaultCIWorkflowPath,
+						attempt+1,
+						dispatchErr,
+					)
+				} else {
+					h.logf(
+						"stage=checks status=ok action=workflow_dispatch repo=%s repo_dir=%s branch=%s workflow=%s attempt=%d",
+						repo.URL,
+						repo.RelDir,
+						repo.Branch,
+						defaultCIWorkflowPath,
+						attempt+1,
+					)
+				}
+			}
+			if noReportRetry >= maxPRChecksNoReportRetries || !noChecksReported {
 				break
 			}
 
@@ -797,6 +829,14 @@ func prChecksAnyCommand(repoDir, prURL string) execx.Command {
 			"--watch",
 			"--interval", fmt.Sprintf("%d", prChecksWatchIntervalSeconds),
 		},
+	}
+}
+
+func workflowDispatchCommand(repoDir, branch string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: []string{"workflow", "run", defaultCIWorkflowPath, "--ref", branch},
 	}
 }
 
