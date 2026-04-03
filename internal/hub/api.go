@@ -159,6 +159,32 @@ func (c APIClient) SyncProfile(ctx context.Context, token string, cfg InitConfig
 	return nil
 }
 
+// UpdateAgentStatus updates the hub-visible lifecycle status for this agent.
+func (c APIClient) UpdateAgentStatus(ctx context.Context, token, status string) error {
+	if strings.TrimSpace(token) == "" {
+		return fmt.Errorf("update agent status requires token")
+	}
+
+	normalizedStatus, err := normalizeAgentStatus(status)
+	if err != nil {
+		return err
+	}
+
+	ok, trace := c.tryAny(ctx, token, []apiAttempt{
+		{Method: http.MethodPatch, Path: "/agents/me/status", Body: map[string]any{"status": normalizedStatus}},
+		{Method: http.MethodPost, Path: "/agents/me/status", Body: map[string]any{"status": normalizedStatus}},
+		{Method: http.MethodPatch, Path: "/agents/me", Body: map[string]any{"status": normalizedStatus}},
+		{Method: http.MethodPatch, Path: "/agents/me/metadata", Body: map[string]any{"status": normalizedStatus}},
+		{Method: http.MethodPatch, Path: "/agents/me/metadata", Body: map[string]any{"metadata": map[string]any{"status": normalizedStatus}}},
+		{Method: http.MethodPatch, Path: "/agents/me", Body: map[string]any{"metadata": map[string]any{"status": normalizedStatus}}},
+	})
+	if !ok {
+		return fmt.Errorf("update agent status failed: %s", trace)
+	}
+
+	return nil
+}
+
 // RegisterRuntime sends plugin/runtime metadata to hub.
 func (c APIClient) RegisterRuntime(ctx context.Context, token string, cfg InitConfig) error {
 	body := map[string]any{
@@ -848,6 +874,16 @@ func normalizeDescription(value, fallback string) string {
 		value = "Executes Codex harness tasks."
 	}
 	return value
+}
+
+func normalizeAgentStatus(status string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(status))
+	switch normalized {
+	case "online", "offline":
+		return normalized, nil
+	default:
+		return "", fmt.Errorf("agent status must be online or offline")
+	}
 }
 
 func firstString(values ...any) string {

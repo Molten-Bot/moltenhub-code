@@ -23,6 +23,7 @@ type Daemon struct {
 
 const wsFallbackWindow = 30 * time.Second
 const dispatchDedupTTL = 2 * time.Hour
+const agentStatusUpdateTimeout = 5 * time.Second
 
 // NewDaemon returns a hub daemon with defaults.
 func NewDaemon(runner execx.Runner) Daemon {
@@ -79,6 +80,21 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 		d.logf("hub.profile status=ok")
 	}
 
+	if err := api.UpdateAgentStatus(ctx, token, "online"); err != nil {
+		d.logf("hub.agent status=warn state=online err=%q", err)
+	} else {
+		d.logf("hub.agent status=online")
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), agentStatusUpdateTimeout)
+		defer cancel()
+		if err := api.UpdateAgentStatus(shutdownCtx, token, "offline"); err != nil {
+			d.logf("hub.agent status=warn state=offline err=%q", err)
+			return
+		}
+		d.logf("hub.agent status=offline")
+	}()
+
 	d.logf("hub.transport primary=openclaw_ws fallback=openclaw_pull")
 
 	workerSem := make(chan struct{}, cfg.Dispatcher.MaxParallel)
@@ -90,7 +106,7 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	if wsURLErr != nil {
 		d.logf("hub.ws status=disabled err=%q", wsURLErr)
 		d.logf("hub.transport mode=openclaw_pull")
-			return d.runPullLoop(ctx, api, token, cfg, workerSem, &workers, deduper)
+		return d.runPullLoop(ctx, api, token, cfg, workerSem, &workers, deduper)
 	}
 
 	for {
