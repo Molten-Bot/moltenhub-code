@@ -66,6 +66,10 @@ type repoWorkspace struct {
 	Changed bool
 }
 
+type codexRunOptions struct {
+	SkipGitRepoCheck bool
+}
+
 // Harness executes the clone -> codex -> PR workflow.
 type Harness struct {
 	Runner      execx.Runner
@@ -129,7 +133,11 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	if err != nil {
 		return h.fail(ExitWorkspace, "workspace", err, "")
 	}
-	h.logf("stage=workspace status=ok run_dir=%s guid=%s", runDir, guid)
+	agentsPath, err := h.Workspace.SeedAgentsFile(runDir)
+	if err != nil {
+		return h.fail(ExitWorkspace, "workspace", err, runDir)
+	}
+	h.logf("stage=workspace status=ok run_dir=%s guid=%s agents=%s", runDir, guid, agentsPath)
 
 	repoURLs := cfg.RepoList()
 	if len(repoURLs) == 0 {
@@ -174,12 +182,14 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	if len(repos) > 1 {
 		codexDir = runDir
 	}
+	codexOpts := codexRunOptions{SkipGitRepoCheck: len(repos) > 1}
 	codexBasePrompt := workspaceCodexPrompt(cfg.Prompt, cfg.TargetSubdir, repos)
+	codexBasePrompt = withAgentsPrompt(codexBasePrompt, agentsPath)
 	codexTargetLabel := codexTargetLabel(cfg.TargetSubdir, len(repos) > 1)
 
 	h.logf("stage=codex status=start target=%s", codexTargetLabel)
 	codexStart := time.Now()
-	if err := h.runCodexWithHeartbeat(ctx, codexDir, codexBasePrompt); err != nil {
+	if err := h.runCodexWithHeartbeat(ctx, codexDir, codexBasePrompt, codexOpts); err != nil {
 		return h.fail(ExitCodex, "codex", err, runDir)
 	}
 	h.logf("stage=codex status=ok elapsed_s=%d", int(time.Since(codexStart).Seconds()))
@@ -215,6 +225,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 			cfg,
 			&repos[i],
 			codexDir,
+			codexOpts,
 			codexBasePrompt,
 			codexTargetLabel,
 			len(repos) > 1,
@@ -233,6 +244,7 @@ func (h Harness) processChangedRepo(
 	cfg config.Config,
 	repo *repoWorkspace,
 	codexDir string,
+	codexOpts codexRunOptions,
 	codexBasePrompt string,
 	codexTargetLabel string,
 	multiRepo bool,
@@ -334,7 +346,7 @@ func (h Harness) processChangedRepo(
 			repo.RelDir,
 		)
 		codexStart := time.Now()
-		if err := h.runCodexWithHeartbeat(ctx, codexDir, repairPrompt); err != nil {
+		if err := h.runCodexWithHeartbeat(ctx, codexDir, repairPrompt, codexOpts); err != nil {
 			return ExitCodex, "codex", err
 		}
 		h.logf(
@@ -428,6 +440,25 @@ func workspaceCodexPrompt(prompt, targetSubdir string, repos []repoWorkspace) st
 	b.WriteString("- If you modify files in any repository, keep each changed repository on its own branch and PR.\n")
 	b.WriteString("- Start every branch name and PR title with 'moltenhub-'.\n")
 	return strings.TrimSpace(b.String())
+}
+
+func withAgentsPrompt(prompt, agentsPath string) string {
+	base := strings.TrimSpace(prompt)
+	agentsPath = strings.TrimSpace(agentsPath)
+
+	location := "./AGENTS.md"
+	if agentsPath != "" {
+		location = agentsPath
+	}
+
+	directive := fmt.Sprintf(
+		"you are ./AGENTS.md\nUse %s as your primary implementation instructions before making any changes.",
+		location,
+	)
+	if base == "" {
+		return directive
+	}
+	return directive + "\n\n" + base
 }
 
 func repoWorkspaceDirName(repoURL string, index, total int) string {
@@ -545,10 +576,10 @@ func isNoRequiredChecksReported(res execx.Result, err error) bool {
 	return strings.Contains(text, "no required checks")
 }
 
-func (h Harness) runCodexWithHeartbeat(ctx context.Context, targetDir, prompt string) error {
+func (h Harness) runCodexWithHeartbeat(ctx context.Context, targetDir, prompt string, opts codexRunOptions) error {
 	done := make(chan error, 1)
 	go func() {
-		_, err := h.runCommand(ctx, "codex", codexCommand(targetDir, prompt))
+		_, err := h.runCommand(ctx, "codex", codexCommandWithOptions(targetDir, prompt, opts))
 		done <- err
 	}()
 
@@ -645,10 +676,20 @@ func branchCommand(repoDir, branch string) execx.Command {
 }
 
 func codexCommand(targetDir, prompt string) execx.Command {
+	return codexCommandWithOptions(targetDir, prompt, codexRunOptions{})
+}
+
+func codexCommandWithOptions(targetDir, prompt string, opts codexRunOptions) execx.Command {
+	args := []string{"exec", "--sandbox", "workspace-write"}
+	if opts.SkipGitRepoCheck {
+		args = append(args, "--skip-git-repo-check")
+	}
+	args = append(args, withCompletionGatePrompt(prompt))
+
 	return execx.Command{
 		Dir:  targetDir,
 		Name: "codex",
-		Args: []string{"exec", "--sandbox", "workspace-write", withCompletionGatePrompt(prompt)},
+		Args: args,
 	}
 }
 

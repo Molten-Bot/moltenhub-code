@@ -131,3 +131,81 @@ func TestCreateRunDirFallsBackWhenDevShmCreateFails(t *testing.T) {
 		t.Fatalf("mkdir attempts = %d, want 2 (%v)", len(created), created)
 	}
 }
+
+func TestSeedAgentsFileCopiesSeedIntoRunDir(t *testing.T) {
+	t.Parallel()
+
+	var (
+		readPath   string
+		writePath  string
+		writeBytes []byte
+		writeMode  os.FileMode
+	)
+
+	m := Manager{
+		ReadFile: func(path string) ([]byte, error) {
+			readPath = path
+			return []byte("seeded instructions"), nil
+		},
+		WriteFile: func(path string, data []byte, mode os.FileMode) error {
+			writePath = path
+			writeBytes = append([]byte(nil), data...)
+			writeMode = mode
+			return nil
+		},
+	}
+
+	runDir := filepath.Join("/tmp", "temp", "abc123")
+	seedPath, err := m.SeedAgentsFile(runDir)
+	if err != nil {
+		t.Fatalf("SeedAgentsFile() error = %v", err)
+	}
+
+	if readPath != agentsSeedPath {
+		t.Fatalf("read path = %q, want %q", readPath, agentsSeedPath)
+	}
+	wantSeedPath := filepath.Join(runDir, agentsFileName)
+	if seedPath != wantSeedPath {
+		t.Fatalf("seed path = %q, want %q", seedPath, wantSeedPath)
+	}
+	if writePath != wantSeedPath {
+		t.Fatalf("write path = %q, want %q", writePath, wantSeedPath)
+	}
+	if string(writeBytes) != "seeded instructions" {
+		t.Fatalf("write bytes = %q", string(writeBytes))
+	}
+	if writeMode != 0o644 {
+		t.Fatalf("write mode = %o, want 644", writeMode)
+	}
+}
+
+func TestSeedAgentsFileReadError(t *testing.T) {
+	t.Parallel()
+
+	m := Manager{
+		ReadFile: func(string) ([]byte, error) {
+			return nil, errors.New("missing seed")
+		},
+	}
+
+	if _, err := m.SeedAgentsFile(filepath.Join("/tmp", "temp", "abc123")); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestSeedAgentsFileWriteError(t *testing.T) {
+	t.Parallel()
+
+	m := Manager{
+		ReadFile: func(string) ([]byte, error) {
+			return []byte("seed"), nil
+		},
+		WriteFile: func(string, []byte, os.FileMode) error {
+			return errors.New("write failed")
+		},
+	}
+
+	if _, err := m.SeedAgentsFile(filepath.Join("/tmp", "temp", "abc123")); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}

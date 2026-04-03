@@ -12,11 +12,12 @@ For each run, the harness performs this flow:
 1. Validate local tooling: `git`, `gh`, `codex`
 2. Validate GitHub auth: `gh auth status`
 3. Create isolated run workspace: `/dev/shm/temp/<guid>` (fallback `/tmp/temp/<guid>`)
-4. Clone all configured repos + base branch before prompting Codex
-5. Run Codex in the configured target subdirectory (single repo) or shared workspace (multi-repo)
-6. For each repo with changes: commit, push to a `moltenhub-...` branch, and create a PR with a title that starts with `moltenhub-`
-7. Wait for required PR checks (`gh pr checks --watch --required`) per changed repo
-8. If required checks fail, re-run Codex with remediation context, push fixes, and re-check until green or retry limit is reached
+4. Seed `AGENTS.md` into the run root from `./library/AGENTS.md`
+5. Clone all configured repos + base branch before prompting Codex
+6. Run Codex in the configured target subdirectory (single repo) or shared workspace (multi-repo, with `--skip-git-repo-check`), with prompt context that starts with `you are ./AGENTS.md` and points to the seeded file
+7. For each repo with changes: commit, push to a `moltenhub-...` branch, and create a PR with a title that starts with `moltenhub-`
+8. Wait for required PR checks (`gh pr checks --watch --required`) per changed repo
+9. If required checks fail, re-run Codex with remediation context, push fixes, and re-check until green or retry limit is reached
 
 If Codex fails, no PR is created and the workspace path is printed for inspection.
 
