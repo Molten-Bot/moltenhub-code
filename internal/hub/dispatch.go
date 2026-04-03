@@ -109,6 +109,20 @@ func ParseSkillDispatch(msg map[string]any, expectedType, expectedSkill string) 
 	return dispatch, true, nil
 }
 
+// ParseRunConfigJSON parses one inline run config JSON object into a validated config.
+func ParseRunConfigJSON(payload []byte) (config.Config, error) {
+	payload = bytes.TrimSpace(payload)
+	if len(payload) == 0 {
+		return config.Config{}, fmt.Errorf("run config payload is empty")
+	}
+
+	var decoded any
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		return config.Config{}, fmt.Errorf("decode run config payload: %w", err)
+	}
+	return parseRunConfigValue(decoded)
+}
+
 func parseRunConfigValue(v any) (config.Config, error) {
 	m, err := normalizeRunConfigMap(v)
 	if err != nil {

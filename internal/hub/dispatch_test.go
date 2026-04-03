@@ -140,9 +140,9 @@ func TestParseSkillDispatchAcceptsJSONStringInputAndSourceRouting(t *testing.T) 
 	t.Parallel()
 
 	msg := map[string]any{
-		"kind":         "skill_request",
-		"skill_name":   "code_for_me",
-		"request_id":   "req-json-input",
+		"kind":           "skill_request",
+		"skill_name":     "code_for_me",
+		"request_id":     "req-json-input",
 		"from_agent_uri": "https://na.hub.molten.bot/acme/sender",
 		"input": `{
 			"repo":"git@github.com:acme/repo.git",
@@ -227,5 +227,40 @@ func TestParseSkillDispatchRejectsUnknownConfigFields(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unknown field") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseRunConfigJSON(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := ParseRunConfigJSON([]byte(`{
+		"repo": "git@github.com:acme/repo.git",
+		"base_branch": "main",
+		"target_subdir": ".",
+		"prompt": "make a change"
+	}`))
+	if err != nil {
+		t.Fatalf("ParseRunConfigJSON() error = %v", err)
+	}
+	if cfg.RepoURL != "git@github.com:acme/repo.git" {
+		t.Fatalf("RepoURL = %q", cfg.RepoURL)
+	}
+	if cfg.BaseBranch != "main" {
+		t.Fatalf("BaseBranch = %q", cfg.BaseBranch)
+	}
+	if cfg.TargetSubdir != "." {
+		t.Fatalf("TargetSubdir = %q", cfg.TargetSubdir)
+	}
+	if cfg.Prompt != "make a change" {
+		t.Fatalf("Prompt = %q", cfg.Prompt)
+	}
+}
+
+func TestParseRunConfigJSONRejectsInvalidPayload(t *testing.T) {
+	t.Parallel()
+
+	_, err := ParseRunConfigJSON([]byte(`{`))
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -17,9 +18,10 @@ var staticFiles embed.FS
 
 // Server provides an HTTP UI for live hub/task monitoring.
 type Server struct {
-	Addr   string
-	Broker *Broker
-	Logf   func(string, ...any)
+	Addr              string
+	Broker            *Broker
+	Logf              func(string, ...any)
+	SubmitLocalPrompt func(context.Context, []byte) (string, error)
 }
 
 // NewServer returns a monitor HTTP server.
@@ -71,6 +73,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/api/state", s.handleState)
 	mux.HandleFunc("/api/stream", s.handleStream)
+	mux.HandleFunc("/api/local-prompt", s.handleLocalPrompt)
 	mux.HandleFunc("/healthz", s.handleHealth)
 	return mux
 }
@@ -158,6 +161,45 @@ func (s Server) handleStream(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s Server) handleLocalPrompt(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.SubmitLocalPrompt == nil {
+		writeJSON(w, http.StatusNotImplemented, map[string]any{
+			"ok":    false,
+			"error": "local prompt submit is unavailable",
+		})
+		return
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": fmt.Sprintf("read request body: %v", err),
+		})
+		return
+	}
+
+	requestID, err := s.SubmitLocalPrompt(r.Context(), body)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": err.Error(),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"ok":         true,
+		"request_id": requestID,
+	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
