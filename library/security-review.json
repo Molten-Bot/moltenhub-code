@@ -1,5 +1,7 @@
 {
-  "repo": "",
+  "repos": [
+    "git@github.com:acme/target-repo.git"
+  ],
   "base_branch": "main",
   "target_subdir": ".",
   "prompt": "You are a security professional. Review the security boundaries of this codebase and document every plausible point of compromise. The output should be a PR that creates /docs/ with a clear markdown summary of findings. Only finish when the PR exists and required CI/CD checks are green; if checks fail, keep iterating with focused fixes."
