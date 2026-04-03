@@ -446,7 +446,13 @@ func (d Daemon) handleDispatch(
 	deliveryID string,
 	ackedEarly bool,
 ) {
-	d.logf("dispatch status=start request_id=%s skill=%s repo=%s", dispatch.RequestID, dispatch.Skill, dispatch.Config.RepoURL)
+	d.logf(
+		"dispatch status=start request_id=%s skill=%s repo=%s repos=%s",
+		dispatch.RequestID,
+		dispatch.Skill,
+		dispatch.Config.RepoURL,
+		strings.Join(dispatch.Config.RepoList(), ","),
+	)
 
 	h := harness.New(d.Runner)
 	h.Logf = func(format string, args ...any) {
@@ -483,7 +489,15 @@ func (d Daemon) handleDispatch(
 		d.logf("dispatch status=no_changes request_id=%s workspace=%s branch=%s", dispatch.RequestID, res.WorkspaceDir, res.Branch)
 		return
 	}
-	d.logf("dispatch status=ok request_id=%s workspace=%s branch=%s pr_url=%s", dispatch.RequestID, res.WorkspaceDir, res.Branch, res.PRURL)
+	d.logf(
+		"dispatch status=ok request_id=%s workspace=%s branch=%s pr_url=%s pr_urls=%s changed_repos=%d",
+		dispatch.RequestID,
+		res.WorkspaceDir,
+		res.Branch,
+		res.PRURL,
+		joinRepoPRURLs(res.RepoResults),
+		countChangedRepoResults(res.RepoResults),
+	)
 }
 
 func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.Result) map[string]any {
@@ -499,6 +513,9 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 		"workspace_dir": res.WorkspaceDir,
 		"branch":        res.Branch,
 		"pr_url":        res.PRURL,
+		"pr_urls":       splitNonEmptyCSV(joinRepoPRURLs(res.RepoResults)),
+		"changed_repos": countChangedRepoResults(res.RepoResults),
+		"repo_results":  repoResultPayloads(res.RepoResults),
 		"no_changes":    res.NoChanges,
 	}
 	if res.Err != nil {
@@ -518,6 +535,71 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 		payload["to"] = dispatch.ReplyTo
 	}
 	return payload
+}
+
+func joinRepoPRURLs(results []harness.RepoResult) string {
+	if len(results) == 0 {
+		return ""
+	}
+	urls := make([]string, 0, len(results))
+	for _, result := range results {
+		if !result.Changed {
+			continue
+		}
+		url := strings.TrimSpace(result.PRURL)
+		if url == "" {
+			continue
+		}
+		urls = append(urls, url)
+	}
+	return strings.Join(urls, ",")
+}
+
+func countChangedRepoResults(results []harness.RepoResult) int {
+	count := 0
+	for _, result := range results {
+		if result.Changed {
+			count++
+		}
+	}
+	return count
+}
+
+func repoResultPayloads(results []harness.RepoResult) []map[string]any {
+	if len(results) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(results))
+	for _, result := range results {
+		out = append(out, map[string]any{
+			"repo_url": result.RepoURL,
+			"repo_dir": result.RepoDir,
+			"branch":   result.Branch,
+			"pr_url":   result.PRURL,
+			"changed":  result.Changed,
+		})
+	}
+	return out
+}
+
+func splitNonEmptyCSV(csv string) []string {
+	csv = strings.TrimSpace(csv)
+	if csv == "" {
+		return nil
+	}
+	parts := strings.Split(csv, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		out = append(out, part)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func sleepWithContext(ctx context.Context, d time.Duration) bool {

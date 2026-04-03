@@ -524,12 +524,14 @@
               rows="7"
               spellcheck="false"
               placeholder='{
-  "repo": "git@github.com:org/repo.git",
+  "repos": [
+    "git@github.com:org/repo.git"
+  ],
   "base_branch": "main",
   "target_subdir": ".",
   "prompt": "Describe the change you want"
 }'></textarea>
-            <div class="prompt-hint">Paste one JSON object with: repo, base_branch, target_subdir, prompt.</div>
+            <div class="prompt-hint">Paste one JSON object with: prompt and one of repo, repo_url, or repos.</div>
             <div class="prompt-actions">
               <button id="local-prompt-submit" class="prompt-submit" type="submit">Run Local Prompt</button>
               <span id="local-prompt-status" class="submit-status">Idle</span>

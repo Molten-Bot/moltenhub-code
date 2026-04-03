@@ -1,5 +1,7 @@
 {
-  "repo": "git@github.com:acme/target-repo.git",
+  "repos": [
+    "git@github.com:acme/target-repo.git"
+  ],
   "base_branch": "main",
   "target_subdir": ".",
   "prompt": "Implement the requested change and add/update unit tests for modified code. Keep changes minimal and production-ready. Only finish when the PR exists and required CI/CD checks are green; if checks fail, keep iterating with focused fixes."

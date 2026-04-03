@@ -319,6 +319,282 @@ func TestRunFailedChecksWithNoRemediationChangesFails(t *testing.T) {
 	}
 }
 
+func TestRunNoChecksReportedRetriesBeforePassing(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := filepath.Join("/tmp", guid)
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "codex/build-api-20260402-150405-abcdef12"
+	prURL := "https://github.com/acme/repo/pull/42"
+	noChecks := "no checks reported on the 'codex/build-api-20260402-150405-abcdef12' branch"
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, cfg.Prompt)},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL), res: execx.Result{Stderr: noChecks + "\n"}, err: errors.New("checks unavailable")},
+		{cmd: prChecksCommand(repoDir, prURL), res: execx.Result{Stderr: noChecks + "\n"}, err: errors.New("checks unavailable")},
+		{cmd: prChecksCommand(repoDir, prURL)},
+	}}
+
+	sleepCalls := 0
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = workspace.Manager{
+		PathExists: func(string) bool { return false },
+		NewGUID:    func() string { return guid },
+		MkdirAll:   func(string, os.FileMode) error { return nil },
+	}
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+	h.Sleep = func(_ context.Context, d time.Duration) error {
+		sleepCalls++
+		if d != prChecksNoReportRetryDelay {
+			t.Fatalf("sleep delay = %s, want %s", d, prChecksNoReportRetryDelay)
+		}
+		return nil
+	}
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if sleepCalls != 2 {
+		t.Fatalf("sleepCalls = %d, want 2", sleepCalls)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunNoChecksReportedAfterRetryWindowTriggersRemediation(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := filepath.Join("/tmp", guid)
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "codex/build-api-20260402-150405-abcdef12"
+	prURL := "https://github.com/acme/repo/pull/42"
+	noChecks := "no checks reported on the 'codex/build-api-20260402-150405-abcdef12' branch"
+
+	exps := []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, cfg.Prompt)},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
+	}
+	for i := 0; i <= maxPRChecksNoReportRetries; i++ {
+		exps = append(exps, expectedRun{
+			cmd: prChecksCommand(repoDir, prURL),
+			res: execx.Result{Stderr: noChecks + "\n"},
+			err: errors.New("checks unavailable"),
+		})
+	}
+	exps = append(exps,
+		expectedRun{cmd: codexCommand(targetDir, remediationPrompt(cfg.Prompt, prURL, noChecks, 1))},
+		expectedRun{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		expectedRun{cmd: addCommand(repoDir)},
+		expectedRun{cmd: commitCommand(repoDir, remediationCommitMessage(cfg.CommitMessage, 1))},
+		expectedRun{cmd: pushCommand(repoDir, branch)},
+		expectedRun{cmd: prChecksCommand(repoDir, prURL)},
+	)
+
+	fake := &fakeRunner{t: t, exps: exps}
+	sleepCalls := 0
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = workspace.Manager{
+		PathExists: func(string) bool { return false },
+		NewGUID:    func() string { return guid },
+		MkdirAll:   func(string, os.FileMode) error { return nil },
+	}
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+	h.Sleep = func(_ context.Context, d time.Duration) error {
+		sleepCalls++
+		if d != prChecksNoReportRetryDelay {
+			t.Fatalf("sleep delay = %s, want %s", d, prChecksNoReportRetryDelay)
+		}
+		return nil
+	}
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if sleepCalls != maxPRChecksNoReportRetries {
+		t.Fatalf("sleepCalls = %d, want %d", sleepCalls, maxPRChecksNoReportRetries)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunNoRequiredChecksFallsBackToAllChecks(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := filepath.Join("/tmp", guid)
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "codex/build-api-20260402-150405-abcdef12"
+	prURL := "https://github.com/acme/repo/pull/42"
+	noRequired := "no required checks reported on the 'codex/build-api-20260402-150405-abcdef12' branch"
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, cfg.Prompt)},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL), res: execx.Result{Stderr: noRequired + "\n"}, err: errors.New("checks unavailable")},
+		{cmd: prChecksAnyCommand(repoDir, prURL)},
+	}}
+
+	sleepCalls := 0
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = workspace.Manager{
+		PathExists: func(string) bool { return false },
+		NewGUID:    func() string { return guid },
+		MkdirAll:   func(string, os.FileMode) error { return nil },
+	}
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+	h.Sleep = func(_ context.Context, _ time.Duration) error {
+		sleepCalls++
+		return nil
+	}
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if sleepCalls != 0 {
+		t.Fatalf("sleepCalls = %d, want 0", sleepCalls)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunMultiRepoCreatesPRsForEachChangedRepo(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.RepoURL = ""
+	cfg.Repo = ""
+	cfg.Repos = []string{
+		"git@github.com:acme/repo-a.git",
+		"git@github.com:acme/repo-b.git",
+	}
+	cfg.TargetSubdir = "."
+
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := filepath.Join("/tmp", guid)
+	branch := "codex/build-api-20260402-150405-abcdef12"
+
+	repoRelA := repoWorkspaceDirName(cfg.Repos[0], 0, len(cfg.Repos))
+	repoRelB := repoWorkspaceDirName(cfg.Repos[1], 1, len(cfg.Repos))
+	repoDirA := filepath.Join(runDir, repoRelA)
+	repoDirB := filepath.Join(runDir, repoRelB)
+	codexPrompt := workspaceCodexPrompt(cfg.Prompt, cfg.TargetSubdir, []repoWorkspace{
+		{URL: cfg.Repos[0], RelDir: repoRelA},
+		{URL: cfg.Repos[1], RelDir: repoRelB},
+	})
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneRepoCommand(cfg.Repos[0], cfg.BaseBranch, repoDirA)},
+		{cmd: cloneRepoCommand(cfg.Repos[1], cfg.BaseBranch, repoDirB)},
+		{cmd: branchCommand(repoDirA, branch)},
+		{cmd: branchCommand(repoDirB, branch)},
+		{cmd: codexCommand(runDir, codexPrompt)},
+		{cmd: statusCommand(repoDirA), res: execx.Result{Stdout: " M file-a.go\n"}},
+		{cmd: statusCommand(repoDirB), res: execx.Result{Stdout: " M file-b.go\n"}},
+		{cmd: addCommand(repoDirA)},
+		{cmd: commitCommand(repoDirA, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDirA, branch)},
+		{cmd: prCreateCommand(repoDirA, cfg, branch), res: execx.Result{Stdout: "https://github.com/acme/repo-a/pull/10\n"}},
+		{cmd: prChecksCommand(repoDirA, "https://github.com/acme/repo-a/pull/10")},
+		{cmd: addCommand(repoDirB)},
+		{cmd: commitCommand(repoDirB, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDirB, branch)},
+		{cmd: prCreateCommand(repoDirB, cfg, branch), res: execx.Result{Stdout: "https://github.com/acme/repo-b/pull/20\n"}},
+		{cmd: prChecksCommand(repoDirB, "https://github.com/acme/repo-b/pull/20")},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = workspace.Manager{
+		PathExists: func(string) bool { return false },
+		NewGUID:    func() string { return guid },
+		MkdirAll:   func(string, os.FileMode) error { return nil },
+	}
+	h.TargetDirOK = func(path string) bool { return path == repoDirA }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if got, want := len(res.RepoResults), 2; got != want {
+		t.Fatalf("len(RepoResults) = %d, want %d", got, want)
+	}
+	if res.RepoResults[0].PRURL == "" || res.RepoResults[1].PRURL == "" {
+		t.Fatalf("RepoResults PRs = %#v", res.RepoResults)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
 func TestCommandBuilders(t *testing.T) {
 	t.Parallel()
 
@@ -357,6 +633,12 @@ func TestCommandBuilders(t *testing.T) {
 	wantChecks := []string{"pr", "checks", "https://github.com/acme/repo/pull/42", "--watch", "--required", "--interval", "10"}
 	if checks.Name != "gh" || checks.Dir != repoDir || !reflect.DeepEqual(checks.Args, wantChecks) {
 		t.Fatalf("pr checks command unexpected: %+v", checks)
+	}
+
+	allChecks := prChecksAnyCommand(repoDir, "https://github.com/acme/repo/pull/42")
+	wantAllChecks := []string{"pr", "checks", "https://github.com/acme/repo/pull/42", "--watch", "--interval", "10"}
+	if allChecks.Name != "gh" || allChecks.Dir != repoDir || !reflect.DeepEqual(allChecks.Args, wantAllChecks) {
+		t.Fatalf("pr checks any command unexpected: %+v", allChecks)
 	}
 }
 

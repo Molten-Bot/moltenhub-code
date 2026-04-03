@@ -34,6 +34,9 @@ this can contain extra notes after the object`
 	if cfg.RepoURL != "git@github.com:acme/repo.git" {
 		t.Fatalf("RepoURL = %q", cfg.RepoURL)
 	}
+	if len(cfg.Repos) != 1 || cfg.Repos[0] != "git@github.com:acme/repo.git" {
+		t.Fatalf("Repos = %#v", cfg.Repos)
+	}
 	if cfg.BaseBranch != "main" {
 		t.Fatalf("BaseBranch = %q, want main", cfg.BaseBranch)
 	}
@@ -105,8 +108,58 @@ func TestLoadRejectsMissingRepo(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "repo_url (or repo) is required") {
+	if !strings.Contains(err.Error(), "repo, repo_url, or repos[] is required") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadSupportsReposArray(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	json := `{
+  "repos": [
+    "git@github.com:acme/repo-one.git",
+    "git@github.com:acme/repo-two.git"
+  ],
+  "prompt": "update both repos"
+}`
+	if err := os.WriteFile(path, []byte(json), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got, want := len(cfg.Repos), 2; got != want {
+		t.Fatalf("len(Repos) = %d, want %d", got, want)
+	}
+	if cfg.RepoURL != "git@github.com:acme/repo-one.git" {
+		t.Fatalf("RepoURL = %q", cfg.RepoURL)
+	}
+}
+
+func TestApplyDefaultsCombinesRepoURLAndRepos(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		RepoURL: "git@github.com:acme/primary.git",
+		Repos: []string{
+			"git@github.com:acme/secondary.git",
+		},
+		Prompt: "x",
+	}
+	cfg.ApplyDefaults()
+	if got, want := len(cfg.Repos), 2; got != want {
+		t.Fatalf("len(Repos) = %d, want %d", got, want)
+	}
+	if cfg.Repos[0] != "git@github.com:acme/primary.git" {
+		t.Fatalf("Repos[0] = %q", cfg.Repos[0])
+	}
+	if cfg.RepoURL != "git@github.com:acme/primary.git" {
+		t.Fatalf("RepoURL = %q", cfg.RepoURL)
 	}
 }
 

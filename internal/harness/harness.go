@@ -30,6 +30,8 @@ const (
 
 	maxPRCheckRemediationAttempts = 3
 	prChecksWatchIntervalSeconds  = 10
+	maxPRChecksNoReportRetries    = 6
+	prChecksNoReportRetryDelay    = 10 * time.Second
 	maxCheckSummaryChars          = 4000
 )
 
@@ -43,6 +45,25 @@ type Result struct {
 	Branch       string
 	PRURL        string
 	NoChanges    bool
+	RepoResults  []RepoResult
+}
+
+// RepoResult captures outcome details for one repository in a run.
+type RepoResult struct {
+	RepoURL string
+	RepoDir string
+	Branch  string
+	PRURL   string
+	Changed bool
+}
+
+type repoWorkspace struct {
+	URL     string
+	Dir     string
+	RelDir  string
+	Branch  string
+	PRURL   string
+	Changed bool
 }
 
 // Harness executes the clone -> codex -> PR workflow.
@@ -52,6 +73,7 @@ type Harness struct {
 	Now         func() time.Time
 	Logf        logFn
 	TargetDirOK func(string) bool
+	Sleep       func(context.Context, time.Duration) error
 }
 
 // New returns a harness configured with defaults.
@@ -62,6 +84,7 @@ func New(runner execx.Runner) Harness {
 		Now:         time.Now,
 		Logf:        func(string, ...any) {},
 		TargetDirOK: pathIsDir,
+		Sleep:       sleepWithContext,
 	}
 }
 
@@ -82,6 +105,9 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 	if h.TargetDirOK == nil {
 		h.TargetDirOK = pathIsDir
+	}
+	if h.Sleep == nil {
+		h.Sleep = sleepWithContext
 	}
 
 	h.logf("stage=preflight status=start")
@@ -105,14 +131,28 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 	h.logf("stage=workspace status=ok run_dir=%s guid=%s", runDir, guid)
 
-	repoDir := filepath.Join(runDir, "repo")
-	h.logf("stage=clone status=start repo=%s branch=%s", cfg.RepoURL, cfg.BaseBranch)
-	if _, err := h.runCommand(ctx, "clone", cloneCommand(cfg, repoDir)); err != nil {
-		return h.fail(ExitClone, "clone", err, runDir)
+	repoURLs := cfg.RepoList()
+	if len(repoURLs) == 0 {
+		return h.fail(ExitConfig, "config", fmt.Errorf("one of repo, repo_url, or repos[] is required"), runDir)
 	}
-	h.logf("stage=clone status=ok")
 
-	targetDir, err := resolveTargetDir(repoDir, cfg.TargetSubdir)
+	repos := make([]repoWorkspace, 0, len(repoURLs))
+	for i, repoURL := range repoURLs {
+		relDir := repoWorkspaceDirName(repoURL, i, len(repoURLs))
+		repoDir := filepath.Join(runDir, relDir)
+		h.logf("stage=clone status=start repo=%s branch=%s repo_dir=%s", repoURL, cfg.BaseBranch, relDir)
+		if _, err := h.runCommand(ctx, "clone", cloneRepoCommand(repoURL, cfg.BaseBranch, repoDir)); err != nil {
+			return h.fail(ExitClone, "clone", err, runDir)
+		}
+		h.logf("stage=clone status=ok repo=%s repo_dir=%s", repoURL, relDir)
+		repos = append(repos, repoWorkspace{
+			URL:    repoURL,
+			Dir:    repoDir,
+			RelDir: relDir,
+		})
+	}
+
+	targetDir, err := resolveTargetDir(repos[0].Dir, cfg.TargetSubdir)
 	if err != nil {
 		return h.fail(ExitConfig, "config", err, runDir)
 	}
@@ -121,99 +161,317 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 
 	branch := slug.BranchName(cfg.Prompt, h.Now(), guid)
-	h.logf("stage=git status=start action=branch branch=%s", branch)
-	if _, err := h.runCommand(ctx, "git", branchCommand(repoDir, branch)); err != nil {
-		return h.fail(ExitGit, "git", err, runDir)
+	for i := range repos {
+		repos[i].Branch = branch
+		h.logf("stage=git status=start action=branch branch=%s repo=%s repo_dir=%s", branch, repos[i].URL, repos[i].RelDir)
+		if _, err := h.runCommand(ctx, "git", branchCommand(repos[i].Dir, branch)); err != nil {
+			return h.fail(ExitGit, "git", err, runDir)
+		}
+		h.logf("stage=git status=ok action=branch branch=%s repo=%s repo_dir=%s", branch, repos[i].URL, repos[i].RelDir)
 	}
 
-	h.logf("stage=codex status=start target=%s", cfg.TargetSubdir)
+	codexDir := targetDir
+	if len(repos) > 1 {
+		codexDir = runDir
+	}
+	codexBasePrompt := workspaceCodexPrompt(cfg.Prompt, cfg.TargetSubdir, repos)
+	codexTargetLabel := codexTargetLabel(cfg.TargetSubdir, len(repos) > 1)
+
+	h.logf("stage=codex status=start target=%s", codexTargetLabel)
 	codexStart := time.Now()
-	if err := h.runCodexWithHeartbeat(ctx, targetDir, cfg.Prompt); err != nil {
+	if err := h.runCodexWithHeartbeat(ctx, codexDir, codexBasePrompt); err != nil {
 		return h.fail(ExitCodex, "codex", err, runDir)
 	}
 	h.logf("stage=codex status=ok elapsed_s=%d", int(time.Since(codexStart).Seconds()))
 
-	statusRes, err := h.runCommand(ctx, "git", statusCommand(repoDir))
-	if err != nil {
-		return h.fail(ExitGit, "git", err, runDir)
-	}
-	if strings.TrimSpace(statusRes.Stdout) == "" {
-		h.logf("stage=git status=no_changes")
-		return Result{ExitCode: ExitSuccess, WorkspaceDir: runDir, Branch: branch, NoChanges: true}
-	}
-
-	h.logf("stage=git status=start action=commit")
-	if _, err := h.runCommand(ctx, "git", addCommand(repoDir)); err != nil {
-		return h.fail(ExitGit, "git", err, runDir)
-	}
-	if _, err := h.runCommand(ctx, "git", commitCommand(repoDir, cfg.CommitMessage)); err != nil {
-		return h.fail(ExitGit, "git", err, runDir)
-	}
-	if _, err := h.runCommand(ctx, "git", pushCommand(repoDir, branch)); err != nil {
-		return h.fail(ExitGit, "git", err, runDir)
-	}
-	h.logf("stage=git status=ok action=commit")
-
-	h.logf("stage=pr status=start")
-	prRes, err := h.runCommand(ctx, "pr", prCreateCommand(repoDir, cfg, branch))
-	if err != nil {
-		return h.fail(ExitPR, "pr", err, runDir)
-	}
-	prURL := extractFirstURL(prRes.Stdout)
-	if prURL == "" {
-		return h.fail(ExitPR, "pr", fmt.Errorf("gh pr create did not return a PR URL"), runDir)
-	}
-	h.logf("stage=pr status=ok pr_url=%s", prURL)
-
-	for attempt := 0; ; attempt++ {
-		h.logf("stage=checks status=start pr_url=%s attempt=%d", prURL, attempt+1)
-		checkRes, checkErr := h.runCommand(ctx, "checks", prChecksCommand(repoDir, prURL))
-		if checkErr == nil {
-			h.logf("stage=checks status=ok pr_url=%s attempt=%d", prURL, attempt+1)
-			break
-		}
-
-		checkSummary := summarizeCheckOutput(checkRes)
-		h.logf("stage=checks status=failed pr_url=%s attempt=%d", prURL, attempt+1)
-		if attempt >= maxPRCheckRemediationAttempts {
-			return h.fail(ExitPR, "checks", fmt.Errorf("required PR checks failed after %d remediation attempt(s): %s", maxPRCheckRemediationAttempts, checkSummary), runDir)
-		}
-
-		repairPrompt := remediationPrompt(cfg.Prompt, prURL, checkSummary, attempt+1)
-		h.logf("stage=codex status=start target=%s mode=remediation attempt=%d", cfg.TargetSubdir, attempt+1)
-		codexStart = time.Now()
-		if err := h.runCodexWithHeartbeat(ctx, targetDir, repairPrompt); err != nil {
-			return h.fail(ExitCodex, "codex", err, runDir)
-		}
-		h.logf("stage=codex status=ok elapsed_s=%d mode=remediation attempt=%d", int(time.Since(codexStart).Seconds()), attempt+1)
-
-		statusRes, err := h.runCommand(ctx, "git", statusCommand(repoDir))
+	for i := range repos {
+		statusRes, err := h.runCommand(ctx, "git", statusCommand(repos[i].Dir))
 		if err != nil {
 			return h.fail(ExitGit, "git", err, runDir)
 		}
+		repos[i].Changed = strings.TrimSpace(statusRes.Stdout) != ""
+		h.logf("stage=git status=scan repo=%s repo_dir=%s changed=%t", repos[i].URL, repos[i].RelDir, repos[i].Changed)
+	}
+
+	changedCount := 0
+	for _, repo := range repos {
+		if repo.Changed {
+			changedCount++
+		}
+	}
+	if changedCount == 0 {
+		h.logf("stage=git status=no_changes")
+		res := buildResult(runDir, repos, true)
+		res.ExitCode = ExitSuccess
+		return res
+	}
+
+	for i := range repos {
+		if !repos[i].Changed {
+			continue
+		}
+		if exitCode, stage, err := h.processChangedRepo(
+			ctx,
+			cfg,
+			&repos[i],
+			codexDir,
+			codexBasePrompt,
+			codexTargetLabel,
+			len(repos) > 1,
+		); err != nil {
+			return h.fail(exitCode, stage, err, runDir)
+		}
+	}
+
+	res := buildResult(runDir, repos, false)
+	res.ExitCode = ExitSuccess
+	return res
+}
+
+func (h Harness) processChangedRepo(
+	ctx context.Context,
+	cfg config.Config,
+	repo *repoWorkspace,
+	codexDir string,
+	codexBasePrompt string,
+	codexTargetLabel string,
+	multiRepo bool,
+) (int, string, error) {
+	if repo == nil {
+		return ExitConfig, "config", fmt.Errorf("repo workspace is required")
+	}
+
+	h.logf("stage=git status=start action=commit repo=%s repo_dir=%s", repo.URL, repo.RelDir)
+	if _, err := h.runCommand(ctx, "git", addCommand(repo.Dir)); err != nil {
+		return ExitGit, "git", err
+	}
+	if _, err := h.runCommand(ctx, "git", commitCommand(repo.Dir, cfg.CommitMessage)); err != nil {
+		return ExitGit, "git", err
+	}
+	if _, err := h.runCommand(ctx, "git", pushCommand(repo.Dir, repo.Branch)); err != nil {
+		return ExitGit, "git", err
+	}
+	h.logf("stage=git status=ok action=commit repo=%s repo_dir=%s", repo.URL, repo.RelDir)
+
+	h.logf("stage=pr status=start repo=%s repo_dir=%s", repo.URL, repo.RelDir)
+	prRes, err := h.runCommand(ctx, "pr", prCreateCommand(repo.Dir, cfg, repo.Branch))
+	if err != nil {
+		return ExitPR, "pr", err
+	}
+	repo.PRURL = extractFirstURL(prRes.Stdout)
+	if repo.PRURL == "" {
+		return ExitPR, "pr", fmt.Errorf("gh pr create did not return a PR URL for repo %s", repo.URL)
+	}
+	h.logf("stage=pr status=ok repo=%s repo_dir=%s pr_url=%s", repo.URL, repo.RelDir, repo.PRURL)
+
+	for attempt := 0; ; attempt++ {
+		var (
+			checkRes     execx.Result
+			checkErr     error
+			checkSummary string
+		)
+		for noReportRetry := 0; ; noReportRetry++ {
+			h.logf("stage=checks status=start repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt+1)
+			checkRes, checkErr = h.runCommand(ctx, "checks", prChecksCommand(repo.Dir, repo.PRURL))
+			if checkErr != nil && isNoRequiredChecksReported(checkRes, checkErr) {
+				h.logf(
+					"stage=checks status=fallback reason=no_required_checks repo=%s repo_dir=%s pr_url=%s attempt=%d",
+					repo.URL,
+					repo.RelDir,
+					repo.PRURL,
+					attempt+1,
+				)
+				checkRes, checkErr = h.runCommand(ctx, "checks", prChecksAnyCommand(repo.Dir, repo.PRURL))
+			}
+			if checkErr == nil {
+				h.logf("stage=checks status=ok repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt+1)
+				return ExitSuccess, "", nil
+			}
+
+			checkSummary = summarizeCheckOutput(checkRes)
+			if noReportRetry >= maxPRChecksNoReportRetries || !isNoChecksReported(checkRes, checkErr) {
+				break
+			}
+
+			h.logf(
+				"stage=checks status=waiting reason=no_checks_reported repo=%s repo_dir=%s pr_url=%s attempt=%d retry=%d/%d",
+				repo.URL,
+				repo.RelDir,
+				repo.PRURL,
+				attempt+1,
+				noReportRetry+1,
+				maxPRChecksNoReportRetries,
+			)
+			if err := h.Sleep(ctx, prChecksNoReportRetryDelay); err != nil {
+				return ExitPR, "checks", err
+			}
+		}
+
+		h.logf("stage=checks status=failed repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt+1)
+		if attempt >= maxPRCheckRemediationAttempts {
+			return ExitPR, "checks", fmt.Errorf(
+				"required PR checks failed for repo %s after %d remediation attempt(s): %s",
+				repo.URL,
+				maxPRCheckRemediationAttempts,
+				checkSummary,
+			)
+		}
+
+		repairPrompt := remediationPromptForRepo(
+			codexBasePrompt,
+			repo.RelDir,
+			repo.URL,
+			repo.PRURL,
+			checkSummary,
+			attempt+1,
+			multiRepo,
+		)
+		h.logf(
+			"stage=codex status=start target=%s mode=remediation attempt=%d repo=%s repo_dir=%s",
+			codexTargetLabel,
+			attempt+1,
+			repo.URL,
+			repo.RelDir,
+		)
+		codexStart := time.Now()
+		if err := h.runCodexWithHeartbeat(ctx, codexDir, repairPrompt); err != nil {
+			return ExitCodex, "codex", err
+		}
+		h.logf(
+			"stage=codex status=ok elapsed_s=%d mode=remediation attempt=%d repo=%s repo_dir=%s",
+			int(time.Since(codexStart).Seconds()),
+			attempt+1,
+			repo.URL,
+			repo.RelDir,
+		)
+
+		statusRes, err := h.runCommand(ctx, "git", statusCommand(repo.Dir))
+		if err != nil {
+			return ExitGit, "git", err
+		}
 		if strings.TrimSpace(statusRes.Stdout) == "" {
-			return h.fail(ExitPR, "checks", fmt.Errorf("required PR checks failed and codex produced no remediation changes"), runDir)
+			return ExitPR, "checks", fmt.Errorf("required PR checks failed and codex produced no remediation changes for repo %s", repo.URL)
 		}
 
-		h.logf("stage=git status=start action=repair_commit attempt=%d", attempt+1)
-		if _, err := h.runCommand(ctx, "git", addCommand(repoDir)); err != nil {
-			return h.fail(ExitGit, "git", err, runDir)
+		h.logf("stage=git status=start action=repair_commit attempt=%d repo=%s repo_dir=%s", attempt+1, repo.URL, repo.RelDir)
+		if _, err := h.runCommand(ctx, "git", addCommand(repo.Dir)); err != nil {
+			return ExitGit, "git", err
 		}
-		if _, err := h.runCommand(ctx, "git", commitCommand(repoDir, remediationCommitMessage(cfg.CommitMessage, attempt+1))); err != nil {
-			return h.fail(ExitGit, "git", err, runDir)
+		if _, err := h.runCommand(ctx, "git", commitCommand(repo.Dir, remediationCommitMessage(cfg.CommitMessage, attempt+1))); err != nil {
+			return ExitGit, "git", err
 		}
-		if _, err := h.runCommand(ctx, "git", pushCommand(repoDir, branch)); err != nil {
-			return h.fail(ExitGit, "git", err, runDir)
+		if _, err := h.runCommand(ctx, "git", pushCommand(repo.Dir, repo.Branch)); err != nil {
+			return ExitGit, "git", err
 		}
-		h.logf("stage=git status=ok action=repair_commit attempt=%d", attempt+1)
+		h.logf("stage=git status=ok action=repair_commit attempt=%d repo=%s repo_dir=%s", attempt+1, repo.URL, repo.RelDir)
 	}
+}
 
-	return Result{
-		ExitCode:     ExitSuccess,
+func buildResult(runDir string, repos []repoWorkspace, noChanges bool) Result {
+	res := Result{
 		WorkspaceDir: runDir,
-		Branch:       branch,
-		PRURL:        prURL,
+		NoChanges:    noChanges,
+		RepoResults:  make([]RepoResult, 0, len(repos)),
 	}
+
+	for _, repo := range repos {
+		res.RepoResults = append(res.RepoResults, RepoResult{
+			RepoURL: repo.URL,
+			RepoDir: repo.Dir,
+			Branch:  repo.Branch,
+			PRURL:   repo.PRURL,
+			Changed: repo.Changed,
+		})
+
+		if repo.Changed && res.Branch == "" {
+			res.Branch = repo.Branch
+		}
+		if repo.PRURL != "" && res.PRURL == "" {
+			res.PRURL = repo.PRURL
+		}
+	}
+	if res.Branch == "" && len(repos) > 0 {
+		res.Branch = repos[0].Branch
+	}
+	return res
+}
+
+func codexTargetLabel(targetSubdir string, multiRepo bool) string {
+	if multiRepo {
+		return "workspace"
+	}
+	targetSubdir = strings.TrimSpace(targetSubdir)
+	if targetSubdir == "" {
+		return "."
+	}
+	return targetSubdir
+}
+
+func workspaceCodexPrompt(prompt, targetSubdir string, repos []repoWorkspace) string {
+	base := strings.TrimSpace(prompt)
+	if len(repos) <= 1 {
+		return base
+	}
+
+	var b strings.Builder
+	if base != "" {
+		b.WriteString(base)
+		b.WriteString("\n\n")
+	}
+	b.WriteString("Workspace context:\n")
+	b.WriteString("- Multiple repositories are already cloned before you begin.\n")
+	b.WriteString(fmt.Sprintf("- Primary target subdirectory: %s/%s\n", repos[0].RelDir, strings.TrimSpace(targetSubdir)))
+	b.WriteString("- Repository map (workspace path => remote):\n")
+	for _, repo := range repos {
+		b.WriteString(fmt.Sprintf("- %s => %s\n", repo.RelDir, repo.URL))
+	}
+	b.WriteString("- If you modify files in any repository, keep each changed repository on its own branch and PR.\n")
+	return strings.TrimSpace(b.String())
+}
+
+func repoWorkspaceDirName(repoURL string, index, total int) string {
+	if total <= 1 {
+		return "repo"
+	}
+	return fmt.Sprintf("repo-%02d-%s", index+1, repoDirSlug(repoURL))
+}
+
+func repoDirSlug(repoURL string) string {
+	segment := strings.TrimSpace(repoURL)
+	if i := strings.LastIndex(segment, "/"); i >= 0 {
+		segment = segment[i+1:]
+	}
+	if i := strings.LastIndex(segment, ":"); i >= 0 {
+		segment = segment[i+1:]
+	}
+	segment = strings.TrimSuffix(segment, ".git")
+	segment = strings.ToLower(segment)
+
+	var b strings.Builder
+	lastSep := false
+	for _, r := range segment {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			lastSep = false
+			continue
+		}
+		if b.Len() > 0 && !lastSep {
+			b.WriteByte('-')
+			lastSep = true
+		}
+	}
+
+	out := strings.Trim(b.String(), "-")
+	if out == "" {
+		return "repo"
+	}
+	if len(out) > 40 {
+		out = strings.Trim(out[:40], "-")
+		if out == "" {
+			return "repo"
+		}
+	}
+	return out
 }
 
 func (h Harness) fail(exitCode int, stage string, err error, runDir string) Result {
@@ -270,6 +528,22 @@ func encodeLogLine(line string) string {
 	return base64.StdEncoding.EncodeToString([]byte(line))
 }
 
+func isNoChecksReported(res execx.Result, err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
+	return strings.Contains(text, "no checks reported")
+}
+
+func isNoRequiredChecksReported(res execx.Result, err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
+	return strings.Contains(text, "no required checks")
+}
+
 func (h Harness) runCodexWithHeartbeat(ctx context.Context, targetDir, prompt string) error {
 	done := make(chan error, 1)
 	go func() {
@@ -316,6 +590,21 @@ func pathIsDir(path string) bool {
 	return st.IsDir()
 }
 
+func sleepWithContext(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
 var githubURL = regexp.MustCompile(`https://github\.com/\S+`)
 
 func extractFirstURL(text string) string {
@@ -336,9 +625,13 @@ func authCommand() execx.Command {
 }
 
 func cloneCommand(cfg config.Config, repoDir string) execx.Command {
+	return cloneRepoCommand(cfg.RepoURL, cfg.BaseBranch, repoDir)
+}
+
+func cloneRepoCommand(repoURL, baseBranch, repoDir string) execx.Command {
 	return execx.Command{
 		Name: "git",
-		Args: []string{"clone", "--branch", cfg.BaseBranch, "--single-branch", cfg.RepoURL, repoDir},
+		Args: []string{"clone", "--branch", baseBranch, "--single-branch", repoURL, repoDir},
 	}
 }
 
@@ -410,6 +703,18 @@ func prChecksCommand(repoDir, prURL string) execx.Command {
 	}
 }
 
+func prChecksAnyCommand(repoDir, prURL string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: []string{
+			"pr", "checks", prURL,
+			"--watch",
+			"--interval", fmt.Sprintf("%d", prChecksWatchIntervalSeconds),
+		},
+	}
+}
+
 func withCompletionGatePrompt(prompt string) string {
 	base := strings.TrimSpace(prompt)
 	if base == "" {
@@ -421,6 +726,7 @@ func withCompletionGatePrompt(prompt string) string {
 Completion requirements:
 - Keep working until there is a PR for your changes and required CI/CD checks are green.
 - If CI/CD fails, continue fixing code/tests/workflows until checks pass.
+- If you changed multiple repositories, ensure each changed repository has its own branch and PR.
 - Optimize for the highest-quality PR you can produce with focused, production-ready changes.`
 }
 
@@ -430,6 +736,22 @@ func remediationPrompt(basePrompt, prURL, checkSummary string, attempt int) stri
 		strings.TrimSpace(basePrompt),
 		attempt,
 		maxPRCheckRemediationAttempts,
+		prURL,
+		checkSummary,
+	)
+}
+
+func remediationPromptForRepo(basePrompt, repoPath, repoURL, prURL, checkSummary string, attempt int, multiRepo bool) string {
+	if !multiRepo {
+		return remediationPrompt(basePrompt, prURL, checkSummary, attempt)
+	}
+	return fmt.Sprintf(
+		"%s\n\nRemediation round %d/%d.\nTarget repository workspace path: %s\nTarget repository remote: %s\nAn open PR already exists for this repository: %s\n\nRequired CI/CD checks are failing right now for this repository.\nLatest check output:\n%s\n\nFocus remediation changes on this repository, update tests/workflows as needed, and keep the PR high quality. If you also change other repositories, ensure each changed repository has its own branch and PR.",
+		strings.TrimSpace(basePrompt),
+		attempt,
+		maxPRCheckRemediationAttempts,
+		repoPath,
+		repoURL,
 		prURL,
 		checkSummary,
 	)

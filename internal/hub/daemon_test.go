@@ -3,6 +3,8 @@ package hub
 import (
 	"errors"
 	"testing"
+
+	"github.com/jef/how-i-want-to-code/internal/harness"
 )
 
 func TestApplyStoredRuntimeConfigOverridesTokens(t *testing.T) {
@@ -105,5 +107,62 @@ func TestDispatchParseErrorPayloadIncludesRequiredSchema(t *testing.T) {
 	}
 	if _, ok := result["required_schema"]; !ok {
 		t.Fatalf("required_schema missing: %#v", result)
+	}
+}
+
+func TestDispatchResultPayloadIncludesRepoResults(t *testing.T) {
+	t.Parallel()
+
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:       "code_for_me",
+			ResultType: "skill_result",
+		},
+	}
+	dispatch := SkillDispatch{
+		RequestID: "req-22",
+		Skill:     "code_for_me",
+	}
+	res := harness.Result{
+		ExitCode:     harness.ExitSuccess,
+		WorkspaceDir: "/tmp/run",
+		Branch:       "codex/feature",
+		PRURL:        "https://github.com/acme/repo-a/pull/10",
+		RepoResults: []harness.RepoResult{
+			{
+				RepoURL: "git@github.com:acme/repo-a.git",
+				RepoDir: "/tmp/run/repo-01-repo-a",
+				Branch:  "codex/feature",
+				PRURL:   "https://github.com/acme/repo-a/pull/10",
+				Changed: true,
+			},
+			{
+				RepoURL: "git@github.com:acme/repo-b.git",
+				RepoDir: "/tmp/run/repo-02-repo-b",
+				Branch:  "codex/feature",
+				PRURL:   "https://github.com/acme/repo-b/pull/20",
+				Changed: true,
+			},
+		},
+	}
+
+	payload := dispatchResultPayload(cfg, dispatch, res)
+	result, ok := payload["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("result missing or wrong type: %#v", payload["result"])
+	}
+	prURLs, ok := result["pr_urls"].([]string)
+	if !ok {
+		t.Fatalf("pr_urls missing or wrong type: %#v", result["pr_urls"])
+	}
+	if len(prURLs) != 2 {
+		t.Fatalf("len(pr_urls) = %d, want 2", len(prURLs))
+	}
+	repoResults, ok := result["repo_results"].([]map[string]any)
+	if !ok {
+		t.Fatalf("repo_results missing or wrong type: %#v", result["repo_results"])
+	}
+	if len(repoResults) != 2 {
+		t.Fatalf("len(repo_results) = %d, want 2", len(repoResults))
 	}
 }

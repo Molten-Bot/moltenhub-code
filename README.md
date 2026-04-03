@@ -1,6 +1,6 @@
 # how-i-want-to-code
 
-Minimal Go harness for repeatable Codex dispatch against a single directory in a target repository.
+Minimal Go harness for repeatable Codex dispatch against one or more repositories in a shared workspace.
 
 Also supports multiplexed execution across many task configs in parallel.
 Also supports a persistent Hub listener mode that binds to MoltenHub and launches harness runs from websocket skill dispatches (with pull fallback).
@@ -12,10 +12,10 @@ For each run, the harness performs this flow:
 1. Validate local tooling: `git`, `gh`, `codex`
 2. Validate GitHub auth: `gh auth status`
 3. Create isolated run workspace: `/dev/shm/<guid>` (fallback `/tmp/<guid>`)
-4. Clone target repo + base branch
-5. Run Codex in exactly one configured subdirectory
-6. If changes exist: commit, push, and create PR
-7. Wait for required PR checks (`gh pr checks --watch --required`)
+4. Clone all configured repos + base branch before prompting Codex
+5. Run Codex in the configured target subdirectory (single repo) or shared workspace (multi-repo)
+6. For each repo with changes: commit, push, and create a PR
+7. Wait for required PR checks (`gh pr checks --watch --required`) per changed repo
 8. If required checks fail, re-run Codex with remediation context, push fixes, and re-check until green or retry limit is reached
 
 If Codex fails, no PR is created and the workspace path is printed for inspection.
@@ -131,7 +131,7 @@ Inbound dispatch must match the configured skill and include run config JSON. Su
 
 Run config is validated strictly against the harness run schema:
 
-- Required: `prompt` and one of `repo` or `repo_url`
+- Required: `prompt` and one of `repo`, `repo_url`, or `repos`
 - Optional: `version`, `base_branch`, `target_subdir`, `commit_message`, `pr_title`, `pr_body`, `labels`, `reviewers`
 - Additional/unknown fields are rejected
 
@@ -144,13 +144,16 @@ Config supports JSON with `//` comments (JSONC-style) and reads the first JSON o
 Required fields:
 
 - `prompt`
-- `repo` or `repo_url`
+- one of: `repo`, `repo_url`, or `repos` (`[]string`)
 
 Optional fields (with defaults):
 
 - `version` (default: `v1`)
+- `repo` / `repo_url` (single-repo aliases; when combined with `repos`, they are included as the first repo)
+- `repos` (`[]string`; if set, all repos are cloned before Codex runs)
 - `base_branch` (default: `main`)
 - `target_subdir` (default: `.` for repo root)
+- `target_subdir` applies to the first repo in `repos` for multi-repo jobs
 - `commit_message` (default: auto-generated from prompt)
 - `pr_title` (default: auto-generated from prompt)
 - `pr_body` (default: auto-generated with prompt summary)

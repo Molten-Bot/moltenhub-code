@@ -204,7 +204,7 @@ func extractConfigValue(msg map[string]any) (any, bool) {
 func looksLikeRunConfigMap(v map[string]any) bool {
 	prompt := firstNonEmpty(stringAt(v, "prompt"))
 	repo := firstNonEmpty(stringAt(v, "repo"), stringAt(v, "repo_url"))
-	return prompt != "" && repo != ""
+	return prompt != "" && (repo != "" || hasNonEmptyStringArray(v["repos"]))
 }
 
 func requiredSkillPayloadSchema(dispatchType, skillName string) map[string]any {
@@ -237,6 +237,7 @@ func requiredSkillPayloadSchema(dispatchType, skillName string) map[string]any {
 			"anyOf": []map[string]any{
 				{"required": []string{"repo"}},
 				{"required": []string{"repo_url"}},
+				{"required": []string{"repos"}},
 			},
 			"properties": map[string]any{
 				"version": map[string]any{
@@ -250,6 +251,14 @@ func requiredSkillPayloadSchema(dispatchType, skillName string) map[string]any {
 				"repo_url": map[string]any{
 					"type":      "string",
 					"minLength": 1,
+				},
+				"repos": map[string]any{
+					"type":     "array",
+					"minItems": 1,
+					"items": map[string]any{
+						"type":      "string",
+						"minLength": 1,
+					},
 				},
 				"base_branch": map[string]any{
 					"type":      "string",
@@ -321,6 +330,25 @@ func stringAt(root map[string]any, key string) string {
 		return ""
 	}
 	return strings.TrimSpace(s)
+}
+
+func hasNonEmptyStringArray(v any) bool {
+	switch typed := v.(type) {
+	case []string:
+		for _, entry := range typed {
+			if strings.TrimSpace(entry) != "" {
+				return true
+			}
+		}
+	case []any:
+		for _, entry := range typed {
+			s, ok := entry.(string)
+			if ok && strings.TrimSpace(s) != "" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func stringAtPath(root map[string]any, path ...string) string {

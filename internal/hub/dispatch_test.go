@@ -44,6 +44,39 @@ func TestParseSkillDispatchFromPayloadConfig(t *testing.T) {
 	}
 }
 
+func TestParseSkillDispatchFromPayloadConfigWithReposArray(t *testing.T) {
+	t.Parallel()
+
+	msg := map[string]any{
+		"type":  "skill_request",
+		"skill": "codex_harness_run",
+		"id":    "req-multi",
+		"payload": map[string]any{
+			"config": map[string]any{
+				"repos": []any{
+					"git@github.com:acme/repo-one.git",
+					"git@github.com:acme/repo-two.git",
+				},
+				"prompt": "update both repos",
+			},
+		},
+	}
+
+	dispatch, matched, err := ParseSkillDispatch(msg, "skill_request", "codex_harness_run")
+	if err != nil {
+		t.Fatalf("ParseSkillDispatch() error = %v", err)
+	}
+	if !matched {
+		t.Fatal("matched = false, want true")
+	}
+	if got, want := len(dispatch.Config.Repos), 2; got != want {
+		t.Fatalf("len(Repos) = %d, want %d", got, want)
+	}
+	if dispatch.Config.RepoURL != "git@github.com:acme/repo-one.git" {
+		t.Fatalf("RepoURL = %q", dispatch.Config.RepoURL)
+	}
+}
+
 func TestParseSkillDispatchIgnoresDifferentSkill(t *testing.T) {
 	t.Parallel()
 
@@ -253,6 +286,27 @@ func TestParseRunConfigJSON(t *testing.T) {
 	}
 	if cfg.Prompt != "make a change" {
 		t.Fatalf("Prompt = %q", cfg.Prompt)
+	}
+}
+
+func TestParseRunConfigJSONWithReposArray(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := ParseRunConfigJSON([]byte(`{
+		"repos": [
+			"git@github.com:acme/repo-one.git",
+			"git@github.com:acme/repo-two.git"
+		],
+		"prompt": "make a cross-repo change"
+	}`))
+	if err != nil {
+		t.Fatalf("ParseRunConfigJSON() error = %v", err)
+	}
+	if got, want := len(cfg.Repos), 2; got != want {
+		t.Fatalf("len(Repos) = %d, want %d", got, want)
+	}
+	if cfg.RepoURL != "git@github.com:acme/repo-one.git" {
+		t.Fatalf("RepoURL = %q", cfg.RepoURL)
 	}
 }
 

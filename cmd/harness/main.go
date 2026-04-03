@@ -90,6 +90,12 @@ func runSingle(args []string) int {
 	if result.PRURL != "" {
 		fmt.Printf(" pr_url=%s", result.PRURL)
 	}
+	if prURLs := joinPRURLs(result.RepoResults); prURLs != "" {
+		fmt.Printf(" pr_urls=%s", prURLs)
+	}
+	if changedRepos := countChangedRepos(result.RepoResults); changedRepos > 0 {
+		fmt.Printf(" changed_repos=%d", changedRepos)
+	}
 	fmt.Println()
 
 	return harness.ExitSuccess
@@ -264,7 +270,13 @@ func runLocalDispatch(
 	requestID string,
 	runCfg config.Config,
 ) {
-	logf("dispatch status=start request_id=%s skill=%s repo=%s", requestID, skill, runCfg.RepoURL)
+	logf(
+		"dispatch status=start request_id=%s skill=%s repo=%s repos=%s",
+		requestID,
+		skill,
+		runCfg.RepoURL,
+		strings.Join(runCfg.RepoList(), ","),
+	)
 
 	h := harness.New(runner)
 	h.Logf = func(format string, args ...any) {
@@ -281,7 +293,15 @@ func runLocalDispatch(
 		logf("dispatch status=no_changes request_id=%s workspace=%s branch=%s", requestID, res.WorkspaceDir, res.Branch)
 		return
 	}
-	logf("dispatch status=ok request_id=%s workspace=%s branch=%s pr_url=%s", requestID, res.WorkspaceDir, res.Branch, res.PRURL)
+	logf(
+		"dispatch status=ok request_id=%s workspace=%s branch=%s pr_url=%s pr_urls=%s changed_repos=%d",
+		requestID,
+		res.WorkspaceDir,
+		res.Branch,
+		res.PRURL,
+		joinPRURLs(res.RepoResults),
+		countChangedRepos(res.RepoResults),
+	)
 }
 
 func monitorURL(addr string) string {
@@ -312,6 +332,30 @@ func hubExitCode(err error) int {
 	default:
 		return harness.ExitPreflight
 	}
+}
+
+func joinPRURLs(results []harness.RepoResult) string {
+	if len(results) == 0 {
+		return ""
+	}
+	urls := make([]string, 0, len(results))
+	for _, result := range results {
+		if !result.Changed || strings.TrimSpace(result.PRURL) == "" {
+			continue
+		}
+		urls = append(urls, strings.TrimSpace(result.PRURL))
+	}
+	return strings.Join(urls, ",")
+}
+
+func countChangedRepos(results []harness.RepoResult) int {
+	count := 0
+	for _, result := range results {
+		if result.Changed {
+			count++
+		}
+	}
+	return count
 }
 
 func collectConfigPaths(inputs []string) ([]string, error) {

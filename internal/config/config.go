@@ -15,6 +15,7 @@ type Config struct {
 	Version       string   `json:"version"`
 	RepoURL       string   `json:"repo_url"`
 	Repo          string   `json:"repo"`
+	Repos         []string `json:"repos"`
 	BaseBranch    string   `json:"base_branch"`
 	TargetSubdir  string   `json:"target_subdir"`
 	Prompt        string   `json:"prompt"`
@@ -53,8 +54,11 @@ func (c *Config) ApplyDefaults() {
 		c.Version = "v1"
 	}
 
-	if strings.TrimSpace(c.RepoURL) == "" && strings.TrimSpace(c.Repo) != "" {
-		c.RepoURL = strings.TrimSpace(c.Repo)
+	repos := c.RepoList()
+	c.Repos = repos
+	if len(repos) > 0 {
+		c.RepoURL = repos[0]
+		c.Repo = repos[0]
 	}
 
 	c.BaseBranch = strings.TrimSpace(c.BaseBranch)
@@ -88,8 +92,8 @@ func (c Config) Validate() error {
 	if c.Version != "v1" {
 		return fmt.Errorf("unsupported version %q", c.Version)
 	}
-	if strings.TrimSpace(c.RepoURL) == "" {
-		return fmt.Errorf("repo_url (or repo) is required")
+	if len(c.RepoList()) == 0 {
+		return fmt.Errorf("one of repo, repo_url, or repos[] is required")
 	}
 	if strings.TrimSpace(c.BaseBranch) == "" {
 		return fmt.Errorf("base_branch is required")
@@ -113,6 +117,20 @@ func (c Config) Validate() error {
 		return fmt.Errorf("pr_body is required")
 	}
 	return nil
+}
+
+// RepoList returns the normalized list of repositories for this run.
+func (c Config) RepoList() []string {
+	repoURL := strings.TrimSpace(c.RepoURL)
+	if repoURL == "" && strings.TrimSpace(c.Repo) != "" {
+		repoURL = strings.TrimSpace(c.Repo)
+	}
+
+	repos := normalizeNonEmptyStrings(c.Repos)
+	if repoURL != "" {
+		repos = prependIfMissing(repos, repoURL)
+	}
+	return repos
 }
 
 func validateSubdir(subdir string) error {
@@ -222,4 +240,40 @@ func stripLineComments(data []byte) []byte {
 	}
 
 	return out
+}
+
+func normalizeNonEmptyStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		out = append(out, trimmed)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func prependIfMissing(values []string, value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return values
+	}
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
+	}
+	return append([]string{value}, values...)
 }
