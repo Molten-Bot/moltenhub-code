@@ -98,6 +98,48 @@ func TestBrokerParsesQuotedErrorTextWithEscapedQuotes(t *testing.T) {
 	}
 }
 
+func TestBrokerParsesStageErrorText(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog("dispatch status=start request_id=req-stage-err")
+	b.IngestLog(`dispatch request_id=req-stage-err stage=codex status=error err="codex command failed"`)
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	task := snap.Tasks[0]
+	if task.Status != "error" {
+		t.Fatalf("status = %q, want error", task.Status)
+	}
+	if task.Stage != "codex" {
+		t.Fatalf("stage = %q, want codex", task.Stage)
+	}
+	if task.StageStatus != "error" {
+		t.Fatalf("stage status = %q, want error", task.StageStatus)
+	}
+	if task.Error != "codex command failed" {
+		t.Fatalf("error = %q", task.Error)
+	}
+}
+
+func TestBrokerParsesStageErrorTextWithEscapedQuotes(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog("dispatch status=start request_id=req-stage-err-quoted")
+	b.IngestLog(`dispatch request_id=req-stage-err-quoted stage=codex status=error err="decode run config payload: json: unknown field \"branch\""`)
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	if snap.Tasks[0].Error != `decode run config payload: json: unknown field "branch"` {
+		t.Fatalf("error = %q", snap.Tasks[0].Error)
+	}
+}
+
 func TestBrokerCapturesWorkspaceAndBranchFromErrorStatus(t *testing.T) {
 	t.Parallel()
 

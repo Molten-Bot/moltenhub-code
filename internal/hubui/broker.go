@@ -272,6 +272,7 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 			}
 		}
 		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
+		t.Error = firstNonEmpty(parseFieldValue(line, "err"), parseFieldValue(line, "error"), t.Error)
 	}
 
 	if strings.Contains(line, " cmd ") && fields["b64"] != "" {
