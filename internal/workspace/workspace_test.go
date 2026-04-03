@@ -99,3 +99,35 @@ func TestCreateRunDirMkdirFailure(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 }
+
+func TestCreateRunDirFallsBackWhenDevShmCreateFails(t *testing.T) {
+	t.Parallel()
+
+	var created []string
+	m := Manager{
+		PathExists: func(path string) bool { return path == "/dev/shm" },
+		NewGUID:    func() string { return "abc123" },
+		MkdirAll: func(path string, _ os.FileMode) error {
+			created = append(created, path)
+			if path == filepath.Join("/dev/shm", "temp", "abc123") {
+				return errors.New("permission denied")
+			}
+			return nil
+		},
+	}
+
+	runDir, guid, err := m.CreateRunDir()
+	if err != nil {
+		t.Fatalf("CreateRunDir() error = %v", err)
+	}
+	if guid != "abc123" {
+		t.Fatalf("guid = %q", guid)
+	}
+	want := filepath.Join("/tmp", "temp", "abc123")
+	if runDir != want {
+		t.Fatalf("runDir = %q, want %q", runDir, want)
+	}
+	if len(created) != 2 {
+		t.Fatalf("mkdir attempts = %d, want 2 (%v)", len(created), created)
+	}
+}

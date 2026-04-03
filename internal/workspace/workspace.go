@@ -58,11 +58,31 @@ func (m Manager) CreateRunDir() (string, string, error) {
 		return "", "", fmt.Errorf("generated empty guid")
 	}
 
-	runDir := filepath.Join(m.SelectBase(), defaultRunRoot, guid)
-	if err := mkdirAll(runDir, 0o755); err != nil {
-		return "", "", fmt.Errorf("create run dir: %w", err)
+	preferredBase := m.SelectBase()
+	fallbackBase := defaultDiskBase
+	if preferredBase == defaultDiskBase {
+		fallbackBase = ""
 	}
-	return runDir, guid, nil
+
+	candidates := []string{preferredBase}
+	if fallbackBase != "" && fallbackBase != preferredBase {
+		candidates = append(candidates, fallbackBase)
+	}
+
+	var lastErr error
+	for _, base := range candidates {
+		runDir := filepath.Join(base, defaultRunRoot, guid)
+		if err := mkdirAll(runDir, 0o755); err != nil {
+			lastErr = err
+			continue
+		}
+		return runDir, guid, nil
+	}
+
+	if lastErr != nil {
+		return "", "", fmt.Errorf("create run dir: %w", lastErr)
+	}
+	return "", "", fmt.Errorf("create run dir: no workspace base candidates")
 }
 
 func pathExists(path string) bool {
