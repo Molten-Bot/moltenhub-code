@@ -10,15 +10,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jef/how-i-want-to-code/internal/config"
 	"github.com/jef/how-i-want-to-code/internal/execx"
 	"github.com/jef/how-i-want-to-code/internal/harness"
 )
 
 // Daemon listens for hub skill dispatches and runs harness jobs.
 type Daemon struct {
-	Runner         execx.Runner
-	Logf           func(string, ...any)
-	ReconnectDelay time.Duration
+	Runner           execx.Runner
+	Logf             func(string, ...any)
+	OnDispatchQueued func(requestID string, runCfg config.Config)
+	ReconnectDelay   time.Duration
 }
 
 const wsFallbackWindow = 30 * time.Second
@@ -305,6 +307,9 @@ func (d Daemon) processInboundMessage(
 			}
 			return
 		}
+	}
+	if d.OnDispatchQueued != nil {
+		d.OnDispatchQueued(dispatch.RequestID, dispatch.Config)
 	}
 
 	ackedEarly := false

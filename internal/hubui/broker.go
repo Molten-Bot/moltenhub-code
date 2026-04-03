@@ -1,6 +1,7 @@
 package hubui
 
 import (
+	"bytes"
 	"encoding/base64"
 	"sort"
 	"strconv"
@@ -46,6 +47,7 @@ type Task struct {
 	Error        string    `json:"error,omitempty"`
 	StartedAt    string    `json:"started_at"`
 	UpdatedAt    string    `json:"updated_at"`
+	CanRerun     bool      `json:"can_rerun,omitempty"`
 	Logs         []TaskLog `json:"logs"`
 }
 
@@ -67,6 +69,7 @@ type Broker struct {
 	nextEventID int64
 	events      []Event
 	tasks       map[string]*taskState
+	runConfigs  map[string][]byte
 	subs        map[chan struct{}]struct{}
 }
 
@@ -95,6 +98,7 @@ func NewBroker() *Broker {
 		maxEvents:  defaultMaxEvents,
 		maxTaskLog: defaultMaxTaskLogs,
 		tasks:      map[string]*taskState{},
+		runConfigs: map[string][]byte{},
 		subs:       map[chan struct{}]struct{}{},
 	}
 }
@@ -163,6 +167,7 @@ func (b *Broker) Snapshot() Snapshot {
 
 	snapshot.Tasks = make([]Task, 0, len(tasks))
 	for _, t := range tasks {
+		_, canRerun := b.runConfigs[t.RequestID]
 		snapshot.Tasks = append(snapshot.Tasks, Task{
 			RequestID:    t.RequestID,
 			Skill:        t.Skill,
@@ -178,11 +183,54 @@ func (b *Broker) Snapshot() Snapshot {
 			Error:        t.Error,
 			StartedAt:    t.StartedAt.UTC().Format(time.RFC3339Nano),
 			UpdatedAt:    t.UpdatedAt.UTC().Format(time.RFC3339Nano),
+			CanRerun:     canRerun,
 			Logs:         append([]TaskLog(nil), t.Logs...),
 		})
 	}
 
 	return snapshot
+}
+
+// RecordTaskRunConfig stores a parsed task run config payload for future reruns.
+func (b *Broker) RecordTaskRunConfig(requestID string, runConfigJSON []byte) {
+	if b == nil {
+		return
+	}
+	requestID = strings.TrimSpace(requestID)
+	runConfigJSON = bytes.TrimSpace(runConfigJSON)
+	if requestID == "" || len(runConfigJSON) == 0 {
+		return
+	}
+	cfgCopy := append([]byte(nil), runConfigJSON...)
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if existing, ok := b.runConfigs[requestID]; ok && bytes.Equal(existing, cfgCopy) {
+		return
+	}
+	b.runConfigs[requestID] = cfgCopy
+	b.notifySubscribersLocked()
+}
+
+// TaskRunConfig returns a copy of the stored run config payload for requestID.
+func (b *Broker) TaskRunConfig(requestID string) ([]byte, bool) {
+	if b == nil {
+		return nil, false
+	}
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return nil, false
+	}
+
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	runConfigJSON, ok := b.runConfigs[requestID]
+	if !ok || len(runConfigJSON) == 0 {
+		return nil, false
+	}
+	return append([]byte(nil), runConfigJSON...), true
 }
 
 // Subscribe returns a change notification channel and cancel function.

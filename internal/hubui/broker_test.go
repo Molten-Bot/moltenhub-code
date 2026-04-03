@@ -1,6 +1,7 @@
 package hubui
 
 import (
+	"bytes"
 	"encoding/base64"
 	"testing"
 )
@@ -200,5 +201,41 @@ func TestBrokerSubscribeSignalsChanges(t *testing.T) {
 		// Expected.
 	default:
 		t.Fatal("expected update signal")
+	}
+}
+
+func TestBrokerTaskRunConfigSupportsRerunMetadata(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-rerun"
+	payload := []byte(`{"repo":"git@github.com:acme/repo.git","base_branch":"main","target_subdir":".","prompt":"rerun me"}`)
+
+	b.RecordTaskRunConfig(requestID, payload)
+	b.IngestLog("dispatch status=start request_id=req-rerun skill=codex_harness_run repo=git@github.com:acme/repo.git")
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	if !snap.Tasks[0].CanRerun {
+		t.Fatal("task.CanRerun = false, want true")
+	}
+
+	got, ok := b.TaskRunConfig(requestID)
+	if !ok {
+		t.Fatal("TaskRunConfig() found = false, want true")
+	}
+	if !bytes.Equal(got, payload) {
+		t.Fatalf("TaskRunConfig() = %q, want %q", string(got), string(payload))
+	}
+
+	got[0] = 'x'
+	gotAgain, ok := b.TaskRunConfig(requestID)
+	if !ok {
+		t.Fatal("TaskRunConfig() second fetch found = false, want true")
+	}
+	if bytes.Equal(gotAgain, got) {
+		t.Fatalf("TaskRunConfig() returned shared slice %q", string(gotAgain))
 	}
 }

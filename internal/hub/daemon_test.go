@@ -1,9 +1,12 @@
 package hub
 
 import (
+	"context"
 	"errors"
+	"sync"
 	"testing"
 
+	"github.com/jef/how-i-want-to-code/internal/config"
 	"github.com/jef/how-i-want-to-code/internal/harness"
 )
 
@@ -164,5 +167,65 @@ func TestDispatchResultPayloadIncludesRepoResults(t *testing.T) {
 	}
 	if len(repoResults) != 2 {
 		t.Fatalf("len(repo_results) = %d, want 2", len(repoResults))
+	}
+}
+
+func TestProcessInboundMessageInvokesOnDispatchQueued(t *testing.T) {
+	t.Parallel()
+
+	d := NewDaemon(nil)
+	var (
+		mu           sync.Mutex
+		gotRequestID string
+		gotRepo      string
+		gotPrompt    string
+	)
+	d.OnDispatchQueued = func(requestID string, runCfg config.Config) {
+		mu.Lock()
+		defer mu.Unlock()
+		gotRequestID = requestID
+		gotRepo = runCfg.RepoURL
+		gotPrompt = runCfg.Prompt
+	}
+
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:         "codex_harness_run",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+		Dispatcher: DispatcherConfig{
+			MaxParallel: 1,
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	workerSem := make(chan struct{}, cfg.Dispatcher.MaxParallel)
+	workerSem <- struct{}{}
+	var workers sync.WaitGroup
+
+	msg := map[string]any{
+		"type":       "skill_request",
+		"skill":      "codex_harness_run",
+		"request_id": "req-queued",
+		"config": map[string]any{
+			"repo":   "git@github.com:acme/repo.git",
+			"prompt": "ship rerun button",
+		},
+	}
+	d.processInboundMessage(ctx, APIClient{}, "", cfg, msg, "", "", workerSem, &workers, nil)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if gotRequestID != "req-queued" {
+		t.Fatalf("request id = %q, want %q", gotRequestID, "req-queued")
+	}
+	if gotRepo != "git@github.com:acme/repo.git" {
+		t.Fatalf("repo = %q, want %q", gotRepo, "git@github.com:acme/repo.git")
+	}
+	if gotPrompt != "ship rerun button" {
+		t.Fatalf("prompt = %q, want %q", gotPrompt, "ship rerun button")
 	}
 }
