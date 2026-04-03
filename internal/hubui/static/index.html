@@ -293,6 +293,8 @@
       font-family: "IBM Plex Mono", "Consolas", monospace;
       font-size: 0.8rem;
       color: #d9e3ee;
+      flex: 1 1 auto;
+      min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -663,6 +665,7 @@
   <script>
     const MAIN_TASK_ID = "__main__";
     const MAIN_TASK_LABEL = "main";
+    const TASK_PROMPT_PREVIEW_MAX = 30;
     const DISMISSED_TASKS_KEY = "hubui.dismissedTaskIds";
     const COMPLETED_STATUSES = new Set(["ok", "no_changes", "error", "invalid", "duplicate"]);
     const TASK_PROGRESS_STEPS = [
@@ -760,6 +763,32 @@
       const repos = normalizedTaskRepos(task);
       if (!repos.length) return "-";
       return `[${repos.join(", ")}]`;
+    }
+
+    function taskPromptText(task) {
+      if (!task || typeof task.prompt !== "string") return "";
+      return task.prompt.replace(/\s+/g, " ").trim();
+    }
+
+    function taskPromptPreview(task) {
+      const prompt = taskPromptText(task);
+      if (!prompt) return "";
+      if (prompt.length <= TASK_PROMPT_PREVIEW_MAX) {
+        return prompt;
+      }
+      return `${prompt.slice(0, TASK_PROMPT_PREVIEW_MAX)}...`;
+    }
+
+    function taskDisplayLabel(task) {
+      const id = task?.display_id || task?.request_id || "";
+      if (!task || task.request_id === MAIN_TASK_ID) {
+        return id;
+      }
+      const preview = taskPromptPreview(task);
+      if (!preview) {
+        return id;
+      }
+      return `${id} | ${preview}`;
     }
 
     function statusClass(status) {
@@ -1107,7 +1136,11 @@
 
         const id = document.createElement("div");
         id.className = "task-id";
-        id.textContent = task.display_id || task.request_id;
+        id.textContent = taskDisplayLabel(task);
+        const prompt = taskPromptText(task);
+        if (prompt) {
+          id.title = `${task.display_id || task.request_id}: ${prompt}`;
+        }
 
         const badge = document.createElement("span");
         badge.className = `badge ${statusClass(task.status)}`;
@@ -1200,7 +1233,7 @@
         return;
       }
 
-      const selectedLabel = selected.display_id || selected.request_id;
+      const selectedLabel = taskDisplayLabel(selected);
       taskHead.textContent = `${selectedLabel} | ${selected.status || "pending"} | ${selected.stage || "-"}`;
       renderTaskResult(selected);
       terminal.replaceChildren();

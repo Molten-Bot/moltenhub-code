@@ -3,6 +3,7 @@ package hubui
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"sort"
 	"strconv"
 	"strings"
@@ -34,6 +35,7 @@ type TaskLog struct {
 // Task represents one hub dispatch execution state.
 type Task struct {
 	RequestID    string    `json:"request_id"`
+	Prompt       string    `json:"prompt,omitempty"`
 	Skill        string    `json:"skill,omitempty"`
 	Repo         string    `json:"repo,omitempty"`
 	Repos        []string  `json:"repos,omitempty"`
@@ -75,6 +77,7 @@ type Broker struct {
 
 type taskState struct {
 	RequestID    string
+	Prompt       string
 	Skill        string
 	Repo         string
 	Repos        []string
@@ -170,6 +173,7 @@ func (b *Broker) Snapshot() Snapshot {
 		_, canRerun := b.runConfigs[t.RequestID]
 		snapshot.Tasks = append(snapshot.Tasks, Task{
 			RequestID:    t.RequestID,
+			Prompt:       t.Prompt,
 			Skill:        t.Skill,
 			Repo:         t.Repo,
 			Repos:        append([]string(nil), t.Repos...),
@@ -202,15 +206,25 @@ func (b *Broker) RecordTaskRunConfig(requestID string, runConfigJSON []byte) {
 		return
 	}
 	cfgCopy := append([]byte(nil), runConfigJSON...)
+	prompt := promptFromRunConfigJSON(cfgCopy)
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if existing, ok := b.runConfigs[requestID]; ok && bytes.Equal(existing, cfgCopy) {
-		return
+	changed := false
+	if existing, ok := b.runConfigs[requestID]; !ok || !bytes.Equal(existing, cfgCopy) {
+		b.runConfigs[requestID] = cfgCopy
+		changed = true
 	}
-	b.runConfigs[requestID] = cfgCopy
-	b.notifySubscribersLocked()
+	if prompt != "" {
+		if t, ok := b.tasks[requestID]; ok && t.Prompt != prompt {
+			t.Prompt = prompt
+			changed = true
+		}
+	}
+	if changed {
+		b.notifySubscribersLocked()
+	}
 }
 
 // TaskRunConfig returns a copy of the stored run config payload for requestID.
@@ -260,12 +274,16 @@ func (b *Broker) Subscribe() (<-chan struct{}, func()) {
 
 func (b *Broker) ensureTaskLocked(requestID string, now time.Time) *taskState {
 	if existing, ok := b.tasks[requestID]; ok {
+		if existing.Prompt == "" {
+			existing.Prompt = promptFromRunConfigJSON(b.runConfigs[requestID])
+		}
 		existing.UpdatedAt = now
 		return existing
 	}
 
 	t := &taskState{
 		RequestID: requestID,
+		Prompt:    promptFromRunConfigJSON(b.runConfigs[requestID]),
 		Status:    "pending",
 		StartedAt: now,
 		UpdatedAt: now,
@@ -542,4 +560,17 @@ func appendNonEmptyUnique(dst []string, values ...string) []string {
 	}
 
 	return out
+}
+
+func promptFromRunConfigJSON(runConfigJSON []byte) string {
+	if len(runConfigJSON) == 0 {
+		return ""
+	}
+	var raw struct {
+		Prompt string `json:"prompt"`
+	}
+	if err := json.Unmarshal(runConfigJSON, &raw); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(raw.Prompt)
 }

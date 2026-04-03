@@ -243,6 +243,9 @@ func TestBrokerTaskRunConfigSupportsRerunMetadata(t *testing.T) {
 	if !snap.Tasks[0].CanRerun {
 		t.Fatal("task.CanRerun = false, want true")
 	}
+	if snap.Tasks[0].Prompt != "rerun me" {
+		t.Fatalf("task.Prompt = %q, want %q", snap.Tasks[0].Prompt, "rerun me")
+	}
 
 	got, ok := b.TaskRunConfig(requestID)
 	if !ok {
@@ -259,5 +262,64 @@ func TestBrokerTaskRunConfigSupportsRerunMetadata(t *testing.T) {
 	}
 	if bytes.Equal(gotAgain, got) {
 		t.Fatalf("TaskRunConfig() returned shared slice %q", string(gotAgain))
+	}
+}
+
+func TestBrokerAppliesPromptWhenConfigRecordedAfterTaskStart(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-after-start"
+
+	b.IngestLog("dispatch status=start request_id=req-after-start skill=codex_harness_run repo=git@github.com:acme/repo.git")
+	b.RecordTaskRunConfig(requestID, []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"late prompt value"}`))
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	if snap.Tasks[0].Prompt != "late prompt value" {
+		t.Fatalf("task.Prompt = %q, want %q", snap.Tasks[0].Prompt, "late prompt value")
+	}
+}
+
+func TestPromptFromRunConfigJSON(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		raw  []byte
+		want string
+	}{
+		{
+			name: "valid prompt",
+			raw:  []byte(`{"prompt":"run integration tests"}`),
+			want: "run integration tests",
+		},
+		{
+			name: "missing prompt",
+			raw:  []byte(`{"repo":"git@github.com:acme/repo.git"}`),
+			want: "",
+		},
+		{
+			name: "invalid json",
+			raw:  []byte(`{"prompt":"oops"`),
+			want: "",
+		},
+		{
+			name: "trimmed prompt",
+			raw:  []byte(`{"prompt":"  refactor api  "}`),
+			want: "refactor api",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := promptFromRunConfigJSON(tt.raw); got != tt.want {
+				t.Fatalf("promptFromRunConfigJSON() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
