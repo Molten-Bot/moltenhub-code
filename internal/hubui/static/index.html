@@ -173,8 +173,96 @@
 
     .right-col {
       display: grid;
-      grid-template-rows: minmax(200px, 38%) minmax(260px, 1fr);
+      grid-template-rows: minmax(220px, 30%) minmax(220px, 32%) minmax(260px, 1fr);
       gap: 16px;
+    }
+
+    .prompt-wrap {
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .prompt-form {
+      height: 100%;
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      grid-template-rows: 1fr auto auto;
+    }
+
+    .prompt-text {
+      width: 100%;
+      height: 100%;
+      resize: vertical;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #0d1825;
+      color: #d8e4f2;
+      font-family: "IBM Plex Mono", "Consolas", monospace;
+      font-size: 0.79rem;
+      line-height: 1.4;
+      padding: 10px;
+    }
+
+    .prompt-text:focus {
+      outline: 1px solid #6a8aac;
+      border-color: #6a8aac;
+    }
+
+    .prompt-hint {
+      color: var(--muted);
+      font-size: 0.74rem;
+      line-height: 1.3;
+    }
+
+    .prompt-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .prompt-submit {
+      border: 1px solid #597695;
+      background: #2f4864;
+      color: #dfe7ef;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color .12s ease, transform .12s ease, opacity .12s ease;
+    }
+
+    .prompt-submit:hover {
+      border-color: #83a3c4;
+      transform: translateY(-1px);
+    }
+
+    .prompt-submit:disabled {
+      cursor: not-allowed;
+      opacity: 0.65;
+      transform: none;
+    }
+
+    .submit-status {
+      color: var(--muted);
+      font-size: 0.74rem;
+      line-height: 1.3;
+      min-height: 1.3em;
+    }
+
+    .submit-status.ok {
+      color: var(--good);
+    }
+
+    .submit-status.warn {
+      color: var(--warn);
+    }
+
+    .submit-status.error {
+      color: var(--bad);
     }
 
     .task {
@@ -298,7 +386,7 @@
         min-height: auto;
       }
       .right-col {
-        grid-template-rows: minmax(220px, 38vh) minmax(260px, 46vh);
+        grid-template-rows: minmax(250px, 40vh) minmax(220px, 34vh) minmax(260px, 46vh);
       }
     }
   </style>
@@ -328,6 +416,29 @@
       </section>
 
       <div class="right-col">
+        <section class="panel prompt-wrap">
+          <div class="panel-header">
+            <span>Local Prompt</span>
+          </div>
+          <form id="local-prompt-form" class="prompt-form">
+            <textarea
+              id="local-prompt-input"
+              class="prompt-text"
+              spellcheck="false"
+              placeholder='{
+  "repo": "git@github.com:org/repo.git",
+  "base_branch": "main",
+  "target_subdir": ".",
+  "prompt": "Describe the change you want"
+}'></textarea>
+            <div class="prompt-hint">Paste one JSON object with: repo, base_branch, target_subdir, prompt.</div>
+            <div class="prompt-actions">
+              <button id="local-prompt-submit" class="prompt-submit" type="submit">Run Local Prompt</button>
+              <span id="local-prompt-status" class="submit-status">Idle</span>
+            </div>
+          </form>
+        </section>
+
         <section class="panel">
           <div class="panel-header">
             <span>Tasks</span>
@@ -360,6 +471,10 @@
     const taskList = document.getElementById("task-list");
     const taskHead = document.getElementById("task-head");
     const terminal = document.getElementById("terminal");
+    const localPromptForm = document.getElementById("local-prompt-form");
+    const localPromptInput = document.getElementById("local-prompt-input");
+    const localPromptSubmit = document.getElementById("local-prompt-submit");
+    const localPromptStatus = document.getElementById("local-prompt-status");
 
     function setConnection(online, text) {
       connDot.classList.toggle("online", online);
@@ -384,6 +499,11 @@
     function statusClass(status) {
       if (!status) return "";
       return status.replace(/[^a-z_]/g, "");
+    }
+
+    function setLocalPromptStatus(kind, text) {
+      localPromptStatus.className = kind ? `submit-status ${kind}` : "submit-status";
+      localPromptStatus.textContent = text;
     }
 
     function renderEvents(snapshot) {
@@ -561,6 +681,45 @@
       };
     }
 
+    async function submitLocalPrompt(event) {
+      event.preventDefault();
+      const payload = localPromptInput.value.trim();
+      if (!payload) {
+        setLocalPromptStatus("error", "Paste a JSON payload first.");
+        return;
+      }
+
+      localPromptSubmit.disabled = true;
+      setLocalPromptStatus("warn", "Submitting...");
+
+      try {
+        const response = await fetch("/api/local-prompt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: payload,
+        });
+
+        let body = null;
+        try {
+          body = await response.json();
+        } catch (_err) {
+          body = null;
+        }
+
+        if (!response.ok) {
+          throw new Error(body?.error || `submit http ${response.status}`);
+        }
+
+        const requestID = body?.request_id || "(unknown)";
+        setLocalPromptStatus("ok", `Queued request ${requestID}`);
+      } catch (err) {
+        setLocalPromptStatus("error", `Submit failed: ${err.message}`);
+      } finally {
+        localPromptSubmit.disabled = false;
+      }
+    }
+
+    localPromptForm.addEventListener("submit", submitLocalPrompt);
     loadInitial();
     startStream();
   </script>

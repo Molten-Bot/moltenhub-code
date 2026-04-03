@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"syscall"
+	"time"
 
 	"github.com/jef/how-i-want-to-code/internal/config"
 	"github.com/jef/how-i-want-to-code/internal/execx"
@@ -186,12 +188,15 @@ func runHub(args []string) int {
 	}
 
 	logger := log.New(os.Stderr, "", 0)
+	runner := execx.OSRunner{}
 	monitorBroker := hubui.NewBroker()
 	daemonLogger := func(format string, args ...any) {
 		line := fmt.Sprintf(format, args...)
 		logger.Print(line)
 		monitorBroker.IngestLog(line)
 	}
+	localDispatchSem := make(chan struct{}, cfg.Dispatcher.MaxParallel)
+	var localDispatchSeq uint64
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -199,6 +204,38 @@ func runHub(args []string) int {
 	if strings.TrimSpace(*uiListen) != "" {
 		uiServer := hubui.NewServer(*uiListen, monitorBroker)
 		uiServer.Logf = logger.Printf
+		uiServer.SubmitLocalPrompt = func(reqCtx context.Context, body []byte) (string, error) {
+			runCfg, err := hub.ParseRunConfigJSON(body)
+			if err != nil {
+				return "", fmt.Errorf("invalid run config: %w", err)
+			}
+
+			select {
+			case <-ctx.Done():
+				return "", fmt.Errorf("service is shutting down")
+			default:
+			}
+
+			select {
+			case localDispatchSem <- struct{}{}:
+			case <-reqCtx.Done():
+				return "", fmt.Errorf("request canceled")
+			default:
+				return "", fmt.Errorf("dispatcher is busy (max_parallel=%d)", cap(localDispatchSem))
+			}
+
+			requestID := fmt.Sprintf(
+				"local-%d-%06d",
+				time.Now().UTC().Unix(),
+				atomic.AddUint64(&localDispatchSeq, 1),
+			)
+			go func(requestID string, runCfg config.Config) {
+				defer func() { <-localDispatchSem }()
+				runLocalDispatch(ctx, runner, daemonLogger, cfg.Skill.Name, requestID, runCfg)
+			}(requestID, runCfg)
+
+			return requestID, nil
+		}
 		logger.Printf("hub.ui status=ready url=%s", monitorURL(*uiListen))
 		go func() {
 			if err := uiServer.Run(ctx); err != nil {
@@ -207,7 +244,7 @@ func runHub(args []string) int {
 		}()
 	}
 
-	daemon := hub.NewDaemon(execx.OSRunner{})
+	daemon := hub.NewDaemon(runner)
 	daemon.Logf = daemonLogger
 
 	if err := daemon.Run(ctx, cfg); err != nil {
@@ -215,6 +252,34 @@ func runHub(args []string) int {
 		return hubExitCode(err)
 	}
 	return harness.ExitSuccess
+}
+
+func runLocalDispatch(
+	ctx context.Context,
+	runner execx.Runner,
+	logf func(string, ...any),
+	skill string,
+	requestID string,
+	runCfg config.Config,
+) {
+	logf("dispatch status=start request_id=%s skill=%s repo=%s", requestID, skill, runCfg.RepoURL)
+
+	h := harness.New(runner)
+	h.Logf = func(format string, args ...any) {
+		line := fmt.Sprintf(format, args...)
+		logf("dispatch request_id=%s %s", requestID, line)
+	}
+
+	res := h.Run(ctx, runCfg)
+	if res.Err != nil {
+		logf("dispatch status=error request_id=%s exit_code=%d err=%q", requestID, res.ExitCode, res.Err)
+		return
+	}
+	if res.NoChanges {
+		logf("dispatch status=no_changes request_id=%s workspace=%s branch=%s", requestID, res.WorkspaceDir, res.Branch)
+		return
+	}
+	logf("dispatch status=ok request_id=%s workspace=%s branch=%s pr_url=%s", requestID, res.WorkspaceDir, res.Branch, res.PRURL)
 }
 
 func monitorURL(addr string) string {
