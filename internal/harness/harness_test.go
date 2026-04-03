@@ -543,7 +543,7 @@ func TestRunMultiRepoCreatesPRsForEachChangedRepo(t *testing.T) {
 		{cmd: cloneRepoCommand(cfg.Repos[1], cfg.BaseBranch, repoDirB)},
 		{cmd: branchCommand(repoDirA, branch)},
 		{cmd: branchCommand(repoDirB, branch)},
-		{cmd: codexCommand(runDir, codexPrompt)},
+		{cmd: codexCommandWithOptions(runDir, codexPrompt, codexRunOptions{SkipGitRepoCheck: true})},
 		{cmd: statusCommand(repoDirA), res: execx.Result{Stdout: " M file-a.go\n"}},
 		{cmd: statusCommand(repoDirB), res: execx.Result{Stdout: " M file-b.go\n"}},
 		{cmd: addCommand(repoDirA)},
@@ -581,6 +581,79 @@ func TestRunMultiRepoCreatesPRsForEachChangedRepo(t *testing.T) {
 	}
 }
 
+func TestRunMultiRepoRemediationUsesWorkspaceCodexOptions(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.RepoURL = ""
+	cfg.Repo = ""
+	cfg.Repos = []string{
+		"git@github.com:acme/repo-a.git",
+		"git@github.com:acme/repo-b.git",
+	}
+	cfg.TargetSubdir = "."
+
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := filepath.Join("/tmp", "temp", guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+
+	repoRelA := repoWorkspaceDirName(cfg.Repos[0], 0, len(cfg.Repos))
+	repoRelB := repoWorkspaceDirName(cfg.Repos[1], 1, len(cfg.Repos))
+	repoDirA := filepath.Join(runDir, repoRelA)
+	repoDirB := filepath.Join(runDir, repoRelB)
+	codexPrompt := workspaceCodexPrompt(cfg.Prompt, cfg.TargetSubdir, []repoWorkspace{
+		{URL: cfg.Repos[0], RelDir: repoRelA},
+		{URL: cfg.Repos[1], RelDir: repoRelB},
+	})
+	codexPrompt = withAgentsPrompt(codexPrompt, agentsPath)
+	prURL := "https://github.com/acme/repo-a/pull/99"
+	checkSummary := "X integration-tests failing"
+	repairPrompt := remediationPromptForRepo(codexPrompt, repoRelA, cfg.Repos[0], prURL, checkSummary, 1, true)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneRepoCommand(cfg.Repos[0], cfg.BaseBranch, repoDirA)},
+		{cmd: cloneRepoCommand(cfg.Repos[1], cfg.BaseBranch, repoDirB)},
+		{cmd: branchCommand(repoDirA, branch)},
+		{cmd: branchCommand(repoDirB, branch)},
+		{cmd: codexCommandWithOptions(runDir, codexPrompt, codexRunOptions{SkipGitRepoCheck: true})},
+		{cmd: statusCommand(repoDirA), res: execx.Result{Stdout: " M file-a.go\n"}},
+		{cmd: statusCommand(repoDirB), res: execx.Result{Stdout: "\n"}},
+		{cmd: addCommand(repoDirA)},
+		{cmd: commitCommand(repoDirA, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDirA, branch)},
+		{cmd: prCreateCommand(repoDirA, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDirA, prURL), res: execx.Result{Stdout: checkSummary + "\n"}, err: errors.New("checks failed")},
+		{cmd: codexCommandWithOptions(runDir, repairPrompt, codexRunOptions{SkipGitRepoCheck: true})},
+		{cmd: statusCommand(repoDirA), res: execx.Result{Stdout: " M file-a.go\n"}},
+		{cmd: addCommand(repoDirA)},
+		{cmd: commitCommand(repoDirA, remediationCommitMessage(cfg.CommitMessage, 1))},
+		{cmd: pushCommand(repoDirA, branch)},
+		{cmd: prChecksCommand(repoDirA, prURL)},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == repoDirA }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
 func TestCommandBuilders(t *testing.T) {
 	t.Parallel()
 
@@ -598,6 +671,10 @@ func TestCommandBuilders(t *testing.T) {
 	codex := codexCommand(targetDir, prompt)
 	if codex.Name != "codex" || codex.Dir != targetDir || !reflect.DeepEqual(codex.Args, []string{"exec", "--sandbox", "workspace-write", withCompletionGatePrompt(prompt)}) {
 		t.Fatalf("codex command unexpected: %+v", codex)
+	}
+	codexWorkspace := codexCommandWithOptions(targetDir, prompt, codexRunOptions{SkipGitRepoCheck: true})
+	if codexWorkspace.Name != "codex" || codexWorkspace.Dir != targetDir || !reflect.DeepEqual(codexWorkspace.Args, []string{"exec", "--sandbox", "workspace-write", "--skip-git-repo-check", withCompletionGatePrompt(prompt)}) {
+		t.Fatalf("codex workspace command unexpected: %+v", codexWorkspace)
 	}
 
 	pr := prCreateCommand(repoDir, cfg, branch)
