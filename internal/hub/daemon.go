@@ -275,7 +275,9 @@ func (d Daemon) processInboundMessage(
 ) {
 	dispatch, matched, parseErr := ParseSkillDispatch(msg, cfg.Skill.DispatchType, cfg.Skill.Name)
 	if !matched {
-		d.logf("dispatch status=ignored skill=%s", incomingSkillName(msg))
+		if skill := incomingSkillName(msg); skill != "unknown" {
+			d.logf("dispatch status=ignored skill=%s", skill)
+		}
 		if strings.TrimSpace(deliveryID) != "" {
 			if err := api.AckOpenClawDelivery(ctx, token, deliveryID); err != nil {
 				d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)

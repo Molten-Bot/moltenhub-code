@@ -3,6 +3,8 @@ package hub
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -167,6 +169,90 @@ func TestDispatchResultPayloadIncludesRepoResults(t *testing.T) {
 	}
 	if len(repoResults) != 2 {
 		t.Fatalf("len(repo_results) = %d, want 2", len(repoResults))
+	}
+}
+
+func TestProcessInboundMessageSkipsIgnoredLogForUnknownSkill(t *testing.T) {
+	t.Parallel()
+
+	d := NewDaemon(nil)
+	logs := make([]string, 0, 1)
+	d.Logf = func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:         "codex_harness_run",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+		Dispatcher: DispatcherConfig{
+			MaxParallel: 1,
+		},
+	}
+
+	var workers sync.WaitGroup
+	d.processInboundMessage(
+		context.Background(),
+		APIClient{},
+		"",
+		cfg,
+		map[string]any{"type": "status_update"},
+		"",
+		"",
+		nil,
+		&workers,
+		nil,
+	)
+
+	if len(logs) != 0 {
+		t.Fatalf("logs = %v, want none", logs)
+	}
+}
+
+func TestProcessInboundMessageLogsIgnoredKnownSkill(t *testing.T) {
+	t.Parallel()
+
+	d := NewDaemon(nil)
+	logs := make([]string, 0, 1)
+	d.Logf = func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:         "codex_harness_run",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+		Dispatcher: DispatcherConfig{
+			MaxParallel: 1,
+		},
+	}
+
+	var workers sync.WaitGroup
+	d.processInboundMessage(
+		context.Background(),
+		APIClient{},
+		"",
+		cfg,
+		map[string]any{
+			"type":  "skill_request",
+			"skill": "other_skill",
+		},
+		"",
+		"",
+		nil,
+		&workers,
+		nil,
+	)
+
+	if len(logs) != 1 {
+		t.Fatalf("len(logs) = %d, want 1 (%v)", len(logs), logs)
+	}
+	if !strings.Contains(logs[0], "dispatch status=ignored skill=other_skill") {
+		t.Fatalf("ignored log = %q", logs[0])
 	}
 }
 
