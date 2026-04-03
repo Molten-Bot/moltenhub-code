@@ -30,6 +30,8 @@ const (
 
 	maxPRCheckRemediationAttempts = 3
 	prChecksWatchIntervalSeconds  = 10
+	maxPRChecksNoReportRetries    = 6
+	prChecksNoReportRetryDelay    = 10 * time.Second
 	maxCheckSummaryChars          = 4000
 )
 
@@ -71,6 +73,7 @@ type Harness struct {
 	Now         func() time.Time
 	Logf        logFn
 	TargetDirOK func(string) bool
+	Sleep       func(context.Context, time.Duration) error
 }
 
 // New returns a harness configured with defaults.
@@ -81,6 +84,7 @@ func New(runner execx.Runner) Harness {
 		Now:         time.Now,
 		Logf:        func(string, ...any) {},
 		TargetDirOK: pathIsDir,
+		Sleep:       sleepWithContext,
 	}
 }
 
@@ -101,6 +105,9 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 	if h.TargetDirOK == nil {
 		h.TargetDirOK = pathIsDir
+	}
+	if h.Sleep == nil {
+		h.Sleep = sleepWithContext
 	}
 
 	h.logf("stage=preflight status=start")
@@ -258,14 +265,38 @@ func (h Harness) processChangedRepo(
 	h.logf("stage=pr status=ok repo=%s repo_dir=%s pr_url=%s", repo.URL, repo.RelDir, repo.PRURL)
 
 	for attempt := 0; ; attempt++ {
-		h.logf("stage=checks status=start repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt+1)
-		checkRes, checkErr := h.runCommand(ctx, "checks", prChecksCommand(repo.Dir, repo.PRURL))
-		if checkErr == nil {
-			h.logf("stage=checks status=ok repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt+1)
-			return ExitSuccess, "", nil
+		var (
+			checkRes     execx.Result
+			checkErr     error
+			checkSummary string
+		)
+		for noReportRetry := 0; ; noReportRetry++ {
+			h.logf("stage=checks status=start repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt+1)
+			checkRes, checkErr = h.runCommand(ctx, "checks", prChecksCommand(repo.Dir, repo.PRURL))
+			if checkErr == nil {
+				h.logf("stage=checks status=ok repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt+1)
+				return ExitSuccess, "", nil
+			}
+
+			checkSummary = summarizeCheckOutput(checkRes)
+			if noReportRetry >= maxPRChecksNoReportRetries || !isNoChecksReported(checkRes, checkErr) {
+				break
+			}
+
+			h.logf(
+				"stage=checks status=waiting reason=no_checks_reported repo=%s repo_dir=%s pr_url=%s attempt=%d retry=%d/%d",
+				repo.URL,
+				repo.RelDir,
+				repo.PRURL,
+				attempt+1,
+				noReportRetry+1,
+				maxPRChecksNoReportRetries,
+			)
+			if err := h.Sleep(ctx, prChecksNoReportRetryDelay); err != nil {
+				return ExitPR, "checks", err
+			}
 		}
 
-		checkSummary := summarizeCheckOutput(checkRes)
 		h.logf("stage=checks status=failed repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt+1)
 		if attempt >= maxPRCheckRemediationAttempts {
 			return ExitPR, "checks", fmt.Errorf(
@@ -487,6 +518,14 @@ func encodeLogLine(line string) string {
 	return base64.StdEncoding.EncodeToString([]byte(line))
 }
 
+func isNoChecksReported(res execx.Result, err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
+	return strings.Contains(text, "no checks reported") || strings.Contains(text, "no required checks")
+}
+
 func (h Harness) runCodexWithHeartbeat(ctx context.Context, targetDir, prompt string) error {
 	done := make(chan error, 1)
 	go func() {
@@ -531,6 +570,21 @@ func pathIsDir(path string) bool {
 		return false
 	}
 	return st.IsDir()
+}
+
+func sleepWithContext(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 var githubURL = regexp.MustCompile(`https://github\.com/\S+`)
