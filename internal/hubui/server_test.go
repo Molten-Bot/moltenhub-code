@@ -116,11 +116,17 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("read body: %v", err)
 	}
 	markup := string(body)
-	if !strings.Contains(markup, ".task-close") {
-		t.Fatalf("expected index html to include task close styles")
+	if !strings.Contains(markup, `src="https://cdn.tailwindcss.com"`) {
+		t.Fatalf("expected index html to include tailwind runtime")
 	}
-	if !strings.Contains(markup, ".task-rerun") {
-		t.Fatalf("expected index html to include task rerun styles")
+	if !strings.Contains(markup, `href="/static/style.css"`) {
+		t.Fatalf("expected index html to include external stylesheet link")
+	}
+	if !strings.Contains(markup, `"task-close"`) {
+		t.Fatalf("expected index html to include task close class usage")
+	}
+	if !strings.Contains(markup, `"task-rerun"`) {
+		t.Fatalf("expected index html to include task rerun class usage")
 	}
 	if !strings.Contains(markup, "function dismissTask(") {
 		t.Fatalf("expected index html to include dismissTask handler")
@@ -128,8 +134,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function rerunTask(") {
 		t.Fatalf("expected index html to include rerunTask handler")
 	}
-	if !strings.Contains(markup, ".task-progress") {
-		t.Fatalf("expected index html to include task progress styles")
+	if !strings.Contains(markup, `"task-progress"`) {
+		t.Fatalf("expected index html to include task progress class usage")
 	}
 	if !strings.Contains(markup, "function renderTaskProgress(") {
 		t.Fatalf("expected index html to include renderTaskProgress handler")
@@ -142,6 +148,39 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "function renderHubConnection(") {
 		t.Fatalf("expected index html to include renderHubConnection handler")
+	}
+}
+
+func TestHandlerServesStaticCSS(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/static/style.css")
+	if err != nil {
+		t.Fatalf("GET /static/style.css error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "text/css") {
+		t.Fatalf("content-type = %q", ct)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	css := string(body)
+	if !strings.Contains(css, ".task-close") {
+		t.Fatalf("expected stylesheet to include task close styles")
+	}
+	if !strings.Contains(css, ".task-rerun") {
+		t.Fatalf("expected stylesheet to include task rerun styles")
 	}
 }
 
