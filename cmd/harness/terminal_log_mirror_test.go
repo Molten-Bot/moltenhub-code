@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -78,6 +79,36 @@ func TestTaskLogMirrorWritesAggregateAndTaskLogs(t *testing.T) {
 	assertLogFileContent(t, filepath.Join(root, "local", "1712345678", "000111", logFileName), []string{lines[0]})
 	assertLogFileContent(t, filepath.Join(root, "task", "005", logFileName), []string{lines[1]})
 	assertLogFileContent(t, filepath.Join(root, fallbackLogSubdir, logFileName), []string{lines[2]})
+}
+
+func TestTaskLogMirrorEvictsOldTaskFilesAndContinuesWriting(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join(t.TempDir(), ".log")
+	mirror, err := newTaskLogMirror(root)
+	if err != nil {
+		t.Fatalf("newTaskLogMirror() error = %v", err)
+	}
+
+	total := maxOpenTaskLogFiles + 16
+	for i := 0; i < total; i++ {
+		mirror.WriteLine(fmt.Sprintf("dispatch request_id=req-%03d status=start", i))
+	}
+
+	if err := mirror.Close(); err != nil {
+		t.Fatalf("mirror.Close() error = %v", err)
+	}
+
+	assertLogFileContent(
+		t,
+		filepath.Join(root, "req", "000", logFileName),
+		[]string{"dispatch request_id=req-000 status=start"},
+	)
+	assertLogFileContent(
+		t,
+		filepath.Join(root, "req", fmt.Sprintf("%03d", total-1), logFileName),
+		[]string{fmt.Sprintf("dispatch request_id=req-%03d status=start", total-1)},
+	)
 }
 
 func assertLogFileContent(t *testing.T, path string, want []string) {

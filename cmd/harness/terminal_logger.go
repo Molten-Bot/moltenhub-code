@@ -277,13 +277,19 @@ func isImportantCodexCommandText(text string) bool {
 }
 
 func parseSimpleKVFields(line string) map[string]string {
-	out := map[string]string{}
+	if !strings.Contains(line, "=") {
+		return nil
+	}
+	out := make(map[string]string, 8)
 	for _, field := range strings.Fields(line) {
 		key, val, found := strings.Cut(field, "=")
 		if !found {
 			continue
 		}
 		out[key] = strings.Trim(val, "\"")
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }

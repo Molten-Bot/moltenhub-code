@@ -20,3 +20,12 @@ func TestRedactSensitiveLogText(t *testing.T) {
 		t.Fatalf("expected [REDACTED] marker in output: %q", output)
 	}
 }
+
+func TestRedactSensitiveLogTextLeavesNonSensitiveInputUntouched(t *testing.T) {
+	t.Parallel()
+
+	input := "dispatch status=ok request_id=req-1 stage=pr workspace=/tmp/work"
+	if got := redactSensitiveLogText(input); got != input {
+		t.Fatalf("redactSensitiveLogText() = %q, want %q", got, input)
+	}
+}

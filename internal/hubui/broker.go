@@ -137,16 +137,13 @@ func (b *Broker) IngestLog(line string) {
 	defer b.mu.Unlock()
 
 	b.nextEventID++
-	b.events = append(b.events, Event{
+	b.events = appendCappedEvent(b.events, b.maxEvents, Event{
 		ID:        b.nextEventID,
 		Time:      now.Format(time.RFC3339Nano),
 		Kind:      classifyEventKind(line),
 		RequestID: requestID,
 		Line:      line,
 	})
-	if len(b.events) > b.maxEvents {
-		b.events = append([]Event(nil), b.events[len(b.events)-b.maxEvents:]...)
-	}
 
 	if requestID != "" {
 		t := b.ensureTaskLocked(requestID, now)
@@ -413,10 +410,7 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 }
 
 func (b *Broker) appendTaskLogLocked(t *taskState, line TaskLog) {
-	t.Logs = append(t.Logs, line)
-	if len(t.Logs) > b.maxTaskLog {
-		t.Logs = append([]TaskLog(nil), t.Logs[len(t.Logs)-b.maxTaskLog:]...)
-	}
+	t.Logs = appendCappedTaskLog(t.Logs, b.maxTaskLog, line)
 }
 
 func (b *Broker) updateHubConnectionFromLineLocked(line string, fields map[string]string) {
@@ -477,7 +471,10 @@ func classifyEventKind(line string) string {
 }
 
 func parseKVFields(line string) map[string]string {
-	out := map[string]string{}
+	if !strings.Contains(line, "=") {
+		return nil
+	}
+	out := make(map[string]string, 8)
 	for _, field := range strings.Fields(line) {
 		k, v, ok := strings.Cut(field, "=")
 		if !ok {
@@ -485,7 +482,34 @@ func parseKVFields(line string) map[string]string {
 		}
 		out[k] = strings.Trim(v, "\"")
 	}
+	if len(out) == 0 {
+		return nil
+	}
 	return out
+}
+
+func appendCappedEvent(events []Event, max int, entry Event) []Event {
+	if max <= 0 {
+		return events
+	}
+	if len(events) < max {
+		return append(events, entry)
+	}
+	copy(events, events[1:])
+	events[len(events)-1] = entry
+	return events
+}
+
+func appendCappedTaskLog(logs []TaskLog, max int, entry TaskLog) []TaskLog {
+	if max <= 0 {
+		return logs
+	}
+	if len(logs) < max {
+		return append(logs, entry)
+	}
+	copy(logs, logs[1:])
+	logs[len(logs)-1] = entry
+	return logs
 }
 
 func parseFieldValue(line, key string) string {

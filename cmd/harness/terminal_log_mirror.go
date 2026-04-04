@@ -9,10 +9,11 @@ import (
 )
 
 const (
-	logDirectoryName   = ".log"
-	logFileName        = "terminal.log"
-	fallbackLogSubdir  = "main"
-	maxLogFileOpenMode = 0o644
+	logDirectoryName    = ".log"
+	logFileName         = "terminal.log"
+	fallbackLogSubdir   = "main"
+	maxLogFileOpenMode  = 0o644
+	maxOpenTaskLogFiles = 128
 )
 
 type terminalLogSink interface {
@@ -23,8 +24,10 @@ type terminalLogSink interface {
 type taskLogMirror struct {
 	mu sync.Mutex
 
-	rootDir   string
-	aggregate *os.File
+	rootDir       string
+	aggregate     *os.File
+	taskFiles     map[string]*os.File
+	taskFileOrder []string
 }
 
 func newDefaultTaskLogMirror() (*taskLogMirror, error) {
@@ -56,6 +59,7 @@ func newTaskLogMirror(rootDir string) (*taskLogMirror, error) {
 	return &taskLogMirror{
 		rootDir:   absRoot,
 		aggregate: aggregateFile,
+		taskFiles: make(map[string]*os.File),
 	}, nil
 }
 
@@ -75,16 +79,11 @@ func (m *taskLogMirror) WriteLine(line string) {
 		_, _ = m.aggregate.WriteString(trimmed + "\n")
 	}
 
-	taskFilePath, err := m.taskLogFilePathLocked(taskLogSubdirForLine(trimmed))
-	if err != nil {
-		return
-	}
-	taskFile, err := os.OpenFile(taskFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, maxLogFileOpenMode)
+	taskFile, err := m.taskLogFileLocked(taskLogSubdirForLine(trimmed))
 	if err != nil {
 		return
 	}
 	_, _ = taskFile.WriteString(trimmed + "\n")
-	_ = taskFile.Close()
 }
 
 func (m *taskLogMirror) Close() error {
@@ -102,8 +101,52 @@ func (m *taskLogMirror) Close() error {
 		}
 		m.aggregate = nil
 	}
+	for _, taskFile := range m.taskFiles {
+		if err := taskFile.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	m.taskFiles = nil
+	m.taskFileOrder = nil
 
 	return firstErr
+}
+
+func (m *taskLogMirror) taskLogFileLocked(subdir string) (*os.File, error) {
+	taskFilePath, err := m.taskLogFilePathLocked(subdir)
+	if err != nil {
+		return nil, err
+	}
+	if existing := m.taskFiles[taskFilePath]; existing != nil {
+		return existing, nil
+	}
+	if m.taskFiles == nil {
+		m.taskFiles = make(map[string]*os.File)
+	}
+	if len(m.taskFiles) >= maxOpenTaskLogFiles {
+		m.closeOldestTaskFileLocked()
+	}
+
+	taskFile, err := os.OpenFile(taskFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, maxLogFileOpenMode)
+	if err != nil {
+		return nil, err
+	}
+	m.taskFiles[taskFilePath] = taskFile
+	m.taskFileOrder = append(m.taskFileOrder, taskFilePath)
+	return taskFile, nil
+}
+
+func (m *taskLogMirror) closeOldestTaskFileLocked() {
+	if len(m.taskFileOrder) == 0 {
+		return
+	}
+	oldestPath := m.taskFileOrder[0]
+	m.taskFileOrder = m.taskFileOrder[1:]
+	taskFile := m.taskFiles[oldestPath]
+	delete(m.taskFiles, oldestPath)
+	if taskFile != nil {
+		_ = taskFile.Close()
+	}
 }
 
 func (m *taskLogMirror) taskLogFilePathLocked(subdir string) (string, error) {

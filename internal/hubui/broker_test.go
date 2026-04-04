@@ -3,6 +3,7 @@ package hubui
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"testing"
 )
 
@@ -370,5 +371,54 @@ func TestPromptFromRunConfigJSON(t *testing.T) {
 				t.Fatalf("promptFromRunConfigJSON() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestBrokerCapsEventsWithoutGrowingSlice(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.maxEvents = 3
+
+	for i := 1; i <= 5; i++ {
+		b.IngestLog(fmt.Sprintf("dispatch status=start request_id=req-%d", i))
+	}
+
+	snap := b.Snapshot()
+	if got, want := len(snap.Events), 3; got != want {
+		t.Fatalf("len(events) = %d, want %d", got, want)
+	}
+	if snap.Events[0].RequestID != "req-3" || snap.Events[1].RequestID != "req-4" || snap.Events[2].RequestID != "req-5" {
+		t.Fatalf("events request ids = %#v", []string{
+			snap.Events[0].RequestID,
+			snap.Events[1].RequestID,
+			snap.Events[2].RequestID,
+		})
+	}
+}
+
+func TestBrokerCapsTaskLogsWithoutGrowingSlice(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.maxTaskLog = 2
+
+	b.IngestLog("dispatch status=start request_id=req-cap")
+	b.IngestLog("dispatch request_id=req-cap stage=clone status=start")
+	b.IngestLog("dispatch request_id=req-cap stage=pr status=ok")
+
+	snap := b.Snapshot()
+	if got, want := len(snap.Tasks), 1; got != want {
+		t.Fatalf("len(tasks) = %d, want %d", got, want)
+	}
+	logs := snap.Tasks[0].Logs
+	if got, want := len(logs), 2; got != want {
+		t.Fatalf("len(task logs) = %d, want %d", got, want)
+	}
+	if logs[0].Text != "dispatch request_id=req-cap stage=clone status=start" {
+		t.Fatalf("logs[0].Text = %q", logs[0].Text)
+	}
+	if logs[1].Text != "dispatch request_id=req-cap stage=pr status=ok" {
+		t.Fatalf("logs[1].Text = %q", logs[1].Text)
 	}
 }
