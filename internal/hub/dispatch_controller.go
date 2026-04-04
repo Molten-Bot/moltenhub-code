@@ -126,7 +126,6 @@ func (c *AdaptiveDispatchController) Acquire(ctx context.Context, requestID stri
 		queueDepth int
 		running    int
 		allowed    int
-		granted    bool
 	)
 
 	c.mu.Lock()
