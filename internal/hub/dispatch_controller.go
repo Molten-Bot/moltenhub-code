@@ -122,6 +122,7 @@ func (c *AdaptiveDispatchController) Acquire(ctx context.Context, requestID stri
 
 	var (
 		queued     bool
+		granted    bool
 		queueDepth int
 		running    int
 		allowed    int

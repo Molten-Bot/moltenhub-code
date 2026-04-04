@@ -216,6 +216,140 @@ func TestAcquireReturnsClosedErrorWhenStopped(t *testing.T) {
 	}
 }
 
+func TestAcquireCancellationRemovesWaiterAndPromotesNext(t *testing.T) {
+	t.Parallel()
+
+	controller := NewAdaptiveDispatchController(DispatcherConfig{
+		MaxParallel:            1,
+		MinParallel:            1,
+		SampleWindow:           1,
+		SampleIntervalMS:       1000,
+		CPUHighWatermark:       85,
+		MemoryHighWatermark:    90,
+		DiskIOHighWatermarkMBs: 120,
+	}, nil)
+
+	releaseFirst, err := controller.Acquire(context.Background(), "req-1")
+	if err != nil {
+		t.Fatalf("Acquire(req-1) error = %v", err)
+	}
+
+	req2Ctx, cancelReq2 := context.WithCancel(context.Background())
+	defer cancelReq2()
+
+	req2ErrCh := make(chan error, 1)
+	go func() {
+		release, acquireErr := controller.Acquire(req2Ctx, "req-2")
+		if acquireErr != nil {
+			req2ErrCh <- acquireErr
+			return
+		}
+		release()
+		req2ErrCh <- nil
+	}()
+	waitForQueuedRequest(t, controller, "req-2")
+
+	req3Acquired := make(chan struct{}, 1)
+	req3ErrCh := make(chan error, 1)
+	releaseReq3 := make(chan struct{})
+	go func() {
+		release, acquireErr := controller.Acquire(context.Background(), "req-3")
+		if acquireErr != nil {
+			req3ErrCh <- acquireErr
+			return
+		}
+		req3Acquired <- struct{}{}
+		<-releaseReq3
+		release()
+	}()
+	waitForQueuedRequest(t, controller, "req-3")
+
+	cancelReq2()
+
+	select {
+	case err := <-req2ErrCh:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Acquire(req-2) error = %v, want context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for req-2 cancellation")
+	}
+
+	select {
+	case <-req3Acquired:
+		t.Fatal("req-3 granted before req-1 release")
+	case err := <-req3ErrCh:
+		t.Fatalf("unexpected req-3 acquire error: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	releaseFirst()
+
+	select {
+	case <-req3Acquired:
+	case err := <-req3ErrCh:
+		t.Fatalf("unexpected req-3 acquire error: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for req-3 grant")
+	}
+
+	close(releaseReq3)
+}
+
+func TestStopUnblocksQueuedAcquireWithClosedError(t *testing.T) {
+	t.Parallel()
+
+	controller := NewAdaptiveDispatchController(DispatcherConfig{
+		MaxParallel:            1,
+		MinParallel:            1,
+		SampleWindow:           1,
+		SampleIntervalMS:       50,
+		CPUHighWatermark:       85,
+		MemoryHighWatermark:    90,
+		DiskIOHighWatermarkMBs: 120,
+	}, nil)
+	controller.sample = staticSample{value: resourceSample{CPUPercent: 10, MemoryPercent: 20}}
+
+	lifecycleCtx, cancelLifecycle := context.WithCancel(context.Background())
+	defer cancelLifecycle()
+	controller.Start(lifecycleCtx)
+
+	releaseFirst, err := controller.Acquire(context.Background(), "req-1")
+	if err != nil {
+		t.Fatalf("Acquire(req-1) error = %v", err)
+	}
+
+	req2ErrCh := make(chan error, 1)
+	go func() {
+		release, acquireErr := controller.Acquire(context.Background(), "req-2")
+		if acquireErr != nil {
+			req2ErrCh <- acquireErr
+			return
+		}
+		release()
+		req2ErrCh <- nil
+	}()
+	waitForQueuedRequest(t, controller, "req-2")
+
+	cancelLifecycle()
+
+	select {
+	case err := <-req2ErrCh:
+		if !errors.Is(err, errDispatchControllerClosed) {
+			t.Fatalf("Acquire(req-2) error = %v, want errDispatchControllerClosed", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for req-2 to unblock on stop")
+	}
+
+	releaseFirst()
+
+	_, err = controller.Acquire(context.Background(), "req-3")
+	if !errors.Is(err, errDispatchControllerClosed) {
+		t.Fatalf("Acquire(req-3) error = %v, want errDispatchControllerClosed", err)
+	}
+}
+
 func TestComputeAllowedParallelScalesByPressure(t *testing.T) {
 	t.Parallel()
 
