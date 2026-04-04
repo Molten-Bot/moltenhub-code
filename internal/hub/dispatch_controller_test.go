@@ -16,6 +16,23 @@ func (s staticSample) Sample() (resourceSample, error) {
 	return s.value, s.err
 }
 
+type sequenceSample struct {
+	values []resourceSample
+	idx    int
+}
+
+func (s *sequenceSample) Sample() (resourceSample, error) {
+	if len(s.values) == 0 {
+		return resourceSample{}, errors.New("no sample values configured")
+	}
+	if s.idx >= len(s.values) {
+		return s.values[len(s.values)-1], nil
+	}
+	value := s.values[s.idx]
+	s.idx++
+	return value, nil
+}
+
 func TestAdaptiveDispatchControllerQueuesNewestRequests(t *testing.T) {
 	t.Parallel()
 
@@ -216,6 +233,45 @@ func TestComputeAllowedParallelScalesByPressure(t *testing.T) {
 	}
 	if got := computeAllowedParallel(cfg, avg); got != 4 {
 		t.Fatalf("computeAllowedParallel() = %d, want 4", got)
+	}
+}
+
+func TestAdaptiveDispatchControllerSampleWindowKeepsNewestSamples(t *testing.T) {
+	t.Parallel()
+
+	controller := NewAdaptiveDispatchController(DispatcherConfig{
+		MaxParallel:            2,
+		MinParallel:            1,
+		SampleWindow:           2,
+		SampleIntervalMS:       1000,
+		CPUHighWatermark:       85,
+		MemoryHighWatermark:    90,
+		DiskIOHighWatermarkMBs: 120,
+	}, nil)
+	controller.sample = &sequenceSample{
+		values: []resourceSample{
+			{CPUPercent: 10},
+			{CPUPercent: 20},
+			{CPUPercent: 30},
+		},
+	}
+
+	controller.sampleAndUpdate()
+	controller.sampleAndUpdate()
+	controller.sampleAndUpdate()
+
+	controller.mu.Lock()
+	window := append([]resourceSample(nil), controller.window...)
+	controller.mu.Unlock()
+
+	if got, want := len(window), 2; got != want {
+		t.Fatalf("len(window) = %d, want %d", got, want)
+	}
+	if got, want := window[0].CPUPercent, 20.0; got != want {
+		t.Fatalf("window[0].CPUPercent = %.1f, want %.1f", got, want)
+	}
+	if got, want := window[1].CPUPercent, 30.0; got != want {
+		t.Fatalf("window[1].CPUPercent = %.1f, want %.1f", got, want)
 	}
 }
 
