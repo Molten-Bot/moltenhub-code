@@ -4,672 +4,72 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hub Monitor</title>
-  <style>
-    :root {
-      --bg: #0b111a;
-      --panel: #111c2a;
-      --panel-soft: #16263a;
-      --border: #29405b;
-      --text: #dfe7ef;
-      --muted: #94a6ba;
-      --good: #4fd38c;
-      --warn: #ffbe55;
-      --bad: #f27171;
-      --running: #51b8ff;
-      --meta: #88a2bd;
-      --accent: #f6b36a;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      color: var(--text);
-      background:
-        radial-gradient(circle at 0% 0%, rgba(246, 179, 106, 0.16), transparent 48%),
-        radial-gradient(circle at 100% 100%, rgba(81, 184, 255, 0.14), transparent 52%),
-        var(--bg);
-      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-      min-height: 100vh;
-    }
-
-    .app {
-      width: min(1500px, 100%);
-      margin: 0 auto;
-      padding: 20px;
-      display: grid;
-      gap: 16px;
-    }
-
-    .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .title {
-      font-size: 1.4rem;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
-
-    .sub {
-      color: var(--muted);
-      font-size: 0.9rem;
-    }
-
-    .status-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      color: var(--muted);
-      font-size: 0.9rem;
-      flex-wrap: wrap;
-    }
-
-    .status-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      background: rgba(17, 28, 42, 0.74);
-      padding: 5px 10px;
-      min-height: 30px;
-    }
-
-    .status-text {
-      display: grid;
-      gap: 1px;
-      min-width: 0;
-    }
-
-    .status-label {
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      font-size: 0.62rem;
-      line-height: 1.1;
-    }
-
-    .status-value {
-      color: #d8e6f4;
-      font-size: 0.75rem;
-      line-height: 1.1;
-      word-break: break-word;
-    }
-
-    .dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--warn);
-      box-shadow: 0 0 0 0 rgba(255, 190, 85, 0.45);
-      animation: pulse 1.7s infinite;
-    }
-
-    .dot.online {
-      background: var(--good);
-      box-shadow: 0 0 0 0 rgba(79, 211, 140, 0.42);
-    }
-
-    .layout {
-      min-height: calc(100vh - 130px);
-    }
-
-    .panel {
-      border: 1px solid var(--border);
-      background: linear-gradient(170deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01)) var(--panel);
-      border-radius: 14px;
-      overflow: hidden;
-      min-height: 220px;
-    }
-
-    .panel-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 14px;
-      border-bottom: 1px solid var(--border);
-      background: rgba(0, 0, 0, 0.14);
-      font-weight: 600;
-      font-size: 0.92rem;
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
-    }
-
-    .counter {
-      color: var(--accent);
-      font-size: 0.82rem;
-      font-weight: 700;
-    }
-
-    .scroll {
-      height: calc(100% - 48px);
-      overflow: auto;
-    }
-
-    .task-list {
-      display: grid;
-      gap: 8px;
-      padding: 12px;
-    }
-
-    .event {
-      border: 1px solid var(--border);
-      background: var(--panel-soft);
-      border-radius: 10px;
-      padding: 8px 10px;
-      font-size: 0.8rem;
-      line-height: 1.35;
-    }
-
-    .event-head {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      margin-bottom: 4px;
-    }
-
-    .event-kind {
-      padding: 2px 7px;
-      border-radius: 12px;
-      background: #20324a;
-      color: #abcbef;
-      font-size: 0.68rem;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
-
-    .event-time {
-      color: var(--muted);
-      font-size: 0.72rem;
-    }
-
-    .event-line {
-      color: #c7d4e2;
-      font-family: "IBM Plex Mono", "Consolas", monospace;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    .right-col {
-      display: grid;
-      grid-template-rows: minmax(220px, 30%) minmax(220px, 32%) minmax(260px, 1fr);
-      gap: 16px;
-    }
-
-    .prompt-form {
-      display: grid;
-      gap: 10px;
-      padding: 12px;
-      grid-template-rows: auto auto auto;
-    }
-
-    .prompt-text {
-      width: 100%;
-      height: calc(7 * 1.4em + 20px);
-      min-height: calc(7 * 1.4em + 20px);
-      resize: vertical;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: #0d1825;
-      color: #d8e4f2;
-      font-family: "IBM Plex Mono", "Consolas", monospace;
-      font-size: 0.79rem;
-      line-height: 1.4;
-      padding: 10px;
-    }
-
-    .prompt-text:focus {
-      outline: 1px solid #6a8aac;
-      border-color: #6a8aac;
-    }
-
-    .prompt-hint {
-      color: var(--muted);
-      font-size: 0.74rem;
-      line-height: 1.3;
-    }
-
-    .prompt-actions {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .prompt-submit {
-      border: 1px solid #597695;
-      background: #2f4864;
-      color: #dfe7ef;
-      border-radius: 8px;
-      padding: 8px 12px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: border-color .12s ease, transform .12s ease, opacity .12s ease;
-    }
-
-    .prompt-submit:hover {
-      border-color: #83a3c4;
-      transform: translateY(-1px);
-    }
-
-    .prompt-submit:disabled {
-      cursor: not-allowed;
-      opacity: 0.65;
-      transform: none;
-    }
-
-    .submit-status {
-      color: var(--muted);
-      font-size: 0.74rem;
-      line-height: 1.3;
-      min-height: 1.3em;
-    }
-
-    .submit-status.ok {
-      color: var(--good);
-    }
-
-    .submit-status.warn {
-      color: var(--warn);
-    }
-
-    .submit-status.error {
-      color: var(--bad);
-    }
-
-    .task {
-      border: 1px solid var(--border);
-      background: var(--panel-soft);
-      border-radius: 10px;
-      padding: 9px 10px;
-      cursor: pointer;
-      transition: border-color .12s ease, transform .12s ease;
-    }
-
-    .task:hover {
-      border-color: #4f6f93;
-      transform: translateY(-1px);
-    }
-
-    .task.active {
-      border-color: var(--accent);
-      box-shadow: inset 0 0 0 1px rgba(246, 179, 106, 0.3);
-    }
-
-    .task-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 6px;
-    }
-
-    .task-top-actions {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .task-id {
-      font-family: "IBM Plex Mono", "Consolas", monospace;
-      font-size: 0.8rem;
-      color: #d9e3ee;
-      flex: 1 1 auto;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .task-close {
-      border: 1px solid rgba(136, 162, 189, 0.42);
-      background: rgba(12, 23, 36, 0.7);
-      color: #b7c7d8;
-      border-radius: 999px;
-      padding: 2px 8px;
-      font-size: 0.62rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      cursor: pointer;
-      transition: border-color .12s ease, color .12s ease, transform .12s ease;
-    }
-
-    .task-rerun {
-      border: 1px solid rgba(81, 184, 255, 0.48);
-      background: rgba(21, 49, 78, 0.72);
-      color: #bfe2ff;
-      border-radius: 999px;
-      padding: 2px 8px;
-      font-size: 0.62rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      cursor: pointer;
-      transition: border-color .12s ease, color .12s ease, transform .12s ease, opacity .12s ease;
-    }
-
-    .task-close:hover {
-      border-color: #9fb8d1;
-      color: #e1edf9;
-      transform: translateY(-1px);
-    }
-
-    .task-rerun:hover {
-      border-color: #8ecfff;
-      color: #e6f4ff;
-      transform: translateY(-1px);
-    }
-
-    .task-close:focus-visible {
-      outline: 1px solid #9fb8d1;
-      outline-offset: 1px;
-    }
-
-    .task-rerun:focus-visible {
-      outline: 1px solid #8ecfff;
-      outline-offset: 1px;
-    }
-
-    .task-rerun:disabled {
-      cursor: not-allowed;
-      opacity: 0.6;
-      transform: none;
-    }
-
-    .badge {
-      font-size: 0.66rem;
-      letter-spacing: 0.04em;
-      font-weight: 700;
-      text-transform: uppercase;
-      border-radius: 10px;
-      padding: 3px 7px;
-      color: #10232f;
-      background: #8a9bad;
-    }
-
-    .badge.running { background: var(--running); }
-    .badge.main { background: var(--accent); }
-    .badge.idle { background: #7a8ea3; }
-    .badge.active { background: #7eb8eb; }
-    .badge.ok { background: var(--good); }
-    .badge.no_changes { background: var(--warn); }
-    .badge.duplicate { background: var(--warn); color: #2e2620; }
-    .badge.error, .badge.invalid { background: var(--bad); color: #2d1515; }
-
-    .task-meta {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 4px 10px;
-      color: var(--muted);
-      font-size: 0.74rem;
-    }
-
-    .task-progress {
-      margin-top: 8px;
-      display: grid;
-      gap: 5px;
-    }
-
-    .task-progress-track {
-      position: relative;
-      height: 14px;
-    }
-
-    .task-progress-line {
-      position: absolute;
-      left: 7px;
-      right: 7px;
-      top: 50%;
-      height: 2px;
-      transform: translateY(-50%);
-      background: rgba(125, 154, 185, 0.34);
-      border-radius: 999px;
-      overflow: hidden;
-    }
-
-    .task-progress-fill {
-      width: 0;
-      height: 100%;
-      background: linear-gradient(90deg, #66c6ff, #4fd38c);
-      transition: width .18s ease;
-    }
-
-    .task-progress-steps {
-      position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .task-progress-step {
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      border: 2px solid #506884;
-      background: #1c2f44;
-      cursor: help;
-      transition: background-color .12s ease, border-color .12s ease, box-shadow .12s ease;
-    }
-
-    .task-progress-step.done {
-      background: #5ad796;
-      border-color: #b5f5d0;
-    }
-
-    .task-progress-step.current {
-      background: #56bfff;
-      border-color: #cae9ff;
-      box-shadow: 0 0 0 3px rgba(86, 191, 255, 0.16);
-    }
-
-    .task-progress-label {
-      color: var(--meta);
-      font-size: 0.68rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .task-output-list {
-      margin-top: 8px;
-      border-top: 1px dashed rgba(125, 154, 185, 0.32);
-      padding-top: 7px;
-      display: grid;
-      gap: 4px;
-    }
-
-    .task-output-line {
-      font-family: "IBM Plex Mono", "Consolas", monospace;
-      font-size: 0.72rem;
-      color: #c7d4e2;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .task-output-line.stderr {
-      color: #f2b5b5;
-    }
-
-    .task-output-line.meta {
-      color: var(--meta);
-    }
-
-    .log-wrap {
-      display: grid;
-      grid-template-rows: auto auto 1fr;
-      height: 100%;
-    }
-
-    .task-head {
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      font-size: 0.84rem;
-      color: var(--muted);
-    }
-
-    .task-result {
-      display: none;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-      padding: 8px 14px;
-      border-bottom: 1px solid var(--border);
-      font-size: 0.78rem;
-    }
-
-    .task-result.show {
-      display: flex;
-    }
-
-    .task-result.ok {
-      color: #b9efd3;
-      background: rgba(79, 211, 140, 0.14);
-    }
-
-    .task-result.no_changes {
-      color: #ffe2ad;
-      background: rgba(255, 190, 85, 0.14);
-    }
-
-    .task-result.duplicate {
-      color: #ffe2ad;
-      background: rgba(255, 190, 85, 0.14);
-    }
-
-    .task-result.error,
-    .task-result.invalid {
-      color: #ffd2d2;
-      background: rgba(242, 113, 113, 0.14);
-    }
-
-    .task-result-title {
-      font-size: 0.7rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .task-result-detail {
-      color: var(--muted);
-    }
-
-    .task-result.ok .task-result-detail {
-      color: #d7f6e6;
-    }
-
-    .task-result-link {
-      color: #a7d6ff;
-      font-family: "IBM Plex Mono", "Consolas", monospace;
-      text-decoration: none;
-      border-bottom: 1px dotted rgba(167, 214, 255, 0.6);
-      word-break: break-all;
-    }
-
-    .task-result-link:hover {
-      color: #d0eaff;
-      border-bottom-color: rgba(208, 234, 255, 0.9);
-    }
-
-    .term {
-      margin: 0;
-      padding: 12px;
-      overflow: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
-      font-size: 0.79rem;
-      line-height: 1.35;
-      font-family: "IBM Plex Mono", "Consolas", monospace;
-      color: #dbe6f2;
-      background: #0c1724;
-      height: 100%;
-    }
-
-    .meta-line {
-      color: var(--meta);
-    }
-
-    .stderr-line {
-      color: #f2b5b5;
-    }
-
-    .stdout-line {
-      color: #dbe6f2;
-    }
-
-    .placeholder {
-      color: var(--muted);
-      padding: 20px;
-      font-size: 0.9rem;
-    }
-
-    @keyframes pulse {
-      0% { box-shadow: 0 0 0 0 rgba(255, 190, 85, 0.45); }
-      70% { box-shadow: 0 0 0 8px rgba(255, 190, 85, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(255, 190, 85, 0); }
-    }
-
-    @media (max-width: 980px) {
-      .layout {
-        min-height: auto;
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            hub: {
+              bg: "#0b111a",
+              panel: "#111c2a",
+              panelSoft: "#16263a",
+              border: "#29405b",
+              text: "#dfe7ef",
+              muted: "#94a6ba",
+              good: "#4fd38c",
+              warn: "#ffbe55",
+              bad: "#f27171",
+              running: "#51b8ff",
+              meta: "#88a2bd",
+              accent: "#f6b36a"
+            }
+          },
+          fontFamily: {
+            sans: ["IBM Plex Sans", "Segoe UI", "sans-serif"],
+            mono: ["IBM Plex Mono", "Consolas", "monospace"]
+          }
+        }
       }
-      .right-col {
-        grid-template-rows: minmax(250px, 40vh) minmax(220px, 34vh) minmax(260px, 46vh);
-      }
-    }
-  </style>
+    };
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
-  <div class="app">
-    <div class="header">
+<body class="min-h-screen bg-hub-bg text-hub-text antialiased">
+  <div class="app mx-auto grid w-full max-w-[1500px] gap-4 p-5">
+    <div class="header flex flex-wrap items-center justify-between gap-3">
       <div>
-        <div class="title">Codex Hub Monitor</div>
-        <div class="sub">Live task status + terminal output</div>
+        <div class="title text-[1.4rem] font-bold uppercase tracking-[0.04em]">Codex Hub Monitor</div>
+        <div class="sub text-sm text-hub-muted">Live task status + terminal output</div>
       </div>
-      <div class="status-row">
-        <div class="status-item">
+      <div class="status-row flex flex-wrap items-center gap-2.5 text-sm text-hub-muted">
+        <div class="status-item flex min-h-[30px] items-center gap-2 rounded-full border border-hub-border bg-hub-panel/75 px-2.5 py-1">
           <span id="local-conn-dot" class="dot"></span>
-          <span class="status-text">
-            <span class="status-label">Local Instance</span>
-            <span id="local-conn-text" class="status-value">Connecting...</span>
+          <span class="status-text grid min-w-0 gap-px">
+            <span class="status-label text-[0.62rem] uppercase leading-tight tracking-[0.05em] text-hub-muted">Local Instance</span>
+            <span id="local-conn-text" class="status-value break-words text-xs leading-tight text-slate-200">Connecting...</span>
           </span>
         </div>
-        <div class="status-item">
+        <div class="status-item flex min-h-[30px] items-center gap-2 rounded-full border border-hub-border bg-hub-panel/75 px-2.5 py-1">
           <span id="hub-conn-dot" class="dot"></span>
-          <span class="status-text">
-            <span class="status-label">MoltenHub</span>
-            <span id="hub-conn-text" class="status-value">Waiting for hub status...</span>
+          <span class="status-text grid min-w-0 gap-px">
+            <span class="status-label text-[0.62rem] uppercase leading-tight tracking-[0.05em] text-hub-muted">MoltenHub</span>
+            <span id="hub-conn-text" class="status-value break-words text-xs leading-tight text-slate-200">Waiting for hub status...</span>
           </span>
         </div>
       </div>
     </div>
 
-    <div class="layout">
-      <div class="right-col">
-        <section class="panel prompt-wrap">
-          <div class="panel-header">
+    <div class="layout min-h-[calc(100vh-130px)] max-[980px]:min-h-0">
+      <div class="right-col grid gap-4 [grid-template-rows:minmax(220px,30%)_minmax(220px,32%)_minmax(260px,1fr)] max-[980px]:[grid-template-rows:minmax(250px,40vh)_minmax(220px,34vh)_minmax(260px,46vh)]">
+        <section class="panel prompt-wrap min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
+          <div class="panel-header flex items-center justify-between gap-2 border-b border-hub-border bg-black/15 px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
             <span>Local Prompt</span>
           </div>
-          <form id="local-prompt-form" class="prompt-form">
+          <form id="local-prompt-form" class="prompt-form grid [grid-template-rows:auto_auto_auto] gap-2.5 p-3">
             <textarea
               id="local-prompt-input"
-              class="prompt-text"
+              class="prompt-text h-[calc(7*1.4em+20px)] min-h-[calc(7*1.4em+20px)] w-full resize-y rounded-lg border border-hub-border bg-[#0d1825] p-2.5 font-mono text-[0.79rem] leading-[1.4] text-slate-200 focus:border-[#6a8aac] focus:outline-none focus:ring-1 focus:ring-[#6a8aac]"
               rows="7"
               spellcheck="false"
               placeholder='{
@@ -680,28 +80,28 @@
   "target_subdir": ".",
   "prompt": "Describe the change you want"
 }'></textarea>
-            <div class="prompt-hint">Paste one JSON object with: prompt and one of repo, repo_url, or repos. The UI normalizes JSON before submit.</div>
-            <div class="prompt-actions">
-              <button id="local-prompt-submit" class="prompt-submit" type="submit">Run Local Prompt</button>
-              <span id="local-prompt-status" class="submit-status">Idle</span>
+            <div class="prompt-hint text-[0.74rem] leading-[1.3] text-hub-muted">Paste one JSON object with: prompt and one of repo, repo_url, or repos. The UI normalizes JSON before submit.</div>
+            <div class="prompt-actions flex flex-wrap items-center justify-between gap-2.5">
+              <button id="local-prompt-submit" class="prompt-submit rounded-lg border border-[#597695] bg-[#2f4864] px-3 py-2 text-[0.8rem] font-semibold text-hub-text transition hover:-translate-y-px hover:border-[#83a3c4] disabled:cursor-not-allowed disabled:opacity-65 disabled:translate-y-0" type="submit">Run Local Prompt</button>
+              <span id="local-prompt-status" class="submit-status min-h-[1.3em] text-[0.74rem] leading-[1.3] text-hub-muted">Idle</span>
             </div>
           </form>
         </section>
 
-        <section class="panel">
-          <div class="panel-header">
+        <section class="panel min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
+          <div class="panel-header flex items-center justify-between gap-2 border-b border-hub-border bg-black/15 px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
             <span>Tasks</span>
-            <span class="counter" id="task-count">0</span>
+            <span class="counter text-[0.82rem] font-bold text-hub-accent" id="task-count">0</span>
           </div>
-          <div class="scroll">
-            <div id="task-list" class="task-list"></div>
+          <div class="scroll task-scroll h-[calc(100%-48px)] overflow-auto">
+            <div id="task-list" class="task-list grid gap-2 p-3"></div>
           </div>
         </section>
 
-        <section class="panel log-wrap">
-          <div id="task-head" class="task-head">Select a task to inspect logs</div>
-          <div id="task-result" class="task-result"></div>
-          <pre id="terminal" class="term"></pre>
+        <section class="panel log-wrap grid h-full [grid-template-rows:auto_auto_1fr] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
+          <div id="task-head" class="task-head flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-2.5 text-[0.84rem] text-hub-muted">Select a task to inspect logs</div>
+          <div id="task-result" class="task-result hidden flex-wrap items-center gap-2.5 border-b border-hub-border px-3.5 py-2 text-[0.78rem]"></div>
+          <pre id="terminal" class="term task-scroll m-0 h-full overflow-auto whitespace-pre-wrap break-words bg-[#0c1724] p-3 font-mono text-[0.79rem] leading-[1.35] text-[#dbe6f2]"></pre>
         </section>
       </div>
     </div>

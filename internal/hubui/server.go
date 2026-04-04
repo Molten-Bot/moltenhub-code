@@ -71,6 +71,12 @@ func (s Server) Run(ctx context.Context) error {
 // Handler returns the HTTP handler for the monitor UI/API.
 func (s Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	staticFS, err := fs.Sub(staticFiles, "static")
+	if err != nil {
+		s.logf("hub.ui status=warn event=load_static_files err=%q", err)
+	} else {
+		mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	}
 	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/api/state", s.handleState)
 	mux.HandleFunc("/api/stream", s.handleStream)
