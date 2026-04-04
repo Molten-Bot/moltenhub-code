@@ -21,6 +21,11 @@ type apiAttempt struct {
 
 var errNoPulledMessage = errors.New("no pulled message")
 
+const (
+	runtimeIdentifier    = "molten-hub-codex-multiplexor"
+	runtimeSkillFallback = "Executes molten hub codex multiplexor tasks."
+)
+
 // PulledOpenClawMessage is one leased inbound message from pull transport.
 type PulledOpenClawMessage struct {
 	DeliveryID string
@@ -188,8 +193,8 @@ func (c APIClient) UpdateAgentStatus(ctx context.Context, token, status string) 
 // RegisterRuntime sends plugin/runtime metadata to hub.
 func (c APIClient) RegisterRuntime(ctx context.Context, token string, cfg InitConfig) error {
 	body := map[string]any{
-		"plugin_id":   "codex-harness",
-		"runtime_id":  "codex-harness",
+		"plugin_id":   runtimeIdentifier,
+		"runtime_id":  runtimeIdentifier,
 		"session_key": cfg.SessionKey,
 		"skills": []map[string]any{{
 			"name":          cfg.Skill.Name,
@@ -197,7 +202,7 @@ func (c APIClient) RegisterRuntime(ctx context.Context, token string, cfg InitCo
 			"result_type":   cfg.Skill.ResultType,
 		}},
 		"metadata": map[string]any{
-			"agent_type": "codex-harness",
+			"agent_type": runtimeIdentifier,
 		},
 	}
 	ok, trace := c.tryAny(ctx, token, []apiAttempt{
@@ -708,10 +713,10 @@ func buildAgentMetadata(cfg InitConfig) map[string]any {
 
 	metadata["agent_type"] = normalizeAgentType(metadata["agent_type"])
 	if _, ok := metadata["runtime"]; !ok {
-		metadata["runtime"] = "codex-harness"
+		metadata["runtime"] = runtimeIdentifier
 	}
 	if _, ok := metadata["harness"]; !ok {
-		metadata["harness"] = "codex-harness@v1"
+		metadata["harness"] = runtimeIdentifier + "@v1"
 	}
 
 	if _, ok := metadata["display_name"]; !ok && strings.TrimSpace(cfg.Profile.DisplayName) != "" {
@@ -738,12 +743,12 @@ func buildAgentMetadata(cfg InitConfig) map[string]any {
 
 func normalizeAgentType(raw any) string {
 	s, _ := raw.(string)
-	return normalizeIdentifier(s, "codex-harness")
+	return normalizeIdentifier(s, runtimeIdentifier)
 }
 
 func normalizeSkillsMetadata(raw any, fallbackName, fallbackDescription string) []map[string]any {
 	fallbackName = normalizeSkillName(fallbackName)
-	fallbackDescription = normalizeDescription(fallbackDescription, "Executes Codex harness tasks.")
+	fallbackDescription = normalizeDescription(fallbackDescription, runtimeSkillFallback)
 
 	out := make([]map[string]any, 0, 1)
 	seen := map[string]struct{}{}
@@ -842,20 +847,20 @@ func skillDescription(cfg SkillConfig) string {
 	case dispatchType != "" && resultType != "":
 		return normalizeDescription(
 			fmt.Sprintf("Handles %s requests and returns %s responses.", dispatchType, resultType),
-			"Executes Codex harness tasks.",
+			runtimeSkillFallback,
 		)
 	case dispatchType != "":
 		return normalizeDescription(
 			fmt.Sprintf("Handles %s requests.", dispatchType),
-			"Executes Codex harness tasks.",
+			runtimeSkillFallback,
 		)
 	case resultType != "":
 		return normalizeDescription(
 			fmt.Sprintf("Returns %s responses.", resultType),
-			"Executes Codex harness tasks.",
+			runtimeSkillFallback,
 		)
 	default:
-		return "Executes Codex harness tasks."
+		return runtimeSkillFallback
 	}
 }
 
@@ -865,13 +870,13 @@ func normalizeDescription(value, fallback string) string {
 		value = strings.Join(strings.Fields(strings.TrimSpace(fallback)), " ")
 	}
 	if value == "" {
-		value = "Executes Codex harness tasks."
+		value = runtimeSkillFallback
 	}
 	if len(value) > 240 {
 		value = strings.TrimSpace(value[:240])
 	}
 	if value == "" {
-		value = "Executes Codex harness tasks."
+		value = runtimeSkillFallback
 	}
 	return value
 }

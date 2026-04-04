@@ -51,7 +51,7 @@ func sampleConfig() config.Config {
 		Prompt:        "Build API",
 		CommitMessage: "feat: automate api",
 		PRTitle:       "moltenhub-feat: automate api",
-		PRBody:        "Automated by codex harness",
+		PRBody:        "Automated by molten hub codex multiplexor",
 		Labels:        []string{"automation", ""},
 		Reviewers:     []string{"octocat", ""},
 	}

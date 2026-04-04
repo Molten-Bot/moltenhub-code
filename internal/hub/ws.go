@@ -81,7 +81,7 @@ func DialWebsocket(ctx context.Context, rawURL, bearerToken string) (*WSClient, 
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Sec-WebSocket-Key", key)
 	req.Header.Set("Sec-WebSocket-Version", "13")
-	req.Header.Set("User-Agent", "codex-harness/1")
+	req.Header.Set("User-Agent", "molten-hub-codex-multiplexor/1")
 	if strings.TrimSpace(bearerToken) != "" {
 		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(bearerToken))
 	}

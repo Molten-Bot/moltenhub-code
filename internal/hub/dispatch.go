@@ -380,7 +380,7 @@ func normalizeSkillMatcherName(value string) string {
 	normalized := strings.ToLower(strings.TrimSpace(value))
 	normalized = strings.ReplaceAll(normalized, "-", "_")
 	switch normalized {
-	case "codex_harness_run", "code_for_me":
+	case "codex_harness_run", "code_for_me", "molten_hub_codex_multiplexor_run":
 		return "code_for_me"
 	default:
 		return normalized

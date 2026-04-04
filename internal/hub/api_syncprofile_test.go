@@ -43,7 +43,7 @@ func TestSyncProfileUsesOpenAPICompatiblePayloads(t *testing.T) {
 	cfg := InitConfig{
 		Handle: "codex-beast",
 		Profile: ProfileConfig{
-			DisplayName: "Codex Harness",
+			DisplayName: "molten hub codex multiplexor",
 			Emoji:       "🎮",
 			Bio:         "Automation worker",
 		},
@@ -84,7 +84,7 @@ func TestSyncProfileUsesOpenAPICompatiblePayloads(t *testing.T) {
 		t.Fatalf("metadata has wrong type: %#v", metaRaw)
 	}
 
-	if got := meta["display_name"]; got != "Codex Harness" {
+	if got := meta["display_name"]; got != "molten hub codex multiplexor" {
 		t.Fatalf("display_name = %#v", got)
 	}
 	if got := meta["emoji"]; got != "🎮" {
@@ -215,7 +215,7 @@ func TestSyncProfileSanitizesLegacyMetadataSkills(t *testing.T) {
 func TestNormalizeSkillName(t *testing.T) {
 	t.Parallel()
 
-	if got := normalizeSkillName("CODEx Harness RUN!!"); got != "codex-harness-run" {
+	if got := normalizeSkillName("Molten Hub Codex Multiplexor Run!!"); got != "molten-hub-codex-multiplexor-run" {
 		t.Fatalf("normalizeSkillName() = %q", got)
 	}
 	if got := normalizeSkillName("@"); got != "code_for_me" {

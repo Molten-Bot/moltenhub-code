@@ -1,6 +1,6 @@
-# how-i-want-to-code
+# molten hub codex multiplexor
 
-Minimal Go harness for repeatable Codex dispatch against one or more repositories in a shared workspace.
+Minimal Go app for repeatable Codex dispatch against one or more repositories in a shared workspace.
 
 Also supports multiplexed execution across many task configs in parallel.
 Also supports a persistent Hub listener mode that binds to MoltenHub and launches harness runs from websocket skill dispatches (with pull fallback).

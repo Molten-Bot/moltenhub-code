@@ -204,7 +204,7 @@ func TestParseSkillDispatchAcceptsJSONStringInputAndSourceRouting(t *testing.T) 
 	}
 }
 
-func TestParseSkillDispatchMatchesLegacyAndCurrentSkillAliases(t *testing.T) {
+func TestParseSkillDispatchMatchesLegacyCurrentAndRenamedSkillAliases(t *testing.T) {
 	t.Parallel()
 
 	msgCurrent := map[string]any{
@@ -235,6 +235,27 @@ func TestParseSkillDispatchMatchesLegacyAndCurrentSkillAliases(t *testing.T) {
 		t.Fatalf("ParseSkillDispatch() legacy->current error = %v", err)
 	} else if !matched {
 		t.Fatal("matched = false for legacy->current alias")
+	}
+
+	msgRenamed := map[string]any{
+		"type":  "skill_request",
+		"skill": "molten_hub_codex_multiplexor_run",
+		"config": map[string]any{
+			"repo":   "git@github.com:acme/repo.git",
+			"prompt": "x",
+		},
+	}
+
+	if _, matched, err := ParseSkillDispatch(msgCurrent, "skill_request", "molten_hub_codex_multiplexor_run"); err != nil {
+		t.Fatalf("ParseSkillDispatch() current->renamed error = %v", err)
+	} else if !matched {
+		t.Fatal("matched = false for current->renamed alias")
+	}
+
+	if _, matched, err := ParseSkillDispatch(msgRenamed, "skill_request", "code_for_me"); err != nil {
+		t.Fatalf("ParseSkillDispatch() renamed->current error = %v", err)
+	} else if !matched {
+		t.Fatal("matched = false for renamed->current alias")
 	}
 }
 
