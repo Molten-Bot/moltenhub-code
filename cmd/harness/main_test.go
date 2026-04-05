@@ -144,6 +144,22 @@ func TestLocalTaskLogDir(t *testing.T) {
 	}
 }
 
+func TestFailureFollowUpRunConfigIncludesNonLocalRequestLogPaths(t *testing.T) {
+	t.Parallel()
+
+	logRoot := filepath.Join(t.TempDir(), ".log")
+	failedResult := harness.Result{Err: fmt.Errorf("checks failed")}
+
+	cfg := failureFollowUpRunConfig("req-123-abc", failedResult, logRoot)
+	expectedLogDir := filepath.Join(logRoot, "req", "123", "abc")
+	if !strings.Contains(cfg.Prompt, expectedLogDir) {
+		t.Fatalf("Prompt missing non-local log dir path %q: %q", expectedLogDir, cfg.Prompt)
+	}
+	if !strings.Contains(cfg.Prompt, filepath.Join(expectedLogDir, logFileName)) {
+		t.Fatalf("Prompt missing non-local log file path: %q", cfg.Prompt)
+	}
+}
+
 func TestFailureFollowUpRunConfigUsesRequiredPayloadShapeAndLogContext(t *testing.T) {
 	t.Parallel()
 

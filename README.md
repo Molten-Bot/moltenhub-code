@@ -98,7 +98,7 @@ Identifier parts are split by `-` to make isolation fast:
 - `session=task-003` -> `.log/task/003/terminal.log`
 
 When a completed local task is closed from the web UI, its `.log/local/...` folder is removed.
-When a local task fails, the hub UI queue automatically schedules a follow-up task that includes relevant failing log paths in its prompt context.
+When a task fails (local UI task or hub-dispatched task), the harness automatically schedules a follow-up local task that includes relevant failing log paths in its prompt context.
 
 ## Hub Init Config (v1)
 
@@ -145,7 +145,7 @@ Dispatcher concurrency is adaptive: inbound work is queued FIFO, and when sample
 3. Start OpenClaw websocket transport via `/v1/openclaw/messages/ws` (primary).
 4. If websocket fails, temporarily fall back to OpenClaw pull transport via `/v1/openclaw/messages/pull` (`timeout_ms` long-poll), then retry websocket.
 5. For each inbound message, parse run config JSON and execute a harness run in a worker goroutine.
-6. Publish `skill_result` via `/v1/openclaw/messages/publish`.
+6. Publish `skill_result` via `/v1/openclaw/messages/publish` (failed runs set `status=error` and include error details for the calling agent).
 7. When delivery leases are present (pull transport), Ack/Nack via `/v1/openclaw/messages/ack` and `/v1/openclaw/messages/nack`.
 
 ## Hub Skill Payload

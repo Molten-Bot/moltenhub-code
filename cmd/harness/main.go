@@ -223,6 +223,7 @@ func runHub(args []string) int {
 		logRoot = filepath.Join(wd, logDirectoryName)
 	}
 
+	var queueFailureFollowUp func(failedRequestID string, failedResult harness.Result)
 	var enqueueLocalRun func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string) (string, error)
 	enqueueLocalRun = func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string) (string, error) {
 		source = strings.TrimSpace(source)
@@ -294,25 +295,29 @@ func runHub(args []string) int {
 			if !allowFailureFollowUp || outcome.State != "error" {
 				return
 			}
-
-			followUpCfg := failureFollowUpRunConfig(requestID, outcome.Result, logRoot)
-			followUpRequestID, followUpErr := enqueueLocalRun(ctx, followUpCfg, false, "failure_followup")
-			if followUpErr != nil {
-				daemonLogger(
-					"dispatch status=warn action=queue_failure_followup request_id=%s err=%q",
-					requestID,
-					followUpErr,
-				)
-				return
+			if queueFailureFollowUp != nil {
+				queueFailureFollowUp(requestID, outcome.Result)
 			}
-			daemonLogger(
-				"dispatch status=ok action=queue_failure_followup request_id=%s follow_up_request_id=%s",
-				requestID,
-				followUpRequestID,
-			)
 		}(requestID, runCfg, dedupeKey, allowFailureFollowUp)
 
 		return requestID, nil
+	}
+	queueFailureFollowUp = func(failedRequestID string, failedResult harness.Result) {
+		followUpCfg := failureFollowUpRunConfig(failedRequestID, failedResult, logRoot)
+		followUpRequestID, followUpErr := enqueueLocalRun(ctx, followUpCfg, false, "failure_followup")
+		if followUpErr != nil {
+			daemonLogger(
+				"dispatch status=warn action=queue_failure_followup request_id=%s err=%q",
+				failedRequestID,
+				followUpErr,
+			)
+			return
+		}
+		daemonLogger(
+			"dispatch status=ok action=queue_failure_followup request_id=%s follow_up_request_id=%s",
+			failedRequestID,
+			followUpRequestID,
+		)
 	}
 
 	if strings.TrimSpace(*uiListen) != "" {
@@ -350,6 +355,11 @@ func runHub(args []string) int {
 	daemon.OnDispatchQueued = func(requestID string, runCfg config.Config) {
 		if runConfigJSON, ok := marshalRunConfigJSON(runCfg); ok {
 			monitorBroker.RecordTaskRunConfig(requestID, runConfigJSON)
+		}
+	}
+	daemon.OnDispatchFailed = func(requestID string, result harness.Result) {
+		if queueFailureFollowUp != nil {
+			queueFailureFollowUp(requestID, result)
 		}
 	}
 
@@ -443,7 +453,7 @@ func failureFollowUpRunConfig(failedRequestID string, failedResult harness.Resul
 		Repos:        []string{failureFollowUpRepoURL},
 		BaseBranch:   "main",
 		TargetSubdir: ".",
-		Prompt:       failureFollowUpPrompt(failedRequestID, failedResult, localTaskLogPaths(logRoot, failedRequestID)),
+		Prompt:       failureFollowUpPrompt(failedRequestID, failedResult, taskLogPaths(logRoot, failedRequestID)),
 	}
 }
 
@@ -486,8 +496,8 @@ func failureFollowUpPrompt(failedRequestID string, failedResult harness.Result, 
 	return strings.TrimSpace(b.String())
 }
 
-func localTaskLogPaths(logRoot, requestID string) []string {
-	logDir, ok := localTaskLogDir(logRoot, requestID)
+func taskLogPaths(logRoot, requestID string) []string {
+	logDir, ok := taskLogDir(logRoot, requestID)
 	if !ok {
 		return nil
 	}
@@ -497,7 +507,7 @@ func localTaskLogPaths(logRoot, requestID string) []string {
 	}
 }
 
-func localTaskLogDir(logRoot, requestID string) (string, bool) {
+func taskLogDir(logRoot, requestID string) (string, bool) {
 	logRoot = strings.TrimSpace(logRoot)
 	requestID = strings.TrimSpace(requestID)
 	if logRoot == "" || requestID == "" {
@@ -509,12 +519,27 @@ func localTaskLogDir(logRoot, requestID string) (string, bool) {
 		return "", false
 	}
 	subdir = filepath.Clean(subdir)
+	if subdir == "." || subdir == "" || subdir == ".." {
+		return "", false
+	}
+	if filepath.IsAbs(subdir) || strings.HasPrefix(subdir, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return filepath.Join(logRoot, subdir), true
+}
+
+func localTaskLogDir(logRoot, requestID string) (string, bool) {
+	subdir, ok := identifierSubdir(requestID)
+	if !ok {
+		return "", false
+	}
+	subdir = filepath.Clean(subdir)
 	localPrefix := "local" + string(filepath.Separator)
 	if subdir != "local" && !strings.HasPrefix(subdir, localPrefix) {
 		return "", false
 	}
 
-	return filepath.Join(logRoot, subdir), true
+	return taskLogDir(logRoot, requestID)
 }
 
 func monitorURL(addr string) string {
