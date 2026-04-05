@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -96,8 +97,14 @@ func (c Config) Validate() error {
 	if c.Version != "v1" {
 		return fmt.Errorf("unsupported version %q", c.Version)
 	}
-	if len(c.RepoList()) == 0 {
+	repos := c.RepoList()
+	if len(repos) == 0 {
 		return fmt.Errorf("one of repo, repo_url, or repos[] is required")
+	}
+	for _, repo := range repos {
+		if err := validateRepoRef(repo); err != nil {
+			return err
+		}
 	}
 	if strings.TrimSpace(c.BaseBranch) == "" {
 		return fmt.Errorf("base_branch is required")
@@ -151,6 +158,50 @@ func validateSubdir(subdir string) error {
 	if strings.Contains(clean, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("target_subdir cannot contain parent traversals")
 	}
+	return nil
+}
+
+func validateRepoRef(repo string) error {
+	repo = strings.TrimSpace(repo)
+	if repo == "" {
+		return fmt.Errorf("repository URL is required")
+	}
+	if strings.ContainsAny(repo, " \t\r\n") {
+		return fmt.Errorf("invalid repository URL %q: whitespace is not allowed", repo)
+	}
+
+	// scp-like git SSH syntax is valid and intentionally does not parse as a URL:
+	// git@github.com:owner/repo.git
+	if !strings.Contains(repo, "://") {
+		return nil
+	}
+
+	parsed, err := url.Parse(repo)
+	if err != nil {
+		msg := strings.ToLower(strings.TrimSpace(err.Error()))
+		if strings.HasPrefix(strings.ToLower(repo), "ssh://") && strings.Contains(msg, "invalid port") {
+			return fmt.Errorf(
+				"invalid repository URL %q: mixed SSH URL styles. Use either git@host:owner/repo.git or ssh://git@host/owner/repo.git",
+				repo,
+			)
+		}
+		return fmt.Errorf("invalid repository URL %q: %v", repo, err)
+	}
+
+	switch strings.ToLower(parsed.Scheme) {
+	case "ssh", "http", "https", "git":
+		if strings.TrimSpace(parsed.Host) == "" {
+			return fmt.Errorf("invalid repository URL %q: missing host", repo)
+		}
+		if strings.TrimSpace(parsed.Path) == "" || parsed.Path == "/" {
+			return fmt.Errorf("invalid repository URL %q: missing repository path", repo)
+		}
+	case "file":
+		if strings.TrimSpace(parsed.Path) == "" {
+			return fmt.Errorf("invalid repository URL %q: missing filesystem path", repo)
+		}
+	}
+
 	return nil
 }
 

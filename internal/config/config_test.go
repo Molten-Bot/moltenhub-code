@@ -197,6 +197,42 @@ func TestValidateAllowsRootSubdir(t *testing.T) {
 	}
 }
 
+func TestValidateAllowsSSHURLForm(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		Version:      "v1",
+		RepoURL:      "ssh://git@github.com/acme/repo.git",
+		BaseBranch:   "main",
+		TargetSubdir: ".",
+		Prompt:       "fix tests",
+	}
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestValidateRejectsMixedSSHURLStyles(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		Version:      "v1",
+		RepoURL:      "ssh://git@github.com:acme/repo.git",
+		BaseBranch:   "main",
+		TargetSubdir: ".",
+		Prompt:       "fix tests",
+	}
+	cfg.ApplyDefaults()
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation error, got nil")
+	}
+	if !strings.Contains(err.Error(), "mixed SSH URL styles") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestApplyDefaultsPrefixesDefaultPRTitle(t *testing.T) {
 	t.Parallel()
 
