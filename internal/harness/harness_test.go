@@ -975,6 +975,7 @@ func TestWithCompletionGatePromptIncludesFailureQueueContract(t *testing.T) {
 
 	got := withCompletionGatePrompt("Build API")
 	wantSnippets := []string{
+		"When failures occur, send a response back to the calling agent that clearly states failure and includes the error details.",
 		"When a task fails:",
 		"Queue a follow-up task dedicated to reviewing the logs and fixing all underlying issues in this codebase.",
 		"Pass the relevant failing file/folder log path(s) into that follow-up task context.",

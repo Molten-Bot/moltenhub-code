@@ -20,6 +20,7 @@ type Daemon struct {
 	Runner             execx.Runner
 	Logf               func(string, ...any)
 	OnDispatchQueued   func(requestID string, runCfg config.Config)
+	OnDispatchFailed   func(requestID string, result harness.Result)
 	DispatchController *AdaptiveDispatchController
 	ReconnectDelay     time.Duration
 }
@@ -489,6 +490,9 @@ func (d Daemon) handleDispatch(
 	}
 
 	res := h.Run(ctx, dispatch.Config)
+	if res.Err != nil && d.OnDispatchFailed != nil {
+		d.OnDispatchFailed(dispatch.RequestID, res)
+	}
 	payload := dispatchResultPayload(cfg, dispatch, res)
 	if err := api.PublishResult(ctx, token, payload); err != nil {
 		d.logf("dispatch status=publish_error request_id=%s err=%q", dispatch.RequestID, err)
@@ -561,6 +565,11 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 		"status":     status,
 		"ok":         res.Err == nil,
 		"result":     result,
+	}
+	if res.Err != nil {
+		errText := res.Err.Error()
+		payload["error"] = errText
+		payload["message"] = "task failed: " + errText
 	}
 	if dispatch.ReplyTo != "" {
 		payload["reply_to"] = dispatch.ReplyTo

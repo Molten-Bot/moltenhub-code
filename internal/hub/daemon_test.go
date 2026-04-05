@@ -4,11 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jef/how-i-want-to-code/internal/config"
+	"github.com/jef/how-i-want-to-code/internal/execx"
 	"github.com/jef/how-i-want-to-code/internal/harness"
 )
 
@@ -172,6 +176,102 @@ func TestDispatchResultPayloadIncludesRepoResults(t *testing.T) {
 	}
 }
 
+func TestDispatchResultPayloadIncludesTopLevelFailureMessage(t *testing.T) {
+	t.Parallel()
+
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:       "code_for_me",
+			ResultType: "skill_result",
+		},
+	}
+	dispatch := SkillDispatch{
+		RequestID: "req-err",
+		Skill:     "code_for_me",
+		ReplyTo:   "agent-123",
+	}
+	res := harness.Result{
+		ExitCode: harness.ExitCodex,
+		Err:      fmt.Errorf("codex: process exited with status 1"),
+	}
+
+	payload := dispatchResultPayload(cfg, dispatch, res)
+	if got := payload["status"]; got != "error" {
+		t.Fatalf("status = %#v, want %q", got, "error")
+	}
+	if got := payload["error"]; got != "codex: process exited with status 1" {
+		t.Fatalf("error = %#v", got)
+	}
+	if got := payload["message"]; got != "task failed: codex: process exited with status 1" {
+		t.Fatalf("message = %#v", got)
+	}
+}
+
+func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
+	t.Parallel()
+
+	publishRequests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/openclaw/messages/publish" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		publishRequests++
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"ok":true,"result":{"status":"queued"}}`))
+	}))
+	defer server.Close()
+
+	d := NewDaemon(failingRunner{err: errors.New("runner exploded")})
+	failed := make(chan harness.Result, 1)
+	d.OnDispatchFailed = func(requestID string, result harness.Result) {
+		if requestID != "req-fail" {
+			t.Fatalf("requestID = %q, want %q", requestID, "req-fail")
+		}
+		failed <- result
+	}
+
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:       "code_for_me",
+			ResultType: "skill_result",
+		},
+	}
+
+	runCfg := config.Config{
+		Repo:   "git@github.com:acme/repo.git",
+		Prompt: "fix failing checks",
+	}
+	runCfg.ApplyDefaults()
+
+	d.handleDispatch(
+		context.Background(),
+		NewAPIClient(server.URL+"/v1"),
+		"test-token",
+		cfg,
+		SkillDispatch{
+			RequestID: "req-fail",
+			Skill:     "code_for_me",
+			ReplyTo:   "agent-123",
+			Config:    runCfg,
+		},
+		"",
+		false,
+	)
+
+	select {
+	case result := <-failed:
+		if result.Err == nil {
+			t.Fatal("result.Err = nil, want non-nil")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for OnDispatchFailed callback")
+	}
+
+	if publishRequests != 1 {
+		t.Fatalf("publish requests = %d, want 1", publishRequests)
+	}
+}
+
 func TestProcessInboundMessageSkipsIgnoredLogForUnknownSkill(t *testing.T) {
 	t.Parallel()
 
@@ -314,4 +414,15 @@ func TestProcessInboundMessageInvokesOnDispatchQueued(t *testing.T) {
 	if gotPrompt != "ship rerun button" {
 		t.Fatalf("prompt = %q, want %q", gotPrompt, "ship rerun button")
 	}
+}
+
+type failingRunner struct {
+	err error
+}
+
+func (r failingRunner) Run(_ context.Context, _ execx.Command) (execx.Result, error) {
+	if r.err == nil {
+		r.err = errors.New("runner failed")
+	}
+	return execx.Result{}, r.err
 }
