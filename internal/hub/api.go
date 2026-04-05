@@ -24,6 +24,8 @@ var errNoPulledMessage = errors.New("no pulled message")
 const (
 	runtimeIdentifier    = "molten-hub-codex-multiplexor"
 	runtimeSkillFallback = "Executes molten hub codex multiplexor tasks."
+	agentVisibilityKey   = "visibility"
+	agentVisibilityValue = "public"
 )
 
 // PulledOpenClawMessage is one leased inbound message from pull transport.
@@ -733,6 +735,9 @@ func buildAgentMetadata(cfg InitConfig) map[string]any {
 			metadata["profile_markdown"] = markdown
 		}
 	}
+	metadata["public"] = true
+	metadata["is_public"] = true
+	metadata[agentVisibilityKey] = agentVisibilityValue
 
 	fallbackName := normalizeSkillName(cfg.Skill.Name)
 	fallbackDescription := skillDescription(cfg.Skill)

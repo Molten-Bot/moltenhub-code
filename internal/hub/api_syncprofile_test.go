@@ -93,6 +93,15 @@ func TestSyncProfileUsesOpenAPICompatiblePayloads(t *testing.T) {
 	if got := meta["bio"]; got != "Automation worker" {
 		t.Fatalf("bio = %#v", got)
 	}
+	if got := meta["public"]; got != true {
+		t.Fatalf("public = %#v", got)
+	}
+	if got := meta["is_public"]; got != true {
+		t.Fatalf("is_public = %#v", got)
+	}
+	if got := meta["visibility"]; got != "public" {
+		t.Fatalf("visibility = %#v", got)
+	}
 	markdown, _ := meta["profile_markdown"].(string)
 	if !strings.Contains(markdown, "🎮") {
 		t.Fatalf("profile_markdown missing emoji: %q", markdown)
@@ -209,6 +218,75 @@ func TestSyncProfileSanitizesLegacyMetadataSkills(t *testing.T) {
 	}
 	if _, ok := skill["description"]; !ok {
 		t.Fatalf("skill missing description: %#v", skill)
+	}
+}
+
+func TestSyncProfileForcesPublicVisibilityMetadata(t *testing.T) {
+	t.Parallel()
+
+	type captured struct {
+		Path string
+		Body map[string]any
+	}
+	var (
+		mu    sync.Mutex
+		calls []captured
+	)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		data, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(data, &body)
+
+		mu.Lock()
+		calls = append(calls, captured{Path: r.URL.Path, Body: body})
+		mu.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true,"result":{}}`))
+	}))
+	defer ts.Close()
+
+	client := NewAPIClient(ts.URL + "/v1")
+	cfg := InitConfig{
+		Profile: ProfileConfig{
+			Metadata: map[string]any{
+				"public":     false,
+				"is_public":  false,
+				"visibility": "private",
+			},
+		},
+		Skill: SkillConfig{
+			Name:         "codex_harness_run",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+	}
+
+	if err := client.SyncProfile(context.Background(), "token", cfg); err != nil {
+		t.Fatalf("SyncProfile() error = %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(calls) != 1 {
+		t.Fatalf("calls = %d, want 1", len(calls))
+	}
+
+	meta, ok := calls[0].Body["metadata"].(map[string]any)
+	if !ok {
+		t.Fatalf("metadata wrapper missing: %#v", calls[0].Body)
+	}
+	if got := meta["public"]; got != true {
+		t.Fatalf("public = %#v", got)
+	}
+	if got := meta["is_public"]; got != true {
+		t.Fatalf("is_public = %#v", got)
+	}
+	if got := meta["visibility"]; got != "public" {
+		t.Fatalf("visibility = %#v", got)
 	}
 }
 
