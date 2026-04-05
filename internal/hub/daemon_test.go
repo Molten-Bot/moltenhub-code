@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jef/how-i-want-to-code/internal/config"
-	"github.com/jef/how-i-want-to-code/internal/execx"
-	"github.com/jef/how-i-want-to-code/internal/harness"
+	"github.com/jef/moltenhub-code/internal/config"
+	"github.com/jef/moltenhub-code/internal/execx"
+	"github.com/jef/moltenhub-code/internal/harness"
 )
 
 func TestApplyStoredRuntimeConfigOverridesTokens(t *testing.T) {
@@ -283,7 +283,7 @@ func TestProcessInboundMessageSkipsIgnoredLogForUnknownSkill(t *testing.T) {
 
 	cfg := InitConfig{
 		Skill: SkillConfig{
-			Name:         "codex_harness_run",
+			Name:         "moltenhub_code_run",
 			DispatchType: "skill_request",
 			ResultType:   "skill_result",
 		},
@@ -322,7 +322,7 @@ func TestProcessInboundMessageLogsIgnoredKnownSkill(t *testing.T) {
 
 	cfg := InitConfig{
 		Skill: SkillConfig{
-			Name:         "codex_harness_run",
+			Name:         "moltenhub_code_run",
 			DispatchType: "skill_request",
 			ResultType:   "skill_result",
 		},
@@ -376,7 +376,7 @@ func TestProcessInboundMessageInvokesOnDispatchQueued(t *testing.T) {
 
 	cfg := InitConfig{
 		Skill: SkillConfig{
-			Name:         "codex_harness_run",
+			Name:         "moltenhub_code_run",
 			DispatchType: "skill_request",
 			ResultType:   "skill_result",
 		},
@@ -394,7 +394,7 @@ func TestProcessInboundMessageInvokesOnDispatchQueued(t *testing.T) {
 
 	msg := map[string]any{
 		"type":       "skill_request",
-		"skill":      "codex_harness_run",
+		"skill":      "moltenhub_code_run",
 		"request_id": "req-queued",
 		"config": map[string]any{
 			"repo":   "git@github.com:acme/repo.git",

@@ -14,7 +14,7 @@ func TestBrokerTracksTaskLifecycleAndCommandOutput(t *testing.T) {
 	b := NewBroker()
 	requestID := "req-42"
 
-	b.IngestLog("dispatch status=start request_id=req-42 skill=codex_harness_run repo=git@github.com:acme/repo.git repos=git@github.com:acme/repo.git,git@github.com:acme/repo-two.git")
+	b.IngestLog("dispatch status=start request_id=req-42 skill=moltenhub_code_run repo=git@github.com:acme/repo.git repos=git@github.com:acme/repo.git,git@github.com:acme/repo-two.git")
 	b.IngestLog("dispatch request_id=req-42 stage=codex status=start")
 	b.IngestLog("dispatch request_id=req-42 cmd phase=codex name=codex stream=stdout b64=" + base64.StdEncoding.EncodeToString([]byte("thinking...")))
 	b.IngestLog("dispatch status=ok request_id=req-42 workspace=/tmp/run branch=moltenhub-feature pr_url=https://github.com/acme/repo/pull/99")
@@ -108,7 +108,7 @@ func TestBrokerCapturesPRURLFromStageLine(t *testing.T) {
 	t.Parallel()
 
 	b := NewBroker()
-	b.IngestLog("dispatch status=start request_id=req-pr skill=codex_harness_run repo=git@github.com:acme/repo.git")
+	b.IngestLog("dispatch status=start request_id=req-pr skill=moltenhub_code_run repo=git@github.com:acme/repo.git")
 	b.IngestLog("dispatch request_id=req-pr stage=pr status=ok pr_url=https://github.com/acme/repo/pull/101")
 
 	snap := b.Snapshot()
@@ -124,7 +124,7 @@ func TestBrokerFallsBackToSingleRepoWhenReposFieldMissing(t *testing.T) {
 	t.Parallel()
 
 	b := NewBroker()
-	b.IngestLog("dispatch status=start request_id=req-single skill=codex_harness_run repo=git@github.com:acme/repo.git")
+	b.IngestLog("dispatch status=start request_id=req-single skill=moltenhub_code_run repo=git@github.com:acme/repo.git")
 
 	snap := b.Snapshot()
 	if len(snap.Tasks) != 1 {
@@ -285,7 +285,7 @@ func TestBrokerTaskRunConfigSupportsRerunMetadata(t *testing.T) {
 	payload := []byte(`{"repo":"git@github.com:acme/repo.git","base_branch":"main","target_subdir":".","prompt":"rerun me"}`)
 
 	b.RecordTaskRunConfig(requestID, payload)
-	b.IngestLog("dispatch status=start request_id=req-rerun skill=codex_harness_run repo=git@github.com:acme/repo.git")
+	b.IngestLog("dispatch status=start request_id=req-rerun skill=moltenhub_code_run repo=git@github.com:acme/repo.git")
 
 	snap := b.Snapshot()
 	if len(snap.Tasks) != 1 {
@@ -373,7 +373,7 @@ func TestBrokerAppliesPromptWhenConfigRecordedAfterTaskStart(t *testing.T) {
 	b := NewBroker()
 	requestID := "req-after-start"
 
-	b.IngestLog("dispatch status=start request_id=req-after-start skill=codex_harness_run repo=git@github.com:acme/repo.git")
+	b.IngestLog("dispatch status=start request_id=req-after-start skill=moltenhub_code_run repo=git@github.com:acme/repo.git")
 	b.RecordTaskRunConfig(requestID, []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"late prompt value"}`))
 
 	snap := b.Snapshot()

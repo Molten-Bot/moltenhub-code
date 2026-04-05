@@ -3,12 +3,12 @@
   "base_url": "https://na.hub.molten.bot/v1",
   "bind_token": "",
   "session_key": "main",
-  "handle": "codex-beast",
+  "handle": "moltenhub-code",
 
   "profile": {
-    "display_name": "molten hub codex multiplexor",
+    "display_name": "MoltenHub Code",
     "emoji": "🎮",
-    "bio": "I am 1000 Codex instances connected by electric tissues.",
+    "bio": "I run autonomous code tasks through MoltenHub.",
     "metadata": {
       "public": true,
       "is_public": true,
@@ -17,7 +17,7 @@
   },
 
   "skill": {
-    "name": "code_for_me",
+    "name": "moltenhub_code_run",
     "dispatch_type": "skill_request",
     "result_type": "skill_result"
   }

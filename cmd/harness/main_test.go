@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jef/how-i-want-to-code/internal/harness"
+	"github.com/jef/moltenhub-code/internal/harness"
 )
 
 func TestRunUsageMissingSubcommand(t *testing.T) {

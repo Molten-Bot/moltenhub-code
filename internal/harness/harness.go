@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jef/how-i-want-to-code/internal/config"
-	"github.com/jef/how-i-want-to-code/internal/execx"
-	"github.com/jef/how-i-want-to-code/internal/slug"
-	"github.com/jef/how-i-want-to-code/internal/workspace"
+	"github.com/jef/moltenhub-code/internal/config"
+	"github.com/jef/moltenhub-code/internal/execx"
+	"github.com/jef/moltenhub-code/internal/slug"
+	"github.com/jef/moltenhub-code/internal/workspace"
 )
 
 const (
@@ -938,7 +938,7 @@ When a task fails:
 - Queue a follow-up task dedicated to reviewing the logs and fixing all underlying issues in this codebase.
 - Pass the relevant failing file/folder log path(s) into that follow-up task context.
 - Use this follow-up run config payload shape:
-  {"repos":["git@github.com:jefking/how-i-want-to-code.git"],"base_branch":"main","target_subdir":".","prompt":"<DEFINE A STRONG CLEAR PROMPT THAT GOES IN HERE>"}
+  {"repos":["git@github.com:jefking/moltenhub-code.git"],"base_branch":"main","target_subdir":".","prompt":"<DEFINE A STRONG CLEAR PROMPT THAT GOES IN HERE>"}
 
 Completion requirements:
 - Only create a new branch when starting from 'main'; if you're fixing an existing non-'main' branch, stay on it.
@@ -990,7 +990,7 @@ func summarizeCheckOutput(res execx.Result) string {
 func remediationCommitMessage(base string, attempt int) string {
 	base = strings.TrimSpace(base)
 	if base == "" {
-		base = "chore: codex automated update"
+		base = "chore: automated update"
 	}
 	return fmt.Sprintf("%s (ci remediation %d)", base, attempt)
 }

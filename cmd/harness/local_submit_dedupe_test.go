@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jef/how-i-want-to-code/internal/config"
+	"github.com/jef/moltenhub-code/internal/config"
 )
 
 func TestDedupeKeyForRunConfigDefaultsBranchAndNormalizesRepos(t *testing.T) {

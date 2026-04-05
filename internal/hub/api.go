@@ -22,8 +22,8 @@ type apiAttempt struct {
 var errNoPulledMessage = errors.New("no pulled message")
 
 const (
-	runtimeIdentifier    = "molten-hub-codex-multiplexor"
-	runtimeSkillFallback = "Executes molten hub codex multiplexor tasks."
+	runtimeIdentifier    = "moltenhub-code"
+	runtimeSkillFallback = "Executes MoltenHub Code tasks."
 	agentVisibilityKey   = "visibility"
 	agentVisibilityValue = "public"
 )

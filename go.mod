@@ -1,3 +1,3 @@
-module github.com/jef/how-i-want-to-code
+module github.com/jef/moltenhub-code
 
 go 1.26.1

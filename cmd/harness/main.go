@@ -14,15 +14,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jef/how-i-want-to-code/internal/config"
-	"github.com/jef/how-i-want-to-code/internal/execx"
-	"github.com/jef/how-i-want-to-code/internal/harness"
-	"github.com/jef/how-i-want-to-code/internal/hub"
-	"github.com/jef/how-i-want-to-code/internal/hubui"
-	"github.com/jef/how-i-want-to-code/internal/multiplex"
+	"github.com/jef/moltenhub-code/internal/config"
+	"github.com/jef/moltenhub-code/internal/execx"
+	"github.com/jef/moltenhub-code/internal/harness"
+	"github.com/jef/moltenhub-code/internal/hub"
+	"github.com/jef/moltenhub-code/internal/hubui"
+	"github.com/jef/moltenhub-code/internal/multiplex"
 )
 
-const failureFollowUpRepoURL = "git@github.com:jefking/how-i-want-to-code.git"
+const failureFollowUpRepoURL = "git@github.com:jefking/moltenhub-code.git"
 
 func main() {
 	os.Exit(run())

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jef/how-i-want-to-code/internal/config"
+	"github.com/jef/moltenhub-code/internal/config"
 )
 
 // SkillDispatch represents one inbound skill request ready for execution.
@@ -380,7 +380,7 @@ func normalizeSkillMatcherName(value string) string {
 	normalized := strings.ToLower(strings.TrimSpace(value))
 	normalized = strings.ReplaceAll(normalized, "-", "_")
 	switch normalized {
-	case "codex_harness_run", "code_for_me", "molten_hub_codex_multiplexor_run":
+	case "moltenhub_code_run", "code_for_me":
 		return "code_for_me"
 	default:
 		return normalized

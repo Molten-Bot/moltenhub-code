@@ -23,7 +23,7 @@ func TestPullOpenClawMessageParsesResult(t *testing.T) {
 			t.Fatalf("timeout_ms = %q", got)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"ok":true,"result":{"delivery_id":"d1","openclaw_message":{"message":{"type":"skill_request","skill":"codex_harness_run","config":{"repo":"git@github.com:acme/repo.git","prompt":"x"}}}}}`))
+		_, _ = w.Write([]byte(`{"ok":true,"result":{"delivery_id":"d1","openclaw_message":{"message":{"type":"skill_request","skill":"moltenhub_code_run","config":{"repo":"git@github.com:acme/repo.git","prompt":"x"}}}}}`))
 	}))
 	defer ts.Close()
 
@@ -38,7 +38,7 @@ func TestPullOpenClawMessageParsesResult(t *testing.T) {
 	if pulled.DeliveryID != "d1" {
 		t.Fatalf("DeliveryID = %q", pulled.DeliveryID)
 	}
-	if got := pulled.Message["skill"]; got != "codex_harness_run" {
+	if got := pulled.Message["skill"]; got != "moltenhub_code_run" {
 		t.Fatalf("message.skill = %#v", got)
 	}
 }

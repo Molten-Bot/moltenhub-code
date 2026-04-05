@@ -41,14 +41,14 @@ func TestSyncProfileUsesOpenAPICompatiblePayloads(t *testing.T) {
 
 	client := NewAPIClient(ts.URL + "/v1")
 	cfg := InitConfig{
-		Handle: "codex-beast",
+		Handle: "moltenhub-code",
 		Profile: ProfileConfig{
-			DisplayName: "molten hub codex multiplexor",
+			DisplayName: "MoltenHub Code",
 			Emoji:       "🎮",
 			Bio:         "Automation worker",
 		},
 		Skill: SkillConfig{
-			Name:         "codex_harness_run",
+			Name:         "moltenhub_code_run",
 			DispatchType: "skill_request",
 			ResultType:   "skill_result",
 		},
@@ -84,7 +84,7 @@ func TestSyncProfileUsesOpenAPICompatiblePayloads(t *testing.T) {
 		t.Fatalf("metadata has wrong type: %#v", metaRaw)
 	}
 
-	if got := meta["display_name"]; got != "molten hub codex multiplexor" {
+	if got := meta["display_name"]; got != "MoltenHub Code" {
 		t.Fatalf("display_name = %#v", got)
 	}
 	if got := meta["emoji"]; got != "🎮" {
@@ -119,7 +119,7 @@ func TestSyncProfileUsesOpenAPICompatiblePayloads(t *testing.T) {
 	if !ok {
 		t.Fatalf("skill has wrong type: %#v", skills[0])
 	}
-	if skill["name"] != "codex_harness_run" {
+	if skill["name"] != "moltenhub_code_run" {
 		t.Fatalf("skill name = %#v", skill["name"])
 	}
 	if _, ok := skill["description"]; !ok {
@@ -175,7 +175,7 @@ func TestSyncProfileSanitizesLegacyMetadataSkills(t *testing.T) {
 			},
 		},
 		Skill: SkillConfig{
-			Name:         "codex_harness_run",
+			Name:         "moltenhub_code_run",
 			DispatchType: "skill_request",
 			ResultType:   "skill_result",
 		},
@@ -259,7 +259,7 @@ func TestSyncProfileForcesPublicVisibilityMetadata(t *testing.T) {
 			},
 		},
 		Skill: SkillConfig{
-			Name:         "codex_harness_run",
+			Name:         "moltenhub_code_run",
 			DispatchType: "skill_request",
 			ResultType:   "skill_result",
 		},
@@ -293,7 +293,7 @@ func TestSyncProfileForcesPublicVisibilityMetadata(t *testing.T) {
 func TestNormalizeSkillName(t *testing.T) {
 	t.Parallel()
 
-	if got := normalizeSkillName("Molten Hub Codex Multiplexor Run!!"); got != "molten-hub-codex-multiplexor-run" {
+	if got := normalizeSkillName("MoltenHub Code Run!!"); got != "moltenhub-code-run" {
 		t.Fatalf("normalizeSkillName() = %q", got)
 	}
 	if got := normalizeSkillName("@"); got != "code_for_me" {

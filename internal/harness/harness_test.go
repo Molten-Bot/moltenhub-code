@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jef/how-i-want-to-code/internal/config"
-	"github.com/jef/how-i-want-to-code/internal/execx"
-	"github.com/jef/how-i-want-to-code/internal/workspace"
+	"github.com/jef/moltenhub-code/internal/config"
+	"github.com/jef/moltenhub-code/internal/execx"
+	"github.com/jef/moltenhub-code/internal/workspace"
 )
 
 type expectedRun struct {
@@ -51,7 +51,7 @@ func sampleConfig() config.Config {
 		Prompt:        "Build API",
 		CommitMessage: "feat: automate api",
 		PRTitle:       "moltenhub-feat: automate api",
-		PRBody:        "Automated by molten hub codex multiplexor",
+		PRBody:        "Automated by MoltenHub Code",
 		Labels:        []string{"automation", ""},
 		Reviewers:     []string{"octocat", ""},
 	}
@@ -979,7 +979,7 @@ func TestWithCompletionGatePromptIncludesFailureQueueContract(t *testing.T) {
 		"When a task fails:",
 		"Queue a follow-up task dedicated to reviewing the logs and fixing all underlying issues in this codebase.",
 		"Pass the relevant failing file/folder log path(s) into that follow-up task context.",
-		`{"repos":["git@github.com:jefking/how-i-want-to-code.git"],"base_branch":"main","target_subdir":".","prompt":"<DEFINE A STRONG CLEAR PROMPT THAT GOES IN HERE>"}`,
+		`{"repos":["git@github.com:jefking/moltenhub-code.git"],"base_branch":"main","target_subdir":".","prompt":"<DEFINE A STRONG CLEAR PROMPT THAT GOES IN HERE>"}`,
 		"Completion requirements:",
 	}
 	for _, snippet := range wantSnippets {

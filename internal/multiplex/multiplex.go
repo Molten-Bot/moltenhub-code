@@ -6,9 +6,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/jef/how-i-want-to-code/internal/config"
-	"github.com/jef/how-i-want-to-code/internal/execx"
-	"github.com/jef/how-i-want-to-code/internal/harness"
+	"github.com/jef/moltenhub-code/internal/config"
+	"github.com/jef/moltenhub-code/internal/execx"
+	"github.com/jef/moltenhub-code/internal/harness"
 )
 
 type logFn func(string, ...any)

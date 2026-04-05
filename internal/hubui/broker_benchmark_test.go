@@ -9,7 +9,7 @@ func BenchmarkBrokerIngestLogDispatchStatus(b *testing.B) {
 	b.ReportAllocs()
 
 	broker := NewBroker()
-	line := "dispatch status=start request_id=req-bench skill=codex_harness_run repo=git@github.com:acme/repo.git"
+	line := "dispatch status=start request_id=req-bench skill=moltenhub_code_run repo=git@github.com:acme/repo.git"
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
