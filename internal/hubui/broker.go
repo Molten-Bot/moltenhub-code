@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/url"
 	"sort"
 	"strconv"
@@ -15,6 +16,11 @@ import (
 const (
 	defaultMaxEvents   = 600
 	defaultMaxTaskLogs = 2000
+)
+
+var (
+	ErrTaskNotFound     = errors.New("task not found")
+	ErrTaskNotCompleted = errors.New("task is not completed")
 )
 
 // Event is one monitor timeline entry.
@@ -261,6 +267,33 @@ func (b *Broker) TaskRunConfig(requestID string) ([]byte, bool) {
 		return nil, false
 	}
 	return append([]byte(nil), runConfigJSON...), true
+}
+
+// CloseTask removes a completed task and its stored rerun config.
+func (b *Broker) CloseTask(requestID string) error {
+	if b == nil {
+		return ErrTaskNotFound
+	}
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return ErrTaskNotFound
+	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	task, ok := b.tasks[requestID]
+	if !ok {
+		return ErrTaskNotFound
+	}
+	if !isCompletedTaskStatus(task.Status) {
+		return ErrTaskNotCompleted
+	}
+
+	delete(b.tasks, requestID)
+	delete(b.runConfigs, requestID)
+	b.notifySubscribersLocked()
+	return nil
 }
 
 // Subscribe returns a change notification channel and cancel function.
@@ -663,4 +696,13 @@ func promptFromRunConfigJSON(runConfigJSON []byte) string {
 		return ""
 	}
 	return strings.TrimSpace(raw.Prompt)
+}
+
+func isCompletedTaskStatus(status string) bool {
+	switch strings.TrimSpace(status) {
+	case "ok", "no_changes", "error", "invalid", "duplicate":
+		return true
+	default:
+		return false
+	}
 }

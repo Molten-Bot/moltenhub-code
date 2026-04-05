@@ -22,6 +22,8 @@ import (
 	"github.com/jef/how-i-want-to-code/internal/multiplex"
 )
 
+const failureFollowUpRepoURL = "git@github.com:jefking/how-i-want-to-code.git"
+
 func main() {
 	os.Exit(run())
 }
@@ -214,6 +216,105 @@ func runHub(args []string) int {
 	dispatchController := hub.NewAdaptiveDispatchController(cfg.Dispatcher, daemonLogger)
 	dispatchController.Start(ctx)
 
+	logRoot := ""
+	if wd, wdErr := os.Getwd(); wdErr != nil {
+		daemonLogger("hub.ui status=warn event=resolve_log_root err=%q", wdErr)
+	} else {
+		logRoot = filepath.Join(wd, logDirectoryName)
+	}
+
+	var enqueueLocalRun func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string) (string, error)
+	enqueueLocalRun = func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string) (string, error) {
+		source = strings.TrimSpace(source)
+		if source == "" {
+			source = "local_submit"
+		}
+
+		dedupeKey := dedupeKeyForRunConfig(runCfg)
+		if dedupeKey != "" {
+			if duplicate, state, duplicateOf := localSubmitDeduper.Check(dedupeKey); duplicate {
+				daemonLogger(
+					"dispatch status=duplicate source=%s state=%s duplicate_of=%s",
+					source,
+					state,
+					duplicateOf,
+				)
+				return "", newDuplicateSubmissionError(duplicateOf, state)
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			return "", fmt.Errorf("service is shutting down")
+		default:
+		}
+		select {
+		case <-reqCtx.Done():
+			return "", fmt.Errorf("request canceled")
+		default:
+		}
+
+		requestID := fmt.Sprintf(
+			"local-%d-%06d",
+			time.Now().UTC().Unix(),
+			atomic.AddUint64(&localDispatchSeq, 1),
+		)
+		if dedupeKey != "" {
+			if accepted, state, duplicateOf := localSubmitDeduper.Begin(dedupeKey, requestID); !accepted {
+				daemonLogger(
+					"dispatch status=duplicate source=%s state=%s duplicate_of=%s",
+					source,
+					state,
+					duplicateOf,
+				)
+				return "", newDuplicateSubmissionError(duplicateOf, state)
+			}
+		}
+		if runConfigJSON, ok := marshalRunConfigJSON(runCfg); ok {
+			monitorBroker.RecordTaskRunConfig(requestID, runConfigJSON)
+		}
+
+		go func(requestID string, runCfg config.Config, dedupeKey string, allowFailureFollowUp bool) {
+			finalState := ""
+			if dedupeKey != "" {
+				defer func() {
+					localSubmitDeduper.Done(dedupeKey, requestID, finalState)
+				}()
+			}
+			release, acquireErr := dispatchController.Acquire(ctx, requestID)
+			if acquireErr != nil {
+				finalState = "error"
+				daemonLogger("dispatch status=error request_id=%s err=%q", requestID, acquireErr)
+				return
+			}
+			defer release()
+
+			outcome := runLocalDispatch(ctx, runner, daemonLogger, cfg.Skill.Name, requestID, runCfg)
+			finalState = outcome.State
+			if !allowFailureFollowUp || outcome.State != "error" {
+				return
+			}
+
+			followUpCfg := failureFollowUpRunConfig(requestID, outcome.Result, logRoot)
+			followUpRequestID, followUpErr := enqueueLocalRun(ctx, followUpCfg, false, "failure_followup")
+			if followUpErr != nil {
+				daemonLogger(
+					"dispatch status=warn action=queue_failure_followup request_id=%s err=%q",
+					requestID,
+					followUpErr,
+				)
+				return
+			}
+			daemonLogger(
+				"dispatch status=ok action=queue_failure_followup request_id=%s follow_up_request_id=%s",
+				requestID,
+				followUpRequestID,
+			)
+		}(requestID, runCfg, dedupeKey, allowFailureFollowUp)
+
+		return requestID, nil
+	}
+
 	if strings.TrimSpace(*uiListen) != "" {
 		uiServer := hubui.NewServer(*uiListen, monitorBroker)
 		uiServer.Logf = logger.Printf
@@ -222,65 +323,18 @@ func runHub(args []string) int {
 			if err != nil {
 				return "", fmt.Errorf("invalid run config: %w", err)
 			}
-			dedupeKey := dedupeKeyForRunConfig(runCfg)
-			if dedupeKey != "" {
-				if duplicate, state, duplicateOf := localSubmitDeduper.Check(dedupeKey); duplicate {
-					daemonLogger(
-						"dispatch status=duplicate source=local_submit state=%s duplicate_of=%s",
-						state,
-						duplicateOf,
-					)
-					return "", newDuplicateSubmissionError(duplicateOf, state)
-				}
+			return enqueueLocalRun(reqCtx, runCfg, true, "local_submit")
+		}
+		uiServer.CloseTask = func(_ context.Context, requestID string) error {
+			logDir, ok := localTaskLogDir(logRoot, requestID)
+			if !ok {
+				return nil
 			}
-
-			select {
-			case <-ctx.Done():
-				return "", fmt.Errorf("service is shutting down")
-			default:
+			if err := os.RemoveAll(logDir); err != nil {
+				return fmt.Errorf("remove task log dir %s: %w", logDir, err)
 			}
-			select {
-			case <-reqCtx.Done():
-				return "", fmt.Errorf("request canceled")
-			default:
-			}
-
-			requestID := fmt.Sprintf(
-				"local-%d-%06d",
-				time.Now().UTC().Unix(),
-				atomic.AddUint64(&localDispatchSeq, 1),
-			)
-			if dedupeKey != "" {
-				if accepted, state, duplicateOf := localSubmitDeduper.Begin(dedupeKey, requestID); !accepted {
-					daemonLogger(
-						"dispatch status=duplicate source=local_submit state=%s duplicate_of=%s",
-						state,
-						duplicateOf,
-					)
-					return "", newDuplicateSubmissionError(duplicateOf, state)
-				}
-			}
-			if runConfigJSON, ok := marshalRunConfigJSON(runCfg); ok {
-				monitorBroker.RecordTaskRunConfig(requestID, runConfigJSON)
-			}
-			go func(requestID string, runCfg config.Config, dedupeKey string) {
-				finalState := ""
-				if dedupeKey != "" {
-					defer func() {
-						localSubmitDeduper.Done(dedupeKey, requestID, finalState)
-					}()
-				}
-				release, acquireErr := dispatchController.Acquire(ctx, requestID)
-				if acquireErr != nil {
-					finalState = "error"
-					daemonLogger("dispatch status=error request_id=%s err=%q", requestID, acquireErr)
-					return
-				}
-				defer release()
-				finalState = runLocalDispatch(ctx, runner, daemonLogger, cfg.Skill.Name, requestID, runCfg)
-			}(requestID, runCfg, dedupeKey)
-
-			return requestID, nil
+			daemonLogger("dispatch status=ok action=task_close_cleanup request_id=%s log_dir=%s", requestID, logDir)
+			return nil
 		}
 		logger.Printf("hub.ui status=ready url=%s", monitorURL(*uiListen))
 		go func() {
@@ -328,6 +382,11 @@ func writeStderrLine(logger *terminalLogger, line string) {
 	}
 }
 
+type localDispatchOutcome struct {
+	State  string
+	Result harness.Result
+}
+
 func runLocalDispatch(
 	ctx context.Context,
 	runner execx.Runner,
@@ -335,7 +394,7 @@ func runLocalDispatch(
 	skill string,
 	requestID string,
 	runCfg config.Config,
-) string {
+) localDispatchOutcome {
 	logf(
 		"dispatch status=start request_id=%s skill=%s repo=%s repos=%s",
 		requestID,
@@ -361,11 +420,11 @@ func runLocalDispatch(
 			res.PRURL,
 			res.Err,
 		)
-		return "error"
+		return localDispatchOutcome{State: "error", Result: res}
 	}
 	if res.NoChanges {
 		logf("dispatch status=no_changes request_id=%s workspace=%s branch=%s", requestID, res.WorkspaceDir, res.Branch)
-		return "no_changes"
+		return localDispatchOutcome{State: "no_changes", Result: res}
 	}
 	logf(
 		"dispatch status=ok request_id=%s workspace=%s branch=%s pr_url=%s pr_urls=%s changed_repos=%d",
@@ -376,7 +435,86 @@ func runLocalDispatch(
 		joinPRURLs(res.RepoResults),
 		countChangedRepos(res.RepoResults),
 	)
-	return "ok"
+	return localDispatchOutcome{State: "ok", Result: res}
+}
+
+func failureFollowUpRunConfig(failedRequestID string, failedResult harness.Result, logRoot string) config.Config {
+	return config.Config{
+		Repos:        []string{failureFollowUpRepoURL},
+		BaseBranch:   "main",
+		TargetSubdir: ".",
+		Prompt:       failureFollowUpPrompt(failedRequestID, failedResult, localTaskLogPaths(logRoot, failedRequestID)),
+	}
+}
+
+func failureFollowUpPrompt(failedRequestID string, failedResult harness.Result, logPaths []string) string {
+	var b strings.Builder
+	b.WriteString("Investigate and fix the root causes of a failed harness task in this codebase.")
+
+	if id := strings.TrimSpace(failedRequestID); id != "" {
+		b.WriteString("\n\nFailed request ID: ")
+		b.WriteString(id)
+	}
+	if failedResult.Err != nil {
+		b.WriteString("\nFailure summary: ")
+		b.WriteString(strings.TrimSpace(failedResult.Err.Error()))
+	}
+	if workspace := strings.TrimSpace(failedResult.WorkspaceDir); workspace != "" {
+		b.WriteString("\nFailed workspace path: ")
+		b.WriteString(workspace)
+	}
+
+	b.WriteString("\n\nRelevant failing log path(s):")
+	if len(logPaths) == 0 {
+		b.WriteString("\n- .log/local/<request timestamp>/<request sequence>/terminal.log")
+	} else {
+		for _, path := range logPaths {
+			trimmed := strings.TrimSpace(path)
+			if trimmed == "" {
+				continue
+			}
+			b.WriteString("\n- ")
+			b.WriteString(trimmed)
+		}
+	}
+
+	b.WriteString("\n\nRequired outcome:")
+	b.WriteString("\n- Start by reading the log paths above.")
+	b.WriteString("\n- Fix all underlying issues in code/tests/workflows; do not apply superficial bandaids.")
+	b.WriteString("\n- Validate the fixes locally where possible and summarize what was verified.")
+
+	return strings.TrimSpace(b.String())
+}
+
+func localTaskLogPaths(logRoot, requestID string) []string {
+	logDir, ok := localTaskLogDir(logRoot, requestID)
+	if !ok {
+		return nil
+	}
+	return []string{
+		logDir,
+		filepath.Join(logDir, logFileName),
+	}
+}
+
+func localTaskLogDir(logRoot, requestID string) (string, bool) {
+	logRoot = strings.TrimSpace(logRoot)
+	requestID = strings.TrimSpace(requestID)
+	if logRoot == "" || requestID == "" {
+		return "", false
+	}
+
+	subdir, ok := identifierSubdir(requestID)
+	if !ok {
+		return "", false
+	}
+	subdir = filepath.Clean(subdir)
+	localPrefix := "local" + string(filepath.Separator)
+	if subdir != "local" && !strings.HasPrefix(subdir, localPrefix) {
+		return "", false
+	}
+
+	return filepath.Join(logRoot, subdir), true
 }
 
 func monitorURL(addr string) string {

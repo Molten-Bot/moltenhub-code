@@ -457,3 +457,113 @@ func TestHandlerTaskRerunMethodNotAllowed(t *testing.T) {
 		t.Fatalf("Allow = %q, want %q", allow, http.MethodPost)
 	}
 }
+
+func TestHandlerTaskCloseAccepted(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.RecordTaskRunConfig("req-close", []byte(`{"repo":"x","prompt":"x"}`))
+	b.IngestLog("dispatch status=start request_id=req-close")
+	b.IngestLog("dispatch status=ok request_id=req-close workspace=/tmp/run branch=moltenhub-close")
+
+	var closedID string
+	srv := NewServer("", b)
+	srv.CloseTask = func(_ context.Context, requestID string) error {
+		closedID = requestID
+		return nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/req-close/close", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/req-close/close error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if closedID != "req-close" {
+		t.Fatalf("closed request id = %q, want %q", closedID, "req-close")
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if ok, _ := body["ok"].(bool); !ok {
+		t.Fatalf("ok = %#v, want true", body["ok"])
+	}
+	if closed, _ := body["closed"].(bool); !closed {
+		t.Fatalf("closed = %#v, want true", body["closed"])
+	}
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 0 {
+		t.Fatalf("len(tasks) = %d, want 0", len(snap.Tasks))
+	}
+}
+
+func TestHandlerTaskCloseRejectsRunningTask(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog("dispatch status=start request_id=req-running")
+	srv := NewServer("", b)
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/req-running/close", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/req-running/close error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusConflict)
+	}
+}
+
+func TestHandlerTaskCloseMissingTask(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/req-missing/close", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/req-missing/close error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+	}
+}
+
+func TestHandlerTaskCloseMethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog("dispatch status=start request_id=req-close-method")
+	b.IngestLog("dispatch status=error request_id=req-close-method err=\"failed\"")
+	srv := NewServer("", b)
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/tasks/req-close-method/close")
+	if err != nil {
+		t.Fatalf("GET /api/tasks/req-close-method/close error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusMethodNotAllowed)
+	}
+	if allow := resp.Header.Get("Allow"); allow != http.MethodPost {
+		t.Fatalf("Allow = %q, want %q", allow, http.MethodPost)
+	}
+}

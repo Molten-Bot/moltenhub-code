@@ -23,6 +23,7 @@ type Server struct {
 	Broker            *Broker
 	Logf              func(string, ...any)
 	SubmitLocalPrompt func(context.Context, []byte) (string, error)
+	CloseTask         func(context.Context, string) error
 }
 
 // NewServer returns a monitor HTTP server.
@@ -226,12 +227,18 @@ func (s Server) handleTaskAction(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !strings.HasSuffix(path, "/rerun") {
+	action := ""
+	switch {
+	case strings.HasSuffix(path, "/rerun"):
+		action = "rerun"
+	case strings.HasSuffix(path, "/close"):
+		action = "close"
+	default:
 		http.NotFound(w, r)
 		return
 	}
 
-	requestID := strings.TrimSuffix(path, "/rerun")
+	requestID := strings.TrimSuffix(path, "/"+action)
 	requestID = strings.TrimSuffix(requestID, "/")
 	decoded, err := url.PathUnescape(requestID)
 	if err != nil {
@@ -250,7 +257,14 @@ func (s Server) handleTaskAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.handleTaskRerun(w, r, decoded)
+	switch action {
+	case "rerun":
+		s.handleTaskRerun(w, r, decoded)
+	case "close":
+		s.handleTaskClose(w, r, decoded)
+	default:
+		http.NotFound(w, r)
+	}
 }
 
 func (s Server) handleTaskRerun(w http.ResponseWriter, r *http.Request, requestID string) {
@@ -304,6 +318,51 @@ func (s Server) handleTaskRerun(w http.ResponseWriter, r *http.Request, requestI
 		"ok":         true,
 		"request_id": newRequestID,
 		"rerun_of":   requestID,
+	})
+}
+
+func (s Server) handleTaskClose(w http.ResponseWriter, r *http.Request, requestID string) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.Broker == nil {
+		http.Error(w, "monitor broker is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	if err := s.Broker.CloseTask(requestID); err != nil {
+		switch {
+		case errors.Is(err, ErrTaskNotFound):
+			writeJSON(w, http.StatusNotFound, map[string]any{
+				"ok":    false,
+				"error": "task not found",
+			})
+		case errors.Is(err, ErrTaskNotCompleted):
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"ok":    false,
+				"error": "task is not completed",
+			})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]any{
+				"ok":    false,
+				"error": err.Error(),
+			})
+		}
+		return
+	}
+
+	if s.CloseTask != nil {
+		if err := s.CloseTask(r.Context(), requestID); err != nil {
+			s.logf("hub.ui status=warn event=task_close_cleanup request_id=%s err=%q", requestID, err)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":         true,
+		"request_id": requestID,
+		"closed":     true,
 	})
 }
 

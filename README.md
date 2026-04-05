@@ -87,6 +87,8 @@ Per-session logs are emitted to stderr with `session=<id>` prefixes, and a final
 
 At runtime, the harness mirrors terminal output into a local `.log` directory in the current working directory.
 
+On process boot, the `.log` directory is reset to keep each run/session clean.
+
 - Aggregate stream: `.log/terminal.log`
 - Task/request stream: `.log/<identifier parts>/terminal.log`
 
@@ -94,6 +96,9 @@ Identifier parts are split by `-` to make isolation fast:
 
 - `request_id=local-1712345678-000001` -> `.log/local/1712345678/000001/terminal.log`
 - `session=task-003` -> `.log/task/003/terminal.log`
+
+When a completed local task is closed from the web UI, its `.log/local/...` folder is removed.
+When a local task fails, the hub UI queue automatically schedules a follow-up task that includes relevant failing log paths in its prompt context.
 
 ## Hub Init Config (v1)
 

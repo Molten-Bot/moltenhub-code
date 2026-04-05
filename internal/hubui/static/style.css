@@ -383,6 +383,12 @@ body {
   transform: none;
 }
 
+.task-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+}
+
 .badge {
   font-size: 0.66rem;
   letter-spacing: 0.04em;

@@ -1,11 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
+
+	"github.com/jef/how-i-want-to-code/internal/harness"
 )
 
 func TestRunUsageMissingSubcommand(t *testing.T) {
@@ -119,5 +123,55 @@ func TestCollectConfigPathsFilesAndDirs(t *testing.T) {
 	slices.Sort(want)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("collectConfigPaths() = %v, want %v", got, want)
+	}
+}
+
+func TestLocalTaskLogDir(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join(t.TempDir(), ".log")
+	got, ok := localTaskLogDir(root, "local-1712345678-000321")
+	if !ok {
+		t.Fatal("localTaskLogDir() ok = false, want true")
+	}
+	want := filepath.Join(root, "local", "1712345678", "000321")
+	if got != want {
+		t.Fatalf("localTaskLogDir() = %q, want %q", got, want)
+	}
+
+	if _, ok := localTaskLogDir(root, "req-abc"); ok {
+		t.Fatal("localTaskLogDir(non-local request) ok = true, want false")
+	}
+}
+
+func TestFailureFollowUpRunConfigUsesRequiredPayloadShapeAndLogContext(t *testing.T) {
+	t.Parallel()
+
+	logRoot := filepath.Join(t.TempDir(), ".log")
+	failedResult := harness.Result{
+		Err:          fmt.Errorf("clone: repository not found"),
+		WorkspaceDir: "/tmp/run-123",
+	}
+
+	cfg := failureFollowUpRunConfig("local-1712345678-000001", failedResult, logRoot)
+	if got, want := cfg.Repos, []string{failureFollowUpRepoURL}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Repos = %v, want %v", got, want)
+	}
+	if cfg.BaseBranch != "main" {
+		t.Fatalf("BaseBranch = %q, want %q", cfg.BaseBranch, "main")
+	}
+	if cfg.TargetSubdir != "." {
+		t.Fatalf("TargetSubdir = %q, want %q", cfg.TargetSubdir, ".")
+	}
+
+	expectedLogDir := filepath.Join(logRoot, "local", "1712345678", "000001")
+	if !strings.Contains(cfg.Prompt, expectedLogDir) {
+		t.Fatalf("Prompt missing log dir path %q: %q", expectedLogDir, cfg.Prompt)
+	}
+	if !strings.Contains(cfg.Prompt, filepath.Join(expectedLogDir, logFileName)) {
+		t.Fatalf("Prompt missing log file path: %q", cfg.Prompt)
+	}
+	if !strings.Contains(cfg.Prompt, "clone: repository not found") {
+		t.Fatalf("Prompt missing failure summary: %q", cfg.Prompt)
 	}
 }

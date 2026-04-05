@@ -3,6 +3,7 @@ package hubui
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"testing"
 )
@@ -312,6 +313,57 @@ func TestBrokerTaskRunConfigSupportsRerunMetadata(t *testing.T) {
 	}
 	if bytes.Equal(gotAgain, got) {
 		t.Fatalf("TaskRunConfig() returned shared slice %q", string(gotAgain))
+	}
+}
+
+func TestBrokerCloseTaskRemovesCompletedTaskAndRunConfig(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-close"
+	b.RecordTaskRunConfig(requestID, []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"close me"}`))
+	b.IngestLog("dispatch status=start request_id=req-close")
+	b.IngestLog("dispatch status=ok request_id=req-close workspace=/tmp/run branch=moltenhub-close")
+
+	if err := b.CloseTask(requestID); err != nil {
+		t.Fatalf("CloseTask() error = %v", err)
+	}
+
+	if _, ok := b.TaskRunConfig(requestID); ok {
+		t.Fatal("TaskRunConfig() found = true after CloseTask(), want false")
+	}
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 0 {
+		t.Fatalf("len(tasks) = %d, want 0", len(snap.Tasks))
+	}
+}
+
+func TestBrokerCloseTaskRejectsIncompleteTask(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-running"
+	b.IngestLog("dispatch status=start request_id=req-running")
+
+	err := b.CloseTask(requestID)
+	if !errors.Is(err, ErrTaskNotCompleted) {
+		t.Fatalf("CloseTask() error = %v, want %v", err, ErrTaskNotCompleted)
+	}
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("len(tasks) = %d, want 1", len(snap.Tasks))
+	}
+}
+
+func TestBrokerCloseTaskMissingReturnsNotFound(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	err := b.CloseTask("req-missing")
+	if !errors.Is(err, ErrTaskNotFound) {
+		t.Fatalf("CloseTask() error = %v, want %v", err, ErrTaskNotFound)
 	}
 }
 

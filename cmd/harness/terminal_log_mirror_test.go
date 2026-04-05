@@ -81,6 +81,38 @@ func TestTaskLogMirrorWritesAggregateAndTaskLogs(t *testing.T) {
 	assertLogFileContent(t, filepath.Join(root, fallbackLogSubdir, logFileName), []string{lines[2]})
 }
 
+func TestTaskLogMirrorResetsExistingRootOnInit(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join(t.TempDir(), ".log")
+	stale := filepath.Join(root, "local", "stale", logFileName)
+	if err := os.MkdirAll(filepath.Dir(stale), 0o755); err != nil {
+		t.Fatalf("mkdir stale dir: %v", err)
+	}
+	if err := os.WriteFile(stale, []byte("stale\n"), 0o644); err != nil {
+		t.Fatalf("write stale file: %v", err)
+	}
+
+	mirror, err := newTaskLogMirror(root)
+	if err != nil {
+		t.Fatalf("newTaskLogMirror() error = %v", err)
+	}
+
+	if _, statErr := os.Stat(stale); !os.IsNotExist(statErr) {
+		t.Fatalf("stale log path still exists after init: stat err = %v", statErr)
+	}
+
+	mirror.WriteLine("dispatch request_id=local-1712345678-000222 stage=codex status=start")
+	if err := mirror.Close(); err != nil {
+		t.Fatalf("mirror.Close() error = %v", err)
+	}
+	assertLogFileContent(
+		t,
+		filepath.Join(root, "local", "1712345678", "000222", logFileName),
+		[]string{"dispatch request_id=local-1712345678-000222 stage=codex status=start"},
+	)
+}
+
 func TestTaskLogMirrorEvictsOldTaskFilesAndContinuesWriting(t *testing.T) {
 	t.Parallel()
 

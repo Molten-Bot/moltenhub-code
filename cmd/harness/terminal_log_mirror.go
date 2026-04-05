@@ -46,8 +46,8 @@ func newTaskLogMirror(rootDir string) (*taskLogMirror, error) {
 	if absRoot == "" {
 		return nil, fmt.Errorf("log root is empty")
 	}
-	if err := os.MkdirAll(absRoot, 0o755); err != nil {
-		return nil, fmt.Errorf("create log root: %w", err)
+	if err := resetLogRoot(absRoot); err != nil {
+		return nil, fmt.Errorf("reset log root: %w", err)
 	}
 
 	aggregatePath := filepath.Join(absRoot, logFileName)
@@ -61,6 +61,20 @@ func newTaskLogMirror(rootDir string) (*taskLogMirror, error) {
 		aggregate: aggregateFile,
 		taskFiles: make(map[string]*os.File),
 	}, nil
+}
+
+func resetLogRoot(absRoot string) error {
+	absRoot = strings.TrimSpace(absRoot)
+	if absRoot == "" {
+		return fmt.Errorf("log root is empty")
+	}
+	if filepath.Base(absRoot) != logDirectoryName {
+		return fmt.Errorf("refusing to reset non-%s directory: %s", logDirectoryName, absRoot)
+	}
+	if err := os.RemoveAll(absRoot); err != nil {
+		return err
+	}
+	return os.MkdirAll(absRoot, 0o755)
 }
 
 func (m *taskLogMirror) WriteLine(line string) {

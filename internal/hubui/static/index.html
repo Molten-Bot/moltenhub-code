@@ -139,6 +139,7 @@
       selectedTaskId: "",
       dismissedTaskIDs: loadDismissedTaskIDs(),
       rerunInFlight: new Set(),
+      closeInFlight: new Set(),
     };
 
     const localConnDot = document.getElementById("local-conn-dot");
@@ -378,14 +379,38 @@
       return COMPLETED_STATUSES.has(task.status || "");
     }
 
-    function dismissTask(requestID) {
-      if (!requestID) return;
-      state.dismissedTaskIDs.add(requestID);
-      persistDismissedTaskIDs();
-      if (state.selectedTaskId === requestID) {
-        state.selectedTaskId = "";
-      }
+    async function dismissTask(requestID) {
+      if (!requestID || state.closeInFlight.has(requestID)) return;
+      state.closeInFlight.add(requestID);
       render(state.snapshot);
+
+      try {
+        const response = await fetch(`/api/tasks/${encodeURIComponent(requestID)}/close`, {
+          method: "POST",
+        });
+        let body = null;
+        try {
+          body = await response.json();
+        } catch (_err) {
+          body = null;
+        }
+        if (!response.ok) {
+          throw new Error(body?.error || `close http ${response.status}`);
+        }
+
+        state.dismissedTaskIDs.add(requestID);
+        persistDismissedTaskIDs();
+        if (state.selectedTaskId === requestID) {
+          state.selectedTaskId = "";
+        }
+        setLocalPromptStatus("ok", `Closed task ${requestID}`);
+        render(state.snapshot);
+      } catch (err) {
+        setLocalPromptStatus("error", `Close failed: ${err.message}`);
+      } finally {
+        state.closeInFlight.delete(requestID);
+        render(state.snapshot);
+      }
     }
 
     function canRerunTask(task) {
@@ -723,6 +748,7 @@
           close.className = "task-close";
           close.textContent = "Close";
           close.title = "Abandon completed task";
+          close.disabled = state.closeInFlight.has(task.request_id);
           close.addEventListener("click", (event) => {
             event.stopPropagation();
             dismissTask(task.request_id);
