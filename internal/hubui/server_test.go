@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -95,27 +94,18 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	t.Parallel()
 
 	srv := NewServer("", NewBroker())
-	ts := httptest.NewServer(srv.Handler())
-	defer ts.Close()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
 
-	resp, err := http.Get(ts.URL + "/")
-	if err != nil {
-		t.Fatalf("GET / error = %v", err)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d", resp.StatusCode)
-	}
-	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "text/html") {
+	if ct := resp.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
 		t.Fatalf("content-type = %q", ct)
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("read body: %v", err)
-	}
-	markup := string(body)
+	markup := resp.Body.String()
 	if !strings.Contains(markup, `src="https://cdn.tailwindcss.com"`) {
 		t.Fatalf("expected index html to include tailwind runtime")
 	}
@@ -140,6 +130,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function renderTaskProgress(") {
 		t.Fatalf("expected index html to include renderTaskProgress handler")
 	}
+	if !strings.Contains(markup, "function isMinimizedTask(") {
+		t.Fatalf("expected index html to include completed-task minimization handler")
+	}
+	if !strings.Contains(markup, `"task-collapsed"`) {
+		t.Fatalf("expected index html to include collapsed task class usage")
+	}
 	if !strings.Contains(markup, `id="local-conn-text"`) {
 		t.Fatalf("expected index html to include local connection indicator")
 	}
@@ -155,32 +151,26 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	t.Parallel()
 
 	srv := NewServer("", NewBroker())
-	ts := httptest.NewServer(srv.Handler())
-	defer ts.Close()
+	req := httptest.NewRequest(http.MethodGet, "/static/style.css", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
 
-	resp, err := http.Get(ts.URL + "/static/style.css")
-	if err != nil {
-		t.Fatalf("GET /static/style.css error = %v", err)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d", resp.StatusCode)
-	}
-	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "text/css") {
+	if ct := resp.Header().Get("Content-Type"); !strings.Contains(ct, "text/css") {
 		t.Fatalf("content-type = %q", ct)
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("read body: %v", err)
-	}
-	css := string(body)
+	css := resp.Body.String()
 	if !strings.Contains(css, ".task-close") {
 		t.Fatalf("expected stylesheet to include task close styles")
 	}
 	if !strings.Contains(css, ".task-rerun") {
 		t.Fatalf("expected stylesheet to include task rerun styles")
+	}
+	if !strings.Contains(css, ".task.task-collapsed") {
+		t.Fatalf("expected stylesheet to include collapsed task styles")
 	}
 }
 

@@ -379,6 +379,10 @@
       return COMPLETED_STATUSES.has(task.status || "");
     }
 
+    function isMinimizedTask(task) {
+      return isCompletedTask(task);
+    }
+
     async function dismissTask(requestID) {
       if (!requestID || state.closeInFlight.has(requestID)) return;
       state.closeInFlight.add(requestID);
@@ -706,7 +710,13 @@
 
       for (const task of tasks) {
         const node = document.createElement("article");
-        node.className = "task" + (task.request_id === state.selectedTaskId ? " active" : "");
+        node.className = "task";
+        if (task.request_id === state.selectedTaskId) {
+          node.classList.add("active");
+        }
+        if (isMinimizedTask(task)) {
+          node.classList.add("task-collapsed");
+        }
         node.addEventListener("click", () => selectTask(task.request_id));
 
         const top = document.createElement("div");
@@ -758,45 +768,49 @@
 
         top.append(id, topActions);
 
-        const meta = document.createElement("div");
-        meta.className = "task-meta";
+        node.appendChild(top);
 
-        const stage = document.createElement("div");
-        const stageLabel = task.stage ? `${task.stage}${task.stage_status ? ` (${task.stage_status})` : ""}` : "-";
-        stage.textContent = `stage: ${stageLabel}`;
-        const skill = document.createElement("div");
-        skill.textContent = `skill: ${task.skill || "-"}`;
-        const repos = document.createElement("div");
-        repos.textContent = `repos: ${formatTaskRepos(task)}`;
-        const update = document.createElement("div");
-        update.textContent = `updated: ${relativeTime(task.updated_at)}`;
-        meta.append(stage, skill, repos, update);
+        if (!isMinimizedTask(task)) {
+          const meta = document.createElement("div");
+          meta.className = "task-meta";
 
-        const progress = renderTaskProgress(task);
+          const stage = document.createElement("div");
+          const stageLabel = task.stage ? `${task.stage}${task.stage_status ? ` (${task.stage_status})` : ""}` : "-";
+          stage.textContent = `stage: ${stageLabel}`;
+          const skill = document.createElement("div");
+          skill.textContent = `skill: ${task.skill || "-"}`;
+          const repos = document.createElement("div");
+          repos.textContent = `repos: ${formatTaskRepos(task)}`;
+          const update = document.createElement("div");
+          update.textContent = `updated: ${relativeTime(task.updated_at)}`;
+          meta.append(stage, skill, repos, update);
 
-        const output = document.createElement("div");
-        output.className = "task-output-list";
+          const progress = renderTaskProgress(task);
 
-        const previews = taskPreviewLines(task);
-        if (!previews.length) {
-          const empty = document.createElement("div");
-          empty.className = "task-output-line meta";
-          empty.textContent = "No output yet.";
-          output.appendChild(empty);
-        } else {
-          for (const row of previews) {
-            const line = document.createElement("div");
-            const stream = row.stream || "meta";
-            line.className = `task-output-line ${stream}`;
-            line.textContent = previewText(row);
-            output.appendChild(line);
+          const output = document.createElement("div");
+          output.className = "task-output-list";
+
+          const previews = taskPreviewLines(task);
+          if (!previews.length) {
+            const empty = document.createElement("div");
+            empty.className = "task-output-line meta";
+            empty.textContent = "No output yet.";
+            output.appendChild(empty);
+          } else {
+            for (const row of previews) {
+              const line = document.createElement("div");
+              const stream = row.stream || "meta";
+              line.className = `task-output-line ${stream}`;
+              line.textContent = previewText(row);
+              output.appendChild(line);
+            }
           }
-        }
 
-        if (progress) {
-          node.append(top, meta, progress, output);
-        } else {
-          node.append(top, meta, output);
+          if (progress) {
+            node.append(meta, progress, output);
+          } else {
+            node.append(meta, output);
+          }
         }
         taskList.appendChild(node);
       }
