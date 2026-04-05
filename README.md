@@ -110,7 +110,7 @@ Optional fields (with defaults):
 - `profile.display_name`
 - `profile.emoji`
 - `profile.bio`
-- `profile.metadata` (merged into agent metadata patch)
+- `profile.metadata` (merged into agent metadata patch; startup enforces `public=true`, `is_public=true`, and `visibility=public`)
 - `skill.name` (default: `code_for_me`)
 - `skill.dispatch_type` (default: `skill_request`)
 - `skill.result_type` (default: `skill_result`)
@@ -136,6 +136,7 @@ Dispatcher concurrency is adaptive: inbound work is queued FIFO, and when sample
    - one-time handle update via `/v1/agents/me/metadata` / `/v1/agents/me`
    - metadata patch only, with OpenAPI-compatible `metadata.skills` entries (`name` + `description`)
    - profile values are embedded in metadata (`display_name`, `emoji`, `bio`, `profile_markdown`)
+   - visibility metadata is enforced as public on startup (`public=true`, `is_public=true`, `visibility=public`)
 3. Start OpenClaw websocket transport via `/v1/openclaw/messages/ws` (primary).
 4. If websocket fails, temporarily fall back to OpenClaw pull transport via `/v1/openclaw/messages/pull` (`timeout_ms` long-poll), then retry websocket.
 5. For each inbound message, parse run config JSON and execute a harness run in a worker goroutine.
