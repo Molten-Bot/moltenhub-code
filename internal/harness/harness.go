@@ -148,11 +148,6 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 	h.logf("stage=workspace status=ok run_dir=%s guid=%s agents=%s", runDir, guid, agentsPath)
 
-	imagePaths, err := materializePromptImages(runDir, cfg.Images)
-	if err != nil {
-		return h.fail(ExitConfig, "config", err, runDir)
-	}
-
 	repoURLs := cfg.RepoList()
 	if len(repoURLs) == 0 {
 		return h.fail(ExitConfig, "config", fmt.Errorf("one of repo, repo_url, or repos[] is required"), runDir)
@@ -247,6 +242,10 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	codexDir := targetDir
 	if len(repos) > 1 {
 		codexDir = runDir
+	}
+	imagePaths, err := materializePromptImages(codexDir, cfg.Images)
+	if err != nil {
+		return h.fail(ExitConfig, "config", err, runDir)
 	}
 	codexOpts := codexRunOptions{
 		SkipGitRepoCheck: len(repos) > 1,
@@ -913,12 +912,12 @@ func codexCommandWithOptions(targetDir, prompt string, opts codexRunOptions) exe
 	}
 }
 
-func materializePromptImages(runDir string, images []config.PromptImage) ([]string, error) {
+func materializePromptImages(baseDir string, images []config.PromptImage) ([]string, error) {
 	if len(images) == 0 {
 		return nil, nil
 	}
 
-	dir := filepath.Join(runDir, "prompt-images")
+	dir := filepath.Join(baseDir, "prompt-images")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("create prompt image dir: %w", err)
 	}
