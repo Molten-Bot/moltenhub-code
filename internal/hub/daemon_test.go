@@ -234,11 +234,20 @@ func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
 	}))
 	defer server.Close()
 
+	runCfg := config.Config{
+		Repo:   "git@github.com:acme/repo.git",
+		Prompt: "fix failing checks",
+	}
+	runCfg.ApplyDefaults()
+
 	d := NewDaemon(failingRunner{err: errors.New("runner exploded")})
 	failed := make(chan harness.Result, 1)
-	d.OnDispatchFailed = func(requestID string, result harness.Result) {
+	d.OnDispatchFailed = func(requestID string, failedRunCfg config.Config, result harness.Result) {
 		if requestID != "req-fail" {
 			t.Fatalf("requestID = %q, want %q", requestID, "req-fail")
+		}
+		if got, want := strings.Join(failedRunCfg.RepoList(), ","), strings.Join(runCfg.RepoList(), ","); got != want {
+			t.Fatalf("failed run repos = %q, want %q", got, want)
 		}
 		failed <- result
 	}
@@ -249,12 +258,6 @@ func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
 			ResultType: "skill_result",
 		},
 	}
-
-	runCfg := config.Config{
-		Repo:   "git@github.com:acme/repo.git",
-		Prompt: "fix failing checks",
-	}
-	runCfg.ApplyDefaults()
 
 	d.handleDispatch(
 		context.Background(),

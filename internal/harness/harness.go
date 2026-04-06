@@ -3,6 +3,7 @@ package harness
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -253,14 +254,11 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		ImagePaths:       imagePaths,
 	}
 	codexBasePrompt := workspaceCodexPrompt(cfg.Prompt, cfg.TargetSubdir, repos)
-	if strings.TrimSpace(agentsPath) != "" {
-		codexBasePrompt = withAgentsPrompt(codexBasePrompt, agentsPath)
-	}
 	codexTargetLabel := codexTargetLabel(cfg.TargetSubdir, len(repos) > 1)
 
 	h.logf("stage=codex status=start target=%s", codexTargetLabel)
 	codexStart := time.Now()
-	if err := h.runCodexWithHeartbeat(ctx, codexDir, codexBasePrompt, codexOpts); err != nil {
+	if err := h.runCodex(ctx, codexDir, codexBasePrompt, codexOpts, agentsPath); err != nil {
 		return h.fail(ExitCodex, "codex", err, runDir)
 	}
 	h.logf("stage=codex status=ok elapsed_s=%d", int(time.Since(codexStart).Seconds()))
@@ -298,6 +296,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 			codexDir,
 			codexOpts,
 			codexBasePrompt,
+			agentsPath,
 			codexTargetLabel,
 			len(repos) > 1,
 		); err != nil {
@@ -317,6 +316,7 @@ func (h Harness) processChangedRepo(
 	codexDir string,
 	codexOpts codexRunOptions,
 	codexBasePrompt string,
+	agentsPath string,
 	codexTargetLabel string,
 	multiRepo bool,
 ) (int, string, error) {
@@ -467,7 +467,7 @@ func (h Harness) processChangedRepo(
 			repo.RelDir,
 		)
 		codexStart := time.Now()
-		if err := h.runCodexWithHeartbeat(ctx, codexDir, repairPrompt, codexOpts); err != nil {
+		if err := h.runCodex(ctx, codexDir, repairPrompt, codexOpts, agentsPath); err != nil {
 			return ExitCodex, "codex", err
 		}
 		h.logf(
@@ -753,6 +753,88 @@ func shouldFallbackCloneToDefaultBranch(baseBranch string, res execx.Result, err
 	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
 	return strings.Contains(text, "could not find remote branch") ||
 		(strings.Contains(text, "remote branch") && strings.Contains(text, "not found"))
+}
+
+func (h Harness) runCodex(
+	ctx context.Context,
+	targetDir string,
+	prompt string,
+	opts codexRunOptions,
+	agentsPath string,
+) error {
+	finalPrompt := strings.TrimSpace(prompt)
+	cleanup := func() error { return nil }
+
+	if trimmedAgentsPath := strings.TrimSpace(agentsPath); trimmedAgentsPath != "" {
+		stagedAgentsPath, stagedCleanup, err := stageAgentsPromptFile(targetDir, trimmedAgentsPath)
+		if err != nil {
+			h.logf(
+				"stage=workspace status=warn action=stage_agents_for_codex target=%s source=%s err=%q",
+				targetDir,
+				trimmedAgentsPath,
+				err,
+			)
+			stagedAgentsPath = trimmedAgentsPath
+			stagedCleanup = func() error { return nil }
+		}
+		finalPrompt = withAgentsPrompt(finalPrompt, stagedAgentsPath)
+		cleanup = stagedCleanup
+	}
+
+	err := h.runCodexWithHeartbeat(ctx, targetDir, finalPrompt, opts)
+	if cleanupErr := cleanup(); cleanupErr != nil {
+		h.logf(
+			"stage=workspace status=warn action=cleanup_agents_for_codex target=%s err=%q",
+			targetDir,
+			cleanupErr,
+		)
+	}
+	return err
+}
+
+func stageAgentsPromptFile(targetDir, agentsPath string) (string, func() error, error) {
+	targetDir = strings.TrimSpace(targetDir)
+	agentsPath = strings.TrimSpace(agentsPath)
+	if targetDir == "" {
+		return "", nil, fmt.Errorf("codex target directory is required")
+	}
+	if agentsPath == "" {
+		return "", nil, fmt.Errorf("agents source path is required")
+	}
+
+	relativeToTarget, relErr := filepath.Rel(targetDir, agentsPath)
+	if relErr == nil && relativeToTarget != ".." && !strings.HasPrefix(relativeToTarget, ".."+string(filepath.Separator)) {
+		return agentsPath, func() error { return nil }, nil
+	}
+
+	content, err := os.ReadFile(agentsPath)
+	if err != nil {
+		return "", nil, fmt.Errorf("read agents source file: %w", err)
+	}
+
+	f, err := os.CreateTemp(targetDir, ".moltenhub-agents-*.md")
+	if err != nil {
+		return "", nil, fmt.Errorf("create staged agents file: %w", err)
+	}
+
+	stagedPath := f.Name()
+	if _, err := f.Write(content); err != nil {
+		_ = f.Close()
+		_ = os.Remove(stagedPath)
+		return "", nil, fmt.Errorf("write staged agents file: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(stagedPath)
+		return "", nil, fmt.Errorf("close staged agents file: %w", err)
+	}
+
+	cleanup := func() error {
+		if err := os.Remove(stagedPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove staged agents file %s: %w", stagedPath, err)
+		}
+		return nil
+	}
+	return stagedPath, cleanup, nil
 }
 
 func (h Harness) runCodexWithHeartbeat(ctx context.Context, targetDir, prompt string, opts codexRunOptions) error {
@@ -1105,7 +1187,7 @@ When a task fails:
 - Queue a follow-up task dedicated to reviewing the logs and fixing all underlying issues in this codebase.
 - Pass the relevant failing file/folder log path(s) into that follow-up task context.
 - Use this follow-up run config payload shape:
-  {"repos":["git@github.com:jefking/moltenhub-code.git"],"base_branch":"main","target_subdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."}
+  {"repos":["<same_repo_as_failed_task>"],"base_branch":"main","target_subdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."}
 
 Completion requirements:
 - Only create a new branch when starting from 'main'; if you're fixing an existing non-'main' branch, stay on it.
