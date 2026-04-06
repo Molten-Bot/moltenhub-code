@@ -157,11 +157,11 @@ func normalizeRunConfigMap(v any) (map[string]any, error) {
 		if trimmed == "" {
 			return nil, fmt.Errorf("run config payload must be a JSON object")
 		}
-		var parsed any
-		if err := json.Unmarshal([]byte(trimmed), &parsed); err != nil {
+		var decoded any
+		if err := json.Unmarshal([]byte(trimmed), &decoded); err != nil {
 			return nil, fmt.Errorf("decode run config payload string: %w", err)
 		}
-		m, ok := parsed.(map[string]any)
+		m, ok := decoded.(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf("run config payload must be a JSON object")
 		}
