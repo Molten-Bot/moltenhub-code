@@ -181,35 +181,17 @@ func dedupeKeyForRunConfig(cfg config.Config) string {
 	}
 
 	repos := normalizeRepoList(cfg.RepoList())
-	var (
-		encoded []byte
-		err     error
-	)
-	if baseBranch == "main" {
-		payload := struct {
-			Prompt     string   `json:"prompt"`
-			Repos      []string `json:"repos"`
-			BaseBranch string   `json:"base_branch"`
-			Images     []string `json:"images,omitempty"`
-		}{
-			Prompt:     strings.TrimSpace(cfg.Prompt),
-			Repos:      repos,
-			BaseBranch: baseBranch,
-			Images:     promptImageFingerprints(cfg.Images),
-		}
-		encoded, err = json.Marshal(payload)
-	} else {
-		payload := struct {
-			Repos        []string `json:"repos"`
-			TargetBranch string   `json:"target_branch"`
-			Images       []string `json:"images,omitempty"`
-		}{
-			Repos:        repos,
-			TargetBranch: baseBranch,
-			Images:       promptImageFingerprints(cfg.Images),
-		}
-		encoded, err = json.Marshal(payload)
+	payload := struct {
+		Repos      []string `json:"repos"`
+		BaseBranch string   `json:"base_branch"`
+		PromptHash string   `json:"prompt_hash"`
+	}{
+		Repos:      repos,
+		BaseBranch: baseBranch,
+		PromptHash: promptHashForDeduper(cfg.Prompt),
 	}
+
+	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return ""
 	}
@@ -238,18 +220,7 @@ func normalizeRepoList(repos []string) []string {
 	return out
 }
 
-func promptImageFingerprints(images []config.PromptImage) []string {
-	if len(images) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(images))
-	for _, image := range images {
-		sum := sha256.Sum256([]byte(strings.Join([]string{
-			strings.TrimSpace(image.Name),
-			strings.TrimSpace(image.MediaType),
-			strings.TrimSpace(image.DataBase64),
-		}, "\n")))
-		out = append(out, hex.EncodeToString(sum[:]))
-	}
-	return out
+func promptHashForDeduper(prompt string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(prompt)))
+	return hex.EncodeToString(sum[:])
 }

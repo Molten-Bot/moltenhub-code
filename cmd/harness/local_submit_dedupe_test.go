@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,13 +23,13 @@ func TestDedupeKeyForRunConfigDefaultsBranchAndNormalizesRepos(t *testing.T) {
 	}
 
 	got := dedupeKeyForRunConfig(cfg)
-	want := `{"prompt":"update docs","repos":["git@github.com:acme/repo.git","git@github.com:acme/repo-two.git"],"base_branch":"main"}`
+	want := `{"repos":["git@github.com:acme/repo.git","git@github.com:acme/repo-two.git"],"base_branch":"main","prompt_hash":"` + promptHashForTest("update docs") + `"}`
 	if got != want {
 		t.Fatalf("dedupeKeyForRunConfig() = %q, want %q", got, want)
 	}
 }
 
-func TestDedupeKeyForRunConfigIncludesPromptImages(t *testing.T) {
+func TestDedupeKeyForRunConfigIgnoresPromptImages(t *testing.T) {
 	t.Parallel()
 
 	cfgA := config.Config{
@@ -42,12 +45,12 @@ func TestDedupeKeyForRunConfigIncludesPromptImages(t *testing.T) {
 
 	keyA := dedupeKeyForRunConfig(cfgA)
 	keyB := dedupeKeyForRunConfig(cfgB)
-	if keyA == keyB {
-		t.Fatalf("dedupe keys should differ when image attachments differ\nA: %q\nB: %q", keyA, keyB)
+	if keyA != keyB {
+		t.Fatalf("dedupe keys should match when only image attachments differ\nA: %q\nB: %q", keyA, keyB)
 	}
 }
 
-func TestDedupeKeyForRunConfigNonMainUsesTargetBranchScope(t *testing.T) {
+func TestDedupeKeyForRunConfigNonMainIncludesPromptHash(t *testing.T) {
 	t.Parallel()
 
 	cfgA := config.Config{
@@ -63,11 +66,11 @@ func TestDedupeKeyForRunConfigNonMainUsesTargetBranchScope(t *testing.T) {
 
 	keyA := dedupeKeyForRunConfig(cfgA)
 	keyB := dedupeKeyForRunConfig(cfgB)
-	if keyA != keyB {
-		t.Fatalf("dedupe keys should match for same non-main target branch\nA: %q\nB: %q", keyA, keyB)
+	if keyA == keyB {
+		t.Fatalf("dedupe keys should differ when prompts differ\nA: %q\nB: %q", keyA, keyB)
 	}
 
-	want := `{"repos":["git@github.com:acme/repo.git"],"target_branch":"release/2026.04-hotfix"}`
+	want := `{"repos":["git@github.com:acme/repo.git"],"base_branch":"release/2026.04-hotfix","prompt_hash":"` + promptHashForTest("fix flaky test") + `"}`
 	if keyA != want {
 		t.Fatalf("dedupeKeyForRunConfig() = %q, want %q", keyA, want)
 	}
@@ -87,11 +90,17 @@ func TestDedupeKeyForRunConfigNonMainNormalizesBranchRefs(t *testing.T) {
 		BaseBranch: "origin/release/2026.04-hotfix",
 	}
 
+	cfgOrigin.Prompt = cfgRef.Prompt
 	keyRef := dedupeKeyForRunConfig(cfgRef)
 	keyOrigin := dedupeKeyForRunConfig(cfgOrigin)
 	if keyRef != keyOrigin {
 		t.Fatalf("normalized non-main branch keys differ\nrefs: %q\norigin: %q", keyRef, keyOrigin)
 	}
+}
+
+func promptHashForTest(prompt string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(prompt)))
+	return hex.EncodeToString(sum[:])
 }
 
 func TestLocalSubmissionDeduperCheckBeginDone(t *testing.T) {
