@@ -157,8 +157,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="builder-repo-input" class="prompt-control prompt-input"`) || !strings.Contains(markup, `id="builder-target-subdir" class="prompt-control prompt-input"`) {
 		t.Fatalf("expected index html to include builder repo and target subdir inputs")
 	}
-	if !strings.Contains(markup, `prompt-grid grid gap-2.5 md:grid-cols-3`) || !strings.Contains(markup, `prompt-field md:col-span-2`) {
-		t.Fatalf("expected index html to place repository and target subdir on a shared 3-column builder row")
+	if !strings.Contains(markup, `class="prompt-grid"`) ||
+		!strings.Contains(markup, `id="builder-repo-history-field" class="prompt-field prompt-field-repo-history"`) ||
+		!strings.Contains(markup, `class="prompt-field prompt-field-repository"`) ||
+		!strings.Contains(markup, `class="prompt-field prompt-field-base-branch"`) ||
+		!strings.Contains(markup, `class="prompt-field prompt-field-target-subdir"`) {
+		t.Fatalf("expected index html to include the builder row with explicit field layout classes")
+	}
+	if !strings.Contains(markup, `builderRepoHistoryField.classList.toggle("hidden", !hasSavedHistory);`) {
+		t.Fatalf("expected index html to hide repo history when there are no saved repos")
 	}
 	if !strings.Contains(markup, "function rememberRepos(") {
 		t.Fatalf("expected index html to include repo history persistence")

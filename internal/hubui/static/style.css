@@ -273,14 +273,31 @@ body {
 }
 
 .prompt-grid {
-  display: grid;
+  display: flex;
+  align-items: flex-end;
   gap: 10px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  flex-wrap: nowrap;
 }
 
 .prompt-field {
   display: grid;
   gap: 6px;
+  min-width: 0;
+}
+
+.prompt-field-repo-history {
+  flex: 0 0 clamp(180px, 22%, 280px);
+}
+
+.prompt-field-repository {
+  flex: 1 1 auto;
+  min-width: 220px;
+}
+
+.prompt-field-base-branch,
+.prompt-field-target-subdir {
+  flex: 0 0 25%;
+  max-width: 25%;
 }
 
 .prompt-label {
@@ -787,6 +804,14 @@ select.prompt-control {
     grid-template-rows: minmax(240px, 38vh) minmax(320px, 1fr);
   }
   .prompt-grid {
-    grid-template-columns: minmax(0, 1fr);
+    flex-wrap: wrap;
+  }
+  .prompt-field-repo-history,
+  .prompt-field-repository,
+  .prompt-field-base-branch,
+  .prompt-field-target-subdir {
+    flex: 1 1 100%;
+    max-width: none;
+    min-width: 0;
   }
 }
