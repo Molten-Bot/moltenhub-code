@@ -104,22 +104,120 @@ body {
   min-height: 30px;
 }
 
+.status-item-compact {
+  position: relative;
+  justify-content: center;
+  gap: 0;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+}
+
+.status-item-compact:focus-visible {
+  outline: 2px solid rgba(81, 184, 255, 0.55);
+  outline-offset: 2px;
+}
+
+.status-tooltip {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 7px);
+  z-index: 30;
+  max-width: min(60vw, 320px);
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(11, 17, 26, 0.95);
+  color: #d8e6f4;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.36);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-3px);
+  transition: opacity 130ms ease, transform 130ms ease, visibility 130ms ease;
+  pointer-events: none;
+}
+
+.status-item-compact:hover .status-tooltip,
+.status-item-compact:focus-visible .status-tooltip,
+.status-item-compact:focus-within .status-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
 .status-item-metrics {
+  gap: 10px;
   padding-right: 12px;
 }
 
-.status-item-metrics .status-value {
-  font-family: "IBM Plex Mono", "Consolas", monospace;
-  letter-spacing: 0.01em;
+.status-item-metrics .status-label {
   white-space: nowrap;
 }
 
+.metric-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.metric-icon {
+  width: 15px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+
+.metric-icon svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+.metric-icon-neutral {
+  color: var(--muted);
+}
+
+.metric-icon-good {
+  color: var(--good);
+}
+
+.metric-icon-warn {
+  color: var(--warn);
+}
+
+.metric-icon-bad {
+  color: var(--bad);
+}
+
+.status-item-metrics .status-value,
+.metric-value {
+  font-family: "IBM Plex Mono", "Consolas", monospace;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  word-break: normal;
+}
+
 @media (max-width: 640px) {
-  .status-item-metrics {
-    width: 100%;
+  .status-item-compact .status-tooltip {
+    right: auto;
+    left: 0;
   }
 
-  .status-item-metrics .status-value {
+  .status-item-metrics {
+    width: 100%;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .status-item-metrics .status-value,
+  .metric-value {
     white-space: normal;
   }
 }

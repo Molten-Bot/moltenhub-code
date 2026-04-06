@@ -52,25 +52,33 @@
         </div>
       </div>
       <div class="status-row flex flex-wrap items-center gap-2.5 text-sm text-hub-muted">
-        <div class="status-item flex min-h-[30px] items-center gap-2 rounded-full border border-hub-border bg-hub-panel/75 px-2.5 py-1">
+        <div id="local-conn-item" class="status-item status-item-compact flex min-h-[30px] items-center rounded-full border border-hub-border bg-hub-panel/75" title="Local Instance: Connecting..." aria-label="Local Instance: Connecting..." tabindex="0">
           <span id="local-conn-dot" class="dot"></span>
-          <span class="status-text grid min-w-0 gap-px">
-            <span class="status-label text-[0.62rem] uppercase leading-tight tracking-[0.05em] text-hub-muted">Local Instance</span>
-            <span id="local-conn-text" class="status-value break-words text-xs leading-tight text-slate-200">Connecting...</span>
-          </span>
+          <span id="local-conn-text" class="status-tooltip text-xs leading-tight text-slate-200">Local Instance: Connecting...</span>
         </div>
-        <div class="status-item flex min-h-[30px] items-center gap-2 rounded-full border border-hub-border bg-hub-panel/75 px-2.5 py-1">
+        <div id="hub-conn-item" class="status-item status-item-compact flex min-h-[30px] items-center rounded-full border border-hub-border bg-hub-panel/75" title="MoltenHub: Waiting for hub status..." aria-label="MoltenHub: Waiting for hub status..." tabindex="0">
           <span id="hub-conn-dot" class="dot"></span>
-          <span class="status-text grid min-w-0 gap-px">
-            <span class="status-label text-[0.62rem] uppercase leading-tight tracking-[0.05em] text-hub-muted">MoltenHub</span>
-            <span id="hub-conn-text" class="status-value break-words text-xs leading-tight text-slate-200">Waiting for hub status...</span>
-          </span>
+          <span id="hub-conn-text" class="status-tooltip text-xs leading-tight text-slate-200">MoltenHub: Waiting for hub status...</span>
         </div>
-        <div class="status-item status-item-metrics flex min-h-[30px] items-center gap-2 rounded-full border border-hub-border bg-hub-panel/75 px-2.5 py-1">
-          <span class="status-text grid min-w-0 gap-px">
-            <span class="status-label text-[0.62rem] uppercase leading-tight tracking-[0.05em] text-hub-muted">System</span>
-            <span id="resource-metrics-text" class="status-value break-words text-xs leading-tight text-slate-200">Awaiting samples...</span>
+        <div class="status-item status-item-metrics flex min-h-[30px] items-center rounded-full border border-hub-border bg-hub-panel/75 px-2.5 py-1">
+          <span class="status-label text-[0.62rem] uppercase leading-tight tracking-[0.05em] text-hub-muted">System</span>
+          <span class="metric-chip">
+            <span id="resource-cpu-icon" class="metric-icon metric-icon-neutral" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M7 3h2v2h6V3h2v2h2a2 2 0 0 1 2 2v2h-2V7H5v2H3V7a2 2 0 0 1 2-2h2V3Zm12 12h2v2a2 2 0 0 1-2 2h-2v2h-2v-2H9v2H7v-2H5a2 2 0 0 1-2-2v-2h2v2h14v-2Zm-14-3h14V9H5v3Zm5-2h4v2h-4v-2Z"></path>
+              </svg>
+            </span>
+            <span id="resource-cpu-text" class="status-value metric-value text-xs leading-tight text-slate-200">CPU --</span>
           </span>
+          <span class="metric-chip">
+            <span id="resource-mem-icon" class="metric-icon metric-icon-neutral" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M4 7h16a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-1v2h-2v-2H7v2H5v-2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Zm0 2v6h16V9H4Zm2 1h2v4H6v-4Zm4 0h2v4h-2v-4Zm4 0h2v4h-2v-4Zm4 0h2v4h-2v-4Z"></path>
+              </svg>
+            </span>
+            <span id="resource-mem-text" class="status-value metric-value text-xs leading-tight text-slate-200">MEM --</span>
+          </span>
+          <span id="resource-metrics-text" class="status-value metric-value text-xs leading-tight text-slate-200">DISK --</span>
         </div>
       </div>
     </div>
@@ -250,10 +258,16 @@
       closeInFlight: new Set(),
     };
 
+    const localConnItem = document.getElementById("local-conn-item");
     const localConnDot = document.getElementById("local-conn-dot");
     const localConnText = document.getElementById("local-conn-text");
+    const hubConnItem = document.getElementById("hub-conn-item");
     const hubConnDot = document.getElementById("hub-conn-dot");
     const hubConnText = document.getElementById("hub-conn-text");
+    const resourceCPUIcon = document.getElementById("resource-cpu-icon");
+    const resourceCPUText = document.getElementById("resource-cpu-text");
+    const resourceMemIcon = document.getElementById("resource-mem-icon");
+    const resourceMemText = document.getElementById("resource-mem-text");
     const resourceMetricsText = document.getElementById("resource-metrics-text");
     const taskCount = document.getElementById("task-count");
     const taskList = document.getElementById("task-list");
@@ -283,17 +297,24 @@
     const rightCol = document.querySelector(".right-col");
     const promptWrap = document.querySelector(".prompt-wrap");
 
-    function setIndicator(dot, textNode, online, text) {
+    function setIndicator(itemNode, dot, textNode, label, online, text) {
+      const message = `${label}: ${text}`;
       dot.classList.toggle("online", online);
-      textNode.textContent = text;
+      if (textNode) {
+        textNode.textContent = message;
+      }
+      if (itemNode) {
+        itemNode.title = message;
+        itemNode.setAttribute("aria-label", message);
+      }
     }
 
     function setLocalConnection(online, text) {
-      setIndicator(localConnDot, localConnText, online, text);
+      setIndicator(localConnItem, localConnDot, localConnText, "Local Instance", online, text);
     }
 
     function setHubConnection(online, text) {
-      setIndicator(hubConnDot, hubConnText, online, text);
+      setIndicator(hubConnItem, hubConnDot, hubConnText, "MoltenHub", online, text);
     }
 
     function renderHubConnection(snapshot) {
@@ -327,14 +348,39 @@
       return `${label} ${value.toFixed(1)}${suffix}`;
     }
 
-    function renderResourceMetrics(snapshot) {
-      if (!resourceMetricsText) return;
+    function metricSeverityClass(value) {
+      if (!Number.isFinite(value) || value < 0) return "metric-icon-neutral";
+      if (value < 65) return "metric-icon-good";
+      if (value < 85) return "metric-icon-warn";
+      return "metric-icon-bad";
+    }
 
+    function setMetricIcon(iconNode, value) {
+      if (!iconNode) return;
+      iconNode.classList.remove("metric-icon-neutral", "metric-icon-good", "metric-icon-warn", "metric-icon-bad");
+      iconNode.classList.add(metricSeverityClass(value));
+    }
+
+    function setMetricText(cpu, mem, disk) {
+      if (resourceCPUText) {
+        resourceCPUText.textContent = formatMetricValue("CPU", cpu, "%");
+      }
+      if (resourceMemText) {
+        resourceMemText.textContent = formatMetricValue("MEM", mem, "%");
+      }
+      if (resourceMetricsText) {
+        resourceMetricsText.textContent = formatMetricValue("DISK", disk, " MB/s");
+      }
+      setMetricIcon(resourceCPUIcon, cpu);
+      setMetricIcon(resourceMemIcon, mem);
+    }
+
+    function renderResourceMetrics(snapshot) {
       const resources = snapshot && typeof snapshot.resources === "object" && snapshot.resources !== null
         ? snapshot.resources
         : null;
       if (!resources) {
-        resourceMetricsText.textContent = "Awaiting samples...";
+        setMetricText(NaN, NaN, NaN);
         return;
       }
 
@@ -342,15 +388,10 @@
       const mem = Number(resources.memory_percent);
       const disk = Number(resources.disk_io_mb_s);
       if (!Number.isFinite(cpu) && !Number.isFinite(mem) && !Number.isFinite(disk)) {
-        resourceMetricsText.textContent = "Awaiting samples...";
+        setMetricText(NaN, NaN, NaN);
         return;
       }
-
-      resourceMetricsText.textContent = [
-        formatMetricValue("CPU", cpu, "%"),
-        formatMetricValue("MEM", mem, "%"),
-        formatMetricValue("DISK", disk, " MB/s"),
-      ].join("  ");
+      setMetricText(cpu, mem, disk);
     }
 
     function escapeLiteralNewlinesInJSONStrings(raw) {
