@@ -175,6 +175,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function toggleTerminalOutput(") {
 		t.Fatalf("expected index html to include terminal output toggle handler")
 	}
+	if !strings.Contains(markup, "function setTaskFullscreen(") {
+		t.Fatalf("expected index html to include full screen task toggle handler")
+	}
+	if !strings.Contains(markup, "function fullscreenTasks(") {
+		t.Fatalf("expected index html to exclude the main pseudo-task from full screen mode")
+	}
 	if !strings.Contains(markup, "function isMinimizedTask(") {
 		t.Fatalf("expected index html to include completed-task minimization handler")
 	}
@@ -183,6 +189,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `id="task-terminal-toggle"`) {
 		t.Fatalf("expected index html to include terminal output open/close button")
+	}
+	if !strings.Contains(markup, `id="task-fullscreen-toggle"`) {
+		t.Fatalf("expected index html to include tasks full screen toggle")
+	}
+	if !strings.Contains(markup, `id="task-fullscreen-list"`) {
+		t.Fatalf("expected index html to include full screen task list")
+	}
+	if !strings.Contains(markup, `id="task-fullscreen-terminal"`) {
+		t.Fatalf("expected index html to include full screen terminal output")
 	}
 	if !strings.Contains(markup, `id="local-conn-text"`) {
 		t.Fatalf("expected index html to include local connection indicator")
@@ -302,6 +317,12 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".task-terminal-toggle") {
 		t.Fatalf("expected stylesheet to include terminal output toggle styles")
+	}
+	if !strings.Contains(css, ".task-fullscreen-toggle") {
+		t.Fatalf("expected stylesheet to include task full screen toggle styles")
+	}
+	if !strings.Contains(css, ".task-fullscreen") {
+		t.Fatalf("expected stylesheet to include full screen task layout styles")
 	}
 	if !strings.Contains(css, ".task.task-collapsed") {
 		t.Fatalf("expected stylesheet to include collapsed task styles")
