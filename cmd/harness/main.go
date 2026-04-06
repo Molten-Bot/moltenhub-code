@@ -24,6 +24,8 @@ import (
 
 const failureFollowUpRepoURL = "git@github.com:jefking/moltenhub-code.git"
 
+const maxFailureFollowUpLogExcerptChars = 8000
+
 func main() {
 	os.Exit(run())
 }
@@ -449,15 +451,16 @@ func runLocalDispatch(
 }
 
 func failureFollowUpRunConfig(failedRequestID string, failedResult harness.Result, logRoot string) config.Config {
+	logPaths := taskLogPaths(logRoot, failedRequestID)
 	return config.Config{
 		Repos:        []string{failureFollowUpRepoURL},
 		BaseBranch:   "main",
 		TargetSubdir: ".",
-		Prompt:       failureFollowUpPrompt(failedRequestID, failedResult, taskLogPaths(logRoot, failedRequestID)),
+		Prompt:       failureFollowUpPrompt(failedRequestID, failedResult, logPaths, failureFollowUpLogExcerpt(logPaths)),
 	}
 }
 
-func failureFollowUpPrompt(failedRequestID string, failedResult harness.Result, logPaths []string) string {
+func failureFollowUpPrompt(failedRequestID string, failedResult harness.Result, logPaths []string, logExcerpt string) string {
 	var b strings.Builder
 	b.WriteString("Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results.")
 
@@ -488,11 +491,68 @@ func failureFollowUpPrompt(failedRequestID string, failedResult harness.Result, 
 		}
 	}
 
+	if excerpt := strings.TrimSpace(logExcerpt); excerpt != "" {
+		b.WriteString("\n\nCaptured log excerpt(s):")
+		b.WriteString("\n```text\n")
+		b.WriteString(excerpt)
+		if !strings.HasSuffix(excerpt, "\n") {
+			b.WriteString("\n")
+		}
+		b.WriteString("```")
+	}
+
 	b.WriteString("\n\nRequired outcome:")
 	b.WriteString("\n- Start by reading the log paths above.")
+	b.WriteString("\n- Use the captured log excerpts below when direct filesystem access to the original logs is unavailable.")
 	b.WriteString("\n- Fix all underlying issues in code/tests/workflows; do not apply superficial bandaids.")
 	b.WriteString("\n- Treat every error in the referenced logs as actionable until you have either fixed it or proven it is not causal.")
 	b.WriteString("\n- Validate the fixes locally where possible and summarize what was verified.")
+
+	return strings.TrimSpace(b.String())
+}
+
+func failureFollowUpLogExcerpt(logPaths []string) string {
+	var b strings.Builder
+	remaining := maxFailureFollowUpLogExcerptChars
+
+	for _, path := range logPaths {
+		path = strings.TrimSpace(path)
+		if path == "" || remaining <= 0 {
+			continue
+		}
+
+		info, err := os.Stat(path)
+		if err != nil || info.IsDir() {
+			continue
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+
+		text := strings.TrimSpace(string(content))
+		if text == "" {
+			continue
+		}
+
+		if len(text) > remaining {
+			text = text[len(text)-remaining:]
+			if idx := strings.IndexByte(text, '\n'); idx >= 0 && idx+1 < len(text) {
+				text = text[idx+1:]
+			}
+		}
+
+		section := fmt.Sprintf("==> %s <==\n%s\n", path, text)
+		if len(section) > remaining {
+			section = section[len(section)-remaining:]
+			if idx := strings.IndexByte(section, '\n'); idx >= 0 && idx+1 < len(section) {
+				section = section[idx+1:]
+			}
+		}
+		b.WriteString(section)
+		remaining = maxFailureFollowUpLogExcerptChars - b.Len()
+	}
 
 	return strings.TrimSpace(b.String())
 }
