@@ -52,6 +52,7 @@
         </div>
       </div>
       <div class="status-row flex flex-wrap items-center gap-2.5 text-sm text-hub-muted">
+        <button id="prompt-visibility-toggle" class="prompt-visibility-toggle" type="button" aria-pressed="true">Hide Local Prompt</button>
         <div id="local-conn-item" class="status-item status-item-compact flex min-h-[30px] items-center rounded-full border border-hub-border bg-hub-panel/75" title="Local Instance: Connecting..." aria-label="Local Instance: Connecting..." tabindex="0">
           <span id="local-conn-dot" class="dot"></span>
           <span id="local-conn-text" class="status-tooltip text-xs leading-tight text-slate-200">Local Instance: Connecting...</span>
@@ -198,6 +199,7 @@
     const DISMISSED_TASKS_KEY = "hubui.dismissedTaskIds";
     const REPO_HISTORY_KEY = "hubui.repoHistory.v1";
     const PROMPT_MODE_KEY = "hubui.localPromptMode";
+    const PROMPT_VISIBILITY_KEY = "hubui.localPromptVisible";
     const COMPLETED_STATUSES = new Set(["ok", "no_changes", "error", "invalid", "duplicate"]);
     const TASK_PROGRESS_STEPS = [
       { id: "received", label: "Task Received", detail: "Dispatch accepted by hub." },
@@ -248,6 +250,14 @@
       }
     }
 
+    function loadPromptVisibility() {
+      try {
+        return localStorage.getItem(PROMPT_VISIBILITY_KEY) !== "hidden";
+      } catch (_err) {
+        return true;
+      }
+    }
+
     const state = {
       ui: normalizeUIConfig(window.__HUB_UI_CONFIG__),
       snapshot: null,
@@ -256,6 +266,7 @@
       libraryTasks: [],
       repoHistory: loadRepoHistory(),
       promptMode: loadPromptMode(),
+      promptVisible: loadPromptVisibility(),
       promptImages: [],
       rerunInFlight: new Set(),
       closeInFlight: new Set(),
@@ -302,6 +313,7 @@
     const builderImagesClear = document.getElementById("builder-images-clear");
     const rightCol = document.querySelector(".right-col");
     const promptWrap = document.querySelector(".prompt-wrap");
+    const promptVisibilityToggle = document.getElementById("prompt-visibility-toggle");
 
     function setIndicator(itemNode, dot, textNode, label, online, text) {
       const message = `${label}: ${text}`;
@@ -678,6 +690,14 @@
       }
     }
 
+    function persistPromptVisibility() {
+      try {
+        localStorage.setItem(PROMPT_VISIBILITY_KEY, state.promptVisible ? "visible" : "hidden");
+      } catch (_err) {
+        // Ignore localStorage failures.
+      }
+    }
+
     function builderPayload() {
       const repo = normalizeRepoValue(builderRepoInput.value);
       if (!repo) {
@@ -789,17 +809,32 @@
         : "Select a repo and either a library task or a custom prompt in Builder mode. You can paste PNG screenshots into the prompt field before submitting.";
     }
 
-    function applyAutomaticMode() {
+    function applyPromptVisibility() {
       const automatic = Boolean(state.ui?.automaticMode);
+      const visible = !automatic && state.promptVisible;
       if (promptWrap) {
-        promptWrap.classList.toggle("hidden", automatic);
+        promptWrap.classList.toggle("hidden", !visible);
       }
       if (rightCol) {
-        rightCol.classList.toggle("automatic-mode", automatic);
+        rightCol.classList.toggle("automatic-mode", !visible);
+      }
+      if (promptVisibilityToggle) {
+        promptVisibilityToggle.disabled = automatic;
+        promptVisibilityToggle.textContent = visible ? "Hide Local Prompt" : "Show Local Prompt";
+        promptVisibilityToggle.setAttribute("aria-pressed", visible ? "true" : "false");
       }
       if (automatic) {
         setLocalPromptStatus("warn", "Automatic mode enabled; browser prompt input is hidden.");
       }
+    }
+
+    function togglePromptVisibility() {
+      if (Boolean(state.ui?.automaticMode)) {
+        return;
+      }
+      state.promptVisible = !state.promptVisible;
+      persistPromptVisibility();
+      applyPromptVisibility();
     }
 
     function relativeTime(iso) {
@@ -1611,6 +1646,7 @@
     builderPromptInput.addEventListener("paste", handlePromptImagePaste);
     builderImagePasteTarget.addEventListener("paste", handlePromptImagePaste);
     builderImagesClear.addEventListener("click", clearPromptImages);
+    promptVisibilityToggle.addEventListener("click", togglePromptVisibility);
     taskTerminalToggle.addEventListener("click", () => {
       toggleTerminalOutput(state.selectedTaskId);
     });
@@ -1645,7 +1681,7 @@
       // Builder starts empty until the user fills it in.
     }
     setPromptMode(state.promptMode);
-    applyAutomaticMode();
+    applyPromptVisibility();
     loadInitial();
     startStream();
   </script>

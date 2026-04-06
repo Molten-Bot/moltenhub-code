@@ -190,6 +190,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="hub-conn-text"`) {
 		t.Fatalf("expected index html to include moltenhub connection indicator")
 	}
+	if !strings.Contains(markup, `id="prompt-visibility-toggle"`) {
+		t.Fatalf("expected index html to include local prompt visibility toggle")
+	}
 	if !strings.Contains(markup, `id="resource-metrics-text"`) {
 		t.Fatalf("expected index html to include resource metrics indicator")
 	}
@@ -232,6 +235,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "function rememberRepos(") {
 		t.Fatalf("expected index html to include repo history persistence")
+	}
+	if !strings.Contains(markup, "function togglePromptVisibility(") {
+		t.Fatalf("expected index html to include prompt visibility toggle handler")
+	}
+	if !strings.Contains(markup, "function applyPromptVisibility(") {
+		t.Fatalf("expected index html to include prompt visibility renderer")
+	}
+	if !strings.Contains(markup, `const PROMPT_VISIBILITY_KEY = "hubui.localPromptVisible";`) {
+		t.Fatalf("expected index html to persist prompt visibility preference")
 	}
 	if !strings.Contains(markup, "function handlePromptImagePaste(") {
 		t.Fatalf("expected index html to include screenshot paste handler")
@@ -296,6 +308,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".prompt-mode-tab") {
 		t.Fatalf("expected stylesheet to include prompt mode tab styles")
+	}
+	if !strings.Contains(css, ".prompt-visibility-toggle") {
+		t.Fatalf("expected stylesheet to include local prompt visibility toggle styles")
 	}
 	if !strings.Contains(css, ".prompt-grid") {
 		t.Fatalf("expected stylesheet to include prompt grid styles")

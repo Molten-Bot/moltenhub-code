@@ -104,6 +104,36 @@ body {
   min-height: 30px;
 }
 
+.prompt-visibility-toggle {
+  border: 1px solid rgba(246, 179, 106, 0.42);
+  background: rgba(48, 37, 22, 0.55);
+  color: #f3cf9f;
+  border-radius: 999px;
+  padding: 6px 11px;
+  min-height: 30px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: border-color .12s ease, color .12s ease, transform .12s ease, opacity .12s ease;
+}
+
+.prompt-visibility-toggle:hover {
+  border-color: #ffd39f;
+  color: #ffe8cb;
+  transform: translateY(-1px);
+}
+
+.prompt-visibility-toggle:focus-visible {
+  outline: 1px solid #ffd39f;
+  outline-offset: 1px;
+}
+
+.prompt-visibility-toggle:disabled {
+  opacity: 0.6;
+  transform: none;
+}
+
 .status-item-compact {
   position: relative;
   justify-content: center;
