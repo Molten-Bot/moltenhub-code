@@ -151,22 +151,53 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	if len(repoURLs) == 0 {
 		return h.fail(ExitConfig, "config", fmt.Errorf("one of repo, repo_url, or repos[] is required"), runDir)
 	}
+	runCfg := cfg
+	cloneBaseBranch := strings.TrimSpace(runCfg.BaseBranch)
+	if cloneBaseBranch == "" {
+		cloneBaseBranch = "main"
+	}
 
 	repos := make([]repoWorkspace, 0, len(repoURLs))
 	for i, repoURL := range repoURLs {
 		relDir := repoWorkspaceDirName(repoURL, i, len(repoURLs))
 		repoDir := filepath.Join(runDir, relDir)
-		h.logf("stage=clone status=start repo=%s branch=%s repo_dir=%s", repoURL, cfg.BaseBranch, relDir)
-		if _, err := h.runCommand(ctx, "clone", cloneRepoCommand(repoURL, cfg.BaseBranch, repoDir)); err != nil {
-			return h.fail(ExitClone, "clone", err, runDir)
+		branchForClone := cloneBaseBranch
+		h.logf("stage=clone status=start repo=%s branch=%s repo_dir=%s", repoURL, branchForClone, relDir)
+		cloneRes, cloneErr := h.runCommand(ctx, "clone", cloneRepoCommand(repoURL, branchForClone, repoDir))
+		if cloneErr != nil {
+			if !shouldFallbackCloneToDefaultBranch(branchForClone, cloneRes, cloneErr) {
+				return h.fail(ExitClone, "clone", cloneErr, runDir)
+			}
+
+			h.logf(
+				"stage=clone status=warn action=fallback_default_branch reason=missing_remote_branch repo=%s branch=%s repo_dir=%s",
+				repoURL,
+				branchForClone,
+				relDir,
+			)
+			if err := os.RemoveAll(repoDir); err != nil {
+				return h.fail(ExitClone, "clone", fmt.Errorf("cleanup failed clone dir %s: %w", repoDir, err), runDir)
+			}
+			if _, err := h.runCommand(ctx, "clone", cloneRepoDefaultBranchCommand(repoURL, repoDir)); err != nil {
+				return h.fail(ExitClone, "clone", err, runDir)
+			}
+			cloneBaseBranch = "main"
+			h.logf(
+				"stage=clone status=ok action=fallback_default_branch repo=%s repo_dir=%s resolved_branch=%s",
+				repoURL,
+				relDir,
+				cloneBaseBranch,
+			)
+		} else {
+			h.logf("stage=clone status=ok repo=%s repo_dir=%s", repoURL, relDir)
 		}
-		h.logf("stage=clone status=ok repo=%s repo_dir=%s", repoURL, relDir)
 		repos = append(repos, repoWorkspace{
 			URL:    repoURL,
 			Dir:    repoDir,
 			RelDir: relDir,
 		})
 	}
+	runCfg.BaseBranch = cloneBaseBranch
 
 	targetDir, err := resolveTargetDir(repos[0].Dir, cfg.TargetSubdir)
 	if err != nil {
@@ -176,8 +207,8 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		return h.fail(ExitConfig, "config", fmt.Errorf("target_subdir does not exist or is not a directory: %s", cfg.TargetSubdir), runDir)
 	}
 
-	createWorkBranch := shouldCreateWorkBranch(cfg.BaseBranch)
-	branch := strings.TrimSpace(cfg.BaseBranch)
+	createWorkBranch := shouldCreateWorkBranch(runCfg.BaseBranch)
+	branch := strings.TrimSpace(runCfg.BaseBranch)
 	if createWorkBranch {
 		branch = slug.BranchName(cfg.Prompt, h.Now(), guid)
 	}
@@ -187,7 +218,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 			h.logf(
 				"stage=git status=ok action=branch_reuse branch=%s base_branch=%s repo=%s repo_dir=%s",
 				branch,
-				cfg.BaseBranch,
+				runCfg.BaseBranch,
 				repos[i].URL,
 				repos[i].RelDir,
 			)
@@ -246,7 +277,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		}
 		if exitCode, stage, err := h.processChangedRepo(
 			ctx,
-			cfg,
+			runCfg,
 			&repos[i],
 			codexDir,
 			codexOpts,
@@ -695,6 +726,19 @@ func isNonFastForwardPush(res execx.Result, err error) bool {
 	return strings.Contains(text, "non-fast-forward") || strings.Contains(text, "fetch first")
 }
 
+func shouldFallbackCloneToDefaultBranch(baseBranch string, res execx.Result, err error) bool {
+	if err == nil {
+		return false
+	}
+	normalized := normalizeBranchRef(baseBranch)
+	if !strings.HasPrefix(normalized, "moltenhub-") {
+		return false
+	}
+	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
+	return strings.Contains(text, "could not find remote branch") ||
+		(strings.Contains(text, "remote branch") && strings.Contains(text, "not found"))
+}
+
 func (h Harness) runCodexWithHeartbeat(ctx context.Context, targetDir, prompt string, opts codexRunOptions) error {
 	done := make(chan error, 1)
 	go func() {
@@ -791,6 +835,13 @@ func cloneRepoCommand(repoURL, baseBranch, repoDir string) execx.Command {
 	return execx.Command{
 		Name: "git",
 		Args: []string{"clone", "--branch", baseBranch, "--single-branch", repoURL, repoDir},
+	}
+}
+
+func cloneRepoDefaultBranchCommand(repoURL, repoDir string) execx.Command {
+	return execx.Command{
+		Name: "git",
+		Args: []string{"clone", "--single-branch", repoURL, repoDir},
 	}
 }
 
@@ -951,7 +1002,7 @@ When a task fails:
 - Queue a follow-up task dedicated to reviewing the logs and fixing all underlying issues in this codebase.
 - Pass the relevant failing file/folder log path(s) into that follow-up task context.
 - Use this follow-up run config payload shape:
-  {"repos":["git@github.com:jefking/moltenhub-code.git"],"base_branch":"main","target_subdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."}
+  {"repos":["git@github.com:Molten-Bot/moltenhub-code.git"],"base_branch":"main","target_subdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."}
 
 Completion requirements:
 - Only create a new branch when starting from 'main'; if you're fixing an existing non-'main' branch, stay on it.

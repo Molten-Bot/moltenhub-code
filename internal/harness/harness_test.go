@@ -914,6 +914,106 @@ func TestRunNonMainBranchCreatesPRWithoutExplicitBaseWhenNoOpenPR(t *testing.T) 
 	}
 }
 
+func TestRunMissingMoltenhubBaseBranchFallsBackToDefaultAndCreatesNewBranch(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.BaseBranch = "moltenhub-the-top-left-should-show-our-logo-https-20260406-192020-bf8c1ade"
+
+	now := time.Date(2026, 4, 6, 19, 53, 52, 0, time.UTC)
+	guid := "9ded650b29c70708825082be50fbf433"
+	runDir := filepath.Join("/tmp", "temp", guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api-20260406-195352-9ded650b"
+	prURL := "https://github.com/acme/repo/pull/112"
+
+	cloneMissingBranch := execx.Result{
+		Stderr: "warning: Could not find remote branch moltenhub-the-top-left-should-show-our-logo-https-20260406-192020-bf8c1ade to clone.\n" +
+			"fatal: Remote branch moltenhub-the-top-left-should-show-our-logo-https-20260406-192020-bf8c1ade not found in upstream origin\n",
+	}
+	cfgMain := cfg
+	cfgMain.BaseBranch = "main"
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneRepoCommand(cfg.RepoURL, cfg.BaseBranch, repoDir), res: cloneMissingBranch, err: errors.New("clone failed")},
+		{cmd: cloneRepoDefaultBranchCommand(cfg.RepoURL, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateCommand(repoDir, cfgMain, branch), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL)},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if got, want := res.Branch, branch; got != want {
+		t.Fatalf("Branch = %q, want %q", got, want)
+	}
+	if got, want := res.PRURL, prURL; got != want {
+		t.Fatalf("PRURL = %q, want %q", got, want)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunMissingNonMoltenhubBaseBranchFailsClone(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.BaseBranch = "release/2026.04-hotfix"
+	guid := "abcdef123456"
+	runDir := filepath.Join("/tmp", "temp", guid)
+	repoDir := filepath.Join(runDir, "repo")
+
+	cloneMissingBranch := execx.Result{
+		Stderr: "warning: Could not find remote branch release/2026.04-hotfix to clone.\n" +
+			"fatal: Remote branch release/2026.04-hotfix not found in upstream origin\n",
+	}
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneRepoCommand(cfg.RepoURL, cfg.BaseBranch, repoDir), res: cloneMissingBranch, err: errors.New("clone failed")},
+	}}
+
+	h := New(fake)
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == filepath.Join(repoDir, cfg.TargetSubdir) }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err == nil {
+		t.Fatal("Run() err = nil, want clone failure")
+	}
+	if res.ExitCode != ExitClone {
+		t.Fatalf("ExitCode = %d, want %d", res.ExitCode, ExitClone)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
 func TestCommandBuilders(t *testing.T) {
 	t.Parallel()
 
@@ -926,6 +1026,10 @@ func TestCommandBuilders(t *testing.T) {
 	clone := cloneCommand(cfg, repoDir)
 	if clone.Name != "git" || !reflect.DeepEqual(clone.Args, []string{"clone", "--branch", "main", "--single-branch", cfg.RepoURL, repoDir}) {
 		t.Fatalf("clone command unexpected: %+v", clone)
+	}
+	cloneDefault := cloneRepoDefaultBranchCommand(cfg.RepoURL, repoDir)
+	if cloneDefault.Name != "git" || !reflect.DeepEqual(cloneDefault.Args, []string{"clone", "--single-branch", cfg.RepoURL, repoDir}) {
+		t.Fatalf("clone default command unexpected: %+v", cloneDefault)
 	}
 	authStatus := authCommand()
 	if authStatus.Name != "gh" || !reflect.DeepEqual(authStatus.Args, []string{"auth", "status"}) {
@@ -1034,7 +1138,7 @@ func TestWithCompletionGatePromptIncludesFailureQueueContract(t *testing.T) {
 		"When a task fails:",
 		"Queue a follow-up task dedicated to reviewing the logs and fixing all underlying issues in this codebase.",
 		"Pass the relevant failing file/folder log path(s) into that follow-up task context.",
-		`{"repos":["git@github.com:jefking/moltenhub-code.git"],"base_branch":"main","target_subdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."}`,
+		`{"repos":["git@github.com:Molten-Bot/moltenhub-code.git"],"base_branch":"main","target_subdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."}`,
 		"Completion requirements:",
 	}
 	for _, snippet := range wantSnippets {
