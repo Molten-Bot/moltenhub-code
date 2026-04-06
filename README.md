@@ -1,5 +1,7 @@
 # MoltenHub Code
 
+Turn one prompt into review-ready pull requests across your repos, with automatic CI remediation when checks fail.
+
 MoltenHub Code is a small Go harness that runs Codex against one or more repositories, opens PRs, and waits for required checks.
 It supports single runs, parallel local runs, and a persistent MoltenHub listener with a local monitoring UI.
 
