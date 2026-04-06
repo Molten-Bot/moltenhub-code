@@ -205,6 +205,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="builder-image-list"`) {
 		t.Fatalf("expected index html to include screenshot attachment list")
 	}
+	if !strings.Contains(markup, `id="local-prompt-submit"`) || !strings.Contains(markup, `>Run</button>`) {
+		t.Fatalf("expected index html to render the local prompt submit button with label Run")
+	}
 	if !strings.Contains(markup, `id="builder-repo-input" class="prompt-control prompt-input"`) || !strings.Contains(markup, `id="builder-target-subdir" class="prompt-control prompt-input"`) {
 		t.Fatalf("expected index html to include builder repo and target subdir inputs")
 	}
@@ -223,6 +226,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "function handlePromptImagePaste(") {
 		t.Fatalf("expected index html to include screenshot paste handler")
+	}
+	if !strings.Contains(markup, "clearPromptImages();") {
+		t.Fatalf("expected index html to clear attached screenshots after a successful submit")
 	}
 	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":false};`) {
 		t.Fatalf("expected index html to include default UI config")

@@ -601,9 +601,9 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 func failureResponseMessage(errText string) string {
 	errText = strings.TrimSpace(errText)
 	if errText == "" {
-		return "task failed: unknown error"
+		return "Task failed. Error details: unknown error."
 	}
-	return "task failed: " + errText
+	return "Task failed. Error details: " + errText
 }
 
 func joinRepoPRURLs(results []harness.RepoResult) string {

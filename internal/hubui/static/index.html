@@ -155,7 +155,7 @@
             </div>
             <div id="local-prompt-hint" class="prompt-hint text-[0.74rem] leading-[1.3] text-hub-muted">Select a repo, branch, subdir, and prompt in Builder mode. Use Raw JSON for multi-repo runs or advanced fields.</div>
             <div class="prompt-actions flex flex-wrap items-center justify-between gap-2.5">
-              <button id="local-prompt-submit" class="prompt-submit rounded-lg border border-[#597695] bg-[#2f4864] px-3 py-2 text-[0.8rem] font-semibold text-hub-text transition hover:-translate-y-px hover:border-[#83a3c4] disabled:opacity-65 disabled:translate-y-0" type="submit">Run Local Prompt</button>
+              <button id="local-prompt-submit" class="prompt-submit rounded-lg border border-[#597695] bg-[#2f4864] px-3 py-2 text-[0.8rem] font-semibold text-hub-text transition hover:-translate-y-px hover:border-[#83a3c4] disabled:opacity-65 disabled:translate-y-0" type="submit">Run</button>
               <span id="local-prompt-status" class="submit-status min-h-[1.3em] text-[0.74rem] leading-[1.3] text-hub-muted">Idle</span>
             </div>
           </form>
@@ -1453,6 +1453,7 @@
         } catch (_err) {
           // Ignore repo history extraction failures.
         }
+        clearPromptImages();
         setLocalPromptStatus("ok", `Queued request ${requestID}`);
       } catch (err) {
         setLocalPromptStatus("error", `Submit failed: ${err.message}`);
