@@ -6,4 +6,5 @@
 !.github/workflows/
 !.github/workflows/*.yml
 !.github/workflows/*.yaml
+!.dockerignore
 bin/*

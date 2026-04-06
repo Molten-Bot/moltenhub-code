@@ -120,6 +120,53 @@ func TestRunHappyPathCreatesPR(t *testing.T) {
 	}
 }
 
+func TestRunWithGitHubTokenRunsAuthSetupGitBeforeCodex(t *testing.T) {
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := filepath.Join("/tmp", "temp", guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+
+	t.Setenv("GITHUB_TOKEN", "ghp_example_token")
+	t.Setenv("GH_TOKEN", "")
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "setup-git"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: "https://github.com/acme/repo/pull/42\n"}},
+		{cmd: prChecksCommand(repoDir, "https://github.com/acme/repo/pull/42")},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
 func TestRunNonMainBranchReusesExistingBranchAndPR(t *testing.T) {
 	t.Parallel()
 
@@ -880,6 +927,14 @@ func TestCommandBuilders(t *testing.T) {
 	if clone.Name != "git" || !reflect.DeepEqual(clone.Args, []string{"clone", "--branch", "main", "--single-branch", cfg.RepoURL, repoDir}) {
 		t.Fatalf("clone command unexpected: %+v", clone)
 	}
+	authStatus := authCommand()
+	if authStatus.Name != "gh" || !reflect.DeepEqual(authStatus.Args, []string{"auth", "status"}) {
+		t.Fatalf("auth status command unexpected: %+v", authStatus)
+	}
+	authSetup := authSetupGitCommand()
+	if authSetup.Name != "gh" || !reflect.DeepEqual(authSetup.Args, []string{"auth", "setup-git"}) {
+		t.Fatalf("auth setup-git command unexpected: %+v", authSetup)
+	}
 
 	codex := codexCommand(targetDir, prompt)
 	if codex.Name != "codex" || codex.Dir != targetDir || !reflect.DeepEqual(codex.Args, []string{"exec", "--sandbox", "workspace-write", withCompletionGatePrompt(prompt)}) {
@@ -986,6 +1041,25 @@ func TestWithCompletionGatePromptIncludesFailureQueueContract(t *testing.T) {
 		if !strings.Contains(got, snippet) {
 			t.Fatalf("withCompletionGatePrompt() missing snippet %q", snippet)
 		}
+	}
+}
+
+func TestHasGitHubAuthToken(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+	if hasGitHubAuthToken() {
+		t.Fatal("hasGitHubAuthToken() = true, want false")
+	}
+
+	t.Setenv("GITHUB_TOKEN", "ghp_example")
+	if !hasGitHubAuthToken() {
+		t.Fatal("hasGitHubAuthToken() = false with GITHUB_TOKEN set, want true")
+	}
+
+	t.Setenv("GITHUB_TOKEN", "")
+	t.Setenv("GH_TOKEN", "ghp_example_from_gh_token")
+	if !hasGitHubAuthToken() {
+		t.Fatal("hasGitHubAuthToken() = false with GH_TOKEN set, want true")
 	}
 }
 

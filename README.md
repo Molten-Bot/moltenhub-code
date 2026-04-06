@@ -28,6 +28,31 @@ Build:
 go build -o bin/harness ./cmd/harness
 ```
 
+## Container
+
+Build a container image:
+
+```bash
+docker build -t moltenhub-code:latest .
+```
+
+Run with PAT auth via `GITHUB_TOKEN`:
+
+```bash
+docker run --rm -it \
+  -e GITHUB_TOKEN=ghp_xxx \
+  -v "$PWD:/workspace" \
+  -w /workspace \
+  moltenhub-code:latest \
+  harness run --config templates/run.example.json
+```
+
+Container startup pre-registers auth before any Codex stage:
+
+- maps `GITHUB_TOKEN` to `GH_TOKEN` for `gh` commands
+- runs `gh auth status` and `gh auth setup-git`
+- configures GitHub URL rewrites so `git@github.com:*` and `ssh://git@github.com/*` can use PAT-backed HTTPS
+
 Single run:
 
 ```bash

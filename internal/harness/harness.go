@@ -128,6 +128,11 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	if _, err := h.runCommand(ctx, "auth", authCommand()); err != nil {
 		return h.fail(ExitAuth, "auth", err, "")
 	}
+	if hasGitHubAuthToken() {
+		if _, err := h.runCommand(ctx, "auth", authSetupGitCommand()); err != nil {
+			return h.fail(ExitAuth, "auth", err, "")
+		}
+	}
 	h.logf("stage=auth status=ok")
 
 	h.logf("stage=workspace status=start")
@@ -768,6 +773,14 @@ func preflightCommands() []execx.Command {
 
 func authCommand() execx.Command {
 	return execx.Command{Name: "gh", Args: []string{"auth", "status"}}
+}
+
+func authSetupGitCommand() execx.Command {
+	return execx.Command{Name: "gh", Args: []string{"auth", "setup-git"}}
+}
+
+func hasGitHubAuthToken() bool {
+	return strings.TrimSpace(os.Getenv("GH_TOKEN")) != "" || strings.TrimSpace(os.Getenv("GITHUB_TOKEN")) != ""
 }
 
 func cloneCommand(cfg config.Config, repoDir string) execx.Command {
