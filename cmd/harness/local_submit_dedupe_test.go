@@ -26,6 +26,27 @@ func TestDedupeKeyForRunConfigDefaultsBranchAndNormalizesRepos(t *testing.T) {
 	}
 }
 
+func TestDedupeKeyForRunConfigIncludesPromptImages(t *testing.T) {
+	t.Parallel()
+
+	cfgA := config.Config{
+		Prompt: "update docs",
+		Repos:  []string{"git@github.com:acme/repo.git"},
+		Images: []config.PromptImage{{Name: "a.png", MediaType: "image/png", DataBase64: "YQ=="}},
+	}
+	cfgB := config.Config{
+		Prompt: "update docs",
+		Repos:  []string{"git@github.com:acme/repo.git"},
+		Images: []config.PromptImage{{Name: "b.png", MediaType: "image/png", DataBase64: "Yg=="}},
+	}
+
+	keyA := dedupeKeyForRunConfig(cfgA)
+	keyB := dedupeKeyForRunConfig(cfgB)
+	if keyA == keyB {
+		t.Fatalf("dedupe keys should differ when image attachments differ\nA: %q\nB: %q", keyA, keyB)
+	}
+}
+
 func TestDedupeKeyForRunConfigNonMainUsesTargetBranchScope(t *testing.T) {
 	t.Parallel()
 

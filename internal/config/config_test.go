@@ -189,6 +189,33 @@ func TestApplyDefaultsCombinesRepoURLAndRepos(t *testing.T) {
 	}
 }
 
+func TestApplyDefaultsNormalizesPromptImages(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		RepoURL: "git@github.com:acme/repo.git",
+		Prompt:  "x",
+		Images: []PromptImage{
+			{Name: " shot.png ", MediaType: " image/png ", DataBase64: " Zm9v "},
+			{},
+		},
+	}
+	cfg.ApplyDefaults()
+
+	if got, want := len(cfg.Images), 1; got != want {
+		t.Fatalf("len(Images) = %d, want %d", got, want)
+	}
+	if got, want := cfg.Images[0].Name, "shot.png"; got != want {
+		t.Fatalf("Images[0].Name = %q, want %q", got, want)
+	}
+	if got, want := cfg.Images[0].MediaType, "image/png"; got != want {
+		t.Fatalf("Images[0].MediaType = %q, want %q", got, want)
+	}
+	if got, want := cfg.Images[0].DataBase64, "Zm9v"; got != want {
+		t.Fatalf("Images[0].DataBase64 = %q, want %q", got, want)
+	}
+}
+
 func TestApplyDefaultsMergesGitHubHandleIntoReviewers(t *testing.T) {
 	t.Parallel()
 
