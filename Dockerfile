@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 ARG GO_VERSION=1.26.1
-ARG RUNTIME_IMAGE=node:22-bookworm-slim
+ARG RUNTIME_IMAGE=node:25-bookworm-slim
 ARG CODEX_NPM_PACKAGE=@openai/codex@latest
 
 FROM golang:${GO_VERSION}-bookworm AS build
