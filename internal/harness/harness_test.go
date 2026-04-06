@@ -1138,7 +1138,7 @@ func TestWithCompletionGatePromptIncludesFailureQueueContract(t *testing.T) {
 		"When a task fails:",
 		"Queue a follow-up task dedicated to reviewing the logs and fixing all underlying issues in this codebase.",
 		"Pass the relevant failing file/folder log path(s) into that follow-up task context.",
-		`{"repos":["git@github.com:Molten-Bot/moltenhub-code.git"],"base_branch":"main","target_subdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."}`,
+		`{"repos":["git@github.com:jefking/moltenhub-code.git"],"base_branch":"main","target_subdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."}`,
 		"Completion requirements:",
 	}
 	for _, snippet := range wantSnippets {
