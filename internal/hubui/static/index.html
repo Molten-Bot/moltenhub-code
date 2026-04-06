@@ -125,6 +125,20 @@
                   spellcheck="false"
                   placeholder="Describe the change you want"></textarea>
               </label>
+              <div id="builder-image-field" class="prompt-field grid gap-2">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="prompt-label">Screenshots</span>
+                  <button
+                    id="builder-images-clear"
+                    class="rounded-md border border-hub-border bg-[#132131] px-2 py-1 text-[0.72rem] font-semibold text-hub-muted transition hover:border-[#83a3c4] hover:text-hub-text"
+                    type="button">Clear</button>
+                </div>
+                <div
+                  id="builder-image-paste-target"
+                  class="prompt-control rounded-lg border border-dashed border-[#4e6986] bg-[#0d1825] px-3 py-2 text-[0.76rem] leading-[1.4] text-hub-muted"
+                  tabindex="0">Paste PNG screenshots here or directly into the prompt field. Attached images are sent to Codex during startup.</div>
+                <div id="builder-image-list" class="grid gap-2"></div>
+              </div>
             </div>
 
             <div id="prompt-raw-panel" class="prompt-panel hidden">
@@ -231,6 +245,7 @@
       libraryTasks: [],
       repoHistory: loadRepoHistory(),
       promptMode: loadPromptMode(),
+      promptImages: [],
       rerunInFlight: new Set(),
       closeInFlight: new Set(),
     };
@@ -262,6 +277,9 @@
     const builderLibraryTask = document.getElementById("builder-library-task");
     const builderPromptField = document.getElementById("builder-prompt-field");
     const builderPromptInput = document.getElementById("builder-prompt-input");
+    const builderImagePasteTarget = document.getElementById("builder-image-paste-target");
+    const builderImageList = document.getElementById("builder-image-list");
+    const builderImagesClear = document.getElementById("builder-images-clear");
     const rightCol = document.querySelector(".right-col");
     const promptWrap = document.querySelector(".prompt-wrap");
 
@@ -425,6 +443,125 @@
       return out;
     }
 
+    function normalizePromptImages(images) {
+      if (!Array.isArray(images)) return [];
+      const out = [];
+      for (const image of images) {
+        if (!image || typeof image !== "object" || Array.isArray(image)) continue;
+        const dataBase64 = String(image.data_base64 || "").trim();
+        if (!dataBase64) continue;
+        out.push({
+          name: String(image.name || "").trim(),
+          media_type: String(image.media_type || "").trim() || "image/png",
+          data_base64: dataBase64,
+        });
+      }
+      return out;
+    }
+
+    function promptImageName(image, index) {
+      const name = String(image?.name || "").trim();
+      if (name) return name;
+      return `screenshot-${index + 1}.png`;
+    }
+
+    function renderPromptImages() {
+      if (!builderImageList || !builderImagesClear) return;
+      builderImageList.replaceChildren();
+      builderImagesClear.disabled = state.promptImages.length === 0;
+
+      if (!state.promptImages.length) {
+        const empty = document.createElement("div");
+        empty.className = "rounded-lg border border-hub-border bg-[#0d1825] px-3 py-2 text-[0.74rem] leading-[1.35] text-hub-muted";
+        empty.textContent = "No screenshots attached.";
+        builderImageList.appendChild(empty);
+        return;
+      }
+
+      state.promptImages.forEach((image, index) => {
+        const row = document.createElement("div");
+        row.className = "rounded-lg border border-hub-border bg-[#0d1825] px-3 py-2 text-[0.74rem] leading-[1.35] text-slate-200";
+        row.textContent = `${promptImageName(image, index)} (${String(image.media_type || "image/png").trim() || "image/png"})`;
+        builderImageList.appendChild(row);
+      });
+    }
+
+    function setPromptImages(images) {
+      state.promptImages = normalizePromptImages(images);
+      renderPromptImages();
+    }
+
+    function clearPromptImages() {
+      setPromptImages([]);
+      if (state.promptMode === "raw") {
+        try {
+          syncRawFromBuilder();
+        } catch (_err) {
+          // Leave raw editor unchanged if builder is incomplete.
+        }
+      }
+    }
+
+    function readFileAsDataURL(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error(`read ${file?.name || "clipboard image"} failed`));
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function dataURLBase64(dataURL) {
+      const marker = "base64,";
+      const idx = String(dataURL || "").indexOf(marker);
+      if (idx < 0) {
+        throw new Error("clipboard image did not decode as base64");
+      }
+      return dataURL.slice(idx + marker.length).trim();
+    }
+
+    async function promptImageFromFile(file, index) {
+      const dataURL = await readFileAsDataURL(file);
+      return {
+        name: String(file?.name || `screenshot-${index + 1}.png`).trim() || `screenshot-${index + 1}.png`,
+        media_type: String(file?.type || "image/png").trim() || "image/png",
+        data_base64: dataURLBase64(dataURL),
+      };
+    }
+
+    async function appendPromptImages(files) {
+      const startIndex = state.promptImages.length;
+      const next = await Promise.all((files || []).map((file, index) => promptImageFromFile(file, startIndex + index)));
+      setPromptImages([...state.promptImages, ...next]);
+      if (state.promptMode === "raw") {
+        try {
+          syncRawFromBuilder();
+        } catch (_err) {
+          // Leave raw editor unchanged if builder is incomplete.
+        }
+      }
+      return next.length;
+    }
+
+    async function handlePromptImagePaste(event) {
+      const items = Array.from(event?.clipboardData?.items || []);
+      const files = items
+        .filter((item) => item && item.kind === "file")
+        .map((item) => item.getAsFile())
+        .filter((file) => file && /^image\/png$/i.test(String(file.type || "")));
+      if (!files.length) {
+        return;
+      }
+
+      event.preventDefault();
+      try {
+        const count = await appendPromptImages(files);
+        setLocalPromptStatus("ok", `Attached ${count} screenshot${count === 1 ? "" : "s"}.`);
+      } catch (err) {
+        setLocalPromptStatus("error", `Screenshot paste failed: ${err.message}`);
+      }
+    }
+
     function persistRepoHistory() {
       try {
         localStorage.setItem(REPO_HISTORY_KEY, JSON.stringify(state.repoHistory));
@@ -519,6 +656,7 @@
         base_branch: branch,
         target_subdir: String(builderTargetSubdir.value || "").trim() || ".",
         prompt,
+        images: normalizePromptImages(state.promptImages),
       };
     }
 
@@ -542,6 +680,7 @@
       builderTargetSubdir.value = String(payload.target_subdir || ".").trim() || ".";
       builderLibraryTask.value = String(payload.library_task_name || "").trim();
       builderPromptInput.value = String(payload.prompt || "").trim();
+      setPromptImages(payload.images);
       syncBuilderPromptVisibility();
       renderRepoHistoryOptions();
       renderLibraryTaskOptions();
@@ -599,8 +738,8 @@
       promptBuilderPanel.classList.toggle("hidden", isRaw);
       promptRawPanel.classList.toggle("hidden", !isRaw);
       localPromptHint.textContent = isRaw
-        ? "Paste one JSON object with either prompt or library_task_name and one of repo, repo_url, or repos. The UI normalizes JSON before submit."
-        : "Select a repo and either a library task or a custom prompt in Builder mode. Use Raw JSON for multi-repo runs or advanced fields.";
+        ? "Paste one JSON object with either prompt or library_task_name and one of repo, repo_url, or repos. Include images[] with base64 payloads for screenshots when needed."
+        : "Select a repo and either a library task or a custom prompt in Builder mode. You can paste PNG screenshots into the prompt field before submitting.";
     }
 
     function applyAutomaticMode() {
@@ -1340,6 +1479,10 @@
       }
     });
 
+    builderPromptInput.addEventListener("paste", handlePromptImagePaste);
+    builderImagePasteTarget.addEventListener("paste", handlePromptImagePaste);
+    builderImagesClear.addEventListener("click", clearPromptImages);
+
     promptModeBuilder.addEventListener("click", () => {
       if (state.promptMode === "builder") return;
       try {
@@ -1363,6 +1506,7 @@
     localPromptForm.addEventListener("submit", submitLocalPrompt);
     renderRepoHistoryOptions();
     renderLibraryTaskOptions();
+    renderPromptImages();
     try {
       syncRawFromBuilder();
     } catch (_err) {

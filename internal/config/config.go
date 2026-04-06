@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -17,19 +18,27 @@ const prBodyFooter = "If you would like to connect agents together checkout [Mol
 
 // Config is the v1 public contract for a harness run.
 type Config struct {
-	Version       string   `json:"version"`
-	RepoURL       string   `json:"repo_url"`
-	Repo          string   `json:"repo"`
-	Repos         []string `json:"repos"`
-	BaseBranch    string   `json:"base_branch"`
-	TargetSubdir  string   `json:"target_subdir"`
-	Prompt        string   `json:"prompt"`
-	CommitMessage string   `json:"commit_message"`
-	PRTitle       string   `json:"pr_title"`
-	PRBody        string   `json:"pr_body"`
-	Labels        []string `json:"labels"`
-	GitHubHandle  string   `json:"github_handle"`
-	Reviewers     []string `json:"reviewers"`
+	Version       string        `json:"version"`
+	RepoURL       string        `json:"repo_url"`
+	Repo          string        `json:"repo"`
+	Repos         []string      `json:"repos"`
+	BaseBranch    string        `json:"base_branch"`
+	TargetSubdir  string        `json:"target_subdir"`
+	Prompt        string        `json:"prompt"`
+	Images        []PromptImage `json:"images,omitempty"`
+	CommitMessage string        `json:"commit_message"`
+	PRTitle       string        `json:"pr_title"`
+	PRBody        string        `json:"pr_body"`
+	Labels        []string      `json:"labels"`
+	GitHubHandle  string        `json:"github_handle"`
+	Reviewers     []string      `json:"reviewers"`
+}
+
+// PromptImage captures one prompt image attachment.
+type PromptImage struct {
+	Name       string `json:"name,omitempty"`
+	MediaType  string `json:"media_type,omitempty"`
+	DataBase64 string `json:"data_base64,omitempty"`
 }
 
 // Load reads and validates a JSON/JSONC config from disk.
@@ -78,6 +87,7 @@ func (c *Config) ApplyDefaults() {
 	}
 
 	c.Prompt = strings.TrimSpace(c.Prompt)
+	c.Images = normalizePromptImages(c.Images)
 	c.GitHubHandle = normalizeReviewer(c.GitHubHandle)
 	c.Reviewers = mergeReviewers(c.Reviewers, c.GitHubHandle)
 
@@ -125,6 +135,11 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.Prompt) == "" {
 		return fmt.Errorf("prompt is required")
 	}
+	for i, image := range c.Images {
+		if err := validatePromptImage(image, i); err != nil {
+			return err
+		}
+	}
 	if strings.TrimSpace(c.CommitMessage) == "" {
 		return fmt.Errorf("commit_message is required")
 	}
@@ -149,6 +164,39 @@ func (c Config) RepoList() []string {
 		repos = prependIfMissing(repos, repoURL)
 	}
 	return repos
+}
+
+func normalizePromptImages(images []PromptImage) []PromptImage {
+	if len(images) == 0 {
+		return nil
+	}
+	out := make([]PromptImage, 0, len(images))
+	for _, image := range images {
+		image.Name = strings.TrimSpace(image.Name)
+		image.MediaType = strings.TrimSpace(image.MediaType)
+		image.DataBase64 = strings.TrimSpace(image.DataBase64)
+		if image.Name == "" && image.MediaType == "" && image.DataBase64 == "" {
+			continue
+		}
+		out = append(out, image)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func validatePromptImage(image PromptImage, index int) error {
+	if image.DataBase64 == "" {
+		return fmt.Errorf("images[%d].data_base64 is required", index)
+	}
+	if image.MediaType != "" && !strings.HasPrefix(strings.ToLower(image.MediaType), "image/") {
+		return fmt.Errorf("images[%d].media_type must be an image MIME type", index)
+	}
+	if _, err := base64.StdEncoding.DecodeString(image.DataBase64); err != nil {
+		return fmt.Errorf("images[%d].data_base64 is invalid base64: %w", index, err)
+	}
+	return nil
 }
 
 func validateSubdir(subdir string) error {

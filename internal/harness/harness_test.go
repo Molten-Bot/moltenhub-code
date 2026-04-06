@@ -1056,6 +1056,20 @@ func TestCommandBuilders(t *testing.T) {
 	if codexWorkspace.Name != "codex" || codexWorkspace.Dir != targetDir || !reflect.DeepEqual(codexWorkspace.Args, []string{"exec", "--sandbox", "workspace-write", "--skip-git-repo-check", withCompletionGatePrompt(prompt)}) {
 		t.Fatalf("codex workspace command unexpected: %+v", codexWorkspace)
 	}
+	codexWithImages := codexCommandWithOptions(targetDir, prompt, codexRunOptions{
+		SkipGitRepoCheck: true,
+		ImagePaths:       []string{"/tmp/run/prompt-images/01-shot.png", "/tmp/run/prompt-images/02-shot.png"},
+	})
+	if codexWithImages.Name != "codex" || codexWithImages.Dir != targetDir || !reflect.DeepEqual(codexWithImages.Args, []string{
+		"exec",
+		"--sandbox", "workspace-write",
+		"--skip-git-repo-check",
+		"--image", "/tmp/run/prompt-images/01-shot.png",
+		"--image", "/tmp/run/prompt-images/02-shot.png",
+		withCompletionGatePrompt(prompt),
+	}) {
+		t.Fatalf("codex image command unexpected: %+v", codexWithImages)
+	}
 
 	pr := prCreateCommand(repoDir, cfg, branch)
 	wantPrefix := []string{"pr", "create", "--base", "main", "--head", branch, "--title", cfg.PRTitle, "--body", cfg.PRBody}
@@ -1134,6 +1148,31 @@ func TestCommandBuilders(t *testing.T) {
 	wantPullRebase := []string{"pull", "--rebase", "origin", branch}
 	if pullRebase.Name != "git" || pullRebase.Dir != repoDir || !reflect.DeepEqual(pullRebase.Args, wantPullRebase) {
 		t.Fatalf("pull rebase command unexpected: %+v", pullRebase)
+	}
+}
+
+func TestMaterializePromptImages(t *testing.T) {
+	t.Parallel()
+
+	runDir := t.TempDir()
+	paths, err := materializePromptImages(runDir, []config.PromptImage{
+		{Name: "Clipboard Shot.PNG", MediaType: "image/png", DataBase64: "aGVsbG8="},
+	})
+	if err != nil {
+		t.Fatalf("materializePromptImages() error = %v", err)
+	}
+	if got, want := len(paths), 1; got != want {
+		t.Fatalf("len(paths) = %d, want %d", got, want)
+	}
+	if want := filepath.Join(runDir, "prompt-images", "01-clipboard-shot.png"); paths[0] != want {
+		t.Fatalf("paths[0] = %q, want %q", paths[0], want)
+	}
+	data, err := os.ReadFile(paths[0])
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", paths[0], err)
+	}
+	if got, want := string(data), "hello"; got != want {
+		t.Fatalf("image content = %q, want %q", got, want)
 	}
 }
 

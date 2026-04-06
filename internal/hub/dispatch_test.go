@@ -307,6 +307,31 @@ func TestParseRunConfigJSON(t *testing.T) {
 	}
 }
 
+func TestParseRunConfigJSONWithImages(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := ParseRunConfigJSON([]byte(`{
+		"repo": "git@github.com:acme/repo.git",
+		"prompt": "inspect screenshot",
+		"images": [
+			{
+				"name": "shot.png",
+				"media_type": "image/png",
+				"data_base64": "aGVsbG8="
+			}
+		]
+	}`))
+	if err != nil {
+		t.Fatalf("ParseRunConfigJSON() error = %v", err)
+	}
+	if got, want := len(cfg.Images), 1; got != want {
+		t.Fatalf("len(Images) = %d, want %d", got, want)
+	}
+	if got, want := cfg.Images[0].Name, "shot.png"; got != want {
+		t.Fatalf("Images[0].Name = %q, want %q", got, want)
+	}
+}
+
 func TestParseRunConfigJSONExpandsLibraryTaskPayload(t *testing.T) {
 	t.Parallel()
 

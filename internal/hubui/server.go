@@ -20,6 +20,8 @@ import (
 //go:embed static/*
 var staticFiles embed.FS
 
+const maxLocalPromptBodyBytes = 16 << 20
+
 // Server provides an HTTP UI for live hub/task monitoring.
 type Server struct {
 	Addr              string
@@ -248,7 +250,7 @@ func (s Server) handleLocalPrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxLocalPromptBodyBytes))
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":    false,

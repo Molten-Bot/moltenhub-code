@@ -199,6 +199,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="builder-library-task"`) {
 		t.Fatalf("expected index html to include library task select")
 	}
+	if !strings.Contains(markup, `id="builder-image-paste-target"`) {
+		t.Fatalf("expected index html to include screenshot paste target")
+	}
+	if !strings.Contains(markup, `id="builder-image-list"`) {
+		t.Fatalf("expected index html to include screenshot attachment list")
+	}
 	if !strings.Contains(markup, `id="builder-repo-input" class="prompt-control prompt-input"`) || !strings.Contains(markup, `id="builder-target-subdir" class="prompt-control prompt-input"`) {
 		t.Fatalf("expected index html to include builder repo and target subdir inputs")
 	}
@@ -214,6 +220,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "function rememberRepos(") {
 		t.Fatalf("expected index html to include repo history persistence")
+	}
+	if !strings.Contains(markup, "function handlePromptImagePaste(") {
+		t.Fatalf("expected index html to include screenshot paste handler")
 	}
 	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":false};`) {
 		t.Fatalf("expected index html to include default UI config")
@@ -320,6 +329,34 @@ func TestHandlerLocalPromptSubmitAccepted(t *testing.T) {
 	}
 	if requestID, _ := body["request_id"].(string); requestID != "local-123" {
 		t.Fatalf("request_id = %q", requestID)
+	}
+}
+
+func TestHandlerLocalPromptSubmitAcceptedWithImages(t *testing.T) {
+	t.Parallel()
+
+	var gotBody string
+	srv := NewServer("", NewBroker())
+	srv.SubmitLocalPrompt = func(_ context.Context, body []byte) (string, error) {
+		gotBody = string(body)
+		return "local-789", nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	payload := `{"repo":"git@github.com:acme/repo.git","base_branch":"main","target_subdir":".","prompt":"inspect screenshot","images":[{"name":"shot.png","media_type":"image/png","data_base64":"aGVsbG8="}]}`
+	resp, err := http.Post(ts.URL+"/api/local-prompt", "application/json", bytes.NewBufferString(payload))
+	if err != nil {
+		t.Fatalf("POST /api/local-prompt error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusAccepted)
+	}
+	if gotBody != payload {
+		t.Fatalf("submitted body = %q, want %q", gotBody, payload)
 	}
 }
 

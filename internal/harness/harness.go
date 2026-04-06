@@ -70,6 +70,7 @@ type repoWorkspace struct {
 
 type codexRunOptions struct {
 	SkipGitRepoCheck bool
+	ImagePaths       []string
 }
 
 // Harness executes the clone -> codex -> PR workflow.
@@ -147,6 +148,11 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 	h.logf("stage=workspace status=ok run_dir=%s guid=%s agents=%s", runDir, guid, agentsPath)
 
+	imagePaths, err := materializePromptImages(runDir, cfg.Images)
+	if err != nil {
+		return h.fail(ExitConfig, "config", err, runDir)
+	}
+
 	repoURLs := cfg.RepoList()
 	if len(repoURLs) == 0 {
 		return h.fail(ExitConfig, "config", fmt.Errorf("one of repo, repo_url, or repos[] is required"), runDir)
@@ -191,17 +197,17 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		} else {
 			h.logf("stage=clone status=ok repo=%s repo_dir=%s", repoURL, relDir)
 		}
-			if !shouldCreateWorkBranch(cloneBaseBranch) {
-				h.logf("stage=clone status=start action=fetch_main repo=%s repo_dir=%s", repoURL, relDir)
-				if _, err := h.runCommand(ctx, "clone", fetchMainBranchCommand(repoDir)); err != nil {
-					return h.fail(ExitClone, "clone", err, runDir)
-				}
-				h.logf("stage=clone status=ok action=fetch_main repo=%s repo_dir=%s", repoURL, relDir)
+		if !shouldCreateWorkBranch(cloneBaseBranch) {
+			h.logf("stage=clone status=start action=fetch_main repo=%s repo_dir=%s", repoURL, relDir)
+			if _, err := h.runCommand(ctx, "clone", fetchMainBranchCommand(repoDir)); err != nil {
+				return h.fail(ExitClone, "clone", err, runDir)
 			}
-			repos = append(repos, repoWorkspace{
-				URL:    repoURL,
-				Dir:    repoDir,
-				RelDir: relDir,
+			h.logf("stage=clone status=ok action=fetch_main repo=%s repo_dir=%s", repoURL, relDir)
+		}
+		repos = append(repos, repoWorkspace{
+			URL:    repoURL,
+			Dir:    repoDir,
+			RelDir: relDir,
 		})
 	}
 	runCfg.BaseBranch = cloneBaseBranch
@@ -242,7 +248,10 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	if len(repos) > 1 {
 		codexDir = runDir
 	}
-	codexOpts := codexRunOptions{SkipGitRepoCheck: len(repos) > 1}
+	codexOpts := codexRunOptions{
+		SkipGitRepoCheck: len(repos) > 1,
+		ImagePaths:       imagePaths,
+	}
 	codexBasePrompt := workspaceCodexPrompt(cfg.Prompt, cfg.TargetSubdir, repos)
 	if strings.TrimSpace(agentsPath) != "" {
 		codexBasePrompt = withAgentsPrompt(codexBasePrompt, agentsPath)
@@ -888,12 +897,91 @@ func codexCommandWithOptions(targetDir, prompt string, opts codexRunOptions) exe
 	if opts.SkipGitRepoCheck {
 		args = append(args, "--skip-git-repo-check")
 	}
+	for _, imagePath := range opts.ImagePaths {
+		imagePath = strings.TrimSpace(imagePath)
+		if imagePath == "" {
+			continue
+		}
+		args = append(args, "--image", imagePath)
+	}
 	args = append(args, withCompletionGatePrompt(prompt))
 
 	return execx.Command{
 		Dir:  targetDir,
 		Name: "codex",
 		Args: args,
+	}
+}
+
+func materializePromptImages(runDir string, images []config.PromptImage) ([]string, error) {
+	if len(images) == 0 {
+		return nil, nil
+	}
+
+	dir := filepath.Join(runDir, "prompt-images")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, fmt.Errorf("create prompt image dir: %w", err)
+	}
+
+	paths := make([]string, 0, len(images))
+	for i, image := range images {
+		raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(image.DataBase64))
+		if err != nil {
+			return nil, fmt.Errorf("decode images[%d]: %w", i, err)
+		}
+		path := filepath.Join(dir, promptImageFilename(image, i))
+		if err := os.WriteFile(path, raw, 0o644); err != nil {
+			return nil, fmt.Errorf("write images[%d]: %w", i, err)
+		}
+		paths = append(paths, path)
+	}
+	return paths, nil
+}
+
+func promptImageFilename(image config.PromptImage, index int) string {
+	base := strings.TrimSpace(image.Name)
+	if base != "" {
+		base = filepath.Base(base)
+		if ext := filepath.Ext(base); ext != "" {
+			base = strings.TrimSuffix(base, ext)
+		}
+	}
+	if base == "" {
+		base = "prompt-image"
+	}
+
+	var b strings.Builder
+	lastSep := false
+	for _, r := range strings.ToLower(base) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			lastSep = false
+			continue
+		}
+		if b.Len() > 0 && !lastSep {
+			b.WriteByte('-')
+			lastSep = true
+		}
+	}
+	slug := strings.Trim(b.String(), "-")
+	if slug == "" {
+		slug = "prompt-image"
+	}
+	return fmt.Sprintf("%02d-%s%s", index+1, slug, promptImageExtension(image.MediaType))
+}
+
+func promptImageExtension(mediaType string) string {
+	switch strings.ToLower(strings.TrimSpace(mediaType)) {
+	case "image/jpeg", "image/jpg":
+		return ".jpg"
+	case "image/gif":
+		return ".gif"
+	case "image/webp":
+		return ".webp"
+	case "image/png", "":
+		return ".png"
+	default:
+		return ".img"
 	}
 }
 
