@@ -38,10 +38,10 @@ docker build -t moltenhub-code:latest .
 
 GitHub Actions publish flow:
 
-- pushes to `main` publish `moltenai/moltenhub-code:vnext`
-- each image build also publishes an immutable `moltenai/moltenhub-code:<run_number>` tag
-- manual `workflow_dispatch` with `channel=production` promotes `moltenai/moltenhub-code:vnext` to `moltenai/moltenhub-code:latest` without rebuilding
-- manual dispatch supports either channel
+- `deploy-vnext` runs automatically on pushes to `main` (including PR merges) and publishes:
+  - `moltenai/moltenhub-code:vnext`
+  - `moltenai/moltenhub-code:<yyyy.mm.dd.run_number>` (example: `2026.04.04.5`)
+- `deploy-prod` is manual-only (`workflow_dispatch`) and promotes a selected source tag (default `vnext`) to `moltenai/moltenhub-code:latest` without rebuilding
 - required repository secret: `DOCKERHUB_TOKEN`
 
 Run with PAT auth via `GITHUB_TOKEN`:
