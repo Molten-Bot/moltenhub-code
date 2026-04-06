@@ -154,6 +154,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="builder-repo-select"`) {
 		t.Fatalf("expected index html to include repo history select")
 	}
+	if !strings.Contains(markup, `id="builder-repo-input" class="prompt-control prompt-input"`) || !strings.Contains(markup, `id="builder-target-subdir" class="prompt-control prompt-input"`) {
+		t.Fatalf("expected index html to include builder repo and target subdir inputs")
+	}
+	if !strings.Contains(markup, `prompt-grid grid gap-2.5 md:grid-cols-3`) || !strings.Contains(markup, `prompt-field md:col-span-2`) {
+		t.Fatalf("expected index html to place repository and target subdir on a shared 3-column builder row")
+	}
 	if !strings.Contains(markup, "function rememberRepos(") {
 		t.Fatalf("expected index html to include repo history persistence")
 	}
