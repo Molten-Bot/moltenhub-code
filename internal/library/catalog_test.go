@@ -1,0 +1,174 @@
+package library
+
+import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+func TestLoadCatalogReadsJSONTasks(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	data := `{
+  "security-review": {
+    "description": "Audit security boundaries.",
+    "target_subdir": ".",
+    "prompt": "Review the repository."
+  }
+}`
+	if err := os.WriteFile(filepath.Join(dir, "security-review.json"), []byte(data), 0o644); err != nil {
+		t.Fatalf("write task: %v", err)
+	}
+
+	catalog, err := LoadCatalog(dir)
+	if err != nil {
+		t.Fatalf("LoadCatalog() error = %v", err)
+	}
+	if got, want := len(catalog.Tasks), 1; got != want {
+		t.Fatalf("len(Tasks) = %d, want %d", got, want)
+	}
+	if got, want := catalog.Tasks[0].Name, "security-review"; got != want {
+		t.Fatalf("Name = %q, want %q", got, want)
+	}
+	if got, want := catalog.Tasks[0].TargetSubdir, "."; got != want {
+		t.Fatalf("TargetSubdir = %q, want %q", got, want)
+	}
+	if got, want := catalog.Names(), []string{"security-review"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Names() = %v, want %v", got, want)
+	}
+}
+
+func TestLoadCatalogSupportsMultipleKeyedTasksInOneFile(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	data := `{
+  "security-review": {
+    "description": "Audit security boundaries.",
+    "prompt": "Review the repository."
+  },
+  "unit-test-coverage": {
+    "target_subdir": ".",
+    "prompt": "Raise coverage."
+  }
+}`
+	if err := os.WriteFile(filepath.Join(dir, "tasks.json"), []byte(data), 0o644); err != nil {
+		t.Fatalf("write task: %v", err)
+	}
+
+	catalog, err := LoadCatalog(dir)
+	if err != nil {
+		t.Fatalf("LoadCatalog() error = %v", err)
+	}
+	if got, want := catalog.Names(), []string{"security-review", "unit-test-coverage"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Names() = %v, want %v", got, want)
+	}
+	if got, want := catalog.Tasks[0].TargetSubdir, "."; got != want {
+		t.Fatalf("TargetSubdir = %q, want %q", got, want)
+	}
+}
+
+func TestLoadCatalogSupportsLegacySingleTaskShape(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	data := `{
+  "name": "security-review",
+  "description": "Audit security boundaries.",
+  "target_subdir": ".",
+  "prompt": "Review the repository."
+}`
+	if err := os.WriteFile(filepath.Join(dir, "security-review.json"), []byte(data), 0o644); err != nil {
+		t.Fatalf("write task: %v", err)
+	}
+
+	catalog, err := LoadCatalog(dir)
+	if err != nil {
+		t.Fatalf("LoadCatalog() error = %v", err)
+	}
+	if got, want := catalog.Names(), []string{"security-review"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Names() = %v, want %v", got, want)
+	}
+}
+
+func TestLoadCatalogRejectsUnknownFields(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	data := `{
+  "broken-task": {
+    "repos": ["git@github.com:acme/repo.git"],
+    "prompt": "x"
+  }
+}`
+	if err := os.WriteFile(filepath.Join(dir, "broken.json"), []byte(data), 0o644); err != nil {
+		t.Fatalf("write task: %v", err)
+	}
+
+	_, err := LoadCatalog(dir)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadCatalogRejectsMismatchedInlineNameForKeyedTask(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	data := `{
+  "security-review": {
+    "name": "wrong-name",
+    "prompt": "Review the repository."
+  }
+}`
+	if err := os.WriteFile(filepath.Join(dir, "broken.json"), []byte(data), 0o644); err != nil {
+		t.Fatalf("write task: %v", err)
+	}
+
+	_, err := LoadCatalog(dir)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "name must match key") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestExpandRunConfigUsesRepoAndBranchInputs(t *testing.T) {
+	t.Parallel()
+
+	catalog := Catalog{
+		Tasks: []TaskDefinition{{
+			Name:         "unit-test-coverage",
+			TargetSubdir: ".",
+			Prompt:       "Raise coverage.",
+		}},
+		byName: map[string]TaskDefinition{
+			"unit-test-coverage": {
+				Name:         "unit-test-coverage",
+				TargetSubdir: ".",
+				Prompt:       "Raise coverage.",
+			},
+		},
+	}
+
+	cfg, err := catalog.ExpandRunConfig("unit-test-coverage", "git@github.com:acme/repo.git", "release")
+	if err != nil {
+		t.Fatalf("ExpandRunConfig() error = %v", err)
+	}
+	if got, want := cfg.RepoURL, "git@github.com:acme/repo.git"; got != want {
+		t.Fatalf("RepoURL = %q, want %q", got, want)
+	}
+	if got, want := cfg.BaseBranch, "release"; got != want {
+		t.Fatalf("BaseBranch = %q, want %q", got, want)
+	}
+	if got, want := cfg.Prompt, "Raise coverage."; got != want {
+		t.Fatalf("Prompt = %q, want %q", got, want)
+	}
+}

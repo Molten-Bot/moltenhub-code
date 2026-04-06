@@ -13,6 +13,7 @@ import (
 	"github.com/jef/moltenhub-code/internal/config"
 	"github.com/jef/moltenhub-code/internal/execx"
 	"github.com/jef/moltenhub-code/internal/harness"
+	"github.com/jef/moltenhub-code/internal/library"
 )
 
 // Daemon listens for hub skill dispatches and runs harness jobs.
@@ -78,6 +79,18 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 		return fmt.Errorf("hub runtime config: %w", err)
 	}
 	d.logf("hub.runtime_config status=saved path=%s", defaultRuntimeConfigPath)
+
+	libraryCatalog, libraryErr := library.LoadCatalog(library.DefaultDir)
+	if libraryErr != nil {
+		d.logf("hub.library status=warn err=%q", libraryErr)
+	} else {
+		d.logf("hub.library status=loaded tasks=%d", len(libraryCatalog.Tasks))
+	}
+	if err := api.RegisterRuntime(ctx, token, cfg, libraryCatalog.Summaries()); err != nil {
+		d.logf("hub.runtime status=warn action=register err=%q", err)
+	} else {
+		d.logf("hub.runtime status=registered skills=1 library_tasks=%d", len(libraryCatalog.Tasks))
+	}
 
 	if err := api.SyncProfile(ctx, token, cfg); err != nil {
 		d.logf("hub.profile status=warn err=%q", err)
@@ -704,9 +717,17 @@ func dispatchParseErrorPayload(cfg InitConfig, dispatch SkillDispatch, parseErr 
 	if result == nil {
 		result = map[string]any{}
 	}
-	result["required_schema"] = requiredSkillPayloadSchema(cfg.Skill.DispatchType, cfg.Skill.Name)
+	result["required_schema"] = requiredSkillPayloadSchema(cfg.Skill.DispatchType, cfg.Skill.Name, currentLibraryTaskNames())
 	payload["result"] = result
 	return payload
+}
+
+func currentLibraryTaskNames() []string {
+	catalog, err := library.LoadCatalog(library.DefaultDir)
+	if err != nil {
+		return nil
+	}
+	return catalog.Names()
 }
 
 func incomingSkillName(msg map[string]any) string {

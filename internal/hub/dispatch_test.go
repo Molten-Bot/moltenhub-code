@@ -307,6 +307,44 @@ func TestParseRunConfigJSON(t *testing.T) {
 	}
 }
 
+func TestParseRunConfigJSONExpandsLibraryTaskPayload(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := ParseRunConfigJSON([]byte(`{
+		"repo": "git@github.com:acme/repo.git",
+		"branch": "release",
+		"library_task_name": "unit-test-coverage"
+	}`))
+	if err != nil {
+		t.Fatalf("ParseRunConfigJSON() error = %v", err)
+	}
+	if got, want := cfg.RepoURL, "git@github.com:acme/repo.git"; got != want {
+		t.Fatalf("RepoURL = %q, want %q", got, want)
+	}
+	if got, want := cfg.BaseBranch, "release"; got != want {
+		t.Fatalf("BaseBranch = %q, want %q", got, want)
+	}
+	if got := cfg.Prompt; !strings.Contains(got, "100% unit-test coverage") {
+		t.Fatalf("Prompt = %q", got)
+	}
+}
+
+func TestParseRunConfigJSONRejectsAmbiguousPromptAndLibraryTask(t *testing.T) {
+	t.Parallel()
+
+	_, err := ParseRunConfigJSON([]byte(`{
+		"repo": "git@github.com:acme/repo.git",
+		"prompt": "x",
+		"library_task_name": "unit-test-coverage"
+	}`))
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "cannot include both prompt and library_task_name") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestParseRunConfigJSONWithReposArray(t *testing.T) {
 	t.Parallel()
 

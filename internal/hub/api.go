@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/jef/moltenhub-code/internal/library"
 )
 
 type apiAttempt struct {
@@ -193,7 +195,16 @@ func (c APIClient) UpdateAgentStatus(ctx context.Context, token, status string) 
 }
 
 // RegisterRuntime sends plugin/runtime metadata to hub.
-func (c APIClient) RegisterRuntime(ctx context.Context, token string, cfg InitConfig) error {
+func (c APIClient) RegisterRuntime(ctx context.Context, token string, cfg InitConfig, libraryTasks []library.TaskSummary) error {
+	libraryNames := make([]string, 0, len(libraryTasks))
+	for _, task := range libraryTasks {
+		name := strings.TrimSpace(task.Name)
+		if name == "" {
+			continue
+		}
+		libraryNames = append(libraryNames, name)
+	}
+
 	body := map[string]any{
 		"plugin_id":   runtimeIdentifier,
 		"runtime_id":  runtimeIdentifier,
@@ -202,9 +213,18 @@ func (c APIClient) RegisterRuntime(ctx context.Context, token string, cfg InitCo
 			"name":          cfg.Skill.Name,
 			"dispatch_type": cfg.Skill.DispatchType,
 			"result_type":   cfg.Skill.ResultType,
+			"metadata": map[string]any{
+				"run_config_modes":    []string{"prompt", "library_task"},
+				"library_task_names":  libraryNames,
+				"library_task_count":  len(libraryNames),
+				"library_tasks":       libraryTasks,
+				"supports_branch_key": true,
+			},
 		}},
 		"metadata": map[string]any{
-			"agent_type": runtimeIdentifier,
+			"agent_type":         runtimeIdentifier,
+			"library_task_names": libraryNames,
+			"library_task_count": len(libraryNames),
 		},
 	}
 	ok, trace := c.tryAny(ctx, token, []apiAttempt{
