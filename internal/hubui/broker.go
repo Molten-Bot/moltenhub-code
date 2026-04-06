@@ -523,7 +523,7 @@ func (b *Broker) updateHubConnectionFromLineLocked(line string, fields map[strin
 }
 
 func (b *Broker) updateResourceMetricsFromLineLocked(line string, fields map[string]string, now time.Time) {
-	if !strings.HasPrefix(line, "dispatcher status=window") {
+	if !strings.Contains(line, "dispatcher status=window") {
 		return
 	}
 

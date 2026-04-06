@@ -106,3 +106,24 @@ func TestTerminalLoggerCaptureWritesTrimmedLineToSink(t *testing.T) {
 		t.Fatalf("sink line = %q", sink.lines[0])
 	}
 }
+
+func TestTerminalLoggerHidesDebugLinesFromRegularOutputButKeepsSink(t *testing.T) {
+	t.Parallel()
+
+	sink := &recordingTerminalLogSink{}
+	var out strings.Builder
+	logger := newTerminalLogger(&out, false)
+	logger.sink = sink
+
+	logger.Print("debug dispatcher status=window state=steady cpu=11.6 memory=35.2 disk_io_mb_s=0.4 allowed=24 max=24 running=0 queue_depth=0")
+
+	if got := out.String(); got != "" {
+		t.Fatalf("terminal output = %q, want empty", got)
+	}
+	if len(sink.lines) != 1 {
+		t.Fatalf("sink lines = %d, want 1", len(sink.lines))
+	}
+	if sink.lines[0] != "debug dispatcher status=window state=steady cpu=11.6 memory=35.2 disk_io_mb_s=0.4 allowed=24 max=24 running=0 queue_depth=0" {
+		t.Fatalf("sink line = %q", sink.lines[0])
+	}
+}

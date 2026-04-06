@@ -109,7 +109,7 @@ func TestBrokerTracksDispatcherResourceWindow(t *testing.T) {
 	t.Parallel()
 
 	b := NewBroker()
-	b.IngestLog("dispatcher status=window state=steady cpu=12.5 memory=48.2 disk_io_mb_s=3.7 allowed=2 max=4 running=1 queue_depth=0")
+	b.IngestLog("debug dispatcher status=window state=steady cpu=12.5 memory=48.2 disk_io_mb_s=3.7 allowed=2 max=4 running=1 queue_depth=0")
 
 	snap := b.Snapshot()
 	if got := snap.Resources.CPUPercent; got != 12.5 {

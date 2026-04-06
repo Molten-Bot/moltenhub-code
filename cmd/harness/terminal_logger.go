@@ -16,6 +16,7 @@ type terminalLogMode int
 const (
 	terminalLogModeNormal terminalLogMode = iota
 	terminalLogModeProgress
+	terminalLogModeSinkOnly
 	terminalLogModeDrop
 )
 
@@ -90,6 +91,9 @@ func (l *terminalLogger) Print(line string) {
 		l.clearProgressLocked()
 		_, _ = fmt.Fprintln(l.out, rendered)
 		l.writeSinkLocked(rendered)
+	case terminalLogModeSinkOnly:
+		l.clearProgressLocked()
+		l.writeSinkLocked(rendered)
 	default:
 		l.clearProgressLocked()
 		_, _ = fmt.Fprintln(l.out, rendered)
@@ -160,6 +164,9 @@ func (l *terminalLogger) clearProgressLocked() {
 func formatTerminalLogLine(line string) (string, terminalLogMode) {
 	if line == "" {
 		return "", terminalLogModeDrop
+	}
+	if strings.HasPrefix(line, "debug ") {
+		return line, terminalLogModeSinkOnly
 	}
 
 	if progress, ok := compactCodexProgressLine(line); ok {

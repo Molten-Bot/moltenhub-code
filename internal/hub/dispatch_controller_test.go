@@ -210,7 +210,7 @@ func TestAdaptiveDispatchControllerLogsWindowSamplesEvenWhenCapacityIsSteady(t *
 		t.Fatal("expected sampleAndUpdate to emit a window log line")
 	}
 	last := lines[len(lines)-1]
-	if !strings.Contains(last, "dispatcher status=window") {
+	if !strings.Contains(last, "debug dispatcher status=window") {
 		t.Fatalf("last log = %q, want dispatcher window line", last)
 	}
 	if !strings.Contains(last, "state=steady") {
