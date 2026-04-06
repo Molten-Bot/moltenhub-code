@@ -148,6 +148,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `href="/static/style.css"`) {
 		t.Fatalf("expected index html to include external stylesheet link")
 	}
+	if !strings.Contains(markup, `src="https://molten.bot/logo.svg"`) {
+		t.Fatalf("expected index html to include moltenhub logo")
+	}
 	if !strings.Contains(markup, `"task-close"`) {
 		t.Fatalf("expected index html to include task close class usage")
 	}
@@ -190,8 +193,43 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="builder-library-task"`) {
 		t.Fatalf("expected index html to include library task select")
 	}
+	if !strings.Contains(markup, `id="builder-repo-input" class="prompt-control prompt-input"`) || !strings.Contains(markup, `id="builder-target-subdir" class="prompt-control prompt-input"`) {
+		t.Fatalf("expected index html to include builder repo and target subdir inputs")
+	}
+	if !strings.Contains(markup, `class="prompt-grid"`) ||
+		!strings.Contains(markup, `id="builder-repo-history-field" class="prompt-field prompt-field-repo-history"`) ||
+		!strings.Contains(markup, `class="prompt-field prompt-field-repository"`) ||
+		!strings.Contains(markup, `class="prompt-field prompt-field-base-branch"`) ||
+		!strings.Contains(markup, `class="prompt-field prompt-field-target-subdir"`) {
+		t.Fatalf("expected index html to include the builder row with explicit field layout classes")
+	}
+	if !strings.Contains(markup, `builderRepoHistoryField.classList.toggle("hidden", !hasSavedHistory);`) {
+		t.Fatalf("expected index html to hide repo history when there are no saved repos")
+	}
 	if !strings.Contains(markup, "function rememberRepos(") {
 		t.Fatalf("expected index html to include repo history persistence")
+	}
+	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":false};`) {
+		t.Fatalf("expected index html to include default UI config")
+	}
+}
+
+func TestHandlerIndexInjectsAutomaticModeConfig(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	srv.AutomaticMode = true
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+
+	markup := resp.Body.String()
+	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":true};`) {
+		t.Fatalf("expected automatic mode UI config, got %q", markup)
 	}
 }
 
@@ -225,6 +263,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".prompt-grid") {
 		t.Fatalf("expected stylesheet to include prompt grid styles")
+	}
+	if !strings.Contains(css, ".brand-logo") {
+		t.Fatalf("expected stylesheet to include brand logo styles")
 	}
 }
 

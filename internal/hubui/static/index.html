@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MoltenHub Code</title>
   <script>
+    window.__HUB_UI_CONFIG__ = {"automaticMode":false};
+  </script>
+  <script>
     tailwind.config = {
       theme: {
         extend: {
@@ -38,9 +41,15 @@
 <body class="min-h-screen bg-hub-bg text-hub-text antialiased">
   <div class="app mx-auto grid w-full max-w-[1500px] gap-4 p-5">
     <div class="header flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <div class="title text-[1.4rem] font-bold uppercase tracking-[0.04em]">MoltenHub Code</div>
-        <div class="sub text-sm text-hub-muted">Live task status + terminal output</div>
+      <div class="brand-lockup flex items-center gap-3">
+        <img
+          class="brand-logo h-11 w-11 shrink-0 rounded-xl border border-white/10 bg-white/5 p-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.25)]"
+          src="https://molten.bot/logo.svg"
+          alt="MoltenHub logo">
+        <div>
+          <div class="title text-[1.4rem] font-bold uppercase tracking-[0.04em]">MoltenHub Code</div>
+          <div class="sub text-sm text-hub-muted">Live task status + terminal output</div>
+        </div>
       </div>
       <div class="status-row flex flex-wrap items-center gap-2.5 text-sm text-hub-muted">
         <div class="status-item flex min-h-[30px] items-center gap-2 rounded-full border border-hub-border bg-hub-panel/75 px-2.5 py-1">
@@ -67,31 +76,30 @@
             <span>Local Prompt</span>
           </div>
           <form id="local-prompt-form" class="prompt-form grid gap-2.5 p-3">
-            <div class="prompt-mode-row flex flex-wrap items-center justify-between gap-2">
+            <div class="prompt-mode-row flex flex-wrap items-center gap-2">
               <div class="prompt-mode-tabs inline-flex rounded-lg border border-hub-border bg-[#0d1825] p-1">
                 <button id="prompt-mode-builder" class="prompt-mode-tab active" type="button">Builder</button>
                 <button id="prompt-mode-raw" class="prompt-mode-tab" type="button">Raw JSON</button>
               </div>
-              <div class="prompt-mode-copy text-[0.72rem] uppercase tracking-[0.05em] text-hub-muted">Builder is the default input</div>
             </div>
 
             <div id="prompt-builder-panel" class="prompt-panel grid gap-2.5">
-              <div class="prompt-grid grid gap-2.5 md:grid-cols-2">
-                <label class="prompt-field">
+              <div class="prompt-grid">
+                <label id="builder-repo-history-field" class="prompt-field prompt-field-repo-history">
                   <span class="prompt-label">Repo History</span>
                   <select id="builder-repo-select" class="prompt-control">
                     <option value="">Enter repo manually</option>
                   </select>
                 </label>
-                <label class="prompt-field">
-                  <span class="prompt-label">Base Branch</span>
-                  <input id="builder-base-branch" class="prompt-control prompt-input" type="text" value="main" spellcheck="false" placeholder="main">
-                </label>
-                <label class="prompt-field md:col-span-2">
+                <label class="prompt-field prompt-field-repository">
                   <span class="prompt-label">Repository</span>
                   <input id="builder-repo-input" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="git@github.com:org/repo.git">
                 </label>
-                <label class="prompt-field md:col-span-2">
+                <label class="prompt-field prompt-field-base-branch">
+                  <span class="prompt-label">Base Branch</span>
+                  <input id="builder-base-branch" class="prompt-control prompt-input" type="text" value="main" spellcheck="false" placeholder="main">
+                </label>
+                <label class="prompt-field prompt-field-target-subdir">
                   <span class="prompt-label">Target Subdir</span>
                   <input id="builder-target-subdir" class="prompt-control prompt-input" type="text" value="." spellcheck="false" placeholder=".">
                 </label>
@@ -169,6 +177,13 @@
       { id: "finalize", label: "Finalize", detail: "Commit, PR, and checks." },
     ];
 
+    function normalizeUIConfig(raw) {
+      const config = raw && typeof raw === "object" ? raw : {};
+      return {
+        automaticMode: Boolean(config.automaticMode),
+      };
+    }
+
     function loadDismissedTaskIDs() {
       try {
         const raw = localStorage.getItem(DISMISSED_TASKS_KEY);
@@ -203,6 +218,7 @@
     }
 
     const state = {
+      ui: normalizeUIConfig(window.__HUB_UI_CONFIG__),
       snapshot: null,
       selectedTaskId: "",
       dismissedTaskIDs: loadDismissedTaskIDs(),
@@ -232,12 +248,15 @@
     const promptBuilderPanel = document.getElementById("prompt-builder-panel");
     const promptRawPanel = document.getElementById("prompt-raw-panel");
     const builderRepoSelect = document.getElementById("builder-repo-select");
+    const builderRepoHistoryField = document.getElementById("builder-repo-history-field");
     const builderRepoInput = document.getElementById("builder-repo-input");
     const builderBaseBranch = document.getElementById("builder-base-branch");
     const builderTargetSubdir = document.getElementById("builder-target-subdir");
     const builderLibraryTask = document.getElementById("builder-library-task");
     const builderPromptField = document.getElementById("builder-prompt-field");
     const builderPromptInput = document.getElementById("builder-prompt-input");
+    const rightCol = document.querySelector(".right-col");
+    const promptWrap = document.querySelector(".prompt-wrap");
 
     function setIndicator(dot, textNode, online, text) {
       dot.classList.toggle("online", online);
@@ -503,6 +522,11 @@
     function renderRepoHistoryOptions() {
       const currentValue = normalizeRepoValue(builderRepoInput.value);
       const unique = dedupeRepoValues([currentValue, ...state.repoHistory]);
+      const hasSavedHistory = state.repoHistory.length > 0;
+
+      if (builderRepoHistoryField) {
+        builderRepoHistoryField.classList.toggle("hidden", !hasSavedHistory);
+      }
 
       builderRepoSelect.replaceChildren();
       const manualOption = document.createElement("option");
@@ -537,6 +561,19 @@
       localPromptHint.textContent = isRaw
         ? "Paste one JSON object with either prompt or library_task_name and one of repo, repo_url, or repos. The UI normalizes JSON before submit."
         : "Select a repo and either a library task or a custom prompt in Builder mode. Use Raw JSON for multi-repo runs or advanced fields.";
+    }
+
+    function applyAutomaticMode() {
+      const automatic = Boolean(state.ui?.automaticMode);
+      if (promptWrap) {
+        promptWrap.classList.toggle("hidden", automatic);
+      }
+      if (rightCol) {
+        rightCol.classList.toggle("automatic-mode", automatic);
+      }
+      if (automatic) {
+        setLocalPromptStatus("warn", "Automatic mode enabled; browser prompt input is hidden.");
+      }
     }
 
     function relativeTime(iso) {
@@ -1291,6 +1328,7 @@
       // Builder starts empty until the user fills it in.
     }
     setPromptMode(state.promptMode);
+    applyAutomaticMode();
     loadInitial();
     startStream();
   </script>

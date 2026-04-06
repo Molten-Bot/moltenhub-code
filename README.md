@@ -85,6 +85,12 @@ Hub mode starts a local monitor UI by default at `http://127.0.0.1:7777`.
 
 The local prompt panel defaults to a schema builder that stores requested repositories in browser local storage and reuses them as a repo picker. Raw JSON mode remains available for advanced or multi-repo payloads.
 
+Automatic mode is available as a runtime flag and hides the browser-local prompt form entirely:
+
+```bash
+./bin/harness hub --init templates/init.example.json --ui-automatic
+```
+
 Override or disable:
 
 ```bash
@@ -146,7 +152,7 @@ Runtime logs are mirrored to `.log`:
 When a task fails (local or hub-dispatched), the harness queues a follow-up local task that:
 
 - includes relevant failing log paths in prompt context
-- uses run config shape: `{"repos":["git@github.com:jefking/moltenhub-code.git"],"base_branch":"main","target_subdir":".","prompt":"..."}`
+- uses run config shape: `{"repos":["git@github.com:Molten-Bot/moltenhub-code.git"],"base_branch":"main","target_subdir":".","prompt":"..."}`
 - asks for root-cause fixes (not superficial bandaids)
 
 ## Exit Codes

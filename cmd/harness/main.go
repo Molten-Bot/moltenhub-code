@@ -22,7 +22,7 @@ import (
 	"github.com/jef/moltenhub-code/internal/multiplex"
 )
 
-const failureFollowUpRepoURL = "git@github.com:jefking/moltenhub-code.git"
+const failureFollowUpRepoURL = "git@github.com:Molten-Bot/moltenhub-code.git"
 
 const maxFailureFollowUpLogExcerptChars = 8000
 
@@ -52,7 +52,7 @@ func run() int {
 func printUsage() {
 	fmt.Fprintln(os.Stderr, "usage: harness run --config <path-to-json>")
 	fmt.Fprintln(os.Stderr, "   or: harness multiplex --config <path-or-dir> [--config <path-or-dir> ...] [--parallel <n>]")
-	fmt.Fprintln(os.Stderr, "   or: harness hub --init <path-to-init-json> [--parallel <n>] [--ui-listen <host:port>]")
+	fmt.Fprintln(os.Stderr, "   or: harness hub --init <path-to-init-json> [--parallel <n>] [--ui-listen <host:port>] [--ui-automatic]")
 }
 
 func runSingle(args []string) int {
@@ -183,6 +183,7 @@ func runHub(args []string) int {
 	initPath := fs.String("init", "", "Path to hub init JSON")
 	parallel := fs.Int("parallel", 0, "Optional override for dispatcher max parallel workers")
 	uiListen := fs.String("ui-listen", "127.0.0.1:7777", "Optional monitor web UI listen address (empty to disable)")
+	uiAutomatic := fs.Bool("ui-automatic", false, "Hide the browser local prompt form and run the monitor UI in automatic mode")
 
 	if err := fs.Parse(args); err != nil {
 		return harness.ExitUsage
@@ -324,6 +325,7 @@ func runHub(args []string) int {
 
 	if strings.TrimSpace(*uiListen) != "" {
 		uiServer := hubui.NewServer(*uiListen, monitorBroker)
+		uiServer.AutomaticMode = *uiAutomatic
 		uiServer.Logf = logger.Printf
 		uiServer.SubmitLocalPrompt = func(reqCtx context.Context, body []byte) (string, error) {
 			runCfg, err := hub.ParseRunConfigJSON(body)

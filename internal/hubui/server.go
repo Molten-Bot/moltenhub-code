@@ -1,6 +1,7 @@
 package hubui
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"encoding/json"
@@ -23,6 +24,7 @@ var staticFiles embed.FS
 type Server struct {
 	Addr              string
 	Broker            *Broker
+	AutomaticMode     bool
 	Logf              func(string, ...any)
 	SubmitLocalPrompt func(context.Context, []byte) (string, error)
 	CloseTask         func(context.Context, string) error
@@ -109,9 +111,27 @@ func (s Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "monitor ui is unavailable", http.StatusInternalServerError)
 		return
 	}
+	data = s.injectIndexConfig(data)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write(data)
+}
+
+func (s Server) injectIndexConfig(data []byte) []byte {
+	cfg, err := json.Marshal(map[string]bool{
+		"automaticMode": s.AutomaticMode,
+	})
+	if err != nil {
+		s.logf("hub.ui status=warn event=marshal_index_config err=%q", err)
+		return data
+	}
+
+	return bytes.Replace(
+		data,
+		[]byte(`window.__HUB_UI_CONFIG__ = {"automaticMode":false};`),
+		[]byte("window.__HUB_UI_CONFIG__ = "+string(cfg)+";"),
+		1,
+	)
 }
 
 func (s Server) handleState(w http.ResponseWriter, _ *http.Request) {
