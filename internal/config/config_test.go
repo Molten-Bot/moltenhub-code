@@ -358,6 +358,35 @@ func TestApplyDefaultsKeepsExistingPRTitlePrefix(t *testing.T) {
 	}
 }
 
+func TestApplyDefaultsTrimsGeneratedSuffixFromCustomPRTitle(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		RepoURL: "git@github.com:acme/repo.git",
+		Prompt:  "fix tests",
+		PRTitle: "moltenhub-queue-dedup-needs-to-be-repo-base-branc-20260406-233219-575aeb56",
+	}
+	cfg.ApplyDefaults()
+
+	if got, want := cfg.PRTitle, "moltenhub-queue-dedup-needs-to-be-repo-base-branc"; got != want {
+		t.Fatalf("PRTitle = %q, want %q", got, want)
+	}
+}
+
+func TestApplyDefaultsTrimsGeneratedSuffixFromDefaultPRTitle(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		RepoURL: "git@github.com:acme/repo.git",
+		Prompt:  "queue-dedup-needs-to-be-repo-base-branc-20260406-233219-575aeb56",
+	}
+	cfg.ApplyDefaults()
+
+	if got, want := cfg.PRTitle, "moltenhub-queue-dedup-needs-to-be-repo-base-branc"; got != want {
+		t.Fatalf("PRTitle = %q, want %q", got, want)
+	}
+}
+
 func TestApplyDefaultsAppendsMoltenBotHubFooterToDefaultPRBody(t *testing.T) {
 	t.Parallel()
 

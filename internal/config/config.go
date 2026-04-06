@@ -285,9 +285,10 @@ func defaultPRBody(prompt string) string {
 }
 
 var wsRE = regexp.MustCompile(`\s+`)
+var generatedPRTitleSuffixRE = regexp.MustCompile(`-[0-9]{8}-[0-9]{6}-[0-9a-f]{8}$`)
 
 func prefixedPRTitle(title string) string {
-	title = strings.TrimSpace(title)
+	title = trimGeneratedPRTitleSuffix(strings.TrimSpace(title))
 	if title == "" {
 		return prTitlePrefix + "Automated update"
 	}
@@ -295,6 +296,19 @@ func prefixedPRTitle(title string) string {
 		return title
 	}
 	return prTitlePrefix + title
+}
+
+func trimGeneratedPRTitleSuffix(title string) string {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return ""
+	}
+	trimmed := generatedPRTitleSuffixRE.ReplaceAllString(title, "")
+	trimmed = strings.TrimSpace(strings.TrimRight(trimmed, "-_."))
+	if trimmed == "" {
+		return title
+	}
+	return trimmed
 }
 
 func ensurePRBodyFooter(body string) string {
