@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -40,6 +41,15 @@ func (f *fakeRunner) Run(_ context.Context, cmd execx.Command) (execx.Result, er
 		f.t.Fatalf("command mismatch\n got:  %+v\n want: %+v", cmd, exp.cmd)
 	}
 	return exp.res, exp.err
+}
+
+type captureRunner struct {
+	cmd execx.Command
+}
+
+func (c *captureRunner) Run(_ context.Context, cmd execx.Command) (execx.Result, error) {
+	c.cmd = cmd
+	return execx.Result{}, nil
 }
 
 func sampleConfig() config.Config {
@@ -1233,6 +1243,77 @@ func TestMaterializePromptImages(t *testing.T) {
 	}
 }
 
+func TestStageAgentsPromptFileCopiesAndCleansUpStagedFile(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	sourcePath := filepath.Join(t.TempDir(), "AGENTS.md")
+	if err := os.WriteFile(sourcePath, []byte("seeded instructions"), 0o644); err != nil {
+		t.Fatalf("write source agents file: %v", err)
+	}
+
+	stagedPath, cleanup, err := stageAgentsPromptFile(targetDir, sourcePath)
+	if err != nil {
+		t.Fatalf("stageAgentsPromptFile() error = %v", err)
+	}
+	if stagedPath == sourcePath {
+		t.Fatalf("stagedPath = %q, want a staged file under %q", stagedPath, targetDir)
+	}
+	if !strings.HasPrefix(stagedPath, targetDir+string(filepath.Separator)) {
+		t.Fatalf("stagedPath = %q, want under %q", stagedPath, targetDir)
+	}
+	data, err := os.ReadFile(stagedPath)
+	if err != nil {
+		t.Fatalf("read staged file: %v", err)
+	}
+	if got, want := string(data), "seeded instructions"; got != want {
+		t.Fatalf("staged file content = %q, want %q", got, want)
+	}
+	if err := cleanup(); err != nil {
+		t.Fatalf("cleanup() error = %v", err)
+	}
+	if _, err := os.Stat(stagedPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("staged file still exists after cleanup: err=%v", err)
+	}
+}
+
+func TestRunCodexStagesAgentsPromptWithinTargetDir(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	sourcePath := filepath.Join(t.TempDir(), "AGENTS.md")
+	if err := os.WriteFile(sourcePath, []byte("seeded instructions"), 0o644); err != nil {
+		t.Fatalf("write source agents file: %v", err)
+	}
+
+	runner := &captureRunner{}
+
+	h := New(runner)
+	if err := h.runCodex(context.Background(), targetDir, "", codexRunOptions{}, sourcePath); err != nil {
+		t.Fatalf("runCodex() error = %v", err)
+	}
+
+	if runner.cmd.Name != "codex" || runner.cmd.Dir != targetDir {
+		t.Fatalf("unexpected codex command: %+v", runner.cmd)
+	}
+	if got, want := len(runner.cmd.Args), 4; got != want {
+		t.Fatalf("len(captured.Args) = %d, want %d", got, want)
+	}
+	prompt := runner.cmd.Args[len(runner.cmd.Args)-1]
+	re := regexp.MustCompile(`Use (.+) as your primary implementation instructions`)
+	matches := re.FindStringSubmatch(prompt)
+	if len(matches) != 2 {
+		t.Fatalf("staged agents prompt path missing from prompt: %q", prompt)
+	}
+	stagedPath := strings.TrimSpace(matches[1])
+	if !strings.HasPrefix(stagedPath, targetDir+string(filepath.Separator)+".moltenhub-agents-") {
+		t.Fatalf("staged agents path = %q, want under %q with .moltenhub-agents-*", stagedPath, targetDir)
+	}
+	if _, err := os.Stat(stagedPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("staged agents file still exists after codex run: err=%v", err)
+	}
+}
+
 func TestWithCompletionGatePromptIncludesFailureQueueContract(t *testing.T) {
 	t.Parallel()
 
@@ -1242,7 +1323,7 @@ func TestWithCompletionGatePromptIncludesFailureQueueContract(t *testing.T) {
 		"When a task fails:",
 		"Queue a follow-up task dedicated to reviewing the logs and fixing all underlying issues in this codebase.",
 		"Pass the relevant failing file/folder log path(s) into that follow-up task context.",
-		`{"repos":["git@github.com:jefking/moltenhub-code.git"],"base_branch":"main","target_subdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."}`,
+		`{"repos":["<same_repo_as_failed_task>"],"base_branch":"main","target_subdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."}`,
 		"Completion requirements:",
 	}
 	for _, snippet := range wantSnippets {

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jef/moltenhub-code/internal/config"
 	"github.com/jef/moltenhub-code/internal/harness"
 )
 
@@ -149,8 +150,9 @@ func TestFailureFollowUpRunConfigIncludesNonLocalRequestLogPaths(t *testing.T) {
 
 	logRoot := filepath.Join(t.TempDir(), ".log")
 	failedResult := harness.Result{Err: fmt.Errorf("checks failed")}
+	failedRunCfg := config.Config{Repos: []string{"git@github.com:acme/repo.git"}}
 
-	cfg := failureFollowUpRunConfig("req-123-abc", failedResult, logRoot)
+	cfg := failureFollowUpRunConfig("req-123-abc", failedResult, failedRunCfg, logRoot)
 	expectedLogDir := filepath.Join(logRoot, "req", "123", "abc")
 	if !strings.Contains(cfg.Prompt, expectedLogDir) {
 		t.Fatalf("Prompt missing non-local log dir path %q: %q", expectedLogDir, cfg.Prompt)
@@ -176,9 +178,16 @@ func TestFailureFollowUpRunConfigUsesRequiredPayloadShapeAndLogContext(t *testin
 		Err:          fmt.Errorf("clone: repository not found"),
 		WorkspaceDir: "/tmp/run-123",
 	}
+	failedRunCfg := config.Config{
+		Repos: []string{
+			"git@github.com:acme/repo-a.git",
+			"git@github.com:acme/repo-b.git",
+			"git@github.com:acme/repo-a.git",
+		},
+	}
 
-	cfg := failureFollowUpRunConfig("local-1712345678-000001", failedResult, logRoot)
-	if got, want := cfg.Repos, []string{failureFollowUpRepoURL}; !reflect.DeepEqual(got, want) {
+	cfg := failureFollowUpRunConfig("local-1712345678-000001", failedResult, failedRunCfg, logRoot)
+	if got, want := cfg.Repos, []string{"git@github.com:acme/repo-a.git", "git@github.com:acme/repo-b.git"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Repos = %v, want %v", got, want)
 	}
 	if cfg.BaseBranch != "main" {
@@ -217,5 +226,13 @@ func TestFailureFollowUpLogExcerptSkipsMissingPaths(t *testing.T) {
 
 	if got := failureFollowUpLogExcerpt([]string{"", filepath.Join(t.TempDir(), "missing.log")}); got != "" {
 		t.Fatalf("failureFollowUpLogExcerpt() = %q, want empty", got)
+	}
+}
+
+func TestFailureFollowUpReposFallsBackWhenFailedRunHasNoRepos(t *testing.T) {
+	t.Parallel()
+
+	if got, want := failureFollowUpRepos(config.Config{}), []string{failureFollowUpFallbackRepoURL}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("failureFollowUpRepos() = %v, want %v", got, want)
 	}
 }

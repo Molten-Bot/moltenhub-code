@@ -22,7 +22,7 @@ import (
 	"github.com/jef/moltenhub-code/internal/multiplex"
 )
 
-const failureFollowUpRepoURL = "git@github.com:jefking/moltenhub-code.git"
+const failureFollowUpFallbackRepoURL = "git@github.com:jefking/moltenhub-code.git"
 
 const maxFailureFollowUpLogExcerptChars = 8000
 
@@ -226,7 +226,7 @@ func runHub(args []string) int {
 		logRoot = filepath.Join(wd, logDirectoryName)
 	}
 
-	var queueFailureFollowUp func(failedRequestID string, failedResult harness.Result)
+	var queueFailureFollowUp func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config)
 	var enqueueLocalRun func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string) (string, error)
 	enqueueLocalRun = func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string) (string, error) {
 		source = strings.TrimSpace(source)
@@ -299,14 +299,14 @@ func runHub(args []string) int {
 				return
 			}
 			if queueFailureFollowUp != nil {
-				queueFailureFollowUp(requestID, outcome.Result)
+				queueFailureFollowUp(requestID, outcome.Result, runCfg)
 			}
 		}(requestID, runCfg, dedupeKey, allowFailureFollowUp)
 
 		return requestID, nil
 	}
-	queueFailureFollowUp = func(failedRequestID string, failedResult harness.Result) {
-		followUpCfg := failureFollowUpRunConfig(failedRequestID, failedResult, logRoot)
+	queueFailureFollowUp = func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config) {
+		followUpCfg := failureFollowUpRunConfig(failedRequestID, failedResult, failedRunCfg, logRoot)
 		followUpRequestID, followUpErr := enqueueLocalRun(ctx, followUpCfg, false, "failure_followup")
 		if followUpErr != nil {
 			daemonLogger(
@@ -361,9 +361,9 @@ func runHub(args []string) int {
 			monitorBroker.RecordTaskRunConfig(requestID, runConfigJSON)
 		}
 	}
-	daemon.OnDispatchFailed = func(requestID string, result harness.Result) {
+	daemon.OnDispatchFailed = func(requestID string, runCfg config.Config, result harness.Result) {
 		if queueFailureFollowUp != nil {
-			queueFailureFollowUp(requestID, result)
+			queueFailureFollowUp(requestID, result, runCfg)
 		}
 	}
 
@@ -452,14 +452,40 @@ func runLocalDispatch(
 	return localDispatchOutcome{State: "ok", Result: res}
 }
 
-func failureFollowUpRunConfig(failedRequestID string, failedResult harness.Result, logRoot string) config.Config {
+func failureFollowUpRunConfig(
+	failedRequestID string,
+	failedResult harness.Result,
+	failedRunCfg config.Config,
+	logRoot string,
+) config.Config {
 	logPaths := taskLogPaths(logRoot, failedRequestID)
 	return config.Config{
-		Repos:        []string{failureFollowUpRepoURL},
+		Repos:        failureFollowUpRepos(failedRunCfg),
 		BaseBranch:   "main",
 		TargetSubdir: ".",
 		Prompt:       failureFollowUpPrompt(failedRequestID, failedResult, logPaths, failureFollowUpLogExcerpt(logPaths)),
 	}
+}
+
+func failureFollowUpRepos(failedRunCfg config.Config) []string {
+	repos := failedRunCfg.RepoList()
+	seen := make(map[string]struct{}, len(repos))
+	normalized := make([]string, 0, len(repos))
+	for _, repo := range repos {
+		repo = strings.TrimSpace(repo)
+		if repo == "" {
+			continue
+		}
+		if _, exists := seen[repo]; exists {
+			continue
+		}
+		seen[repo] = struct{}{}
+		normalized = append(normalized, repo)
+	}
+	if len(normalized) > 0 {
+		return normalized
+	}
+	return []string{failureFollowUpFallbackRepoURL}
 }
 
 func failureFollowUpPrompt(failedRequestID string, failedResult harness.Result, logPaths []string, logExcerpt string) string {

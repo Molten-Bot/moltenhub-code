@@ -21,7 +21,7 @@ type Daemon struct {
 	Runner             execx.Runner
 	Logf               func(string, ...any)
 	OnDispatchQueued   func(requestID string, runCfg config.Config)
-	OnDispatchFailed   func(requestID string, result harness.Result)
+	OnDispatchFailed   func(requestID string, runCfg config.Config, result harness.Result)
 	DispatchController *AdaptiveDispatchController
 	ReconnectDelay     time.Duration
 }
@@ -504,7 +504,7 @@ func (d Daemon) handleDispatch(
 
 	res := h.Run(ctx, dispatch.Config)
 	if res.Err != nil && d.OnDispatchFailed != nil {
-		d.OnDispatchFailed(dispatch.RequestID, res)
+		d.OnDispatchFailed(dispatch.RequestID, dispatch.Config, res)
 	}
 	payload := dispatchResultPayload(cfg, dispatch, res)
 	if err := api.PublishResult(ctx, token, payload); err != nil {
