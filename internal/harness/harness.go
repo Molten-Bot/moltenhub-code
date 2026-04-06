@@ -191,10 +191,17 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		} else {
 			h.logf("stage=clone status=ok repo=%s repo_dir=%s", repoURL, relDir)
 		}
-		repos = append(repos, repoWorkspace{
-			URL:    repoURL,
-			Dir:    repoDir,
-			RelDir: relDir,
+			if !shouldCreateWorkBranch(cloneBaseBranch) {
+				h.logf("stage=clone status=start action=fetch_main repo=%s repo_dir=%s", repoURL, relDir)
+				if _, err := h.runCommand(ctx, "clone", fetchMainBranchCommand(repoDir)); err != nil {
+					return h.fail(ExitClone, "clone", err, runDir)
+				}
+				h.logf("stage=clone status=ok action=fetch_main repo=%s repo_dir=%s", repoURL, relDir)
+			}
+			repos = append(repos, repoWorkspace{
+				URL:    repoURL,
+				Dir:    repoDir,
+				RelDir: relDir,
 		})
 	}
 	runCfg.BaseBranch = cloneBaseBranch
@@ -835,6 +842,14 @@ func cloneRepoCommand(repoURL, baseBranch, repoDir string) execx.Command {
 	return execx.Command{
 		Name: "git",
 		Args: []string{"clone", "--branch", baseBranch, "--single-branch", repoURL, repoDir},
+	}
+}
+
+func fetchMainBranchCommand(repoDir string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "git",
+		Args: []string{"fetch", "origin", "main:refs/remotes/origin/main"},
 	}
 }
 

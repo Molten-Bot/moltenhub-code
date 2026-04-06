@@ -6,7 +6,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strings"
 	"testing"
+
+	"github.com/jef/moltenhub-code/internal/library"
 )
 
 func TestPullOpenClawMessageParsesResult(t *testing.T) {
@@ -289,6 +293,65 @@ func TestPublishResultUsesURIReplyTarget(t *testing.T) {
 	if _, hasUUID := got.Body["to_agent_uuid"]; hasUUID {
 		t.Fatalf("unexpected to_agent_uuid in body: %#v", got.Body["to_agent_uuid"])
 	}
+}
+
+func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
+	t.Parallel()
+
+	type captured struct {
+		Path string
+		Body map[string]any
+	}
+	var got captured
+	client := NewAPIClient("http://example.test/v1")
+	client.HTTPClient = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			defer r.Body.Close()
+			data, _ := io.ReadAll(r.Body)
+			var body map[string]any
+			_ = json.Unmarshal(data, &body)
+			got = captured{Path: r.URL.Path, Body: body}
+			return &http.Response{
+				StatusCode: http.StatusAccepted,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(strings.NewReader(`{"ok":true}`)),
+				Request:    r,
+			}, nil
+		}),
+	}
+	cfg := InitConfig{}
+	cfg.ApplyDefaults()
+	if err := client.RegisterRuntime(context.Background(), "token", cfg, []library.TaskSummary{
+		{Name: "security-review", Description: "Audit the repository."},
+		{Name: "unit-test-coverage"},
+	}); err != nil {
+		t.Fatalf("RegisterRuntime() error = %v", err)
+	}
+
+	if got.Path != "/v1/openclaw/messages/register-plugin" {
+		t.Fatalf("path = %q", got.Path)
+	}
+	skills, ok := got.Body["skills"].([]any)
+	if !ok || len(skills) != 1 {
+		t.Fatalf("skills = %#v", got.Body["skills"])
+	}
+	skill, ok := skills[0].(map[string]any)
+	if !ok {
+		t.Fatalf("skill = %#v", skills[0])
+	}
+	meta, ok := skill["metadata"].(map[string]any)
+	if !ok {
+		t.Fatalf("skill.metadata = %#v", skill["metadata"])
+	}
+	if gotNames, want := meta["library_task_names"], []any{"security-review", "unit-test-coverage"}; !reflect.DeepEqual(gotNames, want) {
+		t.Fatalf("library_task_names = %#v, want %#v", gotNames, want)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return fn(r)
 }
 
 func TestAckAndNackOpenClawDelivery(t *testing.T) {

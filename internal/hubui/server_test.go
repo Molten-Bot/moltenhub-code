@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/jef/moltenhub-code/internal/library"
 )
 
 type duplicateSubmissionStubError struct {
@@ -57,6 +59,40 @@ func TestHandlerStateEndpointReturnsSnapshot(t *testing.T) {
 	}
 	if snap.Tasks[0].RequestID != "req-1" {
 		t.Fatalf("request id = %q", snap.Tasks[0].RequestID)
+	}
+}
+
+func TestHandlerLibraryEndpointReturnsTasks(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	srv.LoadLibraryTasks = func() ([]library.TaskSummary, error) {
+		return []library.TaskSummary{
+			{Name: "security-review", Description: "Audit security boundaries."},
+			{Name: "unit-test-coverage"},
+		}, nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/library", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+
+	var body struct {
+		OK    bool                  `json:"ok"`
+		Tasks []library.TaskSummary `json:"tasks"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if !body.OK {
+		t.Fatalf("ok = false")
+	}
+	if got, want := len(body.Tasks), 2; got != want {
+		t.Fatalf("len(tasks) = %d, want %d", got, want)
 	}
 }
 
@@ -153,6 +189,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `id="builder-repo-select"`) {
 		t.Fatalf("expected index html to include repo history select")
+	}
+	if !strings.Contains(markup, `id="builder-library-task"`) {
+		t.Fatalf("expected index html to include library task select")
 	}
 	if !strings.Contains(markup, `id="builder-repo-input" class="prompt-control prompt-input"`) || !strings.Contains(markup, `id="builder-target-subdir" class="prompt-control prompt-input"`) {
 		t.Fatalf("expected index html to include builder repo and target subdir inputs")

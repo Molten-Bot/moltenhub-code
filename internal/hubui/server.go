@@ -13,6 +13,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/jef/moltenhub-code/internal/library"
 )
 
 //go:embed static/*
@@ -26,6 +28,7 @@ type Server struct {
 	Logf              func(string, ...any)
 	SubmitLocalPrompt func(context.Context, []byte) (string, error)
 	CloseTask         func(context.Context, string) error
+	LoadLibraryTasks  func() ([]library.TaskSummary, error)
 }
 
 // NewServer returns a monitor HTTP server.
@@ -34,6 +37,13 @@ func NewServer(addr string, broker *Broker) Server {
 		Addr:   strings.TrimSpace(addr),
 		Broker: broker,
 		Logf:   func(string, ...any) {},
+		LoadLibraryTasks: func() ([]library.TaskSummary, error) {
+			catalog, err := library.LoadCatalog(library.DefaultDir)
+			if err != nil {
+				return nil, err
+			}
+			return catalog.Summaries(), nil
+		},
 	}
 }
 
@@ -82,6 +92,7 @@ func (s Server) Handler() http.Handler {
 	}
 	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/api/state", s.handleState)
+	mux.HandleFunc("/api/library", s.handleLibrary)
 	mux.HandleFunc("/api/stream", s.handleStream)
 	mux.HandleFunc("/api/local-prompt", s.handleLocalPrompt)
 	mux.HandleFunc("/api/tasks/", s.handleTaskAction)
@@ -129,6 +140,36 @@ func (s Server) handleState(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, s.Broker.Snapshot())
+}
+
+func (s Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.LoadLibraryTasks == nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":    true,
+			"tasks": []library.TaskSummary{},
+		})
+		return
+	}
+
+	tasks, err := s.LoadLibraryTasks()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{
+			"ok":    false,
+			"error": fmt.Sprintf("load library tasks: %v", err),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":    true,
+		"tasks": tasks,
+	})
 }
 
 func (s Server) handleStream(w http.ResponseWriter, r *http.Request) {

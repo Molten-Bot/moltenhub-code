@@ -1,7 +1,5 @@
 {
-  "repos": [
-    "git@github.com:acme/target-repo.git"
-  ],
+  "repo": "git@github.com:acme/target-repo.git",
   "base_branch": "main",
   "target_subdir": ".",
   "github_handle": "octocat",

@@ -103,8 +103,14 @@
                   <span class="prompt-label">Target Subdir</span>
                   <input id="builder-target-subdir" class="prompt-control prompt-input" type="text" value="." spellcheck="false" placeholder=".">
                 </label>
+                <label class="prompt-field md:col-span-2">
+                  <span class="prompt-label">Library Task</span>
+                  <select id="builder-library-task" class="prompt-control">
+                    <option value="">Custom prompt</option>
+                  </select>
+                </label>
               </div>
-              <label class="prompt-field">
+              <label id="builder-prompt-field" class="prompt-field">
                 <span class="prompt-label">Prompt</span>
                 <textarea
                   id="builder-prompt-input"
@@ -122,12 +128,9 @@
                 rows="7"
                 spellcheck="false"
                 placeholder='{
-  "repos": [
-    "git@github.com:org/repo.git"
-  ],
-  "base_branch": "main",
-  "target_subdir": ".",
-  "prompt": "Describe the change you want"
+  "repo": "git@github.com:org/repo.git",
+  "branch": "main",
+  "library_task_name": "unit-test-coverage"
 }'></textarea>
             </div>
             <div id="local-prompt-hint" class="prompt-hint text-[0.74rem] leading-[1.3] text-hub-muted">Select a repo, branch, subdir, and prompt in Builder mode. Use Raw JSON for multi-repo runs or advanced fields.</div>
@@ -219,6 +222,7 @@
       snapshot: null,
       selectedTaskId: "",
       dismissedTaskIDs: loadDismissedTaskIDs(),
+      libraryTasks: [],
       repoHistory: loadRepoHistory(),
       promptMode: loadPromptMode(),
       rerunInFlight: new Set(),
@@ -248,6 +252,8 @@
     const builderRepoInput = document.getElementById("builder-repo-input");
     const builderBaseBranch = document.getElementById("builder-base-branch");
     const builderTargetSubdir = document.getElementById("builder-target-subdir");
+    const builderLibraryTask = document.getElementById("builder-library-task");
+    const builderPromptField = document.getElementById("builder-prompt-field");
     const builderPromptInput = document.getElementById("builder-prompt-input");
     const rightCol = document.querySelector(".right-col");
     const promptWrap = document.querySelector(".prompt-wrap");
@@ -397,6 +403,49 @@
       renderRepoHistoryOptions();
     }
 
+    function selectedLibraryTaskName() {
+      return String(builderLibraryTask.value || "").trim();
+    }
+
+    function renderLibraryTaskOptions() {
+      const selected = selectedLibraryTaskName();
+      builderLibraryTask.replaceChildren();
+
+      const customOption = document.createElement("option");
+      customOption.value = "";
+      customOption.textContent = "Custom prompt";
+      builderLibraryTask.appendChild(customOption);
+
+      for (const task of state.libraryTasks || []) {
+        if (!task || typeof task.name !== "string") continue;
+        const name = task.name.trim();
+        if (!name) continue;
+        const option = document.createElement("option");
+        option.value = name;
+        option.textContent = name;
+        if (typeof task.description === "string" && task.description.trim()) {
+          option.title = task.description.trim();
+        }
+        builderLibraryTask.appendChild(option);
+      }
+
+      if (selected && (state.libraryTasks || []).some((task) => task?.name === selected)) {
+        builderLibraryTask.value = selected;
+      } else {
+        builderLibraryTask.value = "";
+      }
+      syncBuilderPromptVisibility();
+    }
+
+    function syncBuilderPromptVisibility() {
+      const usingLibraryTask = selectedLibraryTaskName() !== "";
+      builderPromptField.classList.toggle("hidden", usingLibraryTask);
+      builderTargetSubdir.disabled = usingLibraryTask;
+      if (usingLibraryTask) {
+        builderTargetSubdir.value = ".";
+      }
+    }
+
     function persistPromptMode() {
       try {
         localStorage.setItem(PROMPT_MODE_KEY, state.promptMode);
@@ -411,14 +460,23 @@
         throw new Error("Repository is required.");
       }
 
+      const libraryTaskName = selectedLibraryTaskName();
+      const branch = String(builderBaseBranch.value || "").trim() || "main";
+      if (libraryTaskName) {
+        return {
+          repo,
+          branch,
+          library_task_name: libraryTaskName,
+        };
+      }
+
       const prompt = String(builderPromptInput.value || "").trim();
       if (!prompt) {
         throw new Error("Prompt is required.");
       }
-
       return {
         repos: [repo],
-        base_branch: String(builderBaseBranch.value || "").trim() || "main",
+        base_branch: branch,
         target_subdir: String(builderTargetSubdir.value || "").trim() || ".",
         prompt,
       };
@@ -440,10 +498,13 @@
       ]);
 
       builderRepoInput.value = repos[0] || "";
-      builderBaseBranch.value = String(payload.base_branch || "main").trim() || "main";
+      builderBaseBranch.value = String(payload.base_branch || payload.branch || "main").trim() || "main";
       builderTargetSubdir.value = String(payload.target_subdir || ".").trim() || ".";
+      builderLibraryTask.value = String(payload.library_task_name || "").trim();
       builderPromptInput.value = String(payload.prompt || "").trim();
+      syncBuilderPromptVisibility();
       renderRepoHistoryOptions();
+      renderLibraryTaskOptions();
     }
 
     function currentPromptPayload() {
@@ -498,8 +559,8 @@
       promptBuilderPanel.classList.toggle("hidden", isRaw);
       promptRawPanel.classList.toggle("hidden", !isRaw);
       localPromptHint.textContent = isRaw
-        ? "Paste one JSON object with prompt and one of repo, repo_url, or repos. The UI normalizes JSON before submit."
-        : "Select a repo, branch, subdir, and prompt in Builder mode. Use Raw JSON for multi-repo runs or advanced fields.";
+        ? "Paste one JSON object with either prompt or library_task_name and one of repo, repo_url, or repos. The UI normalizes JSON before submit."
+        : "Select a repo and either a library task or a custom prompt in Builder mode. Use Raw JSON for multi-repo runs or advanced fields.";
     }
 
     function applyAutomaticMode() {
@@ -1120,8 +1181,23 @@
       renderTerminal(snapshot);
     }
 
+    async function loadLibraryTasks() {
+      try {
+        const response = await fetch("/api/library", { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`library http ${response.status}`);
+        }
+        const body = await response.json();
+        state.libraryTasks = Array.isArray(body?.tasks) ? body.tasks : [];
+      } catch (_err) {
+        state.libraryTasks = [];
+      }
+      renderLibraryTaskOptions();
+    }
+
     async function loadInitial() {
       try {
+        await loadLibraryTasks();
         const response = await fetch("/api/state", { cache: "no-store" });
         if (!response.ok) {
           throw new Error(`state http ${response.status}`);
@@ -1212,6 +1288,17 @@
       }
     });
 
+    builderLibraryTask.addEventListener("change", () => {
+      syncBuilderPromptVisibility();
+      if (state.promptMode === "raw") {
+        try {
+          syncRawFromBuilder();
+        } catch (_err) {
+          // Leave raw editor unchanged if builder is incomplete.
+        }
+      }
+    });
+
     promptModeBuilder.addEventListener("click", () => {
       if (state.promptMode === "builder") return;
       try {
@@ -1234,6 +1321,7 @@
 
     localPromptForm.addEventListener("submit", submitLocalPrompt);
     renderRepoHistoryOptions();
+    renderLibraryTaskOptions();
     try {
       syncRawFromBuilder();
     } catch (_err) {
