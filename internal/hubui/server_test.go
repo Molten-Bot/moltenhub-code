@@ -169,11 +169,20 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function renderTaskProgress(") {
 		t.Fatalf("expected index html to include renderTaskProgress handler")
 	}
+	if !strings.Contains(markup, "function toggleTaskOutput(") {
+		t.Fatalf("expected index html to include task output toggle handler")
+	}
+	if !strings.Contains(markup, "function toggleTerminalOutput(") {
+		t.Fatalf("expected index html to include terminal output toggle handler")
+	}
 	if !strings.Contains(markup, "function isMinimizedTask(") {
 		t.Fatalf("expected index html to include completed-task minimization handler")
 	}
 	if !strings.Contains(markup, `"task-collapsed"`) {
 		t.Fatalf("expected index html to include collapsed task class usage")
+	}
+	if !strings.Contains(markup, `id="task-terminal-toggle"`) {
+		t.Fatalf("expected index html to include terminal output open/close button")
 	}
 	if !strings.Contains(markup, `id="local-conn-text"`) {
 		t.Fatalf("expected index html to include local connection indicator")
@@ -275,6 +284,12 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".task-rerun") {
 		t.Fatalf("expected stylesheet to include task rerun styles")
+	}
+	if !strings.Contains(css, ".task-output-toggle") {
+		t.Fatalf("expected stylesheet to include task output toggle styles")
+	}
+	if !strings.Contains(css, ".task-terminal-toggle") {
+		t.Fatalf("expected stylesheet to include terminal output toggle styles")
 	}
 	if !strings.Contains(css, ".task.task-collapsed") {
 		t.Fatalf("expected stylesheet to include collapsed task styles")

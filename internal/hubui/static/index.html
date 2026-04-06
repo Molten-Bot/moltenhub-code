@@ -180,7 +180,10 @@
         </section>
 
         <section class="panel log-wrap grid h-full [grid-template-rows:auto_auto_1fr] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
-          <div id="task-head" class="task-head flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-2.5 text-[0.84rem] text-hub-muted">Select a task to inspect logs</div>
+          <div class="task-head flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-2.5 text-[0.84rem] text-hub-muted">
+            <span id="task-head-label" class="min-w-0 flex-1 truncate">Select a task to inspect logs</span>
+            <button id="task-terminal-toggle" class="task-terminal-toggle" type="button">Open Output</button>
+          </div>
           <div id="task-result" class="task-result hidden flex-wrap items-center gap-2.5 border-b border-hub-border px-3.5 py-2 text-[0.78rem]"></div>
           <pre id="terminal" class="term task-scroll m-0 h-full overflow-auto whitespace-pre-wrap break-words bg-[#0c1724] p-3 font-mono text-[0.79rem] leading-[1.35] text-[#dbe6f2]"></pre>
         </section>
@@ -256,6 +259,8 @@
       promptImages: [],
       rerunInFlight: new Set(),
       closeInFlight: new Set(),
+      expandedTaskOutputIDs: new Set(),
+      openTerminalTaskIDs: new Set(),
     };
 
     const localConnItem = document.getElementById("local-conn-item");
@@ -271,7 +276,8 @@
     const resourceMetricsText = document.getElementById("resource-metrics-text");
     const taskCount = document.getElementById("task-count");
     const taskList = document.getElementById("task-list");
-    const taskHead = document.getElementById("task-head");
+    const taskHeadLabel = document.getElementById("task-head-label");
+    const taskTerminalToggle = document.getElementById("task-terminal-toggle");
     const taskResult = document.getElementById("task-result");
     const terminal = document.getElementById("terminal");
     const localPromptForm = document.getElementById("local-prompt-form");
@@ -923,6 +929,54 @@
       return isCompletedTask(task);
     }
 
+    function isTaskOutputExpanded(task) {
+      const requestID = String(task?.request_id || "").trim();
+      if (!requestID) return false;
+      return state.expandedTaskOutputIDs.has(requestID);
+    }
+
+    function toggleTaskOutput(requestID) {
+      requestID = String(requestID || "").trim();
+      if (!requestID) return;
+      if (state.expandedTaskOutputIDs.has(requestID)) {
+        state.expandedTaskOutputIDs.delete(requestID);
+      } else {
+        state.expandedTaskOutputIDs.add(requestID);
+      }
+      render(state.snapshot);
+    }
+
+    function isTerminalOutputOpen(requestID) {
+      requestID = String(requestID || "").trim();
+      if (!requestID) return false;
+      return state.openTerminalTaskIDs.has(requestID);
+    }
+
+    function toggleTerminalOutput(requestID) {
+      requestID = String(requestID || "").trim();
+      if (!requestID) return;
+      if (state.openTerminalTaskIDs.has(requestID)) {
+        state.openTerminalTaskIDs.delete(requestID);
+      } else {
+        state.openTerminalTaskIDs.add(requestID);
+      }
+      render(state.snapshot);
+    }
+
+    function pruneOutputVisibilityState(tasks) {
+      const taskIDs = new Set((tasks || []).map((task) => task?.request_id).filter(Boolean));
+      for (const requestID of Array.from(state.expandedTaskOutputIDs)) {
+        if (!taskIDs.has(requestID)) {
+          state.expandedTaskOutputIDs.delete(requestID);
+        }
+      }
+      for (const requestID of Array.from(state.openTerminalTaskIDs)) {
+        if (!taskIDs.has(requestID)) {
+          state.openTerminalTaskIDs.delete(requestID);
+        }
+      }
+    }
+
     async function dismissTask(requestID) {
       if (!requestID || state.closeInFlight.has(requestID)) return;
       state.closeInFlight.add(requestID);
@@ -1233,6 +1287,7 @@
 
     function renderTasks(snapshot) {
       const tasks = displayTasks(snapshot);
+      pruneOutputVisibilityState(tasks);
       taskCount.textContent = String(tasks.length);
       taskList.replaceChildren();
 
@@ -1249,12 +1304,14 @@
       }
 
       for (const task of tasks) {
+        const outputExpanded = isTaskOutputExpanded(task);
+        const collapsed = isMinimizedTask(task) && !outputExpanded;
         const node = document.createElement("article");
         node.className = "task";
         if (task.request_id === state.selectedTaskId) {
           node.classList.add("active");
         }
-        if (isMinimizedTask(task)) {
+        if (collapsed) {
           node.classList.add("task-collapsed");
         }
         node.addEventListener("click", () => selectTask(task.request_id));
@@ -1277,6 +1334,17 @@
         const topActions = document.createElement("div");
         topActions.className = "task-top-actions";
         topActions.appendChild(badge);
+
+        const outputToggle = document.createElement("button");
+        outputToggle.type = "button";
+        outputToggle.className = "task-output-toggle";
+        outputToggle.textContent = outputExpanded ? "Close Output" : "Open Output";
+        outputToggle.title = outputExpanded ? "Hide task output preview" : "Show task output preview";
+        outputToggle.addEventListener("click", (event) => {
+          event.stopPropagation();
+          toggleTaskOutput(task.request_id);
+        });
+        topActions.appendChild(outputToggle);
 
         if (canRerunTask(task)) {
           const rerun = document.createElement("button");
@@ -1310,7 +1378,7 @@
 
         node.appendChild(top);
 
-        if (!isMinimizedTask(task)) {
+        if (!collapsed) {
           const meta = document.createElement("div");
           meta.className = "task-meta";
 
@@ -1330,19 +1398,26 @@
           const output = document.createElement("div");
           output.className = "task-output-list";
 
-          const previews = taskPreviewLines(task);
-          if (!previews.length) {
+          if (!outputExpanded) {
             const empty = document.createElement("div");
             empty.className = "task-output-line meta";
-            empty.textContent = "No output yet.";
+            empty.textContent = "Output hidden. Use Open Output to preview.";
             output.appendChild(empty);
           } else {
-            for (const row of previews) {
-              const line = document.createElement("div");
-              const stream = row.stream || "meta";
-              line.className = `task-output-line ${stream}`;
-              line.textContent = previewText(row);
-              output.appendChild(line);
+            const previews = taskPreviewLines(task);
+            if (!previews.length) {
+              const empty = document.createElement("div");
+              empty.className = "task-output-line meta";
+              empty.textContent = "No output yet.";
+              output.appendChild(empty);
+            } else {
+              for (const row of previews) {
+                const line = document.createElement("div");
+                const stream = row.stream || "meta";
+                line.className = `task-output-line ${stream}`;
+                line.textContent = previewText(row);
+                output.appendChild(line);
+              }
             }
           }
 
@@ -1360,16 +1435,28 @@
       const tasks = displayTasks(snapshot);
       const selected = tasks.find(t => t.request_id === state.selectedTaskId);
       if (!selected) {
-        taskHead.textContent = "Select a task to inspect logs";
+        taskHeadLabel.textContent = "Select a task to inspect logs";
+        taskTerminalToggle.disabled = true;
+        taskTerminalToggle.setAttribute("aria-expanded", "false");
+        taskTerminalToggle.textContent = "Open Output";
         clearTaskResult();
         terminal.textContent = "";
         return;
       }
 
       const selectedLabel = taskDisplayLabel(selected);
-      taskHead.textContent = `${selectedLabel} | ${selected.status || "pending"} | ${selected.stage || "-"}`;
+      taskHeadLabel.textContent = `${selectedLabel} | ${selected.status || "pending"} | ${selected.stage || "-"}`;
+      const terminalOpen = isTerminalOutputOpen(selected.request_id);
+      taskTerminalToggle.disabled = false;
+      taskTerminalToggle.setAttribute("aria-expanded", terminalOpen ? "true" : "false");
+      taskTerminalToggle.textContent = terminalOpen ? "Close Output" : "Open Output";
       renderTaskResult(selected);
       terminal.replaceChildren();
+
+      if (!terminalOpen) {
+        terminal.textContent = "Output hidden. Click Open Output to view terminal logs.";
+        return;
+      }
 
       if (!selected.logs?.length) {
         terminal.textContent = "No output captured yet.";
@@ -1524,6 +1611,9 @@
     builderPromptInput.addEventListener("paste", handlePromptImagePaste);
     builderImagePasteTarget.addEventListener("paste", handlePromptImagePaste);
     builderImagesClear.addEventListener("click", clearPromptImages);
+    taskTerminalToggle.addEventListener("click", () => {
+      toggleTerminalOutput(state.selectedTaskId);
+    });
 
     promptModeBuilder.addEventListener("click", () => {
       if (state.promptMode === "builder") return;

@@ -611,6 +611,19 @@ select.prompt-control {
   transition: border-color .12s ease, color .12s ease, transform .12s ease, opacity .12s ease;
 }
 
+.task-output-toggle {
+  border: 1px solid rgba(246, 179, 106, 0.42);
+  background: rgba(48, 37, 22, 0.55);
+  color: #f3cf9f;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: border-color .12s ease, color .12s ease, transform .12s ease;
+}
+
 .task-close:hover {
   border-color: #9fb8d1;
   color: #e1edf9;
@@ -623,6 +636,12 @@ select.prompt-control {
   transform: translateY(-1px);
 }
 
+.task-output-toggle:hover {
+  border-color: #ffd39f;
+  color: #ffe8cb;
+  transform: translateY(-1px);
+}
+
 .task-close:focus-visible {
   outline: 1px solid #9fb8d1;
   outline-offset: 1px;
@@ -630,6 +649,11 @@ select.prompt-control {
 
 .task-rerun:focus-visible {
   outline: 1px solid #8ecfff;
+  outline-offset: 1px;
+}
+
+.task-output-toggle:focus-visible {
+  outline: 1px solid #ffd39f;
   outline-offset: 1px;
 }
 
@@ -775,6 +799,35 @@ select.prompt-control {
   gap: 8px;
   font-size: 0.84rem;
   color: var(--muted);
+}
+
+.task-terminal-toggle {
+  border: 1px solid rgba(246, 179, 106, 0.46);
+  background: rgba(48, 37, 22, 0.55);
+  color: #f3cf9f;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: border-color .12s ease, color .12s ease, transform .12s ease, opacity .12s ease;
+}
+
+.task-terminal-toggle:hover {
+  border-color: #ffd39f;
+  color: #ffe8cb;
+  transform: translateY(-1px);
+}
+
+.task-terminal-toggle:focus-visible {
+  outline: 1px solid #ffd39f;
+  outline-offset: 1px;
+}
+
+.task-terminal-toggle:disabled {
+  opacity: 0.65;
+  transform: none;
 }
 
 .task-result {
