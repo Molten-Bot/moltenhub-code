@@ -141,6 +141,32 @@ func TestLoadSupportsReposArray(t *testing.T) {
 	}
 }
 
+func TestLoadSupportsGitHubHandleAsReviewer(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	json := `{
+  "repo": "git@github.com:acme/repo.git",
+  "prompt": "ship change",
+  "github_handle": "@octocat"
+}`
+	if err := os.WriteFile(path, []byte(json), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got, want := cfg.GitHubHandle, "octocat"; got != want {
+		t.Fatalf("GitHubHandle = %q, want %q", got, want)
+	}
+	if len(cfg.Reviewers) != 1 || cfg.Reviewers[0] != "octocat" {
+		t.Fatalf("Reviewers = %#v, want [octocat]", cfg.Reviewers)
+	}
+}
+
 func TestApplyDefaultsCombinesRepoURLAndRepos(t *testing.T) {
 	t.Parallel()
 
@@ -160,6 +186,34 @@ func TestApplyDefaultsCombinesRepoURLAndRepos(t *testing.T) {
 	}
 	if cfg.RepoURL != "git@github.com:acme/primary.git" {
 		t.Fatalf("RepoURL = %q", cfg.RepoURL)
+	}
+}
+
+func TestApplyDefaultsMergesGitHubHandleIntoReviewers(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		RepoURL:       "git@github.com:acme/repo.git",
+		Prompt:        "x",
+		GitHubHandle:  " @octocat ",
+		Reviewers:     []string{"", "@octocat", "Acme/Platform", "acme/platform"},
+		CommitMessage: "commit",
+		PRTitle:       "title",
+		PRBody:        "body",
+	}
+	cfg.ApplyDefaults()
+
+	if got, want := cfg.GitHubHandle, "octocat"; got != want {
+		t.Fatalf("GitHubHandle = %q, want %q", got, want)
+	}
+	if got, want := len(cfg.Reviewers), 2; got != want {
+		t.Fatalf("len(Reviewers) = %d, want %d (%#v)", got, want, cfg.Reviewers)
+	}
+	if got, want := cfg.Reviewers[0], "octocat"; got != want {
+		t.Fatalf("Reviewers[0] = %q, want %q", got, want)
+	}
+	if got, want := cfg.Reviewers[1], "Acme/Platform"; got != want {
+		t.Fatalf("Reviewers[1] = %q, want %q", got, want)
 	}
 }
 

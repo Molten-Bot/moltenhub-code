@@ -331,6 +331,28 @@ func TestParseRunConfigJSONWithReposArray(t *testing.T) {
 	}
 }
 
+func TestParseRunConfigJSONSupportsGitHubHandleReviewer(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := ParseRunConfigJSON([]byte(`{
+		"repo": "git@github.com:acme/repo.git",
+		"prompt": "make a change",
+		"github_handle": "@octocat"
+	}`))
+	if err != nil {
+		t.Fatalf("ParseRunConfigJSON() error = %v", err)
+	}
+	if got, want := cfg.GitHubHandle, "octocat"; got != want {
+		t.Fatalf("GitHubHandle = %q, want %q", got, want)
+	}
+	if got, want := len(cfg.Reviewers), 1; got != want {
+		t.Fatalf("len(Reviewers) = %d, want %d", got, want)
+	}
+	if got, want := cfg.Reviewers[0], "octocat"; got != want {
+		t.Fatalf("Reviewers[0] = %q, want %q", got, want)
+	}
+}
+
 func TestParseRunConfigJSONRejectsInvalidPayload(t *testing.T) {
 	t.Parallel()
 

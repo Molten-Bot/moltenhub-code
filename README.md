@@ -72,6 +72,7 @@ Common optional fields:
 - `pr_title` (auto-prefixed with `moltenhub-`)
 - `pr_body`
 - `labels`
+- `github_handle` (single GitHub reviewer alias; mapped to PR reviewer)
 - `reviewers`
 
 Example: [`templates/run.example.json`](templates/run.example.json)
@@ -99,7 +100,7 @@ Runtime logs are mirrored to `.log`:
 When a task fails (local or hub-dispatched), the harness queues a follow-up local task that:
 
 - includes relevant failing log paths in prompt context
-- targets this repository
+- uses run config shape: `{"repos":["git@github.com:jefking/how-i-want-to-code.git"],"base_branch":"main","target_subdir":".","prompt":"..."}`
 - asks for root-cause fixes (not superficial bandaids)
 
 ## Exit Codes

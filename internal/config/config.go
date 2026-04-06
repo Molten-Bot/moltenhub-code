@@ -26,6 +26,7 @@ type Config struct {
 	PRTitle       string   `json:"pr_title"`
 	PRBody        string   `json:"pr_body"`
 	Labels        []string `json:"labels"`
+	GitHubHandle  string   `json:"github_handle"`
 	Reviewers     []string `json:"reviewers"`
 }
 
@@ -75,6 +76,8 @@ func (c *Config) ApplyDefaults() {
 	}
 
 	c.Prompt = strings.TrimSpace(c.Prompt)
+	c.GitHubHandle = normalizeReviewer(c.GitHubHandle)
+	c.Reviewers = mergeReviewers(c.Reviewers, c.GitHubHandle)
 
 	if strings.TrimSpace(c.CommitMessage) == "" {
 		c.CommitMessage = defaultCommitMessage(c.Prompt)
@@ -342,4 +345,48 @@ func prependIfMissing(values []string, value string) []string {
 		}
 	}
 	return append([]string{value}, values...)
+}
+
+func mergeReviewers(reviewers []string, githubHandle string) []string {
+	normalized := normalizeReviewerList(reviewers)
+	handle := normalizeReviewer(githubHandle)
+	if handle == "" {
+		return normalized
+	}
+	for _, reviewer := range normalized {
+		if strings.EqualFold(reviewer, handle) {
+			return normalized
+		}
+	}
+	return append([]string{handle}, normalized...)
+}
+
+func normalizeReviewerList(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		normalized := normalizeReviewer(value)
+		if normalized == "" {
+			continue
+		}
+		key := strings.ToLower(normalized)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, normalized)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func normalizeReviewer(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.TrimPrefix(value, "@")
+	return strings.TrimSpace(value)
 }

@@ -290,6 +290,10 @@ func requiredSkillPayloadSchema(dispatchType, skillName string) map[string]any {
 						"type": "string",
 					},
 				},
+				"github_handle": map[string]any{
+					"type":      "string",
+					"minLength": 1,
+				},
 				"reviewers": map[string]any{
 					"type": "array",
 					"items": map[string]any{

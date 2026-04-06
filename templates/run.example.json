@@ -4,5 +4,6 @@
   ],
   "base_branch": "main",
   "target_subdir": ".",
+  "github_handle": "octocat",
   "prompt": "Add your prompt here."
 }
