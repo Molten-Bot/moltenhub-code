@@ -125,7 +125,7 @@ Runtime logs are mirrored to `.log`:
 When a task fails (local or hub-dispatched), the harness queues a follow-up local task that:
 
 - includes relevant failing log paths in prompt context
-- uses run config shape: `{"repos":["git@github.com:jefking/how-i-want-to-code.git"],"base_branch":"main","target_subdir":".","prompt":"..."}`
+- uses run config shape: `{"repos":["git@github.com:Molten-Bot/moltenhub-code.git"],"base_branch":"main","target_subdir":".","prompt":"..."}`
 - asks for root-cause fixes (not superficial bandaids)
 
 ## Exit Codes

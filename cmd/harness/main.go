@@ -22,7 +22,7 @@ import (
 	"github.com/jef/moltenhub-code/internal/multiplex"
 )
 
-const failureFollowUpRepoURL = "git@github.com:jefking/how-i-want-to-code.git"
+const failureFollowUpRepoURL = "git@github.com:Molten-Bot/moltenhub-code.git"
 
 func main() {
 	os.Exit(run())
