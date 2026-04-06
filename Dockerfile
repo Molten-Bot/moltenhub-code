@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-ARG GO_VERSION=1.26.1
+ARG GO_VERSION=1.24.4
 ARG RUNTIME_IMAGE=node:25-bookworm-slim
 ARG CODEX_NPM_PACKAGE=@openai/codex@latest
 
