@@ -263,7 +263,6 @@ body {
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  cursor: pointer;
   transition: background-color .12s ease, color .12s ease;
 }
 
@@ -384,7 +383,6 @@ select.prompt-control {
   padding: 8px 12px;
   font-size: 0.8rem;
   font-weight: 600;
-  cursor: pointer;
   transition: border-color .12s ease, transform .12s ease, opacity .12s ease;
 }
 
@@ -394,7 +392,6 @@ select.prompt-control {
 }
 
 .prompt-submit:disabled {
-  cursor: not-allowed;
   opacity: 0.65;
   transform: none;
 }
@@ -423,7 +420,6 @@ select.prompt-control {
   background: var(--panel-soft);
   border-radius: 10px;
   padding: 9px 10px;
-  cursor: pointer;
   transition: border-color .12s ease, transform .12s ease;
 }
 
@@ -481,7 +477,6 @@ select.prompt-control {
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  cursor: pointer;
   transition: border-color .12s ease, color .12s ease, transform .12s ease;
 }
 
@@ -495,7 +490,6 @@ select.prompt-control {
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  cursor: pointer;
   transition: border-color .12s ease, color .12s ease, transform .12s ease, opacity .12s ease;
 }
 
@@ -522,13 +516,11 @@ select.prompt-control {
 }
 
 .task-rerun:disabled {
-  cursor: not-allowed;
   opacity: 0.6;
   transform: none;
 }
 
 .task-close:disabled {
-  cursor: not-allowed;
   opacity: 0.6;
   transform: none;
 }
@@ -604,7 +596,6 @@ select.prompt-control {
   border-radius: 50%;
   border: 2px solid #506884;
   background: #1c2f44;
-  cursor: help;
   transition: background-color .12s ease, border-color .12s ease, box-shadow .12s ease;
 }
 

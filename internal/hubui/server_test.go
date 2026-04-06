@@ -228,6 +228,12 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".brand-logo") {
 		t.Fatalf("expected stylesheet to include brand logo styles")
 	}
+	if strings.Contains(css, "cursor:") {
+		t.Fatalf("expected stylesheet to avoid custom cursor styles")
+	}
+	if strings.Contains(css, "cursor-not-allowed") {
+		t.Fatalf("expected stylesheet to avoid cursor utility classes")
+	}
 }
 
 func TestHandlerLocalPromptSubmitAccepted(t *testing.T) {
