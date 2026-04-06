@@ -330,3 +330,50 @@ func TestApplyDefaultsKeepsExistingPRTitlePrefix(t *testing.T) {
 		t.Fatalf("PRTitle = %q, want %q", got, want)
 	}
 }
+
+func TestApplyDefaultsAppendsMoltenBotHubFooterToDefaultPRBody(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		RepoURL: "git@github.com:acme/repo.git",
+		Prompt:  "fix tests",
+	}
+	cfg.ApplyDefaults()
+
+	if !strings.HasSuffix(cfg.PRBody, prBodyFooter) {
+		t.Fatalf("PRBody = %q, want footer %q at the end", cfg.PRBody, prBodyFooter)
+	}
+}
+
+func TestApplyDefaultsAppendsMoltenBotHubFooterToCustomPRBody(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		RepoURL: "git@github.com:acme/repo.git",
+		Prompt:  "fix tests",
+		PRBody:  "Custom PR body.",
+	}
+	cfg.ApplyDefaults()
+
+	if !strings.Contains(cfg.PRBody, "Custom PR body.") {
+		t.Fatalf("PRBody = %q, want to preserve the custom body", cfg.PRBody)
+	}
+	if !strings.HasSuffix(cfg.PRBody, prBodyFooter) {
+		t.Fatalf("PRBody = %q, want footer %q at the end", cfg.PRBody, prBodyFooter)
+	}
+}
+
+func TestApplyDefaultsDoesNotDuplicateMoltenBotHubFooter(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		RepoURL: "git@github.com:acme/repo.git",
+		Prompt:  "fix tests",
+		PRBody:  "Custom PR body.\n\n" + prBodyFooter,
+	}
+	cfg.ApplyDefaults()
+
+	if got := strings.Count(cfg.PRBody, "https://molten.bot/hub"); got != 1 {
+		t.Fatalf("PRBody contains %d hub links, want exactly 1: %q", got, cfg.PRBody)
+	}
+}
