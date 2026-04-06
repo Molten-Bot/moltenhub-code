@@ -104,6 +104,27 @@ func TestBrokerTracksMoltenHubConnectionTransitions(t *testing.T) {
 	}
 }
 
+func TestBrokerTracksDispatcherResourceWindow(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog("dispatcher status=window state=steady cpu=12.5 memory=48.2 disk_io_mb_s=3.7 allowed=2 max=4 running=1 queue_depth=0")
+
+	snap := b.Snapshot()
+	if got := snap.Resources.CPUPercent; got != 12.5 {
+		t.Fatalf("resources.cpu_percent = %v, want 12.5", got)
+	}
+	if got := snap.Resources.MemoryPercent; got != 48.2 {
+		t.Fatalf("resources.memory_percent = %v, want 48.2", got)
+	}
+	if got := snap.Resources.DiskIOMBs; got != 3.7 {
+		t.Fatalf("resources.disk_io_mb_s = %v, want 3.7", got)
+	}
+	if snap.Resources.UpdatedAt == "" {
+		t.Fatal("resources.updated_at = empty, want timestamp")
+	}
+}
+
 func TestBrokerCapturesPRURLFromStageLine(t *testing.T) {
 	t.Parallel()
 

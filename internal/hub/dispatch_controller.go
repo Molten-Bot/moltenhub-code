@@ -293,18 +293,21 @@ func (c *AdaptiveDispatchController) sampleAndUpdate() {
 	running := c.running
 	c.mu.Unlock()
 
+	state := "steady"
 	if prevAllowed != nextAllowed {
-		c.logf(
-			"dispatcher status=window cpu=%.1f memory=%.1f disk_io_mb_s=%.1f allowed=%d max=%d running=%d queue_depth=%d",
-			avg.CPUPercent,
-			avg.MemoryPercent,
-			avg.DiskIOMBs,
-			nextAllowed,
-			c.cfg.MaxParallel,
-			running,
-			queueDepth,
-		)
+		state = "adjusted"
 	}
+	c.logf(
+		"dispatcher status=window state=%s cpu=%.1f memory=%.1f disk_io_mb_s=%.1f allowed=%d max=%d running=%d queue_depth=%d",
+		state,
+		avg.CPUPercent,
+		avg.MemoryPercent,
+		avg.DiskIOMBs,
+		nextAllowed,
+		c.cfg.MaxParallel,
+		running,
+		queueDepth,
+	)
 }
 
 func averageResourceSample(values []resourceSample) resourceSample {

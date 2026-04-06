@@ -66,6 +66,12 @@
             <span id="hub-conn-text" class="status-value break-words text-xs leading-tight text-slate-200">Waiting for hub status...</span>
           </span>
         </div>
+        <div class="status-item status-item-metrics flex min-h-[30px] items-center gap-2 rounded-full border border-hub-border bg-hub-panel/75 px-2.5 py-1">
+          <span class="status-text grid min-w-0 gap-px">
+            <span class="status-label text-[0.62rem] uppercase leading-tight tracking-[0.05em] text-hub-muted">System</span>
+            <span id="resource-metrics-text" class="status-value break-words text-xs leading-tight text-slate-200">Awaiting samples...</span>
+          </span>
+        </div>
       </div>
     </div>
 
@@ -229,6 +235,7 @@
     const localConnText = document.getElementById("local-conn-text");
     const hubConnDot = document.getElementById("hub-conn-dot");
     const hubConnText = document.getElementById("hub-conn-text");
+    const resourceMetricsText = document.getElementById("resource-metrics-text");
     const taskCount = document.getElementById("task-count");
     const taskList = document.getElementById("task-list");
     const taskHead = document.getElementById("task-head");
@@ -287,6 +294,39 @@
       }
 
       setHubConnection(false, "Connecting...");
+    }
+
+    function formatMetricValue(label, value, suffix) {
+      if (!Number.isFinite(value) || value < 0) {
+        return `${label} --`;
+      }
+      return `${label} ${value.toFixed(1)}${suffix}`;
+    }
+
+    function renderResourceMetrics(snapshot) {
+      if (!resourceMetricsText) return;
+
+      const resources = snapshot && typeof snapshot.resources === "object" && snapshot.resources !== null
+        ? snapshot.resources
+        : null;
+      if (!resources) {
+        resourceMetricsText.textContent = "Awaiting samples...";
+        return;
+      }
+
+      const cpu = Number(resources.cpu_percent);
+      const mem = Number(resources.memory_percent);
+      const disk = Number(resources.disk_io_mb_s);
+      if (!Number.isFinite(cpu) && !Number.isFinite(mem) && !Number.isFinite(disk)) {
+        resourceMetricsText.textContent = "Awaiting samples...";
+        return;
+      }
+
+      resourceMetricsText.textContent = [
+        formatMetricValue("CPU", cpu, "%"),
+        formatMetricValue("MEM", mem, "%"),
+        formatMetricValue("DISK", disk, " MB/s"),
+      ].join("  ");
     }
 
     function escapeLiteralNewlinesInJSONStrings(raw) {
@@ -1116,6 +1156,7 @@
       }
       rememberRepos(observedRepos);
       renderHubConnection(snapshot);
+      renderResourceMetrics(snapshot);
       renderTasks(snapshot);
       renderTerminal(snapshot);
     }

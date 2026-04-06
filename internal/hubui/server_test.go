@@ -145,8 +145,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="hub-conn-text"`) {
 		t.Fatalf("expected index html to include moltenhub connection indicator")
 	}
+	if !strings.Contains(markup, `id="resource-metrics-text"`) {
+		t.Fatalf("expected index html to include resource metrics indicator")
+	}
 	if !strings.Contains(markup, "function renderHubConnection(") {
 		t.Fatalf("expected index html to include renderHubConnection handler")
+	}
+	if !strings.Contains(markup, "function renderResourceMetrics(") {
+		t.Fatalf("expected index html to include renderResourceMetrics handler")
 	}
 	if !strings.Contains(markup, `id="prompt-mode-builder"`) {
 		t.Fatalf("expected index html to include builder mode toggle")
@@ -227,6 +233,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".brand-logo") {
 		t.Fatalf("expected stylesheet to include brand logo styles")
+	}
+	if !strings.Contains(css, ".status-item-metrics") {
+		t.Fatalf("expected stylesheet to include metrics pill styles")
 	}
 }
 

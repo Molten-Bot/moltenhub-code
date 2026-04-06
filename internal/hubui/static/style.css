@@ -104,6 +104,26 @@ body {
   min-height: 30px;
 }
 
+.status-item-metrics {
+  padding-right: 12px;
+}
+
+.status-item-metrics .status-value {
+  font-family: "IBM Plex Mono", "Consolas", monospace;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .status-item-metrics {
+    width: 100%;
+  }
+
+  .status-item-metrics .status-value {
+    white-space: normal;
+  }
+}
+
 .status-text {
   display: grid;
   gap: 1px;

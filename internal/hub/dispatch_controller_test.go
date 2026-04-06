@@ -3,6 +3,8 @@ package hub
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -183,6 +185,40 @@ func TestAdaptiveDispatchControllerScalesDownOnPressure(t *testing.T) {
 	}
 
 	close(releaseReq2)
+}
+
+func TestAdaptiveDispatchControllerLogsWindowSamplesEvenWhenCapacityIsSteady(t *testing.T) {
+	t.Parallel()
+
+	var lines []string
+	controller := NewAdaptiveDispatchController(DispatcherConfig{
+		MaxParallel:            2,
+		MinParallel:            1,
+		SampleWindow:           1,
+		SampleIntervalMS:       20,
+		CPUHighWatermark:       90,
+		MemoryHighWatermark:    90,
+		DiskIOHighWatermarkMBs: 100,
+	}, func(format string, args ...any) {
+		lines = append(lines, fmt.Sprintf(format, args...))
+	})
+	controller.sample = staticSample{value: resourceSample{CPUPercent: 20, MemoryPercent: 35, DiskIOMBs: 2}}
+
+	controller.sampleAndUpdate()
+
+	if len(lines) == 0 {
+		t.Fatal("expected sampleAndUpdate to emit a window log line")
+	}
+	last := lines[len(lines)-1]
+	if !strings.Contains(last, "dispatcher status=window") {
+		t.Fatalf("last log = %q, want dispatcher window line", last)
+	}
+	if !strings.Contains(last, "state=steady") {
+		t.Fatalf("last log = %q, want steady state marker", last)
+	}
+	if !strings.Contains(last, "cpu=20.0") || !strings.Contains(last, "memory=35.0") || !strings.Contains(last, "disk_io_mb_s=2.0") {
+		t.Fatalf("last log = %q, want resource values", last)
+	}
 }
 
 func TestAcquireReturnsClosedErrorWhenStopped(t *testing.T) {

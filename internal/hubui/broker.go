@@ -67,12 +67,21 @@ type Connection struct {
 	HubBaseURL   string `json:"hub_base_url,omitempty"`
 }
 
+// ResourceMetrics captures the current dispatcher sample window values.
+type ResourceMetrics struct {
+	CPUPercent    float64 `json:"cpu_percent,omitempty"`
+	MemoryPercent float64 `json:"memory_percent,omitempty"`
+	DiskIOMBs     float64 `json:"disk_io_mb_s,omitempty"`
+	UpdatedAt     string  `json:"updated_at,omitempty"`
+}
+
 // Snapshot is the complete monitor payload for the web UI.
 type Snapshot struct {
-	GeneratedAt string     `json:"generated_at"`
-	Connection  Connection `json:"connection"`
-	Events      []Event    `json:"events"`
-	Tasks       []Task     `json:"tasks"`
+	GeneratedAt string          `json:"generated_at"`
+	Connection  Connection      `json:"connection"`
+	Resources   ResourceMetrics `json:"resources"`
+	Events      []Event         `json:"events"`
+	Tasks       []Task          `json:"tasks"`
 }
 
 // Broker collects daemon logs and exposes monitor state snapshots.
@@ -92,6 +101,7 @@ type Broker struct {
 	hubConnected bool
 	hubBaseURL   string
 	hubDomain    string
+	resources    ResourceMetrics
 }
 
 type taskState struct {
@@ -156,6 +166,7 @@ func (b *Broker) IngestLog(line string) {
 		b.updateTaskFromLineLocked(t, line, fields, now)
 	}
 	b.updateHubConnectionFromLineLocked(line, fields)
+	b.updateResourceMetricsFromLineLocked(line, fields, now)
 
 	b.notifySubscribersLocked()
 }
@@ -176,7 +187,8 @@ func (b *Broker) Snapshot() Snapshot {
 			HubDomain:    b.hubDomain,
 			HubBaseURL:   b.hubBaseURL,
 		},
-		Events: append([]Event(nil), b.events...),
+		Resources: b.resources,
+		Events:    append([]Event(nil), b.events...),
 	}
 
 	tasks := make([]*taskState, 0, len(b.tasks))
@@ -481,6 +493,30 @@ func (b *Broker) updateHubConnectionFromLineLocked(line string, fields map[strin
 	}
 }
 
+func (b *Broker) updateResourceMetricsFromLineLocked(line string, fields map[string]string, now time.Time) {
+	if !strings.HasPrefix(line, "dispatcher status=window") {
+		return
+	}
+
+	cpu, okCPU := parseFloatField(fields["cpu"])
+	mem, okMem := parseFloatField(fields["memory"])
+	disk, okDisk := parseFloatField(fields["disk_io_mb_s"])
+	if !okCPU && !okMem && !okDisk {
+		return
+	}
+
+	if okCPU {
+		b.resources.CPUPercent = cpu
+	}
+	if okMem {
+		b.resources.MemoryPercent = mem
+	}
+	if okDisk {
+		b.resources.DiskIOMBs = disk
+	}
+	b.resources.UpdatedAt = now.UTC().Format(time.RFC3339Nano)
+}
+
 func (b *Broker) notifySubscribersLocked() {
 	for ch := range b.subs {
 		select {
@@ -602,6 +638,17 @@ func parseIntField(v string) (int, bool) {
 		return 0, false
 	}
 	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
+func parseFloatField(v string) (float64, bool) {
+	if strings.TrimSpace(v) == "" {
+		return 0, false
+	}
+	n, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
 	if err != nil {
 		return 0, false
 	}
