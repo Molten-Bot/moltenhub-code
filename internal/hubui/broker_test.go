@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 )
 
 func TestBrokerTracksTaskLifecycleAndCommandOutput(t *testing.T) {
@@ -385,6 +386,55 @@ func TestBrokerCloseTaskMissingReturnsNotFound(t *testing.T) {
 	err := b.CloseTask("req-missing")
 	if !errors.Is(err, ErrTaskNotFound) {
 		t.Fatalf("CloseTask() error = %v, want %v", err, ErrTaskNotFound)
+	}
+}
+
+func TestBrokerHidesCompletedOKTasksAfterFiveMinutes(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 4, 6, 12, 0, 0, 0, time.UTC)
+	b := NewBroker()
+	b.now = func() time.Time { return now }
+
+	b.IngestLog("dispatch status=start request_id=req-ok")
+	b.IngestLog("dispatch status=ok request_id=req-ok workspace=/tmp/run branch=moltenhub-cleanup")
+
+	if got := len(b.Snapshot().Tasks); got != 1 {
+		t.Fatalf("len(tasks) before retention = %d, want 1", got)
+	}
+
+	now = now.Add(4*time.Minute + 59*time.Second)
+	if got := len(b.Snapshot().Tasks); got != 1 {
+		t.Fatalf("len(tasks) before ttl expiry = %d, want 1", got)
+	}
+
+	now = now.Add(1 * time.Second)
+	snap := b.Snapshot()
+	if got := len(snap.Tasks); got != 0 {
+		t.Fatalf("len(tasks) after ttl expiry = %d, want 0", got)
+	}
+	if _, ok := b.TaskRunConfig("req-ok"); ok {
+		t.Fatal("TaskRunConfig() found = true for pruned ok task, want false")
+	}
+}
+
+func TestBrokerKeepsFailedTasksAfterFiveMinutes(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 4, 6, 12, 0, 0, 0, time.UTC)
+	b := NewBroker()
+	b.now = func() time.Time { return now }
+
+	b.IngestLog("dispatch status=start request_id=req-error")
+	b.IngestLog(`dispatch status=error request_id=req-error exit_code=50 err="codex exploded"`)
+
+	now = now.Add(6 * time.Minute)
+	snap := b.Snapshot()
+	if got := len(snap.Tasks); got != 1 {
+		t.Fatalf("len(tasks) after ttl for failed task = %d, want 1", got)
+	}
+	if snap.Tasks[0].Status != "error" {
+		t.Fatalf("status = %q, want error", snap.Tasks[0].Status)
 	}
 }
 

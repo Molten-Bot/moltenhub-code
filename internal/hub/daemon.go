@@ -581,10 +581,12 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 	}
 	if res.Err != nil {
 		errText := res.Err.Error()
+		failureMessage := failureResponseMessage(errText)
 		payload["error"] = errText
-		payload["message"] = "task failed; error details included"
+		payload["message"] = failureMessage
 		payload["failure"] = map[string]any{
-			"message": "task failed",
+			"status":  "failed",
+			"message": failureMessage,
 			"error":   errText,
 			"details": result,
 		}
@@ -594,6 +596,14 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 		payload["to"] = dispatch.ReplyTo
 	}
 	return payload
+}
+
+func failureResponseMessage(errText string) string {
+	errText = strings.TrimSpace(errText)
+	if errText == "" {
+		return "task failed: unknown error"
+	}
+	return "task failed: " + errText
 }
 
 func joinRepoPRURLs(results []harness.RepoResult) string {

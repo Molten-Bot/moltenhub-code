@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	defaultMaxEvents   = 600
-	defaultMaxTaskLogs = 2000
+	defaultMaxEvents             = 600
+	defaultMaxTaskLogs           = 2000
+	defaultOKTaskRetentionWindow = 5 * time.Minute
 )
 
 var (
@@ -91,6 +92,7 @@ type Broker struct {
 	now        func() time.Time
 	maxEvents  int
 	maxTaskLog int
+	okTaskTTL  time.Duration
 
 	nextEventID int64
 	events      []Event
@@ -129,6 +131,7 @@ func NewBroker() *Broker {
 		now:        time.Now,
 		maxEvents:  defaultMaxEvents,
 		maxTaskLog: defaultMaxTaskLogs,
+		okTaskTTL:  defaultOKTaskRetentionWindow,
 		tasks:      map[string]*taskState{},
 		runConfigs: map[string][]byte{},
 		subs:       map[chan struct{}]struct{}{},
@@ -151,6 +154,8 @@ func (b *Broker) IngestLog(line string) {
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
+	b.pruneExpiredTasksLocked(now)
 
 	b.nextEventID++
 	b.events = appendCappedEvent(b.events, b.maxEvents, Event{
@@ -177,11 +182,15 @@ func (b *Broker) Snapshot() Snapshot {
 		return Snapshot{}
 	}
 
-	b.mu.RLock()
-	defer b.mu.RUnlock()
+	now := b.now().UTC()
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.pruneExpiredTasksLocked(now)
 
 	snapshot := Snapshot{
-		GeneratedAt: b.now().UTC().Format(time.RFC3339Nano),
+		GeneratedAt: now.Format(time.RFC3339Nano),
 		Connection: Connection{
 			HubConnected: b.hubConnected,
 			HubDomain:    b.hubDomain,
@@ -306,6 +315,26 @@ func (b *Broker) CloseTask(requestID string) error {
 	delete(b.runConfigs, requestID)
 	b.notifySubscribersLocked()
 	return nil
+}
+
+func (b *Broker) pruneExpiredTasksLocked(now time.Time) {
+	if b.okTaskTTL <= 0 {
+		return
+	}
+	for requestID, task := range b.tasks {
+		if !b.shouldHideTaskLocked(task, now) {
+			continue
+		}
+		delete(b.tasks, requestID)
+		delete(b.runConfigs, requestID)
+	}
+}
+
+func (b *Broker) shouldHideTaskLocked(task *taskState, now time.Time) bool {
+	if task == nil || task.Status != "ok" || b.okTaskTTL <= 0 {
+		return false
+	}
+	return !task.UpdatedAt.IsZero() && now.Sub(task.UpdatedAt) >= b.okTaskTTL
 }
 
 // Subscribe returns a change notification channel and cancel function.
