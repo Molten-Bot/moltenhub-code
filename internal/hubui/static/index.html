@@ -171,8 +171,11 @@
 
         <section class="panel min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
           <div class="panel-header flex items-center justify-between gap-2 border-b border-hub-border bg-black/15 px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
-            <span>Tasks</span>
-            <span class="counter text-[0.82rem] font-bold text-hub-accent" id="task-count">0</span>
+            <div class="flex items-center gap-2">
+              <span>Tasks</span>
+              <span class="counter text-[0.82rem] font-bold text-hub-accent" id="task-count">0</span>
+            </div>
+            <button id="task-fullscreen-toggle" class="task-fullscreen-toggle" type="button" aria-expanded="false">Full Screen</button>
           </div>
           <div class="scroll task-scroll h-[calc(100%-48px)] overflow-auto">
             <div id="task-list" class="task-list grid gap-2 p-3"></div>
@@ -186,6 +189,37 @@
           </div>
           <div id="task-result" class="task-result hidden flex-wrap items-center gap-2.5 border-b border-hub-border px-3.5 py-2 text-[0.78rem]"></div>
           <pre id="terminal" class="term task-scroll m-0 h-full overflow-auto whitespace-pre-wrap break-words bg-[#0c1724] p-3 font-mono text-[0.79rem] leading-[1.35] text-[#dbe6f2]"></pre>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="task-fullscreen" class="task-fullscreen hidden" aria-hidden="true">
+    <div class="task-fullscreen-shell">
+      <div class="task-fullscreen-header">
+        <div>
+          <div class="task-fullscreen-title">Tasks</div>
+          <div class="task-fullscreen-subtitle">Focused task/running/state view</div>
+        </div>
+        <button id="task-fullscreen-close" class="task-fullscreen-toggle" type="button">Close</button>
+      </div>
+      <div class="task-fullscreen-body">
+        <section class="panel task-fullscreen-panel">
+          <div class="panel-header">
+            <span>Running State</span>
+            <span id="task-fullscreen-count" class="counter">0</span>
+          </div>
+          <div class="scroll task-scroll">
+            <div id="task-fullscreen-list" class="task-list"></div>
+          </div>
+        </section>
+        <section class="panel log-wrap task-fullscreen-panel">
+          <div class="task-head">
+            <span id="task-fullscreen-head-label" class="min-w-0 flex-1 truncate">Select a task to inspect logs</span>
+            <button id="task-fullscreen-terminal-toggle" class="task-terminal-toggle" type="button">Open Output</button>
+          </div>
+          <div id="task-fullscreen-result" class="task-result hidden"></div>
+          <pre id="task-fullscreen-terminal" class="term task-scroll"></pre>
         </section>
       </div>
     </div>
@@ -261,6 +295,7 @@
       closeInFlight: new Set(),
       expandedTaskOutputIDs: new Set(),
       openTerminalTaskIDs: new Set(),
+      taskFullscreenOpen: false,
     };
 
     const localConnItem = document.getElementById("local-conn-item");
@@ -276,6 +311,15 @@
     const resourceMetricsText = document.getElementById("resource-metrics-text");
     const taskCount = document.getElementById("task-count");
     const taskList = document.getElementById("task-list");
+    const taskFullscreenToggle = document.getElementById("task-fullscreen-toggle");
+    const taskFullscreen = document.getElementById("task-fullscreen");
+    const taskFullscreenClose = document.getElementById("task-fullscreen-close");
+    const taskFullscreenCount = document.getElementById("task-fullscreen-count");
+    const taskFullscreenList = document.getElementById("task-fullscreen-list");
+    const taskFullscreenHeadLabel = document.getElementById("task-fullscreen-head-label");
+    const taskFullscreenTerminalToggle = document.getElementById("task-fullscreen-terminal-toggle");
+    const taskFullscreenResult = document.getElementById("task-fullscreen-result");
+    const taskFullscreenTerminal = document.getElementById("task-fullscreen-terminal");
     const taskHeadLabel = document.getElementById("task-head-label");
     const taskTerminalToggle = document.getElementById("task-terminal-toggle");
     const taskResult = document.getElementById("task-result");
@@ -963,6 +1007,24 @@
       render(state.snapshot);
     }
 
+    function setTaskFullscreen(open) {
+      state.taskFullscreenOpen = Boolean(open);
+      if (taskFullscreen) {
+        taskFullscreen.classList.toggle("hidden", !state.taskFullscreenOpen);
+        taskFullscreen.setAttribute("aria-hidden", state.taskFullscreenOpen ? "false" : "true");
+      }
+      if (taskFullscreenToggle) {
+        taskFullscreenToggle.setAttribute("aria-expanded", state.taskFullscreenOpen ? "true" : "false");
+        taskFullscreenToggle.textContent = state.taskFullscreenOpen ? "Exit Full Screen" : "Full Screen";
+      }
+      if (state.taskFullscreenOpen) {
+        document.body.classList.add("task-fullscreen-open");
+      } else {
+        document.body.classList.remove("task-fullscreen-open");
+      }
+      render(state.snapshot);
+    }
+
     function pruneOutputVisibilityState(tasks) {
       const taskIDs = new Set((tasks || []).map((task) => task?.request_id).filter(Boolean));
       for (const requestID of Array.from(state.expandedTaskOutputIDs)) {
@@ -1127,6 +1189,10 @@
       return [mainTask, ...taskItems];
     }
 
+    function fullscreenTasks(snapshot) {
+      return displayTasks(snapshot).filter((task) => task && task.request_id !== MAIN_TASK_ID);
+    }
+
     function taskPreviewLines(task) {
       const logs = Array.isArray(task.logs) ? task.logs : [];
       if (!logs.length) return [];
@@ -1228,13 +1294,15 @@
       return progress;
     }
 
-    function clearTaskResult() {
-      taskResult.className = "task-result";
-      taskResult.replaceChildren();
+    function clearTaskResult(node) {
+      if (!node) return;
+      node.className = "task-result";
+      node.replaceChildren();
     }
 
-    function renderTaskResult(task) {
-      clearTaskResult();
+    function renderTaskResult(task, node) {
+      if (!node) return;
+      clearTaskResult(node);
 
       if (!task || task.request_id === MAIN_TASK_ID) {
         return;
@@ -1245,11 +1313,11 @@
         return;
       }
 
-      taskResult.className = `task-result show ${statusClass(status)}`;
+      node.className = `task-result show ${statusClass(status)}`;
 
       const title = document.createElement("span");
       title.className = "task-result-title";
-      taskResult.appendChild(title);
+      node.appendChild(title);
 
       const detail = document.createElement("span");
       detail.className = "task-result-detail";
@@ -1267,7 +1335,7 @@
         title.textContent = "Task Failed";
         detail.textContent = task.error ? task.error : "See logs for failure details.";
       }
-      taskResult.appendChild(detail);
+      node.appendChild(detail);
 
       if (status === "ok" && task.pr_url) {
         const link = document.createElement("a");
@@ -1276,7 +1344,7 @@
         link.target = "_blank";
         link.rel = "noopener noreferrer";
         link.textContent = task.pr_url;
-        taskResult.appendChild(link);
+        node.appendChild(link);
       }
     }
 
@@ -1285,17 +1353,18 @@
       render(state.snapshot);
     }
 
-    function renderTasks(snapshot) {
-      const tasks = displayTasks(snapshot);
+    function renderTaskCollection(tasks, listNode, countNode) {
       pruneOutputVisibilityState(tasks);
-      taskCount.textContent = String(tasks.length);
-      taskList.replaceChildren();
+      if (countNode) {
+        countNode.textContent = String(tasks.length);
+      }
+      listNode.replaceChildren();
 
       if (!tasks.length) {
         const empty = document.createElement("div");
         empty.className = "placeholder";
         empty.textContent = "No tasks started yet.";
-        taskList.appendChild(empty);
+        listNode.appendChild(empty);
         return;
       }
 
@@ -1427,39 +1496,46 @@
             node.append(meta, output);
           }
         }
-        taskList.appendChild(node);
+        listNode.appendChild(node);
       }
     }
 
-    function renderTerminal(snapshot) {
-      const tasks = displayTasks(snapshot);
+    function renderTasks(snapshot) {
+      renderTaskCollection(displayTasks(snapshot), taskList, taskCount);
+    }
+
+    function renderFullscreenTasks(snapshot) {
+      renderTaskCollection(fullscreenTasks(snapshot), taskFullscreenList, taskFullscreenCount);
+    }
+
+    function renderTerminalForTasks(tasks, headLabelNode, toggleNode, resultNode, terminalNode) {
       const selected = tasks.find(t => t.request_id === state.selectedTaskId);
       if (!selected) {
-        taskHeadLabel.textContent = "Select a task to inspect logs";
-        taskTerminalToggle.disabled = true;
-        taskTerminalToggle.setAttribute("aria-expanded", "false");
-        taskTerminalToggle.textContent = "Open Output";
-        clearTaskResult();
-        terminal.textContent = "";
+        headLabelNode.textContent = "Select a task to inspect logs";
+        toggleNode.disabled = true;
+        toggleNode.setAttribute("aria-expanded", "false");
+        toggleNode.textContent = "Open Output";
+        clearTaskResult(resultNode);
+        terminalNode.textContent = "";
         return;
       }
 
       const selectedLabel = taskDisplayLabel(selected);
-      taskHeadLabel.textContent = `${selectedLabel} | ${selected.status || "pending"} | ${selected.stage || "-"}`;
+      headLabelNode.textContent = `${selectedLabel} | ${selected.status || "pending"} | ${selected.stage || "-"}`;
       const terminalOpen = isTerminalOutputOpen(selected.request_id);
-      taskTerminalToggle.disabled = false;
-      taskTerminalToggle.setAttribute("aria-expanded", terminalOpen ? "true" : "false");
-      taskTerminalToggle.textContent = terminalOpen ? "Close Output" : "Open Output";
-      renderTaskResult(selected);
-      terminal.replaceChildren();
+      toggleNode.disabled = false;
+      toggleNode.setAttribute("aria-expanded", terminalOpen ? "true" : "false");
+      toggleNode.textContent = terminalOpen ? "Close Output" : "Open Output";
+      renderTaskResult(selected, resultNode);
+      terminalNode.replaceChildren();
 
       if (!terminalOpen) {
-        terminal.textContent = "Output hidden. Click Open Output to view terminal logs.";
+        terminalNode.textContent = "Output hidden. Click Open Output to view terminal logs.";
         return;
       }
 
       if (!selected.logs?.length) {
-        terminal.textContent = "No output captured yet.";
+        terminalNode.textContent = "No output captured yet.";
         return;
       }
 
@@ -1471,8 +1547,16 @@
         line.textContent = `[${relativeTime(row.time)}] [${stream}] ${row.text}`;
         frag.appendChild(line);
       }
-      terminal.appendChild(frag);
-      terminal.scrollTop = terminal.scrollHeight;
+      terminalNode.appendChild(frag);
+      terminalNode.scrollTop = terminalNode.scrollHeight;
+    }
+
+    function renderTerminal(snapshot) {
+      renderTerminalForTasks(displayTasks(snapshot), taskHeadLabel, taskTerminalToggle, taskResult, terminal);
+    }
+
+    function renderFullscreenTerminal(snapshot) {
+      renderTerminalForTasks(fullscreenTasks(snapshot), taskFullscreenHeadLabel, taskFullscreenTerminalToggle, taskFullscreenResult, taskFullscreenTerminal);
     }
 
     function render(snapshot) {
@@ -1487,6 +1571,8 @@
       renderResourceMetrics(snapshot);
       renderTasks(snapshot);
       renderTerminal(snapshot);
+      renderFullscreenTasks(snapshot);
+      renderFullscreenTerminal(snapshot);
     }
 
     async function loadLibraryTasks() {
@@ -1613,6 +1699,20 @@
     builderImagesClear.addEventListener("click", clearPromptImages);
     taskTerminalToggle.addEventListener("click", () => {
       toggleTerminalOutput(state.selectedTaskId);
+    });
+    taskFullscreenTerminalToggle.addEventListener("click", () => {
+      toggleTerminalOutput(state.selectedTaskId);
+    });
+    taskFullscreenToggle.addEventListener("click", () => {
+      setTaskFullscreen(!state.taskFullscreenOpen);
+    });
+    taskFullscreenClose.addEventListener("click", () => {
+      setTaskFullscreen(false);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && state.taskFullscreenOpen) {
+        setTaskFullscreen(false);
+      }
     });
 
     promptModeBuilder.addEventListener("click", () => {
