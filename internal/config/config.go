@@ -36,6 +36,7 @@ type Config struct {
 	Labels        []string      `json:"labels"`
 	GitHubHandle  string        `json:"githubHandle"`
 	Reviewers     []string      `json:"reviewers"`
+	Review        *ReviewConfig `json:"review,omitempty"`
 }
 
 // PromptImage captures one prompt image attachment.
@@ -43,6 +44,13 @@ type PromptImage struct {
 	Name       string `json:"name,omitempty"`
 	MediaType  string `json:"mediaType,omitempty"`
 	DataBase64 string `json:"dataBase64,omitempty"`
+}
+
+// ReviewConfig captures structured pull-request review context for review tasks.
+type ReviewConfig struct {
+	PRNumber   int    `json:"prNumber,omitempty"`
+	PRURL      string `json:"prUrl,omitempty"`
+	HeadBranch string `json:"headBranch,omitempty"`
 }
 
 // UnmarshalJSON supports canonical camelCase keys plus the "branch" alias for baseBranch.
@@ -175,6 +183,7 @@ func (c *Config) ApplyDefaults() {
 	c.Images = normalizePromptImages(c.Images)
 	c.GitHubHandle = normalizeReviewer(c.GitHubHandle)
 	c.Reviewers = mergeReviewers(c.Reviewers, c.GitHubHandle)
+	c.Review = normalizeReviewConfig(c.Review)
 
 	if strings.TrimSpace(c.CommitMessage) == "" {
 		c.CommitMessage = defaultCommitMessage(c.Prompt)
@@ -219,6 +228,9 @@ func (c Config) Validate() error {
 	}
 	if strings.TrimSpace(c.Prompt) == "" {
 		return fmt.Errorf("prompt is required")
+	}
+	if err := validateReviewConfig(c.Review, repos); err != nil {
+		return err
 	}
 	if _, err := agentruntime.Resolve(c.AgentHarness, c.AgentCommand); err != nil {
 		return err
@@ -272,6 +284,47 @@ func normalizePromptImages(images []PromptImage) []PromptImage {
 		return nil
 	}
 	return out
+}
+
+func normalizeReviewConfig(review *ReviewConfig) *ReviewConfig {
+	if review == nil {
+		return nil
+	}
+
+	normalized := &ReviewConfig{
+		PRNumber:   review.PRNumber,
+		PRURL:      strings.TrimSpace(review.PRURL),
+		HeadBranch: strings.TrimSpace(review.HeadBranch),
+	}
+	if normalized.PRNumber <= 0 && normalized.PRURL == "" && normalized.HeadBranch == "" {
+		return nil
+	}
+	return normalized
+}
+
+func validateReviewConfig(review *ReviewConfig, repos []string) error {
+	if review == nil {
+		return nil
+	}
+	if len(repos) != 1 {
+		return fmt.Errorf("review tasks support exactly one repository")
+	}
+	if review.PRNumber < 0 {
+		return fmt.Errorf("review.prNumber must be greater than zero")
+	}
+	if review.PRNumber <= 0 && review.PRURL == "" {
+		return fmt.Errorf("review.prNumber or review.prUrl is required")
+	}
+	if review.PRURL != "" {
+		parsed, err := url.Parse(review.PRURL)
+		if err != nil {
+			return fmt.Errorf("invalid review.prUrl %q: %v", review.PRURL, err)
+		}
+		if strings.TrimSpace(parsed.Scheme) == "" || strings.TrimSpace(parsed.Host) == "" {
+			return fmt.Errorf("invalid review.prUrl %q", review.PRURL)
+		}
+	}
+	return nil
 }
 
 func validatePromptImage(image PromptImage, index int) error {

@@ -301,6 +301,22 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 						"type": "string",
 					},
 				},
+				"review": map[string]any{
+					"type":                 "object",
+					"additionalProperties": false,
+					"properties": map[string]any{
+						"prNumber": map[string]any{
+							"type":    "integer",
+							"minimum": 1,
+						},
+						"prUrl":      propertyNonEmptyString(),
+						"headBranch": propertyNonEmptyString(),
+					},
+					"anyOf": []map[string]any{
+						{"required": []string{"prNumber"}},
+						{"required": []string{"prUrl"}},
+					},
+				},
 			},
 		},
 	}
@@ -430,7 +446,20 @@ func expandLibraryTaskRunConfig(m map[string]any, taskName string) (map[string]a
 	if err != nil {
 		return nil, err
 	}
-	return configToMap(cfg)
+	expanded, err := configToMap(cfg)
+	if err != nil {
+		return nil, err
+	}
+	for key, value := range m {
+		if key == "libraryTaskName" {
+			continue
+		}
+		if _, exists := expanded[key]; exists {
+			continue
+		}
+		expanded[key] = value
+	}
+	return expanded, nil
 }
 
 func configToMap(cfg config.Config) (map[string]any, error) {

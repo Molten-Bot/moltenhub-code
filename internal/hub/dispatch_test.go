@@ -409,6 +409,32 @@ func TestParseRunConfigJSONExpandsLibraryTaskPayload(t *testing.T) {
 	}
 }
 
+func TestParseRunConfigJSONExpandsLibraryTaskPayloadAndPreservesReviewConfig(t *testing.T) {
+	cfg, err := ParseRunConfigJSON([]byte(`{
+		"repo": "git@github.com:acme/repo.git",
+		"libraryTaskName": "code-review",
+		"review": {
+			"prNumber": 42,
+			"headBranch": "feature/improve-tests"
+		}
+	}`))
+	if err != nil {
+		t.Fatalf("ParseRunConfigJSON() error = %v", err)
+	}
+	if cfg.Review == nil {
+		t.Fatal("Review = nil, want non-nil")
+	}
+	if got, want := cfg.Review.PRNumber, 42; got != want {
+		t.Fatalf("Review.PRNumber = %d, want %d", got, want)
+	}
+	if got, want := cfg.Review.HeadBranch, "feature/improve-tests"; got != want {
+		t.Fatalf("Review.HeadBranch = %q, want %q", got, want)
+	}
+	if got := cfg.Prompt; !strings.Contains(got, "pull-request code review") {
+		t.Fatalf("Prompt = %q", got)
+	}
+}
+
 func TestParseRunConfigJSONRejectsAmbiguousPromptAndLibraryTask(t *testing.T) {
 	t.Parallel()
 

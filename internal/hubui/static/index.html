@@ -1215,6 +1215,20 @@
       };
     }
 
+    function resetBuilderTargetSubdir() {
+      builderTargetSubdir.value = ".";
+    }
+
+    function clearBuilderPromptDraft() {
+      clearSubmittedPromptState();
+      resetBuilderTargetSubdir();
+      resetBaseBranchToMain();
+      if (state.promptMode === "json") {
+        localPromptInput.focus();
+        return;
+      }
+      builderPromptInput.focus();
+    }
     function renderRepoHistorySelect(historyField, select, input) {
       if (!historyField || !select || !input) {
         return;
@@ -2343,7 +2357,7 @@
 
     builderPromptInput.addEventListener("paste", handlePromptImagePaste);
     builderImagePasteTarget.addEventListener("paste", handlePromptImagePaste);
-    builderImagesClear.addEventListener("click", clearPromptImages);
+    builderImagesClear.addEventListener("click", clearBuilderPromptDraft);
     if (agentAuthURL) {
       agentAuthURL.addEventListener("click", markAgentAuthInteraction);
     }

@@ -444,6 +444,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function syncBaseBranchClearState(") || !strings.Contains(markup, "builderBaseBranchClear.addEventListener(\"click\", resetBaseBranchToMain);") {
 		t.Fatalf("expected index html to include branch clear behavior")
 	}
+	if !strings.Contains(markup, "function resetBuilderTargetSubdir(") || !strings.Contains(markup, "builderTargetSubdir.value = \".\";") {
+		t.Fatalf("expected index html to include target subdir reset behavior")
+	}
+	if !strings.Contains(markup, "function clearBuilderPromptDraft(") {
+		t.Fatalf("expected index html to include prompt clear handler")
+	}
+	if !strings.Contains(markup, "builderImagesClear.addEventListener(\"click\", clearBuilderPromptDraft);") {
+		t.Fatalf("expected index html Clear button to reset the full builder draft")
+	}
 	if !strings.Contains(markup, `historyField.classList.toggle("hidden", !hasSavedHistory);`) {
 		t.Fatalf("expected index html to hide repo history when there are no saved repos")
 	}

@@ -7,4 +7,9 @@
   // "agentCommand": "codex",
   "githubHandle": "octocat",
   "prompt": "Add your prompt here."
+  // library task example:
+  // "libraryTaskName": "code-review",
+  // "review": {
+  //   "prNumber": 123
+  // }
 }

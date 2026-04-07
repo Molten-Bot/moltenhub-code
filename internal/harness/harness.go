@@ -3,6 +3,7 @@ package harness
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -41,6 +42,10 @@ const (
 	maxCloneAttempts           = 3
 	cloneRetryDelay            = 2 * time.Second
 	maxCloneErrorDetailChars   = 500
+	maxReviewMetadataChars     = 12000
+	maxReviewCommentsChars     = 16000
+	maxReviewDiffStatChars     = 12000
+	maxReviewDiffPatchChars    = 30000
 )
 
 type logFn func(string, ...any)
@@ -277,6 +282,11 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		ImagePaths:       imageArgs,
 	}
 	codexBasePrompt := workspaceCodexPrompt(cfg.Prompt, cfg.TargetSubdir, repos)
+	if reviewPrompt, err := h.prepareReviewPrompt(ctx, runCfg, repos, codexBasePrompt); err != nil {
+		return h.fail(ExitPR, "review", err, runDir)
+	} else {
+		codexBasePrompt = reviewPrompt
+	}
 	codexTargetLabel := codexTargetLabel(cfg.TargetSubdir, len(repos) > 1)
 
 	h.logf("stage=codex status=start target=%s", codexTargetLabel)
@@ -706,6 +716,36 @@ func workspaceCodexPrompt(prompt, targetSubdir string, repos []repoWorkspace) st
 	return strings.TrimSpace(b.String())
 }
 
+func (h Harness) prepareReviewPrompt(
+	ctx context.Context,
+	cfg config.Config,
+	repos []repoWorkspace,
+	basePrompt string,
+) (string, error) {
+	if cfg.Review == nil {
+		return basePrompt, nil
+	}
+	if len(repos) != 1 {
+		return "", fmt.Errorf("review tasks support exactly one repository")
+	}
+
+	repo := repos[0]
+	h.logf("stage=review status=start repo=%s repo_dir=%s", repo.URL, repo.RelDir)
+	reviewContext, err := h.buildReviewPromptContext(ctx, repo, *cfg.Review)
+	if err != nil {
+		return "", err
+	}
+	h.logf("stage=review status=ok repo=%s repo_dir=%s", repo.URL, repo.RelDir)
+
+	if strings.TrimSpace(reviewContext) == "" {
+		return basePrompt, nil
+	}
+	if strings.TrimSpace(basePrompt) == "" {
+		return reviewContext, nil
+	}
+	return strings.TrimSpace(basePrompt + "\n\n" + reviewContext), nil
+}
+
 func withAgentsPrompt(prompt, agentsPath string) string {
 	base := strings.TrimSpace(prompt)
 	agentsPath = strings.TrimSpace(agentsPath)
@@ -725,11 +765,171 @@ func withAgentsPrompt(prompt, agentsPath string) string {
 	return directive + "\n\n" + base
 }
 
+type reviewPRMetadata struct {
+	Number      int    `json:"number"`
+	Title       string `json:"title"`
+	Body        string `json:"body"`
+	URL         string `json:"url"`
+	State       string `json:"state"`
+	IsDraft     bool   `json:"isDraft"`
+	BaseRefName string `json:"baseRefName"`
+	HeadRefName string `json:"headRefName"`
+	Author      struct {
+		Login string `json:"login"`
+	} `json:"author"`
+}
+
+func (h Harness) buildReviewPromptContext(
+	ctx context.Context,
+	repo repoWorkspace,
+	reviewCfg config.ReviewConfig,
+) (string, error) {
+	selector := reviewSelector(reviewCfg)
+	if selector == "" {
+		return "", fmt.Errorf("review selector is required")
+	}
+
+	metaRes, err := h.runCommand(ctx, "review", prReviewMetadataCommand(repo.Dir, selector))
+	if err != nil {
+		return "", fmt.Errorf("load pull request metadata: %w", err)
+	}
+
+	var metadata reviewPRMetadata
+	if err := json.Unmarshal([]byte(strings.TrimSpace(metaRes.Stdout)), &metadata); err != nil {
+		return "", fmt.Errorf("decode pull request metadata: %w", err)
+	}
+	if metadata.Number <= 0 {
+		return "", fmt.Errorf("pull request metadata did not include a valid number")
+	}
+	if strings.TrimSpace(metadata.BaseRefName) == "" {
+		return "", fmt.Errorf("pull request metadata did not include a base branch")
+	}
+
+	if _, err := h.runCommand(ctx, "review", fetchRemoteBranchCommand(repo.Dir, metadata.BaseRefName)); err != nil {
+		return "", fmt.Errorf("fetch pull request base branch %q: %w", metadata.BaseRefName, err)
+	}
+	if _, err := h.runCommand(ctx, "review", fetchPullRequestHeadCommand(repo.Dir, metadata.Number)); err != nil {
+		return "", fmt.Errorf("fetch pull request head for #%d: %w", metadata.Number, err)
+	}
+
+	commentsRes, err := h.runCommand(ctx, "review", prReviewCommentsCommand(repo.Dir, selector))
+	if err != nil {
+		return "", fmt.Errorf("load pull request comments: %w", err)
+	}
+
+	baseRef := remoteTrackingRef(metadata.BaseRefName)
+	headRef := pullRequestTrackingRef(metadata.Number)
+
+	diffStatRes, err := h.runCommand(ctx, "review", reviewDiffStatCommand(repo.Dir, baseRef, headRef))
+	if err != nil {
+		return "", fmt.Errorf("summarize pull request diff: %w", err)
+	}
+	diffPatchRes, err := h.runCommand(ctx, "review", reviewDiffPatchCommand(repo.Dir, baseRef, headRef))
+	if err != nil {
+		return "", fmt.Errorf("load pull request diff: %w", err)
+	}
+
+	metadataJSON, err := json.MarshalIndent(metadata, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("encode pull request metadata: %w", err)
+	}
+
+	var b strings.Builder
+	b.WriteString("Prepared pull-request review context (collected before you started):\n")
+	b.WriteString(fmt.Sprintf("- Repository remote: %s\n", repo.URL))
+	b.WriteString(fmt.Sprintf("- Pull request: #%d\n", metadata.Number))
+	b.WriteString(fmt.Sprintf("- Pull request URL: %s\n", pickFirstNonEmpty(metadata.URL, reviewCfg.PRURL)))
+	b.WriteString(fmt.Sprintf("- Base branch: %s\n", metadata.BaseRefName))
+	b.WriteString(fmt.Sprintf("- Head branch: %s\n", pickFirstNonEmpty(metadata.HeadRefName, reviewCfg.HeadBranch)))
+	b.WriteString("- Existing PR discussion has already been fetched for you below.\n")
+	b.WriteString("- The git diff below was generated locally after fetching the PR head and base refs.\n")
+	b.WriteString("- Treat this prepared context as a starting point and verify important claims yourself before concluding.\n\n")
+	b.WriteString("Pull request metadata:\n```json\n")
+	b.WriteString(truncateForPrompt(string(metadataJSON), maxReviewMetadataChars))
+	b.WriteString("\n```\n\n")
+	b.WriteString("Existing pull request discussion:\n```text\n")
+	b.WriteString(truncateForPrompt(nonEmptyOrDefault(commentsRes.Stdout, "No pull-request comments were returned by gh pr view --comments."), maxReviewCommentsChars))
+	b.WriteString("\n```\n\n")
+	b.WriteString("Local git diff summary:\n```text\n")
+	b.WriteString(truncateForPrompt(nonEmptyOrDefault(joinCommandOutput(diffStatRes), "No diff summary output was returned by git diff --stat --summary."), maxReviewDiffStatChars))
+	b.WriteString("\n```\n\n")
+	b.WriteString("Local git diff patch:\n```diff\n")
+	b.WriteString(truncateForPrompt(nonEmptyOrDefault(diffPatchRes.Stdout, "No diff patch output was returned by git diff."), maxReviewDiffPatchChars))
+	b.WriteString("\n```")
+	return strings.TrimSpace(b.String()), nil
+}
+
 func repoWorkspaceDirName(repoURL string, index, total int) string {
 	if total <= 1 {
 		return "repo"
 	}
 	return fmt.Sprintf("repo-%02d-%s", index+1, repoDirSlug(repoURL))
+}
+
+func reviewSelector(reviewCfg config.ReviewConfig) string {
+	if reviewCfg.PRNumber > 0 {
+		return fmt.Sprintf("%d", reviewCfg.PRNumber)
+	}
+	return strings.TrimSpace(reviewCfg.PRURL)
+}
+
+func prReviewMetadataCommand(repoDir, selector string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: []string{
+			"pr", "view", selector,
+			"--json", "number,title,body,url,state,isDraft,baseRefName,headRefName,author",
+		},
+	}
+}
+
+func prReviewCommentsCommand(repoDir, selector string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: []string{"pr", "view", selector, "--comments"},
+	}
+}
+
+func fetchRemoteBranchCommand(repoDir, branch string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "git",
+		Args: []string{"fetch", "origin", fmt.Sprintf("%s:refs/remotes/origin/%s", branch, branch)},
+	}
+}
+
+func fetchPullRequestHeadCommand(repoDir string, prNumber int) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "git",
+		Args: []string{"fetch", "origin", fmt.Sprintf("pull/%d/head:%s", prNumber, pullRequestTrackingRef(prNumber))},
+	}
+}
+
+func remoteTrackingRef(branch string) string {
+	return fmt.Sprintf("refs/remotes/origin/%s", strings.TrimSpace(branch))
+}
+
+func pullRequestTrackingRef(prNumber int) string {
+	return fmt.Sprintf("refs/remotes/origin/moltenhub-pr-%d", prNumber)
+}
+
+func reviewDiffStatCommand(repoDir, baseRef, headRef string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "git",
+		Args: []string{"diff", "--stat", "--summary", fmt.Sprintf("%s...%s", baseRef, headRef)},
+	}
+}
+
+func reviewDiffPatchCommand(repoDir, baseRef, headRef string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "git",
+		Args: []string{"diff", "--unified=3", "--no-ext-diff", fmt.Sprintf("%s...%s", baseRef, headRef)},
+	}
 }
 
 func repoDirSlug(repoURL string) string {
@@ -849,6 +1049,37 @@ func mergeStreamedOutput(existing, captured string) string {
 		return existing
 	}
 	return existing + "\n" + captured
+}
+
+func joinCommandOutput(res execx.Result) string {
+	return strings.TrimSpace(strings.Join([]string{res.Stdout, res.Stderr}, "\n"))
+}
+
+func truncateForPrompt(text string, max int) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	if max <= 0 || len(text) <= max {
+		return text
+	}
+	return strings.TrimSpace(text[:max]) + "\n...(truncated)"
+}
+
+func nonEmptyOrDefault(value, fallback string) string {
+	if trimmed := strings.TrimSpace(value); trimmed != "" {
+		return trimmed
+	}
+	return strings.TrimSpace(fallback)
+}
+
+func pickFirstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func encodeLogLine(line string) string {

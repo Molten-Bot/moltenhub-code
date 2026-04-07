@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -94,6 +95,45 @@ func sampleConfig() config.Config {
 		Labels:        []string{"automation", ""},
 		Reviewers:     []string{"octocat", ""},
 	}
+}
+
+func repoURLFromConfig(cfg config.Config) string {
+	return cfg.RepoURL
+}
+
+func expectedPreparedReviewContext(repoURL, metadataJSON, commentsText, diffStat, diffPatch string) string {
+	var metadata reviewPRMetadata
+	if err := json.Unmarshal([]byte(metadataJSON), &metadata); err != nil {
+		panic(err)
+	}
+	prettyMetadata, err := json.MarshalIndent(metadata, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+
+	var b strings.Builder
+	b.WriteString("Prepared pull-request review context (collected before you started):\n")
+	b.WriteString(fmt.Sprintf("- Repository remote: %s\n", repoURL))
+	b.WriteString(fmt.Sprintf("- Pull request: #%d\n", metadata.Number))
+	b.WriteString(fmt.Sprintf("- Pull request URL: %s\n", metadata.URL))
+	b.WriteString(fmt.Sprintf("- Base branch: %s\n", metadata.BaseRefName))
+	b.WriteString(fmt.Sprintf("- Head branch: %s\n", metadata.HeadRefName))
+	b.WriteString("- Existing PR discussion has already been fetched for you below.\n")
+	b.WriteString("- The git diff below was generated locally after fetching the PR head and base refs.\n")
+	b.WriteString("- Treat this prepared context as a starting point and verify important claims yourself before concluding.\n\n")
+	b.WriteString("Pull request metadata:\n```json\n")
+	b.WriteString(string(prettyMetadata))
+	b.WriteString("\n```\n\n")
+	b.WriteString("Existing pull request discussion:\n```text\n")
+	b.WriteString(commentsText)
+	b.WriteString("\n```\n\n")
+	b.WriteString("Local git diff summary:\n```text\n")
+	b.WriteString(diffStat)
+	b.WriteString("\n```\n\n")
+	b.WriteString("Local git diff patch:\n```diff\n")
+	b.WriteString(diffPatch)
+	b.WriteString("\n```")
+	return b.String()
 }
 
 func testWorkspaceManager(guid string) workspace.Manager {
@@ -208,6 +248,64 @@ func TestRunPRCreateAlreadyExistsReusesExistingPR(t *testing.T) {
 	}
 	if res.PRURL != prURL {
 		t.Fatalf("PRURL = %q, want %q", res.PRURL, prURL)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunBuildsReviewContextBeforeInvokingCodex(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.Prompt = "Review the pull request"
+	cfg.Review = &config.ReviewConfig{PRNumber: 42}
+
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := filepath.Join("/tmp", "temp", guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-review-the-pull-request"
+	metadataJSON := `{"number":42,"title":"Improve tests","body":"Adds stronger coverage.","url":"https://github.com/acme/repo/pull/42","state":"OPEN","isDraft":false,"baseRefName":"main","headRefName":"feature/improve-tests","author":{"login":"octocat"}}`
+	commentsText := "reviewer: Please add one more regression test."
+	diffStat := " internal/service_test.go | 12 ++++++++++++\n 1 file changed, 12 insertions(+)"
+	diffPatch := "diff --git a/internal/service_test.go b/internal/service_test.go\n+func TestServiceRegression(t *testing.T) {}\n"
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: prReviewMetadataCommand(repoDir, "42"), res: execx.Result{Stdout: metadataJSON}},
+		{cmd: fetchRemoteBranchCommand(repoDir, "main")},
+		{cmd: fetchPullRequestHeadCommand(repoDir, 42)},
+		{cmd: prReviewCommentsCommand(repoDir, "42"), res: execx.Result{Stdout: commentsText}},
+		{cmd: reviewDiffStatCommand(repoDir, remoteTrackingRef("main"), pullRequestTrackingRef(42)), res: execx.Result{Stdout: diffStat}},
+		{cmd: reviewDiffPatchCommand(repoDir, remoteTrackingRef("main"), pullRequestTrackingRef(42)), res: execx.Result{Stdout: diffPatch}},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(strings.TrimSpace(cfg.Prompt+"\n\n"+expectedPreparedReviewContext(repoURLFromConfig(cfg), metadataJSON, commentsText, diffStat, diffPatch)), agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M docs/reviews/pr-42.md\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: "https://github.com/acme/repo/pull/43\n"}},
+		{cmd: prChecksCommand(repoDir, "https://github.com/acme/repo/pull/43")},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
 	}
 	if len(fake.exps) != 0 {
 		t.Fatalf("unconsumed expectations: %d", len(fake.exps))

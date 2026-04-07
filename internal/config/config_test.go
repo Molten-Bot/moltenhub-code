@@ -247,6 +247,63 @@ func TestLoadSupportsGitHubHandleAsReviewer(t *testing.T) {
 	}
 }
 
+func TestLoadSupportsStructuredReviewConfig(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	json := `{
+  "repo": "git@github.com:acme/repo.git",
+  "prompt": "review pull request",
+  "review": {
+    "prNumber": 42,
+    "headBranch": "feature/improve-tests"
+  }
+}`
+	if err := os.WriteFile(path, []byte(json), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Review == nil {
+		t.Fatal("Review = nil, want non-nil")
+	}
+	if got, want := cfg.Review.PRNumber, 42; got != want {
+		t.Fatalf("Review.PRNumber = %d, want %d", got, want)
+	}
+	if got, want := cfg.Review.HeadBranch, "feature/improve-tests"; got != want {
+		t.Fatalf("Review.HeadBranch = %q, want %q", got, want)
+	}
+}
+
+func TestLoadRejectsReviewTaskWithoutPullRequestSelector(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	json := `{
+  "repo": "git@github.com:acme/repo.git",
+  "prompt": "review pull request",
+  "review": {
+    "headBranch": "feature/improve-tests"
+  }
+}`
+	if err := os.WriteFile(path, []byte(json), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "review.prNumber or review.prUrl is required") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestApplyDefaultsCombinesRepoURLAndRepos(t *testing.T) {
 	t.Parallel()
 
