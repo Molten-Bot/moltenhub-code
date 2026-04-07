@@ -10,7 +10,7 @@ services:
     image: moltenhub-code:local
     ports:
       - 3232:7777
-    shm_size: "2gb"
+    shm_size: "8gb"
     env_file:
       - .env
     volumes:
