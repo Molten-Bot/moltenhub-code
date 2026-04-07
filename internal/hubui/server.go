@@ -34,6 +34,21 @@ type Server struct {
 	RunTask           func(context.Context, string) error
 	StopTask          func(context.Context, string) error
 	LoadLibraryTasks  func() ([]library.TaskSummary, error)
+	AgentAuthStatus   func(context.Context) (AgentAuthState, error)
+	StartAgentAuth    func(context.Context) (AgentAuthState, error)
+	VerifyAgentAuth   func(context.Context) (AgentAuthState, error)
+}
+
+// AgentAuthState describes current runtime agent-auth readiness and device flow hints.
+type AgentAuthState struct {
+	Harness    string `json:"harness,omitempty"`
+	Required   bool   `json:"required"`
+	Ready      bool   `json:"ready"`
+	State      string `json:"state,omitempty"`
+	Message    string `json:"message,omitempty"`
+	AuthURL    string `json:"auth_url,omitempty"`
+	DeviceCode string `json:"device_code,omitempty"`
+	UpdatedAt  string `json:"updated_at,omitempty"`
 }
 
 // NewServer returns a monitor HTTP server.
@@ -100,9 +115,21 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/api/library", s.handleLibrary)
 	mux.HandleFunc("/api/stream", s.handleStream)
 	mux.HandleFunc("/api/local-prompt", s.handleLocalPrompt)
+	mux.HandleFunc("/api/agent-auth", s.handleAgentAuthStatus)
+	mux.HandleFunc("/api/agent-auth/start-device", s.handleAgentAuthStart)
+	mux.HandleFunc("/api/agent-auth/verify", s.handleAgentAuthVerify)
 	mux.HandleFunc("/api/tasks/", s.handleTaskAction)
 	mux.HandleFunc("/healthz", s.handleHealth)
 	return mux
+}
+
+func defaultAgentAuthState() AgentAuthState {
+	return AgentAuthState{
+		Required: false,
+		Ready:    true,
+		State:    "ready",
+		Message:  "Agent auth is ready.",
+	}
 }
 
 func (s Server) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -236,6 +263,100 @@ func (s Server) handleStream(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s Server) handleAgentAuthStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	state, err := s.currentAgentAuthState(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{
+			"ok":    false,
+			"error": fmt.Sprintf("load agent auth state: %v", err),
+			"auth":  state,
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":   true,
+		"auth": state,
+	})
+}
+
+func (s Server) handleAgentAuthStart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.StartAgentAuth == nil {
+		writeJSON(w, http.StatusNotImplemented, map[string]any{
+			"ok":    false,
+			"error": "agent device auth is unavailable",
+			"auth":  defaultAgentAuthState(),
+		})
+		return
+	}
+	state, err := s.StartAgentAuth(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": err.Error(),
+			"auth":  state,
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":   true,
+		"auth": state,
+	})
+}
+
+func (s Server) handleAgentAuthVerify(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.VerifyAgentAuth == nil {
+		writeJSON(w, http.StatusNotImplemented, map[string]any{
+			"ok":    false,
+			"error": "agent auth verification is unavailable",
+			"auth":  defaultAgentAuthState(),
+		})
+		return
+	}
+	state, err := s.VerifyAgentAuth(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": err.Error(),
+			"auth":  state,
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":   true,
+		"auth": state,
+	})
+}
+
+func (s Server) currentAgentAuthState(ctx context.Context) (AgentAuthState, error) {
+	if s.AgentAuthStatus == nil {
+		return defaultAgentAuthState(), nil
+	}
+	state, err := s.AgentAuthStatus(ctx)
+	if strings.TrimSpace(state.State) == "" {
+		if state.Ready {
+			state.State = "ready"
+		} else {
+			state.State = "needs_device_auth"
+		}
+	}
+	return state, err
 }
 
 func (s Server) handleLocalPrompt(w http.ResponseWriter, r *http.Request) {

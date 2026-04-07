@@ -219,12 +219,20 @@ func runHub(args []string) int {
 		logger.Print(line)
 		monitorBroker.IngestLog(line)
 	}
+
+	runtimeCfg, runtimeErr := agentruntime.Resolve(cfg.AgentHarness, cfg.AgentCommand)
+	var codexAuth *codexAuthGate
+
 	localSubmitDeduper := newLocalSubmissionDeduper(localSubmissionDedupTTL)
 	localTaskController := newLocalTaskController()
 	var localDispatchSeq uint64
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	if runtimeErr == nil && runtimeCfg.Harness == agentruntime.HarnessCodex {
+		codexAuth = newCodexAuthGate(ctx, runner, runtimeCfg.Command, daemonLogger)
+	}
 
 	if ok := runHubBootDiagnostics(ctx, runner, daemonLogger, cfg); !ok {
 		writeStderrLine(logger, "error: hub endpoint ping precheck failed; ensure <hub-host>/ping returns 2xx before connecting")
@@ -244,6 +252,19 @@ func runHub(args []string) int {
 	var queueFailureFollowUp func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config)
 	var enqueueLocalRun func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string) (string, error)
 	enqueueLocalRun = func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string) (string, error) {
+		if codexAuth != nil {
+			authState, authErr := codexAuth.Status(reqCtx)
+			if authErr != nil {
+				return "", fmt.Errorf("check codex auth status: %w", authErr)
+			}
+			if authState.Required && !authState.Ready {
+				return "", fmt.Errorf(
+					"agent auth required: %s",
+					firstNonEmptyString(authState.Message, "complete Codex device authorization in the UI"),
+				)
+			}
+		}
+
 		runCfg = applyDefaultAgentRuntimeConfig(runCfg, cfg)
 		source = strings.TrimSpace(source)
 		if source == "" {
@@ -431,6 +452,11 @@ func runHub(args []string) int {
 		uiServer := hubui.NewServer(*uiListen, monitorBroker)
 		uiServer.AutomaticMode = *uiAutomatic
 		uiServer.Logf = logger.Printf
+		if codexAuth != nil {
+			uiServer.AgentAuthStatus = codexAuth.Status
+			uiServer.StartAgentAuth = codexAuth.StartDeviceAuth
+			uiServer.VerifyAgentAuth = codexAuth.Verify
+		}
 		uiServer.SubmitLocalPrompt = func(reqCtx context.Context, body []byte) (string, error) {
 			runCfg, err := hub.ParseRunConfigJSON(body)
 			if err != nil {

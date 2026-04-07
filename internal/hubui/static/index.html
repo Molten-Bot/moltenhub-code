@@ -238,6 +238,27 @@
     </div>
   </div>
 
+  <div id="agent-auth-gate" class="fixed inset-0 z-[95] hidden items-center justify-center bg-[#040911]/85 p-4 backdrop-blur-sm" aria-live="polite">
+    <div class="w-full max-w-xl rounded-2xl border border-hub-border bg-hub-panel p-5 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
+      <div class="text-[0.84rem] uppercase tracking-[0.08em] text-hub-muted">Agent Authorization</div>
+      <h2 class="mt-1 text-xl font-semibold text-hub-text">Authorize Codex Before Running Tasks</h2>
+      <p id="agent-auth-message" class="mt-2 text-sm text-hub-muted">Checking Codex login status...</p>
+
+      <div id="agent-auth-details" class="mt-4 hidden rounded-xl border border-hub-border bg-[#0d1825] p-3">
+        <div class="text-[0.72rem] uppercase tracking-[0.08em] text-hub-muted">Open This Link</div>
+        <a id="agent-auth-url" class="mt-1 block break-all text-sm text-[#8dc6ff] underline decoration-dotted underline-offset-2" href="" target="_blank" rel="noopener noreferrer"></a>
+        <div class="mt-3 text-[0.72rem] uppercase tracking-[0.08em] text-hub-muted">Device Code</div>
+        <div id="agent-auth-code" class="mt-1 rounded-lg border border-hub-border bg-[#09121e] px-3 py-2 font-mono text-base tracking-[0.2em] text-hub-text"></div>
+      </div>
+
+      <div class="mt-4 flex flex-wrap items-center gap-2">
+        <button id="agent-auth-start" class="rounded-lg border border-hub-border bg-[#12304a] px-3 py-2 text-sm font-medium text-hub-text hover:bg-[#18415f]" type="button">Start Device Auth</button>
+        <button id="agent-auth-verify" class="rounded-lg border border-hub-border bg-[#173d2b] px-3 py-2 text-sm font-medium text-hub-text hover:bg-[#1f533a]" type="button">Done, Check Again</button>
+      </div>
+      <div id="agent-auth-status" class="mt-3 min-h-[1.2em] text-[0.76rem] leading-[1.35] text-hub-muted"></div>
+    </div>
+  </div>
+
   <script>
     const DISMISSED_TASKS_KEY = "hubui.dismissedTaskIds";
     const REPO_HISTORY_KEY = "hubui.repoHistory.v1";
@@ -258,6 +279,23 @@
       const config = raw && typeof raw === "object" ? raw : {};
       return {
         automaticMode: Boolean(config.automaticMode),
+      };
+    }
+
+    function normalizeAgentAuth(raw) {
+      const auth = raw && typeof raw === "object" ? raw : {};
+      const required = Boolean(auth.required);
+      const ready = Boolean(auth.ready);
+      const state = String(auth.state || (ready ? "ready" : "needs_device_auth")).trim() || (ready ? "ready" : "needs_device_auth");
+      return {
+        required,
+        ready,
+        harness: String(auth.harness || "").trim(),
+        state,
+        message: String(auth.message || "").trim(),
+        authURL: String(auth.auth_url || "").trim(),
+        deviceCode: String(auth.device_code || "").trim(),
+        updatedAt: String(auth.updated_at || "").trim(),
       };
     }
 
@@ -310,6 +348,7 @@
 
     const state = {
       ui: normalizeUIConfig(window.__HUB_UI_CONFIG__),
+      agentAuth: normalizeAgentAuth({ required: false, ready: true, state: "ready" }),
       snapshot: null,
       selectedTaskId: "",
       dismissedTaskIDs: loadDismissedTaskIDs(),
@@ -325,6 +364,7 @@
       expandedTaskOutputIDs: new Set(),
       openTerminalTaskIDs: new Set(),
       taskFullscreenOpen: false,
+      agentAuthBusy: false,
     };
 
     const localConnItem = document.getElementById("local-conn-item");
@@ -385,6 +425,14 @@
     const rightCol = document.querySelector(".right-col");
     const promptWrap = document.querySelector(".prompt-wrap");
     const promptVisibilityToggle = document.getElementById("prompt-visibility-toggle");
+    const agentAuthGate = document.getElementById("agent-auth-gate");
+    const agentAuthMessage = document.getElementById("agent-auth-message");
+    const agentAuthDetails = document.getElementById("agent-auth-details");
+    const agentAuthURL = document.getElementById("agent-auth-url");
+    const agentAuthCode = document.getElementById("agent-auth-code");
+    const agentAuthStart = document.getElementById("agent-auth-start");
+    const agentAuthVerify = document.getElementById("agent-auth-verify");
+    const agentAuthStatus = document.getElementById("agent-auth-status");
 
     function setIndicator(itemNode, dot, textNode, label, online, text) {
       const message = `${label}: ${text}`;
@@ -400,6 +448,144 @@
 
     function setLocalConnection(online, text) {
       setIndicator(localConnItem, localConnDot, localConnText, "Local", online, text);
+    }
+
+    function setAgentAuthBusy(busy) {
+      state.agentAuthBusy = Boolean(busy);
+      if (agentAuthStart) {
+        agentAuthStart.disabled = state.agentAuthBusy;
+      }
+      if (agentAuthVerify) {
+        agentAuthVerify.disabled = state.agentAuthBusy;
+      }
+    }
+
+    function setAgentAuthStatusText(text, kind) {
+      if (!agentAuthStatus) return;
+      const tone = String(kind || "").trim();
+      const base = "mt-3 min-h-[1.2em] text-[0.76rem] leading-[1.35]";
+      switch (tone) {
+        case "error":
+          agentAuthStatus.className = `${base} text-hub-bad`;
+          break;
+        case "ok":
+          agentAuthStatus.className = `${base} text-hub-good`;
+          break;
+        case "warn":
+          agentAuthStatus.className = `${base} text-hub-warn`;
+          break;
+        default:
+          agentAuthStatus.className = `${base} text-hub-muted`;
+          break;
+      }
+      agentAuthStatus.textContent = String(text || "");
+    }
+
+    function applyAgentAuthGate(auth) {
+      state.agentAuth = normalizeAgentAuth(auth);
+      const gateVisible = state.agentAuth.required && !state.agentAuth.ready;
+
+      if (agentAuthGate) {
+        agentAuthGate.classList.toggle("hidden", !gateVisible);
+        agentAuthGate.classList.toggle("flex", gateVisible);
+      }
+
+      if (agentAuthMessage) {
+        const fallbackMessage = state.agentAuth.ready
+          ? "Codex authorization is ready."
+          : "Codex authorization is required before running tasks.";
+        agentAuthMessage.textContent = state.agentAuth.message || fallbackMessage;
+      }
+
+      const hasChallenge = Boolean(state.agentAuth.authURL || state.agentAuth.deviceCode);
+      if (agentAuthDetails) {
+        agentAuthDetails.classList.toggle("hidden", !hasChallenge);
+      }
+      if (agentAuthURL) {
+        agentAuthURL.textContent = state.agentAuth.authURL || "";
+        agentAuthURL.href = state.agentAuth.authURL || "#";
+        agentAuthURL.classList.toggle("pointer-events-none", !state.agentAuth.authURL);
+      }
+      if (agentAuthCode) {
+        agentAuthCode.textContent = state.agentAuth.deviceCode || "Start device auth to generate a code.";
+      }
+
+      if (agentAuthStart) {
+        agentAuthStart.classList.toggle("hidden", state.agentAuth.ready);
+      }
+      if (agentAuthVerify) {
+        agentAuthVerify.classList.toggle("hidden", state.agentAuth.ready);
+      }
+      if (localPromptSubmit) {
+        const submitDisabled = state.agentAuthBusy || (state.agentAuth.required && !state.agentAuth.ready);
+        localPromptSubmit.disabled = submitDisabled;
+      }
+    }
+
+    async function requestAgentAuth(path, method) {
+      const response = await fetch(path, { method, cache: "no-store" });
+      let body = null;
+      try {
+        body = await response.json();
+      } catch (_err) {
+        body = null;
+      }
+      if (!response.ok) {
+        const apiErr = body && typeof body.error === "string" ? body.error : `auth http ${response.status}`;
+        throw new Error(apiErr);
+      }
+      return normalizeAgentAuth(body?.auth);
+    }
+
+    async function loadAgentAuthStatus() {
+      try {
+        const auth = await requestAgentAuth("/api/agent-auth", "GET");
+        applyAgentAuthGate(auth);
+        if (!auth.required || auth.ready) {
+          setAgentAuthStatusText("", "");
+        }
+      } catch (err) {
+        applyAgentAuthGate({
+          required: true,
+          ready: false,
+          state: "error",
+          message: "Unable to verify Codex login status.",
+        });
+        setAgentAuthStatusText(`Status check failed: ${err.message}`, "error");
+      }
+    }
+
+    async function startAgentDeviceAuth() {
+      setAgentAuthBusy(true);
+      setAgentAuthStatusText("Starting device authorization...", "warn");
+      try {
+        const auth = await requestAgentAuth("/api/agent-auth/start-device", "POST");
+        applyAgentAuthGate(auth);
+        setAgentAuthStatusText("Open the link, enter the code, then click Done, Check Again.", "warn");
+      } catch (err) {
+        setAgentAuthStatusText(`Device auth failed: ${err.message}`, "error");
+      } finally {
+        setAgentAuthBusy(false);
+      }
+    }
+
+    async function verifyAgentDeviceAuth() {
+      setAgentAuthBusy(true);
+      setAgentAuthStatusText("Checking Codex authorization...", "warn");
+      try {
+        const auth = await requestAgentAuth("/api/agent-auth/verify", "POST");
+        applyAgentAuthGate(auth);
+        if (auth.ready) {
+          setAgentAuthStatusText("Codex authorization is ready.", "ok");
+          setLocalPromptStatus("ok", "Codex auth is ready.");
+        } else {
+          setAgentAuthStatusText("Still waiting for authorization. Complete browser auth and try again.", "warn");
+        }
+      } catch (err) {
+        setAgentAuthStatusText(`Verification failed: ${err.message}`, "error");
+      } finally {
+        setAgentAuthBusy(false);
+      }
     }
 
     function applyHubDotMode(mode) {
@@ -1965,6 +2151,7 @@
 
     async function loadInitial() {
       try {
+        await loadAgentAuthStatus();
         await loadLibraryTasks();
         const response = await fetch("/api/state", { cache: "no-store" });
         if (!response.ok) {
@@ -2000,6 +2187,10 @@
 
     async function submitLocalPrompt(event) {
       event.preventDefault();
+      if (state.agentAuth.required && !state.agentAuth.ready) {
+        setLocalPromptStatus("error", "Codex auth is required. Complete the authorization screen first.");
+        return;
+      }
       let normalized = null;
       try {
         normalized = currentPromptPayload();
@@ -2098,6 +2289,8 @@
     builderPromptInput.addEventListener("paste", handlePromptImagePaste);
     builderImagePasteTarget.addEventListener("paste", handlePromptImagePaste);
     builderImagesClear.addEventListener("click", clearPromptImages);
+    agentAuthStart.addEventListener("click", startAgentDeviceAuth);
+    agentAuthVerify.addEventListener("click", verifyAgentDeviceAuth);
     promptVisibilityToggle.addEventListener("click", togglePromptVisibility);
     taskTerminalToggle.addEventListener("click", () => {
       toggleTerminalOutput(state.selectedTaskId);
@@ -2162,6 +2355,7 @@
     }
     setPromptMode(state.promptMode);
     applyPromptVisibility();
+    applyAgentAuthGate(state.agentAuth);
     loadInitial();
     startStream();
   </script>
