@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,7 +12,9 @@ import (
 	"testing"
 
 	"github.com/jef/moltenhub-code/internal/config"
+	"github.com/jef/moltenhub-code/internal/execx"
 	"github.com/jef/moltenhub-code/internal/harness"
+	"github.com/jef/moltenhub-code/internal/hub"
 )
 
 func TestRunUsageMissingSubcommand(t *testing.T) {
@@ -246,4 +250,117 @@ func TestFailureFollowUpReposReturnsNilWhenNoRepoFound(t *testing.T) {
 	if got := failureFollowUpRepos(harness.Result{}, config.Config{}); got != nil {
 		t.Fatalf("failureFollowUpRepos() = %v, want nil", got)
 	}
+}
+
+func TestRunHubBootDiagnosticsWithRuntimeLoader(t *testing.T) {
+	t.Parallel()
+
+	runner := &stubExecRunner{
+		results: map[string]stubExecResult{
+			stubCommandKey(execx.Command{Name: "git", Args: []string{"--version"}}): {
+				result: execx.Result{Stdout: "git version 2.47.1\n"},
+			},
+			stubCommandKey(execx.Command{Name: "gh", Args: []string{"--version"}}): {
+				result: execx.Result{Stdout: "gh version 2.61.0 (2026-01-15)\n"},
+			},
+			stubCommandKey(execx.Command{Name: "codex", Args: []string{"--help"}}): {
+				result: execx.Result{Stdout: "Codex CLI help\n"},
+			},
+			stubCommandKey(execx.Command{Name: "gh", Args: []string{"auth", "status"}}): {
+				result: execx.Result{Stderr: "not logged into github.com\n"},
+				err:    errors.New("gh auth status failed"),
+			},
+		},
+	}
+
+	var logs []string
+	logf := func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	runHubBootDiagnosticsWithRuntimeLoader(
+		context.Background(),
+		runner,
+		logf,
+		hub.InitConfig{BaseURL: "https://na.hub.molten.bot/v1"},
+		func() (hub.RuntimeConfig, error) {
+			return hub.RuntimeConfig{}, errors.New("missing runtime config")
+		},
+	)
+
+	assertLogContains(t, logs, "boot.diagnosis status=ok requirement=git_cli")
+	assertLogContains(t, logs, "boot.diagnosis status=ok requirement=gh_cli")
+	assertLogContains(t, logs, "boot.diagnosis status=ok requirement=codex_cli")
+	assertLogContains(t, logs, "boot.diagnosis status=warn requirement=gh_auth")
+	assertLogContains(t, logs, "boot.diagnosis status=recommendation requirement=moltenhub_hub")
+	assertLogContains(t, logs, "boot.diagnosis status=complete required_checks=ok")
+}
+
+func TestHubCredentialsConfigured(t *testing.T) {
+	t.Parallel()
+
+	if !hubCredentialsConfigured(hub.InitConfig{AgentToken: "agent-token"}, nil) {
+		t.Fatal("hubCredentialsConfigured() = false with agent token, want true")
+	}
+	if !hubCredentialsConfigured(hub.InitConfig{BindToken: "bind-token"}, nil) {
+		t.Fatal("hubCredentialsConfigured() = false with bind token, want true")
+	}
+	if !hubCredentialsConfigured(hub.InitConfig{}, func() (hub.RuntimeConfig, error) {
+		return hub.RuntimeConfig{Token: "saved-token"}, nil
+	}) {
+		t.Fatal("hubCredentialsConfigured() = false with runtime config token, want true")
+	}
+	if hubCredentialsConfigured(hub.InitConfig{}, func() (hub.RuntimeConfig, error) {
+		return hub.RuntimeConfig{}, errors.New("not found")
+	}) {
+		t.Fatal("hubCredentialsConfigured() = true without token sources, want false")
+	}
+}
+
+func TestDiagnosticDetailForResult(t *testing.T) {
+	t.Parallel()
+
+	if got := diagnosticDetailForResult(execx.Result{Stdout: "\n\n git version 2.47.1 \n"}); got != "git version 2.47.1" {
+		t.Fatalf("diagnosticDetailForResult(stdout) = %q", got)
+	}
+	if got := diagnosticDetailForResult(execx.Result{Stderr: "not logged in\n"}); got != "not logged in" {
+		t.Fatalf("diagnosticDetailForResult(stderr) = %q", got)
+	}
+	if got := diagnosticDetailForResult(execx.Result{}); got != "check completed" {
+		t.Fatalf("diagnosticDetailForResult(empty) = %q", got)
+	}
+}
+
+type stubExecResult struct {
+	result execx.Result
+	err    error
+}
+
+type stubExecRunner struct {
+	results map[string]stubExecResult
+}
+
+func (r *stubExecRunner) Run(_ context.Context, cmd execx.Command) (execx.Result, error) {
+	if r == nil {
+		return execx.Result{}, errors.New("nil runner")
+	}
+	entry, ok := r.results[stubCommandKey(cmd)]
+	if !ok {
+		return execx.Result{}, fmt.Errorf("unexpected command: %s", stubCommandKey(cmd))
+	}
+	return entry.result, entry.err
+}
+
+func stubCommandKey(cmd execx.Command) string {
+	return fmt.Sprintf("%s %s", cmd.Name, strings.Join(cmd.Args, " "))
+}
+
+func assertLogContains(t *testing.T, lines []string, want string) {
+	t.Helper()
+	for _, line := range lines {
+		if strings.Contains(line, want) {
+			return
+		}
+	}
+	t.Fatalf("logs missing %q\nlogs:\n%s", want, strings.Join(lines, "\n"))
 }

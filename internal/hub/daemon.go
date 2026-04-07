@@ -357,11 +357,33 @@ func (d Daemon) processInboundMessage(
 
 		release, acquireErr := dispatchController.Acquire(ctx, dispatch.RequestID)
 		if acquireErr != nil {
-			if !errors.Is(acquireErr, context.Canceled) && !errors.Is(acquireErr, errDispatchControllerClosed) {
+			if !errors.Is(acquireErr, context.Canceled) {
+				failErr := fmt.Errorf("dispatch acquire: %w", acquireErr)
+				failRes := harness.Result{
+					ExitCode: harness.ExitPreflight,
+					Err:      failErr,
+				}
+				payload := dispatchResultPayload(cfg, dispatch, failRes)
+				if err := api.PublishResult(ctx, token, payload); err != nil {
+					d.logf("dispatch status=publish_error request_id=%s err=%q", dispatch.RequestID, err)
+					if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
+						if nackErr := api.NackOpenClawDelivery(ctx, token, deliveryID); nackErr != nil {
+							d.logf("dispatch status=nack_error delivery_id=%s err=%q", deliveryID, nackErr)
+						}
+					}
+				} else if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
+					if err := api.AckOpenClawDelivery(ctx, token, deliveryID); err != nil {
+						d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
+					}
+				}
 				d.logf(
-					"dispatch status=error request_id=%s err=%q",
+					"dispatch status=error request_id=%s exit_code=%d workspace=%s branch=%s pr_url=%s err=%q",
 					firstNonEmpty(dispatch.RequestID, dedupeKey),
-					acquireErr,
+					failRes.ExitCode,
+					failRes.WorkspaceDir,
+					failRes.Branch,
+					failRes.PRURL,
+					failRes.Err,
 				)
 			}
 			if deduper != nil {

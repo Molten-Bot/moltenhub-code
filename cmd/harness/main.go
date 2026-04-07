@@ -24,6 +24,10 @@ import (
 
 const failureFollowUpRequiredPrompt = "Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."
 
+const hubBootRecommendation = "Recommended: connect this runtime to Molten Hub at https://molten.bot/hub so agents can dispatch work to it."
+
+const hubBootDiagnosticTimeout = 10 * time.Second
+
 func main() {
 	os.Exit(run())
 }
@@ -214,6 +218,9 @@ func runHub(args []string) int {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	runHubBootDiagnostics(ctx, runner, daemonLogger, cfg)
+
 	dispatchController := hub.NewAdaptiveDispatchController(cfg.Dispatcher, daemonLogger)
 	dispatchController.Start(ctx)
 
@@ -618,6 +625,128 @@ func marshalRunConfigJSON(cfg config.Config) ([]byte, bool) {
 		return nil, false
 	}
 	return payload, true
+}
+
+type runtimeConfigLoader func() (hub.RuntimeConfig, error)
+
+func runHubBootDiagnostics(ctx context.Context, runner execx.Runner, logf func(string, ...any), cfg hub.InitConfig) {
+	runHubBootDiagnosticsWithRuntimeLoader(ctx, runner, logf, cfg, func() (hub.RuntimeConfig, error) {
+		return hub.LoadRuntimeConfig("")
+	})
+}
+
+func runHubBootDiagnosticsWithRuntimeLoader(
+	ctx context.Context,
+	runner execx.Runner,
+	logf func(string, ...any),
+	cfg hub.InitConfig,
+	loadRuntimeConfig runtimeConfigLoader,
+) {
+	if runner == nil || logf == nil {
+		return
+	}
+
+	checks := []struct {
+		requirement string
+		cmd         execx.Command
+	}{
+		{
+			requirement: "git_cli",
+			cmd:         execx.Command{Name: "git", Args: []string{"--version"}},
+		},
+		{
+			requirement: "gh_cli",
+			cmd:         execx.Command{Name: "gh", Args: []string{"--version"}},
+		},
+		{
+			requirement: "codex_cli",
+			cmd:         execx.Command{Name: "codex", Args: []string{"--help"}},
+		},
+	}
+
+	logf("boot.diagnosis status=start checks=git_cli,gh_cli,codex_cli,gh_auth,moltenhub_hub")
+
+	failedRequiredChecks := 0
+	for _, check := range checks {
+		checkCtx, cancel := context.WithTimeout(ctx, hubBootDiagnosticTimeout)
+		res, err := runner.Run(checkCtx, check.cmd)
+		cancel()
+		if err != nil {
+			failedRequiredChecks++
+			logf("boot.diagnosis status=error requirement=%s err=%q", check.requirement, err)
+			continue
+		}
+		logf(
+			"boot.diagnosis status=ok requirement=%s detail=%q",
+			check.requirement,
+			diagnosticDetailForResult(res),
+		)
+	}
+
+	authCtx, cancel := context.WithTimeout(ctx, hubBootDiagnosticTimeout)
+	authRes, authErr := runner.Run(authCtx, execx.Command{Name: "gh", Args: []string{"auth", "status"}})
+	cancel()
+	if authErr != nil {
+		logf(
+			"boot.diagnosis status=warn requirement=gh_auth detail=%q recommendation=%q",
+			diagnosticDetailForResult(authRes),
+			"Run `gh auth login` (or set GH_TOKEN) before dispatching tasks.",
+		)
+	} else {
+		logf("boot.diagnosis status=ok requirement=gh_auth detail=%q", diagnosticDetailForResult(authRes))
+	}
+
+	if hubCredentialsConfigured(cfg, loadRuntimeConfig) {
+		logf(
+			"boot.diagnosis status=ok requirement=moltenhub_hub detail=%q",
+			fmt.Sprintf("Hub endpoint configured: %s", strings.TrimSpace(cfg.BaseURL)),
+		)
+	} else {
+		logf(
+			"boot.diagnosis status=recommendation requirement=moltenhub_hub detail=%q",
+			hubBootRecommendation,
+		)
+	}
+
+	if failedRequiredChecks == 0 {
+		logf("boot.diagnosis status=complete required_checks=ok")
+		return
+	}
+	logf(
+		"boot.diagnosis status=warn required_checks=failed count=%d recommendation=%q",
+		failedRequiredChecks,
+		"Install missing tools before running tasks: git, gh, codex.",
+	)
+}
+
+func diagnosticDetailForResult(res execx.Result) string {
+	candidates := []string{res.Stdout, res.Stderr}
+	for _, candidate := range candidates {
+		for _, line := range strings.Split(candidate, "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			line = strings.Join(strings.Fields(line), " ")
+			const maxChars = 200
+			if len(line) > maxChars {
+				return line[:maxChars-3] + "..."
+			}
+			return line
+		}
+	}
+	return "check completed"
+}
+
+func hubCredentialsConfigured(cfg hub.InitConfig, loadRuntimeConfig runtimeConfigLoader) bool {
+	if strings.TrimSpace(cfg.AgentToken) != "" || strings.TrimSpace(cfg.BindToken) != "" {
+		return true
+	}
+	if loadRuntimeConfig == nil {
+		return false
+	}
+	_, err := loadRuntimeConfig()
+	return err == nil
 }
 
 func collectConfigPaths(inputs []string) ([]string, error) {
