@@ -590,6 +590,7 @@ func (d Daemon) handleDispatch(
 		)
 		return
 	}
+	d.recordGitHubTaskCompleteActivity(ctx, api, dispatch.RequestID)
 	if res.NoChanges {
 		d.logf("dispatch status=no_changes request_id=%s workspace=%s branch=%s", dispatch.RequestID, res.WorkspaceDir, res.Branch)
 		return
@@ -603,6 +604,15 @@ func (d Daemon) handleDispatch(
 		joinRepoPRURLs(res.RepoResults),
 		countChangedRepoResults(res.RepoResults),
 	)
+}
+
+func (d Daemon) recordGitHubTaskCompleteActivity(ctx context.Context, api MoltenHubAPI, requestID string) {
+	if api == nil {
+		return
+	}
+	if err := api.RecordGitHubTaskCompleteActivity(ctx); err != nil {
+		d.logf("dispatch status=warn action=record_github_task_complete request_id=%s err=%q", requestID, err)
+	}
 }
 
 func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.Result) map[string]any {

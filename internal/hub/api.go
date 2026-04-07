@@ -28,6 +28,8 @@ const (
 	runtimeSkillFallback = "Executes MoltenHub Code tasks."
 	agentVisibilityKey   = "visibility"
 	agentVisibilityValue = "public"
+	gitHubTaskComplete   = "github task complete"
+	maxActivityEntries   = 20
 )
 
 // PulledOpenClawMessage is one leased inbound message from pull transport.
@@ -245,6 +247,48 @@ func (c APIClient) MarkOpenClawOffline(ctx context.Context, token, sessionKey, r
 	}
 
 	return nil
+}
+
+// RecordGitHubTaskCompleteActivity appends a minimal completion entry to metadata.activities.
+func (c APIClient) RecordGitHubTaskCompleteActivity(ctx context.Context, token string) error {
+	if strings.TrimSpace(token) == "" {
+		return fmt.Errorf("record github task complete activity requires token")
+	}
+
+	metadata, err := c.AgentMetadata(ctx, token)
+	if err != nil {
+		return fmt.Errorf("load agent metadata: %w", err)
+	}
+
+	metadata = cloneMetadataMap(metadata)
+	metadata["activities"] = appendActivityEntries(metadata["activities"], gitHubTaskComplete)
+
+	ok, trace := c.tryAny(ctx, token, []apiAttempt{
+		{Method: http.MethodPatch, Path: "/agents/me/metadata", Body: map[string]any{"metadata": metadata}},
+		{Method: http.MethodPatch, Path: "/agents/me", Body: map[string]any{"metadata": metadata}},
+	})
+	if !ok {
+		return fmt.Errorf("record github task complete activity failed: %s", trace)
+	}
+
+	return nil
+}
+
+// AgentMetadata loads the current agent metadata for safe merge-style updates.
+func (c APIClient) AgentMetadata(ctx context.Context, token string) (map[string]any, error) {
+	if strings.TrimSpace(token) == "" {
+		return nil, fmt.Errorf("agent metadata requires token")
+	}
+
+	status, body, err := c.doJSON(ctx, http.MethodGet, "/agents/me", token, nil)
+	if err != nil {
+		return nil, err
+	}
+	if status/100 != 2 {
+		return nil, fmt.Errorf("status=%d body=%s", status, truncateBody(body))
+	}
+
+	return extractMetadataFromJSON(body), nil
 }
 
 // RegisterRuntime sends plugin/runtime metadata to hub.
@@ -746,6 +790,17 @@ func extractTokenFromAny(v any) string {
 	return ""
 }
 
+func extractMetadataFromJSON(body []byte) map[string]any {
+	if len(bytes.TrimSpace(body)) == 0 {
+		return map[string]any{}
+	}
+	var parsed any
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return map[string]any{}
+	}
+	return extractMetadataFromAny(parsed)
+}
+
 func extractAPIBaseFromAny(v any) string {
 	switch typed := v.(type) {
 	case map[string]any:
@@ -771,6 +826,31 @@ func extractAPIBaseFromAny(v any) string {
 		}
 	}
 	return ""
+}
+
+func extractMetadataFromAny(v any) map[string]any {
+	switch typed := v.(type) {
+	case map[string]any:
+		if metadata, ok := typed["metadata"]; ok {
+			if out := toMap(metadata); out != nil {
+				return out
+			}
+		}
+		for _, key := range []string{"result", "agent", "data", "payload"} {
+			if nested, ok := typed[key]; ok {
+				if out := extractMetadataFromAny(nested); len(out) > 0 {
+					return out
+				}
+			}
+		}
+	case []any:
+		for _, entry := range typed {
+			if out := extractMetadataFromAny(entry); len(out) > 0 {
+				return out
+			}
+		}
+	}
+	return map[string]any{}
 }
 
 func truncateBody(body []byte) string {
@@ -810,6 +890,56 @@ func buildAgentMetadata(cfg InitConfig) map[string]any {
 	metadata["skills"] = normalizeSkillsMetadata(nil, fallbackName, fallbackDescription)
 
 	return metadata
+}
+
+func cloneMetadataMap(src map[string]any) map[string]any {
+	if len(src) == 0 {
+		return map[string]any{}
+	}
+	dst := make(map[string]any, len(src))
+	for key, value := range src {
+		dst[key] = value
+	}
+	return dst
+}
+
+func appendActivityEntries(raw any, entry string) []string {
+	entry = strings.TrimSpace(entry)
+	if entry == "" {
+		return nil
+	}
+
+	activities := make([]string, 0, maxActivityEntries)
+	appendValue := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		activities = append(activities, value)
+	}
+
+	switch typed := raw.(type) {
+	case []string:
+		for _, value := range typed {
+			appendValue(value)
+		}
+	case []any:
+		for _, value := range typed {
+			if text, ok := value.(string); ok {
+				appendValue(text)
+			}
+		}
+	case string:
+		appendValue(typed)
+	}
+
+	if len(activities) == 0 || activities[len(activities)-1] != entry {
+		appendValue(entry)
+	}
+	if len(activities) > maxActivityEntries {
+		activities = append([]string(nil), activities[len(activities)-maxActivityEntries:]...)
+	}
+	return activities
 }
 
 func normalizeAgentType(raw any) string {
