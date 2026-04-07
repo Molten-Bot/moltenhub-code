@@ -199,8 +199,8 @@ func writeConfig(t *testing.T, dir, name, prompt string) string {
 	path := filepath.Join(dir, name)
 	data := fmt.Sprintf(`{
   "repo": "git@github.com:acme/repo.git",
-  "base_branch": "main",
-  "target_subdir": ".",
+  "baseBranch": "main",
+  "targetSubdir": ".",
   "prompt": %q
 }
 `, prompt)

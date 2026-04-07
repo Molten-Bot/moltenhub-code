@@ -183,7 +183,7 @@
                 placeholder='{
   "repo": "git@github.com:org/repo.git",
   "branch": "main",
-  "library_task_name": "unit-test-coverage"
+  "libraryTaskName": "unit-test-coverage"
 }'></textarea>
             </div>
             <div id="local-prompt-hint" class="prompt-hint text-[0.74rem] leading-[1.3] text-hub-muted"></div>
@@ -580,12 +580,12 @@
       const out = [];
       for (const image of images) {
         if (!image || typeof image !== "object" || Array.isArray(image)) continue;
-        const dataBase64 = String(image.data_base64 || "").trim();
+        const dataBase64 = String(image.dataBase64 || image.data_base64 || "").trim();
         if (!dataBase64) continue;
         out.push({
           name: String(image.name || "").trim(),
-          media_type: String(image.media_type || "").trim() || "image/png",
-          data_base64: dataBase64,
+          mediaType: String(image.mediaType || image.media_type || "").trim() || "image/png",
+          dataBase64,
         });
       }
       return out;
@@ -611,7 +611,7 @@
       state.promptImages.forEach((image, index) => {
         const row = document.createElement("div");
         row.className = "rounded-lg border border-hub-border bg-[#0d1825] px-3 py-2 text-[0.74rem] leading-[1.35] text-slate-200";
-        row.textContent = `${promptImageName(image, index)} (${String(image.media_type || "image/png").trim() || "image/png"})`;
+        row.textContent = `${promptImageName(image, index)} (${String(image.mediaType || image.media_type || "image/png").trim() || "image/png"})`;
         builderImageList.appendChild(row);
       });
     }
@@ -654,8 +654,8 @@
       const dataURL = await readFileAsDataURL(file);
       return {
         name: String(file?.name || `screenshot-${index + 1}.png`).trim() || `screenshot-${index + 1}.png`,
-        media_type: String(file?.type || "image/png").trim() || "image/png",
-        data_base64: dataURLBase64(dataURL),
+        mediaType: String(file?.type || "image/png").trim() || "image/png",
+        dataBase64: dataURLBase64(dataURL),
       };
     }
 
@@ -730,7 +730,7 @@
 
     function libraryTaskDisplayName(task) {
       if (!task || typeof task !== "object") return "";
-      const displayName = String(task.display_name || "").trim();
+      const displayName = String(task.displayName || task.display_name || "").trim();
       if (displayName) {
         return displayName;
       }
@@ -870,8 +870,8 @@
       }
       return {
         repos: [repo],
-        base_branch: branch,
-        target_subdir: String(builderTargetSubdir.value || "").trim() || ".",
+        baseBranch: branch,
+        targetSubdir: String(builderTargetSubdir.value || "").trim() || ".",
         prompt,
         images: normalizePromptImages(state.promptImages),
       };
@@ -892,7 +892,7 @@
       return {
         repo,
         branch,
-        library_task_name: libraryTaskName,
+        libraryTaskName: libraryTaskName,
       };
     }
 
@@ -910,20 +910,21 @@
       const repos = dedupeRepoValues([
         ...(Array.isArray(payload.repos) ? payload.repos : []),
         payload.repo,
+        payload.repoUrl,
         payload.repo_url,
       ]);
 
       const repo = repos[0] || "";
-      const branch = String(payload.base_branch || payload.branch || "main").trim() || "main";
+      const branch = String(payload.baseBranch || payload.base_branch || payload.branch || "main").trim() || "main";
       builderRepoInput.value = repo;
       builderBaseBranch.value = branch;
       libraryRepoInput.value = repo;
       libraryBaseBranch.value = branch;
       syncBaseBranchClearState();
-      builderTargetSubdir.value = String(payload.target_subdir || ".").trim() || ".";
+      builderTargetSubdir.value = String(payload.targetSubdir || payload.target_subdir || ".").trim() || ".";
       builderPromptInput.value = String(payload.prompt || "").trim();
       setPromptImages(payload.images);
-      state.selectedLibraryTask = String(payload.library_task_name || "").trim();
+      state.selectedLibraryTask = String(payload.libraryTaskName || payload.library_task_name || "").trim();
       renderRepoHistoryOptions();
       renderLibraryTaskOptions();
     }
@@ -1969,7 +1970,7 @@
         const requestID = body?.request_id || "(unknown)";
         try {
           const parsed = JSON.parse(normalized.compact);
-          rememberRepos(dedupeRepoValues([...(Array.isArray(parsed?.repos) ? parsed.repos : []), parsed?.repo, parsed?.repo_url]));
+          rememberRepos(dedupeRepoValues([...(Array.isArray(parsed?.repos) ? parsed.repos : []), parsed?.repo, parsed?.repoUrl, parsed?.repo_url]));
         } catch (_err) {
           // Ignore repo history extraction failures.
         }

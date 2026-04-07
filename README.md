@@ -12,10 +12,10 @@ For each run:
 1. Verifies required tools (`git`, `gh`, `codex`) and GitHub auth.
 2. Creates an isolated workspace (`/dev/shm/temp/<guid>`, fallback `/tmp/temp/<guid>`).
 3. Seeds `AGENTS.md` from [`library/AGENTS.md`](library/AGENTS.md).
-4. Clones configured repos and checks out `base_branch`.
-5. Runs Codex in `target_subdir` (or workspace root for multi-repo runs).
+4. Clones configured repos and checks out `baseBranch`.
+5. Runs Codex in `targetSubdir` (or workspace root for multi-repo runs).
 6. For changed repos:
-   - If `base_branch` is `main`, creates a `moltenhub-*` branch.
+   - If `baseBranch` is `main`, creates a `moltenhub-*` branch.
    - Otherwise reuses the existing non-`main` branch.
 7. Creates or reuses PRs with `moltenhub-*` titles.
 8. Watches required CI checks and performs remediation retries when checks fail.
@@ -159,19 +159,19 @@ Override or disable:
 
 Required:
 
-- one of `prompt` or `library_task_name`
-- one of `repo`, `repo_url`, or `repos`
+- one of `prompt` or `libraryTaskName`
+- one of `repo`, `repoUrl`, or `repos`
 
 Common optional fields:
 
-- `base_branch` (default `main`)
-- `branch` (alias for `base_branch`, mainly for library-backed skill calls)
-- `target_subdir` (default `.`)
-- `commit_message`
-- `pr_title` (auto-prefixed with `moltenhub-`)
-- `pr_body`
+- `baseBranch` (default `main`)
+- `branch` (alias for `baseBranch`, mainly for library-backed skill calls)
+- `targetSubdir` (default `.`)
+- `commitMessage`
+- `prTitle` (auto-prefixed with `moltenhub-`)
+- `prBody`
 - `labels`
-- `github_handle` (single GitHub reviewer alias; mapped to PR reviewer)
+- `githubHandle` (single GitHub reviewer alias; mapped to PR reviewer)
 - `reviewers`
 
 Example: [`templates/run.example.json`](templates/run.example.json)
@@ -182,7 +182,7 @@ Library-backed runs can also use:
 {
   "repo": "git@github.com:acme/target-repo.git",
   "branch": "main",
-  "library_task_name": "unit-test-coverage"
+  "libraryTaskName": "unit-test-coverage"
 }
 ```
 
@@ -219,7 +219,7 @@ Runtime logs are mirrored to `.log`:
 When a task fails (local or hub-dispatched), the harness queues a follow-up local task that:
 
 - includes relevant failing log paths in prompt context
-- uses run config shape: `{"repos":["<same_repo_as_failed_task>"],"base_branch":"main","target_subdir":".","prompt":"..."}`
+- uses run config shape: `{"repos":["<same_repo_as_failed_task>"],"baseBranch":"main","targetSubdir":".","prompt":"..."}`
 - asks for root-cause fixes (not superficial bandaids)
 
 Hub skill failure responses also include an explicit failure message and error details in the published result payload so the calling agent gets a clear failure reason.

@@ -304,7 +304,7 @@ func TestBrokerTaskRunConfigSupportsRerunMetadata(t *testing.T) {
 
 	b := NewBroker()
 	requestID := "req-rerun"
-	payload := []byte(`{"repo":"git@github.com:acme/repo.git","base_branch":"main","target_subdir":".","prompt":"rerun me"}`)
+	payload := []byte(`{"repo":"git@github.com:acme/repo.git","baseBranch":"main","targetSubdir":".","prompt":"rerun me"}`)
 
 	b.RecordTaskRunConfig(requestID, payload)
 	b.IngestLog("dispatch status=start request_id=req-rerun skill=moltenhub_code_run repo=git@github.com:acme/repo.git")
