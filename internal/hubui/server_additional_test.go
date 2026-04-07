@@ -280,3 +280,33 @@ func TestTaskPanelStylesConstrainHorizontalOverflow(t *testing.T) {
 		t.Fatalf("expected task scroll containers to hide horizontal overflow")
 	}
 }
+
+func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodGet, "/static/style.css", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.Code)
+	}
+
+	css := resp.Body.String()
+	if !strings.Contains(css, ".prompt-wrap.panel {\n  display: flex;\n  flex-direction: column;\n}") {
+		t.Fatalf("expected studio panel to stack header/form without clipping")
+	}
+	if !strings.Contains(css, ".prompt-form {\n  display: grid;\n  gap: 10px;\n  padding: 12px;\n  min-width: 0;\n  min-height: 0;\n  overflow-y: auto;\n}") {
+		t.Fatalf("expected studio form content to scroll instead of clipping controls")
+	}
+	if !strings.Contains(css, ".prompt-actions {\n  display: flex;\n  align-items: stretch;\n  flex-wrap: wrap;\n  gap: 10px;\n}") {
+		t.Fatalf("expected prompt actions to use wrapping layout for Safari-safe sizing")
+	}
+	if !strings.Contains(css, ".prompt-action-button {\n  width: auto;\n  display: inline-flex;") {
+		t.Fatalf("expected action buttons to avoid full-width auto-column overflow")
+	}
+	if !strings.Contains(css, "@media (max-width: 640px) {\n  .prompt-actions {\n    gap: 6px;\n  }\n\n  .prompt-action-paste {\n    flex-basis: 100%;\n  }\n\n  .prompt-action-button {\n    flex: 1 1 0;\n    min-inline-size: 0;\n  }") {
+		t.Fatalf("expected mobile layout to keep Studio action controls fully visible")
+	}
+}
