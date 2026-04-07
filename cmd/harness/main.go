@@ -753,10 +753,13 @@ func shouldQueueFailureFollowUp(failedResult harness.Result) (bool, string) {
 }
 
 func failureFollowUpRepos(failedResult harness.Result, failedRunCfg config.Config) []string {
+	if repos := uniqueRepos(failedRunCfg.RepoList()); len(repos) == 1 {
+		return repos
+	}
 	if repo := singleRepoFromResults(failedResult.RepoResults); repo != "" {
 		return []string{repo}
 	}
-	for _, repo := range failedRunCfg.RepoList() {
+	for _, repo := range uniqueRepos(failedRunCfg.RepoList()) {
 		repo = strings.TrimSpace(repo)
 		if repo == "" {
 			continue
@@ -771,6 +774,29 @@ func failureFollowUpRepos(failedResult harness.Result, failedRunCfg config.Confi
 		return []string{repo}
 	}
 	return nil
+}
+
+func uniqueRepos(repos []string) []string {
+	if len(repos) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(repos))
+	out := make([]string, 0, len(repos))
+	for _, repo := range repos {
+		repo = strings.TrimSpace(repo)
+		if repo == "" {
+			continue
+		}
+		if _, ok := seen[repo]; ok {
+			continue
+		}
+		seen[repo] = struct{}{}
+		out = append(out, repo)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func singleRepoFromResults(results []harness.RepoResult) string {
