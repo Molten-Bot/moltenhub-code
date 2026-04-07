@@ -219,6 +219,7 @@ func runHub(args []string) int {
 		monitorBroker.IngestLog(line)
 	}
 	localSubmitDeduper := newLocalSubmissionDeduper(localSubmissionDedupTTL)
+	localTaskController := newLocalTaskController()
 	var localDispatchSeq uint64
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -291,36 +292,101 @@ func runHub(args []string) int {
 			monitorBroker.RecordTaskRunConfig(requestID, runConfigJSON)
 		}
 
-		go func(requestID string, runCfg config.Config, dedupeKey string, allowFailureFollowUp bool) {
+		runCtx, cancelRun := context.WithCancelCause(ctx)
+		taskHandle := localTaskController.Register(requestID, cancelRun)
+
+		go func(
+			requestID string,
+			runCfg config.Config,
+			dedupeKey string,
+			allowFailureFollowUp bool,
+			runCtx context.Context,
+			cancelRun context.CancelCauseFunc,
+			taskHandle *localTaskHandle,
+		) {
 			finalState := ""
 			if dedupeKey != "" {
 				defer func() {
 					localSubmitDeduper.Done(dedupeKey, requestID, finalState)
 				}()
 			}
-			release, acquireErr := dispatchController.Acquire(ctx, requestID)
-			if acquireErr != nil {
-				finalState = "error"
-				daemonLogger("dispatch status=error request_id=%s err=%q", requestID, acquireErr)
-				if !errors.Is(acquireErr, context.Canceled) && allowFailureFollowUp && queueFailureFollowUp != nil {
-					queueFailureFollowUp(requestID, harness.Result{
-						ExitCode: harness.ExitPreflight,
-						Err:      fmt.Errorf("dispatch acquire: %w", acquireErr),
-					}, runCfg)
+			defer cancelRun(nil)
+			defer localTaskController.Complete(requestID)
+
+			for {
+				if taskHandle != nil {
+					if waitErr := taskHandle.WaitUntilRunnable(runCtx); waitErr != nil {
+						if errors.Is(waitErr, errTaskStoppedByOperator) {
+							finalState = "stopped"
+							daemonLogger("dispatch status=stopped request_id=%s err=%q", requestID, waitErr)
+							return
+						}
+						finalState = "error"
+						daemonLogger("dispatch status=error request_id=%s err=%q", requestID, waitErr)
+						if !errors.Is(waitErr, context.Canceled) && allowFailureFollowUp && queueFailureFollowUp != nil {
+							queueFailureFollowUp(requestID, harness.Result{
+								ExitCode: harness.ExitPreflight,
+								Err:      fmt.Errorf("dispatch wait: %w", waitErr),
+							}, runCfg)
+						}
+						return
+					}
+				}
+
+				acquireCtx, cancelAcquire := context.WithCancel(runCtx)
+				if taskHandle != nil {
+					taskHandle.SetAcquireCancel(cancelAcquire)
+				}
+				release, acquireErr := dispatchController.Acquire(acquireCtx, requestID)
+				if taskHandle != nil {
+					taskHandle.ClearAcquireCancel(cancelAcquire)
+				}
+				cancelAcquire()
+
+				if acquireErr != nil {
+					if taskHandle != nil && taskHandle.IsStopped() {
+						finalState = "stopped"
+						daemonLogger("dispatch status=stopped request_id=%s err=%q", requestID, errTaskStoppedByOperator)
+						return
+					}
+					if taskHandle != nil && taskHandle.IsPaused() && errors.Is(acquireErr, context.Canceled) && runCtx.Err() == nil {
+						continue
+					}
+					finalState = "error"
+					daemonLogger("dispatch status=error request_id=%s err=%q", requestID, acquireErr)
+					if !errors.Is(acquireErr, context.Canceled) && allowFailureFollowUp && queueFailureFollowUp != nil {
+						queueFailureFollowUp(requestID, harness.Result{
+							ExitCode: harness.ExitPreflight,
+							Err:      fmt.Errorf("dispatch acquire: %w", acquireErr),
+						}, runCfg)
+					}
+					return
+				}
+
+				if taskHandle != nil {
+					taskHandle.SetRunning(true)
+				}
+				outcome := runLocalDispatch(runCtx, runner, daemonLogger, cfg.Skill.Name, requestID, runCfg, func() bool {
+					if taskHandle == nil {
+						return false
+					}
+					return taskHandle.IsStopped()
+				})
+				if taskHandle != nil {
+					taskHandle.SetRunning(false)
+				}
+				release()
+
+				finalState = outcome.State
+				if !allowFailureFollowUp || outcome.State != "error" {
+					return
+				}
+				if queueFailureFollowUp != nil {
+					queueFailureFollowUp(requestID, outcome.Result, runCfg)
 				}
 				return
 			}
-			defer release()
-
-			outcome := runLocalDispatch(ctx, runner, daemonLogger, cfg.Skill.Name, requestID, runCfg)
-			finalState = outcome.State
-			if !allowFailureFollowUp || outcome.State != "error" {
-				return
-			}
-			if queueFailureFollowUp != nil {
-				queueFailureFollowUp(requestID, outcome.Result, runCfg)
-			}
-		}(requestID, runCfg, dedupeKey, allowFailureFollowUp)
+		}(requestID, runCfg, dedupeKey, allowFailureFollowUp, runCtx, cancelRun, taskHandle)
 
 		return requestID, nil
 	}
@@ -370,6 +436,27 @@ func runHub(args []string) int {
 				return fmt.Errorf("remove task log dir %s: %w", logDir, err)
 			}
 			daemonLogger("dispatch status=ok action=task_close_cleanup request_id=%s log_dir=%s", requestID, logDir)
+			return nil
+		}
+		uiServer.PauseTask = func(_ context.Context, requestID string) error {
+			if err := localTaskController.Pause(requestID); err != nil {
+				return err
+			}
+			daemonLogger("dispatch status=paused request_id=%s", requestID)
+			return nil
+		}
+		uiServer.RunTask = func(_ context.Context, requestID string) error {
+			if err := localTaskController.Run(requestID); err != nil {
+				return err
+			}
+			daemonLogger("dispatch status=resumed request_id=%s", requestID)
+			return nil
+		}
+		uiServer.StopTask = func(_ context.Context, requestID string) error {
+			if err := localTaskController.Stop(requestID); err != nil {
+				return err
+			}
+			daemonLogger("dispatch status=stopped request_id=%s err=%q", requestID, errTaskStoppedByOperator)
 			return nil
 		}
 		logger.Printf("hub.ui status=ready url=%s", monitorURL(*uiListen))
@@ -435,6 +522,7 @@ func runLocalDispatch(
 	skill string,
 	requestID string,
 	runCfg config.Config,
+	wasStopped func() bool,
 ) localDispatchOutcome {
 	logf(
 		"dispatch status=start request_id=%s skill=%s repo=%s repos=%s",
@@ -452,6 +540,22 @@ func runLocalDispatch(
 
 	res := h.Run(ctx, runCfg)
 	if res.Err != nil {
+		if wasStopped != nil && wasStopped() {
+			stopErr := context.Cause(ctx)
+			if stopErr == nil {
+				stopErr = errTaskStoppedByOperator
+			}
+			logf(
+				"dispatch status=stopped request_id=%s exit_code=%d workspace=%s branch=%s pr_url=%s err=%q",
+				requestID,
+				res.ExitCode,
+				res.WorkspaceDir,
+				res.Branch,
+				res.PRURL,
+				stopErr,
+			)
+			return localDispatchOutcome{State: "stopped", Result: res}
+		}
 		logf(
 			"dispatch status=error request_id=%s exit_code=%d workspace=%s branch=%s pr_url=%s err=%q",
 			requestID,

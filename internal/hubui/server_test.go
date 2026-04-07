@@ -991,3 +991,142 @@ func TestHandlerTaskCloseMethodNotAllowed(t *testing.T) {
 		t.Fatalf("Allow = %q, want %q", allow, http.MethodPost)
 	}
 }
+
+func TestHandlerTaskPauseAccepted(t *testing.T) {
+	t.Parallel()
+
+	var gotRequestID string
+	srv := NewServer("", NewBroker())
+	srv.PauseTask = func(_ context.Context, requestID string) error {
+		gotRequestID = requestID
+		return nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/req-pause/pause", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/req-pause/pause error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if gotRequestID != "req-pause" {
+		t.Fatalf("pause request id = %q, want %q", gotRequestID, "req-pause")
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got, _ := body["action"].(string); got != "pause" {
+		t.Fatalf("action = %q, want %q", got, "pause")
+	}
+	if got, _ := body["status"].(string); got != "paused" {
+		t.Fatalf("status = %q, want %q", got, "paused")
+	}
+}
+
+func TestHandlerTaskRunAccepted(t *testing.T) {
+	t.Parallel()
+
+	var gotRequestID string
+	srv := NewServer("", NewBroker())
+	srv.RunTask = func(_ context.Context, requestID string) error {
+		gotRequestID = requestID
+		return nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/req-run/run", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/req-run/run error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if gotRequestID != "req-run" {
+		t.Fatalf("run request id = %q, want %q", gotRequestID, "req-run")
+	}
+}
+
+func TestHandlerTaskStopAccepted(t *testing.T) {
+	t.Parallel()
+
+	var gotRequestID string
+	srv := NewServer("", NewBroker())
+	srv.StopTask = func(_ context.Context, requestID string) error {
+		gotRequestID = requestID
+		return nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/req-stop/stop", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/req-stop/stop error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if gotRequestID != "req-stop" {
+		t.Fatalf("stop request id = %q, want %q", gotRequestID, "req-stop")
+	}
+}
+
+func TestHandlerTaskControlReturnsNotFound(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	srv.PauseTask = func(_ context.Context, requestID string) error {
+		return ErrTaskNotFound
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/req-missing/pause", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/req-missing/pause error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+	}
+}
+
+func TestHandlerTaskControlMethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	srv.StopTask = func(_ context.Context, requestID string) error {
+		return nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/tasks/req-stop/stop")
+	if err != nil {
+		t.Fatalf("GET /api/tasks/req-stop/stop error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusMethodNotAllowed)
+	}
+	if allow := resp.Header.Get("Allow"); allow != http.MethodPost {
+		t.Fatalf("Allow = %q, want %q", allow, http.MethodPost)
+	}
+}

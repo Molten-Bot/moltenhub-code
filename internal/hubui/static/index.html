@@ -244,7 +244,7 @@
     const PROMPT_MODE_KEY = "hubui.localPromptMode";
     const PROMPT_VISIBILITY_KEY = "hubui.localPromptVisible";
     const QUEUED_STATUS_TIMEOUT_MS = 8_000;
-    const COMPLETED_STATUSES = new Set(["ok", "no_changes", "error", "invalid", "duplicate"]);
+    const COMPLETED_STATUSES = new Set(["ok", "no_changes", "error", "invalid", "duplicate", "stopped"]);
     const TASK_PROGRESS_STEPS = [
       { id: "received", label: "Task Received", detail: "Dispatch accepted by hub." },
       { id: "run", label: "Run Started", detail: "Harness run initialized." },
@@ -321,6 +321,7 @@
       promptImages: [],
       rerunInFlight: new Set(),
       closeInFlight: new Set(),
+      taskControlInFlight: new Set(),
       expandedTaskOutputIDs: new Set(),
       openTerminalTaskIDs: new Set(),
       taskFullscreenOpen: false,
@@ -1397,6 +1398,60 @@
       }
     }
 
+    function controlFlightKey(requestID, action) {
+      return `${String(requestID || "").trim()}:${String(action || "").trim()}`;
+    }
+
+    function isTaskControlInFlight(requestID) {
+      requestID = String(requestID || "").trim();
+      if (!requestID) return false;
+      for (const key of state.taskControlInFlight) {
+        if (key.startsWith(`${requestID}:`)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    async function controlTask(requestID, action) {
+      requestID = String(requestID || "").trim();
+      action = String(action || "").trim();
+      if (!requestID || !action) {
+        return;
+      }
+
+      const flightKey = controlFlightKey(requestID, action);
+      if (state.taskControlInFlight.has(flightKey)) {
+        return;
+      }
+      state.taskControlInFlight.add(flightKey);
+      render(state.snapshot);
+
+      const actionLabel = action === "run" ? "Run" : action === "pause" ? "Pause" : "Stop";
+      setLocalPromptStatus("warn", `${actionLabel} ${requestID}...`);
+
+      try {
+        const response = await fetch(`/api/tasks/${encodeURIComponent(requestID)}/${encodeURIComponent(action)}`, {
+          method: "POST",
+        });
+        let body = null;
+        try {
+          body = await response.json();
+        } catch (_err) {
+          body = null;
+        }
+        if (!response.ok) {
+          throw new Error(body?.error || `${action} http ${response.status}`);
+        }
+        setLocalPromptStatus("ok", `${actionLabel} applied to ${requestID}`);
+      } catch (err) {
+        setLocalPromptStatus("error", `${actionLabel} failed: ${err.message}`);
+      } finally {
+        state.taskControlInFlight.delete(flightKey);
+        render(state.snapshot);
+      }
+    }
+
     function parseTaskTimestamp(iso) {
       const ts = new Date(String(iso || "")).getTime();
       if (!Number.isFinite(ts)) return 0;
@@ -1406,8 +1461,8 @@
     function taskActivityRank(task) {
       const status = String(task?.status || "").toLowerCase();
       if (status === "running") return 0;
-      if (status === "pending" || status === "active") return 1;
-      if (status === "error" || status === "invalid") return 2;
+      if (status === "pending" || status === "active" || status === "paused") return 1;
+      if (status === "error" || status === "invalid" || status === "stopped") return 2;
       if (status === "duplicate") return 3;
       if (status === "ok" || status === "no_changes") return 4;
       return 5;
@@ -1560,7 +1615,7 @@
       }
 
       const status = task.status || "";
-      if (status !== "ok" && status !== "no_changes" && status !== "error" && status !== "invalid" && status !== "duplicate") {
+      if (status !== "ok" && status !== "no_changes" && status !== "error" && status !== "invalid" && status !== "duplicate" && status !== "stopped") {
         return;
       }
 
@@ -1579,6 +1634,9 @@
       } else if (status === "no_changes") {
         title.textContent = "Task Complete";
         detail.textContent = "No code changes were detected.";
+      } else if (status === "stopped") {
+        title.textContent = "Task Stopped";
+        detail.textContent = task.error ? task.error : "Task was stopped by operator.";
       } else if (status === "duplicate") {
         title.textContent = "Duplicate Ignored";
         detail.textContent = task.error ? task.error : "An equivalent prompt/repo/branch submission was ignored.";
@@ -1668,6 +1726,40 @@
           setTerminalOutputOpen(task.request_id, nextOpen);
         });
         topActions.appendChild(outputToggle);
+
+        const taskControlBusy = isTaskControlInFlight(task.request_id);
+        if (!isCompletedTask(task)) {
+          const paused = String(task.status || "").toLowerCase() === "paused";
+          const canTogglePauseRun = paused || String(task.status || "").toLowerCase() !== "running";
+
+          const pauseRun = document.createElement("button");
+          pauseRun.type = "button";
+          pauseRun.className = "task-control-toggle";
+          pauseRun.textContent = paused ? "Run" : "Pause";
+          pauseRun.title = paused
+            ? "Resume this queued task"
+            : canTogglePauseRun
+              ? "Pause this queued task"
+              : "Use Stop to kill a running task";
+          pauseRun.disabled = taskControlBusy || !canTogglePauseRun;
+          pauseRun.addEventListener("click", (event) => {
+            event.stopPropagation();
+            controlTask(task.request_id, paused ? "run" : "pause");
+          });
+          topActions.appendChild(pauseRun);
+
+          const stop = document.createElement("button");
+          stop.type = "button";
+          stop.className = "task-stop";
+          stop.textContent = "Stop";
+          stop.title = "Kill this task";
+          stop.disabled = taskControlBusy;
+          stop.addEventListener("click", (event) => {
+            event.stopPropagation();
+            controlTask(task.request_id, "stop");
+          });
+          topActions.appendChild(stop);
+        }
 
         if (canRerunTask(task)) {
           const rerun = document.createElement("button");
