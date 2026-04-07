@@ -384,6 +384,14 @@ body.task-fullscreen-open {
   grid-template-rows: min-content minmax(220px, 32%) minmax(260px, 1fr);
 }
 
+.right-col.task-output-hidden {
+  grid-template-rows: minmax(220px, 30%) minmax(260px, 1fr);
+}
+
+.right-col.prompt-collapsed.task-output-hidden {
+  grid-template-rows: min-content minmax(260px, 1fr);
+}
+
 .prompt-wrap.prompt-collapsed {
   min-height: 0;
 }
@@ -1201,6 +1209,12 @@ select.prompt-control {
   }
   .right-col.prompt-collapsed {
     grid-template-rows: min-content minmax(220px, 34vh) minmax(260px, 46vh);
+  }
+  .right-col.task-output-hidden {
+    grid-template-rows: minmax(250px, 40vh) minmax(220px, 1fr);
+  }
+  .right-col.prompt-collapsed.task-output-hidden {
+    grid-template-rows: min-content minmax(220px, 1fr);
   }
   .task-fullscreen {
     padding: 12px;

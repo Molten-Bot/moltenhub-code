@@ -208,7 +208,7 @@
           </div>
         </section>
 
-        <section class="panel log-wrap grid h-full [grid-template-rows:auto_auto_1fr] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
+        <section id="task-output-panel" class="panel log-wrap hidden grid h-full [grid-template-rows:auto_auto_1fr] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]" aria-hidden="true">
           <div class="task-head flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-2.5 text-[0.84rem] text-hub-muted">
             <span id="task-head-label" class="min-w-0 flex-1 truncate">Select a task to inspect logs</span>
             <button id="task-terminal-toggle" class="task-terminal-toggle" type="button">Open Output</button>
@@ -365,6 +365,7 @@
     const taskFullscreenTerminalToggle = document.getElementById("task-fullscreen-terminal-toggle");
     const taskFullscreenResult = document.getElementById("task-fullscreen-result");
     const taskFullscreenTerminal = document.getElementById("task-fullscreen-terminal");
+    const taskOutputPanel = document.getElementById("task-output-panel");
     const taskHeadLabel = document.getElementById("task-head-label");
     const taskTerminalToggle = document.getElementById("task-terminal-toggle");
     const taskResult = document.getElementById("task-result");
@@ -1820,8 +1821,22 @@
       terminalNode.scrollTop = terminalNode.scrollHeight;
     }
 
+    function setTaskOutputPanelVisibility(visible) {
+      const outputVisible = Boolean(visible);
+      if (rightCol) {
+        rightCol.classList.toggle("task-output-hidden", !outputVisible);
+      }
+      if (taskOutputPanel) {
+        taskOutputPanel.classList.toggle("hidden", !outputVisible);
+        taskOutputPanel.setAttribute("aria-hidden", outputVisible ? "false" : "true");
+      }
+    }
+
     function renderTerminal(snapshot) {
-      renderTerminalForTasks(displayTasks(snapshot), taskHeadLabel, taskTerminalToggle, taskResult, terminal);
+      const tasks = displayTasks(snapshot);
+      const selected = tasks.find((task) => task.request_id === state.selectedTaskId);
+      setTaskOutputPanelVisibility(Boolean(selected && isTerminalOutputOpen(selected.request_id)));
+      renderTerminalForTasks(tasks, taskHeadLabel, taskTerminalToggle, taskResult, terminal);
     }
 
     function renderFullscreenTerminal(snapshot) {

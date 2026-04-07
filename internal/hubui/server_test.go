@@ -193,6 +193,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="task-terminal-toggle"`) {
 		t.Fatalf("expected index html to include terminal output open/close button")
 	}
+	if !strings.Contains(markup, `id="task-output-panel"`) {
+		t.Fatalf("expected index html to include standard output panel wrapper")
+	}
+	if !strings.Contains(markup, `id="task-output-panel" class="panel log-wrap hidden`) {
+		t.Fatalf("expected index html to keep standard output panel hidden by default")
+	}
 	if !strings.Contains(markup, `id="task-fullscreen-toggle"`) {
 		t.Fatalf("expected index html to include tasks full screen toggle")
 	}
@@ -213,6 +219,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "taskFullscreenBody.classList.toggle(\"task-output-hidden\", !outputVisible);") {
 		t.Fatalf("expected index html to include full screen task-only mode when output is hidden")
+	}
+	if !strings.Contains(markup, "function setTaskOutputPanelVisibility(") {
+		t.Fatalf("expected index html to include standard output panel visibility handler")
+	}
+	if !strings.Contains(markup, "rightCol.classList.toggle(\"task-output-hidden\", !outputVisible);") {
+		t.Fatalf("expected index html to collapse the standard layout when output is hidden")
 	}
 	if !strings.Contains(markup, "setTerminalOutputOpen(task.request_id, nextOpen);") {
 		t.Fatalf("expected index html to open full terminal output from task Open Output action")
@@ -368,6 +380,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".task-fullscreen-body.task-output-hidden") {
 		t.Fatalf("expected stylesheet to include full screen hidden-output task layout styles")
+	}
+	if !strings.Contains(css, ".right-col.task-output-hidden") {
+		t.Fatalf("expected stylesheet to include standard hidden-output task layout styles")
 	}
 	if !strings.Contains(css, ".task.task-collapsed") {
 		t.Fatalf("expected stylesheet to include collapsed task styles")
