@@ -1,9 +1,9 @@
 services:
   harness:
-    image: moltenhub-code:vnext
-    pull_policy: build
     build:
       context: .
+      dockerfile: Dockerfile
+    image: moltenhub-code:local
     ports:
       - 3232:7777
     env_file:
