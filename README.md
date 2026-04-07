@@ -56,12 +56,12 @@ OPENAI_API_KEY=sk_xxx
 Run with Docker Compose (`docker-compose.yml`):
 
 ```bash
-mkdir -p docker/config
-cp templates/run.example.json docker/config/config.json
+mkdir -p moltenhub
+cp templates/run.example.json moltenhub/config.json
 docker compose up
 ```
 
-`docker compose` uses a persistent bind mount at `./docker/config -> /workspace/config` and starts `with-config`, which auto-selects:
+`docker compose` uses a persistent bind mount at `./moltenhub -> /workspace/config` and starts `with-config`, which auto-selects:
 
 ```bash
 # run mode when config exists
@@ -77,8 +77,8 @@ MOLTEN_HUB_TOKEN (+ optional MOLTEN_HUB_URL, MOLTEN_HUB_SESSION_KEY)
 Hub mode example:
 
 ```bash
-rm -f docker/config/config.json
-cp templates/init.example.json docker/config/init.json
+rm -f moltenhub/config.json
+cp templates/init.example.json moltenhub/init.json
 docker compose up
 ```
 
@@ -96,7 +96,7 @@ Equivalent direct `docker run`:
 docker run --rm -it \
   -e GITHUB_TOKEN=ghp_xxx \
   -e OPENAI_API_KEY=sk_xxx \
-  -v "$PWD/docker/config:/workspace/config" \
+  -v "$PWD/moltenhub:/workspace/config" \
   -w /workspace \
   moltenhub-code:latest \
   with-config

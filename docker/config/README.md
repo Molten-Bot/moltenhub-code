@@ -1,6 +1,8 @@
 # Docker Runtime Config Mount
 
-`docker-compose.yml` mounts this directory to `/workspace/config` in the container.
+`docker-compose.yml` now mounts `./moltenhub` to `/workspace/config` in the container.
+
+This directory remains available if you prefer a manual bind mount (for example with `docker run`).
 
 Provide one of these files:
 
@@ -11,6 +13,7 @@ Provide one of these files:
 You can bootstrap from examples:
 
 ```bash
-cp templates/run.example.json docker/config/config.json
-cp templates/init.example.json docker/config/init.json
+mkdir -p moltenhub
+cp templates/run.example.json moltenhub/config.json
+cp templates/init.example.json moltenhub/init.json
 ```

@@ -2,6 +2,7 @@
 !/templates/*.example.json
 .*
 .log/
+moltenhub/
 !.github/
 !.github/workflows/
 !.github/workflows/*.yml

@@ -9,5 +9,5 @@ services:
     env_file:
       - .env
     volumes:
-      - /.moltenhub:/workspace/config
+      - ./moltenhub:/workspace/config
     command: ["/usr/local/bin/with-config"]
