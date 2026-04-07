@@ -632,6 +632,7 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 		"skill":      firstNonEmpty(dispatch.Skill, cfg.Skill.Name),
 		"request_id": dispatch.RequestID,
 		"status":     status,
+		"failed":     res.Err != nil,
 		"ok":         res.Err == nil,
 		"result":     result,
 	}

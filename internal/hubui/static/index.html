@@ -360,6 +360,8 @@
       taskControlInFlight: new Set(),
       expandedTaskOutputIDs: new Set(),
       openTerminalTaskIDs: new Set(),
+      sparkleTaskIDs: new Set(),
+      sparkleTimers: new Map(),
       taskFullscreenOpen: false,
       agentAuthBusy: false,
       agentAuthInteracted: false,
@@ -1478,6 +1480,48 @@
       return COMPLETED_STATUSES.has(task.status || "");
     }
 
+    function triggerTaskSparkle(requestID) {
+      requestID = String(requestID || "").trim();
+      if (!requestID) return;
+
+      const existingTimer = state.sparkleTimers.get(requestID);
+      if (existingTimer) {
+        window.clearTimeout(existingTimer);
+      }
+
+      state.sparkleTaskIDs.add(requestID);
+      const timer = window.setTimeout(() => {
+        state.sparkleTaskIDs.delete(requestID);
+        state.sparkleTimers.delete(requestID);
+        render(state.snapshot);
+      }, 2000);
+      state.sparkleTimers.set(requestID, timer);
+    }
+
+    function shouldSparkleTask(task) {
+      const requestID = String(task?.request_id || "").trim();
+      if (!requestID) return false;
+      return state.sparkleTaskIDs.has(requestID);
+    }
+
+    function syncTaskCompletionSparkles(previousSnapshot, nextSnapshot) {
+      const previousStatuses = new Map();
+      for (const task of previousSnapshot?.tasks || []) {
+        previousStatuses.set(String(task.request_id || ""), task.status || "");
+      }
+
+      for (const task of nextSnapshot?.tasks || []) {
+        const requestID = String(task.request_id || "").trim();
+        if (!requestID || !isCompletedTask(task)) {
+          continue;
+        }
+        const previousTask = previousStatuses.get(requestID);
+        if (!previousTask || !COMPLETED_STATUSES.has(previousTask)) {
+          triggerTaskSparkle(requestID);
+        }
+      }
+    }
+
     function isMinimizedTask(task) {
       if (!task) return false;
       return isCompletedTask(task);
@@ -1968,6 +2012,17 @@
         const topActions = document.createElement("div");
         topActions.className = "task-top-actions";
         topActions.appendChild(badge);
+        if (shouldSparkleTask(task)) {
+          const sparklet = document.createElement("span");
+          sparklet.className = "task-sparklet";
+          sparklet.setAttribute("aria-hidden", "true");
+          for (let i = 0; i < 6; i += 1) {
+            const particle = document.createElement("span");
+            particle.className = "task-sparklet-particle";
+            sparklet.appendChild(particle);
+          }
+          topActions.appendChild(sparklet);
+        }
 
         const outputToggle = document.createElement("button");
         outputToggle.type = "button";
@@ -2193,7 +2248,9 @@
 
     function render(snapshot) {
       if (!snapshot) return;
+      const previousSnapshot = state.snapshot;
       state.snapshot = snapshot;
+      syncTaskCompletionSparkles(previousSnapshot, snapshot);
       const observedRepos = [];
       const failedCloneRepos = [];
       for (const task of snapshot.tasks || []) {

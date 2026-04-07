@@ -519,6 +519,9 @@ func TestDispatchResultPayloadIncludesTopLevelFailureMessage(t *testing.T) {
 	if got := payload["status"]; got != "error" {
 		t.Fatalf("status = %#v, want %q", got, "error")
 	}
+	if got := payload["failed"]; got != true {
+		t.Fatalf("failed = %#v, want true", got)
+	}
 	if got := payload["error"]; got != "codex: process exited with status 1" {
 		t.Fatalf("error = %#v", got)
 	}
