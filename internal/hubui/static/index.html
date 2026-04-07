@@ -101,13 +101,13 @@
             <div id="prompt-builder-panel" class="prompt-panel grid gap-2.5">
               <div class="prompt-grid">
                 <label id="builder-repo-history-field" class="prompt-field prompt-field-repo-history">
-                  <span class="prompt-label">Git Repository</span>
+                  <span class="prompt-label">Repository</span>
                   <select id="builder-repo-select" class="prompt-control">
                     <option value="">Enter repo manually</option>
                   </select>
                 </label>
-                <label class="prompt-field prompt-field-repository">
-                  <input id="builder-repo-input" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="git@github.com:org/repo.git" aria-label="Git Repository">
+                <label id="builder-repo-field" class="prompt-field prompt-field-repository">
+                  <input id="builder-repo-input" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="git@github.com:org/repo.git" aria-label="Repository">
                 </label>
                 <label class="prompt-field prompt-field-base-branch">
                   <span class="prompt-label">Branch</span>
@@ -155,13 +155,13 @@
             <div id="prompt-library-panel" class="prompt-panel hidden grid gap-2.5">
               <div class="prompt-grid">
                 <label id="library-repo-history-field" class="prompt-field prompt-field-repo-history">
-                  <span class="prompt-label">Git Repository</span>
+                  <span class="prompt-label">Repository</span>
                   <select id="library-repo-select" class="prompt-control">
                     <option value="">Enter repo manually</option>
                   </select>
                 </label>
-                <label class="prompt-field prompt-field-repository">
-                  <input id="library-repo-input" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="git@github.com:org/repo.git" aria-label="Git Repository">
+                <label id="library-repo-field" class="prompt-field prompt-field-repository">
+                  <input id="library-repo-input" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="git@github.com:org/repo.git" aria-label="Repository">
                 </label>
                 <label class="prompt-field prompt-field-base-branch">
                   <span class="prompt-label">Branch</span>
@@ -370,7 +370,7 @@
     const promptRawPanel = document.getElementById("prompt-raw-panel");
     const builderRepoSelect = document.getElementById("builder-repo-select");
     const builderRepoHistoryField = document.getElementById("builder-repo-history-field");
-    const builderRepositoryField = document.querySelector(".prompt-field-repository");
+    const builderRepositoryField = document.getElementById("builder-repo-field");
     const builderRepoInput = document.getElementById("builder-repo-input");
     const builderBaseBranch = document.getElementById("builder-base-branch");
     const builderBaseBranchClear = document.getElementById("builder-base-branch-clear");
@@ -381,6 +381,7 @@
     const builderImagesClear = document.getElementById("builder-images-clear");
     const libraryRepoSelect = document.getElementById("library-repo-select");
     const libraryRepoHistoryField = document.getElementById("library-repo-history-field");
+    const libraryRepositoryField = document.getElementById("library-repo-field");
     const libraryRepoInput = document.getElementById("library-repo-input");
     const libraryBaseBranch = document.getElementById("library-base-branch");
     const libraryTaskList = document.getElementById("library-task-list");
@@ -833,12 +834,23 @@
       builderBaseBranch.focus();
     }
 
-    function syncBuilderRepositoryVisibility() {
-      const hasSavedHistory = state.repoHistory.length > 0;
-      const usingRepoHistory = normalizeRepoValue(builderRepoSelect.value) !== "";
-      if (builderRepositoryField) {
-        builderRepositoryField.classList.toggle("hidden", hasSavedHistory && usingRepoHistory);
+    function syncRepositoryVisibility(select, repositoryField) {
+      if (!select || !repositoryField) {
+        return;
       }
+      const hasSavedHistory = state.repoHistory.length > 0;
+      const usingRepoHistory = normalizeRepoValue(select.value) !== "";
+      repositoryField.classList.toggle("hidden", hasSavedHistory && usingRepoHistory);
+    }
+
+    function syncRepositoryFieldVisibility() {
+      syncRepositoryVisibility(builderRepoSelect, builderRepositoryField);
+      syncRepositoryVisibility(libraryRepoSelect, libraryRepositoryField);
+    }
+
+    function displayRepoLabel(repo) {
+      const cleaned = cleanRepoName(repo);
+      return cleaned || repo;
     }
 
     function persistPromptMode() {
@@ -860,7 +872,7 @@
     function builderPayload() {
       const repo = normalizeRepoValue(builderRepoInput.value);
       if (!repo) {
-        throw new Error("Git repository is required.");
+        throw new Error("Repository is required.");
       }
 
       const branch = String(builderBaseBranch.value || "").trim() || "main";
@@ -880,7 +892,7 @@
     function libraryPayload() {
       const repo = normalizeRepoValue(libraryRepoInput.value);
       if (!repo) {
-        throw new Error("Git repository is required.");
+        throw new Error("Repository is required.");
       }
 
       const libraryTaskName = selectedLibraryTaskName();
@@ -947,6 +959,7 @@
 
       const currentValue = normalizeRepoValue(input.value);
       const selectedValue = normalizeRepoValue(select.value);
+      const manualSelected = selectedValue === "";
       const unique = dedupeRepoValues([currentValue, ...state.repoHistory]);
       const hasSavedHistory = state.repoHistory.length > 0;
 
@@ -962,11 +975,13 @@
         if (!repo) continue;
         const option = document.createElement("option");
         option.value = repo;
-        option.textContent = repo;
+        option.textContent = displayRepoLabel(repo);
         select.appendChild(option);
       }
 
-      if (selectedValue && unique.includes(selectedValue)) {
+      if (manualSelected) {
+        select.value = "";
+      } else if (selectedValue && unique.includes(selectedValue)) {
         select.value = selectedValue;
       } else if (currentValue && unique.includes(currentValue)) {
         select.value = currentValue;
@@ -974,7 +989,7 @@
         select.value = "";
       }
 
-      syncBuilderRepositoryVisibility();
+      syncRepositoryFieldVisibility();
     }
 
     function renderRepoHistoryOptions() {
