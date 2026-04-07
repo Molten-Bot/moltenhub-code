@@ -32,3 +32,24 @@ func TestRuntimeDockerfileCopiesFullLibraryCatalog(t *testing.T) {
 		t.Fatalf("%s still only copies library/AGENTS.md into the runtime image", dockerfilePath)
 	}
 }
+
+func TestRuntimeDockerfileInstallsRipgrep(t *testing.T) {
+	t.Parallel()
+
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller(0) failed")
+	}
+
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	dockerfilePath := filepath.Join(repoRoot, "Dockerfile")
+
+	data, err := os.ReadFile(dockerfilePath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", dockerfilePath, err)
+	}
+
+	if !strings.Contains(string(data), "ripgrep") {
+		t.Fatalf("%s does not install ripgrep in the runtime image", dockerfilePath)
+	}
+}

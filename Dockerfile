@@ -33,6 +33,7 @@ RUN apt-get update \
         git \
         gh \
         openssh-client \
+        ripgrep \
     && agent_harness="$(printf '%s' "${AGENT_HARNESS}" | tr '[:upper:]' '[:lower:]')" \
     && agent_pkg="${AGENT_NPM_PACKAGE}" \
     && if [ -z "${agent_pkg}" ]; then \
