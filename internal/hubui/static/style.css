@@ -430,6 +430,7 @@ body.task-fullscreen-open {
 
 .library-task-list {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   max-height: 210px;
   overflow: auto;
@@ -437,6 +438,7 @@ body.task-fullscreen-open {
 }
 
 .library-task-empty {
+  grid-column: 1 / -1;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: #0d1825;
