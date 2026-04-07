@@ -8,10 +8,12 @@ import (
 )
 
 var nonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
+var generatedPromptSuffixRE = regexp.MustCompile(`-[0-9]{8}-[0-9]{6}(?:-[0-9a-f]{1,8})?$`)
 
 // FromPrompt converts prompt text into a branch-safe slug.
 func FromPrompt(prompt string) string {
 	lower := strings.ToLower(strings.TrimSpace(prompt))
+	lower = trimGeneratedPromptSuffix(lower)
 	if lower == "" {
 		return "task"
 	}
@@ -30,15 +32,23 @@ func FromPrompt(prompt string) string {
 	return s
 }
 
-// BranchName builds a unique branch name with prompt slug, timestamp, and short guid.
+func trimGeneratedPromptSuffix(prompt string) string {
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		return ""
+	}
+	trimmed := generatedPromptSuffixRE.ReplaceAllString(prompt, "")
+	trimmed = strings.Trim(trimmed, "-")
+	if trimmed == "" {
+		return prompt
+	}
+	return trimmed
+}
+
+// BranchName builds a branch name with a stable prompt slug.
 func BranchName(prompt string, now time.Time, guid string) string {
 	slug := FromPrompt(prompt)
-	shortGUID := guid
-	if len(shortGUID) > 8 {
-		shortGUID = shortGUID[:8]
-	}
-	if shortGUID == "" {
-		shortGUID = "noguid"
-	}
-	return fmt.Sprintf("moltenhub-%s-%s-%s", slug, now.UTC().Format("20060102-150405"), shortGUID)
+	_ = now
+	_ = guid
+	return fmt.Sprintf("moltenhub-%s", slug)
 }

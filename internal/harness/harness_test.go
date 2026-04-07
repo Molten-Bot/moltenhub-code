@@ -89,7 +89,7 @@ func TestRunHappyPathCreatesPR(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 
 	fake := &fakeRunner{t: t, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
@@ -138,7 +138,7 @@ func TestRunWithGitHubTokenRunsAuthSetupGitBeforeCodex(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 
 	t.Setenv("GITHUB_TOKEN", "ghp_example_token")
 	t.Setenv("GH_TOKEN", "")
@@ -190,7 +190,7 @@ func TestRunWithPromptImagesUsesCodexDirPaths(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260402-150405-fedcba98"
+	branch := "moltenhub-build-api"
 	imagePath := filepath.Join(targetDir, "prompt-images", "01-clipboard-shot.png")
 
 	fake := &fakeRunner{t: t, exps: []expectedRun{
@@ -354,7 +354,7 @@ func TestRunCodexFailureStopsBeforeCommitAndPR(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 
 	fake := &fakeRunner{t: t, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
@@ -396,7 +396,7 @@ func TestRunNoChangesSkipsPR(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 
 	fake := &fakeRunner{t: t, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
@@ -442,7 +442,7 @@ func TestRunFailedChecksTriggersCodexRemediation(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 	prURL := "https://github.com/acme/repo/pull/42"
 
 	checkSummary := "X unit-tests failing"
@@ -498,7 +498,7 @@ func TestRunFailedChecksWithNoRemediationChangesFails(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 	prURL := "https://github.com/acme/repo/pull/42"
 
 	checkSummary := "X unit-tests failing"
@@ -550,9 +550,9 @@ func TestRunNoChecksReportedRetriesBeforePassing(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 	prURL := "https://github.com/acme/repo/pull/42"
-	noChecks := "no checks reported on the 'moltenhub-build-api-20260402-150405-abcdef12' branch"
+	noChecks := "no checks reported on the 'moltenhub-build-api' branch"
 
 	fake := &fakeRunner{t: t, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
@@ -611,9 +611,9 @@ func TestRunNoChecksReportedAfterRetryWindowTriggersRemediation(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 	prURL := "https://github.com/acme/repo/pull/42"
-	noChecks := "no checks reported on the 'moltenhub-build-api-20260402-150405-abcdef12' branch"
+	noChecks := "no checks reported on the 'moltenhub-build-api' branch"
 
 	exps := []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
@@ -687,9 +687,9 @@ func TestRunNoRequiredChecksFallsBackToAllChecks(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 	prURL := "https://github.com/acme/repo/pull/42"
-	noRequired := "no required checks reported on the 'moltenhub-build-api-20260402-150405-abcdef12' branch"
+	noRequired := "no required checks reported on the 'moltenhub-build-api' branch"
 
 	fake := &fakeRunner{t: t, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
@@ -749,7 +749,7 @@ func TestRunMultiRepoCreatesPRsForEachChangedRepo(t *testing.T) {
 	guid := "abcdef123456"
 	runDir := filepath.Join("/tmp", "temp", guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 
 	repoRelA := repoWorkspaceDirName(cfg.Repos[0], 0, len(cfg.Repos))
 	repoRelB := repoWorkspaceDirName(cfg.Repos[1], 1, len(cfg.Repos))
@@ -824,7 +824,7 @@ func TestRunMultiRepoRemediationUsesWorkspaceCodexOptions(t *testing.T) {
 	guid := "abcdef123456"
 	runDir := filepath.Join("/tmp", "temp", guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 
 	repoRelA := repoWorkspaceDirName(cfg.Repos[0], 0, len(cfg.Repos))
 	repoRelB := repoWorkspaceDirName(cfg.Repos[1], 1, len(cfg.Repos))
@@ -997,7 +997,7 @@ func TestRunMissingMoltenhubBaseBranchFallsBackToDefaultAndCreatesNewBranch(t *t
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260406-195352-9ded650b"
+	branch := "moltenhub-build-api"
 	prURL := "https://github.com/acme/repo/pull/112"
 
 	cloneMissingBranch := execx.Result{
@@ -1057,7 +1057,7 @@ func TestRunCloneRetriesTransientFailureThenSucceeds(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260406-195352-9ded650b"
+	branch := "moltenhub-build-api"
 	prURL := "https://github.com/acme/repo/pull/112"
 
 	cloneTransientFailure := execx.Result{
@@ -1185,7 +1185,7 @@ func TestCommandBuilders(t *testing.T) {
 
 	cfg := sampleConfig()
 	repoDir := "/tmp/run/repo"
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 	prompt := "fix tests"
 	targetDir := filepath.Join(repoDir, "services/api")
 
