@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -128,6 +129,100 @@ func TestLoadStoredRuntimeConfigReadsPrimaryPath(t *testing.T) {
 	if cfg.Token != "agent_primary" {
 		t.Fatalf("Token = %q, want %q", cfg.Token, "agent_primary")
 	}
+}
+
+func TestDaemonRunUsesStoredRuntimeConfigBaseURLWhenInitBaseURLOmitted(t *testing.T) {
+	root := t.TempDir()
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	var (
+		reqMu  sync.Mutex
+		paths  []string
+		logMu  sync.Mutex
+		logs   []string
+		base   string
+		token  = "agent_saved"
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqMu.Lock()
+		paths = append(paths, r.URL.Path)
+		reqMu.Unlock()
+
+		switch r.URL.Path {
+		case "/v1/agents/me":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case "/v1/openclaw/messages/register-plugin":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case "/v1/agents/me/metadata", "/v1/agents/me/status":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case "/v1/openclaw/messages/pull":
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	base = server.URL + "/v1"
+
+	if err := SaveRuntimeConfig("", base, token, "main"); err != nil {
+		t.Fatalf("SaveRuntimeConfig() error = %v", err)
+	}
+
+	d := NewDaemon(execx.OSRunner{})
+	d.ReconnectDelay = 10 * time.Millisecond
+	d.Logf = func(format string, args ...any) {
+		logMu.Lock()
+		logs = append(logs, fmt.Sprintf(format, args...))
+		logMu.Unlock()
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+
+	if err := d.Run(ctx, InitConfig{}); err != nil {
+		t.Fatalf("Daemon.Run() error = %v", err)
+	}
+
+	reqMu.Lock()
+	gotPaths := append([]string(nil), paths...)
+	reqMu.Unlock()
+
+	foundAgentsMe := false
+	for _, path := range gotPaths {
+		if path == "/v1/agents/me" {
+			foundAgentsMe = true
+			break
+		}
+	}
+	if !foundAgentsMe {
+		t.Fatalf("expected auth request against stored runtime base URL, got paths=%v", gotPaths)
+	}
+
+	wantLog := fmt.Sprintf("hub.connection status=configured base_url=%s", base)
+	logMu.Lock()
+	defer logMu.Unlock()
+	for _, line := range logs {
+		if strings.Contains(line, wantLog) {
+			return
+		}
+	}
+	t.Fatalf("missing configured base URL log %q in logs=%v", wantLog, logs)
 }
 
 func TestIncomingSkillName(t *testing.T) {

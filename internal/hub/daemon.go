@@ -51,7 +51,6 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 		d.ReconnectDelay = 3 * time.Second
 	}
 
-	cfg.ApplyDefaults()
 	runtimeCfgPath := defaultRuntimeConfigPath()
 	if stored, loadedPath, err := loadStoredRuntimeConfig(runtimeCfgPath); err == nil {
 		if applied := applyStoredRuntimeConfig(&cfg, stored); applied {
@@ -60,6 +59,7 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		d.logf("hub.runtime_config status=warn err=%q", err)
 	}
+	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("init config: %w", err)
 	}
