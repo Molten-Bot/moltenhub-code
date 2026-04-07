@@ -145,25 +145,25 @@ func TestLocalSubmissionDeduperCheckBeginDone(t *testing.T) {
 	d := newLocalSubmissionDeduper(2 * time.Minute)
 	key := "k-1"
 
-	if duplicate, _, _ := d.Check(key); duplicate {
+	if duplicate, _, _ := d.Check(key, false); duplicate {
 		t.Fatal("Check() duplicate = true before Begin")
 	}
 
-	if accepted, state, duplicateOf := d.Begin(key, "local-1"); !accepted || state != "accepted" || duplicateOf != "" {
+	if accepted, state, duplicateOf := d.Begin(key, "local-1", false); !accepted || state != "accepted" || duplicateOf != "" {
 		t.Fatalf("Begin() = (%v, %q, %q), want (true, accepted, empty)", accepted, state, duplicateOf)
 	}
 
-	if duplicate, state, duplicateOf := d.Check(key); !duplicate || state != "in_flight" || duplicateOf != "local-1" {
+	if duplicate, state, duplicateOf := d.Check(key, false); !duplicate || state != "in_flight" || duplicateOf != "local-1" {
 		t.Fatalf("Check() after Begin = (%v, %q, %q)", duplicate, state, duplicateOf)
 	}
 
-	if accepted, state, duplicateOf := d.Begin(key, "local-2"); accepted || state != "in_flight" || duplicateOf != "local-1" {
+	if accepted, state, duplicateOf := d.Begin(key, "local-2", false); accepted || state != "in_flight" || duplicateOf != "local-1" {
 		t.Fatalf("second Begin() = (%v, %q, %q)", accepted, state, duplicateOf)
 	}
 
 	d.Done(key, "local-1", "ok")
 
-	if duplicate, state, duplicateOf := d.Check(key); !duplicate || state != "completed" || duplicateOf != "local-1" {
+	if duplicate, state, duplicateOf := d.Check(key, false); !duplicate || state != "completed" || duplicateOf != "local-1" {
 		t.Fatalf("Check() after Done = (%v, %q, %q)", duplicate, state, duplicateOf)
 	}
 }
@@ -174,18 +174,38 @@ func TestLocalSubmissionDeduperAllowsRetryAfterError(t *testing.T) {
 	d := newLocalSubmissionDeduper(2 * time.Minute)
 	key := "k-error"
 
-	if accepted, state, duplicateOf := d.Begin(key, "local-1"); !accepted || state != "accepted" || duplicateOf != "" {
+	if accepted, state, duplicateOf := d.Begin(key, "local-1", false); !accepted || state != "accepted" || duplicateOf != "" {
 		t.Fatalf("Begin() = (%v, %q, %q), want (true, accepted, empty)", accepted, state, duplicateOf)
 	}
 
 	d.Done(key, "local-1", "error")
 
-	if duplicate, state, duplicateOf := d.Check(key); duplicate || state != "accepted" || duplicateOf != "" {
+	if duplicate, state, duplicateOf := d.Check(key, false); duplicate || state != "accepted" || duplicateOf != "" {
 		t.Fatalf("Check() after error Done = (%v, %q, %q), want (false, accepted, empty)", duplicate, state, duplicateOf)
 	}
 
-	if accepted, state, duplicateOf := d.Begin(key, "local-2"); !accepted || state != "accepted" || duplicateOf != "" {
+	if accepted, state, duplicateOf := d.Begin(key, "local-2", false); !accepted || state != "accepted" || duplicateOf != "" {
 		t.Fatalf("retry Begin() = (%v, %q, %q), want (true, accepted, empty)", accepted, state, duplicateOf)
+	}
+}
+
+func TestLocalSubmissionDeduperAllowsExplicitRerunAfterCompletion(t *testing.T) {
+	t.Parallel()
+
+	d := newLocalSubmissionDeduper(2 * time.Minute)
+	key := "k-rerun"
+
+	if accepted, state, duplicateOf := d.Begin(key, "local-1", false); !accepted || state != "accepted" || duplicateOf != "" {
+		t.Fatalf("Begin() = (%v, %q, %q), want (true, accepted, empty)", accepted, state, duplicateOf)
+	}
+	d.Done(key, "local-1", "ok")
+
+	if duplicate, state, duplicateOf := d.Check(key, true); duplicate || state != "accepted" || duplicateOf != "" {
+		t.Fatalf("Check(allowCompleted) = (%v, %q, %q), want (false, accepted, empty)", duplicate, state, duplicateOf)
+	}
+
+	if accepted, state, duplicateOf := d.Begin(key, "local-2", true); !accepted || state != "accepted" || duplicateOf != "" {
+		t.Fatalf("Begin(allowCompleted) = (%v, %q, %q), want (true, accepted, empty)", accepted, state, duplicateOf)
 	}
 }
 

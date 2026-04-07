@@ -29,6 +29,7 @@ type Server struct {
 	AutomaticMode     bool
 	Logf              func(string, ...any)
 	SubmitLocalPrompt func(context.Context, []byte) (string, error)
+	SubmitTaskRerun   func(context.Context, string, []byte) (string, error)
 	CloseTask         func(context.Context, string) error
 	PauseTask         func(context.Context, string) error
 	RunTask           func(context.Context, string) error
@@ -519,7 +520,7 @@ func (s Server) handleTaskRerun(w http.ResponseWriter, r *http.Request, requestI
 		http.Error(w, "monitor broker is unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	if s.SubmitLocalPrompt == nil {
+	if s.SubmitLocalPrompt == nil && s.SubmitTaskRerun == nil {
 		writeJSON(w, http.StatusNotImplemented, map[string]any{
 			"ok":    false,
 			"error": "task rerun is unavailable",
@@ -536,7 +537,16 @@ func (s Server) handleTaskRerun(w http.ResponseWriter, r *http.Request, requestI
 		return
 	}
 
-	newRequestID, err := s.SubmitLocalPrompt(r.Context(), runConfigJSON)
+	submit := func(ctx context.Context, body []byte) (string, error) {
+		return s.SubmitLocalPrompt(ctx, body)
+	}
+	if s.SubmitTaskRerun != nil {
+		submit = func(ctx context.Context, body []byte) (string, error) {
+			return s.SubmitTaskRerun(ctx, requestID, body)
+		}
+	}
+
+	newRequestID, err := submit(r.Context(), runConfigJSON)
 	if err != nil {
 		if duplicateRequestID, duplicateState, ok := duplicateSubmissionDetails(err); ok {
 			writeJSON(w, http.StatusConflict, map[string]any{

@@ -808,6 +808,49 @@ func TestHandlerTaskRerunAccepted(t *testing.T) {
 	}
 }
 
+func TestHandlerTaskRerunUsesDedicatedSubmitterWhenConfigured(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-rerun-hook"
+	payload := `{"repo":"git@github.com:acme/repo.git","baseBranch":"main","targetSubdir":".","prompt":"rerun this"}`
+	b.RecordTaskRunConfig(requestID, []byte(payload))
+
+	var (
+		gotRequestID string
+		gotBody      string
+	)
+	srv := NewServer("", b)
+	srv.SubmitLocalPrompt = func(_ context.Context, _ []byte) (string, error) {
+		t.Fatal("SubmitLocalPrompt should not be called when SubmitTaskRerun is configured")
+		return "", nil
+	}
+	srv.SubmitTaskRerun = func(_ context.Context, rerunOf string, body []byte) (string, error) {
+		gotRequestID = rerunOf
+		gotBody = string(body)
+		return "local-999", nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/"+requestID+"/rerun", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/%s/rerun error = %v", requestID, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusAccepted)
+	}
+	if gotRequestID != requestID {
+		t.Fatalf("rerunOf = %q, want %q", gotRequestID, requestID)
+	}
+	if gotBody != payload {
+		t.Fatalf("submitted body = %q, want %q", gotBody, payload)
+	}
+}
+
 func TestHandlerTaskRerunUnavailable(t *testing.T) {
 	t.Parallel()
 

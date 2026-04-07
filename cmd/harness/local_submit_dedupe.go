@@ -81,7 +81,7 @@ func newLocalSubmissionDeduper(ttl time.Duration) *localSubmissionDeduper {
 	}
 }
 
-func (d *localSubmissionDeduper) Check(key string) (bool, string, string) {
+func (d *localSubmissionDeduper) Check(key string, allowCompleted bool) (bool, string, string) {
 	if d == nil {
 		return false, "", ""
 	}
@@ -98,13 +98,16 @@ func (d *localSubmissionDeduper) Check(key string) (bool, string, string) {
 	if requestID, exists := d.inFlight[key]; exists {
 		return true, "in_flight", requestID
 	}
+	if allowCompleted {
+		return false, "accepted", ""
+	}
 	if record, exists := d.completed[key]; exists {
 		return true, "completed", record.requestID
 	}
 	return false, "accepted", ""
 }
 
-func (d *localSubmissionDeduper) Begin(key, requestID string) (bool, string, string) {
+func (d *localSubmissionDeduper) Begin(key, requestID string, allowCompleted bool) (bool, string, string) {
 	if d == nil {
 		return true, "accepted", ""
 	}
@@ -121,6 +124,10 @@ func (d *localSubmissionDeduper) Begin(key, requestID string) (bool, string, str
 
 	if existingRequestID, exists := d.inFlight[key]; exists {
 		return false, "in_flight", existingRequestID
+	}
+	if allowCompleted {
+		d.inFlight[key] = requestID
+		return true, "accepted", ""
 	}
 	if existingRecord, exists := d.completed[key]; exists {
 		return false, "completed", existingRecord.requestID

@@ -270,8 +270,9 @@ func runHub(args []string) int {
 		}
 
 		dedupeKey := dedupeKeyForRunConfig(runCfg)
+		allowCompletedDuplicate := source == "rerun"
 		if dedupeKey != "" {
-			if duplicate, state, duplicateOf := localSubmitDeduper.Check(dedupeKey); duplicate {
+			if duplicate, state, duplicateOf := localSubmitDeduper.Check(dedupeKey, allowCompletedDuplicate); duplicate {
 				daemonLogger(
 					"dispatch status=duplicate source=%s state=%s duplicate_of=%s",
 					source,
@@ -299,7 +300,7 @@ func runHub(args []string) int {
 			atomic.AddUint64(&localDispatchSeq, 1),
 		)
 		if dedupeKey != "" {
-			if accepted, state, duplicateOf := localSubmitDeduper.Begin(dedupeKey, requestID); !accepted {
+			if accepted, state, duplicateOf := localSubmitDeduper.Begin(dedupeKey, requestID, allowCompletedDuplicate); !accepted {
 				daemonLogger(
 					"dispatch status=duplicate source=%s state=%s duplicate_of=%s",
 					source,
@@ -461,6 +462,13 @@ func runHub(args []string) int {
 				return "", fmt.Errorf("invalid run config: %w", err)
 			}
 			return enqueueLocalRun(reqCtx, runCfg, true, "local_submit")
+		}
+		uiServer.SubmitTaskRerun = func(reqCtx context.Context, _ string, body []byte) (string, error) {
+			runCfg, err := hub.ParseRunConfigJSON(body)
+			if err != nil {
+				return "", fmt.Errorf("invalid run config: %w", err)
+			}
+			return enqueueLocalRun(reqCtx, runCfg, true, "rerun")
 		}
 		uiServer.CloseTask = func(_ context.Context, requestID string) error {
 			logDir, ok := localTaskLogDir(logRoot, requestID)
