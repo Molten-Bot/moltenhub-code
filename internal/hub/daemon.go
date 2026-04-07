@@ -54,6 +54,7 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	runtimeCfgPath := defaultRuntimeConfigPath()
 	pullTimeoutMs := runtimeTimeoutMs
 	if stored, loadedPath, err := loadStoredRuntimeConfig(runtimeCfgPath); err == nil {
+		runtimeCfgPath = loadedPath
 		if stored.TimeoutMs > 0 {
 			pullTimeoutMs = stored.TimeoutMs
 		}
@@ -112,6 +113,11 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), agentStatusUpdateTimeout)
 		defer cancel()
+		if err := api.MarkOpenClawOffline(shutdownCtx, cfg.SessionKey, transportOfflineReasonAgent); err != nil {
+			d.logf("hub.transport status=warn mode=openclaw_ws err=%q", err)
+		} else {
+			d.logf("hub.transport status=offline mode=openclaw_ws")
+		}
 		if err := api.UpdateAgentStatus(shutdownCtx, "offline"); err != nil {
 			d.logf("hub.agent status=warn state=offline err=%q", err)
 			return
@@ -773,16 +779,22 @@ func applyStoredRuntimeConfig(cfg *InitConfig, stored RuntimeConfig) bool {
 }
 
 func loadStoredRuntimeConfig(primaryPath string) (RuntimeConfig, string, error) {
-	primaryPath = strings.TrimSpace(primaryPath)
-	if primaryPath == "" {
-		primaryPath = defaultRuntimeConfigPath()
+	candidates := runtimeConfigCandidatePaths(primaryPath)
+	var firstErr error
+	for _, candidate := range candidates {
+		stored, err := LoadRuntimeConfig(candidate)
+		if err == nil {
+			return stored, candidate, nil
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		return RuntimeConfig{}, candidate, err
 	}
-
-	stored, err := LoadRuntimeConfig(primaryPath)
-	if err == nil {
-		return stored, primaryPath, nil
-	}
-	return RuntimeConfig{}, primaryPath, err
+	return RuntimeConfig{}, candidates[0], firstErr
 }
 
 func dispatchParseErrorPayload(cfg InitConfig, dispatch SkillDispatch, parseErr error) map[string]any {

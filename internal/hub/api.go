@@ -223,6 +223,30 @@ func (c APIClient) UpdateAgentStatus(ctx context.Context, token, status string) 
 	return nil
 }
 
+// MarkOpenClawOffline marks this runtime offline for OpenClaw websocket transport.
+func (c APIClient) MarkOpenClawOffline(ctx context.Context, token, sessionKey, reason string) error {
+	if strings.TrimSpace(token) == "" {
+		return fmt.Errorf("mark openclaw offline requires token")
+	}
+
+	body := map[string]any{}
+	if strings.TrimSpace(sessionKey) != "" {
+		body["session_key"] = strings.TrimSpace(sessionKey)
+	}
+	if strings.TrimSpace(reason) != "" {
+		body["reason"] = strings.TrimSpace(reason)
+	}
+
+	ok, trace := c.tryAny(ctx, token, []apiAttempt{
+		{Method: http.MethodPost, Path: "/openclaw/messages/offline", Body: body},
+	})
+	if !ok {
+		return fmt.Errorf("mark openclaw offline failed: %s", trace)
+	}
+
+	return nil
+}
+
 // RegisterRuntime sends plugin/runtime metadata to hub.
 func (c APIClient) RegisterRuntime(ctx context.Context, token string, cfg InitConfig, libraryTasks []library.TaskSummary) error {
 	runtimeSkill := runtimeSkillConfig()

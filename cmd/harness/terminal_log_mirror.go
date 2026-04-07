@@ -1,6 +1,7 @@
 package main
 
 import (
+	"hash/fnv"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -32,11 +33,11 @@ type taskLogMirror struct {
 }
 
 func newDefaultTaskLogMirror() (*taskLogMirror, error) {
-	wd, err := os.Getwd()
+	rootDir, err := defaultLogRoot()
 	if err != nil {
-		return nil, fmt.Errorf("resolve working directory: %w", err)
+		return nil, err
 	}
-	return newTaskLogMirror(filepath.Join(wd, logDirectoryName))
+	return newTaskLogMirror(rootDir)
 }
 
 func newTaskLogMirror(rootDir string) (*taskLogMirror, error) {
@@ -76,6 +77,34 @@ func resetLogRoot(absRoot string) error {
 		return err
 	}
 	return os.MkdirAll(absRoot, 0o755)
+}
+
+func defaultLogRoot() (string, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("resolve working directory: %w", err)
+	}
+	return defaultLogRootForWorkingDir(wd, resetLogRoot)
+}
+
+func defaultLogRootForWorkingDir(wd string, reset func(string) error) (string, error) {
+	primary := filepath.Join(wd, logDirectoryName)
+	if err := reset(primary); err == nil {
+		return primary, nil
+	} else {
+		fallback := filepath.Join(os.TempDir(), "moltenhub-code", "logs", logRootHash(wd), logDirectoryName)
+		if fallbackErr := reset(fallback); fallbackErr == nil {
+			return fallback, nil
+		} else {
+			return "", fmt.Errorf("reset log root: %w; fallback %s: %v", err, fallback, fallbackErr)
+		}
+	}
+}
+
+func logRootHash(text string) string {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(strings.TrimSpace(text)))
+	return fmt.Sprintf("%016x", h.Sum64())
 }
 
 func (m *taskLogMirror) WriteLine(line string) {

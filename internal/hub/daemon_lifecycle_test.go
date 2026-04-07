@@ -17,6 +17,10 @@ func TestDaemonRunPublishesAgentLifecycleStatus(t *testing.T) {
 	type statusCall struct {
 		Status string
 	}
+	type offlineCall struct {
+		SessionKey string
+		Reason     string
+	}
 	type metadataCall struct {
 		Method string
 		Path   string
@@ -24,6 +28,7 @@ func TestDaemonRunPublishesAgentLifecycleStatus(t *testing.T) {
 	var (
 		mu            sync.Mutex
 		statuses      []statusCall
+		offlineCalls  []offlineCall
 		metadataCalls []metadataCall
 		onlineCh      = make(chan struct{})
 		once          sync.Once
@@ -61,6 +66,22 @@ func TestDaemonRunPublishesAgentLifecycleStatus(t *testing.T) {
 					close(onlineCh)
 				})
 			}
+
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+			return
+		case "/v1/openclaw/messages/offline":
+			defer r.Body.Close()
+			data, _ := io.ReadAll(r.Body)
+			var body map[string]any
+			_ = json.Unmarshal(data, &body)
+
+			mu.Lock()
+			offlineCalls = append(offlineCalls, offlineCall{
+				SessionKey: firstString(body["session_key"]),
+				Reason:     firstString(body["reason"]),
+			})
+			mu.Unlock()
 
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
@@ -136,6 +157,9 @@ func TestDaemonRunPublishesAgentLifecycleStatus(t *testing.T) {
 	if len(statuses) < 2 {
 		t.Fatalf("status calls = %d, want at least 2", len(statuses))
 	}
+	if len(offlineCalls) < 1 {
+		t.Fatalf("offline calls = %d, want at least 1", len(offlineCalls))
+	}
 	if len(metadataCalls) < 1 {
 		t.Fatalf("metadata calls = %d, want at least 1", len(metadataCalls))
 	}
@@ -151,6 +175,13 @@ func TestDaemonRunPublishesAgentLifecycleStatus(t *testing.T) {
 	last := statuses[len(statuses)-1]
 	if last.Status != "offline" {
 		t.Fatalf("last status = %q, want offline", last.Status)
+	}
+	lastOffline := offlineCalls[len(offlineCalls)-1]
+	if lastOffline.SessionKey != "main" {
+		t.Fatalf("last offline session_key = %q, want main", lastOffline.SessionKey)
+	}
+	if lastOffline.Reason != transportOfflineReasonAgent {
+		t.Fatalf("last offline reason = %q, want %q", lastOffline.Reason, transportOfflineReasonAgent)
 	}
 }
 

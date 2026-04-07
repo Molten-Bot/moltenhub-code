@@ -143,3 +143,59 @@ func TestUpdateAgentStatusValidation(t *testing.T) {
 		t.Fatal("expected status validation error")
 	}
 }
+
+func TestMarkOpenClawOfflineUsesOfflineEndpoint(t *testing.T) {
+	t.Parallel()
+
+	type captured struct {
+		Method string
+		Path   string
+		Body   map[string]any
+	}
+	var (
+		mu    sync.Mutex
+		calls []captured
+	)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		data, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(data, &body)
+
+		mu.Lock()
+		calls = append(calls, captured{Method: r.Method, Path: r.URL.Path, Body: body})
+		mu.Unlock()
+
+		if r.Method == http.MethodPost && r.URL.Path == "/v1/openclaw/messages/offline" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	client := NewAPIClient(ts.URL + "/v1")
+	if err := client.MarkOpenClawOffline(context.Background(), "token", "main", "harness_shutdown"); err != nil {
+		t.Fatalf("MarkOpenClawOffline() error = %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(calls) != 1 {
+		t.Fatalf("calls = %d, want 1", len(calls))
+	}
+	if calls[0].Method != http.MethodPost {
+		t.Fatalf("method = %q, want POST", calls[0].Method)
+	}
+	if calls[0].Path != "/v1/openclaw/messages/offline" {
+		t.Fatalf("path = %q", calls[0].Path)
+	}
+	if calls[0].Body["session_key"] != "main" {
+		t.Fatalf("session_key = %#v", calls[0].Body["session_key"])
+	}
+	if calls[0].Body["reason"] != "harness_shutdown" {
+		t.Fatalf("reason = %#v", calls[0].Body["reason"])
+	}
+}

@@ -243,10 +243,8 @@ func runHub(args []string) int {
 	dispatchController.Start(ctx)
 
 	logRoot := ""
-	if wd, wdErr := os.Getwd(); wdErr != nil {
-		daemonLogger("hub.ui status=warn event=resolve_log_root err=%q", wdErr)
-	} else {
-		logRoot = filepath.Join(wd, logDirectoryName)
+	if mirror, ok := logger.sink.(*taskLogMirror); ok {
+		logRoot = strings.TrimSpace(mirror.rootDir)
 	}
 
 	var queueFailureFollowUp func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config)
