@@ -204,7 +204,7 @@
         </div>
         <button id="task-fullscreen-close" class="task-fullscreen-toggle" type="button">Close</button>
       </div>
-      <div class="task-fullscreen-body">
+      <div id="task-fullscreen-body" class="task-fullscreen-body task-output-hidden">
         <section class="panel task-fullscreen-panel">
           <div class="panel-header">
             <span>Running State</span>
@@ -214,7 +214,7 @@
             <div id="task-fullscreen-list" class="task-list"></div>
           </div>
         </section>
-        <section class="panel log-wrap task-fullscreen-panel">
+        <section id="task-fullscreen-output-panel" class="panel log-wrap task-fullscreen-panel task-fullscreen-output-panel hidden" aria-hidden="true">
           <div class="task-head">
             <span id="task-fullscreen-head-label" class="min-w-0 flex-1 truncate">Select a task to inspect logs</span>
             <button id="task-fullscreen-terminal-toggle" class="task-terminal-toggle" type="button">Open Output</button>
@@ -324,9 +324,11 @@
     const taskList = document.getElementById("task-list");
     const taskFullscreenToggle = document.getElementById("task-fullscreen-toggle");
     const taskFullscreen = document.getElementById("task-fullscreen");
+    const taskFullscreenBody = document.getElementById("task-fullscreen-body");
     const taskFullscreenClose = document.getElementById("task-fullscreen-close");
     const taskFullscreenCount = document.getElementById("task-fullscreen-count");
     const taskFullscreenList = document.getElementById("task-fullscreen-list");
+    const taskFullscreenOutputPanel = document.getElementById("task-fullscreen-output-panel");
     const taskFullscreenHeadLabel = document.getElementById("task-fullscreen-head-label");
     const taskFullscreenTerminalToggle = document.getElementById("task-fullscreen-terminal-toggle");
     const taskFullscreenResult = document.getElementById("task-fullscreen-result");
@@ -1017,15 +1019,21 @@
       return state.expandedTaskOutputIDs.has(requestID);
     }
 
+    function setTaskOutputOpen(requestID, open) {
+      requestID = String(requestID || "").trim();
+      if (!requestID) return;
+      if (open) {
+        state.expandedTaskOutputIDs.add(requestID);
+      } else {
+        state.expandedTaskOutputIDs.delete(requestID);
+      }
+      render(state.snapshot);
+    }
+
     function toggleTaskOutput(requestID) {
       requestID = String(requestID || "").trim();
       if (!requestID) return;
-      if (state.expandedTaskOutputIDs.has(requestID)) {
-        state.expandedTaskOutputIDs.delete(requestID);
-      } else {
-        state.expandedTaskOutputIDs.add(requestID);
-      }
-      render(state.snapshot);
+      setTaskOutputOpen(requestID, !state.expandedTaskOutputIDs.has(requestID));
     }
 
     function isTerminalOutputOpen(requestID) {
@@ -1034,15 +1042,21 @@
       return state.openTerminalTaskIDs.has(requestID);
     }
 
+    function setTerminalOutputOpen(requestID, open) {
+      requestID = String(requestID || "").trim();
+      if (!requestID) return;
+      if (open) {
+        state.openTerminalTaskIDs.add(requestID);
+      } else {
+        state.openTerminalTaskIDs.delete(requestID);
+      }
+      render(state.snapshot);
+    }
+
     function toggleTerminalOutput(requestID) {
       requestID = String(requestID || "").trim();
       if (!requestID) return;
-      if (state.openTerminalTaskIDs.has(requestID)) {
-        state.openTerminalTaskIDs.delete(requestID);
-      } else {
-        state.openTerminalTaskIDs.add(requestID);
-      }
-      render(state.snapshot);
+      setTerminalOutputOpen(requestID, !state.openTerminalTaskIDs.has(requestID));
     }
 
     function setTaskFullscreen(open) {
@@ -1177,6 +1191,39 @@
       }
     }
 
+    function parseTaskTimestamp(iso) {
+      const ts = new Date(String(iso || "")).getTime();
+      if (!Number.isFinite(ts)) return 0;
+      return ts;
+    }
+
+    function taskActivityRank(task) {
+      const status = String(task?.status || "").toLowerCase();
+      if (status === "running") return 0;
+      if (status === "pending" || status === "active") return 1;
+      if (status === "error" || status === "invalid") return 2;
+      if (status === "duplicate") return 3;
+      if (status === "ok" || status === "no_changes") return 4;
+      return 5;
+    }
+
+    function sortTasksByActivity(tasks) {
+      const out = Array.isArray(tasks) ? [...tasks] : [];
+      out.sort((a, b) => {
+        const rankDiff = taskActivityRank(a) - taskActivityRank(b);
+        if (rankDiff !== 0) return rankDiff;
+
+        const updatedDiff = parseTaskTimestamp(b?.updated_at) - parseTaskTimestamp(a?.updated_at);
+        if (updatedDiff !== 0) return updatedDiff;
+
+        const startedDiff = parseTaskTimestamp(b?.started_at) - parseTaskTimestamp(a?.started_at);
+        if (startedDiff !== 0) return startedDiff;
+
+        return String(b?.request_id || "").localeCompare(String(a?.request_id || ""));
+      });
+      return out;
+    }
+
     function displayTasks(snapshot) {
       const events = snapshot.events || [];
       const mainLogs = [];
@@ -1224,7 +1271,7 @@
         return !isCompletedTask(task);
       });
 
-      return [mainTask, ...taskItems];
+      return [mainTask, ...sortTasksByActivity(taskItems)];
     }
 
     function fullscreenTasks(snapshot) {
@@ -1449,7 +1496,10 @@
         outputToggle.title = outputExpanded ? "Hide task output preview" : "Show task output preview";
         outputToggle.addEventListener("click", (event) => {
           event.stopPropagation();
-          toggleTaskOutput(task.request_id);
+          const nextOpen = !isTaskOutputExpanded(task);
+          selectTask(task.request_id);
+          setTaskOutputOpen(task.request_id, nextOpen);
+          setTerminalOutputOpen(task.request_id, nextOpen);
         });
         topActions.appendChild(outputToggle);
 
@@ -1594,7 +1644,19 @@
     }
 
     function renderFullscreenTerminal(snapshot) {
-      renderTerminalForTasks(fullscreenTasks(snapshot), taskFullscreenHeadLabel, taskFullscreenTerminalToggle, taskFullscreenResult, taskFullscreenTerminal);
+      const tasks = fullscreenTasks(snapshot);
+      const selected = tasks.find((task) => task.request_id === state.selectedTaskId);
+      const outputVisible = Boolean(selected && isTerminalOutputOpen(selected.request_id));
+
+      if (taskFullscreenBody) {
+        taskFullscreenBody.classList.toggle("task-output-hidden", !outputVisible);
+      }
+      if (taskFullscreenOutputPanel) {
+        taskFullscreenOutputPanel.classList.toggle("hidden", !outputVisible);
+        taskFullscreenOutputPanel.setAttribute("aria-hidden", outputVisible ? "false" : "true");
+      }
+
+      renderTerminalForTasks(tasks, taskFullscreenHeadLabel, taskFullscreenTerminalToggle, taskFullscreenResult, taskFullscreenTerminal);
     }
 
     function render(snapshot) {

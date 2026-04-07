@@ -196,8 +196,23 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="task-fullscreen-list"`) {
 		t.Fatalf("expected index html to include full screen task list")
 	}
+	if !strings.Contains(markup, `id="task-fullscreen-body"`) {
+		t.Fatalf("expected index html to include full screen task body wrapper")
+	}
+	if !strings.Contains(markup, `id="task-fullscreen-output-panel"`) {
+		t.Fatalf("expected index html to include full screen output panel wrapper")
+	}
 	if !strings.Contains(markup, `id="task-fullscreen-terminal"`) {
 		t.Fatalf("expected index html to include full screen terminal output")
+	}
+	if !strings.Contains(markup, "function sortTasksByActivity(") {
+		t.Fatalf("expected index html to include activity-based task sorting for list rendering")
+	}
+	if !strings.Contains(markup, "taskFullscreenBody.classList.toggle(\"task-output-hidden\", !outputVisible);") {
+		t.Fatalf("expected index html to include full screen task-only mode when output is hidden")
+	}
+	if !strings.Contains(markup, "setTerminalOutputOpen(task.request_id, nextOpen);") {
+		t.Fatalf("expected index html to open full terminal output from task Open Output action")
 	}
 	if !strings.Contains(markup, `id="local-conn-text"`) {
 		t.Fatalf("expected index html to include local connection indicator")
@@ -323,6 +338,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".task-fullscreen") {
 		t.Fatalf("expected stylesheet to include full screen task layout styles")
+	}
+	if !strings.Contains(css, ".task-fullscreen-body.task-output-hidden") {
+		t.Fatalf("expected stylesheet to include full screen hidden-output task layout styles")
 	}
 	if !strings.Contains(css, ".task.task-collapsed") {
 		t.Fatalf("expected stylesheet to include collapsed task styles")
