@@ -412,7 +412,7 @@ body .right-col.prompt-collapsed.task-output-hidden {
 .prompt-form {
   display: grid;
   gap: 10px;
-  padding: 14px;
+  padding: 12px;
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
@@ -431,20 +431,6 @@ body .right-col.prompt-collapsed.task-output-hidden {
   border-radius: 999px;
   border: 1px solid var(--border);
   background: rgba(232, 239, 255, 0.82);
-}
-
-.prompt-mode-tab,
-.prompt-input-action,
-.prompt-action-button,
-.task-close,
-.task-rerun,
-.task-control-toggle,
-.task-stop,
-.task-output-toggle,
-.task-terminal-toggle,
-.task-fullscreen-toggle,
-.prompt-visibility-toggle {
-  cursor: pointer;
 }
 
 .prompt-mode-tab {
@@ -1038,7 +1024,7 @@ select.prompt-control {
 
 .task-output-list {
   margin-top: 8px;
-  border-top: 1px dashed rgba(113, 136, 177, 0.3);
+  border-top: 1px dashed rgba(125, 154, 185, 0.32);
   padding-top: 7px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1152,7 +1138,7 @@ select.prompt-control {
 
 .task-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgba(113, 136, 177, 0.55) rgba(232, 239, 255, 0.5);
+  scrollbar-color: rgba(136, 162, 189, 0.55) rgba(17, 28, 42, 0.35);
   overflow-x: hidden;
 }
 
