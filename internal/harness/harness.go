@@ -1419,6 +1419,8 @@ func withCompletionGatePrompt(prompt string) string {
 
 	return base + `
 
+Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.
+
 When failures occur, send a response back to the calling agent that clearly states failure and includes the error details.
 
 When a task fails:
