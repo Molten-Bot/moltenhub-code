@@ -63,29 +63,54 @@ func (c *APIClient) ResolveAgentToken(ctx context.Context, cfg InitConfig) (stri
 	}
 
 	agentToken := strings.TrimSpace(cfg.AgentToken)
+	bindToken := strings.TrimSpace(cfg.BindToken)
 	if agentToken != "" {
 		if c.verifyToken(ctx, agentToken) {
 			c.logf("hub.auth source=agent_config status=verified")
-		} else {
-			c.logf("hub.auth source=agent_config status=unverified")
+			return agentToken, nil
+		}
+		c.logf("hub.auth source=agent_config status=unverified")
+
+		if bindToken != "" {
+			if bound, ok := c.bindTokenFallback(ctx, bindToken, "bind_config_fallback"); ok {
+				return bound, nil
+			}
+		}
+		if bindToken == "" || bindToken != agentToken {
+			if bound, ok := c.bindTokenFallback(ctx, agentToken, "agent_config_bind_fallback"); ok {
+				return bound, nil
+			}
 		}
 		return agentToken, nil
 	}
 
-	bindToken := strings.TrimSpace(cfg.BindToken)
 	if bindToken == "" {
 		return "", fmt.Errorf("missing bind_token and agent_token")
 	}
 
-	bound, err := c.bindTokenFlow(ctx, bindToken)
-	if err != nil {
-		return "", err
-	}
-	if c.verifyToken(ctx, bound) {
+	if bound, ok := c.bindTokenFallback(ctx, bindToken, "bind"); ok {
 		return bound, nil
 	}
-	c.logf("hub.auth source=bind status=unverified")
-	return bound, nil
+
+	return "", fmt.Errorf("bind flow failed for provided bind_token")
+}
+
+func (c *APIClient) bindTokenFallback(ctx context.Context, bindToken, source string) (string, bool) {
+	bindToken = strings.TrimSpace(bindToken)
+	if bindToken == "" {
+		return "", false
+	}
+	bound, err := c.bindTokenFlow(ctx, bindToken)
+	if err != nil {
+		c.logf("hub.auth source=%s status=failed err=%q", source, err)
+		return "", false
+	}
+	if c.verifyToken(ctx, bound) {
+		c.logf("hub.auth source=%s status=verified", source)
+	} else {
+		c.logf("hub.auth source=%s status=unverified", source)
+	}
+	return bound, true
 }
 
 func (c *APIClient) bindTokenFlow(ctx context.Context, bindToken string) (string, error) {
