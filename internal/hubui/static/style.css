@@ -1001,6 +1001,54 @@ select.prompt-control {
 .badge.stopped { background: #e09f9f; color: #321a1a; }
 .badge.error, .badge.invalid { background: var(--bad); color: #2d1515; }
 
+.task-sparklet {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  pointer-events: none;
+}
+
+.task-sparklet-particle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  margin-top: -2px;
+  border-radius: 999px;
+  background: radial-gradient(circle, #fff6cf 0%, #ffd36b 58%, rgba(255, 211, 107, 0) 100%);
+  box-shadow: 0 0 10px rgba(255, 211, 107, 0.65);
+  animation: taskSparkletBurst 2s ease-out forwards;
+}
+
+.task-sparklet-particle:nth-child(1) { --sparkle-x: 0px; --sparkle-y: -14px; animation-delay: 0s; }
+.task-sparklet-particle:nth-child(2) { --sparkle-x: 11px; --sparkle-y: -7px; animation-delay: 0.04s; }
+.task-sparklet-particle:nth-child(3) { --sparkle-x: 12px; --sparkle-y: 7px; animation-delay: 0.08s; }
+.task-sparklet-particle:nth-child(4) { --sparkle-x: 0px; --sparkle-y: 14px; animation-delay: 0.02s; }
+.task-sparklet-particle:nth-child(5) { --sparkle-x: -12px; --sparkle-y: 7px; animation-delay: 0.1s; }
+.task-sparklet-particle:nth-child(6) { --sparkle-x: -11px; --sparkle-y: -7px; animation-delay: 0.06s; }
+
+@keyframes taskSparkletBurst {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.3);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  78% {
+    opacity: 1;
+    transform: translate(var(--sparkle-x), var(--sparkle-y)) scale(0.95);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(var(--sparkle-x) * 1.2), calc(var(--sparkle-y) * 1.2)) scale(0.2);
+  }
+}
+
 .task-meta {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

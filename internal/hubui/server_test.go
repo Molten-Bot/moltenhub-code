@@ -486,6 +486,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `close.textContent = "X";`) {
 		t.Fatalf("expected index html to render task close icon control")
 	}
+	if !strings.Contains(markup, "function triggerTaskSparkle(") || !strings.Contains(markup, "window.setTimeout(() => {") {
+		t.Fatalf("expected index html to include timed task completion sparklet handling")
+	}
+	if !strings.Contains(markup, `sparklet.className = "task-sparklet";`) {
+		t.Fatalf("expected index html to render a sparklet for newly completed tasks")
+	}
+	if !strings.Contains(markup, "syncTaskCompletionSparkles(previousSnapshot, snapshot);") {
+		t.Fatalf("expected index html to trigger sparklets when task status first becomes completed")
+	}
 	if !strings.Contains(markup, `const PROMPT_VISIBILITY_KEY = "hubui.localPromptVisible";`) {
 		t.Fatalf("expected index html to persist prompt visibility preference")
 	}
