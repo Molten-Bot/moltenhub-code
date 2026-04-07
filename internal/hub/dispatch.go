@@ -173,7 +173,7 @@ func normalizeRunConfigMap(v any) (map[string]any, error) {
 	if err := normalizeRunConfigAliases(parsed); err != nil {
 		return nil, err
 	}
-	if taskName := firstNonEmpty(stringAtAny(parsed, "libraryTaskName", "library_task_name")); taskName != "" {
+	if taskName := firstNonEmpty(stringAt(parsed, "libraryTaskName")); taskName != "" {
 		return expandLibraryTaskRunConfig(parsed, taskName)
 	}
 	return parsed, nil
@@ -211,12 +211,12 @@ func extractConfigValue(msg map[string]any) (any, bool) {
 }
 
 func looksLikeRunConfigMap(v map[string]any) bool {
-	if firstNonEmpty(stringAtAny(v, "libraryTaskName", "library_task_name")) != "" {
-		repo := firstNonEmpty(stringAtAny(v, "repo", "repoUrl", "repo_url"))
+	if firstNonEmpty(stringAt(v, "libraryTaskName")) != "" {
+		repo := firstNonEmpty(stringAtAny(v, "repo", "repoUrl"))
 		return repo != "" || hasSingleNonEmptyStringArray(v["repos"])
 	}
 	prompt := firstNonEmpty(stringAt(v, "prompt"))
-	repo := firstNonEmpty(stringAtAny(v, "repo", "repoUrl", "repo_url"))
+	repo := firstNonEmpty(stringAtAny(v, "repo", "repoUrl"))
 	return prompt != "" && (repo != "" || hasNonEmptyStringArray(v["repos"]))
 }
 
@@ -397,68 +397,19 @@ func normalizeRunConfigAliases(m map[string]any) error {
 		return fmt.Errorf("run config payload must be a JSON object")
 	}
 
-	copyAliasValue(m, "repoUrl", "repo_url")
-	copyAliasValue(m, "baseBranch", "base_branch")
-	copyAliasValue(m, "targetSubdir", "target_subdir")
-	copyAliasValue(m, "commitMessage", "commit_message")
-	copyAliasValue(m, "prTitle", "pr_title")
-	copyAliasValue(m, "prBody", "pr_body")
-	copyAliasValue(m, "githubHandle", "github_handle")
-	copyAliasValue(m, "libraryTaskName", "library_task_name")
-	normalizeImageAliases(m)
-
 	if firstNonEmpty(stringAt(m, "baseBranch")) == "" {
-		if branch := firstNonEmpty(stringAt(m, "branch"), stringAt(m, "base_branch")); branch != "" {
+		if branch := firstNonEmpty(stringAt(m, "branch")); branch != "" {
 			m["baseBranch"] = branch
 		}
 	}
-	if firstNonEmpty(stringAt(m, "prompt")) != "" && firstNonEmpty(stringAt(m, "libraryTaskName"), stringAt(m, "library_task_name")) != "" {
+	if firstNonEmpty(stringAt(m, "prompt")) != "" && firstNonEmpty(stringAt(m, "libraryTaskName")) != "" {
 		return fmt.Errorf("run config payload cannot include both prompt and libraryTaskName")
 	}
 	return nil
 }
 
-func copyAliasValue(m map[string]any, canonical string, aliases ...string) {
-	if m == nil {
-		return
-	}
-	if _, ok := m[canonical]; ok {
-		return
-	}
-	for _, alias := range aliases {
-		value, ok := m[alias]
-		if !ok {
-			continue
-		}
-		m[canonical] = value
-		return
-	}
-}
-
-func normalizeImageAliases(m map[string]any) {
-	if m == nil {
-		return
-	}
-	images, ok := m["images"]
-	if !ok {
-		return
-	}
-	entries, ok := images.([]any)
-	if !ok {
-		return
-	}
-	for _, entry := range entries {
-		image, ok := entry.(map[string]any)
-		if !ok {
-			continue
-		}
-		copyAliasValue(image, "mediaType", "media_type")
-		copyAliasValue(image, "dataBase64", "data_base64")
-	}
-}
-
 func expandLibraryTaskRunConfig(m map[string]any, taskName string) (map[string]any, error) {
-	repo := firstNonEmpty(stringAtAny(m, "repo", "repoUrl", "repo_url"))
+	repo := firstNonEmpty(stringAtAny(m, "repo", "repoUrl"))
 	if repo == "" {
 		repos := nonEmptyStringArray(m["repos"])
 		if len(repos) > 1 {
@@ -473,7 +424,7 @@ func expandLibraryTaskRunConfig(m map[string]any, taskName string) (map[string]a
 	if err != nil {
 		return nil, fmt.Errorf("load library catalog: %w", err)
 	}
-	cfg, err := catalog.ExpandRunConfig(taskName, repo, firstNonEmpty(stringAtAny(m, "baseBranch", "base_branch"), stringAt(m, "branch")))
+	cfg, err := catalog.ExpandRunConfig(taskName, repo, firstNonEmpty(stringAt(m, "baseBranch"), stringAt(m, "branch")))
 	if err != nil {
 		return nil, err
 	}

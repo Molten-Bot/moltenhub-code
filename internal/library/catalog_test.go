@@ -78,15 +78,15 @@ func TestLoadCatalogSupportsMultipleKeyedTasksInOneFile(t *testing.T) {
 	}
 }
 
-func TestLoadCatalogSupportsLegacySingleTaskShape(t *testing.T) {
+func TestLoadCatalogSupportsSingleTaskShape(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
 	data := `{
   "name": "security-review",
-  "display_name": "Security Review",
+  "displayName": "Security Review",
   "description": "Audit security boundaries.",
-  "target_subdir": ".",
+  "targetSubdir": ".",
   "prompt": "Review the repository."
 }`
 	if err := os.WriteFile(filepath.Join(dir, "security-review.json"), []byte(data), 0o644); err != nil {
@@ -99,6 +99,28 @@ func TestLoadCatalogSupportsLegacySingleTaskShape(t *testing.T) {
 	}
 	if got, want := catalog.Names(), []string{"security-review"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Names() = %v, want %v", got, want)
+	}
+}
+
+func TestLoadCatalogRejectsSnakeCaseTaskFields(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	data := `{
+  "name": "security-review",
+  "target_subdir": ".",
+  "prompt": "Review the repository."
+}`
+	if err := os.WriteFile(filepath.Join(dir, "security-review.json"), []byte(data), 0o644); err != nil {
+		t.Fatalf("write task: %v", err)
+	}
+
+	_, err := LoadCatalog(dir)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

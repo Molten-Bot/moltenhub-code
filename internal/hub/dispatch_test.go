@@ -307,10 +307,10 @@ func TestParseRunConfigJSON(t *testing.T) {
 	}
 }
 
-func TestParseRunConfigJSONSupportsLegacySnakeCaseAliases(t *testing.T) {
+func TestParseRunConfigJSONRejectsSnakeCaseAliases(t *testing.T) {
 	t.Parallel()
 
-	cfg, err := ParseRunConfigJSON([]byte(`{
+	_, err := ParseRunConfigJSON([]byte(`{
 		"repo_url": "git@github.com:acme/repo.git",
 		"base_branch": "main",
 		"target_subdir": ".",
@@ -320,23 +320,44 @@ func TestParseRunConfigJSONSupportsLegacySnakeCaseAliases(t *testing.T) {
 			{"name":"shot.png","media_type":"image/png","data_base64":"aGVsbG8="}
 		]
 	}`))
-	if err != nil {
-		t.Fatalf("ParseRunConfigJSON() error = %v", err)
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
-	if got, want := cfg.RepoURL, "git@github.com:acme/repo.git"; got != want {
-		t.Fatalf("RepoURL = %q, want %q", got, want)
+	if !strings.Contains(err.Error(), "unsupported field") {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if got, want := cfg.BaseBranch, "main"; got != want {
-		t.Fatalf("BaseBranch = %q, want %q", got, want)
+}
+
+func TestParseRunConfigJSONRejectsSnakeCaseLibraryTaskName(t *testing.T) {
+	t.Parallel()
+
+	_, err := ParseRunConfigJSON([]byte(`{
+		"repo": "git@github.com:acme/repo.git",
+		"library_task_name": "unit-test-coverage"
+	}`))
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
-	if got, want := cfg.TargetSubdir, "."; got != want {
-		t.Fatalf("TargetSubdir = %q, want %q", got, want)
+	if !strings.Contains(err.Error(), "unsupported field") {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if got, want := cfg.GitHubHandle, "octocat"; got != want {
-		t.Fatalf("GitHubHandle = %q, want %q", got, want)
+}
+
+func TestParseRunConfigJSONRejectsSnakeCaseImageFields(t *testing.T) {
+	t.Parallel()
+
+	_, err := ParseRunConfigJSON([]byte(`{
+		"repo": "git@github.com:acme/repo.git",
+		"prompt": "inspect screenshot",
+		"images": [
+			{"name":"shot.png","media_type":"image/png","dataBase64":"aGVsbG8="}
+		]
+	}`))
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
-	if got, want := len(cfg.Images), 1; got != want {
-		t.Fatalf("len(Images) = %d, want %d", got, want)
+	if !strings.Contains(err.Error(), "images[0].media_type") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

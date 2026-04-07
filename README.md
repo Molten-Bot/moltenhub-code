@@ -177,6 +177,8 @@ Common optional fields:
 - `githubHandle` (single GitHub reviewer alias; mapped to PR reviewer)
 - `reviewers`
 
+Run payloads and library task JSON definitions use camelCase keys only. Legacy snake_case aliases are rejected.
+
 Example: [`templates/run.example.json`](templates/run.example.json)
 
 Library-backed runs can also use:

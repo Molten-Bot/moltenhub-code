@@ -41,8 +41,16 @@ type PromptImage struct {
 	DataBase64 string `json:"dataBase64,omitempty"`
 }
 
-// UnmarshalJSON supports both canonical camelCase keys and legacy snake_case aliases.
+// UnmarshalJSON supports canonical camelCase keys plus the "branch" alias for baseBranch.
 func (c *Config) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if err := rejectSnakeCaseRunConfigFields(raw); err != nil {
+		return err
+	}
+
 	type configAlias Config
 	var parsed configAlias
 	if err := json.Unmarshal(data, &parsed); err != nil {
@@ -50,66 +58,54 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 	}
 	*c = Config(parsed)
 
-	var legacy struct {
-		RepoURL       string `json:"repo_url"`
-		BaseBranch    string `json:"base_branch"`
-		Branch        string `json:"branch"`
-		TargetSubdir  string `json:"target_subdir"`
-		CommitMessage string `json:"commit_message"`
-		PRTitle       string `json:"pr_title"`
-		PRBody        string `json:"pr_body"`
-		GitHubHandle  string `json:"github_handle"`
+	var aliases struct {
+		Branch string `json:"branch"`
 	}
-	if err := json.Unmarshal(data, &legacy); err != nil {
+	if err := json.Unmarshal(data, &aliases); err != nil {
 		return err
 	}
 
-	if strings.TrimSpace(c.RepoURL) == "" {
-		c.RepoURL = legacy.RepoURL
-	}
 	if strings.TrimSpace(c.BaseBranch) == "" {
-		c.BaseBranch = firstNonEmptyTrimmed(legacy.BaseBranch, legacy.Branch)
-	}
-	if strings.TrimSpace(c.TargetSubdir) == "" {
-		c.TargetSubdir = legacy.TargetSubdir
-	}
-	if strings.TrimSpace(c.CommitMessage) == "" {
-		c.CommitMessage = legacy.CommitMessage
-	}
-	if strings.TrimSpace(c.PRTitle) == "" {
-		c.PRTitle = legacy.PRTitle
-	}
-	if strings.TrimSpace(c.PRBody) == "" {
-		c.PRBody = legacy.PRBody
-	}
-	if strings.TrimSpace(c.GitHubHandle) == "" {
-		c.GitHubHandle = legacy.GitHubHandle
+		c.BaseBranch = firstNonEmptyTrimmed(aliases.Branch)
 	}
 
 	return nil
 }
 
-// UnmarshalJSON supports both canonical camelCase keys and legacy snake_case aliases.
-func (p *PromptImage) UnmarshalJSON(data []byte) error {
-	type imageAlias PromptImage
-	var parsed imageAlias
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		return err
+func rejectSnakeCaseRunConfigFields(raw map[string]json.RawMessage) error {
+	forbidden := map[string]string{
+		"repo_url":          "repoUrl",
+		"base_branch":       "baseBranch",
+		"target_subdir":     "targetSubdir",
+		"commit_message":    "commitMessage",
+		"pr_title":          "prTitle",
+		"pr_body":           "prBody",
+		"github_handle":     "githubHandle",
+		"library_task_name": "libraryTaskName",
 	}
-	*p = PromptImage(parsed)
+	for legacy, canonical := range forbidden {
+		if _, ok := raw[legacy]; ok {
+			return fmt.Errorf("json: unsupported field %q; use %q", legacy, canonical)
+		}
+	}
+	return rejectSnakeCaseImageFields(raw["images"])
+}
 
-	var legacy struct {
-		MediaType  string `json:"media_type"`
-		DataBase64 string `json:"data_base64"`
+func rejectSnakeCaseImageFields(rawImages json.RawMessage) error {
+	if len(rawImages) == 0 {
+		return nil
 	}
-	if err := json.Unmarshal(data, &legacy); err != nil {
-		return err
+	var images []map[string]json.RawMessage
+	if err := json.Unmarshal(rawImages, &images); err != nil {
+		return nil
 	}
-	if strings.TrimSpace(p.MediaType) == "" {
-		p.MediaType = legacy.MediaType
-	}
-	if strings.TrimSpace(p.DataBase64) == "" {
-		p.DataBase64 = legacy.DataBase64
+	for idx, image := range images {
+		if _, ok := image["media_type"]; ok {
+			return fmt.Errorf("json: unsupported field %q; use %q", fmt.Sprintf("images[%d].media_type", idx), fmt.Sprintf("images[%d].mediaType", idx))
+		}
+		if _, ok := image["data_base64"]; ok {
+			return fmt.Errorf("json: unsupported field %q; use %q", fmt.Sprintf("images[%d].data_base64", idx), fmt.Sprintf("images[%d].dataBase64", idx))
+		}
 	}
 	return nil
 }

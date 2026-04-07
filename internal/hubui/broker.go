@@ -812,14 +812,13 @@ func branchFromRunConfigJSON(runConfigJSON []byte) string {
 		return ""
 	}
 	var raw struct {
-		BaseBranch       string `json:"baseBranch"`
-		LegacyBaseBranch string `json:"base_branch"`
-		Branch           string `json:"branch"`
+		BaseBranch string `json:"baseBranch"`
+		Branch     string `json:"branch"`
 	}
 	if err := json.Unmarshal(runConfigJSON, &raw); err != nil {
 		return ""
 	}
-	return firstNonEmpty(raw.BaseBranch, raw.LegacyBaseBranch, raw.Branch)
+	return firstNonEmpty(raw.BaseBranch, raw.Branch)
 }
 
 func isCompletedTaskStatus(status string) bool {

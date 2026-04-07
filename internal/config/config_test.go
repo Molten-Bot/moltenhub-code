@@ -70,7 +70,7 @@ func TestLoadDefaultsBaseBranch(t *testing.T) {
 	}
 }
 
-func TestLoadSupportsLegacySnakeCaseAliases(t *testing.T) {
+func TestLoadRejectsSnakeCaseRunConfigAliases(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -89,27 +89,37 @@ func TestLoadSupportsLegacySnakeCaseAliases(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	cfg, err := Load(path)
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
-	if got, want := cfg.RepoURL, "git@github.com:acme/repo.git"; got != want {
-		t.Fatalf("RepoURL = %q, want %q", got, want)
+	if !strings.Contains(err.Error(), "unsupported field") {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if got, want := cfg.BaseBranch, "release"; got != want {
-		t.Fatalf("BaseBranch = %q, want %q", got, want)
+}
+
+func TestLoadRejectsSnakeCaseImageFields(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	json := `{
+  "repo": "git@github.com:acme/repo.git",
+  "prompt": "inspect screenshot",
+  "images": [
+    {"name":"shot.png","media_type":"image/png","dataBase64":"aGVsbG8="}
+  ]
+}`
+	if err := os.WriteFile(path, []byte(json), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
 	}
-	if got, want := cfg.TargetSubdir, "."; got != want {
-		t.Fatalf("TargetSubdir = %q, want %q", got, want)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
-	if got, want := cfg.GitHubHandle, "octocat"; got != want {
-		t.Fatalf("GitHubHandle = %q, want %q", got, want)
-	}
-	if got, want := len(cfg.Images), 1; got != want {
-		t.Fatalf("len(Images) = %d, want %d", got, want)
-	}
-	if got, want := cfg.Images[0].DataBase64, "aGVsbG8="; got != want {
-		t.Fatalf("Images[0].DataBase64 = %q, want %q", got, want)
+	if !strings.Contains(err.Error(), "images[0].media_type") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

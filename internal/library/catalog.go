@@ -30,7 +30,7 @@ type TaskDefinition struct {
 	Reviewers     []string `json:"reviewers"`
 }
 
-// UnmarshalJSON supports both canonical camelCase keys and legacy snake_case aliases.
+// UnmarshalJSON supports canonical camelCase keys.
 func (t *TaskDefinition) UnmarshalJSON(data []byte) error {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -49,37 +49,6 @@ func (t *TaskDefinition) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*t = TaskDefinition(parsed)
-
-	var legacy struct {
-		DisplayName   string `json:"display_name"`
-		TargetSubdir  string `json:"target_subdir"`
-		CommitMessage string `json:"commit_message"`
-		PRTitle       string `json:"pr_title"`
-		PRBody        string `json:"pr_body"`
-		GitHubHandle  string `json:"github_handle"`
-	}
-	if err := json.Unmarshal(data, &legacy); err != nil {
-		return err
-	}
-
-	if strings.TrimSpace(t.DisplayName) == "" {
-		t.DisplayName = legacy.DisplayName
-	}
-	if strings.TrimSpace(t.TargetSubdir) == "" {
-		t.TargetSubdir = legacy.TargetSubdir
-	}
-	if strings.TrimSpace(t.CommitMessage) == "" {
-		t.CommitMessage = legacy.CommitMessage
-	}
-	if strings.TrimSpace(t.PRTitle) == "" {
-		t.PRTitle = legacy.PRTitle
-	}
-	if strings.TrimSpace(t.PRBody) == "" {
-		t.PRBody = legacy.PRBody
-	}
-	if strings.TrimSpace(t.GitHubHandle) == "" {
-		t.GitHubHandle = legacy.GitHubHandle
-	}
 	return nil
 }
 
@@ -97,23 +66,17 @@ type Catalog struct {
 }
 
 var taskDefinitionFieldNames = map[string]struct{}{
-	"name":           {},
-	"displayName":    {},
-	"display_name":   {},
-	"description":    {},
-	"targetSubdir":   {},
-	"target_subdir":  {},
-	"prompt":         {},
-	"commitMessage":  {},
-	"commit_message": {},
-	"prTitle":        {},
-	"pr_title":       {},
-	"prBody":         {},
-	"pr_body":        {},
-	"labels":         {},
-	"githubHandle":   {},
-	"github_handle":  {},
-	"reviewers":      {},
+	"name":          {},
+	"displayName":   {},
+	"description":   {},
+	"targetSubdir":  {},
+	"prompt":        {},
+	"commitMessage": {},
+	"prTitle":       {},
+	"prBody":        {},
+	"labels":        {},
+	"githubHandle":  {},
+	"reviewers":     {},
 }
 
 // LoadCatalog loads and validates library tasks from ./library/*.json.

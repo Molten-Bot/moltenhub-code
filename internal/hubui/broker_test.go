@@ -359,15 +359,15 @@ func TestBrokerTaskRunConfigSupportsRerunMetadata(t *testing.T) {
 	}
 }
 
-func TestBrokerTaskRunConfigSupportsLegacyBaseBranchAlias(t *testing.T) {
+func TestBrokerTaskRunConfigSupportsBranchAlias(t *testing.T) {
 	t.Parallel()
 
 	b := NewBroker()
-	requestID := "req-rerun-legacy"
-	payload := []byte(`{"repo":"git@github.com:acme/repo.git","base_branch":"release/2026.04","target_subdir":".","prompt":"rerun me"}`)
+	requestID := "req-rerun-branch-alias"
+	payload := []byte(`{"repo":"git@github.com:acme/repo.git","branch":"release/2026.04","targetSubdir":".","prompt":"rerun me"}`)
 
 	b.RecordTaskRunConfig(requestID, payload)
-	b.IngestLog("dispatch status=start request_id=req-rerun-legacy skill=moltenhub_code_run repo=git@github.com:acme/repo.git")
+	b.IngestLog("dispatch status=start request_id=req-rerun-branch-alias skill=moltenhub_code_run repo=git@github.com:acme/repo.git")
 
 	snap := b.Snapshot()
 	if len(snap.Tasks) != 1 {
@@ -485,7 +485,7 @@ func TestBrokerAppliesPromptWhenConfigRecordedAfterTaskStart(t *testing.T) {
 	requestID := "req-after-start"
 
 	b.IngestLog("dispatch status=start request_id=req-after-start skill=moltenhub_code_run repo=git@github.com:acme/repo.git")
-	b.RecordTaskRunConfig(requestID, []byte(`{"repo":"git@github.com:acme/repo.git","base_branch":"release/2026.04","prompt":"late prompt value"}`))
+	b.RecordTaskRunConfig(requestID, []byte(`{"repo":"git@github.com:acme/repo.git","baseBranch":"release/2026.04","prompt":"late prompt value"}`))
 
 	snap := b.Snapshot()
 	if len(snap.Tasks) != 1 {
@@ -554,18 +554,13 @@ func TestBranchFromRunConfigJSON(t *testing.T) {
 			want: "main",
 		},
 		{
-			name: "base branch",
-			raw:  []byte(`{"base_branch":"main"}`),
-			want: "main",
-		},
-		{
 			name: "branch alias",
 			raw:  []byte(`{"branch":"release/2026.04"}`),
 			want: "release/2026.04",
 		},
 		{
 			name: "prefer base branch",
-			raw:  []byte(`{"base_branch":"main","branch":"feature-x"}`),
+			raw:  []byte(`{"baseBranch":"main","branch":"feature-x"}`),
 			want: "main",
 		},
 		{
@@ -575,7 +570,7 @@ func TestBranchFromRunConfigJSON(t *testing.T) {
 		},
 		{
 			name: "invalid json",
-			raw:  []byte(`{"base_branch":"main"`),
+			raw:  []byte(`{"baseBranch":"main"`),
 			want: "",
 		},
 	}
