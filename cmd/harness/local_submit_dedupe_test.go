@@ -98,6 +98,42 @@ func TestDedupeKeyForRunConfigNonMainNormalizesBranchRefs(t *testing.T) {
 	}
 }
 
+func TestDedupeKeyForRunConfigIncludesAgentRuntimeWhenConfigured(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Config{
+		Prompt:       "fix release issue",
+		Repos:        []string{"git@github.com:acme/repo.git"},
+		BaseBranch:   "main",
+		AgentHarness: "claude",
+		AgentCommand: "claude-custom",
+	}
+
+	got := dedupeKeyForRunConfig(cfg)
+	want := `{"repos":["git@github.com:acme/repo.git"],"baseBranch":"main","agentHarness":"claude","agentCommand":"claude-custom","promptHash":"` + promptHashForTest("fix release issue") + `"}`
+	if got != want {
+		t.Fatalf("dedupeKeyForRunConfig() = %q, want %q", got, want)
+	}
+}
+
+func TestDedupeKeyForRunConfigDiffersByHarness(t *testing.T) {
+	t.Parallel()
+
+	base := config.Config{
+		Prompt:     "fix release issue",
+		Repos:      []string{"git@github.com:acme/repo.git"},
+		BaseBranch: "main",
+	}
+	claude := base
+	claude.AgentHarness = "claude"
+
+	keyBase := dedupeKeyForRunConfig(base)
+	keyClaude := dedupeKeyForRunConfig(claude)
+	if keyBase == keyClaude {
+		t.Fatalf("dedupe keys should differ when agent harness differs\nbase: %q\nclaude: %q", keyBase, keyClaude)
+	}
+}
+
 func promptHashForTest(prompt string) string {
 	sum := sha256.Sum256([]byte(strings.TrimSpace(prompt)))
 	return hex.EncodeToString(sum[:])

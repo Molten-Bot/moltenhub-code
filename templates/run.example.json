@@ -2,6 +2,9 @@
   "repo": "git@github.com:acme/target-repo.git",
   "baseBranch": "main",
   "targetSubdir": ".",
+  "agentHarness": "codex",
+  // optional override when executable name differs from harness default
+  // "agentCommand": "codex",
   "githubHandle": "octocat",
   "prompt": "Add your prompt here."
 }

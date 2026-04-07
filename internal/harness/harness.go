@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jef/moltenhub-code/internal/agentruntime"
 	"github.com/jef/moltenhub-code/internal/config"
 	"github.com/jef/moltenhub-code/internal/execx"
 	"github.com/jef/moltenhub-code/internal/slug"
@@ -34,12 +35,12 @@ const (
 	// Allow up to ~3 minutes for newly-created PR checks to appear before remediation.
 	maxPRChecksNoReportRetries = 18
 	prChecksNoReportRetryDelay = 10 * time.Second
-	maxCheckSummaryChars          = 4000
-	defaultCIWorkflowPath         = ".github/workflows/ci.yml"
-	maxPushSyncAttempts           = 3
-	maxCloneAttempts              = 3
-	cloneRetryDelay               = 2 * time.Second
-	maxCloneErrorDetailChars      = 500
+	maxCheckSummaryChars       = 4000
+	defaultCIWorkflowPath      = ".github/workflows/ci.yml"
+	maxPushSyncAttempts        = 3
+	maxCloneAttempts           = 3
+	cloneRetryDelay            = 2 * time.Second
+	maxCloneErrorDetailChars   = 500
 )
 
 type logFn func(string, ...any)
@@ -73,10 +74,7 @@ type repoWorkspace struct {
 	Changed bool
 }
 
-type codexRunOptions struct {
-	SkipGitRepoCheck bool
-	ImagePaths       []string
-}
+type codexRunOptions = agentruntime.RunOptions
 
 // Harness executes the clone -> codex -> PR workflow.
 type Harness struct {
@@ -121,9 +119,13 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	if h.Sleep == nil {
 		h.Sleep = sleepWithContext
 	}
+	runtime, err := agentruntime.Resolve(cfg.AgentHarness, cfg.AgentCommand)
+	if err != nil {
+		return h.fail(ExitConfig, "config", err, "")
+	}
 
 	h.logf("stage=preflight status=start")
-	for _, cmd := range preflightCommands() {
+	for _, cmd := range preflightCommandsWithRuntime(runtime) {
 		if _, err := h.runCommand(ctx, "preflight", cmd); err != nil {
 			return h.fail(ExitPreflight, "preflight", err, "")
 		}
@@ -279,7 +281,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 
 	h.logf("stage=codex status=start target=%s", codexTargetLabel)
 	codexStart := time.Now()
-	if err := h.runCodex(ctx, codexDir, codexBasePrompt, codexOpts, agentsPath); err != nil {
+	if err := h.runCodex(ctx, runtime, codexDir, codexBasePrompt, codexOpts, agentsPath); err != nil {
 		return h.fail(ExitCodex, "codex", err, runDir)
 	}
 	h.logf("stage=codex status=ok elapsed_s=%d", int(time.Since(codexStart).Seconds()))
@@ -314,6 +316,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 			ctx,
 			runCfg,
 			&repos[i],
+			runtime,
 			codexDir,
 			codexOpts,
 			codexBasePrompt,
@@ -334,6 +337,7 @@ func (h Harness) processChangedRepo(
 	ctx context.Context,
 	cfg config.Config,
 	repo *repoWorkspace,
+	runtime agentruntime.Runtime,
 	codexDir string,
 	codexOpts codexRunOptions,
 	codexBasePrompt string,
@@ -504,7 +508,7 @@ func (h Harness) processChangedRepo(
 			repo.RelDir,
 		)
 		codexStart := time.Now()
-		if err := h.runCodex(ctx, codexDir, repairPrompt, codexOpts, agentsPath); err != nil {
+		if err := h.runCodex(ctx, runtime, codexDir, repairPrompt, codexOpts, agentsPath); err != nil {
 			return ExitCodex, "codex", err
 		}
 		h.logf(
@@ -906,6 +910,7 @@ func shouldFallbackCloneToDefaultBranch(baseBranch string, res execx.Result, err
 
 func (h Harness) runCodex(
 	ctx context.Context,
+	runtime agentruntime.Runtime,
 	targetDir string,
 	prompt string,
 	opts codexRunOptions,
@@ -945,7 +950,7 @@ func (h Harness) runCodex(
 		cleanup = combineCleanupFns(stagedCleanup, targetAgentsCleanup)
 	}
 
-	err := h.runCodexWithHeartbeat(ctx, targetDir, finalPrompt, opts)
+	err := h.runCodexWithHeartbeat(ctx, runtime, targetDir, finalPrompt, opts)
 	if cleanupErr := cleanup(); cleanupErr != nil {
 		h.logf(
 			"stage=workspace status=warn action=cleanup_agents_for_codex target=%s err=%q",
@@ -1074,11 +1079,21 @@ func promptPathForCodex(targetDir, path string) string {
 	return rel
 }
 
-func (h Harness) runCodexWithHeartbeat(ctx context.Context, targetDir, prompt string, opts codexRunOptions) error {
+func (h Harness) runCodexWithHeartbeat(
+	ctx context.Context,
+	runtime agentruntime.Runtime,
+	targetDir, prompt string,
+	opts codexRunOptions,
+) error {
+	cmd, err := agentCommandWithOptions(runtime, targetDir, prompt, opts)
+	if err != nil {
+		return err
+	}
+
 	done := make(chan error, 1)
 	go func() {
-		_, err := h.runCommand(ctx, "codex", codexCommandWithOptions(targetDir, prompt, opts))
-		done <- err
+		_, runErr := h.runCommand(ctx, "codex", cmd)
+		done <- runErr
 	}()
 
 	start := time.Now()
@@ -1143,10 +1158,14 @@ func extractFirstURL(text string) string {
 }
 
 func preflightCommands() []execx.Command {
+	return preflightCommandsWithRuntime(agentruntime.Default())
+}
+
+func preflightCommandsWithRuntime(runtime agentruntime.Runtime) []execx.Command {
 	return []execx.Command{
 		{Name: "git", Args: []string{"--version"}},
 		{Name: "gh", Args: []string{"--version"}},
-		{Name: "codex", Args: []string{"--help"}},
+		runtime.PreflightCommand(),
 	}
 }
 
@@ -1212,24 +1231,19 @@ func codexCommand(targetDir, prompt string) execx.Command {
 }
 
 func codexCommandWithOptions(targetDir, prompt string, opts codexRunOptions) execx.Command {
-	args := []string{"exec", "--sandbox", "workspace-write"}
-	if opts.SkipGitRepoCheck {
-		args = append(args, "--skip-git-repo-check")
+	cmd, err := agentCommandWithOptions(agentruntime.Default(), targetDir, prompt, opts)
+	if err != nil {
+		panic(err)
 	}
-	for _, imagePath := range opts.ImagePaths {
-		imagePath = strings.TrimSpace(imagePath)
-		if imagePath == "" {
-			continue
-		}
-		args = append(args, "--image", imagePath)
-	}
+	return cmd
+}
 
-	return execx.Command{
-		Dir:   targetDir,
-		Name:  "codex",
-		Args:  args,
-		Stdin: withCompletionGatePrompt(prompt),
-	}
+func agentCommandWithOptions(
+	runtime agentruntime.Runtime,
+	targetDir, prompt string,
+	opts codexRunOptions,
+) (execx.Command, error) {
+	return runtime.BuildCommand(targetDir, withCompletionGatePrompt(prompt), opts)
 }
 
 func codexImageArgs(targetDir string, imagePaths []string) ([]string, error) {

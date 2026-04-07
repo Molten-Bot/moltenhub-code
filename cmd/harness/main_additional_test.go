@@ -167,6 +167,26 @@ func TestRunHubBootDiagnosticsWithRuntimeLoaderRejectsNilDeps(t *testing.T) {
 	}
 }
 
+func TestRunHubBootDiagnosticsWithRuntimeLoaderRejectsInvalidAgentHarness(t *testing.T) {
+	t.Parallel()
+
+	var logs []string
+	ok := runHubBootDiagnosticsWithRuntimeLoader(
+		context.Background(),
+		&stubExecRunner{},
+		func(format string, args ...any) { logs = append(logs, fmt.Sprintf(format, args...)) },
+		hub.InitConfig{
+			BaseURL:      "https://na.hub.molten.bot/v1",
+			AgentHarness: "unsupported",
+		},
+		nil,
+	)
+	if ok {
+		t.Fatal("runHubBootDiagnosticsWithRuntimeLoader() = true, want false")
+	}
+	assertLogContains(t, logs, "boot.diagnosis status=error requirement=agent_runtime")
+}
+
 func TestRunHubBootDiagnosticsWrapper(t *testing.T) {
 	t.Parallel()
 
@@ -202,6 +222,64 @@ func TestRunHubBootDiagnosticsWrapper(t *testing.T) {
 		t.Fatal("runHubBootDiagnostics() = false, want true")
 	}
 	assertLogContains(t, logs, "boot.diagnosis status=ok requirement=git_cli")
+}
+
+func TestRunHubBootDiagnosticsUsesConfiguredAgentRuntime(t *testing.T) {
+	t.Parallel()
+
+	pingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/ping" {
+			http.NotFound(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer pingServer.Close()
+
+	runner := &stubExecRunner{
+		results: map[string]stubExecResult{
+			stubCommandKey(execx.Command{Name: "git", Args: []string{"--version"}}):        {result: execx.Result{Stdout: "git version"}},
+			stubCommandKey(execx.Command{Name: "gh", Args: []string{"--version"}}):         {result: execx.Result{Stdout: "gh version"}},
+			stubCommandKey(execx.Command{Name: "claude-custom", Args: []string{"--help"}}): {result: execx.Result{Stdout: "claude help"}},
+			stubCommandKey(execx.Command{Name: "gh", Args: []string{"auth", "status"}}):    {result: execx.Result{Stdout: "Logged in to github.com as test\n"}},
+		},
+	}
+
+	var logs []string
+	ok := runHubBootDiagnostics(
+		context.Background(),
+		runner,
+		func(format string, args ...any) { logs = append(logs, fmt.Sprintf(format, args...)) },
+		hub.InitConfig{
+			BaseURL:      pingServer.URL + "/v1",
+			AgentHarness: "claude",
+			AgentCommand: "claude-custom",
+		},
+	)
+	if !ok {
+		t.Fatal("runHubBootDiagnostics() = false, want true")
+	}
+	assertLogContains(t, logs, "boot.diagnosis status=ok requirement=claude_cli")
+}
+
+func TestApplyDefaultAgentRuntimeConfig(t *testing.T) {
+	t.Parallel()
+
+	initCfg := hub.InitConfig{
+		AgentHarness: "claude",
+		AgentCommand: "claude-custom",
+	}
+	got := applyDefaultAgentRuntimeConfig(config.Config{}, initCfg)
+	if got.AgentHarness != "claude" || got.AgentCommand != "claude-custom" {
+		t.Fatalf("applyDefaultAgentRuntimeConfig() = %+v", got)
+	}
+
+	explicit := config.Config{AgentHarness: "auggie", AgentCommand: "auggie-custom"}
+	got = applyDefaultAgentRuntimeConfig(explicit, initCfg)
+	if got.AgentHarness != "auggie" || got.AgentCommand != "auggie-custom" {
+		t.Fatalf("explicit run config should win; got %+v", got)
+	}
 }
 
 func TestRunLocalDispatchReportsErrorState(t *testing.T) {
