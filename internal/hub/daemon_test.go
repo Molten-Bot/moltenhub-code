@@ -717,8 +717,7 @@ func TestProcessInboundMessageInvokesOnDispatchFailedForAcquireFailure(t *testin
 	var workers sync.WaitGroup
 	d.processInboundMessage(
 		context.Background(),
-		NewAPIClient(server.URL+"/v1"),
-		"agent-token",
+		NewAsyncAPIClientFrom(NewAPIClient(server.URL+"/v1"), "agent-token"),
 		cfg,
 		msg,
 		"",
