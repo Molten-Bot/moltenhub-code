@@ -1,6 +1,6 @@
 # MoltenHub Code
 
-Turn one prompt into review-ready pull requests across your repos, with automatic CI remediation when checks fail.
+Turn a prompt into review-ready pull requests.
 
 MoltenHub Code is a small Go harness that runs an agent CLI (Codex, Claude, or Auggie) against one or more repositories, opens PRs, and waits for required checks.
 It supports single runs, parallel local runs, and a persistent MoltenHub listener with a local monitoring UI.
@@ -143,6 +143,7 @@ Container startup pre-registers auth before any agent stage:
   - startup checks `codex login status` from an empty temp working directory
   - `Start Device Auth` launches `codex login --device-auth` and surfaces URL/code in the pre-screen
   - `Done, Check Again` re-checks readiness before allowing Studio submissions
+- if remote Hub auth fails (`401`) and the UI is enabled, harness now remains in local-only mode so you can still complete Codex device auth and run local Studio tasks
 
 Single run:
 

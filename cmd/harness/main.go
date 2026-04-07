@@ -537,6 +537,14 @@ func runHub(args []string) int {
 	}
 
 	if err := daemon.Run(ctx, cfg); err != nil {
+		if shouldFallbackToLocalOnlyMode(*uiListen, err) {
+			daemonLogger(
+				"hub.auth status=local_only detail=%q",
+				"Remote hub auth failed; continuing in local-only mode. Use the local UI/API to submit tasks.",
+			)
+			<-ctx.Done()
+			return harness.ExitSuccess
+		}
 		writeStderrLine(logger, fmt.Sprintf("error: %v", err))
 		return hubExitCode(err)
 	}
@@ -796,6 +804,13 @@ func hubExitCode(err error) int {
 	default:
 		return harness.ExitPreflight
 	}
+}
+
+func shouldFallbackToLocalOnlyMode(uiListen string, err error) bool {
+	if strings.TrimSpace(uiListen) == "" || err == nil {
+		return false
+	}
+	return hubExitCode(err) == harness.ExitAuth
 }
 
 func joinPRURLs(results []harness.RepoResult) string {
