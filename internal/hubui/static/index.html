@@ -195,9 +195,8 @@
         </section>
 
         <section class="panel min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
-          <div class="panel-header flex items-center justify-between gap-2 border-b border-hub-border bg-black/15 px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
-            <span>Tasks</span>
-            <button id="task-fullscreen-toggle" class="task-fullscreen-toggle" type="button" aria-expanded="false">Full Screen</button>
+          <div class="panel-header flex items-center justify-end gap-2 border-b border-hub-border bg-black/15 px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
+            <button id="task-fullscreen-toggle" class="task-fullscreen-toggle" type="button" aria-expanded="false" aria-label="Open full screen tasks">Full Screen</button>
           </div>
           <div class="scroll task-scroll h-[calc(100%-48px)] overflow-auto">
             <div id="task-list" class="task-list grid gap-2 p-3"></div>
@@ -218,10 +217,6 @@
 
   <div id="task-fullscreen" class="task-fullscreen hidden" aria-hidden="true">
     <div class="task-fullscreen-shell">
-      <div class="task-fullscreen-header">
-        <div class="task-fullscreen-title">Tasks</div>
-        <button id="task-fullscreen-close" class="task-fullscreen-toggle task-fullscreen-close" type="button" aria-label="Close full screen tasks">X</button>
-      </div>
       <div id="task-fullscreen-body" class="task-fullscreen-body task-output-hidden">
         <section class="panel task-fullscreen-panel">
           <div class="panel-header">
@@ -348,7 +343,6 @@
     const taskFullscreenToggle = document.getElementById("task-fullscreen-toggle");
     const taskFullscreen = document.getElementById("task-fullscreen");
     const taskFullscreenBody = document.getElementById("task-fullscreen-body");
-    const taskFullscreenClose = document.getElementById("task-fullscreen-close");
     const taskFullscreenCount = document.getElementById("task-fullscreen-count");
     const taskFullscreenList = document.getElementById("task-fullscreen-list");
     const taskFullscreenOutputPanel = document.getElementById("task-fullscreen-output-panel");
@@ -1251,7 +1245,9 @@
       }
       if (taskFullscreenToggle) {
         taskFullscreenToggle.setAttribute("aria-expanded", state.taskFullscreenOpen ? "true" : "false");
-        taskFullscreenToggle.textContent = state.taskFullscreenOpen ? "Exit Full Screen" : "Full Screen";
+        taskFullscreenToggle.classList.toggle("task-fullscreen-close", state.taskFullscreenOpen);
+        taskFullscreenToggle.textContent = state.taskFullscreenOpen ? "X" : "Full Screen";
+        taskFullscreenToggle.setAttribute("aria-label", state.taskFullscreenOpen ? "Close full screen tasks" : "Open full screen tasks");
       }
       if (state.taskFullscreenOpen) {
         document.body.classList.add("task-fullscreen-open");
@@ -1983,9 +1979,6 @@
     });
     taskFullscreenToggle.addEventListener("click", () => {
       setTaskFullscreen(!state.taskFullscreenOpen);
-    });
-    taskFullscreenClose.addEventListener("click", () => {
-      setTaskFullscreen(false);
     });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && state.taskFullscreenOpen) {

@@ -56,14 +56,27 @@ OPENAI_API_KEY=sk_xxx
 Run with Docker Compose (`docker-compose.yml`):
 
 ```bash
-docker compose run --rm harness
+mkdir -p docker/config
+cp templates/run.example.json docker/config/config.json
+docker compose up
 ```
 
-Override command examples:
+`docker compose` uses a persistent bind mount at `./docker/config -> /workspace/config` and starts `with-config`, which auto-selects:
 
 ```bash
-docker compose run --rm harness harness run --config templates/run.example.json
-docker compose run --rm --service-ports harness harness hub --init templates/init.example.json
+# run mode when config exists
+/workspace/config/config.json
+
+# hub mode when run config is absent and init exists
+/workspace/config/init.json
+```
+
+Hub mode example:
+
+```bash
+rm -f docker/config/config.json
+cp templates/init.example.json docker/config/init.json
+docker compose up
 ```
 
 GitHub Actions publish flow:
@@ -80,10 +93,10 @@ Equivalent direct `docker run`:
 docker run --rm -it \
   -e GITHUB_TOKEN=ghp_xxx \
   -e OPENAI_API_KEY=sk_xxx \
-  -v "$PWD:/workspace" \
+  -v "$PWD/docker/config:/workspace/config" \
   -w /workspace \
   moltenhub-code:latest \
-  harness run --config templates/run.example.json
+  with-config
 ```
 
 Container startup pre-registers auth before any Codex stage:

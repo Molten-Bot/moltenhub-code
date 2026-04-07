@@ -9,3 +9,4 @@
 !.dockerignore
 !.env.example
 bin/*
+prompt-images/*
