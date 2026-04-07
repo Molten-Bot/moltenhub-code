@@ -71,7 +71,7 @@ func TestRunMultiplexUsageMissingConfigFlag(t *testing.T) {
 	}
 }
 
-func TestRunHubUsageMissingInitFlag(t *testing.T) {
+func TestRunHubUsageMissingInitOrConfigFlag(t *testing.T) {
 	orig := os.Args
 	t.Cleanup(func() { os.Args = orig })
 	os.Args = []string{"harness", "hub"}
@@ -370,7 +370,7 @@ func TestHubCredentialsConfigured(t *testing.T) {
 		t.Fatal("hubCredentialsConfigured() = false with bind token, want true")
 	}
 	if !hubCredentialsConfigured(hub.InitConfig{}, func() (hub.RuntimeConfig, error) {
-		return hub.RuntimeConfig{Token: "saved-token"}, nil
+		return hub.RuntimeConfig{InitConfig: hub.InitConfig{AgentToken: "saved-token"}}, nil
 	}) {
 		t.Fatal("hubCredentialsConfigured() = false with runtime config token, want true")
 	}

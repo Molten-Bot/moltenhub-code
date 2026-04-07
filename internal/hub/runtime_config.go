@@ -17,12 +17,75 @@ const (
 	transportOfflineReasonAgent = "harness_shutdown"
 )
 
-// RuntimeConfig is persisted after successful hub auth so subsequent runs can reuse the token.
+// RuntimeConfig is persisted after successful hub auth so subsequent runs can
+// start directly from config.json without requiring init.json again.
 type RuntimeConfig struct {
-	BaseURL    string `json:"baseUrl"`
-	Token      string `json:"token"`
-	SessionKey string `json:"sessionKey,omitempty"`
-	TimeoutMs  int    `json:"timeoutMs,omitempty"`
+	InitConfig
+	TimeoutMs int `json:"timeout_ms,omitempty"`
+}
+
+// UnmarshalJSON accepts the current init-style snake_case config and the legacy
+// minimal runtime config shape.
+func (c *RuntimeConfig) UnmarshalJSON(data []byte) error {
+	type runtimeAlias RuntimeConfig
+	var parsed runtimeAlias
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+	*c = RuntimeConfig(parsed)
+
+	var legacy struct {
+		BaseURL    string `json:"baseUrl"`
+		Token      string `json:"token"`
+		SessionKey string `json:"sessionKey"`
+		TimeoutMs  int    `json:"timeoutMs"`
+	}
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(c.BaseURL) == "" {
+		c.BaseURL = legacy.BaseURL
+	}
+	if strings.TrimSpace(c.AgentToken) == "" {
+		c.AgentToken = legacy.Token
+	}
+	if strings.TrimSpace(c.SessionKey) == "" {
+		c.SessionKey = legacy.SessionKey
+	}
+	if c.TimeoutMs <= 0 {
+		c.TimeoutMs = legacy.TimeoutMs
+	}
+
+	return nil
+}
+
+// ApplyDefaults normalizes a persisted runtime config.
+func (c *RuntimeConfig) ApplyDefaults() {
+	c.InitConfig.ApplyDefaults()
+	if c.TimeoutMs <= 0 {
+		c.TimeoutMs = runtimeTimeoutMs
+	}
+}
+
+// Validate checks required values for hub boot from config.json.
+func (c RuntimeConfig) Validate() error {
+	if err := c.InitConfig.Validate(); err != nil {
+		return err
+	}
+	if strings.TrimSpace(c.AgentToken) == "" && strings.TrimSpace(c.BindToken) == "" {
+		return fmt.Errorf("runtime config requires agent_token or bind_token")
+	}
+	if c.TimeoutMs <= 0 {
+		return fmt.Errorf("runtime config timeout_ms must be > 0")
+	}
+	return nil
+}
+
+func (c RuntimeConfig) Init() InitConfig {
+	initCfg := c.InitConfig
+	initCfg.RuntimeConfigPath = c.RuntimeConfigPath
+	return initCfg
 }
 
 // LoadRuntimeConfig reads and validates a persisted runtime config JSON file.
@@ -42,47 +105,31 @@ func LoadRuntimeConfig(path string) (RuntimeConfig, error) {
 		return RuntimeConfig{}, fmt.Errorf("parse runtime config: %w", err)
 	}
 
-	cfg.BaseURL = strings.TrimSpace(cfg.BaseURL)
-	cfg.Token = strings.TrimSpace(cfg.Token)
-	cfg.SessionKey = strings.TrimSpace(cfg.SessionKey)
-
-	if cfg.BaseURL == "" {
-		return RuntimeConfig{}, fmt.Errorf("runtime config baseUrl is required")
-	}
-	if cfg.Token == "" {
-		return RuntimeConfig{}, fmt.Errorf("runtime config token is required")
-	}
-	if cfg.SessionKey == "" {
-		cfg.SessionKey = runtimeSessionKey
-	}
-	if cfg.TimeoutMs <= 0 {
-		cfg.TimeoutMs = runtimeTimeoutMs
+	cfg.RuntimeConfigPath = path
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err != nil {
+		return RuntimeConfig{}, err
 	}
 
 	return cfg, nil
 }
 
-// SaveRuntimeConfig writes a normalized runtime config JSON file.
-func SaveRuntimeConfig(path, baseURL, token, sessionKey string) error {
+// SaveRuntimeConfig writes a normalized, hub-bootable runtime config JSON file.
+func SaveRuntimeConfig(path string, initCfg InitConfig, token string) error {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		path = defaultRuntimeConfigPath()
 	}
 
 	cfg := RuntimeConfig{
-		BaseURL:    strings.TrimSpace(baseURL),
-		Token:      strings.TrimSpace(token),
-		SessionKey: strings.TrimSpace(sessionKey),
+		InitConfig: initCfg,
 		TimeoutMs:  runtimeTimeoutMs,
 	}
-	if cfg.SessionKey == "" {
-		cfg.SessionKey = runtimeSessionKey
-	}
-	if cfg.BaseURL == "" {
-		return fmt.Errorf("baseUrl is required")
-	}
-	if cfg.Token == "" {
-		return fmt.Errorf("token is required")
+	cfg.RuntimeConfigPath = path
+	cfg.AgentToken = strings.TrimSpace(token)
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err != nil {
+		return err
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")

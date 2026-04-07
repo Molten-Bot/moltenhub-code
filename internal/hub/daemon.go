@@ -85,7 +85,7 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	}
 	d.logf("hub.connection status=configured base_url=%s", cfg.BaseURL)
 	d.logf("hub.auth status=ok")
-	if err := SaveRuntimeConfig(runtimeCfgPath, cfg.BaseURL, token, cfg.SessionKey); err != nil {
+	if err := SaveRuntimeConfig(runtimeCfgPath, cfg, token); err != nil {
 		return fmt.Errorf("hub runtime config: %w", err)
 	}
 	d.logf("hub.runtime_config status=saved path=%s", runtimeCfgPath)
@@ -756,7 +756,7 @@ func applyStoredRuntimeConfig(cfg *InitConfig, stored RuntimeConfig) bool {
 		return false
 	}
 
-	token := strings.TrimSpace(stored.Token)
+	token := strings.TrimSpace(stored.AgentToken)
 	if token == "" {
 		return false
 	}

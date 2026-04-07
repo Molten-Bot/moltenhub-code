@@ -30,7 +30,7 @@ func TestApplyStoredRuntimeConfigSkipsWhenInitBindTokenProvided(t *testing.T) {
 	}
 	stored := RuntimeConfig{
 		BaseURL:    "https://na.hub.molten.bot/v1",
-		Token:      "agent_saved",
+		AgentToken: "agent_saved",
 		SessionKey: "saved-session",
 	}
 
@@ -53,7 +53,7 @@ func TestApplyStoredRuntimeConfigNoToken(t *testing.T) {
 	t.Parallel()
 
 	cfg := InitConfig{BindToken: "bind_token"}
-	applied := applyStoredRuntimeConfig(&cfg, RuntimeConfig{Token: ""})
+	applied := applyStoredRuntimeConfig(&cfg, RuntimeConfig{InitConfig: InitConfig{AgentToken: ""}})
 	if applied {
 		t.Fatal("applied = true, want false")
 	}
@@ -72,7 +72,7 @@ func TestApplyStoredRuntimeConfigKeepsExplicitAgentToken(t *testing.T) {
 	}
 	stored := RuntimeConfig{
 		BaseURL:    "https://na.hub.molten.bot/v1",
-		Token:      "agent_saved",
+		AgentToken: "agent_saved",
 		SessionKey: "saved-session",
 	}
 
@@ -93,7 +93,7 @@ func TestApplyStoredRuntimeConfigKeepsInitBaseURL(t *testing.T) {
 	}
 	stored := RuntimeConfig{
 		BaseURL:    "http://127.0.0.1:37991/v1",
-		Token:      "agent_saved",
+		AgentToken: "agent_saved",
 		SessionKey: "saved-session",
 	}
 
@@ -116,7 +116,10 @@ func TestLoadStoredRuntimeConfigReadsPrimaryPath(t *testing.T) {
 	root := t.TempDir()
 	primaryPath := filepath.Join(root, ".moltenhub", "config.json")
 
-	if err := SaveRuntimeConfig(primaryPath, "https://na.hub.molten.bot/v1", "agent_primary", "main"); err != nil {
+	if err := SaveRuntimeConfig(primaryPath, InitConfig{
+		BaseURL:    "https://na.hub.molten.bot/v1",
+		SessionKey: "main",
+	}, "agent_primary"); err != nil {
 		t.Fatalf("SaveRuntimeConfig(primary) error = %v", err)
 	}
 
@@ -127,8 +130,8 @@ func TestLoadStoredRuntimeConfigReadsPrimaryPath(t *testing.T) {
 	if loadedPath != primaryPath {
 		t.Fatalf("loadedPath = %q, want %q", loadedPath, primaryPath)
 	}
-	if cfg.Token != "agent_primary" {
-		t.Fatalf("Token = %q, want %q", cfg.Token, "agent_primary")
+	if cfg.AgentToken != "agent_primary" {
+		t.Fatalf("AgentToken = %q, want %q", cfg.AgentToken, "agent_primary")
 	}
 }
 
@@ -185,7 +188,10 @@ func TestDaemonRunUsesStoredRuntimeConfigBaseURLWhenInitBaseURLOmitted(t *testin
 	defer server.Close()
 	base = server.URL + "/v1"
 
-	if err := SaveRuntimeConfig("", base, token, "main"); err != nil {
+	if err := SaveRuntimeConfig("", InitConfig{
+		BaseURL:    base,
+		SessionKey: "main",
+	}, token); err != nil {
 		t.Fatalf("SaveRuntimeConfig() error = %v", err)
 	}
 	runtimeCfgPath := defaultRuntimeConfigPath()

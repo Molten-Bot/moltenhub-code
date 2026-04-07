@@ -6,7 +6,8 @@ This directory remains available if you prefer a manual bind mount (for example 
 
 Provide one of these files:
 
-- `config.json` to run `harness run --config /workspace/config/config.json`
+- `config.json` to run `harness run --config /workspace/config/config.json` when it contains task-run fields
+- `config.json` to run `harness hub --config /workspace/config/config.json` when it contains hub runtime fields
 - `init.json` to run `harness hub --init /workspace/config/init.json` when `config.json` is absent
 - if both files are absent and `MOLTEN_HUB_TOKEN` is set, `with-config` auto-generates a temporary init config and starts hub mode
 
@@ -14,6 +15,8 @@ When running hub mode, `init.json` may also include runtime secrets:
 
 - `github_token` for GitHub auth bootstrap
 - `openai_api_key` for Codex CLI login when using the Codex harness
+
+After the first successful hub auth, those hub runtime fields are persisted into `config.json` so later boots can use `config.json` directly.
 
 You can bootstrap from examples:
 

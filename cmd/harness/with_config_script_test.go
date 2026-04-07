@@ -30,6 +30,26 @@ func TestWithConfigScriptPrefersRunConfig(t *testing.T) {
 	}
 }
 
+func TestWithConfigScriptUsesHubConfigWhenConfigJSONMatchesHubSchema(t *testing.T) {
+	t.Parallel()
+
+	env := newWithConfigTestEnv(t)
+	configPath := filepath.Join(env.configDir, "config.json")
+	if err := os.WriteFile(configPath, []byte(`{"base_url":"https://na.hub.molten.bot/v1","agent_token":"tok"}`), 0o644); err != nil {
+		t.Fatalf("write hub config: %v", err)
+	}
+
+	output, err := runWithConfigScript(t, env, nil)
+	if err != nil {
+		t.Fatalf("with-config error: %v\noutput: %s", err, output)
+	}
+
+	args := readFileTrimmed(t, env.argsPath)
+	if got, want := args, "hub --config "+configPath; got != want {
+		t.Fatalf("harness args = %q, want %q", got, want)
+	}
+}
+
 func TestWithConfigScriptFallsBackToInitConfig(t *testing.T) {
 	t.Parallel()
 
@@ -138,10 +158,13 @@ func newWithConfigTestEnv(t *testing.T) withConfigTestEnv {
 	argsPath := filepath.Join(root, "harness.args")
 	initPath := filepath.Join(root, "harness.init.json")
 	stubPath := filepath.Join(binDir, "harness")
-	stub := `#!/bin/sh
+stub := `#!/bin/sh
 set -eu
 printf '%s' "$*" > "${HARNESS_STUB_ARGS_FILE}"
 if [ "${1:-}" = "hub" ] && [ "${2:-}" = "--init" ] && [ "${3:-}" != "" ]; then
+    cat "${3}" > "${HARNESS_STUB_INIT_FILE}"
+fi
+if [ "${1:-}" = "hub" ] && [ "${2:-}" = "--config" ] && [ "${3:-}" != "" ]; then
     cat "${3}" > "${HARNESS_STUB_INIT_FILE}"
 fi
 `

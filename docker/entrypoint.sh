@@ -20,16 +20,33 @@ detect_init_path_from_args() {
     done
 }
 
-read_init_json_key() {
-    init_path="$1"
+detect_config_path_from_args() {
+    prev=""
+    for arg in "$@"; do
+        if [ "${prev}" = "--config" ]; then
+            printf '%s' "${arg}"
+            return
+        fi
+        case "${arg}" in
+            --config=*)
+                printf '%s' "${arg#--config=}"
+                return
+                ;;
+        esac
+        prev="${arg}"
+    done
+}
+
+read_json_key() {
+    json_path="$1"
     keys_csv="$2"
-    if [ "${init_path}" = "" ] || [ ! -f "${init_path}" ]; then
+    if [ "${json_path}" = "" ] || [ ! -f "${json_path}" ]; then
         return 0
     fi
 
     node -e '
 const fs = require("node:fs");
-const [, initPath, keysCSV] = process.argv;
+const [, jsonPath, keysCSV] = process.argv;
 function stripLineComments(data) {
   let out = "";
   let inString = false;
@@ -70,7 +87,7 @@ function stripLineComments(data) {
   return out;
 }
 try {
-  const raw = fs.readFileSync(initPath, "utf8");
+  const raw = fs.readFileSync(jsonPath, "utf8");
   const cfg = JSON.parse(stripLineComments(raw));
   const keys = String(keysCSV || "")
     .split(",")
@@ -85,7 +102,7 @@ try {
   }
 } catch (_) {
 }
-' "${init_path}" "${keys_csv}"
+' "${json_path}" "${keys_csv}"
 }
 
 init_path="${HARNESS_INIT_CONFIG_PATH:-}"
@@ -96,10 +113,23 @@ if [ "${init_path}" = "" ]; then
     init_path="${config_dir}/init.json"
 fi
 
+config_path="${HARNESS_RUNTIME_CONFIG_PATH:-}"
+if [ "${config_path}" = "" ]; then
+    config_path="$(detect_config_path_from_args "$@")"
+fi
+if [ "${config_path}" = "" ]; then
+    config_path="${config_dir}/config.json"
+fi
+
 if [ "${GH_TOKEN:-}" = "" ] && [ "${GITHUB_TOKEN:-}" = "" ]; then
-    github_token_from_init="$(read_init_json_key "${init_path}" "github_token")"
+    github_token_from_init="$(read_json_key "${init_path}" "github_token")"
     if [ "${github_token_from_init}" != "" ]; then
         export GITHUB_TOKEN="${github_token_from_init}"
+    else
+        github_token_from_config="$(read_json_key "${config_path}" "github_token")"
+        if [ "${github_token_from_config}" != "" ]; then
+            export GITHUB_TOKEN="${github_token_from_config}"
+        fi
     fi
 fi
 
@@ -110,9 +140,14 @@ if [ "${GH_TOKEN:-}" = "" ]; then
 fi
 
 if [ "${OPENAI_API_KEY:-}" = "" ]; then
-    openai_api_key_from_init="$(read_init_json_key "${init_path}" "openai_api_key,openaiApiKey,OPENAI_API_KEY")"
+    openai_api_key_from_init="$(read_json_key "${init_path}" "openai_api_key,openaiApiKey,OPENAI_API_KEY")"
     if [ "${openai_api_key_from_init}" != "" ]; then
         export OPENAI_API_KEY="${openai_api_key_from_init}"
+    else
+        openai_api_key_from_config="$(read_json_key "${config_path}" "openai_api_key,openaiApiKey,OPENAI_API_KEY")"
+        if [ "${openai_api_key_from_config}" != "" ]; then
+            export OPENAI_API_KEY="${openai_api_key_from_config}"
+        fi
     fi
 fi
 

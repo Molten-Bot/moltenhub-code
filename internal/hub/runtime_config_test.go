@@ -15,7 +15,28 @@ func TestSaveRuntimeConfigWritesExpectedShape(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "moltenhub", "config.json")
 
-	err := SaveRuntimeConfig(path, "https://na.hub.molten.bot/v1", "agent_123", "main")
+	err := SaveRuntimeConfig(path, InitConfig{
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		BindToken:    "bind_123",
+		AgentHarness: "codex",
+		SessionKey:   "main",
+		Profile: ProfileConfig{
+			DisplayName: "Molten Bot",
+			Emoji:       "🤙🏻",
+			Bio:         "Lightspeed is trailing behind my commit velocity",
+		},
+		GitHubToken:  "ghp_secret",
+		OpenAIAPIKey: "sk-secret",
+		Dispatcher: DispatcherConfig{
+			MaxParallel:            3,
+			MinParallel:            1,
+			SampleWindow:           5,
+			SampleIntervalMS:       1500,
+			CPUHighWatermark:       85,
+			MemoryHighWatermark:    90,
+			DiskIOHighWatermarkMBs: 120,
+		},
+	}, "agent_123")
 	if err != nil {
 		t.Fatalf("SaveRuntimeConfig() error = %v", err)
 	}
@@ -32,14 +53,26 @@ func TestSaveRuntimeConfigWritesExpectedShape(t *testing.T) {
 	if got.BaseURL != "https://na.hub.molten.bot/v1" {
 		t.Fatalf("BaseURL = %q", got.BaseURL)
 	}
-	if got.Token != "agent_123" {
-		t.Fatalf("Token = %q", got.Token)
+	if got.BindToken != "bind_123" {
+		t.Fatalf("BindToken = %q", got.BindToken)
+	}
+	if got.AgentToken != "agent_123" {
+		t.Fatalf("AgentToken = %q", got.AgentToken)
 	}
 	if got.SessionKey != "main" {
 		t.Fatalf("SessionKey = %q", got.SessionKey)
 	}
 	if got.TimeoutMs != 20000 {
 		t.Fatalf("TimeoutMs = %d", got.TimeoutMs)
+	}
+	if got.Profile.DisplayName != "Molten Bot" {
+		t.Fatalf("Profile.DisplayName = %q", got.Profile.DisplayName)
+	}
+	if got.GitHubToken != "ghp_secret" {
+		t.Fatalf("GitHubToken = %q", got.GitHubToken)
+	}
+	if got.OpenAIAPIKey != "sk-secret" {
+		t.Fatalf("OpenAIAPIKey = %q", got.OpenAIAPIKey)
 	}
 
 	st, err := os.Stat(path)
@@ -57,7 +90,9 @@ func TestSaveRuntimeConfigDefaultsSessionKey(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "moltenhub", "config.json")
 
-	err := SaveRuntimeConfig(path, "https://na.hub.molten.bot/v1", "agent_123", "")
+	err := SaveRuntimeConfig(path, InitConfig{
+		BaseURL: "https://na.hub.molten.bot/v1",
+	}, "agent_123")
 	if err != nil {
 		t.Fatalf("SaveRuntimeConfig() error = %v", err)
 	}
@@ -82,10 +117,10 @@ func TestSaveRuntimeConfigRequiresBaseURLAndToken(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "moltenhub", "config.json")
 
-	if err := SaveRuntimeConfig(path, "", "agent_123", "main"); err == nil {
+	if err := SaveRuntimeConfig(path, InitConfig{}, "agent_123"); err == nil {
 		t.Fatal("expected error for empty base URL")
 	}
-	if err := SaveRuntimeConfig(path, "https://na.hub.molten.bot/v1", "", "main"); err == nil {
+	if err := SaveRuntimeConfig(path, InitConfig{BaseURL: "https://na.hub.molten.bot/v1"}, ""); err == nil {
 		t.Fatal("expected error for empty token")
 	}
 }
@@ -96,7 +131,10 @@ func TestLoadRuntimeConfigRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "moltenhub", "config.json")
 
-	if err := SaveRuntimeConfig(path, "https://na.hub.molten.bot/v1", "agent_abc", "main"); err != nil {
+	if err := SaveRuntimeConfig(path, InitConfig{
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		AgentHarness: "codex",
+	}, "agent_abc"); err != nil {
 		t.Fatalf("SaveRuntimeConfig() error = %v", err)
 	}
 
@@ -107,8 +145,8 @@ func TestLoadRuntimeConfigRoundTrip(t *testing.T) {
 	if got.BaseURL != "https://na.hub.molten.bot/v1" {
 		t.Fatalf("BaseURL = %q", got.BaseURL)
 	}
-	if got.Token != "agent_abc" {
-		t.Fatalf("Token = %q", got.Token)
+	if got.AgentToken != "agent_abc" {
+		t.Fatalf("AgentToken = %q", got.AgentToken)
 	}
 	if got.SessionKey != "main" {
 		t.Fatalf("SessionKey = %q", got.SessionKey)
@@ -196,6 +234,59 @@ func TestLoadRuntimeConfigRejectsMissingToken(t *testing.T) {
 	_, err := LoadRuntimeConfig(path)
 	if err == nil {
 		t.Fatal("expected error for missing token")
+	}
+}
+
+func TestLoadRuntimeConfigSupportsInitStyleWholeConfig(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "moltenhub", "config.json")
+	data := `{
+  "base_url": "https://na.hub.molten.bot/v1",
+  "bind_token": "bind_saved",
+  "agent_token": "agent_saved",
+  "agent_harness": "codex",
+  "session_key": "main",
+  "github_token": "ghp_saved",
+  "openai_api_key": "sk_saved",
+  "profile": {
+    "display_name": "moltenbot000 hub coder",
+    "emoji": "🤙🏻",
+    "bio": "Lightspeed is trailing behind my commit velocity"
+  },
+  "dispatcher": {
+    "max_parallel": 4
+  }
+}`
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	got, err := LoadRuntimeConfig(path)
+	if err != nil {
+		t.Fatalf("LoadRuntimeConfig() error = %v", err)
+	}
+	if got.BindToken != "bind_saved" {
+		t.Fatalf("BindToken = %q", got.BindToken)
+	}
+	if got.AgentToken != "agent_saved" {
+		t.Fatalf("AgentToken = %q", got.AgentToken)
+	}
+	if got.Profile.DisplayName != "moltenbot000 hub coder" {
+		t.Fatalf("Profile.DisplayName = %q", got.Profile.DisplayName)
+	}
+	if got.GitHubToken != "ghp_saved" {
+		t.Fatalf("GitHubToken = %q", got.GitHubToken)
+	}
+	if got.OpenAIAPIKey != "sk_saved" {
+		t.Fatalf("OpenAIAPIKey = %q", got.OpenAIAPIKey)
+	}
+	if got.Dispatcher.MaxParallel != 4 {
+		t.Fatalf("Dispatcher.MaxParallel = %d", got.Dispatcher.MaxParallel)
 	}
 }
 

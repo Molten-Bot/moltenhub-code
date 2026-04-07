@@ -85,10 +85,13 @@ docker compose up
 `docker compose` uses a persistent bind mount at `./moltenhub -> /workspace/config` and starts `with-config`, which auto-selects:
 
 ```bash
-# run mode when config exists
+# hub mode when config.json contains hub runtime fields
 /workspace/config/config.json
 
-# hub mode when run config is absent and init exists
+# run mode when config.json contains task-run fields
+/workspace/config/config.json
+
+# hub mode when config.json is absent and init exists
 /workspace/config/init.json
 
 # hub mode from env when both config files are absent
@@ -108,6 +111,8 @@ For `init.json`-only startup, ensure the container user can read the file:
 ```bash
 chmod 644 moltenhub/init.json
 ```
+
+After the first successful hub auth, the runtime persists a hub-bootable `config.json` next to `init.json`, so later boots can start from `config.json` directly.
 
 GitHub Actions publish flow:
 

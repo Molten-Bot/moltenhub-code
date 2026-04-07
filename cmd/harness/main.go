@@ -60,7 +60,7 @@ func run() int {
 func printUsage() {
 	fmt.Fprintln(os.Stderr, "usage: harness run --config <path-to-json>")
 	fmt.Fprintln(os.Stderr, "   or: harness multiplex --config <path-or-dir> [--config <path-or-dir> ...] [--parallel <n>]")
-	fmt.Fprintln(os.Stderr, "   or: harness hub --init <path-to-init-json> [--parallel <n>] [--ui-listen <host:port>] [--ui-automatic]")
+	fmt.Fprintln(os.Stderr, "   or: harness hub (--init <path-to-init-json> | --config <path-to-config-json>) [--parallel <n>] [--ui-listen <host:port>] [--ui-automatic]")
 }
 
 func runSingle(args []string) int {
@@ -189,6 +189,7 @@ func runHub(args []string) int {
 	fs.SetOutput(os.Stderr)
 
 	initPath := fs.String("init", "", "Path to hub init JSON")
+	configPath := fs.String("config", "", "Path to hub runtime config JSON")
 	parallel := fs.Int("parallel", 0, "Optional override for dispatcher max parallel workers")
 	uiListen := fs.String("ui-listen", "127.0.0.1:7777", "Optional monitor web UI listen address (empty to disable)")
 	uiAutomatic := fs.Bool("ui-automatic", false, "Hide the browser Studio form and run the monitor UI in automatic mode")
@@ -196,17 +197,32 @@ func runHub(args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return harness.ExitUsage
 	}
-	if *initPath == "" {
-		fmt.Fprintln(os.Stderr, "missing required --init flag")
+	if strings.TrimSpace(*initPath) == "" && strings.TrimSpace(*configPath) == "" {
+		fmt.Fprintln(os.Stderr, "missing required --init or --config flag")
+		return harness.ExitUsage
+	}
+	if strings.TrimSpace(*initPath) != "" && strings.TrimSpace(*configPath) != "" {
+		fmt.Fprintln(os.Stderr, "provide only one of --init or --config")
 		return harness.ExitUsage
 	}
 
-	cfg, err := hub.LoadInit(*initPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "init config error: %v\n", err)
-		return harness.ExitConfig
+	var cfg hub.InitConfig
+	if strings.TrimSpace(*configPath) != "" {
+		runtimeCfg, err := hub.LoadRuntimeConfig(*configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "runtime config error: %v\n", err)
+			return harness.ExitConfig
+		}
+		cfg = runtimeCfg.Init()
+		cfg.RuntimeConfigPath = strings.TrimSpace(*configPath)
+	} else {
+		cfg, err = hub.LoadInit(*initPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "init config error: %v\n", err)
+			return harness.ExitConfig
+		}
+		cfg.RuntimeConfigPath = hub.ResolveRuntimeConfigPath(*initPath)
 	}
-	cfg.RuntimeConfigPath = hub.ResolveRuntimeConfigPath(*initPath)
 	if *parallel > 0 {
 		cfg.Dispatcher.MaxParallel = *parallel
 	}
