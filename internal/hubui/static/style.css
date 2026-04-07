@@ -441,6 +441,13 @@ body.task-fullscreen-open {
   min-width: 0;
 }
 
+.prompt-input-action-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
 .prompt-field-repo-history {
   flex: 0 0 clamp(180px, 22%, 280px);
 }
@@ -484,6 +491,42 @@ select.prompt-control {
   min-height: 40px;
   padding: 9px 10px;
   font-size: 0.79rem;
+}
+
+.prompt-input-action-wrap .prompt-input {
+  padding-right: 36px;
+}
+
+.prompt-input-action {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: #8da6bf;
+  font-size: 0.71rem;
+  font-weight: 700;
+  line-height: 1;
+  transition: border-color .12s ease, background-color .12s ease, color .12s ease;
+}
+
+.prompt-input-action:hover:not(:disabled),
+.prompt-input-action:focus-visible:not(:disabled) {
+  border-color: #5f7ea0;
+  background: #122131;
+  color: #d7e6f7;
+  outline: none;
+}
+
+.prompt-input-action:disabled {
+  opacity: 0.45;
 }
 
 select.prompt-control {

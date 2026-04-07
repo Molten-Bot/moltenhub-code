@@ -111,7 +111,16 @@
                 </label>
                 <label class="prompt-field prompt-field-base-branch">
                   <span class="prompt-label">Branch</span>
-                  <input id="builder-base-branch" class="prompt-control prompt-input" type="text" value="main" spellcheck="false" placeholder="main">
+                  <span class="prompt-input-action-wrap">
+                    <input id="builder-base-branch" class="prompt-control prompt-input" type="text" value="main" spellcheck="false" placeholder="main">
+                    <button
+                      id="builder-base-branch-clear"
+                      class="prompt-input-action"
+                      type="button"
+                      aria-label="Reset branch to main"
+                      title="Already on main"
+                      disabled>X</button>
+                  </span>
                 </label>
                 <label class="prompt-field prompt-field-target-subdir">
                   <span class="prompt-label">Directory</span>
@@ -347,6 +356,7 @@
     const builderRepoHistoryField = document.getElementById("builder-repo-history-field");
     const builderRepoInput = document.getElementById("builder-repo-input");
     const builderBaseBranch = document.getElementById("builder-base-branch");
+    const builderBaseBranchClear = document.getElementById("builder-base-branch-clear");
     const builderTargetSubdir = document.getElementById("builder-target-subdir");
     const builderLibraryTask = document.getElementById("builder-library-task");
     const builderPromptField = document.getElementById("builder-prompt-field");
@@ -725,6 +735,27 @@
       }
     }
 
+    function syncBaseBranchClearState() {
+      if (!builderBaseBranchClear) return;
+      const branch = String(builderBaseBranch.value || "").trim();
+      const isMain = branch === "" || branch === "main";
+      builderBaseBranchClear.disabled = isMain;
+      builderBaseBranchClear.title = isMain ? "Already on main" : "Reset to main";
+    }
+
+    function resetBaseBranchToMain() {
+      builderBaseBranch.value = "main";
+      syncBaseBranchClearState();
+      if (state.promptMode === "raw") {
+        try {
+          syncRawFromBuilder();
+        } catch (_err) {
+          // Leave raw editor unchanged if builder is incomplete.
+        }
+      }
+      builderBaseBranch.focus();
+    }
+
     function persistPromptMode() {
       try {
         localStorage.setItem(PROMPT_MODE_KEY, state.promptMode);
@@ -787,6 +818,7 @@
 
       builderRepoInput.value = repos[0] || "";
       builderBaseBranch.value = String(payload.base_branch || payload.branch || "main").trim() || "main";
+      syncBaseBranchClearState();
       builderTargetSubdir.value = String(payload.target_subdir || ".").trim() || ".";
       builderLibraryTask.value = String(payload.library_task_name || "").trim();
       builderPromptInput.value = String(payload.prompt || "").trim();
@@ -1730,6 +1762,8 @@
         }
       }
     });
+    builderBaseBranch.addEventListener("input", syncBaseBranchClearState);
+    builderBaseBranchClear.addEventListener("click", resetBaseBranchToMain);
 
     builderPromptInput.addEventListener("paste", handlePromptImagePaste);
     builderImagePasteTarget.addEventListener("paste", handlePromptImagePaste);
@@ -1777,6 +1811,7 @@
     renderRepoHistoryOptions();
     renderLibraryTaskOptions();
     renderPromptImages();
+    syncBaseBranchClearState();
     try {
       syncRawFromBuilder();
     } catch (_err) {
