@@ -256,3 +256,27 @@ func TestAgentAuthEndpointsWithCallbacks(t *testing.T) {
 		t.Fatalf("POST /api/agent-auth/verify status = %d, want 200", verifyResp.StatusCode)
 	}
 }
+
+func TestTaskPanelStylesConstrainHorizontalOverflow(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodGet, "/static/style.css", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.Code)
+	}
+
+	css := resp.Body.String()
+	if !strings.Contains(css, ".task-output-list {\n  margin-top: 8px;\n  border-top: 1px dashed rgba(125, 154, 185, 0.32);\n  padding-top: 7px;\n  display: grid;\n  grid-template-columns: minmax(0, 1fr);") {
+		t.Fatalf("expected task output list to clamp width to panel columns")
+	}
+	if !strings.Contains(css, ".task-meta > div {\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}") {
+		t.Fatalf("expected task metadata rows to truncate instead of widening cards")
+	}
+	if !strings.Contains(css, ".task-scroll {\n  scrollbar-width: thin;\n  scrollbar-color: rgba(136, 162, 189, 0.55) rgba(17, 28, 42, 0.35);\n  overflow-x: hidden;\n}") {
+		t.Fatalf("expected task scroll containers to hide horizontal overflow")
+	}
+}

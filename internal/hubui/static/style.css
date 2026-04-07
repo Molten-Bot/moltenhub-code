@@ -349,6 +349,7 @@ body.task-fullscreen-open {
   display: grid;
   gap: 8px;
   padding: 12px;
+  min-width: 0;
 }
 
 .event {
@@ -768,6 +769,7 @@ select.prompt-control {
   border-radius: 10px;
   padding: 9px 10px;
   transition: border-color .12s ease, transform .12s ease;
+  min-width: 0;
 }
 
 .task:hover {
@@ -789,8 +791,10 @@ select.prompt-control {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 6px;
+  min-width: 0;
 }
 
 .task.task-collapsed .task-top {
@@ -800,8 +804,11 @@ select.prompt-control {
 .task-top-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 6px;
   flex: 0 0 auto;
+  max-width: 100%;
 }
 
 .task-id {
@@ -988,6 +995,14 @@ select.prompt-control {
   gap: 4px 10px;
   color: var(--muted);
   font-size: 0.74rem;
+  min-width: 0;
+}
+
+.task-meta > div {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .task-progress {
@@ -1052,7 +1067,9 @@ select.prompt-control {
   border-top: 1px dashed rgba(125, 154, 185, 0.32);
   padding-top: 7px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 4px;
+  min-width: 0;
 }
 
 .task-output-line {
@@ -1062,6 +1079,8 @@ select.prompt-control {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .task-output-line.stderr {
@@ -1305,6 +1324,7 @@ body.task-fullscreen-open #task-fullscreen-toggle {
 .task-scroll {
   scrollbar-width: thin;
   scrollbar-color: rgba(136, 162, 189, 0.55) rgba(17, 28, 42, 0.35);
+  overflow-x: hidden;
 }
 
 .task-scroll::-webkit-scrollbar {
