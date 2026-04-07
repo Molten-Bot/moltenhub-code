@@ -939,12 +939,8 @@ func dispatchParseErrorPayload(cfg InitConfig, dispatch SkillDispatch, parseErr 
 		ExitCode: harness.ExitConfig,
 		Err:      fmt.Errorf("dispatch parse: %w", parseErr),
 	})
-	result, _ := payload["result"].(map[string]any)
-	if result == nil {
-		result = map[string]any{}
-	}
+	result := payload["result"].(map[string]any)
 	result["requiredSchema"] = requiredSkillPayloadSchema(cfg.Skill.DispatchType, cfg.Skill.Name, currentLibraryTaskNames())
-	payload["result"] = result
 	return payload
 }
 
