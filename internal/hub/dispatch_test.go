@@ -333,7 +333,8 @@ func TestParseRunConfigJSONWithImages(t *testing.T) {
 }
 
 func TestParseRunConfigJSONExpandsLibraryTaskPayload(t *testing.T) {
-	t.Parallel()
+	// This test resolves the on-disk library catalog and must not race tests that
+	// temporarily change process working directory.
 
 	cfg, err := ParseRunConfigJSON([]byte(`{
 		"repo": "git@github.com:acme/repo.git",

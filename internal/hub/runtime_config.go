@@ -18,8 +18,8 @@ const (
 type RuntimeConfig struct {
 	BaseURL    string `json:"baseUrl"`
 	Token      string `json:"token"`
-	SessionKey string `json:"sessionKey"`
-	TimeoutMs  int    `json:"timeoutMs"`
+	SessionKey string `json:"sessionKey,omitempty"`
+	TimeoutMs  int    `json:"timeoutMs,omitempty"`
 }
 
 // LoadRuntimeConfig reads and validates a persisted runtime config JSON file.
