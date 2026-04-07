@@ -10,4 +10,4 @@ services:
       - .env
     volumes:
       - ./moltenhub:/workspace/config
-    command: ["/usr/local/bin/with-config"]
+    command: ["harness", "hub", "--init", "/workspace/config/init.json", "--ui-listen", ":7777"]
