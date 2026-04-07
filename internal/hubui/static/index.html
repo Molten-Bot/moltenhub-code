@@ -136,11 +136,11 @@
                   spellcheck="false"
                   placeholder="Describe the change you want"></textarea>
               </label>
-              <div id="builder-image-field" class="prompt-field grid gap-2 w-[85%] max-w-full max-[640px]:w-full">
+              <div id="builder-image-field" class="prompt-field grid gap-2 w-full max-w-full">
                 <div
                   id="builder-image-paste-target"
                   class="prompt-control rounded-lg border border-dashed border-[#4e6986] bg-[#0d1825] px-3 py-2 text-[0.76rem] leading-[1.4] text-hub-muted"
-                  tabindex="0">Paste screenshots here.</div>
+                  tabindex="0">Paste screenshots.</div>
                 <div id="builder-image-list" class="grid gap-2"></div>
               </div>
             </div>
@@ -180,14 +180,14 @@
 }'></textarea>
             </div>
             <div id="local-prompt-hint" class="prompt-hint text-[0.74rem] leading-[1.3] text-hub-muted"></div>
-            <div class="prompt-actions flex items-center gap-2.5">
+            <div class="prompt-actions">
               <span id="local-prompt-status" class="submit-status min-h-[1.3em] text-[0.74rem] leading-[1.3] text-hub-muted"></span>
               <button
                 id="builder-images-clear"
-                class="rounded-md border border-hub-border bg-[#132131] px-2 py-1 text-[0.72rem] font-semibold text-hub-muted transition hover:border-[#83a3c4] hover:text-hub-text disabled:opacity-65"
+                class="prompt-action-button prompt-action-clear"
                 type="button"
                 disabled>Clear</button>
-              <button id="local-prompt-submit" class="prompt-submit rounded-lg border border-[#597695] bg-[#2f4864] px-3 py-2 text-[0.8rem] font-semibold text-hub-text transition hover:-translate-y-px hover:border-[#83a3c4] disabled:opacity-65 disabled:translate-y-0" type="submit">Run</button>
+              <button id="local-prompt-submit" class="prompt-action-button prompt-submit" type="submit">Run</button>
             </div>
           </form>
         </section>

@@ -358,8 +358,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="builder-image-paste-target"`) {
 		t.Fatalf("expected index html to include screenshot paste target")
 	}
-	if !strings.Contains(markup, `w-[85%]`) {
-		t.Fatalf("expected index html to constrain screenshot paste target width to 85 percent")
+	if !strings.Contains(markup, `id="builder-image-field" class="prompt-field grid gap-2 w-full max-w-full"`) {
+		t.Fatalf("expected index html to render screenshot field at full width")
+	}
+	if !strings.Contains(markup, ">Paste screenshots.<") {
+		t.Fatalf("expected index html to render concise screenshot paste copy")
+	}
+	if strings.Contains(markup, ">Paste screenshots here.<") {
+		t.Fatalf("expected index html to remove old screenshot paste copy")
 	}
 	if !strings.Contains(markup, `id="builder-image-list"`) {
 		t.Fatalf("expected index html to include screenshot attachment list")
@@ -379,13 +385,16 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if strings.Contains(markup, "Paste PNG screenshots here or directly into the prompt field. Attached images are sent to Codex during startup.") {
 		t.Fatalf("expected index html to remove verbose screenshot helper copy")
 	}
-	if !strings.Contains(markup, `class="prompt-actions flex items-center gap-2.5"`) {
-		t.Fatalf("expected index html to render prompt actions without flex wrapping")
+	if !strings.Contains(markup, `class="prompt-actions"`) {
+		t.Fatalf("expected index html to render prompt actions container")
 	}
 	if !strings.Contains(markup, `id="builder-images-clear"`) {
 		t.Fatalf("expected index html to render screenshot Clear button in prompt actions")
 	}
-	if !strings.Contains(markup, `id="local-prompt-submit" class="prompt-submit`) {
+	if !strings.Contains(markup, `id="builder-images-clear"`) || !strings.Contains(markup, `class="prompt-action-button prompt-action-clear"`) {
+		t.Fatalf("expected index html to render Clear with shared action sizing class")
+	}
+	if !strings.Contains(markup, `id="local-prompt-submit" class="prompt-action-button prompt-submit"`) {
 		t.Fatalf("expected index html to keep the Run button in prompt actions")
 	}
 	if !strings.Contains(markup, `const QUEUED_STATUS_TIMEOUT_MS = 8_000;`) {
