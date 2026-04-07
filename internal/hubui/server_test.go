@@ -184,6 +184,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function isMinimizedTask(") {
 		t.Fatalf("expected index html to include completed-task minimization handler")
 	}
+	if !strings.Contains(markup, "if (task.request_id === MAIN_TASK_ID) return true;") {
+		t.Fatalf("expected index html to collapse the main thread task by default")
+	}
 	if !strings.Contains(markup, `"task-collapsed"`) {
 		t.Fatalf("expected index html to include collapsed task class usage")
 	}

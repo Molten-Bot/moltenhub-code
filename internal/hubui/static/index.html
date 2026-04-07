@@ -1048,6 +1048,8 @@
     }
 
     function isMinimizedTask(task) {
+      if (!task) return false;
+      if (task.request_id === MAIN_TASK_ID) return true;
       return isCompletedTask(task);
     }
 
