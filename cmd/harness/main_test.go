@@ -315,20 +315,41 @@ func TestFailureFollowUpRunConfigUsesRequiredPayloadShapeAndLogContext(t *testin
 	}
 }
 
-func TestFailureFollowUpReposUsesFailedRunRepoFirst(t *testing.T) {
+func TestFailureFollowUpReposUsesFailedResultRepoWhenItIdentifiesASingleRepo(t *testing.T) {
 	t.Parallel()
 
 	failedResult := harness.Result{
 		RepoResults: []harness.RepoResult{
-			{RepoURL: "git@github.com:acme/fallback.git"},
+			{RepoURL: "git@github.com:acme/failed-result.git"},
+			{RepoURL: "git@github.com:acme/failed-result.git"},
 		},
 	}
 	failedRunCfg := config.Config{
 		Repos: []string{
-			"git@github.com:acme/failed-run.git",
+			"git@github.com:acme/from-config.git",
 		},
 	}
-	if got, want := failureFollowUpRepos(failedResult, failedRunCfg), []string{"git@github.com:acme/failed-run.git"}; !reflect.DeepEqual(got, want) {
+	if got, want := failureFollowUpRepos(failedResult, failedRunCfg), []string{"git@github.com:acme/failed-result.git"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("failureFollowUpRepos() = %v, want %v", got, want)
+	}
+}
+
+func TestFailureFollowUpReposPrefersSingleRepoFromResult(t *testing.T) {
+	t.Parallel()
+
+	failedResult := harness.Result{
+		RepoResults: []harness.RepoResult{
+			{RepoURL: "git@github.com:acme/from-result.git"},
+			{RepoURL: "git@github.com:acme/from-result.git"},
+		},
+	}
+	failedRunCfg := config.Config{
+		Repos: []string{
+			"git@github.com:acme/from-config.git",
+			"git@github.com:acme/other-config.git",
+		},
+	}
+	if got, want := failureFollowUpRepos(failedResult, failedRunCfg), []string{"git@github.com:acme/from-result.git"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("failureFollowUpRepos() = %v, want %v", got, want)
 	}
 }
@@ -342,6 +363,27 @@ func TestFailureFollowUpReposFallsBackToFailedResultRepo(t *testing.T) {
 		},
 	}
 	if got, want := failureFollowUpRepos(failedResult, config.Config{}), []string{"git@github.com:acme/from-result.git"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("failureFollowUpRepos() = %v, want %v", got, want)
+	}
+}
+
+func TestFailureFollowUpReposFallsBackToConfigRepoWhenResultIsAmbiguous(t *testing.T) {
+	t.Parallel()
+
+	failedResult := harness.Result{
+		RepoResults: []harness.RepoResult{
+			{RepoURL: "git@github.com:acme/repo-a.git"},
+			{RepoURL: "git@github.com:acme/repo-b.git"},
+		},
+	}
+	failedRunCfg := config.Config{
+		Repos: []string{
+			"git@github.com:acme/from-config.git",
+			"git@github.com:acme/other-config.git",
+		},
+	}
+
+	if got, want := failureFollowUpRepos(failedResult, failedRunCfg), []string{"git@github.com:acme/from-config.git"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("failureFollowUpRepos() = %v, want %v", got, want)
 	}
 }

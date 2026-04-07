@@ -162,7 +162,7 @@ func TestMarshalRunConfigJSONReturnsJSONPayload(t *testing.T) {
 func TestFailureFollowUpPromptDefaultWhenNoPaths(t *testing.T) {
 	t.Parallel()
 
-	got := failureFollowUpPrompt(nil)
+	got := failureFollowUpPrompt(nil, harness.Result{}, config.Config{})
 	if !strings.Contains(got, failureFollowUpRequiredPrompt) {
 		t.Fatalf("prompt missing required instructions: %q", got)
 	}
@@ -183,6 +183,41 @@ func TestFailureFollowUpPromptDefaultWhenNoPaths(t *testing.T) {
 	}
 	if !strings.Contains(got, `"baseBranch":"main","targetSubdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."`) {
 		t.Fatalf("prompt missing follow-up payload shape: %q", got)
+	}
+}
+
+func TestFailureFollowUpPromptIncludesFailureContext(t *testing.T) {
+	t.Parallel()
+
+	got := failureFollowUpPrompt(
+		[]string{"/workspace/.log/local/1775600653/000013/terminal.log"},
+		harness.Result{
+			ExitCode:     harness.ExitClone,
+			Err:          errors.New("clone: repository not found"),
+			WorkspaceDir: "/tmp/run-123",
+			Branch:       "moltenhub-fix-clone",
+			PRURL:        "https://github.com/acme/repo/pull/17",
+		},
+		config.Config{
+			Repos: []string{
+				"git@github.com:acme/repo-a.git",
+				"git@github.com:acme/repo-b.git",
+			},
+		},
+	)
+
+	for _, want := range []string{
+		"Observed failure context:",
+		"- exit_code=40",
+		`- error="clone: repository not found"`,
+		"- workspace_dir=/tmp/run-123",
+		"- branch=moltenhub-fix-clone",
+		"- pr_url=https://github.com/acme/repo/pull/17",
+		"- repos=git@github.com:acme/repo-a.git,git@github.com:acme/repo-b.git",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("prompt missing %q: %q", want, got)
+		}
 	}
 }
 

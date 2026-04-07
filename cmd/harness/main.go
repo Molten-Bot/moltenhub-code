@@ -719,7 +719,7 @@ func failureFollowUpRunConfig(
 		Repos:        failureFollowUpRepos(failedResult, failedRunCfg),
 		BaseBranch:   "main",
 		TargetSubdir: ".",
-		Prompt:       failureFollowUpPrompt(logPaths),
+		Prompt:       failureFollowUpPrompt(logPaths, failedResult, failedRunCfg),
 	}
 }
 
@@ -753,6 +753,9 @@ func shouldQueueFailureFollowUp(failedResult harness.Result) (bool, string) {
 }
 
 func failureFollowUpRepos(failedResult harness.Result, failedRunCfg config.Config) []string {
+	if repo := singleRepoFromResults(failedResult.RepoResults); repo != "" {
+		return []string{repo}
+	}
 	for _, repo := range failedRunCfg.RepoList() {
 		repo = strings.TrimSpace(repo)
 		if repo == "" {
@@ -770,7 +773,25 @@ func failureFollowUpRepos(failedResult harness.Result, failedRunCfg config.Confi
 	return nil
 }
 
-func failureFollowUpPrompt(logPaths []string) string {
+func singleRepoFromResults(results []harness.RepoResult) string {
+	var repo string
+	for _, result := range results {
+		candidate := strings.TrimSpace(result.RepoURL)
+		if candidate == "" {
+			continue
+		}
+		if repo == "" {
+			repo = candidate
+			continue
+		}
+		if repo != candidate {
+			return ""
+		}
+	}
+	return repo
+}
+
+func failureFollowUpPrompt(logPaths []string, failedResult harness.Result, failedRunCfg config.Config) string {
 	var b strings.Builder
 	b.WriteString(failureFollowUpRequiredPrompt)
 
@@ -789,10 +810,63 @@ func failureFollowUpPrompt(logPaths []string) string {
 			b.WriteString(trimmed)
 		}
 	}
+	if contextBlock := failureFollowUpFailureContext(failedResult, failedRunCfg); contextBlock != "" {
+		b.WriteString("\n\n")
+		b.WriteString(contextBlock)
+	}
 	b.WriteString("\n\n")
 	b.WriteString(failureFollowUpExecutionContract)
 
 	return strings.TrimSpace(b.String())
+}
+
+func failureFollowUpFailureContext(failedResult harness.Result, failedRunCfg config.Config) string {
+	lines := []string{
+		"Observed failure context:",
+		fmt.Sprintf("- exit_code=%d", failedResult.ExitCode),
+	}
+	if failedResult.Err != nil {
+		lines = append(lines, fmt.Sprintf("- error=%q", failedResult.Err.Error()))
+	}
+	if workspaceDir := strings.TrimSpace(failedResult.WorkspaceDir); workspaceDir != "" {
+		lines = append(lines, fmt.Sprintf("- workspace_dir=%s", workspaceDir))
+	}
+	if branch := strings.TrimSpace(failedResult.Branch); branch != "" {
+		lines = append(lines, fmt.Sprintf("- branch=%s", branch))
+	}
+	if prURL := strings.TrimSpace(failedResult.PRURL); prURL != "" {
+		lines = append(lines, fmt.Sprintf("- pr_url=%s", prURL))
+	}
+	if repos := failureFollowUpContextRepos(failedResult, failedRunCfg); len(repos) > 0 {
+		lines = append(lines, fmt.Sprintf("- repos=%s", strings.Join(repos, ",")))
+	}
+	if len(lines) == 1 {
+		return ""
+	}
+	return strings.Join(lines, "\n")
+}
+
+func failureFollowUpContextRepos(failedResult harness.Result, failedRunCfg config.Config) []string {
+	var repos []string
+	seen := make(map[string]struct{})
+	appendRepo := func(repo string) {
+		repo = strings.TrimSpace(repo)
+		if repo == "" {
+			return
+		}
+		if _, ok := seen[repo]; ok {
+			return
+		}
+		seen[repo] = struct{}{}
+		repos = append(repos, repo)
+	}
+	for _, repo := range failedRunCfg.RepoList() {
+		appendRepo(repo)
+	}
+	for _, repoResult := range failedResult.RepoResults {
+		appendRepo(repoResult.RepoURL)
+	}
+	return repos
 }
 
 func taskLogPaths(logRoot, requestID string) []string {
