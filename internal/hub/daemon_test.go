@@ -692,7 +692,7 @@ func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
 	if got := fmt.Sprint(publishedMsg["status"]); got != "error" {
 		t.Fatalf("message.status = %v, want error", publishedMsg["status"])
 	}
-	if got := fmt.Sprint(publishedMsg["message"]); !strings.Contains(got, "Task failed. Error details: dispatch acquire: dispatch controller is closed") {
+	if got := fmt.Sprint(publishedMsg["message"]); !strings.Contains(got, "Failure: task failed. Error details: dispatch acquire: dispatch controller is closed") {
 		t.Fatalf("message.message = %q", got)
 	}
 	if got := fmt.Sprint(publishedMsg["error"]); !strings.Contains(got, "dispatch acquire: dispatch controller is closed") {
