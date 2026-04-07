@@ -322,8 +322,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="builder-image-paste-target"`) {
 		t.Fatalf("expected index html to include screenshot paste target")
 	}
+	if !strings.Contains(markup, `w-[85%]`) {
+		t.Fatalf("expected index html to constrain screenshot paste target width to 85 percent")
+	}
 	if !strings.Contains(markup, `id="builder-image-list"`) {
 		t.Fatalf("expected index html to include screenshot attachment list")
+	}
+	if strings.Contains(markup, ">Screenshots<") {
+		t.Fatalf("expected index html to remove the screenshots title label")
 	}
 	if strings.Contains(markup, "No screenshots attached.") {
 		t.Fatalf("expected index html to hide screenshot empty-state copy until images are attached")
@@ -337,11 +343,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if strings.Contains(markup, "Paste PNG screenshots here or directly into the prompt field. Attached images are sent to Codex during startup.") {
 		t.Fatalf("expected index html to remove verbose screenshot helper copy")
 	}
-	if !strings.Contains(markup, `class="prompt-actions flex items-center justify-end gap-2.5"`) {
+	if !strings.Contains(markup, `class="prompt-actions flex items-center gap-2.5"`) {
 		t.Fatalf("expected index html to render prompt actions without flex wrapping")
 	}
-	if !strings.Contains(markup, `id="local-prompt-submit" class="prompt-submit ml-auto`) {
-		t.Fatalf("expected index html to keep the Run button right-aligned in prompt actions")
+	if !strings.Contains(markup, `id="builder-images-clear"`) {
+		t.Fatalf("expected index html to render screenshot Clear button in prompt actions")
+	}
+	if !strings.Contains(markup, `id="local-prompt-submit" class="prompt-submit`) {
+		t.Fatalf("expected index html to keep the Run button in prompt actions")
 	}
 	if !strings.Contains(markup, `const QUEUED_STATUS_TIMEOUT_MS = 8_000;`) {
 		t.Fatalf("expected index html to include queued status timeout constant")
@@ -353,9 +362,10 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to clear queued status after timeout")
 	}
 	statusIdx := strings.Index(markup, `id="local-prompt-status"`)
+	clearIdx := strings.Index(markup, `id="builder-images-clear"`)
 	runIdx := strings.Index(markup, `id="local-prompt-submit"`)
-	if statusIdx == -1 || runIdx == -1 || statusIdx > runIdx {
-		t.Fatalf("expected queued status text to render to the left of the Run button")
+	if statusIdx == -1 || clearIdx == -1 || runIdx == -1 || statusIdx > clearIdx || clearIdx > runIdx {
+		t.Fatalf("expected queued status, Clear, and Run to render in left-to-right order")
 	}
 	if !strings.Contains(markup, `id="builder-repo-input" class="prompt-control prompt-input"`) || !strings.Contains(markup, `id="builder-target-subdir" class="prompt-control prompt-input"`) {
 		t.Fatalf("expected index html to include builder repo and target subdir inputs")
