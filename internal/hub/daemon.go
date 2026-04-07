@@ -210,6 +210,9 @@ func (d Daemon) pullOnce(
 	deduper *dispatchDeduper,
 	pullTimeoutMs int,
 ) error {
+	if pullTimeoutMs <= 0 {
+		pullTimeoutMs = runtimeTimeoutMs
+	}
 	pulled, found, err := api.PullOpenClawMessage(ctx, pullTimeoutMs)
 	if err != nil {
 		return err
