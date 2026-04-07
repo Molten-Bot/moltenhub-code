@@ -187,6 +187,7 @@ Key fields:
 - `dispatcher.*` (adaptive worker parallelism)
 
 After first successful activation, runtime auth is persisted to `./.moltenhub/config.json`, so `bind_token` and `handle` are not required in `init.json` for subsequent runs.
+Runtime config keys `sessionKey` and `timeoutMs` are optional; missing values default to `main` and `20000`.
 
 Runtime-owned fields:
 
