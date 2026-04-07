@@ -1607,16 +1607,17 @@
       return Boolean(task.can_rerun);
     }
 
-    async function rerunTask(requestID) {
+    async function rerunTask(requestID, force = false) {
       if (!requestID || state.rerunInFlight.has(requestID)) {
         return;
       }
       state.rerunInFlight.add(requestID);
       render(state.snapshot);
-      setLocalPromptStatus("warn", `Re-running ${requestID}...`);
+      setLocalPromptStatus("warn", force ? `Force re-running ${requestID}...` : `Re-running ${requestID}...`);
 
       try {
-        const response = await fetch(`/api/tasks/${encodeURIComponent(requestID)}/rerun`, {
+        const query = force ? "?force=1" : "";
+        const response = await fetch(`/api/tasks/${encodeURIComponent(requestID)}/rerun${query}`, {
           method: "POST",
         });
 
@@ -1629,6 +1630,14 @@
 
         if (!response.ok) {
           if (response.status === 409 && body?.duplicate) {
+            if (!force) {
+              const shouldForce = window.confirm(`${duplicateNotice(body)}\n\nPress OK to force a new re-run anyway.`);
+              if (shouldForce) {
+                state.rerunInFlight.delete(requestID);
+                render(state.snapshot);
+                return rerunTask(requestID, true);
+              }
+            }
             setLocalPromptStatus("warn", duplicateNotice(body));
             return;
           }
@@ -1636,9 +1645,9 @@
         }
 
         const newRequestID = body?.request_id || "(unknown)";
-        setLocalPromptStatus("ok", `Queued request ${newRequestID} (re-run of ${requestID})`);
+        setLocalPromptStatus("ok", force ? `Queued forced request ${newRequestID} (re-run of ${requestID})` : `Queued request ${newRequestID} (re-run of ${requestID})`);
       } catch (err) {
-        setLocalPromptStatus("error", `Re-run failed: ${err.message}`);
+        setLocalPromptStatus("error", force ? `Forced re-run failed: ${err.message}` : `Re-run failed: ${err.message}`);
       } finally {
         state.rerunInFlight.delete(requestID);
         render(state.snapshot);

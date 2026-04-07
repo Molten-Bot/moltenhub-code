@@ -268,8 +268,8 @@ func runHub(args []string) int {
 	}
 
 	var queueFailureFollowUp func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config)
-	var enqueueLocalRun func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string) (string, error)
-	enqueueLocalRun = func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string) (string, error) {
+	var enqueueLocalRun func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string, force bool) (string, error)
+	enqueueLocalRun = func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string, force bool) (string, error) {
 		if codexAuth != nil {
 			authState, authErr := codexAuth.Status(reqCtx)
 			if authErr != nil {
@@ -290,6 +290,9 @@ func runHub(args []string) int {
 		}
 
 		dedupeKey := dedupeKeyForRunConfig(runCfg)
+		if force {
+			dedupeKey = ""
+		}
 		allowCompletedDuplicate := source == "rerun"
 		if dedupeKey != "" {
 			if duplicate, state, duplicateOf := localSubmitDeduper.Check(dedupeKey, allowCompletedDuplicate); duplicate {
@@ -451,7 +454,7 @@ func runHub(args []string) int {
 			)
 			return
 		}
-		followUpRequestID, followUpErr := enqueueLocalRun(ctx, followUpCfg, false, "failure_followup")
+		followUpRequestID, followUpErr := enqueueLocalRun(ctx, followUpCfg, false, "failure_followup", false)
 		if followUpErr != nil {
 			daemonLogger(
 				"dispatch status=warn action=queue_failure_followup request_id=%s err=%q",
@@ -481,14 +484,14 @@ func runHub(args []string) int {
 			if err != nil {
 				return "", fmt.Errorf("invalid run config: %w", err)
 			}
-			return enqueueLocalRun(reqCtx, runCfg, true, "local_submit")
+			return enqueueLocalRun(reqCtx, runCfg, true, "local_submit", false)
 		}
-		uiServer.SubmitTaskRerun = func(reqCtx context.Context, _ string, body []byte) (string, error) {
+		uiServer.SubmitTaskRerun = func(reqCtx context.Context, _ string, body []byte, force bool) (string, error) {
 			runCfg, err := hub.ParseRunConfigJSON(body)
 			if err != nil {
 				return "", fmt.Errorf("invalid run config: %w", err)
 			}
-			return enqueueLocalRun(reqCtx, runCfg, true, "rerun")
+			return enqueueLocalRun(reqCtx, runCfg, true, "rerun", force)
 		}
 		uiServer.CloseTask = func(_ context.Context, requestID string) error {
 			logDir, ok := localTaskLogDir(logRoot, requestID)
