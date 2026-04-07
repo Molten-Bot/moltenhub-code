@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -268,6 +269,11 @@ func resolveCatalogDir(dir string) string {
 	}
 	if exePath, err := os.Executable(); err == nil {
 		if path, ok := findDirUpward(filepath.Dir(exePath), dir); ok {
+			return path
+		}
+	}
+	if _, sourceFile, _, ok := runtime.Caller(0); ok {
+		if path, ok := findDirUpward(filepath.Dir(sourceFile), dir); ok {
 			return path
 		}
 	}

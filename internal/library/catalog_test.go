@@ -176,3 +176,22 @@ func TestExpandRunConfigUsesRepoAndBranchInputs(t *testing.T) {
 		t.Fatalf("Prompt = %q, want %q", got, want)
 	}
 }
+
+func TestResolveCatalogDirFallsBackToSourceTreeWhenWorkingDirChanges(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd() error = %v", err)
+	}
+	tmpDir := t.TempDir()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Chdir(%q) error = %v", tmpDir, err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(wd)
+	})
+
+	resolved := resolveCatalogDir(DefaultDir)
+	if !isCatalogDir(resolved) {
+		t.Fatalf("resolveCatalogDir(%q) = %q, want existing catalog dir", DefaultDir, resolved)
+	}
+}

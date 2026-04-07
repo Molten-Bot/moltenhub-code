@@ -368,6 +368,9 @@ func (d Daemon) processInboundMessage(
 					ExitCode: harness.ExitPreflight,
 					Err:      failErr,
 				}
+				if d.OnDispatchFailed != nil {
+					d.OnDispatchFailed(dispatch.RequestID, dispatch.Config, failRes)
+				}
 				payload := dispatchResultPayload(cfg, dispatch, failRes)
 				if err := api.PublishResult(ctx, token, payload); err != nil {
 					d.logf("dispatch status=publish_error request_id=%s err=%q", dispatch.RequestID, err)

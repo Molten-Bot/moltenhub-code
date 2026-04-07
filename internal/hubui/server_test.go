@@ -220,6 +220,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="task-fullscreen-terminal"`) {
 		t.Fatalf("expected index html to include full screen terminal output")
 	}
+	if !strings.Contains(markup, `id="task-fullscreen-close" class="task-fullscreen-toggle task-fullscreen-close"`) {
+		t.Fatalf("expected index html to include top-right full screen close control")
+	}
+	if !strings.Contains(markup, `id="task-fullscreen-close" class="task-fullscreen-toggle task-fullscreen-close" type="button" aria-label="Close full screen tasks">X</button>`) {
+		t.Fatalf("expected index html to render full screen close button label as X")
+	}
+	if strings.Contains(markup, "task-fullscreen-subtitle") || strings.Contains(markup, "Focused task/running/state view") {
+		t.Fatalf("expected index html to omit full screen subtitle copy")
+	}
 	if !strings.Contains(markup, `id="task-history-list"`) {
 		t.Fatalf("expected index html to include prompt history list")
 	}
@@ -410,6 +419,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".task-fullscreen-toggle") {
 		t.Fatalf("expected stylesheet to include task full screen toggle styles")
+	}
+	if !strings.Contains(css, ".task-fullscreen-close") {
+		t.Fatalf("expected stylesheet to include top-right full screen close styles")
 	}
 	if !strings.Contains(css, ".task-fullscreen") {
 		t.Fatalf("expected stylesheet to include full screen task layout styles")
