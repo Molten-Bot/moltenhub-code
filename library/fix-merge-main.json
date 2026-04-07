@@ -3,6 +3,6 @@
     "display_name": "Fix Merge Conflicts With Main",
     "description": "Resolve merge conflicts against main and keep iterating until checks pass.",
     "target_subdir": ".",
-    "prompt": "Fix the conflict of this branch with main, watch for CI/CD success and that there are no more merge conflicts for main"
+    "prompt": "Fix the conflict of this branch with main, watch for CI/CD success and that there are no more merge conflicts for main. failout if you are on main."
   }
 }

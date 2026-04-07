@@ -1,24 +1,11 @@
 {
-  "version": "v1",
   "base_url": "https://na.hub.molten.bot/v1",
-  "bind_token": "<ADD YOUR BIND TOKEN HERE -> app.molten.bot/hub>",
-  "session_key": "main",
-  "handle": "moltenhub-code",
+  "bind_token": "",
+  "handle": "codex-beast",
 
   "profile": {
-    "display_name": "MoltenHub Code",
+    "display_name": "molten hub code",
     "emoji": "🎮",
-    "bio": "I run autonomous code tasks through MoltenHub.",
-    "metadata": {
-      "public": true,
-      "is_public": true,
-      "visibility": "public"
-    }
-  },
-
-  "skill": {
-    "name": "moltenhub_code_run",
-    "dispatch_type": "skill_request",
-    "result_type": "skill_result"
+    "bio": "I am 1000 Codex instances connected by electric tissues."
   }
 }

@@ -265,9 +265,13 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	if err != nil {
 		return h.fail(ExitConfig, "config", err, runDir)
 	}
+	imageArgs, err := codexImageArgs(codexDir, imagePaths)
+	if err != nil {
+		return h.fail(ExitConfig, "config", err, runDir)
+	}
 	codexOpts := codexRunOptions{
 		SkipGitRepoCheck: len(repos) > 1,
-		ImagePaths:       imagePaths,
+		ImagePaths:       imageArgs,
 	}
 	codexBasePrompt := workspaceCodexPrompt(cfg.Prompt, cfg.TargetSubdir, repos)
 	codexTargetLabel := codexTargetLabel(cfg.TargetSubdir, len(repos) > 1)
@@ -887,8 +891,23 @@ func (h Harness) runCodex(
 			stagedAgentsPath = trimmedAgentsPath
 			stagedCleanup = func() error { return nil }
 		}
-		finalPrompt = withAgentsPrompt(finalPrompt, stagedAgentsPath)
-		cleanup = stagedCleanup
+
+		promptAgentsPath := stagedAgentsPath
+		targetAgentsPath, targetAgentsCleanup, ensureErr := ensureTargetAgentsPromptFile(targetDir, stagedAgentsPath)
+		if ensureErr != nil {
+			h.logf(
+				"stage=workspace status=warn action=ensure_target_agents_for_codex target=%s source=%s err=%q",
+				targetDir,
+				stagedAgentsPath,
+				ensureErr,
+			)
+			targetAgentsCleanup = func() error { return nil }
+		} else {
+			promptAgentsPath = promptPathForCodex(targetDir, targetAgentsPath)
+		}
+
+		finalPrompt = withAgentsPrompt(finalPrompt, promptAgentsPath)
+		cleanup = combineCleanupFns(stagedCleanup, targetAgentsCleanup)
 	}
 
 	err := h.runCodexWithHeartbeat(ctx, targetDir, finalPrompt, opts)
@@ -900,6 +919,21 @@ func (h Harness) runCodex(
 		)
 	}
 	return err
+}
+
+func combineCleanupFns(cleanups ...func() error) func() error {
+	return func() error {
+		var errs []error
+		for _, cleanup := range cleanups {
+			if cleanup == nil {
+				continue
+			}
+			if err := cleanup(); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		return errors.Join(errs...)
+	}
 }
 
 func stageAgentsPromptFile(targetDir, agentsPath string) (string, func() error, error) {
@@ -945,6 +979,64 @@ func stageAgentsPromptFile(targetDir, agentsPath string) (string, func() error, 
 		return nil
 	}
 	return stagedPath, cleanup, nil
+}
+
+func ensureTargetAgentsPromptFile(targetDir, agentsPath string) (string, func() error, error) {
+	targetDir = strings.TrimSpace(targetDir)
+	agentsPath = strings.TrimSpace(agentsPath)
+	if targetDir == "" {
+		return "", nil, fmt.Errorf("codex target directory is required")
+	}
+	if agentsPath == "" {
+		return "", nil, fmt.Errorf("agents source path is required")
+	}
+
+	targetPath := filepath.Join(targetDir, "AGENTS.md")
+	if st, err := os.Stat(targetPath); err == nil {
+		if st.IsDir() {
+			return "", nil, fmt.Errorf("target agents path %s is a directory", targetPath)
+		}
+		return targetPath, func() error { return nil }, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", nil, fmt.Errorf("stat target agents file %s: %w", targetPath, err)
+	}
+
+	content, err := os.ReadFile(agentsPath)
+	if err != nil {
+		return "", nil, fmt.Errorf("read agents source file %s: %w", agentsPath, err)
+	}
+	if err := os.WriteFile(targetPath, content, 0o644); err != nil {
+		return "", nil, fmt.Errorf("write target agents file %s: %w", targetPath, err)
+	}
+
+	cleanup := func() error {
+		if err := os.Remove(targetPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove target agents file %s: %w", targetPath, err)
+		}
+		return nil
+	}
+	return targetPath, cleanup, nil
+}
+
+func promptPathForCodex(targetDir, path string) string {
+	targetDir = strings.TrimSpace(targetDir)
+	path = strings.TrimSpace(path)
+	if targetDir == "" || path == "" {
+		return path
+	}
+
+	rel, err := filepath.Rel(targetDir, path)
+	if err != nil {
+		return path
+	}
+	if rel == "." || rel == "" || rel == ".." || filepath.IsAbs(rel) || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return path
+	}
+	rel = filepath.ToSlash(rel)
+	if !strings.HasPrefix(rel, "./") && !strings.HasPrefix(rel, "../") {
+		rel = "./" + rel
+	}
+	return rel
 }
 
 func (h Harness) runCodexWithHeartbeat(ctx context.Context, targetDir, prompt string, opts codexRunOptions) error {
@@ -1103,6 +1195,41 @@ func codexCommandWithOptions(targetDir, prompt string, opts codexRunOptions) exe
 		Name: "codex",
 		Args: args,
 	}
+}
+
+func codexImageArgs(targetDir string, imagePaths []string) ([]string, error) {
+	targetDir = strings.TrimSpace(targetDir)
+	if len(imagePaths) == 0 {
+		return nil, nil
+	}
+	if targetDir == "" {
+		return nil, fmt.Errorf("codex target directory is required for image attachments")
+	}
+
+	args := make([]string, 0, len(imagePaths))
+	for i, imagePath := range imagePaths {
+		imagePath = strings.TrimSpace(imagePath)
+		if imagePath == "" {
+			continue
+		}
+
+		st, err := os.Stat(imagePath)
+		if err != nil {
+			return nil, fmt.Errorf("resolve image path %d (%s): %w", i, imagePath, err)
+		}
+		if st.IsDir() {
+			return nil, fmt.Errorf("resolve image path %d (%s): path is a directory", i, imagePath)
+		}
+
+		if rel, err := filepath.Rel(targetDir, imagePath); err == nil && rel != "." && rel != ".." &&
+			!filepath.IsAbs(rel) && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			args = append(args, filepath.ToSlash(rel))
+			continue
+		}
+
+		args = append(args, imagePath)
+	}
+	return args, nil
 }
 
 func materializePromptImages(baseDir string, images []config.PromptImage) ([]string, error) {

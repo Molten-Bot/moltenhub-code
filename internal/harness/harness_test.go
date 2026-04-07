@@ -89,7 +89,7 @@ func TestRunHappyPathCreatesPR(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 
 	fake := &fakeRunner{t: t, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
@@ -138,7 +138,7 @@ func TestRunWithGitHubTokenRunsAuthSetupGitBeforeCodex(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 
 	t.Setenv("GITHUB_TOKEN", "ghp_example_token")
 	t.Setenv("GH_TOKEN", "")
@@ -190,8 +190,9 @@ func TestRunWithPromptImagesUsesCodexDirPaths(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260402-150405-fedcba98"
+	branch := "moltenhub-build-api"
 	imagePath := filepath.Join(targetDir, "prompt-images", "01-clipboard-shot.png")
+	imageArg := filepath.ToSlash(filepath.Join("prompt-images", "01-clipboard-shot.png"))
 
 	fake := &fakeRunner{t: t, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
@@ -201,7 +202,7 @@ func TestRunWithPromptImagesUsesCodexDirPaths(t *testing.T) {
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
 		{cmd: codexCommandWithOptions(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath), codexRunOptions{
-			ImagePaths: []string{imagePath},
+			ImagePaths: []string{imageArg},
 		})},
 		{cmd: statusCommand(repoDir)},
 	}}
@@ -354,7 +355,7 @@ func TestRunCodexFailureStopsBeforeCommitAndPR(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 
 	fake := &fakeRunner{t: t, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
@@ -396,7 +397,7 @@ func TestRunNoChangesSkipsPR(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 
 	fake := &fakeRunner{t: t, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
@@ -442,7 +443,7 @@ func TestRunFailedChecksTriggersCodexRemediation(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 	prURL := "https://github.com/acme/repo/pull/42"
 
 	checkSummary := "X unit-tests failing"
@@ -498,7 +499,7 @@ func TestRunFailedChecksWithNoRemediationChangesFails(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 	prURL := "https://github.com/acme/repo/pull/42"
 
 	checkSummary := "X unit-tests failing"
@@ -550,9 +551,9 @@ func TestRunNoChecksReportedRetriesBeforePassing(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 	prURL := "https://github.com/acme/repo/pull/42"
-	noChecks := "no checks reported on the 'moltenhub-build-api-20260402-150405-abcdef12' branch"
+	noChecks := "no checks reported on the 'moltenhub-build-api' branch"
 
 	fake := &fakeRunner{t: t, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
@@ -611,9 +612,9 @@ func TestRunNoChecksReportedAfterRetryWindowTriggersRemediation(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 	prURL := "https://github.com/acme/repo/pull/42"
-	noChecks := "no checks reported on the 'moltenhub-build-api-20260402-150405-abcdef12' branch"
+	noChecks := "no checks reported on the 'moltenhub-build-api' branch"
 
 	exps := []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
@@ -687,9 +688,9 @@ func TestRunNoRequiredChecksFallsBackToAllChecks(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 	prURL := "https://github.com/acme/repo/pull/42"
-	noRequired := "no required checks reported on the 'moltenhub-build-api-20260402-150405-abcdef12' branch"
+	noRequired := "no required checks reported on the 'moltenhub-build-api' branch"
 
 	fake := &fakeRunner{t: t, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
@@ -749,7 +750,7 @@ func TestRunMultiRepoCreatesPRsForEachChangedRepo(t *testing.T) {
 	guid := "abcdef123456"
 	runDir := filepath.Join("/tmp", "temp", guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 
 	repoRelA := repoWorkspaceDirName(cfg.Repos[0], 0, len(cfg.Repos))
 	repoRelB := repoWorkspaceDirName(cfg.Repos[1], 1, len(cfg.Repos))
@@ -824,7 +825,7 @@ func TestRunMultiRepoRemediationUsesWorkspaceCodexOptions(t *testing.T) {
 	guid := "abcdef123456"
 	runDir := filepath.Join("/tmp", "temp", guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 
 	repoRelA := repoWorkspaceDirName(cfg.Repos[0], 0, len(cfg.Repos))
 	repoRelB := repoWorkspaceDirName(cfg.Repos[1], 1, len(cfg.Repos))
@@ -997,7 +998,7 @@ func TestRunMissingMoltenhubBaseBranchFallsBackToDefaultAndCreatesNewBranch(t *t
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260406-195352-9ded650b"
+	branch := "moltenhub-build-api"
 	prURL := "https://github.com/acme/repo/pull/112"
 
 	cloneMissingBranch := execx.Result{
@@ -1057,7 +1058,7 @@ func TestRunCloneRetriesTransientFailureThenSucceeds(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-build-api-20260406-195352-9ded650b"
+	branch := "moltenhub-build-api"
 	prURL := "https://github.com/acme/repo/pull/112"
 
 	cloneTransientFailure := execx.Result{
@@ -1185,7 +1186,7 @@ func TestCommandBuilders(t *testing.T) {
 
 	cfg := sampleConfig()
 	repoDir := "/tmp/run/repo"
-	branch := "moltenhub-build-api-20260402-150405-abcdef12"
+	branch := "moltenhub-build-api"
 	prompt := "fix tests"
 	targetDir := filepath.Join(repoDir, "services/api")
 
@@ -1338,6 +1339,41 @@ func TestMaterializePromptImages(t *testing.T) {
 	}
 }
 
+func TestCodexImageArgsPrefersRelativePaths(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	imagePath := filepath.Join(targetDir, "prompt-images", "01-shot.png")
+	if err := os.MkdirAll(filepath.Dir(imagePath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(imagePath, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	got, err := codexImageArgs(targetDir, []string{imagePath})
+	if err != nil {
+		t.Fatalf("codexImageArgs() error = %v", err)
+	}
+	want := []string{filepath.ToSlash(filepath.Join("prompt-images", "01-shot.png"))}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("codexImageArgs() = %v, want %v", got, want)
+	}
+}
+
+func TestCodexImageArgsRejectsMissingPath(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	_, err := codexImageArgs(targetDir, []string{filepath.Join(targetDir, "missing.png")})
+	if err == nil {
+		t.Fatal("codexImageArgs() error = nil, want missing path error")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "resolve image path") {
+		t.Fatalf("codexImageArgs() error = %v, want resolve image path context", err)
+	}
+}
+
 func TestStageAgentsPromptFileCopiesAndCleansUpStagedFile(t *testing.T) {
 	t.Parallel()
 
@@ -1364,6 +1400,38 @@ func TestStageAgentsPromptFileCopiesAndCleansUpStagedFile(t *testing.T) {
 	if got, want := string(data), "seeded instructions"; got != want {
 		t.Fatalf("staged file content = %q, want %q", got, want)
 	}
+	if err := cleanup(); err != nil {
+		t.Fatalf("cleanup() error = %v", err)
+	}
+	if _, err := os.Stat(stagedPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("staged file still exists after cleanup: err=%v", err)
+	}
+}
+
+func TestEnsureTargetAgentsPromptFileCopiesAndCleansUp(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	sourcePath := filepath.Join(t.TempDir(), "AGENTS.md")
+	if err := os.WriteFile(sourcePath, []byte("seeded instructions"), 0o644); err != nil {
+		t.Fatalf("write source agents file: %v", err)
+	}
+
+	stagedPath, cleanup, err := ensureTargetAgentsPromptFile(targetDir, sourcePath)
+	if err != nil {
+		t.Fatalf("ensureTargetAgentsPromptFile() error = %v", err)
+	}
+	if want := filepath.Join(targetDir, "AGENTS.md"); stagedPath != want {
+		t.Fatalf("stagedPath = %q, want %q", stagedPath, want)
+	}
+	data, err := os.ReadFile(stagedPath)
+	if err != nil {
+		t.Fatalf("read staged file: %v", err)
+	}
+	if got, want := string(data), "seeded instructions"; got != want {
+		t.Fatalf("staged file content = %q, want %q", got, want)
+	}
+
 	if err := cleanup(); err != nil {
 		t.Fatalf("cleanup() error = %v", err)
 	}
@@ -1401,11 +1469,11 @@ func TestRunCodexStagesAgentsPromptWithinTargetDir(t *testing.T) {
 		t.Fatalf("staged agents prompt path missing from prompt: %q", prompt)
 	}
 	stagedPath := strings.TrimSpace(matches[1])
-	if !strings.HasPrefix(stagedPath, targetDir+string(filepath.Separator)+".moltenhub-agents-") {
-		t.Fatalf("staged agents path = %q, want under %q with .moltenhub-agents-*", stagedPath, targetDir)
+	if got, want := stagedPath, "./AGENTS.md"; got != want {
+		t.Fatalf("staged agents path = %q, want %q", got, want)
 	}
-	if _, err := os.Stat(stagedPath); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("staged agents file still exists after codex run: err=%v", err)
+	if _, err := os.Stat(filepath.Join(targetDir, "AGENTS.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("target AGENTS.md still exists after codex run: err=%v", err)
 	}
 }
 

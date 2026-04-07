@@ -373,6 +373,21 @@ func TestApplyDefaultsTrimsGeneratedSuffixFromCustomPRTitle(t *testing.T) {
 	}
 }
 
+func TestApplyDefaultsTrimsGeneratedSuffixWithShortHashFromCustomPRTitle(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		RepoURL: "git@github.com:acme/repo.git",
+		Prompt:  "fix tests",
+		PRTitle: "moltenhub-if-repo-history-is-being-used-the-text-b-20260407-002959-2fc3c",
+	}
+	cfg.ApplyDefaults()
+
+	if got, want := cfg.PRTitle, "moltenhub-if-repo-history-is-being-used-the-text-b"; got != want {
+		t.Fatalf("PRTitle = %q, want %q", got, want)
+	}
+}
+
 func TestApplyDefaultsTrimsGeneratedSuffixFromDefaultPRTitle(t *testing.T) {
 	t.Parallel()
 
@@ -383,6 +398,21 @@ func TestApplyDefaultsTrimsGeneratedSuffixFromDefaultPRTitle(t *testing.T) {
 	cfg.ApplyDefaults()
 
 	if got, want := cfg.PRTitle, "moltenhub-queue-dedup-needs-to-be-repo-base-branc"; got != want {
+		t.Fatalf("PRTitle = %q, want %q", got, want)
+	}
+}
+
+func TestApplyDefaultsTrimsGeneratedSuffixWithoutHashFromCustomPRTitle(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		RepoURL: "git@github.com:acme/repo.git",
+		Prompt:  "fix tests",
+		PRTitle: "moltenhub-release-cleanup-20260407-002959",
+	}
+	cfg.ApplyDefaults()
+
+	if got, want := cfg.PRTitle, "moltenhub-release-cleanup"; got != want {
 		t.Fatalf("PRTitle = %q, want %q", got, want)
 	}
 }

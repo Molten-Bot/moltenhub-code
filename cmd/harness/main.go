@@ -22,9 +22,7 @@ import (
 	"github.com/jef/moltenhub-code/internal/multiplex"
 )
 
-const failureFollowUpFallbackRepoURL = "git@github.com:jefking/moltenhub-code.git"
-
-const maxFailureFollowUpLogExcerptChars = 8000
+const failureFollowUpRequiredPrompt = "Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."
 
 func main() {
 	os.Exit(run())
@@ -307,6 +305,14 @@ func runHub(args []string) int {
 	}
 	queueFailureFollowUp = func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config) {
 		followUpCfg := failureFollowUpRunConfig(failedRequestID, failedResult, failedRunCfg, logRoot)
+		if len(followUpCfg.RepoList()) == 0 {
+			daemonLogger(
+				"dispatch status=warn action=queue_failure_followup request_id=%s err=%q",
+				failedRequestID,
+				"no failed-task repo found for follow-up",
+			)
+			return
+		}
 		followUpRequestID, followUpErr := enqueueLocalRun(ctx, followUpCfg, false, "failure_followup")
 		if followUpErr != nil {
 			daemonLogger(
@@ -460,50 +466,34 @@ func failureFollowUpRunConfig(
 ) config.Config {
 	logPaths := taskLogPaths(logRoot, failedRequestID)
 	return config.Config{
-		Repos:        failureFollowUpRepos(failedRunCfg),
+		Repos:        failureFollowUpRepos(failedResult, failedRunCfg),
 		BaseBranch:   "main",
 		TargetSubdir: ".",
-		Prompt:       failureFollowUpPrompt(failedRequestID, failedResult, logPaths, failureFollowUpLogExcerpt(logPaths)),
+		Prompt:       failureFollowUpPrompt(logPaths),
 	}
 }
 
-func failureFollowUpRepos(failedRunCfg config.Config) []string {
-	repos := failedRunCfg.RepoList()
-	seen := make(map[string]struct{}, len(repos))
-	normalized := make([]string, 0, len(repos))
-	for _, repo := range repos {
+func failureFollowUpRepos(failedResult harness.Result, failedRunCfg config.Config) []string {
+	for _, repo := range failedRunCfg.RepoList() {
 		repo = strings.TrimSpace(repo)
 		if repo == "" {
 			continue
 		}
-		if _, exists := seen[repo]; exists {
+		return []string{repo}
+	}
+	for _, repoResult := range failedResult.RepoResults {
+		repo := strings.TrimSpace(repoResult.RepoURL)
+		if repo == "" {
 			continue
 		}
-		seen[repo] = struct{}{}
-		normalized = append(normalized, repo)
+		return []string{repo}
 	}
-	if len(normalized) > 0 {
-		return normalized
-	}
-	return []string{failureFollowUpFallbackRepoURL}
+	return nil
 }
 
-func failureFollowUpPrompt(failedRequestID string, failedResult harness.Result, logPaths []string, logExcerpt string) string {
+func failureFollowUpPrompt(logPaths []string) string {
 	var b strings.Builder
-	b.WriteString("Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results.")
-
-	if id := strings.TrimSpace(failedRequestID); id != "" {
-		b.WriteString("\n\nFailed request ID: ")
-		b.WriteString(id)
-	}
-	if failedResult.Err != nil {
-		b.WriteString("\nFailure summary: ")
-		b.WriteString(strings.TrimSpace(failedResult.Err.Error()))
-	}
-	if workspace := strings.TrimSpace(failedResult.WorkspaceDir); workspace != "" {
-		b.WriteString("\nFailed workspace path: ")
-		b.WriteString(workspace)
-	}
+	b.WriteString(failureFollowUpRequiredPrompt)
 
 	b.WriteString("\n\nRelevant failing log path(s):")
 	if len(logPaths) == 0 {
@@ -517,69 +507,6 @@ func failureFollowUpPrompt(failedRequestID string, failedResult harness.Result, 
 			b.WriteString("\n- ")
 			b.WriteString(trimmed)
 		}
-	}
-
-	if excerpt := strings.TrimSpace(logExcerpt); excerpt != "" {
-		b.WriteString("\n\nCaptured log excerpt(s):")
-		b.WriteString("\n```text\n")
-		b.WriteString(excerpt)
-		if !strings.HasSuffix(excerpt, "\n") {
-			b.WriteString("\n")
-		}
-		b.WriteString("```")
-	}
-
-	b.WriteString("\n\nRequired outcome:")
-	b.WriteString("\n- Start by reading the log paths above.")
-	b.WriteString("\n- Use the captured log excerpts below when direct filesystem access to the original logs is unavailable.")
-	b.WriteString("\n- Fix all underlying issues in code/tests/workflows; do not apply superficial bandaids.")
-	b.WriteString("\n- Treat every error in the referenced logs as actionable until you have either fixed it or proven it is not causal.")
-	b.WriteString("\n- Validate the fixes locally where possible and summarize what was verified.")
-
-	return strings.TrimSpace(b.String())
-}
-
-func failureFollowUpLogExcerpt(logPaths []string) string {
-	var b strings.Builder
-	remaining := maxFailureFollowUpLogExcerptChars
-
-	for _, path := range logPaths {
-		path = strings.TrimSpace(path)
-		if path == "" || remaining <= 0 {
-			continue
-		}
-
-		info, err := os.Stat(path)
-		if err != nil || info.IsDir() {
-			continue
-		}
-
-		content, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-
-		text := strings.TrimSpace(string(content))
-		if text == "" {
-			continue
-		}
-
-		if len(text) > remaining {
-			text = text[len(text)-remaining:]
-			if idx := strings.IndexByte(text, '\n'); idx >= 0 && idx+1 < len(text) {
-				text = text[idx+1:]
-			}
-		}
-
-		section := fmt.Sprintf("==> %s <==\n%s\n", path, text)
-		if len(section) > remaining {
-			section = section[len(section)-remaining:]
-			if idx := strings.IndexByte(section, '\n'); idx >= 0 && idx+1 < len(section) {
-				section = section[idx+1:]
-			}
-		}
-		b.WriteString(section)
-		remaining = maxFailureFollowUpLogExcerptChars - b.Len()
 	}
 
 	return strings.TrimSpace(b.String())

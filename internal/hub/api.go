@@ -148,7 +148,9 @@ func (c APIClient) SyncProfile(ctx context.Context, token string, cfg InitConfig
 	if handle := strings.TrimSpace(cfg.Handle); handle != "" {
 		handleBody := map[string]any{"handle": handle}
 		ok, trace := c.tryAny(ctx, token, []apiAttempt{
+			{Method: http.MethodPost, Path: "/agents/me/metadata", Body: handleBody},
 			{Method: http.MethodPatch, Path: "/agents/me/metadata", Body: handleBody},
+			{Method: http.MethodPost, Path: "/agents/me", Body: handleBody},
 			{Method: http.MethodPatch, Path: "/agents/me", Body: handleBody},
 		})
 		if !ok {
@@ -158,7 +160,9 @@ func (c APIClient) SyncProfile(ctx context.Context, token string, cfg InitConfig
 
 	metadata := buildAgentMetadata(cfg)
 	ok, trace := c.tryAny(ctx, token, []apiAttempt{
+		{Method: http.MethodPost, Path: "/agents/me/metadata", Body: map[string]any{"metadata": metadata}},
 		{Method: http.MethodPatch, Path: "/agents/me/metadata", Body: map[string]any{"metadata": metadata}},
+		{Method: http.MethodPost, Path: "/agents/me", Body: map[string]any{"metadata": metadata}},
 		{Method: http.MethodPatch, Path: "/agents/me", Body: map[string]any{"metadata": metadata}},
 	})
 	if !ok {
@@ -196,6 +200,7 @@ func (c APIClient) UpdateAgentStatus(ctx context.Context, token, status string) 
 
 // RegisterRuntime sends plugin/runtime metadata to hub.
 func (c APIClient) RegisterRuntime(ctx context.Context, token string, cfg InitConfig, libraryTasks []library.TaskSummary) error {
+	runtimeSkill := runtimeSkillConfig()
 	libraryNames := make([]string, 0, len(libraryTasks))
 	for _, task := range libraryTasks {
 		name := strings.TrimSpace(task.Name)
@@ -210,9 +215,9 @@ func (c APIClient) RegisterRuntime(ctx context.Context, token string, cfg InitCo
 		"runtime_id":  runtimeIdentifier,
 		"session_key": cfg.SessionKey,
 		"skills": []map[string]any{{
-			"name":          cfg.Skill.Name,
-			"dispatch_type": cfg.Skill.DispatchType,
-			"result_type":   cfg.Skill.ResultType,
+			"name":          runtimeSkill.Name,
+			"dispatch_type": runtimeSkill.DispatchType,
+			"result_type":   runtimeSkill.ResultType,
 			"metadata": map[string]any{
 				"run_config_modes":    []string{"prompt", "library_task"},
 				"library_task_names":  libraryNames,
@@ -728,40 +733,32 @@ func truncateBody(body []byte) string {
 }
 
 func buildAgentMetadata(cfg InitConfig) map[string]any {
-	metadata := map[string]any{}
-	for k, v := range cfg.Profile.Metadata {
-		metadata[k] = v
+	metadata := map[string]any{
+		"agent_type": normalizeAgentType(nil),
+		"runtime":    runtimeIdentifier,
+		"harness":    runtimeIdentifier + "@v1",
 	}
 
-	metadata["agent_type"] = normalizeAgentType(metadata["agent_type"])
-	if _, ok := metadata["runtime"]; !ok {
-		metadata["runtime"] = runtimeIdentifier
-	}
-	if _, ok := metadata["harness"]; !ok {
-		metadata["harness"] = runtimeIdentifier + "@v1"
-	}
-
-	if _, ok := metadata["display_name"]; !ok && strings.TrimSpace(cfg.Profile.DisplayName) != "" {
+	if strings.TrimSpace(cfg.Profile.DisplayName) != "" {
 		metadata["display_name"] = strings.TrimSpace(cfg.Profile.DisplayName)
 	}
-	if _, ok := metadata["emoji"]; !ok && strings.TrimSpace(cfg.Profile.Emoji) != "" {
+	if strings.TrimSpace(cfg.Profile.Emoji) != "" {
 		metadata["emoji"] = strings.TrimSpace(cfg.Profile.Emoji)
 	}
-	if _, ok := metadata["bio"]; !ok && strings.TrimSpace(cfg.Profile.Bio) != "" {
+	if strings.TrimSpace(cfg.Profile.Bio) != "" {
 		metadata["bio"] = strings.TrimSpace(cfg.Profile.Bio)
 	}
-	if _, ok := metadata["profile_markdown"]; !ok {
-		if markdown := buildProfileMarkdown(cfg.Profile.DisplayName, cfg.Profile.Emoji, cfg.Profile.Bio); markdown != "" {
-			metadata["profile_markdown"] = markdown
-		}
+	if markdown := buildProfileMarkdown(cfg.Profile.DisplayName, cfg.Profile.Emoji, cfg.Profile.Bio); markdown != "" {
+		metadata["profile_markdown"] = markdown
 	}
 	metadata["public"] = true
 	metadata["is_public"] = true
 	metadata[agentVisibilityKey] = agentVisibilityValue
 
-	fallbackName := normalizeSkillName(cfg.Skill.Name)
-	fallbackDescription := skillDescription(cfg.Skill)
-	metadata["skills"] = normalizeSkillsMetadata(metadata["skills"], fallbackName, fallbackDescription)
+	runtimeSkill := runtimeSkillConfig()
+	fallbackName := normalizeSkillName(runtimeSkill.Name)
+	fallbackDescription := skillDescription(runtimeSkill)
+	metadata["skills"] = normalizeSkillsMetadata(nil, fallbackName, fallbackDescription)
 
 	return metadata
 }

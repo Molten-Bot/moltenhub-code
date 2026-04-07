@@ -184,6 +184,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function isMinimizedTask(") {
 		t.Fatalf("expected index html to include completed-task minimization handler")
 	}
+	if !strings.Contains(markup, "if (task.request_id === MAIN_TASK_ID) return true;") {
+		t.Fatalf("expected index html to collapse the main thread task by default")
+	}
 	if !strings.Contains(markup, `"task-collapsed"`) {
 		t.Fatalf("expected index html to include collapsed task class usage")
 	}
@@ -196,8 +199,23 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="task-fullscreen-list"`) {
 		t.Fatalf("expected index html to include full screen task list")
 	}
+	if !strings.Contains(markup, `id="task-fullscreen-body"`) {
+		t.Fatalf("expected index html to include full screen task body wrapper")
+	}
+	if !strings.Contains(markup, `id="task-fullscreen-output-panel"`) {
+		t.Fatalf("expected index html to include full screen output panel wrapper")
+	}
 	if !strings.Contains(markup, `id="task-fullscreen-terminal"`) {
 		t.Fatalf("expected index html to include full screen terminal output")
+	}
+	if !strings.Contains(markup, "function sortTasksByActivity(") {
+		t.Fatalf("expected index html to include activity-based task sorting for list rendering")
+	}
+	if !strings.Contains(markup, "taskFullscreenBody.classList.toggle(\"task-output-hidden\", !outputVisible);") {
+		t.Fatalf("expected index html to include full screen task-only mode when output is hidden")
+	}
+	if !strings.Contains(markup, "setTerminalOutputOpen(task.request_id, nextOpen);") {
+		t.Fatalf("expected index html to open full terminal output from task Open Output action")
 	}
 	if !strings.Contains(markup, `id="local-conn-text"`) {
 		t.Fatalf("expected index html to include local connection indicator")
@@ -247,12 +265,18 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="builder-repo-input" class="prompt-control prompt-input"`) || !strings.Contains(markup, `id="builder-target-subdir" class="prompt-control prompt-input"`) {
 		t.Fatalf("expected index html to include builder repo and target subdir inputs")
 	}
+	if !strings.Contains(markup, `id="builder-base-branch-clear"`) {
+		t.Fatalf("expected index html to include branch clear action")
+	}
 	if !strings.Contains(markup, `class="prompt-grid"`) ||
 		!strings.Contains(markup, `id="builder-repo-history-field" class="prompt-field prompt-field-repo-history"`) ||
 		!strings.Contains(markup, `class="prompt-field prompt-field-repository"`) ||
 		!strings.Contains(markup, `class="prompt-field prompt-field-base-branch"`) ||
 		!strings.Contains(markup, `class="prompt-field prompt-field-target-subdir"`) {
 		t.Fatalf("expected index html to include the builder row with explicit field layout classes")
+	}
+	if !strings.Contains(markup, "function syncBaseBranchClearState(") || !strings.Contains(markup, "builderBaseBranchClear.addEventListener(\"click\", resetBaseBranchToMain);") {
+		t.Fatalf("expected index html to include branch clear behavior")
 	}
 	if !strings.Contains(markup, `historyField.classList.toggle("hidden", !hasSavedHistory);`) {
 		t.Fatalf("expected index html to hide repo history when there are no saved repos")
@@ -341,6 +365,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".task-fullscreen") {
 		t.Fatalf("expected stylesheet to include full screen task layout styles")
+	}
+	if !strings.Contains(css, ".task-fullscreen-body.task-output-hidden") {
+		t.Fatalf("expected stylesheet to include full screen hidden-output task layout styles")
 	}
 	if !strings.Contains(css, ".task.task-collapsed") {
 		t.Fatalf("expected stylesheet to include collapsed task styles")

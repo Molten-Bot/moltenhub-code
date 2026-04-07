@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MoltenHub Code</title>
+  <title>Molten Hub</title>
   <script>
     window.__HUB_UI_CONFIG__ = {"automaticMode":false};
   </script>
@@ -47,8 +47,8 @@
           src="https://molten.bot/logo.svg"
           alt="MoltenHub logo">
         <div>
-          <div class="title text-[1.4rem] font-bold uppercase tracking-[0.04em]">MoltenHub Code</div>
-          <div class="sub text-sm text-hub-muted">Live task status + terminal output</div>
+          <div class="title text-[1.4rem] font-bold uppercase tracking-[0.04em]">Molten Hub</div>
+          <div class="sub text-sm text-hub-muted">Codex is now a 300LB Gorilla</div>
         </div>
       </div>
       <div class="status-row flex flex-wrap items-center gap-2.5 text-sm text-hub-muted">
@@ -112,7 +112,16 @@
                 </label>
                 <label class="prompt-field prompt-field-base-branch">
                   <span class="prompt-label">Branch</span>
-                  <input id="builder-base-branch" class="prompt-control prompt-input" type="text" value="main" spellcheck="false" placeholder="main">
+                  <span class="prompt-input-action-wrap">
+                    <input id="builder-base-branch" class="prompt-control prompt-input" type="text" value="main" spellcheck="false" placeholder="main">
+                    <button
+                      id="builder-base-branch-clear"
+                      class="prompt-input-action"
+                      type="button"
+                      aria-label="Reset branch to main"
+                      title="Already on main"
+                      disabled>X</button>
+                  </span>
                 </label>
                 <label class="prompt-field prompt-field-target-subdir">
                   <span class="prompt-label">Directory</span>
@@ -220,7 +229,7 @@
         </div>
         <button id="task-fullscreen-close" class="task-fullscreen-toggle" type="button">Close</button>
       </div>
-      <div class="task-fullscreen-body">
+      <div id="task-fullscreen-body" class="task-fullscreen-body task-output-hidden">
         <section class="panel task-fullscreen-panel">
           <div class="panel-header">
             <span>Running State</span>
@@ -230,7 +239,7 @@
             <div id="task-fullscreen-list" class="task-list"></div>
           </div>
         </section>
-        <section class="panel log-wrap task-fullscreen-panel">
+        <section id="task-fullscreen-output-panel" class="panel log-wrap task-fullscreen-panel task-fullscreen-output-panel hidden" aria-hidden="true">
           <div class="task-head">
             <span id="task-fullscreen-head-label" class="min-w-0 flex-1 truncate">Select a task to inspect logs</span>
             <button id="task-fullscreen-terminal-toggle" class="task-terminal-toggle" type="button">Open Output</button>
@@ -347,9 +356,11 @@
     const taskList = document.getElementById("task-list");
     const taskFullscreenToggle = document.getElementById("task-fullscreen-toggle");
     const taskFullscreen = document.getElementById("task-fullscreen");
+    const taskFullscreenBody = document.getElementById("task-fullscreen-body");
     const taskFullscreenClose = document.getElementById("task-fullscreen-close");
     const taskFullscreenCount = document.getElementById("task-fullscreen-count");
     const taskFullscreenList = document.getElementById("task-fullscreen-list");
+    const taskFullscreenOutputPanel = document.getElementById("task-fullscreen-output-panel");
     const taskFullscreenHeadLabel = document.getElementById("task-fullscreen-head-label");
     const taskFullscreenTerminalToggle = document.getElementById("task-fullscreen-terminal-toggle");
     const taskFullscreenResult = document.getElementById("task-fullscreen-result");
@@ -371,8 +382,10 @@
     const promptRawPanel = document.getElementById("prompt-raw-panel");
     const builderRepoSelect = document.getElementById("builder-repo-select");
     const builderRepoHistoryField = document.getElementById("builder-repo-history-field");
+    const builderRepositoryField = document.querySelector(".prompt-field-repository");
     const builderRepoInput = document.getElementById("builder-repo-input");
     const builderBaseBranch = document.getElementById("builder-base-branch");
+    const builderBaseBranchClear = document.getElementById("builder-base-branch-clear");
     const builderTargetSubdir = document.getElementById("builder-target-subdir");
     const builderPromptInput = document.getElementById("builder-prompt-input");
     const builderImagePasteTarget = document.getElementById("builder-image-paste-target");
@@ -812,6 +825,36 @@
       }
     }
 
+    function syncBaseBranchClearState() {
+      if (!builderBaseBranchClear) return;
+      const branch = String(builderBaseBranch.value || "").trim();
+      const isMain = branch === "" || branch === "main";
+      builderBaseBranchClear.disabled = isMain;
+      builderBaseBranchClear.title = isMain ? "Already on main" : "Reset to main";
+    }
+
+    function resetBaseBranchToMain() {
+      builderBaseBranch.value = "main";
+      libraryBaseBranch.value = "main";
+      syncBaseBranchClearState();
+      if (state.promptMode === "json") {
+        try {
+          syncRawFromMode("builder");
+        } catch (_err) {
+          // Leave raw editor unchanged if builder fields are incomplete.
+        }
+      }
+      builderBaseBranch.focus();
+    }
+
+    function syncBuilderRepositoryVisibility() {
+      const hasSavedHistory = state.repoHistory.length > 0;
+      const usingRepoHistory = normalizeRepoValue(builderRepoSelect.value) !== "";
+      if (builderRepositoryField) {
+        builderRepositoryField.classList.toggle("hidden", hasSavedHistory && usingRepoHistory);
+      }
+    }
+
     function persistPromptMode() {
       try {
         localStorage.setItem(PROMPT_MODE_KEY, state.promptMode);
@@ -890,6 +933,7 @@
       builderBaseBranch.value = branch;
       libraryRepoInput.value = repo;
       libraryBaseBranch.value = branch;
+      syncBaseBranchClearState();
       builderTargetSubdir.value = String(payload.target_subdir || ".").trim() || ".";
       builderPromptInput.value = String(payload.prompt || "").trim();
       setPromptImages(payload.images);
@@ -916,6 +960,7 @@
       }
 
       const currentValue = normalizeRepoValue(input.value);
+      const selectedValue = normalizeRepoValue(select.value);
       const unique = dedupeRepoValues([currentValue, ...state.repoHistory]);
       const hasSavedHistory = state.repoHistory.length > 0;
 
@@ -935,11 +980,15 @@
         select.appendChild(option);
       }
 
-      if (currentValue && unique.includes(currentValue)) {
+      if (selectedValue && unique.includes(selectedValue)) {
+        select.value = selectedValue;
+      } else if (currentValue && unique.includes(currentValue)) {
         select.value = currentValue;
       } else {
         select.value = "";
       }
+
+      syncBuilderRepositoryVisibility();
     }
 
     function renderRepoHistoryOptions() {
@@ -1140,6 +1189,8 @@
     }
 
     function isMinimizedTask(task) {
+      if (!task) return false;
+      if (task.request_id === MAIN_TASK_ID) return true;
       return isCompletedTask(task);
     }
 
@@ -1149,15 +1200,21 @@
       return state.expandedTaskOutputIDs.has(requestID);
     }
 
+    function setTaskOutputOpen(requestID, open) {
+      requestID = String(requestID || "").trim();
+      if (!requestID) return;
+      if (open) {
+        state.expandedTaskOutputIDs.add(requestID);
+      } else {
+        state.expandedTaskOutputIDs.delete(requestID);
+      }
+      render(state.snapshot);
+    }
+
     function toggleTaskOutput(requestID) {
       requestID = String(requestID || "").trim();
       if (!requestID) return;
-      if (state.expandedTaskOutputIDs.has(requestID)) {
-        state.expandedTaskOutputIDs.delete(requestID);
-      } else {
-        state.expandedTaskOutputIDs.add(requestID);
-      }
-      render(state.snapshot);
+      setTaskOutputOpen(requestID, !state.expandedTaskOutputIDs.has(requestID));
     }
 
     function isTerminalOutputOpen(requestID) {
@@ -1166,15 +1223,21 @@
       return state.openTerminalTaskIDs.has(requestID);
     }
 
+    function setTerminalOutputOpen(requestID, open) {
+      requestID = String(requestID || "").trim();
+      if (!requestID) return;
+      if (open) {
+        state.openTerminalTaskIDs.add(requestID);
+      } else {
+        state.openTerminalTaskIDs.delete(requestID);
+      }
+      render(state.snapshot);
+    }
+
     function toggleTerminalOutput(requestID) {
       requestID = String(requestID || "").trim();
       if (!requestID) return;
-      if (state.openTerminalTaskIDs.has(requestID)) {
-        state.openTerminalTaskIDs.delete(requestID);
-      } else {
-        state.openTerminalTaskIDs.add(requestID);
-      }
-      render(state.snapshot);
+      setTerminalOutputOpen(requestID, !state.openTerminalTaskIDs.has(requestID));
     }
 
     function setTaskFullscreen(open) {
@@ -1309,6 +1372,39 @@
       }
     }
 
+    function parseTaskTimestamp(iso) {
+      const ts = new Date(String(iso || "")).getTime();
+      if (!Number.isFinite(ts)) return 0;
+      return ts;
+    }
+
+    function taskActivityRank(task) {
+      const status = String(task?.status || "").toLowerCase();
+      if (status === "running") return 0;
+      if (status === "pending" || status === "active") return 1;
+      if (status === "error" || status === "invalid") return 2;
+      if (status === "duplicate") return 3;
+      if (status === "ok" || status === "no_changes") return 4;
+      return 5;
+    }
+
+    function sortTasksByActivity(tasks) {
+      const out = Array.isArray(tasks) ? [...tasks] : [];
+      out.sort((a, b) => {
+        const rankDiff = taskActivityRank(a) - taskActivityRank(b);
+        if (rankDiff !== 0) return rankDiff;
+
+        const updatedDiff = parseTaskTimestamp(b?.updated_at) - parseTaskTimestamp(a?.updated_at);
+        if (updatedDiff !== 0) return updatedDiff;
+
+        const startedDiff = parseTaskTimestamp(b?.started_at) - parseTaskTimestamp(a?.started_at);
+        if (startedDiff !== 0) return startedDiff;
+
+        return String(b?.request_id || "").localeCompare(String(a?.request_id || ""));
+      });
+      return out;
+    }
+
     function displayTasks(snapshot) {
       const events = snapshot.events || [];
       const mainLogs = [];
@@ -1356,7 +1452,7 @@
         return !isCompletedTask(task);
       });
 
-      return [mainTask, ...taskItems];
+      return [mainTask, ...sortTasksByActivity(taskItems)];
     }
 
     function fullscreenTasks(snapshot) {
@@ -1581,7 +1677,10 @@
         outputToggle.title = outputExpanded ? "Hide task output preview" : "Show task output preview";
         outputToggle.addEventListener("click", (event) => {
           event.stopPropagation();
-          toggleTaskOutput(task.request_id);
+          const nextOpen = !isTaskOutputExpanded(task);
+          selectTask(task.request_id);
+          setTaskOutputOpen(task.request_id, nextOpen);
+          setTerminalOutputOpen(task.request_id, nextOpen);
         });
         topActions.appendChild(outputToggle);
 
@@ -1726,7 +1825,19 @@
     }
 
     function renderFullscreenTerminal(snapshot) {
-      renderTerminalForTasks(fullscreenTasks(snapshot), taskFullscreenHeadLabel, taskFullscreenTerminalToggle, taskFullscreenResult, taskFullscreenTerminal);
+      const tasks = fullscreenTasks(snapshot);
+      const selected = tasks.find((task) => task.request_id === state.selectedTaskId);
+      const outputVisible = Boolean(selected && isTerminalOutputOpen(selected.request_id));
+
+      if (taskFullscreenBody) {
+        taskFullscreenBody.classList.toggle("task-output-hidden", !outputVisible);
+      }
+      if (taskFullscreenOutputPanel) {
+        taskFullscreenOutputPanel.classList.toggle("hidden", !outputVisible);
+        taskFullscreenOutputPanel.setAttribute("aria-hidden", outputVisible ? "false" : "true");
+      }
+
+      renderTerminalForTasks(tasks, taskFullscreenHeadLabel, taskFullscreenTerminalToggle, taskFullscreenResult, taskFullscreenTerminal);
     }
 
     function render(snapshot) {
@@ -1872,21 +1983,30 @@
 
     builderRepoInput.addEventListener("input", () => {
       libraryRepoInput.value = builderRepoInput.value;
+      if (normalizeRepoValue(builderRepoSelect.value) !== "") {
+        builderRepoSelect.value = "";
+      }
       renderRepoHistoryOptions();
     });
 
     libraryRepoInput.addEventListener("input", () => {
       builderRepoInput.value = libraryRepoInput.value;
+      if (normalizeRepoValue(libraryRepoSelect.value) !== "") {
+        libraryRepoSelect.value = "";
+      }
       renderRepoHistoryOptions();
     });
 
     builderBaseBranch.addEventListener("input", () => {
       libraryBaseBranch.value = builderBaseBranch.value;
+      syncBaseBranchClearState();
     });
 
     libraryBaseBranch.addEventListener("input", () => {
       builderBaseBranch.value = libraryBaseBranch.value;
+      syncBaseBranchClearState();
     });
+    builderBaseBranchClear.addEventListener("click", resetBaseBranchToMain);
 
     builderPromptInput.addEventListener("paste", handlePromptImagePaste);
     builderImagePasteTarget.addEventListener("paste", handlePromptImagePaste);
@@ -1950,6 +2070,7 @@
     renderRepoHistoryOptions();
     renderLibraryTaskOptions();
     renderPromptImages();
+    syncBaseBranchClearState();
     try {
       syncRawFromMode(state.promptMode === "library" ? "library" : "builder");
     } catch (_err) {

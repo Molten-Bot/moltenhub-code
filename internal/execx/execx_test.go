@@ -38,6 +38,9 @@ func TestOSRunnerRunFailure(t *testing.T) {
 	if !strings.Contains(res.Stderr, "boom") {
 		t.Fatalf("stderr = %q, want to contain boom", res.Stderr)
 	}
+	if !strings.Contains(err.Error(), "boom") {
+		t.Fatalf("error = %q, want to contain stderr summary", err)
+	}
 }
 
 func TestOSRunnerRunStreamEmitsLines(t *testing.T) {
@@ -71,5 +74,21 @@ func TestOSRunnerRunStreamEmitsLines(t *testing.T) {
 	want := []string{"stderr:err-one", "stdout:out-one", "stdout:out-two"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("streamed lines = %v, want %v", got, want)
+	}
+}
+
+func TestSummarizeOutputTailUsesLastNonEmptyLines(t *testing.T) {
+	t.Parallel()
+
+	got := summarizeOutputTail("\nfirst\n\nsecond\nthird\n")
+	want := "first | second | third"
+	if got != want {
+		t.Fatalf("summarizeOutputTail() = %q, want %q", got, want)
+	}
+
+	got = summarizeOutputTail("line-1\nline-2\nline-3\nline-4")
+	want = "line-2 | line-3 | line-4"
+	if got != want {
+		t.Fatalf("summarizeOutputTail(last 3) = %q, want %q", got, want)
 	}
 }

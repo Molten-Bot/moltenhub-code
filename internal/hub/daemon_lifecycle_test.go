@@ -16,11 +16,16 @@ func TestDaemonRunPublishesAgentLifecycleStatus(t *testing.T) {
 	type statusCall struct {
 		Status string
 	}
+	type metadataCall struct {
+		Method string
+		Path   string
+	}
 	var (
-		mu       sync.Mutex
-		statuses []statusCall
-		onlineCh = make(chan struct{})
-		once     sync.Once
+		mu            sync.Mutex
+		statuses      []statusCall
+		metadataCalls []metadataCall
+		onlineCh      = make(chan struct{})
+		once          sync.Once
 	)
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -30,6 +35,12 @@ func TestDaemonRunPublishesAgentLifecycleStatus(t *testing.T) {
 			_, _ = w.Write([]byte(`{"ok":true}`))
 			return
 		case "/v1/agents/me/metadata":
+			mu.Lock()
+			metadataCalls = append(metadataCalls, metadataCall{
+				Method: r.Method,
+				Path:   r.URL.Path,
+			})
+			mu.Unlock()
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
 			return
@@ -123,6 +134,15 @@ func TestDaemonRunPublishesAgentLifecycleStatus(t *testing.T) {
 	defer mu.Unlock()
 	if len(statuses) < 2 {
 		t.Fatalf("status calls = %d, want at least 2", len(statuses))
+	}
+	if len(metadataCalls) < 1 {
+		t.Fatalf("metadata calls = %d, want at least 1", len(metadataCalls))
+	}
+	if metadataCalls[0].Method != http.MethodPost {
+		t.Fatalf("first metadata method = %q, want %q", metadataCalls[0].Method, http.MethodPost)
+	}
+	if metadataCalls[0].Path != "/v1/agents/me/metadata" {
+		t.Fatalf("first metadata path = %q, want %q", metadataCalls[0].Path, "/v1/agents/me/metadata")
 	}
 	if statuses[0].Status != "online" {
 		t.Fatalf("first status = %q, want online", statuses[0].Status)
