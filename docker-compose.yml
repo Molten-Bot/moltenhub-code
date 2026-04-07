@@ -8,5 +8,5 @@ services:
     env_file:
       - .env
     volumes:
-      - ./docker/config:/workspace/config
+      - ./docker/config:/.moltenhub/
     command: ["with-config"]
