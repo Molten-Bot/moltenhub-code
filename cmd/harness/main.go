@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -27,6 +30,7 @@ const failureFollowUpRequiredPrompt = "Review the failing log paths first, ident
 const hubBootRecommendation = "Recommended: connect this runtime to Molten Hub at https://molten.bot/hub so agents can dispatch work to it."
 
 const hubBootDiagnosticTimeout = 10 * time.Second
+const hubPingDiagnosticTimeout = 5 * time.Second
 
 func main() {
 	os.Exit(run())
@@ -219,7 +223,10 @@ func runHub(args []string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	runHubBootDiagnostics(ctx, runner, daemonLogger, cfg)
+	if ok := runHubBootDiagnostics(ctx, runner, daemonLogger, cfg); !ok {
+		writeStderrLine(logger, "error: hub endpoint ping precheck failed; ensure <hub-host>/ping returns 2xx before connecting")
+		return harness.ExitPreflight
+	}
 
 	dispatchController := hub.NewAdaptiveDispatchController(cfg.Dispatcher, daemonLogger)
 	dispatchController.Start(ctx)
@@ -629,8 +636,8 @@ func marshalRunConfigJSON(cfg config.Config) ([]byte, bool) {
 
 type runtimeConfigLoader func() (hub.RuntimeConfig, error)
 
-func runHubBootDiagnostics(ctx context.Context, runner execx.Runner, logf func(string, ...any), cfg hub.InitConfig) {
-	runHubBootDiagnosticsWithRuntimeLoader(ctx, runner, logf, cfg, func() (hub.RuntimeConfig, error) {
+func runHubBootDiagnostics(ctx context.Context, runner execx.Runner, logf func(string, ...any), cfg hub.InitConfig) bool {
+	return runHubBootDiagnosticsWithRuntimeLoader(ctx, runner, logf, cfg, func() (hub.RuntimeConfig, error) {
 		return hub.LoadRuntimeConfig("")
 	})
 }
@@ -641,9 +648,9 @@ func runHubBootDiagnosticsWithRuntimeLoader(
 	logf func(string, ...any),
 	cfg hub.InitConfig,
 	loadRuntimeConfig runtimeConfigLoader,
-) {
+) bool {
 	if runner == nil || logf == nil {
-		return
+		return false
 	}
 
 	checks := []struct {
@@ -664,9 +671,10 @@ func runHubBootDiagnosticsWithRuntimeLoader(
 		},
 	}
 
-	logf("boot.diagnosis status=start checks=git_cli,gh_cli,codex_cli,gh_auth,moltenhub_hub")
+	logf("boot.diagnosis status=start checks=git_cli,gh_cli,codex_cli,gh_auth,moltenhub_ping,moltenhub_hub")
 
 	failedRequiredChecks := 0
+	pingOK := true
 	for _, check := range checks {
 		checkCtx, cancel := context.WithTimeout(ctx, hubBootDiagnosticTimeout)
 		res, err := runner.Run(checkCtx, check.cmd)
@@ -696,6 +704,22 @@ func runHubBootDiagnosticsWithRuntimeLoader(
 		logf("boot.diagnosis status=ok requirement=gh_auth detail=%q", diagnosticDetailForResult(authRes))
 	}
 
+	pingURL, pingURLErr := hubPingURL(cfg.BaseURL)
+	if pingURLErr != nil {
+		pingOK = false
+		logf("boot.diagnosis status=error requirement=moltenhub_ping err=%q", pingURLErr)
+	} else {
+		pingCtx, pingCancel := context.WithTimeout(ctx, hubPingDiagnosticTimeout)
+		pingDetail, pingErr := checkHubPing(pingCtx, pingURL)
+		pingCancel()
+		if pingErr != nil {
+			pingOK = false
+			logf("boot.diagnosis status=error requirement=moltenhub_ping err=%q", pingErr)
+		} else {
+			logf("boot.diagnosis status=ok requirement=moltenhub_ping detail=%q", pingDetail)
+		}
+	}
+
 	if hubCredentialsConfigured(cfg, loadRuntimeConfig) {
 		logf(
 			"boot.diagnosis status=ok requirement=moltenhub_hub detail=%q",
@@ -710,13 +734,14 @@ func runHubBootDiagnosticsWithRuntimeLoader(
 
 	if failedRequiredChecks == 0 {
 		logf("boot.diagnosis status=complete required_checks=ok")
-		return
+		return pingOK
 	}
 	logf(
 		"boot.diagnosis status=warn required_checks=failed count=%d recommendation=%q",
 		failedRequiredChecks,
 		"Install missing tools before running tasks: git, gh, codex.",
 	)
+	return pingOK
 }
 
 func diagnosticDetailForResult(res execx.Result) string {
@@ -736,6 +761,51 @@ func diagnosticDetailForResult(res execx.Result) string {
 		}
 	}
 	return "check completed"
+}
+
+func hubPingURL(baseURL string) (string, error) {
+	u, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil {
+		return "", fmt.Errorf("parse base url: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", fmt.Errorf("base url must use http or https")
+	}
+	if strings.TrimSpace(u.Host) == "" {
+		return "", fmt.Errorf("base url host is required")
+	}
+	u.Path = "/ping"
+	u.RawQuery = ""
+	u.Fragment = ""
+	return u.String(), nil
+}
+
+func checkHubPing(ctx context.Context, pingURL string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pingURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("build ping request: %w", err)
+	}
+
+	client := &http.Client{Timeout: hubPingDiagnosticTimeout}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("GET %s failed: %w", pingURL, err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
+	detail := fmt.Sprintf("%s status=%d", pingURL, resp.StatusCode)
+	if trimmed := strings.TrimSpace(string(body)); trimmed != "" {
+		trimmed = strings.Join(strings.Fields(trimmed), " ")
+		if len(trimmed) > 120 {
+			trimmed = trimmed[:117] + "..."
+		}
+		detail += fmt.Sprintf(" body=%q", trimmed)
+	}
+	if resp.StatusCode/100 != 2 {
+		return "", fmt.Errorf("GET %s returned status=%d", pingURL, resp.StatusCode)
+	}
+	return detail, nil
 }
 
 func hubCredentialsConfigured(cfg hub.InitConfig, loadRuntimeConfig runtimeConfigLoader) bool {

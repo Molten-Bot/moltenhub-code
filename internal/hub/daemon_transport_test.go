@@ -50,3 +50,43 @@ func TestShouldFallbackToPull(t *testing.T) {
 		})
 	}
 }
+
+func TestIsUnauthorizedHubError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "nil",
+			err:  nil,
+			want: false,
+		},
+		{
+			name: "pull status 401",
+			err:  errors.New("pull status=401"),
+			want: true,
+		},
+		{
+			name: "ws unauthorized",
+			err:  errors.New("websocket handshake status=401 body=unauthorized"),
+			want: true,
+		},
+		{
+			name: "network disconnect",
+			err:  errors.New("use of closed network connection"),
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := isUnauthorizedHubError(tt.err); got != tt.want {
+				t.Fatalf("isUnauthorizedHubError() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

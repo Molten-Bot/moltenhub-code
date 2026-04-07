@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -255,6 +257,16 @@ func TestFailureFollowUpReposReturnsNilWhenNoRepoFound(t *testing.T) {
 func TestRunHubBootDiagnosticsWithRuntimeLoader(t *testing.T) {
 	t.Parallel()
 
+	pingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/ping" {
+			http.NotFound(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	t.Cleanup(pingServer.Close)
+
 	runner := &stubExecRunner{
 		results: map[string]stubExecResult{
 			stubCommandKey(execx.Command{Name: "git", Args: []string{"--version"}}): {
@@ -278,22 +290,74 @@ func TestRunHubBootDiagnosticsWithRuntimeLoader(t *testing.T) {
 		logs = append(logs, fmt.Sprintf(format, args...))
 	}
 
-	runHubBootDiagnosticsWithRuntimeLoader(
+	if ok := runHubBootDiagnosticsWithRuntimeLoader(
 		context.Background(),
 		runner,
 		logf,
-		hub.InitConfig{BaseURL: "https://na.hub.molten.bot/v1"},
+		hub.InitConfig{BaseURL: pingServer.URL + "/v1"},
 		func() (hub.RuntimeConfig, error) {
 			return hub.RuntimeConfig{}, errors.New("missing runtime config")
 		},
-	)
+	); !ok {
+		t.Fatal("runHubBootDiagnosticsWithRuntimeLoader() = false, want true")
+	}
 
 	assertLogContains(t, logs, "boot.diagnosis status=ok requirement=git_cli")
 	assertLogContains(t, logs, "boot.diagnosis status=ok requirement=gh_cli")
 	assertLogContains(t, logs, "boot.diagnosis status=ok requirement=codex_cli")
 	assertLogContains(t, logs, "boot.diagnosis status=warn requirement=gh_auth")
+	assertLogContains(t, logs, "boot.diagnosis status=ok requirement=moltenhub_ping")
 	assertLogContains(t, logs, "boot.diagnosis status=recommendation requirement=moltenhub_hub")
 	assertLogContains(t, logs, "boot.diagnosis status=complete required_checks=ok")
+}
+
+func TestRunHubBootDiagnosticsWithRuntimeLoaderFailsWhenPingUnavailable(t *testing.T) {
+	t.Parallel()
+
+	pingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/ping" {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, "down", http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(pingServer.Close)
+
+	runner := &stubExecRunner{
+		results: map[string]stubExecResult{
+			stubCommandKey(execx.Command{Name: "git", Args: []string{"--version"}}): {
+				result: execx.Result{Stdout: "git version 2.47.1\n"},
+			},
+			stubCommandKey(execx.Command{Name: "gh", Args: []string{"--version"}}): {
+				result: execx.Result{Stdout: "gh version 2.61.0 (2026-01-15)\n"},
+			},
+			stubCommandKey(execx.Command{Name: "codex", Args: []string{"--help"}}): {
+				result: execx.Result{Stdout: "Codex CLI help\n"},
+			},
+			stubCommandKey(execx.Command{Name: "gh", Args: []string{"auth", "status"}}): {
+				result: execx.Result{Stdout: "Logged in to github.com as test\n"},
+			},
+		},
+	}
+
+	var logs []string
+	logf := func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	ok := runHubBootDiagnosticsWithRuntimeLoader(
+		context.Background(),
+		runner,
+		logf,
+		hub.InitConfig{BaseURL: pingServer.URL + "/v1"},
+		func() (hub.RuntimeConfig, error) {
+			return hub.RuntimeConfig{}, nil
+		},
+	)
+	if ok {
+		t.Fatal("runHubBootDiagnosticsWithRuntimeLoader() = true, want false")
+	}
+	assertLogContains(t, logs, "boot.diagnosis status=error requirement=moltenhub_ping")
 }
 
 func TestHubCredentialsConfigured(t *testing.T) {
@@ -328,6 +392,18 @@ func TestDiagnosticDetailForResult(t *testing.T) {
 	}
 	if got := diagnosticDetailForResult(execx.Result{}); got != "check completed" {
 		t.Fatalf("diagnosticDetailForResult(empty) = %q", got)
+	}
+}
+
+func TestHubPingURLUsesHostRootPingEndpoint(t *testing.T) {
+	t.Parallel()
+
+	got, err := hubPingURL("https://na.hub.molten.bot/v1")
+	if err != nil {
+		t.Fatalf("hubPingURL() error = %v", err)
+	}
+	if got != "https://na.hub.molten.bot/ping" {
+		t.Fatalf("hubPingURL() = %q, want %q", got, "https://na.hub.molten.bot/ping")
 	}
 }
 

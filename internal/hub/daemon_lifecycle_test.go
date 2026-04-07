@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -150,5 +151,76 @@ func TestDaemonRunPublishesAgentLifecycleStatus(t *testing.T) {
 	last := statuses[len(statuses)-1]
 	if last.Status != "offline" {
 		t.Fatalf("last status = %q, want offline", last.Status)
+	}
+}
+
+func TestDaemonRunReturnsAuthErrorWhenTransportIsUnauthorized(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/agents/me":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+			return
+		case "/v1/openclaw/messages/register-plugin":
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+			return
+		case "/v1/agents/me/metadata", "/v1/agents/me/status":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+			return
+		case "/v1/openclaw/messages/ws":
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		case "/v1/openclaw/messages/pull":
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+	}))
+	defer ts.Close()
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd() error = %v", err)
+	}
+	tmpDir := t.TempDir()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Chdir(%q) error = %v", tmpDir, err)
+	}
+	defer func() {
+		_ = os.Chdir(wd)
+	}()
+
+	d := NewDaemon(nil)
+	d.ReconnectDelay = 10 * time.Millisecond
+
+	cfg := InitConfig{
+		BaseURL:    ts.URL + "/v1",
+		AgentToken: "agent_token",
+		SessionKey: "main",
+		Skill: SkillConfig{
+			Name:         "code_for_me",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+		Dispatcher: DispatcherConfig{
+			MaxParallel: 1,
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err = d.Run(ctx, cfg)
+	if err == nil {
+		t.Fatal("Run() error = nil, want auth error")
+	}
+	if !strings.Contains(err.Error(), "hub auth: pull status=401") {
+		t.Fatalf("Run() error = %q, want pull unauthorized auth error", err)
 	}
 }

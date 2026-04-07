@@ -159,6 +159,9 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 				return nil
 			}
 			if err := d.pullOnce(ctx, api, token, cfg, dispatchController, &workers, deduper); err != nil {
+				if isUnauthorizedHubError(err) {
+					return fmt.Errorf("hub auth: %w", err)
+				}
 				d.logf("hub.pull status=error err=%q", err)
 				if !sleepWithContext(ctx, d.ReconnectDelay) {
 					return nil
@@ -182,6 +185,9 @@ func (d Daemon) runPullLoop(
 			return nil
 		}
 		if err := d.pullOnce(ctx, api, token, cfg, dispatchController, workers, deduper); err != nil {
+			if isUnauthorizedHubError(err) {
+				return fmt.Errorf("hub auth: %w", err)
+			}
 			d.logf("hub.pull status=error err=%q", err)
 			if !sleepWithContext(ctx, d.ReconnectDelay) {
 				return nil
@@ -418,6 +424,16 @@ func shouldFallbackToPull(err error) bool {
 		}
 	}
 	return true
+}
+
+func isUnauthorizedHubError(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.Contains(text, "status=401") ||
+		strings.Contains(text, "status 401") ||
+		strings.Contains(text, "unauthorized")
 }
 
 func dedupeKeyForDispatch(dispatch SkillDispatch, messageID, deliveryID string) string {

@@ -116,7 +116,10 @@ On startup, hub mode emits a boot diagnosis checklist for:
 - `gh` CLI availability
 - `codex` CLI availability
 - `gh auth` readiness
+- Hub endpoint health at `<base_url host>/ping` (must return `2xx` before connecting)
 - a Molten Hub connection recommendation (`https://molten.bot/hub`) when the runtime is not connected yet
+
+If the ping check fails, hub mode exits early instead of entering transport retry loops.
 
 ## UI
 
