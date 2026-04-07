@@ -422,8 +422,8 @@ func TestDispatchParseErrorPayloadIncludesRequiredSchema(t *testing.T) {
 	if !ok {
 		t.Fatalf("result missing or wrong type: %#v", payload["result"])
 	}
-	if _, ok := result["required_schema"]; !ok {
-		t.Fatalf("required_schema missing: %#v", result)
+	if _, ok := result["requiredSchema"]; !ok {
+		t.Fatalf("requiredSchema missing: %#v", result)
 	}
 }
 
@@ -468,19 +468,19 @@ func TestDispatchResultPayloadIncludesRepoResults(t *testing.T) {
 	if !ok {
 		t.Fatalf("result missing or wrong type: %#v", payload["result"])
 	}
-	prURLs, ok := result["pr_urls"].([]string)
+	prURLs, ok := result["prUrls"].([]string)
 	if !ok {
-		t.Fatalf("pr_urls missing or wrong type: %#v", result["pr_urls"])
+		t.Fatalf("prUrls missing or wrong type: %#v", result["prUrls"])
 	}
 	if len(prURLs) != 2 {
-		t.Fatalf("len(pr_urls) = %d, want 2", len(prURLs))
+		t.Fatalf("len(prUrls) = %d, want 2", len(prURLs))
 	}
-	repoResults, ok := result["repo_results"].([]map[string]any)
+	repoResults, ok := result["repoResults"].([]map[string]any)
 	if !ok {
-		t.Fatalf("repo_results missing or wrong type: %#v", result["repo_results"])
+		t.Fatalf("repoResults missing or wrong type: %#v", result["repoResults"])
 	}
 	if len(repoResults) != 2 {
-		t.Fatalf("len(repo_results) = %d, want 2", len(repoResults))
+		t.Fatalf("len(repoResults) = %d, want 2", len(repoResults))
 	}
 }
 

@@ -15,10 +15,10 @@ func TestParseSkillDispatchFromPayloadConfig(t *testing.T) {
 		"from":  "agent-alpha",
 		"payload": map[string]any{
 			"config": map[string]any{
-				"repo":          "git@github.com:acme/repo.git",
-				"base_branch":   "main",
-				"target_subdir": ".",
-				"prompt":        "update tests",
+				"repo":         "git@github.com:acme/repo.git",
+				"baseBranch":   "main",
+				"targetSubdir": ".",
+				"prompt":       "update tests",
 			},
 		},
 	}
@@ -286,8 +286,8 @@ func TestParseRunConfigJSON(t *testing.T) {
 
 	cfg, err := ParseRunConfigJSON([]byte(`{
 		"repo": "git@github.com:acme/repo.git",
-		"base_branch": "main",
-		"target_subdir": ".",
+		"baseBranch": "main",
+		"targetSubdir": ".",
 		"prompt": "make a change"
 	}`))
 	if err != nil {
@@ -307,6 +307,39 @@ func TestParseRunConfigJSON(t *testing.T) {
 	}
 }
 
+func TestParseRunConfigJSONSupportsLegacySnakeCaseAliases(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := ParseRunConfigJSON([]byte(`{
+		"repo_url": "git@github.com:acme/repo.git",
+		"base_branch": "main",
+		"target_subdir": ".",
+		"prompt": "make a change",
+		"github_handle": "@octocat",
+		"images": [
+			{"name":"shot.png","media_type":"image/png","data_base64":"aGVsbG8="}
+		]
+	}`))
+	if err != nil {
+		t.Fatalf("ParseRunConfigJSON() error = %v", err)
+	}
+	if got, want := cfg.RepoURL, "git@github.com:acme/repo.git"; got != want {
+		t.Fatalf("RepoURL = %q, want %q", got, want)
+	}
+	if got, want := cfg.BaseBranch, "main"; got != want {
+		t.Fatalf("BaseBranch = %q, want %q", got, want)
+	}
+	if got, want := cfg.TargetSubdir, "."; got != want {
+		t.Fatalf("TargetSubdir = %q, want %q", got, want)
+	}
+	if got, want := cfg.GitHubHandle, "octocat"; got != want {
+		t.Fatalf("GitHubHandle = %q, want %q", got, want)
+	}
+	if got, want := len(cfg.Images), 1; got != want {
+		t.Fatalf("len(Images) = %d, want %d", got, want)
+	}
+}
+
 func TestParseRunConfigJSONWithImages(t *testing.T) {
 	t.Parallel()
 
@@ -316,8 +349,8 @@ func TestParseRunConfigJSONWithImages(t *testing.T) {
 		"images": [
 			{
 				"name": "shot.png",
-				"media_type": "image/png",
-				"data_base64": "aGVsbG8="
+				"mediaType": "image/png",
+				"dataBase64": "aGVsbG8="
 			}
 		]
 	}`))
@@ -339,7 +372,7 @@ func TestParseRunConfigJSONExpandsLibraryTaskPayload(t *testing.T) {
 	cfg, err := ParseRunConfigJSON([]byte(`{
 		"repo": "git@github.com:acme/repo.git",
 		"branch": "release",
-		"library_task_name": "unit-test-coverage"
+		"libraryTaskName": "unit-test-coverage"
 	}`))
 	if err != nil {
 		t.Fatalf("ParseRunConfigJSON() error = %v", err)
@@ -361,12 +394,12 @@ func TestParseRunConfigJSONRejectsAmbiguousPromptAndLibraryTask(t *testing.T) {
 	_, err := ParseRunConfigJSON([]byte(`{
 		"repo": "git@github.com:acme/repo.git",
 		"prompt": "x",
-		"library_task_name": "unit-test-coverage"
+		"libraryTaskName": "unit-test-coverage"
 	}`))
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "cannot include both prompt and library_task_name") {
+	if !strings.Contains(err.Error(), "cannot include both prompt and libraryTaskName") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -397,8 +430,8 @@ func TestParseRunConfigJSONIgnoresUnknownFields(t *testing.T) {
 
 	cfg, err := ParseRunConfigJSON([]byte(`{
 		"repo": "git@github.com:acme/repo.git",
-		"base_branch": "main",
-		"target_subdir": ".",
+		"baseBranch": "main",
+		"targetSubdir": ".",
 		"prompt": "make a change",
 		"extra_field": {"ignored": true}
 	}`))
@@ -419,7 +452,7 @@ func TestParseRunConfigJSONSupportsGitHubHandleReviewer(t *testing.T) {
 	cfg, err := ParseRunConfigJSON([]byte(`{
 		"repo": "git@github.com:acme/repo.git",
 		"prompt": "make a change",
-		"github_handle": "@octocat"
+		"githubHandle": "@octocat"
 	}`))
 	if err != nil {
 		t.Fatalf("ParseRunConfigJSON() error = %v", err)

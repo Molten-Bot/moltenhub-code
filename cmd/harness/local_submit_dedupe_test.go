@@ -23,7 +23,7 @@ func TestDedupeKeyForRunConfigDefaultsBranchAndNormalizesRepos(t *testing.T) {
 	}
 
 	got := dedupeKeyForRunConfig(cfg)
-	want := `{"repos":["git@github.com:acme/repo.git","git@github.com:acme/repo-two.git"],"base_branch":"main","prompt_hash":"` + promptHashForTest("update docs") + `"}`
+	want := `{"repos":["git@github.com:acme/repo.git","git@github.com:acme/repo-two.git"],"baseBranch":"main","promptHash":"` + promptHashForTest("update docs") + `"}`
 	if got != want {
 		t.Fatalf("dedupeKeyForRunConfig() = %q, want %q", got, want)
 	}
@@ -70,7 +70,7 @@ func TestDedupeKeyForRunConfigNonMainIncludesPromptHash(t *testing.T) {
 		t.Fatalf("dedupe keys should differ when prompts differ\nA: %q\nB: %q", keyA, keyB)
 	}
 
-	want := `{"repos":["git@github.com:acme/repo.git"],"base_branch":"release/2026.04-hotfix","prompt_hash":"` + promptHashForTest("fix flaky test") + `"}`
+	want := `{"repos":["git@github.com:acme/repo.git"],"baseBranch":"release/2026.04-hotfix","promptHash":"` + promptHashForTest("fix flaky test") + `"}`
 	if keyA != want {
 		t.Fatalf("dedupeKeyForRunConfig() = %q, want %q", keyA, want)
 	}

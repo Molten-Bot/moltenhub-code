@@ -605,14 +605,14 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 	}
 
 	result := map[string]any{
-		"exit_code":     res.ExitCode,
-		"workspace_dir": res.WorkspaceDir,
-		"branch":        res.Branch,
-		"pr_url":        res.PRURL,
-		"pr_urls":       splitNonEmptyCSV(joinRepoPRURLs(res.RepoResults)),
-		"changed_repos": countChangedRepoResults(res.RepoResults),
-		"repo_results":  repoResultPayloads(res.RepoResults),
-		"no_changes":    res.NoChanges,
+		"exitCode":     res.ExitCode,
+		"workspaceDir": res.WorkspaceDir,
+		"branch":       res.Branch,
+		"prUrl":        res.PRURL,
+		"prUrls":       splitNonEmptyCSV(joinRepoPRURLs(res.RepoResults)),
+		"changedRepos": countChangedRepoResults(res.RepoResults),
+		"repoResults":  repoResultPayloads(res.RepoResults),
+		"noChanges":    res.NoChanges,
 	}
 	if res.Err != nil {
 		result["error"] = res.Err.Error()
@@ -688,11 +688,11 @@ func repoResultPayloads(results []harness.RepoResult) []map[string]any {
 	out := make([]map[string]any, 0, len(results))
 	for _, result := range results {
 		out = append(out, map[string]any{
-			"repo_url": result.RepoURL,
-			"repo_dir": result.RepoDir,
-			"branch":   result.Branch,
-			"pr_url":   result.PRURL,
-			"changed":  result.Changed,
+			"repoUrl": result.RepoURL,
+			"repoDir": result.RepoDir,
+			"branch":  result.Branch,
+			"prUrl":   result.PRURL,
+			"changed": result.Changed,
 		})
 	}
 	return out
@@ -794,7 +794,7 @@ func dispatchParseErrorPayload(cfg InitConfig, dispatch SkillDispatch, parseErr 
 	if result == nil {
 		result = map[string]any{}
 	}
-	result["required_schema"] = requiredSkillPayloadSchema(cfg.Skill.DispatchType, cfg.Skill.Name, currentLibraryTaskNames())
+	result["requiredSchema"] = requiredSkillPayloadSchema(cfg.Skill.DispatchType, cfg.Skill.Name, currentLibraryTaskNames())
 	payload["result"] = result
 	return payload
 }

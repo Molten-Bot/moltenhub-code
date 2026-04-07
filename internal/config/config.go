@@ -19,26 +19,99 @@ const prBodyFooter = "If you would like to connect agents together checkout [Mol
 // Config is the v1 public contract for a harness run.
 type Config struct {
 	Version       string        `json:"version"`
-	RepoURL       string        `json:"repo_url"`
+	RepoURL       string        `json:"repoUrl"`
 	Repo          string        `json:"repo"`
 	Repos         []string      `json:"repos"`
-	BaseBranch    string        `json:"base_branch"`
-	TargetSubdir  string        `json:"target_subdir"`
+	BaseBranch    string        `json:"baseBranch"`
+	TargetSubdir  string        `json:"targetSubdir"`
 	Prompt        string        `json:"prompt"`
 	Images        []PromptImage `json:"images,omitempty"`
-	CommitMessage string        `json:"commit_message"`
-	PRTitle       string        `json:"pr_title"`
-	PRBody        string        `json:"pr_body"`
+	CommitMessage string        `json:"commitMessage"`
+	PRTitle       string        `json:"prTitle"`
+	PRBody        string        `json:"prBody"`
 	Labels        []string      `json:"labels"`
-	GitHubHandle  string        `json:"github_handle"`
+	GitHubHandle  string        `json:"githubHandle"`
 	Reviewers     []string      `json:"reviewers"`
 }
 
 // PromptImage captures one prompt image attachment.
 type PromptImage struct {
 	Name       string `json:"name,omitempty"`
-	MediaType  string `json:"media_type,omitempty"`
-	DataBase64 string `json:"data_base64,omitempty"`
+	MediaType  string `json:"mediaType,omitempty"`
+	DataBase64 string `json:"dataBase64,omitempty"`
+}
+
+// UnmarshalJSON supports both canonical camelCase keys and legacy snake_case aliases.
+func (c *Config) UnmarshalJSON(data []byte) error {
+	type configAlias Config
+	var parsed configAlias
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+	*c = Config(parsed)
+
+	var legacy struct {
+		RepoURL       string `json:"repo_url"`
+		BaseBranch    string `json:"base_branch"`
+		Branch        string `json:"branch"`
+		TargetSubdir  string `json:"target_subdir"`
+		CommitMessage string `json:"commit_message"`
+		PRTitle       string `json:"pr_title"`
+		PRBody        string `json:"pr_body"`
+		GitHubHandle  string `json:"github_handle"`
+	}
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(c.RepoURL) == "" {
+		c.RepoURL = legacy.RepoURL
+	}
+	if strings.TrimSpace(c.BaseBranch) == "" {
+		c.BaseBranch = firstNonEmptyTrimmed(legacy.BaseBranch, legacy.Branch)
+	}
+	if strings.TrimSpace(c.TargetSubdir) == "" {
+		c.TargetSubdir = legacy.TargetSubdir
+	}
+	if strings.TrimSpace(c.CommitMessage) == "" {
+		c.CommitMessage = legacy.CommitMessage
+	}
+	if strings.TrimSpace(c.PRTitle) == "" {
+		c.PRTitle = legacy.PRTitle
+	}
+	if strings.TrimSpace(c.PRBody) == "" {
+		c.PRBody = legacy.PRBody
+	}
+	if strings.TrimSpace(c.GitHubHandle) == "" {
+		c.GitHubHandle = legacy.GitHubHandle
+	}
+
+	return nil
+}
+
+// UnmarshalJSON supports both canonical camelCase keys and legacy snake_case aliases.
+func (p *PromptImage) UnmarshalJSON(data []byte) error {
+	type imageAlias PromptImage
+	var parsed imageAlias
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+	*p = PromptImage(parsed)
+
+	var legacy struct {
+		MediaType  string `json:"media_type"`
+		DataBase64 string `json:"data_base64"`
+	}
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return err
+	}
+	if strings.TrimSpace(p.MediaType) == "" {
+		p.MediaType = legacy.MediaType
+	}
+	if strings.TrimSpace(p.DataBase64) == "" {
+		p.DataBase64 = legacy.DataBase64
+	}
+	return nil
 }
 
 // Load reads and validates a JSON/JSONC config from disk.
@@ -116,7 +189,7 @@ func (c Config) Validate() error {
 	}
 	repos := c.RepoList()
 	if len(repos) == 0 {
-		return fmt.Errorf("one of repo, repo_url, or repos[] is required")
+		return fmt.Errorf("one of repo, repoUrl, or repos[] is required")
 	}
 	for _, repo := range repos {
 		if err := validateRepoRef(repo); err != nil {
@@ -124,10 +197,10 @@ func (c Config) Validate() error {
 		}
 	}
 	if strings.TrimSpace(c.BaseBranch) == "" {
-		return fmt.Errorf("base_branch is required")
+		return fmt.Errorf("baseBranch is required")
 	}
 	if strings.TrimSpace(c.TargetSubdir) == "" {
-		return fmt.Errorf("target_subdir is required")
+		return fmt.Errorf("targetSubdir is required")
 	}
 	if err := validateSubdir(c.TargetSubdir); err != nil {
 		return err
@@ -141,13 +214,13 @@ func (c Config) Validate() error {
 		}
 	}
 	if strings.TrimSpace(c.CommitMessage) == "" {
-		return fmt.Errorf("commit_message is required")
+		return fmt.Errorf("commitMessage is required")
 	}
 	if strings.TrimSpace(c.PRTitle) == "" {
-		return fmt.Errorf("pr_title is required")
+		return fmt.Errorf("prTitle is required")
 	}
 	if strings.TrimSpace(c.PRBody) == "" {
-		return fmt.Errorf("pr_body is required")
+		return fmt.Errorf("prBody is required")
 	}
 	return nil
 }
@@ -188,13 +261,13 @@ func normalizePromptImages(images []PromptImage) []PromptImage {
 
 func validatePromptImage(image PromptImage, index int) error {
 	if image.DataBase64 == "" {
-		return fmt.Errorf("images[%d].data_base64 is required", index)
+		return fmt.Errorf("images[%d].dataBase64 is required", index)
 	}
 	if image.MediaType != "" && !strings.HasPrefix(strings.ToLower(image.MediaType), "image/") {
-		return fmt.Errorf("images[%d].media_type must be an image MIME type", index)
+		return fmt.Errorf("images[%d].mediaType must be an image MIME type", index)
 	}
 	if _, err := base64.StdEncoding.DecodeString(image.DataBase64); err != nil {
-		return fmt.Errorf("images[%d].data_base64 is invalid base64: %w", index, err)
+		return fmt.Errorf("images[%d].dataBase64 is invalid base64: %w", index, err)
 	}
 	return nil
 }
@@ -202,16 +275,16 @@ func validatePromptImage(image PromptImage, index int) error {
 func validateSubdir(subdir string) error {
 	clean := filepath.Clean(subdir)
 	if clean == "" {
-		return fmt.Errorf("target_subdir must be a relative path")
+		return fmt.Errorf("targetSubdir must be a relative path")
 	}
 	if filepath.IsAbs(clean) {
-		return fmt.Errorf("target_subdir must be relative")
+		return fmt.Errorf("targetSubdir must be relative")
 	}
 	if strings.HasPrefix(clean, "..") {
-		return fmt.Errorf("target_subdir cannot escape repository root")
+		return fmt.Errorf("targetSubdir cannot escape repository root")
 	}
 	if strings.Contains(clean, ".."+string(filepath.Separator)) {
-		return fmt.Errorf("target_subdir cannot contain parent traversals")
+		return fmt.Errorf("targetSubdir cannot contain parent traversals")
 	}
 	return nil
 }
@@ -466,4 +539,13 @@ func normalizeReviewer(value string) string {
 	value = strings.TrimSpace(value)
 	value = strings.TrimPrefix(value, "@")
 	return strings.TrimSpace(value)
+}
+
+func firstNonEmptyTrimmed(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }

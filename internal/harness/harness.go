@@ -154,7 +154,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 
 	repoURLs := cfg.RepoList()
 	if len(repoURLs) == 0 {
-		return h.fail(ExitConfig, "config", fmt.Errorf("one of repo, repo_url, or repos[] is required"), runDir)
+		return h.fail(ExitConfig, "config", fmt.Errorf("one of repo, repoUrl, or repos[] is required"), runDir)
 	}
 	runCfg := cfg
 	cloneBaseBranch := strings.TrimSpace(runCfg.BaseBranch)
@@ -230,7 +230,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		return h.fail(ExitConfig, "config", err, runDir)
 	}
 	if !h.TargetDirOK(targetDir) {
-		return h.fail(ExitConfig, "config", fmt.Errorf("target_subdir does not exist or is not a directory: %s", cfg.TargetSubdir), runDir)
+		return h.fail(ExitConfig, "config", fmt.Errorf("targetSubdir does not exist or is not a directory: %s", cfg.TargetSubdir), runDir)
 	}
 
 	createWorkBranch := shouldCreateWorkBranch(runCfg.BaseBranch)
@@ -242,7 +242,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		repos[i].Branch = branch
 		if !createWorkBranch {
 			h.logf(
-				"stage=git status=ok action=branch_reuse branch=%s base_branch=%s repo=%s repo_dir=%s",
+				"stage=git status=ok action=branch_reuse branch=%s baseBranch=%s repo=%s repo_dir=%s",
 				branch,
 				runCfg.BaseBranch,
 				repos[i].URL,
@@ -1072,7 +1072,7 @@ func resolveTargetDir(repoDir, targetSubdir string) (string, error) {
 		return "", fmt.Errorf("resolve target subdir: %w", err)
 	}
 	if strings.HasPrefix(rel, "..") {
-		return "", fmt.Errorf("target_subdir escapes repository")
+		return "", fmt.Errorf("targetSubdir escapes repository")
 	}
 	return targetDir, nil
 }
@@ -1424,7 +1424,7 @@ When a task fails:
 - Queue a follow-up task dedicated to reviewing the logs and fixing all underlying issues in this codebase.
 - Pass the relevant failing file/folder log path(s) into that follow-up task context.
 - Use this follow-up run config payload shape:
-  {"repos":["<same_repo_as_failed_task>"],"base_branch":"main","target_subdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."}
+  {"repos":["<same_repo_as_failed_task>"],"baseBranch":"main","targetSubdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."}
 
 Completion requirements:
 - Only create a new branch when starting from 'main'; if you're fixing an existing non-'main' branch, stay on it.

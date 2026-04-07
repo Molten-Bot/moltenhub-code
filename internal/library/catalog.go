@@ -18,22 +18,75 @@ const DefaultDir = "library"
 // TaskDefinition is one callable library entry loaded from ./library/*.json.
 type TaskDefinition struct {
 	Name          string   `json:"name"`
-	DisplayName   string   `json:"display_name"`
+	DisplayName   string   `json:"displayName"`
 	Description   string   `json:"description"`
-	TargetSubdir  string   `json:"target_subdir"`
+	TargetSubdir  string   `json:"targetSubdir"`
 	Prompt        string   `json:"prompt"`
-	CommitMessage string   `json:"commit_message"`
-	PRTitle       string   `json:"pr_title"`
-	PRBody        string   `json:"pr_body"`
+	CommitMessage string   `json:"commitMessage"`
+	PRTitle       string   `json:"prTitle"`
+	PRBody        string   `json:"prBody"`
 	Labels        []string `json:"labels"`
-	GitHubHandle  string   `json:"github_handle"`
+	GitHubHandle  string   `json:"githubHandle"`
 	Reviewers     []string `json:"reviewers"`
+}
+
+// UnmarshalJSON supports both canonical camelCase keys and legacy snake_case aliases.
+func (t *TaskDefinition) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	for key := range raw {
+		if _, ok := taskDefinitionFieldNames[key]; ok {
+			continue
+		}
+		return fmt.Errorf("json: unknown field %q", key)
+	}
+
+	type taskAlias TaskDefinition
+	var parsed taskAlias
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+	*t = TaskDefinition(parsed)
+
+	var legacy struct {
+		DisplayName   string `json:"display_name"`
+		TargetSubdir  string `json:"target_subdir"`
+		CommitMessage string `json:"commit_message"`
+		PRTitle       string `json:"pr_title"`
+		PRBody        string `json:"pr_body"`
+		GitHubHandle  string `json:"github_handle"`
+	}
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(t.DisplayName) == "" {
+		t.DisplayName = legacy.DisplayName
+	}
+	if strings.TrimSpace(t.TargetSubdir) == "" {
+		t.TargetSubdir = legacy.TargetSubdir
+	}
+	if strings.TrimSpace(t.CommitMessage) == "" {
+		t.CommitMessage = legacy.CommitMessage
+	}
+	if strings.TrimSpace(t.PRTitle) == "" {
+		t.PRTitle = legacy.PRTitle
+	}
+	if strings.TrimSpace(t.PRBody) == "" {
+		t.PRBody = legacy.PRBody
+	}
+	if strings.TrimSpace(t.GitHubHandle) == "" {
+		t.GitHubHandle = legacy.GitHubHandle
+	}
+	return nil
 }
 
 // TaskSummary is the public UI/runtime registration view of one library task.
 type TaskSummary struct {
 	Name        string `json:"name"`
-	DisplayName string `json:"display_name,omitempty"`
+	DisplayName string `json:"displayName,omitempty"`
 	Description string `json:"description,omitempty"`
 }
 
@@ -45,14 +98,20 @@ type Catalog struct {
 
 var taskDefinitionFieldNames = map[string]struct{}{
 	"name":           {},
+	"displayName":    {},
 	"display_name":   {},
 	"description":    {},
+	"targetSubdir":   {},
 	"target_subdir":  {},
 	"prompt":         {},
+	"commitMessage":  {},
 	"commit_message": {},
+	"prTitle":        {},
 	"pr_title":       {},
+	"prBody":         {},
 	"pr_body":        {},
 	"labels":         {},
+	"githubHandle":   {},
 	"github_handle":  {},
 	"reviewers":      {},
 }
@@ -134,7 +193,7 @@ func (c Catalog) ExpandRunConfig(taskName, repo, branch string) (config.Config, 
 	taskName = strings.TrimSpace(taskName)
 	task, ok := c.byName[taskName]
 	if !ok {
-		return config.Config{}, fmt.Errorf("unknown library_task_name %q", taskName)
+		return config.Config{}, fmt.Errorf("unknown libraryTaskName %q", taskName)
 	}
 
 	repo = strings.TrimSpace(repo)
