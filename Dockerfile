@@ -44,4 +44,4 @@ VOLUME ["/workspace/config"]
 USER app
 
 ENTRYPOINT ["/usr/local/bin/entrypoint"]
-CMD ["with-config"]
+CMD ["/usr/local/bin/with-config"]

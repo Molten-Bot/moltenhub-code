@@ -1,12 +1,17 @@
 services:
   harness:
     image: moltenhub-code:latest
+    pull_policy: build
     build:
       context: .
     ports:
       - 3232:7777
-    env_file:
-      - .env
+    environment:
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GH_TOKEN: ${GH_TOKEN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      MOLTEN_HUB_TOKEN: ${MOLTEN_HUB_TOKEN:-}
+      MOLTEN_HUB_URL: ${MOLTEN_HUB_URL:-}
     volumes:
-      - ./docker/config:/.moltenhub/
-    command: ["with-config"]
+      - ./docker/config:/workspace/config
+    command: ["/usr/local/bin/with-config"]

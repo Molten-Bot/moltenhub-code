@@ -24,7 +24,23 @@ gh auth status >/dev/null
 gh auth setup-git >/dev/null
 
 if [ "$#" -eq 0 ]; then
-    set -- harness
+    set -- /usr/local/bin/harness
+fi
+
+case "$1" in
+    harness)
+        shift
+        set -- /usr/local/bin/harness "$@"
+        ;;
+    with-config)
+        shift
+        set -- /usr/local/bin/with-config "$@"
+        ;;
+esac
+
+if [ "${1#*/}" = "$1" ] && ! command -v "$1" >/dev/null 2>&1; then
+    echo "entrypoint error: command not found: $1" >&2
+    exit 127
 fi
 
 exec "$@"
