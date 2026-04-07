@@ -11,6 +11,7 @@ import (
 const (
 	runtimeConfigPath           = "./.moltenhub/config.json"
 	legacyRuntimeConfigPath     = "./.moltenhub/config/config.json"
+	runtimeConfigPathEnv        = "HARNESS_RUNTIME_CONFIG_PATH"
 	runtimeTimeoutMs            = 20000
 	runtimeSessionKey           = "main"
 	transportOfflineReasonAgent = "harness_shutdown"
@@ -124,13 +125,44 @@ func SaveRuntimeConfig(path, baseURL, token, sessionKey string) error {
 }
 
 func defaultRuntimeConfigPath() string {
+	if path := strings.TrimSpace(os.Getenv(runtimeConfigPathEnv)); path != "" {
+		return path
+	}
 	return runtimeConfigPath
+}
+
+func ResolveRuntimeConfigPath(initPath string) string {
+	if path := strings.TrimSpace(os.Getenv(runtimeConfigPathEnv)); path != "" {
+		return path
+	}
+
+	initPath = strings.TrimSpace(initPath)
+	if initPath == "" {
+		return runtimeConfigPath
+	}
+
+	return filepath.Join(filepath.Dir(initPath), "config.json")
 }
 
 func runtimeConfigCandidatePaths(path string) []string {
 	path = strings.TrimSpace(path)
 	if path != "" {
-		return []string{path}
+		candidates := []string{path}
+		if legacyPath := legacyRuntimeConfigPathFor(path); legacyPath != "" && legacyPath != path {
+			candidates = append(candidates, legacyPath)
+		}
+		return candidates
 	}
 	return []string{runtimeConfigPath, legacyRuntimeConfigPath}
+}
+
+func legacyRuntimeConfigPathFor(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return legacyRuntimeConfigPath
+	}
+	if path == runtimeConfigPath {
+		return legacyRuntimeConfigPath
+	}
+	return filepath.Join(filepath.Dir(path), "config", filepath.Base(path))
 }

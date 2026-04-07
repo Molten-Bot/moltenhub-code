@@ -206,6 +206,7 @@ func runHub(args []string) int {
 		fmt.Fprintf(os.Stderr, "init config error: %v\n", err)
 		return harness.ExitConfig
 	}
+	cfg.RuntimeConfigPath = hub.ResolveRuntimeConfigPath(*initPath)
 	if *parallel > 0 {
 		cfg.Dispatcher.MaxParallel = *parallel
 	}
@@ -511,7 +512,7 @@ func runHub(args []string) int {
 	}
 
 	if !hubCredentialsConfigured(cfg, func() (hub.RuntimeConfig, error) {
-		return hub.LoadRuntimeConfig("")
+		return hub.LoadRuntimeConfig(cfg.RuntimeConfigPath)
 	}) {
 		daemonLogger(
 			"hub.auth status=local_only detail=%q",
@@ -855,7 +856,7 @@ type runtimeConfigLoader func() (hub.RuntimeConfig, error)
 
 func runHubBootDiagnostics(ctx context.Context, runner execx.Runner, logf func(string, ...any), cfg hub.InitConfig) bool {
 	return runHubBootDiagnosticsWithRuntimeLoader(ctx, runner, logf, cfg, func() (hub.RuntimeConfig, error) {
-		return hub.LoadRuntimeConfig("")
+		return hub.LoadRuntimeConfig(cfg.RuntimeConfigPath)
 	})
 }
 

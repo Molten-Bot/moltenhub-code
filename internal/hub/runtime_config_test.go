@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -218,5 +219,34 @@ func TestRuntimeConfigCandidatePathsDefaultIncludesLegacyLocation(t *testing.T) 
 		if got[i] != want[i] {
 			t.Fatalf("runtimeConfigCandidatePaths()[%d] = %q, want %q", i, got[i], want[i])
 		}
+	}
+}
+
+func TestResolveRuntimeConfigPathUsesInitSiblingDirectory(t *testing.T) {
+	t.Parallel()
+
+	got := ResolveRuntimeConfigPath("/workspace/init.json")
+	want := "/workspace/config.json"
+	if got != want {
+		t.Fatalf("ResolveRuntimeConfigPath() = %q, want %q", got, want)
+	}
+}
+
+func TestResolveRuntimeConfigPathPrefersEnvOverride(t *testing.T) {
+	t.Setenv(runtimeConfigPathEnv, "/custom/runtime.json")
+
+	got := ResolveRuntimeConfigPath("/workspace/init.json")
+	if got != "/custom/runtime.json" {
+		t.Fatalf("ResolveRuntimeConfigPath() = %q, want %q", got, "/custom/runtime.json")
+	}
+}
+
+func TestRuntimeConfigCandidatePathsCustomPathIncludesLegacySibling(t *testing.T) {
+	t.Parallel()
+
+	got := runtimeConfigCandidatePaths("/workspace/config.json")
+	want := []string{"/workspace/config.json", "/workspace/config/config.json"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("runtimeConfigCandidatePaths() = %v, want %v", got, want)
 	}
 }

@@ -51,7 +51,10 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 		d.ReconnectDelay = 3 * time.Second
 	}
 
-	runtimeCfgPath := defaultRuntimeConfigPath()
+	runtimeCfgPath := strings.TrimSpace(cfg.RuntimeConfigPath)
+	if runtimeCfgPath == "" {
+		runtimeCfgPath = defaultRuntimeConfigPath()
+	}
 	pullTimeoutMs := runtimeTimeoutMs
 	if stored, loadedPath, err := loadStoredRuntimeConfig(runtimeCfgPath); err == nil {
 		runtimeCfgPath = loadedPath

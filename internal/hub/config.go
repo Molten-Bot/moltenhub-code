@@ -33,6 +33,7 @@ type InitConfig struct {
 	Handle       string           `json:"handle"`
 	Profile      ProfileConfig    `json:"profile"`
 	Skill        SkillConfig      `json:"-"`
+	RuntimeConfigPath string      `json:"-"`
 	Dispatcher   DispatcherConfig `json:"dispatcher"`
 }
 
