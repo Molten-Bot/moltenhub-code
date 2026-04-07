@@ -549,6 +549,11 @@ func TestBranchFromRunConfigJSON(t *testing.T) {
 		want string
 	}{
 		{
+			name: "base branch camelCase",
+			raw:  []byte(`{"baseBranch":"main"}`),
+			want: "main",
+		},
+		{
 			name: "base branch",
 			raw:  []byte(`{"base_branch":"main"}`),
 			want: "main",
