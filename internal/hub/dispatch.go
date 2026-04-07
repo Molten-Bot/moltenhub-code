@@ -270,6 +270,8 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 				"baseBranch":   propertyNonEmptyString(),
 				"branch":       propertyNonEmptyString(),
 				"targetSubdir": propertyNonEmptyString(),
+				"agentHarness": propertyStringEnum("codex", "claude", "auggie"),
+				"agentCommand": propertyNonEmptyString(),
 				"prompt":       propertyNonEmptyString(),
 				"images": map[string]any{
 					"type": "array",

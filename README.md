@@ -2,18 +2,18 @@
 
 Turn one prompt into review-ready pull requests across your repos, with automatic CI remediation when checks fail.
 
-MoltenHub Code is a small Go harness that runs Codex against one or more repositories, opens PRs, and waits for required checks.
+MoltenHub Code is a small Go harness that runs an agent CLI (Codex, Claude, or Auggie) against one or more repositories, opens PRs, and waits for required checks.
 It supports single runs, parallel local runs, and a persistent MoltenHub listener with a local monitoring UI.
 
 ## What It Does
 
 For each run:
 
-1. Verifies required tools (`git`, `gh`, `codex`) and GitHub auth.
+1. Verifies required tools (`git`, `gh`, and the selected agent CLI) plus GitHub auth.
 2. Creates an isolated workspace (`/dev/shm/temp/<guid>`, fallback `/tmp/temp/<guid>`).
 3. Seeds `AGENTS.md` from [`library/AGENTS.md`](library/AGENTS.md).
 4. Clones configured repos and checks out `baseBranch`.
-5. Runs Codex in `targetSubdir` (or workspace root for multi-repo runs).
+5. Runs the selected agent harness in `targetSubdir` (or workspace root for multi-repo runs).
 6. For changed repos:
    - If `baseBranch` is `main`, creates a `moltenhub-*` branch.
    - Otherwise reuses the existing non-`main` branch.
@@ -38,6 +38,21 @@ Build a container image:
 docker build -t moltenhub-code:latest .
 ```
 
+Build for a specific harness:
+
+```bash
+docker build \
+  --build-arg AGENT_HARNESS=claude \
+  --build-arg AGENT_NPM_PACKAGE=@anthropic-ai/claude-code@latest \
+  -t moltenhub-code:claude .
+```
+
+Supported harness values:
+
+- `codex` (`@openai/codex@latest`)
+- `claude` (`@anthropic-ai/claude-code@latest`)
+- `auggie` (`@augmentcode/auggie@latest`)
+
 Pass secrets at container runtime, not at build time. `.env` is excluded from Docker build context via `.dockerignore` so tokens are never copied into image layers.
 
 Create a local env file:
@@ -51,6 +66,9 @@ cp .env.example .env
 ```dotenv
 GITHUB_TOKEN=ghp_xxx
 OPENAI_API_KEY=sk_xxx
+ANTHROPIC_API_KEY=sk-ant-xxx
+AUGMENT_API_TOKEN=xxx
+AGENT_HARNESS=codex
 ```
 
 Run with Docker Compose (`docker-compose.yml`):
@@ -85,9 +103,12 @@ docker compose up
 GitHub Actions publish flow:
 
 - `deploy-vnext` runs automatically on pushes to `main` (including PR merges) and publishes:
-  - `moltenai/moltenhub-code:vnext`
-  - `moltenai/moltenhub-code:<yyyy.mm.dd.run_number>` (example: `2026.04.04.5`)
-- `deploy-prod` is manual-only (`workflow_dispatch`) and promotes a selected source tag (default `vnext`) to `moltenai/moltenhub-code:latest` without rebuilding
+  - `moltenai/moltenhub-code:vnext`, `moltenai/moltenhub-code:<yyyy.mm.dd.run_number>` (default Codex image)
+  - `moltenai/moltenhub-code:vnext-codex|claude|auggie`
+  - `moltenai/moltenhub-code:<yyyy.mm.dd.run_number>-codex|claude|auggie`
+- `deploy-prod` is manual-only (`workflow_dispatch`) and promotes:
+  - selected source tag (default `vnext`) to `moltenai/moltenhub-code:latest`
+  - selected source tag variants (`-codex`, `-claude`, `-auggie`) to `latest-codex`, `latest-claude`, `latest-auggie`
 - required repository secret: `DOCKERHUB_TOKEN`
 
 Equivalent direct `docker run`:
@@ -102,7 +123,7 @@ docker run --rm -it \
   with-config
 ```
 
-Container startup pre-registers auth before any Codex stage:
+Container startup pre-registers auth before any agent stage:
 
 - maps `GITHUB_TOKEN` to `GH_TOKEN` for `gh` commands
 - runs `gh auth status` and `gh auth setup-git`
@@ -130,7 +151,7 @@ On startup, hub mode emits a boot diagnosis checklist for:
 
 - `git` CLI availability
 - `gh` CLI availability
-- `codex` CLI availability
+- selected agent CLI availability (`codex`, `claude`, or `auggie`)
 - `gh auth` readiness
 - Hub endpoint health at `<base_url host>/ping` (must return `2xx` before connecting)
 - a Molten Hub connection recommendation (`https://molten.bot/hub`) when the runtime is not connected yet
@@ -141,7 +162,7 @@ If the ping check fails, hub mode exits early instead of entering transport retr
 
 Hub mode starts a local monitor UI by default at `http://127.0.0.1:7777`.
 
-The Studio panel defaults to a schema builder that stores requested repositories in browser local storage and reuses them as a repo picker. In Builder mode, you can paste clipboard PNG screenshots into the prompt field and they will be attached to the initial Codex run. Raw JSON mode remains available for advanced or multi-repo payloads. The UI also includes a browser-local `Hide` toggle so you can collapse that section without restarting the harness.
+The Studio panel defaults to a schema builder that stores requested repositories in browser local storage and reuses them as a repo picker. In Builder mode, you can paste clipboard PNG screenshots into the prompt field and they will be attached to the initial run. Raw JSON mode remains available for advanced or multi-repo payloads. The UI also includes a browser-local `Hide` toggle so you can collapse that section without restarting the harness.
 
 The Tasks panel shows live task cards sorted by activity, with inline output previews and a full-screen view for deeper inspection.
 
@@ -170,6 +191,8 @@ Common optional fields:
 - `baseBranch` (default `main`)
 - `branch` (alias for `baseBranch`, mainly for library-backed skill calls)
 - `targetSubdir` (default `.`)
+- `agentHarness` (optional: `codex`, `claude`, `auggie`; defaults to `codex` or `HARNESS_AGENT_HARNESS`)
+- `agentCommand` (optional CLI executable override)
 - `commitMessage`
 - `prTitle` (auto-prefixed with `moltenhub-`)
 - `prBody`
@@ -202,6 +225,8 @@ Key fields:
 - `profile.display_name`
 - `profile.emoji`
 - `profile.bio`
+- `agent_harness` (optional: `codex`, `claude`, `auggie`; defaults to `codex` or `HARNESS_AGENT_HARNESS`)
+- `agent_command` (optional CLI executable override)
 - `dispatcher.*` (adaptive worker parallelism)
 
 After first successful activation, runtime auth is persisted to `./.moltenhub/config.json`, so `bind_token` and `handle` are not required in `init.json` for subsequent runs.
@@ -238,7 +263,7 @@ Hub skill failure responses also include an explicit failure message and error d
 - `21` auth error
 - `30` workspace error
 - `40` clone error
-- `50` Codex execution error
+- `50` agent execution error
 - `60` git workflow error
 - `70` PR/checks error
 

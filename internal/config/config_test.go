@@ -194,6 +194,33 @@ func TestLoadSupportsReposArray(t *testing.T) {
 	}
 }
 
+func TestLoadSupportsAgentHarnessAndCommand(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	json := `{
+  "repo": "git@github.com:acme/repo.git",
+  "prompt": "run task",
+  "agentHarness": "CLAUDE",
+  "agentCommand": "claude-custom"
+}`
+	if err := os.WriteFile(path, []byte(json), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got, want := cfg.AgentHarness, "claude"; got != want {
+		t.Fatalf("AgentHarness = %q, want %q", got, want)
+	}
+	if got, want := cfg.AgentCommand, "claude-custom"; got != want {
+		t.Fatalf("AgentCommand = %q, want %q", got, want)
+	}
+}
+
 func TestLoadSupportsGitHubHandleAsReviewer(t *testing.T) {
 	t.Parallel()
 
@@ -312,6 +339,27 @@ func TestValidateRejectsUnsafeSubdir(t *testing.T) {
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("expected validation error, got nil")
+	}
+}
+
+func TestValidateRejectsUnknownAgentHarness(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		Version:      "v1",
+		RepoURL:      "git@github.com:acme/repo.git",
+		BaseBranch:   "main",
+		TargetSubdir: ".",
+		Prompt:       "fix tests",
+		AgentHarness: "not-real",
+	}
+	cfg.ApplyDefaults()
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want unsupported agent harness error")
+	}
+	if !strings.Contains(err.Error(), "unsupported agentHarness") {
+		t.Fatalf("Validate() error = %v, want unsupported agentHarness", err)
 	}
 }
 
