@@ -208,6 +208,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="task-fullscreen-toggle"`) {
 		t.Fatalf("expected index html to include tasks full screen toggle")
 	}
+	if strings.Contains(markup, "<span>Tasks</span>") {
+		t.Fatalf("expected index html to remove Tasks title label from panel header")
+	}
 	if !strings.Contains(markup, `id="task-fullscreen-list"`) {
 		t.Fatalf("expected index html to include full screen task list")
 	}
@@ -220,11 +223,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="task-fullscreen-terminal"`) {
 		t.Fatalf("expected index html to include full screen terminal output")
 	}
-	if !strings.Contains(markup, `id="task-fullscreen-close" class="task-fullscreen-toggle task-fullscreen-close"`) {
-		t.Fatalf("expected index html to include top-right full screen close control")
-	}
-	if !strings.Contains(markup, `id="task-fullscreen-close" class="task-fullscreen-toggle task-fullscreen-close" type="button" aria-label="Close full screen tasks">X</button>`) {
-		t.Fatalf("expected index html to render full screen close button label as X")
+	if strings.Contains(markup, `id="task-fullscreen-close"`) {
+		t.Fatalf("expected index html to use the primary full screen toggle as the close control")
 	}
 	if strings.Contains(markup, "task-fullscreen-subtitle") || strings.Contains(markup, "Focused task/running/state view") {
 		t.Fatalf("expected index html to omit full screen subtitle copy")
@@ -246,6 +246,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "taskFullscreenBody.classList.toggle(\"task-output-hidden\", !outputVisible);") {
 		t.Fatalf("expected index html to include full screen task-only mode when output is hidden")
+	}
+	if !strings.Contains(markup, "taskFullscreenToggle.textContent = state.taskFullscreenOpen ? \"X\" : \"Full Screen\";") {
+		t.Fatalf("expected index html to set full screen toggle text to X when open")
+	}
+	if !strings.Contains(markup, "taskFullscreenToggle.classList.toggle(\"task-fullscreen-close\", state.taskFullscreenOpen);") {
+		t.Fatalf("expected index html to apply close-button styling to full screen toggle when open")
+	}
+	if !strings.Contains(markup, "taskFullscreenToggle.setAttribute(\"aria-label\", state.taskFullscreenOpen ? \"Close full screen tasks\" : \"Open full screen tasks\");") {
+		t.Fatalf("expected index html to update full screen toggle aria-label for open and close states")
 	}
 	if !strings.Contains(markup, "function setTaskOutputPanelVisibility(") {
 		t.Fatalf("expected index html to include standard output panel visibility handler")
@@ -447,10 +456,19 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 		t.Fatalf("expected stylesheet to include task full screen toggle styles")
 	}
 	if !strings.Contains(css, ".task-fullscreen-close") {
-		t.Fatalf("expected stylesheet to include top-right full screen close styles")
+		t.Fatalf("expected stylesheet to include full screen close-state button styles")
+	}
+	if !strings.Contains(css, "body.task-fullscreen-open #task-fullscreen-toggle") {
+		t.Fatalf("expected stylesheet to pin the full screen toggle in the viewport while full screen is open")
 	}
 	if !strings.Contains(css, ".task-fullscreen") {
 		t.Fatalf("expected stylesheet to include full screen task layout styles")
+	}
+	if !strings.Contains(css, ".task-fullscreen {\n  position: fixed;\n  inset: 0;\n  z-index: 80;\n  padding: 0;") {
+		t.Fatalf("expected stylesheet to make full screen task layout use full viewport padding")
+	}
+	if !strings.Contains(css, ".task-fullscreen-shell {\n  position: relative;") || !strings.Contains(css, "width: 100%;") {
+		t.Fatalf("expected stylesheet to make full screen task shell span viewport width")
 	}
 	if !strings.Contains(css, ".task-fullscreen-body.task-output-hidden") {
 		t.Fatalf("expected stylesheet to include full screen hidden-output task layout styles")
