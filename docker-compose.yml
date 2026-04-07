@@ -7,4 +7,4 @@ services:
       - 3232:7777  
     env_file:
       - .env
-    command: ["harness", "run", "--config", "templates/run.example.json"]
+    command: ["harness", "run"]

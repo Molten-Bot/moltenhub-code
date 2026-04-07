@@ -8,3 +8,4 @@ harness
 !.env.example
 .codex
 .moltenhub
+./templates
