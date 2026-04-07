@@ -147,3 +147,14 @@ func TestLoadRuntimeConfigRejectsMissingToken(t *testing.T) {
 		t.Fatal("expected error for missing token")
 	}
 }
+
+func TestRuntimeConfigPathForHome(t *testing.T) {
+	t.Parallel()
+
+	if got, want := runtimeConfigPathForHome("/tmp/home"), filepath.Join("/tmp/home", ".moltenhub", "config.json"); got != want {
+		t.Fatalf("runtimeConfigPathForHome() = %q, want %q", got, want)
+	}
+	if got := runtimeConfigPathForHome(""); got != legacyRuntimeConfigPath {
+		t.Fatalf("runtimeConfigPathForHome(\"\") = %q, want %q", got, legacyRuntimeConfigPath)
+	}
+}

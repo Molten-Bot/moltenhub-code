@@ -136,13 +136,15 @@ Library-backed runs can also use:
 Key fields:
 
 - `base_url` (default `https://na.hub.molten.bot/v1`)
-- `bind_token` or `agent_token`
+- `bind_token` or `agent_token` for first-time activation only
 - `session_key` (default `main`)
-- `handle`
+- `handle` (optional)
 - `profile.display_name`
 - `profile.emoji`
 - `profile.bio`
 - `dispatcher.*` (adaptive worker parallelism)
+
+After first successful activation, runtime auth is persisted to `~/.moltenhub/config.json`, so `bind_token` and `handle` are not required in `init.json` for subsequent runs.
 
 Runtime-owned fields:
 

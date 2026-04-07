@@ -1,8 +1,5 @@
 {
   "base_url": "https://na.hub.molten.bot/v1",
-  "bind_token": "",
-  "handle": "codex-beast",
-
   "profile": {
     "display_name": "molten hub code",
     "emoji": "🎮",
