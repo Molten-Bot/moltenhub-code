@@ -2,6 +2,8 @@ package config
 
 import (
 	"encoding/base64"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -88,5 +90,46 @@ func TestTrimGeneratedPRTitleSuffixAndEnsureFooter(t *testing.T) {
 	}
 	if got := ensurePRBodyFooter("body\n\n" + prBodyFooter); strings.Count(got, "https://molten.bot/hub") != 1 {
 		t.Fatalf("ensurePRBodyFooter(contains footer) duplicated link: %q", got)
+	}
+}
+
+func TestLoadRejectsSnakeCaseAgentHarnessFields(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	json := `{
+  "repo": "git@github.com:acme/repo.git",
+  "prompt": "run task",
+  "agent_harness": "claude"
+}`
+	if err := os.WriteFile(path, []byte(json), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("Load() error = nil, want unsupported field error")
+	}
+	if !strings.Contains(err.Error(), "agent_harness") || !strings.Contains(err.Error(), "agentHarness") {
+		t.Fatalf("Load() error = %v, want agent_harness canonicalization hint", err)
+	}
+}
+
+func TestApplyDefaultsReadsAgentRuntimeFromEnv(t *testing.T) {
+	t.Setenv("HARNESS_AGENT_HARNESS", "CLAUDE")
+	t.Setenv("HARNESS_AGENT_COMMAND", "claude-custom")
+
+	cfg := Config{
+		RepoURL: "git@github.com:acme/repo.git",
+		Prompt:  "run task",
+	}
+	cfg.ApplyDefaults()
+
+	if got, want := cfg.AgentHarness, "claude"; got != want {
+		t.Fatalf("AgentHarness = %q, want %q", got, want)
+	}
+	if got, want := cfg.AgentCommand, "claude-custom"; got != want {
+		t.Fatalf("AgentCommand = %q, want %q", got, want)
 	}
 }

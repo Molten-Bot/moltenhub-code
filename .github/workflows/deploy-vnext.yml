@@ -38,10 +38,26 @@ jobs:
         run: go test ./...
 
   publish:
-    name: Publish vnext Docker image
+    name: Publish vnext Docker image (${{ matrix.harness }})
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - harness: codex
+            npm_package: '@openai/codex@latest'
+            tag_suffix: codex
+            publish_default_tags: 'true'
+          - harness: claude
+            npm_package: '@anthropic-ai/claude-code@latest'
+            tag_suffix: claude
+            publish_default_tags: 'false'
+          - harness: auggie
+            npm_package: '@augmentcode/auggie@latest'
+            tag_suffix: auggie
+            publish_default_tags: 'false'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -59,21 +75,23 @@ jobs:
         id: version
         run: echo "tag=$(date -u +'%Y.%m.%d').${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: moltenai/moltenhub-code
-          tags: |
-            type=raw,value=vnext
-            type=raw,value=${{ steps.version.outputs.tag }}
+      - name: Compute tags
+        id: tags
+        run: |
+          TAGS="moltenai/moltenhub-code:vnext-${{ matrix.tag_suffix }},moltenai/moltenhub-code:${{ steps.version.outputs.tag }}-${{ matrix.tag_suffix }}"
+          if [ "${{ matrix.publish_default_tags }}" = "true" ]; then
+            TAGS="${TAGS},moltenai/moltenhub-code:vnext,moltenai/moltenhub-code:${{ steps.version.outputs.tag }}"
+          fi
+          echo "value=${TAGS}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.tags.outputs.value }}
+          build-args: |
+            AGENT_HARNESS=${{ matrix.harness }}
+            AGENT_NPM_PACKAGE=${{ matrix.npm_package }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

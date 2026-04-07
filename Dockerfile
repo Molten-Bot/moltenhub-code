@@ -1,4 +1,6 @@
-ARG AGENT_NPM_PACKAGE=@openai/codex@latest
+ARG AGENT_HARNESS=codex
+ARG AGENT_NPM_PACKAGE
+ARG AGENT_COMMAND
 
 FROM golang:1.26.1-bookworm AS build
 WORKDIR /src
@@ -16,9 +18,13 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go build -trimpath -ldflags="-s -w" -o /out/harness ./cmd/harness
 
 FROM node:25-bookworm-slim AS runtime
+ARG AGENT_HARNESS
 ARG AGENT_NPM_PACKAGE
+ARG AGENT_COMMAND
 ENV DEBIAN_FRONTEND=noninteractive
 ENV GIT_TERMINAL_PROMPT=0
+ENV HARNESS_AGENT_HARNESS=${AGENT_HARNESS}
+ENV HARNESS_AGENT_COMMAND=${AGENT_COMMAND}
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -26,7 +32,17 @@ RUN apt-get update \
         git \
         gh \
         openssh-client \
-    && npm install --global "${AGENT_NPM_PACKAGE}" \
+    && agent_harness="$(printf '%s' "${AGENT_HARNESS}" | tr '[:upper:]' '[:lower:]')" \
+    && agent_pkg="${AGENT_NPM_PACKAGE}" \
+    && if [ -z "${agent_pkg}" ]; then \
+        case "${agent_harness}" in \
+          codex) agent_pkg='@openai/codex@latest' ;; \
+          claude) agent_pkg='@anthropic-ai/claude-code@latest' ;; \
+          auggie) agent_pkg='@augmentcode/auggie@latest' ;; \
+          *) echo "unsupported AGENT_HARNESS: ${AGENT_HARNESS}" >&2; exit 2 ;; \
+        esac; \
+      fi \
+    && npm install --global "${agent_pkg}" \
     && npm cache clean --force \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*

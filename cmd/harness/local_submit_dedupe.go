@@ -182,13 +182,17 @@ func dedupeKeyForRunConfig(cfg config.Config) string {
 
 	repos := normalizeRepoList(cfg.RepoList())
 	payload := struct {
-		Repos      []string `json:"repos"`
-		BaseBranch string   `json:"baseBranch"`
-		PromptHash string   `json:"promptHash"`
+		Repos        []string `json:"repos"`
+		BaseBranch   string   `json:"baseBranch"`
+		AgentHarness string   `json:"agentHarness,omitempty"`
+		AgentCommand string   `json:"agentCommand,omitempty"`
+		PromptHash   string   `json:"promptHash"`
 	}{
-		Repos:      repos,
-		BaseBranch: baseBranch,
-		PromptHash: promptHashForDeduper(cfg.Prompt),
+		Repos:        repos,
+		BaseBranch:   baseBranch,
+		AgentHarness: strings.ToLower(strings.TrimSpace(cfg.AgentHarness)),
+		AgentCommand: strings.TrimSpace(cfg.AgentCommand),
+		PromptHash:   promptHashForDeduper(cfg.Prompt),
 	}
 
 	encoded, err := json.Marshal(payload)

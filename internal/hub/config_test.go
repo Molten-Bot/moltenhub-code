@@ -3,6 +3,7 @@ package hub
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -163,5 +164,90 @@ func TestValidateRejectsInvalidDispatcherThresholds(t *testing.T) {
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("expected validation error")
+	}
+}
+
+func TestLoadInitSupportsAgentHarnessAndCommand(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "init.json")
+	data := `{
+  "base_url": "https://na.hub.molten.bot/v1",
+  "agent_harness": "CLAUDE",
+  "agent_command": "claude-custom"
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("write init: %v", err)
+	}
+
+	cfg, err := LoadInit(path)
+	if err != nil {
+		t.Fatalf("LoadInit() error = %v", err)
+	}
+	if got, want := cfg.AgentHarness, "claude"; got != want {
+		t.Fatalf("AgentHarness = %q, want %q", got, want)
+	}
+	if got, want := cfg.AgentCommand, "claude-custom"; got != want {
+		t.Fatalf("AgentCommand = %q, want %q", got, want)
+	}
+}
+
+func TestValidateRejectsUnknownAgentHarness(t *testing.T) {
+	t.Parallel()
+
+	cfg := InitConfig{
+		Version:      "v1",
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		BindToken:    "token",
+		AgentHarness: "unknown",
+		SessionKey:   "main",
+		Skill: SkillConfig{
+			Name:         "code_for_me",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+		Dispatcher: DispatcherConfig{
+			MaxParallel:            1,
+			MinParallel:            1,
+			SampleWindow:           1,
+			SampleIntervalMS:       250,
+			CPUHighWatermark:       85,
+			MemoryHighWatermark:    90,
+			DiskIOHighWatermarkMBs: 120,
+		},
+	}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want unsupported agent harness error")
+	}
+	if !strings.Contains(err.Error(), "unsupported agentHarness") {
+		t.Fatalf("Validate() error = %v, want unsupported agentHarness", err)
+	}
+}
+
+func TestLoadInitReadsAgentRuntimeFromEnv(t *testing.T) {
+	t.Setenv("HARNESS_AGENT_HARNESS", "AUGGIE")
+	t.Setenv("HARNESS_AGENT_COMMAND", "auggie-custom")
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "init.json")
+	data := `{
+  "base_url": "https://na.hub.molten.bot/v1",
+  "agent_token": "token"
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("write init: %v", err)
+	}
+
+	cfg, err := LoadInit(path)
+	if err != nil {
+		t.Fatalf("LoadInit() error = %v", err)
+	}
+	if got, want := cfg.AgentHarness, "auggie"; got != want {
+		t.Fatalf("AgentHarness = %q, want %q", got, want)
+	}
+	if got, want := cfg.AgentCommand, "auggie-custom"; got != want {
+		t.Fatalf("AgentCommand = %q, want %q", got, want)
 	}
 }

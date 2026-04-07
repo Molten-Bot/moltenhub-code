@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jef/moltenhub-code/internal/agentruntime"
 	"github.com/jef/moltenhub-code/internal/config"
 	"github.com/jef/moltenhub-code/internal/execx"
 	"github.com/jef/moltenhub-code/internal/harness"
@@ -243,6 +244,7 @@ func runHub(args []string) int {
 	var queueFailureFollowUp func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config)
 	var enqueueLocalRun func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string) (string, error)
 	enqueueLocalRun = func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string) (string, error) {
+		runCfg = applyDefaultAgentRuntimeConfig(runCfg, cfg)
 		source = strings.TrimSpace(source)
 		if source == "" {
 			source = "local_submit"
@@ -763,6 +765,11 @@ func runHubBootDiagnosticsWithRuntimeLoader(
 	if runner == nil || logf == nil {
 		return false
 	}
+	runtime, err := agentruntime.Resolve(cfg.AgentHarness, cfg.AgentCommand)
+	if err != nil {
+		logf("boot.diagnosis status=error requirement=agent_runtime err=%q", err)
+		return false
+	}
 
 	checks := []struct {
 		requirement string
@@ -777,12 +784,12 @@ func runHubBootDiagnosticsWithRuntimeLoader(
 			cmd:         execx.Command{Name: "gh", Args: []string{"--version"}},
 		},
 		{
-			requirement: "codex_cli",
-			cmd:         execx.Command{Name: "codex", Args: []string{"--help"}},
+			requirement: runtime.RequirementName(),
+			cmd:         runtime.PreflightCommand(),
 		},
 	}
-
-	logf("boot.diagnosis status=start checks=git_cli,gh_cli,codex_cli,gh_auth,moltenhub_ping,moltenhub_hub")
+	checkNames := []string{"git_cli", "gh_cli", runtime.RequirementName(), "gh_auth", "moltenhub_ping", "moltenhub_hub"}
+	logf("boot.diagnosis status=start checks=%s", strings.Join(checkNames, ","))
 
 	failedRequiredChecks := 0
 	pingOK := true
@@ -850,9 +857,22 @@ func runHubBootDiagnosticsWithRuntimeLoader(
 	logf(
 		"boot.diagnosis status=warn required_checks=failed count=%d recommendation=%q",
 		failedRequiredChecks,
-		"Install missing tools before running tasks: git, gh, codex.",
+		fmt.Sprintf(
+			"Install missing tools before running tasks: git, gh, %s.",
+			strings.TrimSpace(runtime.Command),
+		),
 	)
 	return pingOK
+}
+
+func applyDefaultAgentRuntimeConfig(runCfg config.Config, initCfg hub.InitConfig) config.Config {
+	if strings.TrimSpace(runCfg.AgentHarness) == "" {
+		runCfg.AgentHarness = strings.TrimSpace(initCfg.AgentHarness)
+	}
+	if strings.TrimSpace(runCfg.AgentCommand) == "" {
+		runCfg.AgentCommand = strings.TrimSpace(initCfg.AgentCommand)
+	}
+	return runCfg
 }
 
 func diagnosticDetailForResult(res execx.Result) string {

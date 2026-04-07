@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jef/moltenhub-code/internal/agentruntime"
 	"github.com/jef/moltenhub-code/internal/config"
 	"github.com/jef/moltenhub-code/internal/execx"
 	"github.com/jef/moltenhub-code/internal/workspace"
@@ -1378,6 +1379,114 @@ func TestCommandBuilders(t *testing.T) {
 	}
 }
 
+func TestPreflightCommandsWithRuntimeUsesConfiguredCLI(t *testing.T) {
+	t.Parallel()
+
+	runtime, err := agentruntime.Resolve(agentruntime.HarnessClaude, "claude-custom")
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+
+	cmds := preflightCommandsWithRuntime(runtime)
+	if got, want := len(cmds), 3; got != want {
+		t.Fatalf("len(preflight commands) = %d, want %d", got, want)
+	}
+	if got := cmds[2]; got.Name != "claude-custom" || !reflect.DeepEqual(got.Args, []string{"--help"}) {
+		t.Fatalf("runtime preflight command = %+v", got)
+	}
+}
+
+func TestAgentCommandWithOptionsUsesConfiguredRuntime(t *testing.T) {
+	t.Parallel()
+
+	targetDir := "/tmp/repo"
+	prompt := "Fix the failing tests."
+
+	claudeRuntime, err := agentruntime.Resolve(agentruntime.HarnessClaude, "")
+	if err != nil {
+		t.Fatalf("Resolve(claude) error = %v", err)
+	}
+	claudeCmd, err := agentCommandWithOptions(claudeRuntime, targetDir, prompt, codexRunOptions{})
+	if err != nil {
+		t.Fatalf("agentCommandWithOptions(claude) error = %v", err)
+	}
+	if claudeCmd.Name != "claude" || claudeCmd.Dir != targetDir {
+		t.Fatalf("unexpected claude command: %+v", claudeCmd)
+	}
+	if got, want := claudeCmd.Args[len(claudeCmd.Args)-1], withCompletionGatePrompt(prompt); got != want {
+		t.Fatalf("claude prompt arg = %q, want completion-gated prompt", got)
+	}
+	if claudeCmd.Stdin != "" {
+		t.Fatalf("claude stdin = %q, want empty", claudeCmd.Stdin)
+	}
+
+	auggieRuntime, err := agentruntime.Resolve(agentruntime.HarnessAuggie, "")
+	if err != nil {
+		t.Fatalf("Resolve(auggie) error = %v", err)
+	}
+	auggieCmd, err := agentCommandWithOptions(auggieRuntime, targetDir, prompt, codexRunOptions{})
+	if err != nil {
+		t.Fatalf("agentCommandWithOptions(auggie) error = %v", err)
+	}
+	if auggieCmd.Name != "auggie" || auggieCmd.Dir != targetDir {
+		t.Fatalf("unexpected auggie command: %+v", auggieCmd)
+	}
+	if got, want := auggieCmd.Args[len(auggieCmd.Args)-1], withCompletionGatePrompt(prompt); got != want {
+		t.Fatalf("auggie prompt arg = %q, want completion-gated prompt", got)
+	}
+	if _, err := agentCommandWithOptions(claudeRuntime, targetDir, prompt, codexRunOptions{ImagePaths: []string{"x.png"}}); err == nil {
+		t.Fatal("agentCommandWithOptions(claude with images) error = nil, want non-nil")
+	}
+}
+
+func TestRunUsesConfiguredRuntimeCommand(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.AgentHarness = "claude"
+	cfg.AgentCommand = "claude-custom"
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "runtimecmd123456"
+	runDir := filepath.Join("/tmp", "temp", guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+	runtime, err := agentruntime.Resolve(cfg.AgentHarness, cfg.AgentCommand)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	runtimePrompt := withAgentsPrompt(cfg.Prompt, agentsPath)
+	runtimeCmd, err := agentCommandWithOptions(runtime, targetDir, runtimePrompt, codexRunOptions{})
+	if err != nil {
+		t.Fatalf("agentCommandWithOptions() error = %v", err)
+	}
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "claude-custom", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: runtimeCmd},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: ""}},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if !res.NoChanges {
+		t.Fatal("NoChanges = false, want true")
+	}
+}
+
 func TestMaterializePromptImages(t *testing.T) {
 	t.Parallel()
 
@@ -1516,7 +1625,7 @@ func TestRunCodexStagesAgentsPromptWithinTargetDir(t *testing.T) {
 	runner := &captureRunner{}
 
 	h := New(runner)
-	if err := h.runCodex(context.Background(), targetDir, "", codexRunOptions{}, sourcePath); err != nil {
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, "", codexRunOptions{}, sourcePath); err != nil {
 		t.Fatalf("runCodex() error = %v", err)
 	}
 

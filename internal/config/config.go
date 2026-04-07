@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/jef/moltenhub-code/internal/agentruntime"
 )
 
 const prTitlePrefix = "moltenhub-"
@@ -22,6 +24,8 @@ type Config struct {
 	RepoURL       string        `json:"repoUrl"`
 	Repo          string        `json:"repo"`
 	Repos         []string      `json:"repos"`
+	AgentHarness  string        `json:"agentHarness,omitempty"`
+	AgentCommand  string        `json:"agentCommand,omitempty"`
 	BaseBranch    string        `json:"baseBranch"`
 	TargetSubdir  string        `json:"targetSubdir"`
 	Prompt        string        `json:"prompt"`
@@ -77,6 +81,8 @@ func rejectSnakeCaseRunConfigFields(raw map[string]json.RawMessage) error {
 		"repo_url":          "repoUrl",
 		"base_branch":       "baseBranch",
 		"target_subdir":     "targetSubdir",
+		"agent_harness":     "agentHarness",
+		"agent_command":     "agentCommand",
 		"commit_message":    "commitMessage",
 		"pr_title":          "prTitle",
 		"pr_body":           "prBody",
@@ -155,6 +161,16 @@ func (c *Config) ApplyDefaults() {
 		c.TargetSubdir = "."
 	}
 
+	c.AgentHarness = strings.ToLower(strings.TrimSpace(c.AgentHarness))
+	if c.AgentHarness == "" {
+		c.AgentHarness = strings.ToLower(strings.TrimSpace(os.Getenv("HARNESS_AGENT_HARNESS")))
+	}
+
+	c.AgentCommand = strings.TrimSpace(c.AgentCommand)
+	if c.AgentCommand == "" {
+		c.AgentCommand = strings.TrimSpace(os.Getenv("HARNESS_AGENT_COMMAND"))
+	}
+
 	c.Prompt = strings.TrimSpace(c.Prompt)
 	c.Images = normalizePromptImages(c.Images)
 	c.GitHubHandle = normalizeReviewer(c.GitHubHandle)
@@ -203,6 +219,9 @@ func (c Config) Validate() error {
 	}
 	if strings.TrimSpace(c.Prompt) == "" {
 		return fmt.Errorf("prompt is required")
+	}
+	if _, err := agentruntime.Resolve(c.AgentHarness, c.AgentCommand); err != nil {
+		return err
 	}
 	for i, image := range c.Images {
 		if err := validatePromptImage(image, i); err != nil {

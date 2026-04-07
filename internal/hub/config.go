@@ -8,6 +8,8 @@ import (
 	"os"
 	"runtime"
 	"strings"
+
+	"github.com/jef/moltenhub-code/internal/agentruntime"
 )
 
 const (
@@ -21,15 +23,17 @@ const (
 
 // InitConfig is the init.json contract for hub runtime mode.
 type InitConfig struct {
-	Version    string           `json:"version"`
-	BaseURL    string           `json:"base_url"`
-	BindToken  string           `json:"bind_token"`
-	AgentToken string           `json:"agent_token"`
-	SessionKey string           `json:"session_key"`
-	Handle     string           `json:"handle"`
-	Profile    ProfileConfig    `json:"profile"`
-	Skill      SkillConfig      `json:"-"`
-	Dispatcher DispatcherConfig `json:"dispatcher"`
+	Version      string           `json:"version"`
+	BaseURL      string           `json:"base_url"`
+	BindToken    string           `json:"bind_token"`
+	AgentToken   string           `json:"agent_token"`
+	AgentHarness string           `json:"agent_harness,omitempty"`
+	AgentCommand string           `json:"agent_command,omitempty"`
+	SessionKey   string           `json:"session_key"`
+	Handle       string           `json:"handle"`
+	Profile      ProfileConfig    `json:"profile"`
+	Skill        SkillConfig      `json:"-"`
+	Dispatcher   DispatcherConfig `json:"dispatcher"`
 }
 
 // ProfileConfig controls optional agent profile sync on startup.
@@ -94,6 +98,14 @@ func (c *InitConfig) ApplyDefaults() {
 
 	c.BindToken = strings.TrimSpace(c.BindToken)
 	c.AgentToken = strings.TrimSpace(c.AgentToken)
+	c.AgentHarness = strings.ToLower(strings.TrimSpace(c.AgentHarness))
+	if c.AgentHarness == "" {
+		c.AgentHarness = strings.ToLower(strings.TrimSpace(os.Getenv("HARNESS_AGENT_HARNESS")))
+	}
+	c.AgentCommand = strings.TrimSpace(c.AgentCommand)
+	if c.AgentCommand == "" {
+		c.AgentCommand = strings.TrimSpace(os.Getenv("HARNESS_AGENT_COMMAND"))
+	}
 	c.SessionKey = strings.TrimSpace(c.SessionKey)
 	if c.SessionKey == "" {
 		c.SessionKey = defaultInitSessionKey
@@ -165,6 +177,9 @@ func (c InitConfig) Validate() error {
 	}
 	if strings.TrimSpace(c.Skill.ResultType) == "" {
 		return fmt.Errorf("skill.result_type is required")
+	}
+	if _, err := agentruntime.Resolve(c.AgentHarness, c.AgentCommand); err != nil {
+		return err
 	}
 	if c.Dispatcher.MaxParallel < 1 {
 		return fmt.Errorf("dispatcher.max_parallel must be >= 1")
