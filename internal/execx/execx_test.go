@@ -24,6 +24,23 @@ func TestOSRunnerRunSuccess(t *testing.T) {
 	}
 }
 
+func TestOSRunnerRunPipesStdin(t *testing.T) {
+	t.Parallel()
+
+	r := OSRunner{}
+	res, err := r.Run(context.Background(), Command{
+		Name:  "bash",
+		Args:  []string{"-lc", "cat"},
+		Stdin: "hello-from-stdin",
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if got, want := res.Stdout, "hello-from-stdin"; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+}
+
 func TestOSRunnerRunFailure(t *testing.T) {
 	t.Parallel()
 

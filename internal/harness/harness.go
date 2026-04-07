@@ -1188,12 +1188,12 @@ func codexCommandWithOptions(targetDir, prompt string, opts codexRunOptions) exe
 		}
 		args = append(args, "--image", imagePath)
 	}
-	args = append(args, withCompletionGatePrompt(prompt))
 
 	return execx.Command{
-		Dir:  targetDir,
-		Name: "codex",
-		Args: args,
+		Dir:   targetDir,
+		Name:  "codex",
+		Args:  args,
+		Stdin: withCompletionGatePrompt(prompt),
 	}
 }
 

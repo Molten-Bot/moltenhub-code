@@ -1212,12 +1212,18 @@ func TestCommandBuilders(t *testing.T) {
 	}
 
 	codex := codexCommand(targetDir, prompt)
-	if codex.Name != "codex" || codex.Dir != targetDir || !reflect.DeepEqual(codex.Args, []string{"exec", "--sandbox", "workspace-write", withCompletionGatePrompt(prompt)}) {
+	if codex.Name != "codex" || codex.Dir != targetDir || !reflect.DeepEqual(codex.Args, []string{"exec", "--sandbox", "workspace-write"}) {
 		t.Fatalf("codex command unexpected: %+v", codex)
 	}
+	if got, want := codex.Stdin, withCompletionGatePrompt(prompt); got != want {
+		t.Fatalf("codex stdin = %q, want %q", got, want)
+	}
 	codexWorkspace := codexCommandWithOptions(targetDir, prompt, codexRunOptions{SkipGitRepoCheck: true})
-	if codexWorkspace.Name != "codex" || codexWorkspace.Dir != targetDir || !reflect.DeepEqual(codexWorkspace.Args, []string{"exec", "--sandbox", "workspace-write", "--skip-git-repo-check", withCompletionGatePrompt(prompt)}) {
+	if codexWorkspace.Name != "codex" || codexWorkspace.Dir != targetDir || !reflect.DeepEqual(codexWorkspace.Args, []string{"exec", "--sandbox", "workspace-write", "--skip-git-repo-check"}) {
 		t.Fatalf("codex workspace command unexpected: %+v", codexWorkspace)
+	}
+	if got, want := codexWorkspace.Stdin, withCompletionGatePrompt(prompt); got != want {
+		t.Fatalf("codex workspace stdin = %q, want %q", got, want)
 	}
 	codexWithImages := codexCommandWithOptions(targetDir, prompt, codexRunOptions{
 		SkipGitRepoCheck: true,
@@ -1229,9 +1235,11 @@ func TestCommandBuilders(t *testing.T) {
 		"--skip-git-repo-check",
 		"--image", "/tmp/run/prompt-images/01-shot.png",
 		"--image", "/tmp/run/prompt-images/02-shot.png",
-		withCompletionGatePrompt(prompt),
 	}) {
 		t.Fatalf("codex image command unexpected: %+v", codexWithImages)
+	}
+	if got, want := codexWithImages.Stdin, withCompletionGatePrompt(prompt); got != want {
+		t.Fatalf("codex image stdin = %q, want %q", got, want)
 	}
 
 	pr := prCreateCommand(repoDir, cfg, branch)
@@ -1459,10 +1467,10 @@ func TestRunCodexStagesAgentsPromptWithinTargetDir(t *testing.T) {
 	if runner.cmd.Name != "codex" || runner.cmd.Dir != targetDir {
 		t.Fatalf("unexpected codex command: %+v", runner.cmd)
 	}
-	if got, want := len(runner.cmd.Args), 4; got != want {
+	if got, want := len(runner.cmd.Args), 3; got != want {
 		t.Fatalf("len(captured.Args) = %d, want %d", got, want)
 	}
-	prompt := runner.cmd.Args[len(runner.cmd.Args)-1]
+	prompt := runner.cmd.Stdin
 	re := regexp.MustCompile(`Use (.+) as your primary implementation instructions`)
 	matches := re.FindStringSubmatch(prompt)
 	if len(matches) != 2 {

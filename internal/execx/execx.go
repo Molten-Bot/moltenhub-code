@@ -14,6 +14,8 @@ type Command struct {
 	Dir  string
 	Name string
 	Args []string
+	// Stdin is optional input piped to the command's stdin.
+	Stdin string
 }
 
 // Result is subprocess output.
@@ -52,6 +54,9 @@ func runWithStream(ctx context.Context, cmd Command, handler StreamLineHandler) 
 	c := exec.CommandContext(ctx, cmd.Name, cmd.Args...)
 	if cmd.Dir != "" {
 		c.Dir = cmd.Dir
+	}
+	if cmd.Stdin != "" {
+		c.Stdin = strings.NewReader(cmd.Stdin)
 	}
 
 	var stdout bytes.Buffer
