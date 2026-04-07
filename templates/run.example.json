@@ -1,7 +1,7 @@
 {
   "repo": "git@github.com:acme/target-repo.git",
-  "base_branch": "main",
-  "target_subdir": ".",
-  "github_handle": "octocat",
+  "baseBranch": "main",
+  "targetSubdir": ".",
+  "githubHandle": "octocat",
   "prompt": "Add your prompt here."
 }

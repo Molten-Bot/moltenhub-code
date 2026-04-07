@@ -15,7 +15,7 @@ func TestLoadSupportsJSONCAndSimplifiedFields(t *testing.T) {
 	jsonWithComments := `{
   // "version": "v1",
   "repo": "git@github.com:acme/repo.git",
-  // "repo_url": "git@github.com:acme/repo.git",
+  // "repoUrl": "git@github.com:acme/repo.git",
   "prompt": "Implement API change and update tests"
 }
 
@@ -54,7 +54,7 @@ func TestLoadDefaultsBaseBranch(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
 	json := `{
-  "repo_url": "git@github.com:acme/repo.git",
+  "repoUrl": "git@github.com:acme/repo.git",
   "prompt": "fix tests"
 }`
 	if err := os.WriteFile(path, []byte(json), 0o644); err != nil {
@@ -70,13 +70,56 @@ func TestLoadDefaultsBaseBranch(t *testing.T) {
 	}
 }
 
+func TestLoadSupportsLegacySnakeCaseAliases(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	json := `{
+  "repo_url": "git@github.com:acme/repo.git",
+  "base_branch": "release",
+  "target_subdir": ".",
+  "prompt": "inspect screenshot",
+  "github_handle": "@octocat",
+  "images": [
+    {"name":"shot.png","media_type":"image/png","data_base64":"aGVsbG8="}
+  ]
+}`
+	if err := os.WriteFile(path, []byte(json), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got, want := cfg.RepoURL, "git@github.com:acme/repo.git"; got != want {
+		t.Fatalf("RepoURL = %q, want %q", got, want)
+	}
+	if got, want := cfg.BaseBranch, "release"; got != want {
+		t.Fatalf("BaseBranch = %q, want %q", got, want)
+	}
+	if got, want := cfg.TargetSubdir, "."; got != want {
+		t.Fatalf("TargetSubdir = %q, want %q", got, want)
+	}
+	if got, want := cfg.GitHubHandle, "octocat"; got != want {
+		t.Fatalf("GitHubHandle = %q, want %q", got, want)
+	}
+	if got, want := len(cfg.Images), 1; got != want {
+		t.Fatalf("len(Images) = %d, want %d", got, want)
+	}
+	if got, want := cfg.Images[0].DataBase64, "aGVsbG8="; got != want {
+		t.Fatalf("Images[0].DataBase64 = %q, want %q", got, want)
+	}
+}
+
 func TestLoadPreservesDoubleSlashInsideStrings(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
 	json := `{
-  "repo_url": "https://github.com/acme/repo.git",
+  "repoUrl": "https://github.com/acme/repo.git",
   "prompt": "Update docs that reference https://example.com/docs"
 }`
 	if err := os.WriteFile(path, []byte(json), 0o644); err != nil {
@@ -108,7 +151,7 @@ func TestLoadRejectsMissingRepo(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "repo, repo_url, or repos[] is required") {
+	if !strings.Contains(err.Error(), "repo, repoUrl, or repos[] is required") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -149,7 +192,7 @@ func TestLoadSupportsGitHubHandleAsReviewer(t *testing.T) {
 	json := `{
   "repo": "git@github.com:acme/repo.git",
   "prompt": "ship change",
-  "github_handle": "@octocat"
+  "githubHandle": "@octocat"
 }`
 	if err := os.WriteFile(path, []byte(json), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)

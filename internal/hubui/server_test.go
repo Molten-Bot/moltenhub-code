@@ -573,7 +573,7 @@ func TestHandlerLocalPromptSubmitAccepted(t *testing.T) {
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
-	payload := `{"repo":"git@github.com:acme/repo.git","base_branch":"main","target_subdir":".","prompt":"update docs"}`
+	payload := `{"repo":"git@github.com:acme/repo.git","baseBranch":"main","targetSubdir":".","prompt":"update docs"}`
 	resp, err := http.Post(ts.URL+"/api/local-prompt", "application/json", bytes.NewBufferString(payload))
 	if err != nil {
 		t.Fatalf("POST /api/local-prompt error = %v", err)
@@ -612,7 +612,7 @@ func TestHandlerLocalPromptSubmitAcceptedWithImages(t *testing.T) {
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
-	payload := `{"repo":"git@github.com:acme/repo.git","base_branch":"main","target_subdir":".","prompt":"inspect screenshot","images":[{"name":"shot.png","media_type":"image/png","data_base64":"aGVsbG8="}]}`
+	payload := `{"repo":"git@github.com:acme/repo.git","baseBranch":"main","targetSubdir":".","prompt":"inspect screenshot","images":[{"name":"shot.png","mediaType":"image/png","dataBase64":"aGVsbG8="}]}`
 	resp, err := http.Post(ts.URL+"/api/local-prompt", "application/json", bytes.NewBufferString(payload))
 	if err != nil {
 		t.Fatalf("POST /api/local-prompt error = %v", err)
@@ -718,7 +718,7 @@ func TestHandlerTaskRerunAccepted(t *testing.T) {
 
 	b := NewBroker()
 	requestID := "req-100"
-	payload := `{"repo":"git@github.com:acme/repo.git","base_branch":"main","target_subdir":".","prompt":"rerun this"}`
+	payload := `{"repo":"git@github.com:acme/repo.git","baseBranch":"main","targetSubdir":".","prompt":"rerun this"}`
 	b.RecordTaskRunConfig(requestID, []byte(payload))
 
 	var gotBody string

@@ -14,9 +14,9 @@ func TestLoadCatalogReadsJSONTasks(t *testing.T) {
 	dir := t.TempDir()
 	data := `{
   "security-review": {
-    "display_name": "Security Review",
+    "displayName": "Security Review",
     "description": "Audit security boundaries.",
-    "target_subdir": ".",
+    "targetSubdir": ".",
     "prompt": "Review the repository."
   }
 }`
@@ -43,6 +43,9 @@ func TestLoadCatalogReadsJSONTasks(t *testing.T) {
 	if got, want := catalog.Names(), []string{"security-review"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Names() = %v, want %v", got, want)
 	}
+	if got, want := catalog.Tasks[0].DisplayName, "Security Review"; got != want {
+		t.Fatalf("DisplayName = %q, want %q", got, want)
+	}
 }
 
 func TestLoadCatalogSupportsMultipleKeyedTasksInOneFile(t *testing.T) {
@@ -55,7 +58,7 @@ func TestLoadCatalogSupportsMultipleKeyedTasksInOneFile(t *testing.T) {
     "prompt": "Review the repository."
   },
   "unit-test-coverage": {
-    "target_subdir": ".",
+    "targetSubdir": ".",
     "prompt": "Raise coverage."
   }
 }`
@@ -81,6 +84,7 @@ func TestLoadCatalogSupportsLegacySingleTaskShape(t *testing.T) {
 	dir := t.TempDir()
 	data := `{
   "name": "security-review",
+  "display_name": "Security Review",
   "description": "Audit security boundaries.",
   "target_subdir": ".",
   "prompt": "Review the repository."

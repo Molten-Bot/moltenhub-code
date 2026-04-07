@@ -1,8 +1,8 @@
 {
   "security-review": {
-    "display_name": "Security Boundary Review",
+    "displayName": "Security Boundary Review",
     "description": "Review security boundaries and produce a documented findings PR.",
-    "target_subdir": ".",
+    "targetSubdir": ".",
     "prompt": "You are a security professional. Review the security boundaries of this codebase and document every plausible point of compromise. The output should be a PR that creates /docs/ with a clear markdown summary of findings. Only finish when the PR exists and required CI/CD checks are green; if checks fail, keep iterating with focused fixes."
   }
 }

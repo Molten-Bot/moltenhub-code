@@ -183,8 +183,8 @@ func dedupeKeyForRunConfig(cfg config.Config) string {
 	repos := normalizeRepoList(cfg.RepoList())
 	payload := struct {
 		Repos      []string `json:"repos"`
-		BaseBranch string   `json:"base_branch"`
-		PromptHash string   `json:"prompt_hash"`
+		BaseBranch string   `json:"baseBranch"`
+		PromptHash string   `json:"promptHash"`
 	}{
 		Repos:      repos,
 		BaseBranch: baseBranch,
