@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -720,7 +719,7 @@ func applyStoredRuntimeConfig(cfg *InitConfig, stored RuntimeConfig) bool {
 	if cfg == nil {
 		return false
 	}
-	if strings.TrimSpace(cfg.AgentToken) != "" {
+	if strings.TrimSpace(cfg.AgentToken) != "" || strings.TrimSpace(cfg.BindToken) != "" {
 		return false
 	}
 
@@ -750,10 +749,6 @@ func applyStoredRuntimeConfig(cfg *InitConfig, stored RuntimeConfig) bool {
 }
 
 func loadStoredRuntimeConfig(primaryPath string) (RuntimeConfig, string, error) {
-	return loadStoredRuntimeConfigWithLegacyPath(primaryPath, legacyRuntimeConfigPath)
-}
-
-func loadStoredRuntimeConfigWithLegacyPath(primaryPath, legacyPath string) (RuntimeConfig, string, error) {
 	primaryPath = strings.TrimSpace(primaryPath)
 	if primaryPath == "" {
 		primaryPath = defaultRuntimeConfigPath()
@@ -762,25 +757,6 @@ func loadStoredRuntimeConfigWithLegacyPath(primaryPath, legacyPath string) (Runt
 	stored, err := LoadRuntimeConfig(primaryPath)
 	if err == nil {
 		return stored, primaryPath, nil
-	}
-	if !errors.Is(err, os.ErrNotExist) {
-		return RuntimeConfig{}, primaryPath, err
-	}
-
-	legacyPath = strings.TrimSpace(legacyPath)
-	if legacyPath == "" {
-		return RuntimeConfig{}, primaryPath, err
-	}
-	if filepath.Clean(legacyPath) == filepath.Clean(primaryPath) {
-		return RuntimeConfig{}, primaryPath, err
-	}
-
-	legacyStored, legacyErr := LoadRuntimeConfig(legacyPath)
-	if legacyErr == nil {
-		return legacyStored, legacyPath, nil
-	}
-	if !errors.Is(legacyErr, os.ErrNotExist) {
-		return RuntimeConfig{}, legacyPath, legacyErr
 	}
 	return RuntimeConfig{}, primaryPath, err
 }

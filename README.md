@@ -152,7 +152,7 @@ Key fields:
 - `profile.bio`
 - `dispatcher.*` (adaptive worker parallelism)
 
-After first successful activation, runtime auth is persisted to `~/.moltenhub/config.json`, so `bind_token` and `handle` are not required in `init.json` for subsequent runs.
+After first successful activation, runtime auth is persisted to `./.moltenhub/config.json`, so `bind_token` and `handle` are not required in `init.json` for subsequent runs.
 
 Runtime-owned fields:
 

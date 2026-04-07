@@ -18,7 +18,7 @@ import (
 	"github.com/jef/moltenhub-code/internal/harness"
 )
 
-func TestApplyStoredRuntimeConfigOverridesTokens(t *testing.T) {
+func TestApplyStoredRuntimeConfigSkipsWhenInitBindTokenProvided(t *testing.T) {
 	t.Parallel()
 
 	cfg := InitConfig{
@@ -33,17 +33,17 @@ func TestApplyStoredRuntimeConfigOverridesTokens(t *testing.T) {
 	}
 
 	applied := applyStoredRuntimeConfig(&cfg, stored)
-	if !applied {
-		t.Fatal("applied = false, want true")
+	if applied {
+		t.Fatal("applied = true, want false")
 	}
-	if cfg.AgentToken != "agent_saved" {
-		t.Fatalf("AgentToken = %q", cfg.AgentToken)
+	if cfg.AgentToken != "" {
+		t.Fatalf("AgentToken = %q, want empty", cfg.AgentToken)
 	}
-	if cfg.BindToken != "" {
-		t.Fatalf("BindToken = %q, want empty", cfg.BindToken)
+	if cfg.BindToken != "bind_token" {
+		t.Fatalf("BindToken = %q, want %q", cfg.BindToken, "bind_token")
 	}
-	if cfg.SessionKey != "saved-session" {
-		t.Fatalf("SessionKey = %q", cfg.SessionKey)
+	if cfg.SessionKey != "main" {
+		t.Fatalf("SessionKey = %q, want %q", cfg.SessionKey, "main")
 	}
 }
 
@@ -87,8 +87,7 @@ func TestApplyStoredRuntimeConfigKeepsInitBaseURL(t *testing.T) {
 	t.Parallel()
 
 	cfg := InitConfig{
-		BaseURL:   "https://na.hub.molten.bot/v1",
-		BindToken: "bind_token",
+		BaseURL: "https://na.hub.molten.bot/v1",
 	}
 	stored := RuntimeConfig{
 		BaseURL:    "http://127.0.0.1:37991/v1",
@@ -111,24 +110,23 @@ func TestApplyStoredRuntimeConfigKeepsInitBaseURL(t *testing.T) {
 	}
 }
 
-func TestLoadStoredRuntimeConfigFallsBackToLegacyPath(t *testing.T) {
+func TestLoadStoredRuntimeConfigReadsPrimaryPath(t *testing.T) {
 	root := t.TempDir()
-	primaryPath := filepath.Join(root, "home", ".moltenhub", "config.json")
-	legacyPath := filepath.Join(root, "legacy", ".moltenhub", "config.json")
+	primaryPath := filepath.Join(root, ".moltenhub", "config.json")
 
-	if err := SaveRuntimeConfig(legacyPath, "https://na.hub.molten.bot/v1", "agent_legacy", "main"); err != nil {
-		t.Fatalf("SaveRuntimeConfig(legacy) error = %v", err)
+	if err := SaveRuntimeConfig(primaryPath, "https://na.hub.molten.bot/v1", "agent_primary", "main"); err != nil {
+		t.Fatalf("SaveRuntimeConfig(primary) error = %v", err)
 	}
 
-	cfg, loadedPath, err := loadStoredRuntimeConfigWithLegacyPath(primaryPath, legacyPath)
+	cfg, loadedPath, err := loadStoredRuntimeConfig(primaryPath)
 	if err != nil {
-		t.Fatalf("loadStoredRuntimeConfigWithLegacyPath() error = %v", err)
+		t.Fatalf("loadStoredRuntimeConfig() error = %v", err)
 	}
-	if loadedPath != legacyPath {
-		t.Fatalf("loadedPath = %q, want %q", loadedPath, legacyPath)
+	if loadedPath != primaryPath {
+		t.Fatalf("loadedPath = %q, want %q", loadedPath, primaryPath)
 	}
-	if cfg.Token != "agent_legacy" {
-		t.Fatalf("Token = %q, want %q", cfg.Token, "agent_legacy")
+	if cfg.Token != "agent_primary" {
+		t.Fatalf("Token = %q, want %q", cfg.Token, "agent_primary")
 	}
 }
 
