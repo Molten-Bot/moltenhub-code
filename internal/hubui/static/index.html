@@ -196,13 +196,17 @@
 
         <section class="panel min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
           <div class="panel-header flex items-center justify-between gap-2 border-b border-hub-border bg-black/15 px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
-            <div class="flex items-center gap-2">
-              <span>Tasks</span>
-              <span class="counter text-[0.82rem] font-bold text-hub-accent" id="task-count">0</span>
-            </div>
+            <span>Tasks</span>
             <button id="task-fullscreen-toggle" class="task-fullscreen-toggle" type="button" aria-expanded="false">Full Screen</button>
           </div>
           <div class="scroll task-scroll h-[calc(100%-48px)] overflow-auto">
+            <section class="task-history" aria-label="Prompt history">
+              <div class="task-history-head">
+                <span>History</span>
+                <span class="counter text-[0.82rem] font-bold text-hub-accent" id="task-count">0</span>
+              </div>
+              <div id="task-history-list" class="task-history-list"></div>
+            </section>
             <div id="task-list" class="task-list grid gap-2 p-3"></div>
           </div>
         </section>
@@ -333,6 +337,7 @@
       selectedLibraryTask: "",
       promptVisible: loadPromptVisibility(),
       promptImages: [],
+      promptHistoryByRequestID: new Map(),
       rerunInFlight: new Set(),
       closeInFlight: new Set(),
       expandedTaskOutputIDs: new Set(),
@@ -352,6 +357,7 @@
     const resourceMemText = document.getElementById("resource-mem-text");
     const resourceMetricsText = document.getElementById("resource-metrics-text");
     const taskCount = document.getElementById("task-count");
+    const taskHistoryList = document.getElementById("task-history-list");
     const taskList = document.getElementById("task-list");
     const taskFullscreenToggle = document.getElementById("task-fullscreen-toggle");
     const taskFullscreen = document.getElementById("task-fullscreen");
@@ -1131,6 +1137,97 @@
       return task.prompt.replace(/\s+/g, " ").trim();
     }
 
+    function upsertPromptHistoryEntry(requestID, prompt, updatedAt) {
+      requestID = String(requestID || "").trim();
+      prompt = String(prompt || "").trim();
+      if (!requestID || !prompt) {
+        return;
+      }
+
+      const normalizedUpdatedAt = String(updatedAt || "").trim();
+      const existing = state.promptHistoryByRequestID.get(requestID);
+      if (existing) {
+        const existingTS = parseTaskTimestamp(existing.updated_at);
+        const nextTS = parseTaskTimestamp(normalizedUpdatedAt);
+        if (nextTS > 0 && existingTS > nextTS) {
+          return;
+        }
+      }
+
+      state.promptHistoryByRequestID.set(requestID, {
+        request_id: requestID,
+        prompt,
+        updated_at: normalizedUpdatedAt,
+      });
+    }
+
+    function updatePromptHistory(snapshot) {
+      const tasks = Array.isArray(snapshot?.tasks) ? snapshot.tasks : [];
+      const generatedAt = String(snapshot?.generated_at || "").trim();
+      for (const task of tasks) {
+        if (!task || !task.request_id) {
+          continue;
+        }
+        const prompt = taskPromptText(task);
+        if (!prompt) {
+          continue;
+        }
+        upsertPromptHistoryEntry(
+          task.request_id,
+          prompt,
+          String(task.updated_at || task.started_at || generatedAt).trim(),
+        );
+      }
+    }
+
+    function sortedPromptHistoryEntries() {
+      const entries = Array.from(state.promptHistoryByRequestID.values());
+      entries.sort((a, b) => {
+        const updatedDiff = parseTaskTimestamp(b?.updated_at) - parseTaskTimestamp(a?.updated_at);
+        if (updatedDiff !== 0) {
+          return updatedDiff;
+        }
+        return String(b?.request_id || "").localeCompare(String(a?.request_id || ""));
+      });
+      return entries;
+    }
+
+    function renderPromptHistory() {
+      if (!taskHistoryList) {
+        return;
+      }
+
+      const entries = sortedPromptHistoryEntries();
+      if (taskCount) {
+        taskCount.textContent = String(entries.length);
+      }
+      taskHistoryList.replaceChildren();
+
+      if (!entries.length) {
+        const empty = document.createElement("div");
+        empty.className = "task-history-empty";
+        empty.textContent = "No prompts captured yet.";
+        taskHistoryList.appendChild(empty);
+        return;
+      }
+
+      for (const entry of entries) {
+        const item = document.createElement("article");
+        item.className = "task-history-item";
+
+        const id = document.createElement("div");
+        id.className = "task-history-id";
+        id.textContent = entry.request_id;
+
+        const prompt = document.createElement("div");
+        prompt.className = "task-history-prompt";
+        prompt.textContent = entry.prompt;
+
+        item.append(id, prompt);
+        taskHistoryList.appendChild(item);
+      }
+    }
+
     function taskPromptPreview(task) {
       const prompt = taskPromptText(task);
       if (!prompt) return "";
@@ -1768,7 +1865,7 @@
     }
 
     function renderTasks(snapshot) {
-      renderTaskCollection(displayTasks(snapshot), taskList, taskCount);
+      renderTaskCollection(displayTasks(snapshot), taskList, null);
     }
 
     function renderFullscreenTasks(snapshot) {
@@ -1866,6 +1963,8 @@
       }
       dropReposFromHistory(failedCloneRepos);
       rememberRepos(observedRepos);
+      updatePromptHistory(snapshot);
+      renderPromptHistory();
       renderHubConnection(snapshot);
       renderResourceMetrics(snapshot);
       renderTasks(snapshot);
