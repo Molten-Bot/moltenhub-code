@@ -135,8 +135,8 @@ func TestLoadHubBootConfigUsesDefaultRuntimeConfigWhenFlagsOmitted(t *testing.T)
 	if exitCode != harness.ExitSuccess {
 		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
 	}
-	if cfg.RuntimeConfigPath != filepath.Join(".", ".moltenhub", "config.json") {
-		t.Fatalf("RuntimeConfigPath = %q, want %q", cfg.RuntimeConfigPath, filepath.Join(".", ".moltenhub", "config.json"))
+	if cfg.RuntimeConfigPath != "./.moltenhub/config.json" {
+		t.Fatalf("RuntimeConfigPath = %q, want %q", cfg.RuntimeConfigPath, "./.moltenhub/config.json")
 	}
 	if cfg.AgentToken != "agent_123" {
 		t.Fatalf("AgentToken = %q, want %q", cfg.AgentToken, "agent_123")
