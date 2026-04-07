@@ -319,6 +319,9 @@ func TestBrokerTaskRunConfigSupportsRerunMetadata(t *testing.T) {
 	if snap.Tasks[0].Prompt != "rerun me" {
 		t.Fatalf("task.Prompt = %q, want %q", snap.Tasks[0].Prompt, "rerun me")
 	}
+	if snap.Tasks[0].Branch != "main" {
+		t.Fatalf("task.Branch = %q, want %q", snap.Tasks[0].Branch, "main")
+	}
 
 	got, ok := b.TaskRunConfig(requestID)
 	if !ok {
@@ -335,6 +338,25 @@ func TestBrokerTaskRunConfigSupportsRerunMetadata(t *testing.T) {
 	}
 	if bytes.Equal(gotAgain, got) {
 		t.Fatalf("TaskRunConfig() returned shared slice %q", string(gotAgain))
+	}
+}
+
+func TestBrokerTaskRunConfigSupportsLegacyBaseBranchAlias(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-rerun-legacy"
+	payload := []byte(`{"repo":"git@github.com:acme/repo.git","base_branch":"release/2026.04","target_subdir":".","prompt":"rerun me"}`)
+
+	b.RecordTaskRunConfig(requestID, payload)
+	b.IngestLog("dispatch status=start request_id=req-rerun-legacy skill=moltenhub_code_run repo=git@github.com:acme/repo.git")
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	if got, want := snap.Tasks[0].Branch, "release/2026.04"; got != want {
+		t.Fatalf("task.Branch = %q, want %q", got, want)
 	}
 }
 

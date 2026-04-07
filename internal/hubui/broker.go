@@ -250,6 +250,7 @@ func (b *Broker) RecordTaskRunConfig(requestID string, runConfigJSON []byte) {
 	}
 	cfgCopy := append([]byte(nil), runConfigJSON...)
 	prompt := promptFromRunConfigJSON(cfgCopy)
+	branch := branchFromRunConfigJSON(cfgCopy)
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -262,6 +263,12 @@ func (b *Broker) RecordTaskRunConfig(requestID string, runConfigJSON []byte) {
 	if prompt != "" {
 		if t, ok := b.tasks[requestID]; ok && t.Prompt != prompt {
 			t.Prompt = prompt
+			changed = true
+		}
+	}
+	if branch != "" {
+		if t, ok := b.tasks[requestID]; ok && t.Branch != branch {
+			t.Branch = branch
 			changed = true
 		}
 	}
@@ -367,6 +374,9 @@ func (b *Broker) ensureTaskLocked(requestID string, now time.Time) *taskState {
 		if existing.Prompt == "" {
 			existing.Prompt = promptFromRunConfigJSON(b.runConfigs[requestID])
 		}
+		if existing.Branch == "" {
+			existing.Branch = branchFromRunConfigJSON(b.runConfigs[requestID])
+		}
 		existing.UpdatedAt = now
 		return existing
 	}
@@ -374,6 +384,7 @@ func (b *Broker) ensureTaskLocked(requestID string, now time.Time) *taskState {
 	t := &taskState{
 		RequestID: requestID,
 		Prompt:    promptFromRunConfigJSON(b.runConfigs[requestID]),
+		Branch:    branchFromRunConfigJSON(b.runConfigs[requestID]),
 		Status:    "pending",
 		StartedAt: now,
 		UpdatedAt: now,
@@ -772,6 +783,21 @@ func promptFromRunConfigJSON(runConfigJSON []byte) string {
 		return ""
 	}
 	return strings.TrimSpace(raw.Prompt)
+}
+
+func branchFromRunConfigJSON(runConfigJSON []byte) string {
+	if len(runConfigJSON) == 0 {
+		return ""
+	}
+	var raw struct {
+		BaseBranch       string `json:"baseBranch"`
+		LegacyBaseBranch string `json:"base_branch"`
+		Branch           string `json:"branch"`
+	}
+	if err := json.Unmarshal(runConfigJSON, &raw); err != nil {
+		return ""
+	}
+	return firstNonEmpty(raw.BaseBranch, raw.LegacyBaseBranch, raw.Branch)
 }
 
 func isCompletedTaskStatus(status string) bool {
