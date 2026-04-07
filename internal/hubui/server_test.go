@@ -358,6 +358,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="builder-image-paste-target"`) {
 		t.Fatalf("expected index html to include screenshot paste target")
 	}
+	if !strings.Contains(markup, `class="prompt-control prompt-action-paste"`) {
+		t.Fatalf("expected index html to render screenshot paste target in the action row style")
+	}
 	if !strings.Contains(markup, `id="builder-image-field" class="prompt-field grid gap-2 w-full max-w-full"`) {
 		t.Fatalf("expected index html to render screenshot field at full width")
 	}
@@ -407,10 +410,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to clear queued status after timeout")
 	}
 	statusIdx := strings.Index(markup, `id="local-prompt-status"`)
+	pasteIdx := strings.Index(markup, `id="builder-image-paste-target"`)
 	clearIdx := strings.Index(markup, `id="builder-images-clear"`)
 	runIdx := strings.Index(markup, `id="local-prompt-submit"`)
-	if statusIdx == -1 || clearIdx == -1 || runIdx == -1 || statusIdx > clearIdx || clearIdx > runIdx {
-		t.Fatalf("expected queued status, Clear, and Run to render in left-to-right order")
+	if statusIdx == -1 || pasteIdx == -1 || clearIdx == -1 || runIdx == -1 || statusIdx > pasteIdx || pasteIdx > clearIdx || clearIdx > runIdx {
+		t.Fatalf("expected queued status and Paste/Clear/Run controls to render in left-to-right order")
 	}
 	if !strings.Contains(markup, `id="builder-repo-input" class="prompt-control prompt-input"`) || !strings.Contains(markup, `id="builder-target-subdir" class="prompt-control prompt-input"`) {
 		t.Fatalf("expected index html to include builder repo and target subdir inputs")
