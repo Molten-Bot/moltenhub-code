@@ -209,10 +209,41 @@ func TestFailureFollowUpRunConfigUsesRequiredPayloadShapeAndLogContext(t *testin
 	}
 }
 
-func TestFailureFollowUpReposFallsBackWhenFailedRunHasNoRepos(t *testing.T) {
+func TestFailureFollowUpReposUsesFailedRunRepoFirst(t *testing.T) {
 	t.Parallel()
 
-	if got, want := failureFollowUpRepos(config.Config{}), []string{failureFollowUpFallbackRepoURL}; !reflect.DeepEqual(got, want) {
+	failedResult := harness.Result{
+		RepoResults: []harness.RepoResult{
+			{RepoURL: "git@github.com:acme/fallback.git"},
+		},
+	}
+	failedRunCfg := config.Config{
+		Repos: []string{
+			"git@github.com:acme/failed-run.git",
+		},
+	}
+	if got, want := failureFollowUpRepos(failedResult, failedRunCfg), []string{"git@github.com:acme/failed-run.git"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("failureFollowUpRepos() = %v, want %v", got, want)
+	}
+}
+
+func TestFailureFollowUpReposFallsBackToFailedResultRepo(t *testing.T) {
+	t.Parallel()
+
+	failedResult := harness.Result{
+		RepoResults: []harness.RepoResult{
+			{RepoURL: "git@github.com:acme/from-result.git"},
+		},
+	}
+	if got, want := failureFollowUpRepos(failedResult, config.Config{}), []string{"git@github.com:acme/from-result.git"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("failureFollowUpRepos() = %v, want %v", got, want)
+	}
+}
+
+func TestFailureFollowUpReposReturnsNilWhenNoRepoFound(t *testing.T) {
+	t.Parallel()
+
+	if got := failureFollowUpRepos(harness.Result{}, config.Config{}); got != nil {
+		t.Fatalf("failureFollowUpRepos() = %v, want nil", got)
 	}
 }

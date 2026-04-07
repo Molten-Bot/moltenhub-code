@@ -22,8 +22,6 @@ import (
 	"github.com/jef/moltenhub-code/internal/multiplex"
 )
 
-const failureFollowUpFallbackRepoURL = "git@github.com:jefking/moltenhub-code.git"
-
 const failureFollowUpRequiredPrompt = "Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."
 
 func main() {
@@ -307,6 +305,14 @@ func runHub(args []string) int {
 	}
 	queueFailureFollowUp = func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config) {
 		followUpCfg := failureFollowUpRunConfig(failedRequestID, failedResult, failedRunCfg, logRoot)
+		if len(followUpCfg.RepoList()) == 0 {
+			daemonLogger(
+				"dispatch status=warn action=queue_failure_followup request_id=%s err=%q",
+				failedRequestID,
+				"no failed-task repo found for follow-up",
+			)
+			return
+		}
 		followUpRequestID, followUpErr := enqueueLocalRun(ctx, followUpCfg, false, "failure_followup")
 		if followUpErr != nil {
 			daemonLogger(
@@ -460,14 +466,14 @@ func failureFollowUpRunConfig(
 ) config.Config {
 	logPaths := taskLogPaths(logRoot, failedRequestID)
 	return config.Config{
-		Repos:        failureFollowUpRepos(failedRunCfg),
+		Repos:        failureFollowUpRepos(failedResult, failedRunCfg),
 		BaseBranch:   "main",
 		TargetSubdir: ".",
 		Prompt:       failureFollowUpPrompt(logPaths),
 	}
 }
 
-func failureFollowUpRepos(failedRunCfg config.Config) []string {
+func failureFollowUpRepos(failedResult harness.Result, failedRunCfg config.Config) []string {
 	for _, repo := range failedRunCfg.RepoList() {
 		repo = strings.TrimSpace(repo)
 		if repo == "" {
@@ -475,7 +481,14 @@ func failureFollowUpRepos(failedRunCfg config.Config) []string {
 		}
 		return []string{repo}
 	}
-	return []string{failureFollowUpFallbackRepoURL}
+	for _, repoResult := range failedResult.RepoResults {
+		repo := strings.TrimSpace(repoResult.RepoURL)
+		if repo == "" {
+			continue
+		}
+		return []string{repo}
+	}
+	return nil
 }
 
 func failureFollowUpPrompt(logPaths []string) string {
