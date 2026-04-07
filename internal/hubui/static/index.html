@@ -87,7 +87,7 @@
         <section class="panel prompt-wrap min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
           <div class="panel-header flex items-center justify-between gap-2 border-b border-hub-border bg-black/15 px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
             <span>Studio</span>
-            <button id="prompt-visibility-toggle" class="prompt-visibility-toggle" type="button" aria-pressed="true">Hide</button>
+            <button id="prompt-visibility-toggle" class="prompt-visibility-toggle" type="button" aria-pressed="true" aria-label="Minimize Studio panel" title="Minimize Studio panel">▾</button>
           </div>
           <form id="local-prompt-form" class="prompt-form grid gap-2.5 p-3">
             <div class="prompt-mode-row flex flex-wrap items-center gap-2">
@@ -1067,7 +1067,9 @@
       }
       if (promptVisibilityToggle) {
         promptVisibilityToggle.disabled = automatic;
-        promptVisibilityToggle.textContent = visible ? "Hide" : "Show";
+        promptVisibilityToggle.textContent = visible ? "▾" : "▸";
+        promptVisibilityToggle.setAttribute("aria-label", visible ? "Minimize Studio panel" : "Expand Studio panel");
+        promptVisibilityToggle.title = visible ? "Minimize Studio panel" : "Expand Studio panel";
         promptVisibilityToggle.setAttribute("aria-pressed", visible ? "true" : "false");
       }
       if (automatic) {
@@ -1736,12 +1738,13 @@
           const pauseRun = document.createElement("button");
           pauseRun.type = "button";
           pauseRun.className = "task-control-toggle";
-          pauseRun.textContent = paused ? "Run" : "Pause";
+          pauseRun.textContent = paused ? "▶" : "||";
           pauseRun.title = paused
             ? "Resume this queued task"
             : canTogglePauseRun
               ? "Pause this queued task"
               : "Use Stop to kill a running task";
+          pauseRun.setAttribute("aria-label", paused ? "Run task" : "Pause task");
           pauseRun.disabled = taskControlBusy || !canTogglePauseRun;
           pauseRun.addEventListener("click", (event) => {
             event.stopPropagation();
@@ -1752,8 +1755,9 @@
           const stop = document.createElement("button");
           stop.type = "button";
           stop.className = "task-stop";
-          stop.textContent = "Stop";
+          stop.textContent = "■";
           stop.title = "Kill this task";
+          stop.setAttribute("aria-label", "Stop task");
           stop.disabled = taskControlBusy;
           stop.addEventListener("click", (event) => {
             event.stopPropagation();
@@ -1780,8 +1784,9 @@
           const close = document.createElement("button");
           close.type = "button";
           close.className = "task-close";
-          close.textContent = "Close";
+          close.textContent = "X";
           close.title = "Abandon completed task";
+          close.setAttribute("aria-label", "Close task");
           close.disabled = state.closeInFlight.has(task.request_id);
           close.addEventListener("click", (event) => {
             event.stopPropagation();
