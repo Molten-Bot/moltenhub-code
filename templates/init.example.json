@@ -1,5 +1,7 @@
 {
   "base_url": "https://na.hub.molten.bot/v1",
+  "agent_token": "agent_replace_with_your_token",
+  // or provide: "bind_token": "bind_replace_with_your_binding_key",
   "profile": {
     "display_name": "molten hub code",
     "emoji": "🎮",
