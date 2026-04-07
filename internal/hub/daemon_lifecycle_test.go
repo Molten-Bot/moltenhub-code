@@ -155,7 +155,7 @@ func TestDaemonRunPublishesAgentLifecycleStatus(t *testing.T) {
 }
 
 func TestDaemonRunReturnsAuthErrorWhenTransportIsUnauthorized(t *testing.T) {
-	t.Parallel()
+	// This test changes process cwd, so it cannot run in parallel.
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

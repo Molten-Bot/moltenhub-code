@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -145,12 +146,13 @@ func TestDaemonRunUsesStoredRuntimeConfigBaseURLWhenInitBaseURLOmitted(t *testin
 	})
 
 	var (
-		reqMu  sync.Mutex
-		paths  []string
-		logMu  sync.Mutex
-		logs   []string
-		base   string
-		token  = "agent_saved"
+		reqMu        sync.Mutex
+		paths        []string
+		pullTimeouts []string
+		logMu        sync.Mutex
+		logs         []string
+		base         string
+		token        = "agent_saved"
 	)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -172,6 +174,7 @@ func TestDaemonRunUsesStoredRuntimeConfigBaseURLWhenInitBaseURLOmitted(t *testin
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		case "/v1/openclaw/messages/pull":
+			pullTimeouts = append(pullTimeouts, r.URL.Query().Get("timeout_ms"))
 			w.WriteHeader(http.StatusNoContent)
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -182,6 +185,24 @@ func TestDaemonRunUsesStoredRuntimeConfigBaseURLWhenInitBaseURLOmitted(t *testin
 
 	if err := SaveRuntimeConfig("", base, token, "main"); err != nil {
 		t.Fatalf("SaveRuntimeConfig() error = %v", err)
+	}
+	runtimeCfgPath := defaultRuntimeConfigPath()
+	cfgData, err := os.ReadFile(runtimeCfgPath)
+	if err != nil {
+		t.Fatalf("read runtime config: %v", err)
+	}
+	var runtimeCfg RuntimeConfig
+	if err := json.Unmarshal(cfgData, &runtimeCfg); err != nil {
+		t.Fatalf("parse runtime config: %v", err)
+	}
+	const storedTimeoutMs = 12345
+	runtimeCfg.TimeoutMs = storedTimeoutMs
+	encodedRuntimeCfg, err := json.Marshal(runtimeCfg)
+	if err != nil {
+		t.Fatalf("marshal runtime config: %v", err)
+	}
+	if err := os.WriteFile(runtimeCfgPath, append(encodedRuntimeCfg, '\n'), 0o600); err != nil {
+		t.Fatalf("write runtime config: %v", err)
 	}
 
 	d := NewDaemon(execx.OSRunner{})
@@ -201,6 +222,7 @@ func TestDaemonRunUsesStoredRuntimeConfigBaseURLWhenInitBaseURLOmitted(t *testin
 
 	reqMu.Lock()
 	gotPaths := append([]string(nil), paths...)
+	gotPullTimeouts := append([]string(nil), pullTimeouts...)
 	reqMu.Unlock()
 
 	foundAgentsMe := false
@@ -212,6 +234,20 @@ func TestDaemonRunUsesStoredRuntimeConfigBaseURLWhenInitBaseURLOmitted(t *testin
 	}
 	if !foundAgentsMe {
 		t.Fatalf("expected auth request against stored runtime base URL, got paths=%v", gotPaths)
+	}
+	wantTimeout := strconv.Itoa(storedTimeoutMs)
+	if len(gotPullTimeouts) == 0 {
+		t.Fatalf("expected pull requests, got none (paths=%v)", gotPaths)
+	}
+	foundStoredTimeout := false
+	for _, got := range gotPullTimeouts {
+		if got == wantTimeout {
+			foundStoredTimeout = true
+			break
+		}
+	}
+	if !foundStoredTimeout {
+		t.Fatalf("expected pull timeout_ms %q from stored runtime config, got %v", wantTimeout, gotPullTimeouts)
 	}
 
 	wantLog := fmt.Sprintf("hub.connection status=configured base_url=%s", base)
