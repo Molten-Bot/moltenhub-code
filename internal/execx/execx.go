@@ -66,9 +66,51 @@ func runWithStream(ctx context.Context, cmd Command, handler StreamLineHandler) 
 	stderrEmitter.Flush()
 	res := Result{Stdout: stdout.String(), Stderr: stderr.String()}
 	if err != nil {
+		if detail := commandFailureDetail(res); detail != "" {
+			return res, fmt.Errorf("run %s %v: %w (%s)", cmd.Name, cmd.Args, err, detail)
+		}
 		return res, fmt.Errorf("run %s %v: %w", cmd.Name, cmd.Args, err)
 	}
 	return res, nil
+}
+
+func commandFailureDetail(res Result) string {
+	if detail := summarizeOutputTail(res.Stderr); detail != "" {
+		return detail
+	}
+	return summarizeOutputTail(res.Stdout)
+}
+
+func summarizeOutputTail(text string) string {
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+
+	lines := strings.Split(text, "\n")
+	tail := make([]string, 0, 3)
+	for i := len(lines) - 1; i >= 0 && len(tail) < 3; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		tail = append(tail, line)
+	}
+	if len(tail) == 0 {
+		return ""
+	}
+	for i, j := 0, len(tail)-1; i < j; i, j = i+1, j-1 {
+		tail[i], tail[j] = tail[j], tail[i]
+	}
+
+	summary := strings.Join(tail, " | ")
+	const maxSummaryChars = 320
+	if len(summary) > maxSummaryChars {
+		summary = summary[:maxSummaryChars-3] + "..."
+	}
+	return summary
 }
 
 type lineEmitter struct {
