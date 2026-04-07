@@ -4,7 +4,9 @@ services:
     build:
       context: .
     ports:
-      - 3232:7777  
+      - 3232:7777
     env_file:
       - .env
-    command: ["harness", "run"]
+    volumes:
+      - ./docker/config:/workspace/config
+    command: ["with-config"]
