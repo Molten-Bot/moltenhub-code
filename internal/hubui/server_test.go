@@ -486,6 +486,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "clearPromptImages();") {
 		t.Fatalf("expected index html to clear attached screenshots after a successful submit")
 	}
+	if !strings.Contains(markup, "function clearSubmittedPromptDraft(") {
+		t.Fatalf("expected index html to include submitted prompt clearing helper")
+	}
+	if !strings.Contains(markup, "builderPromptInput.value = \"\";") || !strings.Contains(markup, "localPromptInput.value = \"\";") {
+		t.Fatalf("expected index html to clear builder and raw prompt inputs after submit")
+	}
+	if !strings.Contains(markup, "clearSubmittedPromptDraft();") {
+		t.Fatalf("expected index html to clear the submitted prompt draft after a successful queue")
+	}
 	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":false};`) {
 		t.Fatalf("expected index html to include default UI config")
 	}

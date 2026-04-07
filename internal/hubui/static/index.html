@@ -1204,6 +1204,11 @@
       };
     }
 
+    function clearSubmittedPromptDraft() {
+      builderPromptInput.value = "";
+      localPromptInput.value = "";
+    }
+
     function renderRepoHistorySelect(historyField, select, input) {
       if (!historyField || !select || !input) {
         return;
@@ -2276,6 +2281,7 @@
         } catch (_err) {
           // Ignore repo history extraction failures.
         }
+        clearSubmittedPromptDraft();
         clearPromptImages();
         setLocalPromptStatus("ok", `Queued request ${requestID}`);
       } catch (err) {
