@@ -83,6 +83,34 @@ func TestApplyStoredRuntimeConfigKeepsExplicitAgentToken(t *testing.T) {
 	}
 }
 
+func TestApplyStoredRuntimeConfigKeepsInitBaseURL(t *testing.T) {
+	t.Parallel()
+
+	cfg := InitConfig{
+		BaseURL:   "https://na.hub.molten.bot/v1",
+		BindToken: "bind_token",
+	}
+	stored := RuntimeConfig{
+		BaseURL:    "http://127.0.0.1:37991/v1",
+		Token:      "agent_saved",
+		SessionKey: "saved-session",
+	}
+
+	applied := applyStoredRuntimeConfig(&cfg, stored)
+	if !applied {
+		t.Fatal("applied = false, want true")
+	}
+	if cfg.BaseURL != "https://na.hub.molten.bot/v1" {
+		t.Fatalf("BaseURL = %q, want %q", cfg.BaseURL, "https://na.hub.molten.bot/v1")
+	}
+	if cfg.AgentToken != "agent_saved" {
+		t.Fatalf("AgentToken = %q, want %q", cfg.AgentToken, "agent_saved")
+	}
+	if cfg.SessionKey != "saved-session" {
+		t.Fatalf("SessionKey = %q, want %q", cfg.SessionKey, "saved-session")
+	}
+}
+
 func TestLoadStoredRuntimeConfigFallsBackToLegacyPath(t *testing.T) {
 	root := t.TempDir()
 	primaryPath := filepath.Join(root, "home", ".moltenhub", "config.json")

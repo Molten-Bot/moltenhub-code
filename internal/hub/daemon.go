@@ -732,9 +732,13 @@ func applyStoredRuntimeConfig(cfg *InitConfig, stored RuntimeConfig) bool {
 	cfg.AgentToken = token
 	cfg.BindToken = ""
 
-	baseURL := strings.TrimSpace(stored.BaseURL)
-	if baseURL != "" {
-		cfg.BaseURL = strings.TrimRight(baseURL, "/")
+	// Keep the init-config endpoint as the source of truth for this run.
+	// Persisted runtime config is used for credential/session reuse only.
+	if strings.TrimSpace(cfg.BaseURL) == "" {
+		baseURL := strings.TrimSpace(stored.BaseURL)
+		if baseURL != "" {
+			cfg.BaseURL = strings.TrimRight(baseURL, "/")
+		}
 	}
 
 	sessionKey := strings.TrimSpace(stored.SessionKey)
