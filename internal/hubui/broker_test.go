@@ -319,6 +319,18 @@ func TestBrokerTaskRunConfigSupportsRerunMetadata(t *testing.T) {
 	if snap.Tasks[0].Prompt != "rerun me" {
 		t.Fatalf("task.Prompt = %q, want %q", snap.Tasks[0].Prompt, "rerun me")
 	}
+	if snap.Tasks[0].Branch != "main" {
+		t.Fatalf("task.Branch = %q, want %q", snap.Tasks[0].Branch, "main")
+	}
+	if snap.Tasks[0].Repo != "git@github.com:acme/repo.git" {
+		t.Fatalf("task.Repo = %q, want %q", snap.Tasks[0].Repo, "git@github.com:acme/repo.git")
+	}
+	if got, want := len(snap.Tasks[0].Repos), 1; got != want {
+		t.Fatalf("len(task.Repos) = %d, want %d", got, want)
+	}
+	if snap.Tasks[0].Repos[0] != "git@github.com:acme/repo.git" {
+		t.Fatalf("task.Repos[0] = %q, want %q", snap.Tasks[0].Repos[0], "git@github.com:acme/repo.git")
+	}
 
 	got, ok := b.TaskRunConfig(requestID)
 	if !ok {
@@ -335,6 +347,38 @@ func TestBrokerTaskRunConfigSupportsRerunMetadata(t *testing.T) {
 	}
 	if bytes.Equal(gotAgain, got) {
 		t.Fatalf("TaskRunConfig() returned shared slice %q", string(gotAgain))
+	}
+}
+
+func TestBrokerTaskRunConfigSupportsLegacyAliasesForRerunMetadata(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-rerun-legacy"
+	payload := []byte(`{"repo_url":"git@github.com:acme/repo.git","base_branch":"release/2026.04","target_subdir":".","prompt":"rerun me"}`)
+
+	b.RecordTaskRunConfig(requestID, payload)
+	b.IngestLog("dispatch status=start request_id=req-rerun-legacy skill=moltenhub_code_run")
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	task := snap.Tasks[0]
+	if task.Branch != "release/2026.04" {
+		t.Fatalf("task.Branch = %q, want %q", task.Branch, "release/2026.04")
+	}
+	if task.Repo != "git@github.com:acme/repo.git" {
+		t.Fatalf("task.Repo = %q, want %q", task.Repo, "git@github.com:acme/repo.git")
+	}
+	if got, want := len(task.Repos), 1; got != want {
+		t.Fatalf("len(task.Repos) = %d, want %d", got, want)
+	}
+	if task.Repos[0] != "git@github.com:acme/repo.git" {
+		t.Fatalf("task.Repos[0] = %q, want %q", task.Repos[0], "git@github.com:acme/repo.git")
+	}
+	if task.Prompt != "rerun me" {
+		t.Fatalf("task.Prompt = %q, want %q", task.Prompt, "rerun me")
 	}
 }
 
@@ -456,33 +500,45 @@ func TestBrokerAppliesPromptWhenConfigRecordedAfterTaskStart(t *testing.T) {
 	}
 }
 
-func TestPromptFromRunConfigJSON(t *testing.T) {
+func TestRunConfigMetadataFromRunConfigJSON(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name string
-		raw  []byte
-		want string
+		name       string
+		raw        []byte
+		wantPrompt string
+		wantBranch string
+		wantRepo   string
 	}{
 		{
-			name: "valid prompt",
-			raw:  []byte(`{"prompt":"run integration tests"}`),
-			want: "run integration tests",
+			name:       "valid prompt",
+			raw:        []byte(`{"prompt":"run integration tests"}`),
+			wantPrompt: "run integration tests",
+			wantBranch: "main",
 		},
 		{
-			name: "missing prompt",
-			raw:  []byte(`{"repo":"git@github.com:acme/repo.git"}`),
-			want: "",
+			name:       "missing prompt",
+			raw:        []byte(`{"repo":"git@github.com:acme/repo.git"}`),
+			wantBranch: "main",
+			wantRepo:   "git@github.com:acme/repo.git",
 		},
 		{
-			name: "invalid json",
-			raw:  []byte(`{"prompt":"oops"`),
-			want: "",
+			name:       "invalid json",
+			raw:        []byte(`{"prompt":"oops"`),
+			wantPrompt: "",
 		},
 		{
-			name: "trimmed prompt",
-			raw:  []byte(`{"prompt":"  refactor api  "}`),
-			want: "refactor api",
+			name:       "trimmed prompt",
+			raw:        []byte(`{"prompt":"  refactor api  "}`),
+			wantPrompt: "refactor api",
+			wantBranch: "main",
+		},
+		{
+			name:       "legacy aliases",
+			raw:        []byte(`{"repo_url":"git@github.com:acme/repo.git","base_branch":"release/2026.04","prompt":"legacy"}`),
+			wantPrompt: "legacy",
+			wantBranch: "release/2026.04",
+			wantRepo:   "git@github.com:acme/repo.git",
 		},
 	}
 
@@ -490,8 +546,15 @@ func TestPromptFromRunConfigJSON(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := promptFromRunConfigJSON(tt.raw); got != tt.want {
-				t.Fatalf("promptFromRunConfigJSON() = %q, want %q", got, tt.want)
+			got := runConfigMetadataFromRunConfigJSON(tt.raw)
+			if got.Prompt != tt.wantPrompt {
+				t.Fatalf("Prompt = %q, want %q", got.Prompt, tt.wantPrompt)
+			}
+			if got.Branch != tt.wantBranch {
+				t.Fatalf("Branch = %q, want %q", got.Branch, tt.wantBranch)
+			}
+			if got.Repo != tt.wantRepo {
+				t.Fatalf("Repo = %q, want %q", got.Repo, tt.wantRepo)
 			}
 		})
 	}

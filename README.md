@@ -152,7 +152,6 @@ Required:
 Common optional fields:
 
 - `baseBranch` (default `main`)
-- `branch` (alias for `baseBranch`, mainly for library-backed skill calls)
 - `targetSubdir` (default `.`)
 - `commitMessage`
 - `prTitle` (auto-prefixed with `moltenhub-`)
@@ -161,7 +160,7 @@ Common optional fields:
 - `githubHandle` (single GitHub reviewer alias; mapped to PR reviewer)
 - `reviewers`
 
-Legacy snake_case aliases (`repo_url`, `base_branch`, `target_subdir`, `library_task_name`, etc.) are still accepted as input for backward compatibility.
+Legacy snake_case aliases (`repo_url`, `base_branch`, `target_subdir`, `library_task_name`, etc.) are still accepted as input for backward compatibility, but canonical payload examples and normalized output use camelCase.
 
 Example: [`templates/run.example.json`](templates/run.example.json)
 
@@ -170,7 +169,7 @@ Library-backed runs can also use:
 ```json
 {
   "repo": "git@github.com:acme/target-repo.git",
-  "branch": "main",
+  "baseBranch": "main",
   "libraryTaskName": "unit-test-coverage"
 }
 ```

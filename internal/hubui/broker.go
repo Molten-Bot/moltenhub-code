@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/jef/moltenhub-code/internal/config"
 )
 
 const (
@@ -98,6 +100,7 @@ type Broker struct {
 	events      []Event
 	tasks       map[string]*taskState
 	runConfigs  map[string][]byte
+	runMetadata map[string]runConfigMetadata
 	subs        map[chan struct{}]struct{}
 
 	hubConnected bool
@@ -125,16 +128,24 @@ type taskState struct {
 	Logs         []TaskLog
 }
 
+type runConfigMetadata struct {
+	Prompt string
+	Repo   string
+	Repos  []string
+	Branch string
+}
+
 // NewBroker returns a monitor state broker with safe defaults.
 func NewBroker() *Broker {
 	return &Broker{
-		now:        time.Now,
-		maxEvents:  defaultMaxEvents,
-		maxTaskLog: defaultMaxTaskLogs,
-		okTaskTTL:  defaultOKTaskRetentionWindow,
-		tasks:      map[string]*taskState{},
-		runConfigs: map[string][]byte{},
-		subs:       map[chan struct{}]struct{}{},
+		now:         time.Now,
+		maxEvents:   defaultMaxEvents,
+		maxTaskLog:  defaultMaxTaskLogs,
+		okTaskTTL:   defaultOKTaskRetentionWindow,
+		tasks:       map[string]*taskState{},
+		runConfigs:  map[string][]byte{},
+		runMetadata: map[string]runConfigMetadata{},
+		subs:        map[chan struct{}]struct{}{},
 	}
 }
 
@@ -249,7 +260,7 @@ func (b *Broker) RecordTaskRunConfig(requestID string, runConfigJSON []byte) {
 		return
 	}
 	cfgCopy := append([]byte(nil), runConfigJSON...)
-	prompt := promptFromRunConfigJSON(cfgCopy)
+	meta := runConfigMetadataFromRunConfigJSON(cfgCopy)
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -259,9 +270,9 @@ func (b *Broker) RecordTaskRunConfig(requestID string, runConfigJSON []byte) {
 		b.runConfigs[requestID] = cfgCopy
 		changed = true
 	}
-	if prompt != "" {
-		if t, ok := b.tasks[requestID]; ok && t.Prompt != prompt {
-			t.Prompt = prompt
+	b.runMetadata[requestID] = meta
+	if t, ok := b.tasks[requestID]; ok {
+		if applyRunConfigMetadataToTask(t, meta) {
 			changed = true
 		}
 	}
@@ -313,6 +324,7 @@ func (b *Broker) CloseTask(requestID string) error {
 
 	delete(b.tasks, requestID)
 	delete(b.runConfigs, requestID)
+	delete(b.runMetadata, requestID)
 	b.notifySubscribersLocked()
 	return nil
 }
@@ -327,6 +339,7 @@ func (b *Broker) pruneExpiredTasksLocked(now time.Time) {
 		}
 		delete(b.tasks, requestID)
 		delete(b.runConfigs, requestID)
+		delete(b.runMetadata, requestID)
 	}
 }
 
@@ -363,21 +376,20 @@ func (b *Broker) Subscribe() (<-chan struct{}, func()) {
 }
 
 func (b *Broker) ensureTaskLocked(requestID string, now time.Time) *taskState {
+	meta := b.runMetadata[requestID]
 	if existing, ok := b.tasks[requestID]; ok {
-		if existing.Prompt == "" {
-			existing.Prompt = promptFromRunConfigJSON(b.runConfigs[requestID])
-		}
+		applyRunConfigMetadataToTask(existing, meta)
 		existing.UpdatedAt = now
 		return existing
 	}
 
 	t := &taskState{
 		RequestID: requestID,
-		Prompt:    promptFromRunConfigJSON(b.runConfigs[requestID]),
 		Status:    "pending",
 		StartedAt: now,
 		UpdatedAt: now,
 	}
+	applyRunConfigMetadataToTask(t, meta)
 	b.tasks[requestID] = t
 	return t
 }
@@ -761,17 +773,60 @@ func appendNonEmptyUnique(dst []string, values ...string) []string {
 	return out
 }
 
-func promptFromRunConfigJSON(runConfigJSON []byte) string {
+func runConfigMetadataFromRunConfigJSON(runConfigJSON []byte) runConfigMetadata {
 	if len(runConfigJSON) == 0 {
-		return ""
+		return runConfigMetadata{}
 	}
-	var raw struct {
-		Prompt string `json:"prompt"`
+	var cfg config.Config
+	if err := json.Unmarshal(runConfigJSON, &cfg); err != nil {
+		var fallback struct {
+			Prompt string `json:"prompt"`
+		}
+		if err := json.Unmarshal(runConfigJSON, &fallback); err != nil {
+			return runConfigMetadata{}
+		}
+		return runConfigMetadata{Prompt: strings.TrimSpace(fallback.Prompt)}
 	}
-	if err := json.Unmarshal(runConfigJSON, &raw); err != nil {
-		return ""
+	cfg.ApplyDefaults()
+	repos := cfg.RepoList()
+	meta := runConfigMetadata{
+		Prompt: strings.TrimSpace(cfg.Prompt),
+		Repos:  append([]string(nil), repos...),
+		Branch: strings.TrimSpace(cfg.BaseBranch),
 	}
-	return strings.TrimSpace(raw.Prompt)
+	if len(repos) > 0 {
+		meta.Repo = repos[0]
+	}
+	return meta
+}
+
+func applyRunConfigMetadataToTask(t *taskState, meta runConfigMetadata) bool {
+	if t == nil {
+		return false
+	}
+	changed := false
+	if t.Prompt == "" && meta.Prompt != "" {
+		t.Prompt = meta.Prompt
+		changed = true
+	}
+	if len(t.Repos) == 0 && len(meta.Repos) > 0 {
+		t.Repos = append([]string(nil), meta.Repos...)
+		changed = true
+	}
+	if t.Repo == "" {
+		if len(t.Repos) > 0 {
+			t.Repo = t.Repos[0]
+			changed = true
+		} else if meta.Repo != "" {
+			t.Repo = meta.Repo
+			changed = true
+		}
+	}
+	if t.Branch == "" && meta.Branch != "" {
+		t.Branch = meta.Branch
+		changed = true
+	}
+	return changed
 }
 
 func isCompletedTaskStatus(status string) bool {

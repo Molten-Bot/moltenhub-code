@@ -204,7 +204,7 @@ func (c Catalog) ExpandRunConfig(taskName, repo, branch string) (config.Config, 
 	taskName = strings.TrimSpace(taskName)
 	task, ok := c.byName[taskName]
 	if !ok {
-		return config.Config{}, fmt.Errorf("unknown library_task_name %q", taskName)
+		return config.Config{}, fmt.Errorf("unknown libraryTaskName %q", taskName)
 	}
 
 	repo = strings.TrimSpace(repo)

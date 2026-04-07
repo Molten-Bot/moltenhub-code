@@ -260,20 +260,16 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 			"oneOf": []map[string]any{
 				{"required": []string{"repo"}},
 				{"required": []string{"repoURL"}},
-				{"required": []string{"repo_url"}},
 				{"required": []string{"repos"}},
 			},
 			"anyOf": []map[string]any{
 				{"required": []string{"prompt"}},
 				{"required": []string{"libraryTaskName"}},
-				{"required": []string{"library_task_name"}},
 			},
 			"properties": map[string]any{
 				"version": propertyStringEnum("v1"),
 				"repo":    propertyNonEmptyString(),
 				"repoURL": propertyNonEmptyString(),
-				// Legacy alias support.
-				"repo_url": propertyNonEmptyString(),
 				"repos": map[string]any{
 					"type":     "array",
 					"minItems": 1,
@@ -282,41 +278,31 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 						"minLength": 1,
 					},
 				},
-				"baseBranch":    propertyNonEmptyString(),
-				"base_branch":   propertyNonEmptyString(),
-				"branch":        propertyNonEmptyString(),
-				"targetSubdir":  propertyNonEmptyString(),
-				"target_subdir": propertyNonEmptyString(),
-				"prompt":        propertyNonEmptyString(),
+				"baseBranch":   propertyNonEmptyString(),
+				"targetSubdir": propertyNonEmptyString(),
+				"prompt":       propertyNonEmptyString(),
 				"images": map[string]any{
 					"type": "array",
 					"items": map[string]any{
 						"type": "object",
 						"properties": map[string]any{
-							"name":        propertyNonEmptyString(),
-							"mediaType":   propertyNonEmptyString(),
-							"media_type":  propertyNonEmptyString(),
-							"dataBase64":  propertyNonEmptyString(),
-							"data_base64": propertyNonEmptyString(),
+							"name":       propertyNonEmptyString(),
+							"mediaType":  propertyNonEmptyString(),
+							"dataBase64": propertyNonEmptyString(),
 						},
 					},
 				},
-				"libraryTaskName":   propertyStringEnum(libraryTaskNames...),
-				"library_task_name": propertyStringEnum(libraryTaskNames...),
-				"commitMessage":     propertyNonEmptyString(),
-				"commit_message":    propertyNonEmptyString(),
-				"prTitle":           propertyNonEmptyString(),
-				"pr_title":          propertyNonEmptyString(),
-				"prBody":            propertyNonEmptyString(),
-				"pr_body":           propertyNonEmptyString(),
+				"libraryTaskName": propertyStringEnum(libraryTaskNames...),
+				"commitMessage":   propertyNonEmptyString(),
+				"prTitle":         propertyNonEmptyString(),
+				"prBody":          propertyNonEmptyString(),
 				"labels": map[string]any{
 					"type": "array",
 					"items": map[string]any{
 						"type": "string",
 					},
 				},
-				"githubHandle":  propertyNonEmptyString(),
-				"github_handle": propertyNonEmptyString(),
+				"githubHandle": propertyNonEmptyString(),
 				"reviewers": map[string]any{
 					"type": "array",
 					"items": map[string]any{
@@ -516,10 +502,6 @@ func assignAliasString(m map[string]any, canonicalKey, aliasKey string) {
 	alias := firstNonEmpty(stringAt(m, aliasKey))
 	if canonical == "" && alias != "" {
 		m[canonicalKey] = alias
-		return
-	}
-	if canonical != "" && alias == "" {
-		m[aliasKey] = canonical
 	}
 }
 

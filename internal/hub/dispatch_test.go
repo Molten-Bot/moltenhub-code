@@ -483,3 +483,112 @@ func TestParseRunConfigJSONRejectsInvalidPayload(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 }
+
+func TestRequiredSkillPayloadSchemaUsesCamelCaseRunConfigFields(t *testing.T) {
+	t.Parallel()
+
+	schema := requiredSkillPayloadSchema("skill_request", "code_for_me", []string{"unit-test-coverage"})
+	runConfigSchema, ok := schema["runConfigSchema"].(map[string]any)
+	if !ok {
+		t.Fatalf("runConfigSchema missing or wrong type: %#v", schema["runConfigSchema"])
+	}
+
+	properties, ok := runConfigSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties missing or wrong type: %#v", runConfigSchema["properties"])
+	}
+
+	requiredCanonical := []string{
+		"repo",
+		"repoURL",
+		"repos",
+		"baseBranch",
+		"targetSubdir",
+		"prompt",
+		"images",
+		"libraryTaskName",
+		"commitMessage",
+		"prTitle",
+		"prBody",
+		"githubHandle",
+		"reviewers",
+	}
+	for _, key := range requiredCanonical {
+		if _, ok := properties[key]; !ok {
+			t.Fatalf("runConfigSchema.properties[%q] missing", key)
+		}
+	}
+
+	legacyKeys := []string{
+		"repo_url",
+		"base_branch",
+		"branch",
+		"target_subdir",
+		"library_task_name",
+		"commit_message",
+		"pr_title",
+		"pr_body",
+		"github_handle",
+	}
+	for _, key := range legacyKeys {
+		if _, ok := properties[key]; ok {
+			t.Fatalf("runConfigSchema.properties[%q] present, want canonical camelCase only", key)
+		}
+	}
+}
+
+func TestNormalizeRunConfigAliasesDoesNotBackfillLegacySnakeCaseKeys(t *testing.T) {
+	t.Parallel()
+
+	payload := map[string]any{
+		"repoURL":         "git@github.com:acme/repo.git",
+		"baseBranch":      "main",
+		"targetSubdir":    ".",
+		"libraryTaskName": "unit-test-coverage",
+		"commitMessage":   "commit",
+		"prTitle":         "moltenhub-pr",
+		"prBody":          "details",
+		"githubHandle":    "@octocat",
+		"images": []any{
+			map[string]any{
+				"mediaType":  "image/png",
+				"dataBase64": "aGVsbG8=",
+			},
+		},
+	}
+
+	if err := normalizeRunConfigAliases(payload); err != nil {
+		t.Fatalf("normalizeRunConfigAliases() error = %v", err)
+	}
+
+	legacyKeys := []string{
+		"repo_url",
+		"base_branch",
+		"target_subdir",
+		"library_task_name",
+		"commit_message",
+		"pr_title",
+		"pr_body",
+		"github_handle",
+	}
+	for _, key := range legacyKeys {
+		if _, ok := payload[key]; ok {
+			t.Fatalf("payload[%q] present, want canonical camelCase only", key)
+		}
+	}
+
+	images, ok := payload["images"].([]any)
+	if !ok || len(images) != 1 {
+		t.Fatalf("images = %#v, want one image", payload["images"])
+	}
+	image, ok := images[0].(map[string]any)
+	if !ok {
+		t.Fatalf("images[0] = %#v, want object", images[0])
+	}
+	if _, ok := image["media_type"]; ok {
+		t.Fatal(`images[0]["media_type"] present, want mediaType only`)
+	}
+	if _, ok := image["data_base64"]; ok {
+		t.Fatal(`images[0]["data_base64"] present, want dataBase64 only`)
+	}
+}
