@@ -785,7 +785,23 @@ func (h Harness) runCommand(ctx context.Context, phase string, cmd execx.Command
 	}
 
 	if streamRunner, ok := h.Runner.(execx.StreamRunner); ok {
-		return streamRunner.RunStream(ctx, cmd, onLine)
+		var stdoutBuf strings.Builder
+		var stderrBuf strings.Builder
+		streamOnLine := func(stream, line string) {
+			onLine(stream, line)
+			switch stream {
+			case "stdout":
+				stdoutBuf.WriteString(line)
+				stdoutBuf.WriteByte('\n')
+			case "stderr":
+				stderrBuf.WriteString(line)
+				stderrBuf.WriteByte('\n')
+			}
+		}
+		res, err := streamRunner.RunStream(ctx, cmd, streamOnLine)
+		res.Stdout = mergeStreamedOutput(res.Stdout, stdoutBuf.String())
+		res.Stderr = mergeStreamedOutput(res.Stderr, stderrBuf.String())
+		return res, err
 	}
 
 	res, err := h.Runner.Run(ctx, cmd)
@@ -818,6 +834,21 @@ func splitOutputLines(text string) []string {
 		lines[i] = strings.TrimSuffix(lines[i], "\r")
 	}
 	return lines
+}
+
+func mergeStreamedOutput(existing, captured string) string {
+	existing = strings.TrimSuffix(existing, "\n")
+	captured = strings.TrimSuffix(captured, "\n")
+	if strings.TrimSpace(captured) == "" {
+		return existing
+	}
+	if strings.TrimSpace(existing) == "" {
+		return captured
+	}
+	if strings.Contains(existing, captured) {
+		return existing
+	}
+	return existing + "\n" + captured
 }
 
 func encodeLogLine(line string) string {
@@ -950,7 +981,15 @@ func (h Harness) runCodex(
 		cleanup = combineCleanupFns(stagedCleanup, targetAgentsCleanup)
 	}
 
-	err := h.runCodexWithHeartbeat(ctx, runtime, targetDir, finalPrompt, opts)
+	res, err := h.runCodexWithHeartbeat(ctx, runtime, targetDir, finalPrompt, opts, "")
+	if shouldRetryCodexWithoutSandbox(res, err) {
+		h.logf(
+			"stage=codex status=warn action=retry_without_sandbox reason=%q",
+			"detected bubblewrap namespace sandbox failure; retrying with danger-full-access",
+		)
+		_, retryErr := h.runCodexWithHeartbeat(ctx, runtime, targetDir, finalPrompt, opts, "danger-full-access")
+		err = retryErr
+	}
 	if cleanupErr := cleanup(); cleanupErr != nil {
 		h.logf(
 			"stage=workspace status=warn action=cleanup_agents_for_codex target=%s err=%q",
@@ -1084,16 +1123,24 @@ func (h Harness) runCodexWithHeartbeat(
 	runtime agentruntime.Runtime,
 	targetDir, prompt string,
 	opts codexRunOptions,
-) error {
+	sandboxOverride string,
+) (execx.Result, error) {
 	cmd, err := agentCommandWithOptions(runtime, targetDir, prompt, opts)
 	if err != nil {
-		return err
+		return execx.Result{}, err
+	}
+	if strings.TrimSpace(sandboxOverride) != "" {
+		cmd.Args = overrideCodexSandbox(cmd.Args, sandboxOverride)
 	}
 
-	done := make(chan error, 1)
+	type codexRunResult struct {
+		res execx.Result
+		err error
+	}
+	done := make(chan codexRunResult, 1)
 	go func() {
-		_, runErr := h.runCommand(ctx, "codex", cmd)
-		done <- runErr
+		runRes, runErr := h.runCommand(ctx, "codex", cmd)
+		done <- codexRunResult{res: runRes, err: runErr}
 	}()
 
 	start := time.Now()
@@ -1102,18 +1149,57 @@ func (h Harness) runCodexWithHeartbeat(
 
 	for {
 		select {
-		case err := <-done:
-			return err
+		case run := <-done:
+			return run.res, run.err
 		case <-ticker.C:
 			h.logf("stage=codex status=running elapsed_s=%d", int(time.Since(start).Seconds()))
 		case <-ctx.Done():
-			err := <-done
-			if err != nil {
-				return err
+			run := <-done
+			if run.err != nil {
+				return run.res, run.err
 			}
-			return ctx.Err()
+			return run.res, ctx.Err()
 		}
 	}
+}
+
+func overrideCodexSandbox(args []string, sandbox string) []string {
+	if len(args) == 0 {
+		return args
+	}
+	out := append([]string(nil), args...)
+	for i := 0; i+1 < len(out); i++ {
+		if out[i] == "--sandbox" {
+			out[i+1] = strings.TrimSpace(sandbox)
+			return out
+		}
+	}
+	return out
+}
+
+func shouldRetryCodexWithoutSandbox(res execx.Result, err error) bool {
+	if err == nil && strings.TrimSpace(res.Stdout) == "" && strings.TrimSpace(res.Stderr) == "" {
+		return false
+	}
+	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr}, "\n"))
+	if err != nil {
+		text = strings.TrimSpace(text + "\n" + strings.ToLower(err.Error()))
+	}
+
+	if strings.Contains(text, "bubblewrap") || strings.Contains(text, "bwrap") || strings.Contains(text, "unshare failed") {
+		return true
+	}
+	if strings.Contains(text, "no permissions to create a new namespace") {
+		return true
+	}
+	if strings.Contains(text, "namespace error") && strings.Contains(text, "operation not permitted") {
+		return true
+	}
+	if strings.Contains(text, "could not start any local repository command") &&
+		(strings.Contains(text, "sandbox/runtime environment") || strings.Contains(text, "namespace")) {
+		return true
+	}
+	return false
 }
 func resolveTargetDir(repoDir, targetSubdir string) (string, error) {
 	targetDir := filepath.Join(repoDir, filepath.Clean(targetSubdir))

@@ -54,6 +54,33 @@ func (c *captureRunner) Run(_ context.Context, cmd execx.Command) (execx.Result,
 	return execx.Result{}, nil
 }
 
+type streamLine struct {
+	stream string
+	line   string
+}
+
+type streamCaptureRunner struct {
+	res         execx.Result
+	err         error
+	lines       []streamLine
+	capturedCmd execx.Command
+}
+
+func (s *streamCaptureRunner) Run(_ context.Context, cmd execx.Command) (execx.Result, error) {
+	s.capturedCmd = cmd
+	return s.res, s.err
+}
+
+func (s *streamCaptureRunner) RunStream(_ context.Context, cmd execx.Command, handler execx.StreamLineHandler) (execx.Result, error) {
+	s.capturedCmd = cmd
+	for _, line := range s.lines {
+		if handler != nil {
+			handler(line.stream, line.line)
+		}
+	}
+	return s.res, s.err
+}
+
 func sampleConfig() config.Config {
 	return config.Config{
 		Version:       "v1",
@@ -1647,6 +1674,118 @@ func TestRunCodexStagesAgentsPromptWithinTargetDir(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(targetDir, "AGENTS.md")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("target AGENTS.md still exists after codex run: err=%v", err)
+	}
+}
+
+func TestRunCodexRetriesWithoutSandboxOnBwrapFailure(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "make home page pink"
+	firstCmd := codexCommand(targetDir, prompt)
+	retryCmd := firstCmd
+	retryCmd.Args = overrideCodexSandbox(retryCmd.Args, "danger-full-access")
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: I could not start any local repository command.",
+				Stderr: "bwrap: namespace error: Operation not permitted",
+			},
+		},
+		{
+			cmd: retryCmd,
+			res: execx.Result{Stdout: "done"},
+		},
+	}}
+
+	h := New(fake)
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, ""); err != nil {
+		t.Fatalf("runCodex() error = %v", err)
+	}
+	if got := len(fake.exps); got != 0 {
+		t.Fatalf("expected all fake runner commands to be consumed, remaining=%d", got)
+	}
+}
+
+func TestRunCommandStreamRunnerMergesCapturedOutput(t *testing.T) {
+	t.Parallel()
+
+	runner := &streamCaptureRunner{
+		res: execx.Result{
+			Stdout: "Failure: I could not start any local repository command.",
+		},
+		lines: []streamLine{
+			{stream: "stderr", line: "- Error detail: bwrap: No permissions to create a new namespace..."},
+		},
+	}
+
+	h := New(runner)
+	res, err := h.runCommand(
+		context.Background(),
+		"codex",
+		execx.Command{Name: "codex", Args: []string{"exec", "--sandbox", "workspace-write"}},
+	)
+	if err != nil {
+		t.Fatalf("runCommand() error = %v", err)
+	}
+	if !strings.Contains(res.Stderr, "No permissions to create a new namespace") {
+		t.Fatalf("res.Stderr = %q, want merged streamed stderr detail", res.Stderr)
+	}
+	if !shouldRetryCodexWithoutSandbox(res, nil) {
+		t.Fatal("shouldRetryCodexWithoutSandbox(...) = false, want true")
+	}
+}
+
+func TestShouldRetryCodexWithoutSandbox(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		res  execx.Result
+		err  error
+		want bool
+	}{
+			{
+				name: "bwrap namespace error",
+				res: execx.Result{
+					Stderr: "bwrap: namespace error: Operation not permitted",
+				},
+				want: true,
+			},
+			{
+				name: "explicit no-permissions namespace text",
+				res: execx.Result{
+					Stderr: "bwrap: No permissions to create a new namespace",
+				},
+				want: true,
+			},
+		{
+			name: "model reports command start failure due sandbox",
+			res: execx.Result{
+				Stdout: "Failure: I could not start any local repository command.",
+				Stderr: "The blocker is the sandbox/runtime environment.",
+			},
+			want: true,
+		},
+		{
+			name: "generic task failure should not trigger retry",
+			res: execx.Result{
+				Stderr: "ERROR: failed to apply patch",
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := shouldRetryCodexWithoutSandbox(tt.res, tt.err); got != tt.want {
+				t.Fatalf("shouldRetryCodexWithoutSandbox(...) = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

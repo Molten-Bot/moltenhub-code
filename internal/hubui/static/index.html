@@ -239,12 +239,15 @@
   </div>
 
   <div id="agent-auth-gate" class="fixed inset-0 z-[95] hidden items-center justify-center bg-[#040911]/85 p-4 backdrop-blur-sm" aria-live="polite">
-    <div class="flex min-h-[220px] w-full max-w-xl flex-col rounded-2xl border border-hub-border bg-hub-panel p-5 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
+    <div class="flex min-h-[220px] w-full max-w-xl flex-col p-2">
       <h2 class="text-[2rem] font-semibold leading-tight text-hub-text">Authorize Codex to get started</h2>
 
-      <div id="agent-auth-details" class="mt-5 hidden rounded-xl border border-hub-border bg-[#0d1825] p-3">
-        <a id="agent-auth-url" class="block break-all text-sm text-[#8dc6ff] underline decoration-dotted underline-offset-2" href="" target="_blank" rel="noopener noreferrer"></a>
-        <div id="agent-auth-code" class="mt-3 rounded-lg border border-hub-border bg-[#09121e] px-3 py-2 font-mono text-base tracking-[0.2em] text-hub-text"></div>
+      <div id="agent-auth-details" class="mt-5 hidden space-y-3">
+        <a id="agent-auth-url" class="block break-all text-[1.05rem] text-[#8dc6ff] underline decoration-dotted underline-offset-2" href="" target="_blank" rel="noopener noreferrer"></a>
+        <div class="flex flex-wrap items-center gap-2.5">
+          <div id="agent-auth-code" class="font-mono text-[1.15rem] tracking-[0.22em] text-hub-text"></div>
+          <button id="agent-auth-copy" class="rounded-md border border-white/20 bg-white/5 px-2.5 py-1.5 text-xs font-medium text-hub-text hover:bg-white/10" type="button">Copy</button>
+        </div>
       </div>
 
       <div class="mt-auto flex justify-end pt-4">
@@ -287,9 +290,9 @@
         harness: String(auth.harness || "").trim(),
         state,
         message: String(auth.message || "").trim(),
-        authURL: String(auth.auth_url || "").trim(),
-        deviceCode: String(auth.device_code || "").trim(),
-        updatedAt: String(auth.updated_at || "").trim(),
+        authURL: String(auth.auth_url || auth.authURL || "").trim(),
+        deviceCode: String(auth.device_code || auth.deviceCode || "").trim(),
+        updatedAt: String(auth.updated_at || auth.updatedAt || "").trim(),
       };
     }
 
@@ -424,6 +427,7 @@
     const agentAuthDetails = document.getElementById("agent-auth-details");
     const agentAuthURL = document.getElementById("agent-auth-url");
     const agentAuthCode = document.getElementById("agent-auth-code");
+    const agentAuthCopy = document.getElementById("agent-auth-copy");
     const agentAuthVerify = document.getElementById("agent-auth-verify");
 
     function setIndicator(itemNode, dot, textNode, label, online, text) {
@@ -460,8 +464,14 @@
 
     function setAgentAuthBusy(busy) {
       state.agentAuthBusy = Boolean(busy);
+      if (agentAuthCopy) {
+        agentAuthCopy.disabled = state.agentAuthBusy;
+      }
       if (agentAuthVerify) {
         agentAuthVerify.disabled = state.agentAuthBusy;
+      }
+      if (localPromptSubmit) {
+        localPromptSubmit.disabled = state.agentAuthBusy || (state.agentAuth.required && !state.agentAuth.ready);
       }
     }
 
@@ -488,6 +498,9 @@
         agentAuthCode.textContent = state.agentAuth.deviceCode || "";
         agentAuthCode.classList.toggle("hidden", !state.agentAuth.deviceCode);
       }
+      if (agentAuthCopy) {
+        agentAuthCopy.classList.toggle("hidden", !state.agentAuth.deviceCode);
+      }
 
       if (agentAuthVerify) {
         agentAuthVerify.classList.toggle("hidden", state.agentAuth.ready);
@@ -497,6 +510,47 @@
         localPromptSubmit.disabled = submitDisabled;
       }
       scheduleAgentAuthRefresh();
+    }
+
+    async function copyAgentAuthCode() {
+      const code = String(state.agentAuth.deviceCode || "").trim();
+      const url = String(state.agentAuth.authURL || "").trim();
+      const value = code || url;
+      if (!value || !agentAuthCopy) return;
+
+      const setCopiedLabel = () => {
+        const original = agentAuthCopy.textContent;
+        agentAuthCopy.textContent = "Copied";
+        window.setTimeout(() => {
+          if (agentAuthCopy) {
+            agentAuthCopy.textContent = original || "Copy";
+          }
+        }, 1200);
+      };
+
+      try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+          await navigator.clipboard.writeText(value);
+          setCopiedLabel();
+          return;
+        }
+      } catch (_err) {
+        // Fall back to a temporary textarea if clipboard API is unavailable.
+      }
+
+      const probe = document.createElement("textarea");
+      probe.value = value;
+      probe.setAttribute("readonly", "readonly");
+      probe.style.position = "absolute";
+      probe.style.left = "-9999px";
+      document.body.appendChild(probe);
+      probe.select();
+      try {
+        document.execCommand("copy");
+        setCopiedLabel();
+      } finally {
+        document.body.removeChild(probe);
+      }
     }
 
     async function requestAgentAuth(path, method) {
@@ -2258,6 +2312,9 @@
     builderPromptInput.addEventListener("paste", handlePromptImagePaste);
     builderImagePasteTarget.addEventListener("paste", handlePromptImagePaste);
     builderImagesClear.addEventListener("click", clearPromptImages);
+    if (agentAuthCopy) {
+      agentAuthCopy.addEventListener("click", copyAgentAuthCode);
+    }
     agentAuthVerify.addEventListener("click", verifyAgentDeviceAuth);
     promptVisibilityToggle.addEventListener("click", togglePromptVisibility);
     taskTerminalToggle.addEventListener("click", () => {
