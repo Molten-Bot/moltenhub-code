@@ -335,66 +335,6 @@ body.task-fullscreen-open {
   padding: 12px;
 }
 
-.task-history {
-  display: grid;
-  gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-  background: rgba(10, 18, 28, 0.46);
-}
-
-.task-history-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  color: var(--meta);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.task-history-list {
-  display: grid;
-  gap: 6px;
-  max-height: 160px;
-  overflow: auto;
-  padding-right: 2px;
-}
-
-.task-history-item {
-  display: grid;
-  gap: 4px;
-  border: 1px solid rgba(66, 95, 128, 0.72);
-  border-radius: 8px;
-  background: rgba(17, 30, 46, 0.74);
-  padding: 7px 8px;
-}
-
-.task-history-id {
-  color: var(--meta);
-  font-size: 0.67rem;
-  font-family: "IBM Plex Mono", "Consolas", monospace;
-  letter-spacing: 0.02em;
-}
-
-.task-history-prompt {
-  color: #d9e5f2;
-  font-size: 0.74rem;
-  line-height: 1.35;
-  font-family: "IBM Plex Mono", "Consolas", monospace;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.task-history-empty {
-  color: var(--muted);
-  font-size: 0.74rem;
-  line-height: 1.35;
-  padding: 4px 2px;
-}
-
 .event {
   border: 1px solid var(--border);
   background: var(--panel-soft);

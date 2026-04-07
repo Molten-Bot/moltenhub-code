@@ -229,17 +229,17 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if strings.Contains(markup, "task-fullscreen-subtitle") || strings.Contains(markup, "Focused task/running/state view") {
 		t.Fatalf("expected index html to omit full screen subtitle copy")
 	}
-	if !strings.Contains(markup, `id="task-history-list"`) {
-		t.Fatalf("expected index html to include prompt history list")
+	if strings.Contains(markup, `id="task-history-list"`) {
+		t.Fatalf("expected index html to remove prompt history list from tasks panel")
 	}
-	if !strings.Contains(markup, `id="task-count"`) {
-		t.Fatalf("expected index html to include task history counter in the history section")
+	if strings.Contains(markup, `id="task-count"`) {
+		t.Fatalf("expected index html to remove prompt history counter from tasks panel")
 	}
-	if !strings.Contains(markup, "function updatePromptHistory(") {
-		t.Fatalf("expected index html to include prompt history updater")
+	if strings.Contains(markup, "function updatePromptHistory(") {
+		t.Fatalf("expected index html to remove prompt history updater")
 	}
-	if !strings.Contains(markup, "function renderPromptHistory(") {
-		t.Fatalf("expected index html to include prompt history renderer")
+	if strings.Contains(markup, "function renderPromptHistory(") {
+		t.Fatalf("expected index html to remove prompt history renderer")
 	}
 	if !strings.Contains(markup, "function sortTasksByActivity(") {
 		t.Fatalf("expected index html to include activity-based task sorting for list rendering")
@@ -461,11 +461,11 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task.task-collapsed") {
 		t.Fatalf("expected stylesheet to include collapsed task styles")
 	}
-	if !strings.Contains(css, ".task-history") {
-		t.Fatalf("expected stylesheet to include prompt history section styles")
+	if strings.Contains(css, ".task-history") {
+		t.Fatalf("expected stylesheet to remove prompt history section styles")
 	}
-	if !strings.Contains(css, ".task-history-list") {
-		t.Fatalf("expected stylesheet to include prompt history list styles")
+	if strings.Contains(css, ".task-history-list") {
+		t.Fatalf("expected stylesheet to remove prompt history list styles")
 	}
 	if !strings.Contains(css, ".prompt-mode-tab") {
 		t.Fatalf("expected stylesheet to include prompt mode tab styles")
