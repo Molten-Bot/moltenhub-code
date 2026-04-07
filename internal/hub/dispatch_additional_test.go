@@ -84,3 +84,84 @@ func TestExtractConfigValueAndLooksLikeRunConfigMap(t *testing.T) {
 		t.Fatal("looksLikeRunConfigMap(empty repos) = true, want false")
 	}
 }
+
+func TestParseSkillDispatchPrefersSenderRoutingOverRecipientTarget(t *testing.T) {
+	t.Parallel()
+
+	msg := map[string]any{
+		"type":           "skill_request",
+		"skill":          "code_for_me",
+		"request_id":     "req-routing",
+		"to_agent_uuid":  "receiver-agent",
+		"from_agent_uri": "https://na.hub.molten.bot/acme/caller",
+		"config": map[string]any{
+			"repo":   "git@github.com:acme/repo.git",
+			"prompt": "fix the issue",
+		},
+	}
+
+	dispatch, matched, err := ParseSkillDispatch(msg, "skill_request", "code_for_me")
+	if err != nil {
+		t.Fatalf("ParseSkillDispatch() error = %v", err)
+	}
+	if !matched {
+		t.Fatal("matched = false, want true")
+	}
+	if got, want := dispatch.ReplyTo, "https://na.hub.molten.bot/acme/caller"; got != want {
+		t.Fatalf("ReplyTo = %q, want %q", got, want)
+	}
+}
+
+func TestParseSkillDispatchFallsBackToRecipientTargetWhenSenderMissing(t *testing.T) {
+	t.Parallel()
+
+	msg := map[string]any{
+		"type":          "skill_request",
+		"skill":         "code_for_me",
+		"request_id":    "req-routing-fallback",
+		"to_agent_uuid": "caller-agent-uuid",
+		"config": map[string]any{
+			"repo":   "git@github.com:acme/repo.git",
+			"prompt": "fix the issue",
+		},
+	}
+
+	dispatch, matched, err := ParseSkillDispatch(msg, "skill_request", "code_for_me")
+	if err != nil {
+		t.Fatalf("ParseSkillDispatch() error = %v", err)
+	}
+	if !matched {
+		t.Fatal("matched = false, want true")
+	}
+	if got, want := dispatch.ReplyTo, "caller-agent-uuid"; got != want {
+		t.Fatalf("ReplyTo = %q, want %q", got, want)
+	}
+}
+
+func TestParseSkillDispatchAcceptsJSONStringPayload(t *testing.T) {
+	t.Parallel()
+
+	msg := map[string]any{
+		"type":       "skill_request",
+		"skill":      "code_for_me",
+		"request_id": "req-payload-json",
+		"payload": `{
+			"repo":"git@github.com:acme/repo.git",
+			"prompt":"ship the fix"
+		}`,
+	}
+
+	dispatch, matched, err := ParseSkillDispatch(msg, "skill_request", "code_for_me")
+	if err != nil {
+		t.Fatalf("ParseSkillDispatch() error = %v", err)
+	}
+	if !matched {
+		t.Fatal("matched = false, want true")
+	}
+	if got, want := dispatch.Config.RepoURL, "git@github.com:acme/repo.git"; got != want {
+		t.Fatalf("RepoURL = %q, want %q", got, want)
+	}
+	if got, want := dispatch.Config.Prompt, "ship the fix"; got != want {
+		t.Fatalf("Prompt = %q, want %q", got, want)
+	}
+}
