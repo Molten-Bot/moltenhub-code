@@ -313,6 +313,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if strings.Contains(markup, "Select a repo, branch, directory, and prompt in Builder mode. You can paste PNG screenshots before submitting.") {
 		t.Fatalf("expected index html to remove the builder mode helper sentence")
 	}
+	if strings.Contains(markup, "Paste PNG screenshots here or directly into the prompt field. Attached images are sent to Codex during startup.") {
+		t.Fatalf("expected index html to remove verbose screenshot helper copy")
+	}
+	if !strings.Contains(markup, `class="prompt-actions flex items-center justify-end gap-2.5"`) {
+		t.Fatalf("expected index html to render prompt actions without flex wrapping")
+	}
+	if !strings.Contains(markup, `id="local-prompt-submit" class="prompt-submit ml-auto`) {
+		t.Fatalf("expected index html to keep the Run button right-aligned in prompt actions")
+	}
 	if !strings.Contains(markup, `const QUEUED_STATUS_TIMEOUT_MS = 8_000;`) {
 		t.Fatalf("expected index html to include queued status timeout constant")
 	}

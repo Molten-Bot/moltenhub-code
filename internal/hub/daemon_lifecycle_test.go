@@ -155,8 +155,6 @@ func TestDaemonRunPublishesAgentLifecycleStatus(t *testing.T) {
 }
 
 func TestDaemonRunReturnsAuthErrorWhenTransportIsUnauthorized(t *testing.T) {
-	t.Parallel()
-
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/agents/me":
