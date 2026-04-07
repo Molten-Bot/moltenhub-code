@@ -145,12 +145,12 @@ func TestDaemonRunUsesStoredRuntimeConfigBaseURLWhenInitBaseURLOmitted(t *testin
 	})
 
 	var (
-		reqMu  sync.Mutex
-		paths  []string
-		logMu  sync.Mutex
-		logs   []string
-		base   string
-		token  = "agent_saved"
+		reqMu sync.Mutex
+		paths []string
+		logMu sync.Mutex
+		logs  []string
+		base  string
+		token = "agent_saved"
 	)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -486,6 +486,16 @@ func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
 	defer server.Close()
 
 	d := NewDaemon(nil)
+	failed := make(chan harness.Result, 1)
+	d.OnDispatchFailed = func(requestID string, failedRunCfg config.Config, result harness.Result) {
+		if requestID != "req-closed-controller" {
+			t.Fatalf("requestID = %q, want %q", requestID, "req-closed-controller")
+		}
+		if got, want := strings.Join(failedRunCfg.RepoList(), ","), "git@github.com:acme/repo.git"; got != want {
+			t.Fatalf("failed run repos = %q, want %q", got, want)
+		}
+		failed <- result
+	}
 	cfg := InitConfig{
 		Skill: SkillConfig{
 			Name:         "code_for_me",
@@ -522,6 +532,18 @@ func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
 		nil,
 	)
 	workers.Wait()
+
+	select {
+	case result := <-failed:
+		if result.Err == nil {
+			t.Fatal("result.Err = nil, want non-nil")
+		}
+		if got := result.Err.Error(); !strings.Contains(got, "dispatch controller is closed") {
+			t.Fatalf("result.Err = %q, want dispatch controller closed detail", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for OnDispatchFailed callback")
+	}
 
 	mu.Lock()
 	defer mu.Unlock()

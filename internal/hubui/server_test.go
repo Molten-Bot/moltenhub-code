@@ -310,6 +310,23 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="local-prompt-submit"`) || !strings.Contains(markup, `>Run</button>`) {
 		t.Fatalf("expected index html to render the prompt studio submit button with label Run")
 	}
+	if strings.Contains(markup, "Select a repo, branch, directory, and prompt in Builder mode. You can paste PNG screenshots before submitting.") {
+		t.Fatalf("expected index html to remove the builder mode helper sentence")
+	}
+	if !strings.Contains(markup, `const QUEUED_STATUS_TIMEOUT_MS = 8_000;`) {
+		t.Fatalf("expected index html to include queued status timeout constant")
+	}
+	if !strings.Contains(markup, `return String(text || "").startsWith("Queued request ");`) {
+		t.Fatalf("expected index html to auto-dismiss queued status text")
+	}
+	if !strings.Contains(markup, `}, QUEUED_STATUS_TIMEOUT_MS);`) {
+		t.Fatalf("expected index html to clear queued status after timeout")
+	}
+	statusIdx := strings.Index(markup, `id="local-prompt-status"`)
+	runIdx := strings.Index(markup, `id="local-prompt-submit"`)
+	if statusIdx == -1 || runIdx == -1 || statusIdx > runIdx {
+		t.Fatalf("expected queued status text to render to the left of the Run button")
+	}
 	if !strings.Contains(markup, `id="builder-repo-input" class="prompt-control prompt-input"`) || !strings.Contains(markup, `id="builder-target-subdir" class="prompt-control prompt-input"`) {
 		t.Fatalf("expected index html to include builder repo and target subdir inputs")
 	}

@@ -186,10 +186,10 @@
   "library_task_name": "unit-test-coverage"
 }'></textarea>
             </div>
-            <div id="local-prompt-hint" class="prompt-hint text-[0.74rem] leading-[1.3] text-hub-muted">Use Builder for custom prompts, Library for saved task templates, and JSON for advanced payloads.</div>
-            <div class="prompt-actions flex flex-wrap items-center justify-between gap-2.5">
+            <div id="local-prompt-hint" class="prompt-hint text-[0.74rem] leading-[1.3] text-hub-muted"></div>
+            <div class="prompt-actions flex flex-wrap items-center justify-end gap-2.5">
+              <span id="local-prompt-status" class="submit-status min-h-[1.3em] text-[0.74rem] leading-[1.3] text-hub-muted"></span>
               <button id="local-prompt-submit" class="prompt-submit rounded-lg border border-[#597695] bg-[#2f4864] px-3 py-2 text-[0.8rem] font-semibold text-hub-text transition hover:-translate-y-px hover:border-[#83a3c4] disabled:opacity-65 disabled:translate-y-0" type="submit">Run</button>
-              <span id="local-prompt-status" class="submit-status min-h-[1.3em] text-[0.74rem] leading-[1.3] text-hub-muted">Idle</span>
             </div>
           </form>
         </section>
@@ -262,6 +262,7 @@
     const REPO_HISTORY_KEY = "hubui.repoHistory.v1";
     const PROMPT_MODE_KEY = "hubui.localPromptMode";
     const PROMPT_VISIBILITY_KEY = "hubui.localPromptVisible";
+    const QUEUED_STATUS_TIMEOUT_MS = 8_000;
     const COMPLETED_STATUSES = new Set(["ok", "no_changes", "error", "invalid", "duplicate"]);
     const TASK_PROGRESS_STEPS = [
       { id: "received", label: "Task Received", detail: "Dispatch accepted by hub." },
@@ -377,9 +378,9 @@
     const terminal = document.getElementById("terminal");
     const localPromptForm = document.getElementById("local-prompt-form");
     const localPromptInput = document.getElementById("local-prompt-input");
-    const localPromptHint = document.getElementById("local-prompt-hint");
     const localPromptSubmit = document.getElementById("local-prompt-submit");
     const localPromptStatus = document.getElementById("local-prompt-status");
+    let localPromptStatusTimer = 0;
     const promptModeBuilder = document.getElementById("prompt-mode-builder");
     const promptModeLibrary = document.getElementById("prompt-mode-library");
     const promptModeJSON = document.getElementById("prompt-mode-json");
@@ -1016,13 +1017,21 @@
       promptBuilderPanel.classList.toggle("hidden", !isBuilder);
       promptLibraryPanel.classList.toggle("hidden", !isLibrary);
       promptRawPanel.classList.toggle("hidden", !isJSON);
-      if (isBuilder) {
-        localPromptHint.textContent = "Select a repo, branch, directory, and prompt in Builder mode. You can paste PNG screenshots before submitting.";
-      } else if (isLibrary) {
-        localPromptHint.textContent = "Select a repo, branch, and one library task template.";
-      } else {
-        localPromptHint.textContent = "Paste one JSON object with either prompt or library_task_name and one of repo, repo_url, or repos. Include images[] with base64 payloads for screenshots when needed.";
+    }
+
+    function clearLocalPromptStatusTimer() {
+      if (!localPromptStatusTimer) {
+        return;
       }
+      clearTimeout(localPromptStatusTimer);
+      localPromptStatusTimer = 0;
+    }
+
+    function shouldAutoDismissLocalPromptStatus(kind, text) {
+      if (kind !== "ok") {
+        return false;
+      }
+      return String(text || "").startsWith("Queued request ");
     }
 
     function applyPromptVisibility() {
@@ -1255,8 +1264,17 @@
     }
 
     function setLocalPromptStatus(kind, text) {
+      clearLocalPromptStatusTimer();
       localPromptStatus.className = kind ? `submit-status ${kind}` : "submit-status";
       localPromptStatus.textContent = text;
+      if (!shouldAutoDismissLocalPromptStatus(kind, text)) {
+        return;
+      }
+      localPromptStatusTimer = window.setTimeout(() => {
+        localPromptStatusTimer = 0;
+        localPromptStatus.className = "submit-status";
+        localPromptStatus.textContent = "";
+      }, QUEUED_STATUS_TIMEOUT_MS);
     }
 
     function duplicateNotice(body) {
