@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -24,6 +25,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: go.mod
 
       - name: Download modules
         run: go mod download

@@ -31,8 +31,9 @@ const (
 
 	maxPRCheckRemediationAttempts = 3
 	prChecksWatchIntervalSeconds  = 10
-	maxPRChecksNoReportRetries    = 6
-	prChecksNoReportRetryDelay    = 10 * time.Second
+	// Allow up to ~3 minutes for newly-created PR checks to appear before remediation.
+	maxPRChecksNoReportRetries = 18
+	prChecksNoReportRetryDelay = 10 * time.Second
 	maxCheckSummaryChars          = 4000
 	defaultCIWorkflowPath         = ".github/workflows/ci.yml"
 	maxPushSyncAttempts           = 3
