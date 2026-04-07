@@ -31,7 +31,9 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd --create-home --shell /bin/sh app
+RUN useradd --create-home --shell /bin/sh app \
+    && mkdir -p /workspace/config \
+    && chown -R app:app /workspace
 WORKDIR /workspace
 
 COPY --from=build /out/harness /usr/local/bin/harness
