@@ -3,10 +3,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        AGENT_HARNESS: ${AGENT_HARNESS:-codex}
-        AGENT_NPM_PACKAGE: ${AGENT_NPM_PACKAGE:-}
-        AGENT_COMMAND: ${AGENT_COMMAND:-}
     image: moltenhub-code:local
     ports:
       - 3232:7777

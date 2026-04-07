@@ -73,7 +73,7 @@ AGENT_HARNESS=codex
 
 `init.json` flow (no `.env` required for hub mode):
 
-- Add `github_token` to satisfy `gh` auth setup
+- Add `github_token` (or `GITHUB_TOKEN`) to satisfy `gh` auth setup
 - Add `openai_api_key` when using the Codex harness
 
 Run with Docker Compose (`docker-compose.yml`):
@@ -137,7 +137,7 @@ docker run --rm -it \
 Container startup pre-registers auth before any agent stage:
 
 - maps `GITHUB_TOKEN` to `GH_TOKEN` for `gh` commands
-- if `GITHUB_TOKEN`/`GH_TOKEN` are not set, it reads `github_token` from init JSON and exports it
+- if `GITHUB_TOKEN`/`GH_TOKEN` are not set, it reads `github_token` (or `GITHUB_TOKEN`) from init JSON and exports it
 - runs `gh auth status` and `gh auth setup-git`
 - configures GitHub URL rewrites so `git@github.com:*` and `ssh://git@github.com/*` can use PAT-backed HTTPS
 - for Codex, it reads `openai_api_key` from init JSON when `OPENAI_API_KEY` is unset and performs `codex login --with-api-key`

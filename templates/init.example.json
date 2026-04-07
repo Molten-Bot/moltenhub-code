@@ -2,6 +2,7 @@
   "base_url": "https://na.hub.molten.bot/v1",
   // Optional: runtime GitHub token. If set, docker entrypoint exports GITHUB_TOKEN/GH_TOKEN.
   // "github_token": "ghp_replace_with_your_pat",
+  // also accepted: "GITHUB_TOKEN"
   // Optional for Codex harness: runtime OpenAI API key.
   // "openai_api_key": "sk-proj_replace_with_your_key",
   "agent_token": "agent_replace_with_your_token",

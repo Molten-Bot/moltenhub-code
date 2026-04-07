@@ -117,7 +117,7 @@ if [ "${OPENAI_API_KEY:-}" = "" ]; then
 fi
 
 if [ "${GH_TOKEN:-}" = "" ] && [ "${GITHUB_TOKEN:-}" = "" ]; then
-    echo "missing required GitHub token: set GITHUB_TOKEN/GH_TOKEN or add github_token to ${init_path}" >&2
+    echo "missing required GitHub token: set GITHUB_TOKEN/GH_TOKEN or add GITHUB_TOKEN/github_token to ${init_path}" >&2
     exit 21
 fi
 
