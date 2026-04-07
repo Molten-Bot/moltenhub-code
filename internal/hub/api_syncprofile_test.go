@@ -15,8 +15,9 @@ func TestSyncProfileUsesOpenAPICompatiblePayloads(t *testing.T) {
 	t.Parallel()
 
 	type captured struct {
-		Path string
-		Body map[string]any
+		Method string
+		Path   string
+		Body   map[string]any
 	}
 	var (
 		mu    sync.Mutex
@@ -30,7 +31,7 @@ func TestSyncProfileUsesOpenAPICompatiblePayloads(t *testing.T) {
 		_ = json.Unmarshal(data, &body)
 
 		mu.Lock()
-		calls = append(calls, captured{Path: r.URL.Path, Body: body})
+		calls = append(calls, captured{Method: r.Method, Path: r.URL.Path, Body: body})
 		mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
@@ -65,6 +66,9 @@ func TestSyncProfileUsesOpenAPICompatiblePayloads(t *testing.T) {
 		t.Fatalf("calls = %d, want 2", len(calls))
 	}
 
+	if calls[0].Method != http.MethodPost {
+		t.Fatalf("first method = %q", calls[0].Method)
+	}
 	if calls[0].Path != "/v1/agents/me/metadata" {
 		t.Fatalf("first path = %q", calls[0].Path)
 	}
@@ -72,6 +76,9 @@ func TestSyncProfileUsesOpenAPICompatiblePayloads(t *testing.T) {
 		t.Fatalf("first body missing handle: %#v", calls[0].Body)
 	}
 
+	if calls[1].Method != http.MethodPost {
+		t.Fatalf("second method = %q", calls[1].Method)
+	}
 	if calls[1].Path != "/v1/agents/me/metadata" {
 		t.Fatalf("second path = %q", calls[1].Path)
 	}
@@ -119,7 +126,7 @@ func TestSyncProfileUsesOpenAPICompatiblePayloads(t *testing.T) {
 	if !ok {
 		t.Fatalf("skill has wrong type: %#v", skills[0])
 	}
-	if skill["name"] != "moltenhub_code_run" {
+	if skill["name"] != "code_for_me" {
 		t.Fatalf("skill name = %#v", skill["name"])
 	}
 	if _, ok := skill["description"]; !ok {
@@ -133,12 +140,13 @@ func TestSyncProfileUsesOpenAPICompatiblePayloads(t *testing.T) {
 	}
 }
 
-func TestSyncProfileSanitizesLegacyMetadataSkills(t *testing.T) {
+func TestSyncProfileIgnoresProfileMetadataOverridesFromInit(t *testing.T) {
 	t.Parallel()
 
 	type captured struct {
-		Path string
-		Body map[string]any
+		Method string
+		Path   string
+		Body   map[string]any
 	}
 	var (
 		mu    sync.Mutex
@@ -152,7 +160,7 @@ func TestSyncProfileSanitizesLegacyMetadataSkills(t *testing.T) {
 		_ = json.Unmarshal(data, &body)
 
 		mu.Lock()
-		calls = append(calls, captured{Path: r.URL.Path, Body: body})
+		calls = append(calls, captured{Method: r.Method, Path: r.URL.Path, Body: body})
 		mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
@@ -165,21 +173,14 @@ func TestSyncProfileSanitizesLegacyMetadataSkills(t *testing.T) {
 	cfg := InitConfig{
 		Profile: ProfileConfig{
 			Metadata: map[string]any{
-				"skills": []any{
-					map[string]any{
-						"name":          "Legacy Skill",
-						"dispatch_type": "skill_request",
-						"result_type":   "skill_result",
-					},
-				},
+				"public":     false,
+				"is_public":  false,
+				"visibility": "private",
+				"agent_type": "override",
 			},
 		},
-		Skill: SkillConfig{
-			Name:         "moltenhub_code_run",
-			DispatchType: "skill_request",
-			ResultType:   "skill_result",
-		},
 	}
+	cfg.ApplyDefaults()
 
 	if err := client.SyncProfile(context.Background(), "token", cfg); err != nil {
 		t.Fatalf("SyncProfile() error = %v", err)
@@ -191,6 +192,9 @@ func TestSyncProfileSanitizesLegacyMetadataSkills(t *testing.T) {
 	if len(calls) != 1 {
 		t.Fatalf("calls = %d, want 1", len(calls))
 	}
+	if calls[0].Method != http.MethodPost {
+		t.Fatalf("method = %q", calls[0].Method)
+	}
 	if calls[0].Path != "/v1/agents/me/metadata" {
 		t.Fatalf("path = %q", calls[0].Path)
 	}
@@ -199,6 +203,19 @@ func TestSyncProfileSanitizesLegacyMetadataSkills(t *testing.T) {
 	if !ok {
 		t.Fatalf("metadata wrapper missing: %#v", calls[0].Body)
 	}
+	if got := meta["public"]; got != true {
+		t.Fatalf("public = %#v", got)
+	}
+	if got := meta["is_public"]; got != true {
+		t.Fatalf("is_public = %#v", got)
+	}
+	if got := meta["visibility"]; got != "public" {
+		t.Fatalf("visibility = %#v", got)
+	}
+	if got := meta["agent_type"]; got != runtimeIdentifier {
+		t.Fatalf("agent_type = %#v", got)
+	}
+
 	skills, ok := meta["skills"].([]any)
 	if !ok || len(skills) == 0 {
 		t.Fatalf("skills missing: %#v", meta["skills"])
@@ -207,14 +224,8 @@ func TestSyncProfileSanitizesLegacyMetadataSkills(t *testing.T) {
 	if !ok {
 		t.Fatalf("skill wrong type: %#v", skills[0])
 	}
-	if skill["name"] != "legacy-skill" {
+	if skill["name"] != "code_for_me" {
 		t.Fatalf("skill name = %#v", skill["name"])
-	}
-	if _, ok := skill["dispatch_type"]; ok {
-		t.Fatalf("skill should not include dispatch_type: %#v", skill)
-	}
-	if _, ok := skill["result_type"]; ok {
-		t.Fatalf("skill should not include result_type: %#v", skill)
 	}
 	if _, ok := skill["description"]; !ok {
 		t.Fatalf("skill missing description: %#v", skill)
@@ -225,8 +236,9 @@ func TestSyncProfileForcesPublicVisibilityMetadata(t *testing.T) {
 	t.Parallel()
 
 	type captured struct {
-		Path string
-		Body map[string]any
+		Method string
+		Path   string
+		Body   map[string]any
 	}
 	var (
 		mu    sync.Mutex
@@ -240,7 +252,7 @@ func TestSyncProfileForcesPublicVisibilityMetadata(t *testing.T) {
 		_ = json.Unmarshal(data, &body)
 
 		mu.Lock()
-		calls = append(calls, captured{Path: r.URL.Path, Body: body})
+		calls = append(calls, captured{Method: r.Method, Path: r.URL.Path, Body: body})
 		mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
@@ -273,6 +285,9 @@ func TestSyncProfileForcesPublicVisibilityMetadata(t *testing.T) {
 	defer mu.Unlock()
 	if len(calls) != 1 {
 		t.Fatalf("calls = %d, want 1", len(calls))
+	}
+	if calls[0].Method != http.MethodPost {
+		t.Fatalf("method = %q", calls[0].Method)
 	}
 
 	meta, ok := calls[0].Body["metadata"].(map[string]any)

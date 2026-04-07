@@ -138,9 +138,16 @@ Key fields:
 - `base_url` (default `https://na.hub.molten.bot/v1`)
 - `bind_token` or `agent_token`
 - `session_key` (default `main`)
-- `profile.*`
-- `skill.*`
+- `handle`
+- `profile.display_name`
+- `profile.emoji`
+- `profile.bio`
 - `dispatcher.*` (adaptive worker parallelism)
+
+Runtime-owned fields:
+
+- skill contract is fixed to `code_for_me` / `skill_request` / `skill_result`
+- profile visibility metadata is managed by runtime and forced public
 
 Example: [`templates/init.example.json`](templates/init.example.json)
 

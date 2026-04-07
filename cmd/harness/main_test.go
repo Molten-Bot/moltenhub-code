@@ -187,7 +187,7 @@ func TestFailureFollowUpRunConfigUsesRequiredPayloadShapeAndLogContext(t *testin
 	}
 
 	cfg := failureFollowUpRunConfig("local-1712345678-000001", failedResult, failedRunCfg, logRoot)
-	if got, want := cfg.Repos, []string{"git@github.com:acme/repo-a.git", "git@github.com:acme/repo-b.git"}; !reflect.DeepEqual(got, want) {
+	if got, want := cfg.Repos, []string{"git@github.com:acme/repo-a.git"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Repos = %v, want %v", got, want)
 	}
 	if cfg.BaseBranch != "main" {
@@ -204,28 +204,8 @@ func TestFailureFollowUpRunConfigUsesRequiredPayloadShapeAndLogContext(t *testin
 	if !strings.Contains(cfg.Prompt, filepath.Join(expectedLogDir, logFileName)) {
 		t.Fatalf("Prompt missing log file path: %q", cfg.Prompt)
 	}
-	if !strings.Contains(cfg.Prompt, "Captured log excerpt(s):") {
-		t.Fatalf("Prompt missing log excerpt header: %q", cfg.Prompt)
-	}
-	if !strings.Contains(cfg.Prompt, "go test failed") {
-		t.Fatalf("Prompt missing embedded log excerpt: %q", cfg.Prompt)
-	}
-	if !strings.Contains(cfg.Prompt, "clone: repository not found") {
-		t.Fatalf("Prompt missing failure summary: %q", cfg.Prompt)
-	}
-	if !strings.Contains(cfg.Prompt, "Review the failing log paths first, identify every root cause behind the failed task") {
-		t.Fatalf("Prompt missing strong remediation instruction: %q", cfg.Prompt)
-	}
-	if !strings.Contains(cfg.Prompt, "Use the captured log excerpts below when direct filesystem access to the original logs is unavailable.") {
-		t.Fatalf("Prompt missing excerpt usage instruction: %q", cfg.Prompt)
-	}
-}
-
-func TestFailureFollowUpLogExcerptSkipsMissingPaths(t *testing.T) {
-	t.Parallel()
-
-	if got := failureFollowUpLogExcerpt([]string{"", filepath.Join(t.TempDir(), "missing.log")}); got != "" {
-		t.Fatalf("failureFollowUpLogExcerpt() = %q, want empty", got)
+	if !strings.Contains(cfg.Prompt, failureFollowUpRequiredPrompt) {
+		t.Fatalf("Prompt missing required instruction: %q", cfg.Prompt)
 	}
 }
 

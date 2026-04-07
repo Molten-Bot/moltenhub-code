@@ -10,6 +10,15 @@ import (
 	"strings"
 )
 
+const (
+	defaultRuntimeSkillName       = "code_for_me"
+	defaultRuntimeDispatchType    = "skill_request"
+	defaultRuntimeSkillResultType = "skill_result"
+	defaultInitVersion            = "v1"
+	defaultInitBaseURL            = "https://na.hub.molten.bot/v1"
+	defaultInitSessionKey         = "main"
+)
+
 // InitConfig is the init.json contract for hub runtime mode.
 type InitConfig struct {
 	Version    string           `json:"version"`
@@ -19,7 +28,7 @@ type InitConfig struct {
 	SessionKey string           `json:"session_key"`
 	Handle     string           `json:"handle"`
 	Profile    ProfileConfig    `json:"profile"`
-	Skill      SkillConfig      `json:"skill"`
+	Skill      SkillConfig      `json:"-"`
 	Dispatcher DispatcherConfig `json:"dispatcher"`
 }
 
@@ -28,7 +37,7 @@ type ProfileConfig struct {
 	DisplayName string         `json:"display_name"`
 	Emoji       string         `json:"emoji"`
 	Bio         string         `json:"bio"`
-	Metadata    map[string]any `json:"metadata"`
+	Metadata    map[string]any `json:"-"`
 }
 
 // SkillConfig defines the inbound dispatch and outbound result contract.
@@ -74,12 +83,12 @@ func LoadInit(path string) (InitConfig, error) {
 func (c *InitConfig) ApplyDefaults() {
 	c.Version = strings.TrimSpace(c.Version)
 	if c.Version == "" {
-		c.Version = "v1"
+		c.Version = defaultInitVersion
 	}
 
 	c.BaseURL = strings.TrimSpace(c.BaseURL)
 	if c.BaseURL == "" {
-		c.BaseURL = "https://na.hub.molten.bot/v1"
+		c.BaseURL = defaultInitBaseURL
 	}
 	c.BaseURL = strings.TrimRight(c.BaseURL, "/")
 
@@ -87,29 +96,14 @@ func (c *InitConfig) ApplyDefaults() {
 	c.AgentToken = strings.TrimSpace(c.AgentToken)
 	c.SessionKey = strings.TrimSpace(c.SessionKey)
 	if c.SessionKey == "" {
-		c.SessionKey = "main"
+		c.SessionKey = defaultInitSessionKey
 	}
 
 	c.Handle = strings.TrimSpace(c.Handle)
 	c.Profile.DisplayName = strings.TrimSpace(c.Profile.DisplayName)
 	c.Profile.Emoji = strings.TrimSpace(c.Profile.Emoji)
 	c.Profile.Bio = strings.TrimSpace(c.Profile.Bio)
-	if c.Profile.Metadata == nil {
-		c.Profile.Metadata = map[string]any{}
-	}
-
-	c.Skill.Name = strings.TrimSpace(c.Skill.Name)
-	if c.Skill.Name == "" {
-		c.Skill.Name = "code_for_me"
-	}
-	c.Skill.DispatchType = strings.TrimSpace(c.Skill.DispatchType)
-	if c.Skill.DispatchType == "" {
-		c.Skill.DispatchType = "skill_request"
-	}
-	c.Skill.ResultType = strings.TrimSpace(c.Skill.ResultType)
-	if c.Skill.ResultType == "" {
-		c.Skill.ResultType = "skill_result"
-	}
+	c.Skill = runtimeSkillConfig()
 
 	if c.Dispatcher.MinParallel < 1 {
 		c.Dispatcher.MinParallel = 1
@@ -134,6 +128,14 @@ func (c *InitConfig) ApplyDefaults() {
 	}
 	if c.Dispatcher.DiskIOHighWatermarkMBs <= 0 {
 		c.Dispatcher.DiskIOHighWatermarkMBs = 120
+	}
+}
+
+func runtimeSkillConfig() SkillConfig {
+	return SkillConfig{
+		Name:         defaultRuntimeSkillName,
+		DispatchType: defaultRuntimeDispatchType,
+		ResultType:   defaultRuntimeSkillResultType,
 	}
 }
 
