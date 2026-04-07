@@ -312,8 +312,14 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".prompt-wrap.panel {\n  display: flex;\n  flex-direction: column;\n}") {
 		t.Fatalf("expected studio panel to stack header/form without clipping")
 	}
+	if !strings.Contains(css, ".prompt-mode-tabs {\n  display: inline-flex;\n  gap: 2px;\n  padding: 5px;\n  border-radius: 999px;") {
+		t.Fatalf("expected studio mode tabs to use the refined segmented-control spacing")
+	}
 	if !strings.Contains(css, ".prompt-form {\n  display: grid;\n  gap: 10px;\n  padding: 12px;\n  min-width: 0;\n  min-height: 0;\n  overflow-y: auto;\n}") {
 		t.Fatalf("expected studio form content to scroll instead of clipping controls")
+	}
+	if !strings.Contains(css, ".prompt-field-repository {\n  flex: 1 1 320px;\n  min-width: 260px;\n}") {
+		t.Fatalf("expected repository input to retain enough width beside the history selector")
 	}
 	if !strings.Contains(css, ".prompt-actions {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 10px;\n}") {
 		t.Fatalf("expected prompt actions to use wrapping layout for Safari-safe sizing")
@@ -327,7 +333,34 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".submit-status-inline {\n  display: inline-flex;\n  align-items: center;\n  flex: 1 1 0;\n  min-width: 140px;\n  margin-right: auto;\n}") {
 		t.Fatalf("expected inline status to sit between the paste target and action buttons")
 	}
+	if !strings.Contains(css, ".prompt-image-chip {\n  border-radius: 14px;\n  border: 1px solid var(--border);\n  background: linear-gradient(160deg, rgba(255, 255, 255, 0.94), rgba(240, 246, 255, 0.88));") {
+		t.Fatalf("expected screenshot chips to use the shared light panel treatment")
+	}
 	if !strings.Contains(css, "@media (max-width: 640px) {\n  .prompt-actions {\n    gap: 6px;\n  }\n\n  .prompt-action-paste {\n    flex: 1 1 100%;\n    width: 100%;\n    max-width: none;\n  }\n\n  .submit-status-inline {\n    flex: 1 1 100%;\n    width: 100%;\n    min-width: 0;\n    margin-right: 0;\n  }\n\n  .prompt-action-button {\n    flex: 1 1 0;\n    min-inline-size: 0;\n  }") {
 		t.Fatalf("expected mobile layout to keep Studio action controls fully visible")
+	}
+}
+
+func TestHeaderStatusStylesStayReadable(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodGet, "/static/style.css", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.Code)
+	}
+
+	css := resp.Body.String()
+	if !strings.Contains(css, ".status-item-compact {\n  position: relative;\n  justify-content: center;\n  gap: 0;\n  width: 38px;\n  min-width: 38px;\n  height: 38px;\n  min-height: 38px;") {
+		t.Fatalf("expected compact status dots to use the larger readable pill sizing")
+	}
+	if !strings.Contains(css, ".status-item-metrics {\n  gap: 12px;\n  padding-left: 12px;\n  padding-right: 14px;\n  min-height: 38px;") {
+		t.Fatalf("expected metrics pill to use stronger spacing and height")
+	}
+	if !strings.Contains(css, ".status-item-metrics .status-value {\n  color: var(--text-soft);\n}") {
+		t.Fatalf("expected metrics text to use readable status color tokens")
 	}
 }

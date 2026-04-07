@@ -343,6 +343,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="resource-metrics-text"`) {
 		t.Fatalf("expected index html to include resource metrics indicator")
 	}
+	if strings.Contains(markup, `text-slate-200`) {
+		t.Fatalf("expected index html to remove hardcoded dark text utilities from studio and status surfaces")
+	}
+	if strings.Contains(markup, `bg-[#0d1825]`) || strings.Contains(markup, `bg-[#0c1724]`) || strings.Contains(markup, `bg-black/15`) {
+		t.Fatalf("expected index html to remove hardcoded dark background utilities from studio surfaces")
+	}
 	if !strings.Contains(markup, "function renderHubConnection(") {
 		t.Fatalf("expected index html to include renderHubConnection handler")
 	}
@@ -384,6 +390,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `id="builder-image-list"`) {
 		t.Fatalf("expected index html to include screenshot attachment list")
+	}
+	if !strings.Contains(markup, `row.className = "prompt-image-chip";`) {
+		t.Fatalf("expected index html to render screenshot attachments with a dedicated light-theme chip class")
 	}
 	if strings.Contains(markup, ">Screenshots<") {
 		t.Fatalf("expected index html to remove the screenshots title label")
