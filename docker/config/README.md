@@ -13,7 +13,7 @@ Provide one of these files:
 When running hub mode, `init.json` may also include runtime secrets:
 
 - `github_token` for GitHub auth bootstrap
-- `openai_api_key` (or `openaiApiKey`) for Codex CLI login when using the Codex harness
+- `openai_api_key` for Codex CLI login when using the Codex harness
 
 You can bootstrap from examples:
 

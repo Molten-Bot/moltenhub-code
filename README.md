@@ -66,9 +66,7 @@ cp .env.example .env
 ```dotenv
 GITHUB_TOKEN=ghp_xxx
 OPENAI_API_KEY=sk_xxx
-ANTHROPIC_API_KEY=sk-ant-xxx
-AUGMENT_API_TOKEN=xxx
-AGENT_HARNESS=codex
+MOLTEN_HUB_TOKEN=agent_or_bind_token
 ```
 
 `init.json` flow (no `.env` required for hub mode):
