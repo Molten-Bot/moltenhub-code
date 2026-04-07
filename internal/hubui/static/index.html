@@ -400,32 +400,57 @@
       setIndicator(localConnItem, localConnDot, localConnText, "Local", online, text);
     }
 
-    function setHubConnection(online, text) {
+    function applyHubDotMode(mode) {
+      if (!hubConnDot) return;
+      hubConnDot.classList.remove("http", "disconnected");
+      if (mode === "http_long_poll") {
+        hubConnDot.classList.add("http");
+        return;
+      }
+      if (mode === "disconnected") {
+        hubConnDot.classList.add("disconnected");
+      }
+    }
+
+    function setHubConnection(mode, text) {
+      const online = mode === "ws" || mode === "http_long_poll";
       setIndicator(hubConnItem, hubConnDot, hubConnText, "Molten Hub", online, text);
+      applyHubDotMode(mode);
     }
 
     function renderHubConnection(snapshot) {
       if (!snapshot || typeof snapshot.connection !== "object" || snapshot.connection === null) {
-        setHubConnection(false, "Hub status unavailable");
+        setHubConnection("disconnected", "Hub status unavailable");
         return;
       }
 
       const conn = snapshot.connection;
       const domain = typeof conn.hub_domain === "string" ? conn.hub_domain.trim() : "";
       const baseURL = typeof conn.hub_base_url === "string" ? conn.hub_base_url.trim() : "";
+      const transport = typeof conn.hub_transport === "string" ? conn.hub_transport.trim() : "";
       const target = domain || baseURL || "hub";
 
+      if (transport === "ws") {
+        setHubConnection("ws", `Connected via WebSocket to ${target}`);
+        return;
+      }
+
+      if (transport === "http_long_poll") {
+        setHubConnection("http_long_poll", `Connected via HTTP long polling to ${target}`);
+        return;
+      }
+
       if (conn.hub_connected) {
-        setHubConnection(true, `Connected to ${target}`);
+        setHubConnection("", `Connected to ${target} (transport pending)`);
         return;
       }
 
       if (domain || baseURL) {
-        setHubConnection(false, `Disconnected from ${target}`);
+        setHubConnection("disconnected", `Disconnected from ${target}`);
         return;
       }
 
-      setHubConnection(false, "Connecting...");
+      setHubConnection("disconnected", "Connecting...");
     }
 
     function formatMetricValue(label, value, suffix) {

@@ -24,6 +24,12 @@ var (
 	ErrTaskNotCompleted = errors.New("task is not completed")
 )
 
+const (
+	hubTransportWS           = "ws"
+	hubTransportHTTPLongPoll = "http_long_poll"
+	hubTransportDisconnected = "disconnected"
+)
+
 // Event is one monitor timeline entry.
 type Event struct {
 	ID        int64  `json:"id"`
@@ -64,6 +70,7 @@ type Task struct {
 // Connection captures current monitor connectivity state.
 type Connection struct {
 	HubConnected bool   `json:"hub_connected"`
+	HubTransport string `json:"hub_transport,omitempty"`
 	HubDomain    string `json:"hub_domain,omitempty"`
 	HubBaseURL   string `json:"hub_base_url,omitempty"`
 }
@@ -101,6 +108,7 @@ type Broker struct {
 	subs        map[chan struct{}]struct{}
 
 	hubConnected bool
+	hubTransport string
 	hubBaseURL   string
 	hubDomain    string
 	resources    ResourceMetrics
@@ -193,6 +201,7 @@ func (b *Broker) Snapshot() Snapshot {
 		GeneratedAt: now.Format(time.RFC3339Nano),
 		Connection: Connection{
 			HubConnected: b.hubConnected,
+			HubTransport: b.hubTransport,
 			HubDomain:    b.hubDomain,
 			HubBaseURL:   b.hubBaseURL,
 		},
@@ -512,17 +521,29 @@ func (b *Broker) updateHubConnectionFromLineLocked(line string, fields map[strin
 	switch {
 	case strings.HasPrefix(line, "hub.auth status=ok"):
 		b.hubConnected = true
+		if b.hubTransport == hubTransportDisconnected {
+			b.hubTransport = ""
+		}
 	case strings.HasPrefix(line, "hub.ws status=connected"):
 		b.hubConnected = true
+		b.hubTransport = hubTransportWS
 	case strings.HasPrefix(line, "hub.transport mode=openclaw_pull"):
 		// Pull mode still means the daemon is connected to MoltenHub transport.
 		b.hubConnected = true
+		b.hubTransport = hubTransportHTTPLongPoll
+	case strings.HasPrefix(line, "hub.transport mode=openclaw_ws"):
+		b.hubConnected = true
+		b.hubTransport = hubTransportWS
 	case strings.HasPrefix(line, "hub.connection "):
 		switch strings.ToLower(strings.TrimSpace(fields["status"])) {
 		case "connected", "online", "ok":
 			b.hubConnected = true
+			if b.hubTransport == hubTransportDisconnected {
+				b.hubTransport = ""
+			}
 		case "disconnected", "offline", "error":
 			b.hubConnected = false
+			b.hubTransport = hubTransportDisconnected
 		}
 	case strings.HasPrefix(line, "hub.ws status=disabled"),
 		strings.HasPrefix(line, "hub.ws status=error"),
@@ -530,6 +551,7 @@ func (b *Broker) updateHubConnectionFromLineLocked(line string, fields map[strin
 		strings.HasPrefix(line, "hub.pull status=error"),
 		strings.HasPrefix(line, "hub.agent status=offline"):
 		b.hubConnected = false
+		b.hubTransport = hubTransportDisconnected
 	}
 }
 

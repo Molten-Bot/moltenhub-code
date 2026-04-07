@@ -307,6 +307,18 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `setIndicator(hubConnItem, hubConnDot, hubConnText, "Molten Hub", online, text);`) {
 		t.Fatalf("expected index html to render hub indicator label as Molten Hub")
 	}
+	if !strings.Contains(markup, "function applyHubDotMode(") {
+		t.Fatalf("expected index html to include hub transport dot mode handler")
+	}
+	if !strings.Contains(markup, "conn.hub_transport") {
+		t.Fatalf("expected index html to read hub transport mode from connection state")
+	}
+	if !strings.Contains(markup, "Connected via WebSocket") {
+		t.Fatalf("expected index html to include websocket connection copy")
+	}
+	if !strings.Contains(markup, "Connected via HTTP long polling") {
+		t.Fatalf("expected index html to include HTTP long-polling connection copy")
+	}
 	if !strings.Contains(markup, `id="prompt-visibility-toggle"`) {
 		t.Fatalf("expected index html to include studio visibility toggle")
 	}
@@ -533,6 +545,12 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".status-item-metrics") {
 		t.Fatalf("expected stylesheet to include metrics pill styles")
+	}
+	if !strings.Contains(css, ".dot.http") {
+		t.Fatalf("expected stylesheet to include HTTP long-poll dot styles")
+	}
+	if !strings.Contains(css, ".dot.disconnected") {
+		t.Fatalf("expected stylesheet to include disconnected dot styles")
 	}
 	if strings.Contains(css, "cursor:") {
 		t.Fatalf("expected stylesheet to avoid custom cursor styles")
