@@ -378,9 +378,25 @@ func (h Harness) processChangedRepo(
 			prRes, err = h.runCommand(ctx, "pr", prCreateWithoutBaseCommand(repo.Dir, cfg, repo.Branch))
 		}
 		if err != nil {
-			return ExitPR, "pr", err
+			if existingPRURL, ok := existingPRURLFromCreateFailure(prRes, err); ok {
+				repo.PRURL = existingPRURL
+				h.logf(
+					"stage=pr status=warn action=reuse_existing reason=already_exists repo=%s repo_dir=%s branch=%s pr_url=%s",
+					repo.URL,
+					repo.RelDir,
+					repo.Branch,
+					repo.PRURL,
+				)
+			} else {
+				return ExitPR, "pr", err
+			}
 		}
-		repo.PRURL = extractFirstURL(prRes.Stdout)
+		if repo.PRURL == "" {
+			repo.PRURL = extractFirstURL(prRes.Stdout)
+		}
+		if repo.PRURL == "" {
+			repo.PRURL = extractFirstURL(prRes.Stderr)
+		}
 		if repo.PRURL == "" {
 			return ExitPR, "pr", fmt.Errorf("gh pr create did not return a PR URL for repo %s", repo.URL)
 		}
@@ -818,6 +834,24 @@ func isNoRequiredChecksReported(res execx.Result, err error) bool {
 	}
 	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
 	return strings.Contains(text, "no required checks")
+}
+
+func existingPRURLFromCreateFailure(res execx.Result, err error) (string, bool) {
+	if err == nil {
+		return "", false
+	}
+
+	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
+	if !strings.Contains(text, "pull request") || !strings.Contains(text, "already exists") {
+		return "", false
+	}
+
+	for _, candidate := range []string{res.Stdout, res.Stderr, err.Error()} {
+		if url := extractFirstURL(candidate); url != "" {
+			return url, true
+		}
+	}
+	return "", false
 }
 
 func isNonFastForwardPush(res execx.Result, err error) bool {
