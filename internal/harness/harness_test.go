@@ -1047,6 +1047,101 @@ func TestRunMissingMoltenhubBaseBranchFallsBackToDefaultAndCreatesNewBranch(t *t
 	}
 }
 
+func TestRunCloneRetriesTransientFailureThenSucceeds(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 6, 19, 53, 52, 0, time.UTC)
+	guid := "9ded650b29c70708825082be50fbf433"
+	runDir := filepath.Join("/tmp", "temp", guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api-20260406-195352-9ded650b"
+	prURL := "https://github.com/acme/repo/pull/112"
+
+	cloneTransientFailure := execx.Result{
+		Stderr: "fatal: unable to access 'https://github.com/acme/repo.git/': Failed to connect to github.com port 443: Connection timed out\n",
+	}
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneRepoCommand(cfg.RepoURL, cfg.BaseBranch, repoDir), res: cloneTransientFailure, err: errors.New("clone failed")},
+		{cmd: cloneRepoCommand(cfg.RepoURL, cfg.BaseBranch, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL)},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+	h.Sleep = func(context.Context, time.Duration) error { return nil }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if got, want := res.PRURL, prURL; got != want {
+		t.Fatalf("PRURL = %q, want %q", got, want)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunRepoNotFoundCloneFailsWithoutRetry(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	guid := "abcdef123456"
+	runDir := filepath.Join("/tmp", "temp", guid)
+	repoDir := filepath.Join(runDir, "repo")
+	cloneRepoNotFound := execx.Result{
+		Stderr: "remote: Repository not found.\n" +
+			"fatal: repository 'git@github.com:acme/repo.git/' not found\n",
+	}
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneRepoCommand(cfg.RepoURL, cfg.BaseBranch, repoDir), res: cloneRepoNotFound, err: errors.New("clone failed")},
+	}}
+
+	h := New(fake)
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == filepath.Join(repoDir, cfg.TargetSubdir) }
+	h.Sleep = func(context.Context, time.Duration) error { return nil }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err == nil {
+		t.Fatal("Run() err = nil, want clone failure")
+	}
+	if res.ExitCode != ExitClone {
+		t.Fatalf("ExitCode = %d, want %d", res.ExitCode, ExitClone)
+	}
+	if !strings.Contains(strings.ToLower(res.Err.Error()), "repository") {
+		t.Fatalf("error = %v, want repository detail", res.Err)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
 func TestRunMissingNonMoltenhubBaseBranchFailsClone(t *testing.T) {
 	t.Parallel()
 

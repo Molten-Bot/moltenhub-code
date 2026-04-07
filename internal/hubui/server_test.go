@@ -251,6 +251,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function rememberRepos(") {
 		t.Fatalf("expected index html to include repo history persistence")
 	}
+	if !strings.Contains(markup, "function dropReposFromHistory(") {
+		t.Fatalf("expected index html to include repo history cleanup helper")
+	}
+	if !strings.Contains(markup, "function isCloneMissingRepoError(") {
+		t.Fatalf("expected index html to include clone failure repo cleanup matcher")
+	}
+	if !strings.Contains(markup, "dropReposFromHistory(failedCloneRepos);") {
+		t.Fatalf("expected index html to drop missing repositories from history on clone failures")
+	}
 	if !strings.Contains(markup, "function togglePromptVisibility(") {
 		t.Fatalf("expected index html to include prompt visibility toggle handler")
 	}

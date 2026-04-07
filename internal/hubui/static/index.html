@@ -683,6 +683,20 @@
       renderRepoHistoryOptions();
     }
 
+    function dropReposFromHistory(repos) {
+      const blocked = new Set(dedupeRepoValues(repos));
+      if (!blocked.size) return;
+
+      const filtered = state.repoHistory.filter((repo) => !blocked.has(repo));
+      if (filtered.length === state.repoHistory.length) {
+        return;
+      }
+
+      state.repoHistory = filtered;
+      persistRepoHistory();
+      renderRepoHistoryOptions();
+    }
+
     function selectedLibraryTaskName() {
       return String(builderLibraryTask.value || "").trim();
     }
@@ -939,6 +953,19 @@
         raw.unshift(task.repo);
       }
       return dedupeRepoValues(raw);
+    }
+
+    function isCloneMissingRepoError(task) {
+      if (!task) return false;
+      if (String(task.status || "").toLowerCase() !== "error") return false;
+      if (String(task.stage || "").toLowerCase() !== "clone") return false;
+
+      const detail = String(task.error || "").toLowerCase();
+      if (!detail) return false;
+
+      return detail.includes("repository not found") ||
+        (detail.includes("fatal: repository") && detail.includes("not found")) ||
+        detail.includes("repository does not exist");
     }
 
     function formatTaskRepos(task) {
@@ -1601,9 +1628,15 @@
       if (!snapshot) return;
       state.snapshot = snapshot;
       const observedRepos = [];
+      const failedCloneRepos = [];
       for (const task of snapshot.tasks || []) {
+        if (isCloneMissingRepoError(task)) {
+          failedCloneRepos.push(...taskRepoValues(task));
+          continue;
+        }
         observedRepos.push(...taskRepoValues(task));
       }
+      dropReposFromHistory(failedCloneRepos);
       rememberRepos(observedRepos);
       renderHubConnection(snapshot);
       renderResourceMetrics(snapshot);

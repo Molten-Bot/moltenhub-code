@@ -36,6 +36,9 @@ const (
 	maxCheckSummaryChars          = 4000
 	defaultCIWorkflowPath         = ".github/workflows/ci.yml"
 	maxPushSyncAttempts           = 3
+	maxCloneAttempts              = 3
+	cloneRetryDelay               = 2 * time.Second
+	maxCloneErrorDetailChars      = 500
 )
 
 type logFn func(string, ...any)
@@ -165,7 +168,14 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		repoDir := filepath.Join(runDir, relDir)
 		branchForClone := cloneBaseBranch
 		h.logf("stage=clone status=start repo=%s branch=%s repo_dir=%s", repoURL, branchForClone, relDir)
-		cloneRes, cloneErr := h.runCommand(ctx, "clone", cloneRepoCommand(repoURL, branchForClone, repoDir))
+		cloneRes, cloneErr := h.runCloneWithRetry(
+			ctx,
+			repoURL,
+			branchForClone,
+			repoDir,
+			relDir,
+			cloneRepoCommand(repoURL, branchForClone, repoDir),
+		)
 		if cloneErr != nil {
 			if !shouldFallbackCloneToDefaultBranch(branchForClone, cloneRes, cloneErr) {
 				return h.fail(ExitClone, "clone", cloneErr, runDir)
@@ -180,7 +190,14 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 			if err := os.RemoveAll(repoDir); err != nil {
 				return h.fail(ExitClone, "clone", fmt.Errorf("cleanup failed clone dir %s: %w", repoDir, err), runDir)
 			}
-			if _, err := h.runCommand(ctx, "clone", cloneRepoDefaultBranchCommand(repoURL, repoDir)); err != nil {
+			if _, err := h.runCloneWithRetry(
+				ctx,
+				repoURL,
+				"",
+				repoDir,
+				relDir,
+				cloneRepoDefaultBranchCommand(repoURL, repoDir),
+			); err != nil {
 				return h.fail(ExitClone, "clone", err, runDir)
 			}
 			cloneBaseBranch = "main"
@@ -535,6 +552,71 @@ func (h Harness) pushWithSync(ctx context.Context, repo repoWorkspace, remediati
 	return fmt.Errorf("push retries exhausted for branch %q", repo.Branch)
 }
 
+func (h Harness) runCloneWithRetry(
+	ctx context.Context,
+	repoURL, branch, repoDir, relDir string,
+	cmd execx.Command,
+) (execx.Result, error) {
+	for attempt := 1; ; attempt++ {
+		res, err := h.runCommand(ctx, "clone", cmd)
+		if err == nil {
+			return res, nil
+		}
+		if !shouldRetryClone(err, res) || attempt >= maxCloneAttempts {
+			return res, cloneErrorWithDetails(err, res)
+		}
+
+		h.logf(
+			"stage=clone status=retry reason=transient_error repo=%s branch=%s repo_dir=%s retry=%d/%d err=%q",
+			repoURL,
+			cloneRetryBranchLabel(branch),
+			relDir,
+			attempt,
+			maxCloneAttempts-1,
+			err,
+		)
+		if cleanupErr := os.RemoveAll(repoDir); cleanupErr != nil {
+			return res, fmt.Errorf("cleanup failed clone dir %s before retry: %w", repoDir, cleanupErr)
+		}
+		if sleepErr := h.Sleep(ctx, cloneRetryDelay); sleepErr != nil {
+			return res, fmt.Errorf("clone retry interrupted: %w", sleepErr)
+		}
+	}
+}
+
+func cloneRetryBranchLabel(branch string) string {
+	branch = strings.TrimSpace(branch)
+	if branch == "" {
+		return "default"
+	}
+	return branch
+}
+
+func cloneErrorWithDetails(err error, res execx.Result) error {
+	if err == nil {
+		return nil
+	}
+	detail := summarizeCloneErrorDetail(res)
+	if detail == "" {
+		return err
+	}
+	return fmt.Errorf("%w: %s", err, detail)
+}
+
+func summarizeCloneErrorDetail(res execx.Result) string {
+	detail := strings.TrimSpace(strings.Join([]string{res.Stderr, res.Stdout}, "\n"))
+	if detail == "" {
+		return ""
+	}
+	detail = strings.ReplaceAll(detail, "\r\n", "\n")
+	detail = strings.ReplaceAll(detail, "\r", "\n")
+	detail = strings.Join(strings.Fields(detail), " ")
+	if len(detail) <= maxCloneErrorDetailChars {
+		return detail
+	}
+	return strings.TrimSpace(detail[:maxCloneErrorDetailChars]) + "...(truncated)"
+}
+
 func buildResult(runDir string, repos []repoWorkspace, noChanges bool) Result {
 	res := Result{
 		WorkspaceDir: runDir,
@@ -741,6 +823,37 @@ func isNonFastForwardPush(res execx.Result, err error) bool {
 	return strings.Contains(text, "non-fast-forward") || strings.Contains(text, "fetch first")
 }
 
+func shouldRetryClone(err error, res execx.Result) bool {
+	if err == nil {
+		return false
+	}
+	if isRepoNotFoundCloneError(err, res) {
+		return false
+	}
+	return !isMissingRemoteBranchCloneError(err, res)
+}
+
+func isMissingRemoteBranchCloneError(err error, res execx.Result) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
+	return strings.Contains(text, "could not find remote branch") ||
+		(strings.Contains(text, "remote branch") && strings.Contains(text, "not found"))
+}
+
+func isRepoNotFoundCloneError(err error, res execx.Result) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
+	return strings.Contains(text, "remote: repository not found") ||
+		(strings.Contains(text, "fatal: repository") && strings.Contains(text, "not found")) ||
+		strings.Contains(text, "repository not found") ||
+		strings.Contains(text, "does not appear to be a git repository") ||
+		strings.Contains(text, "repository does not exist")
+}
+
 func shouldFallbackCloneToDefaultBranch(baseBranch string, res execx.Result, err error) bool {
 	if err == nil {
 		return false
@@ -749,9 +862,7 @@ func shouldFallbackCloneToDefaultBranch(baseBranch string, res execx.Result, err
 	if !strings.HasPrefix(normalized, "moltenhub-") {
 		return false
 	}
-	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
-	return strings.Contains(text, "could not find remote branch") ||
-		(strings.Contains(text, "remote branch") && strings.Contains(text, "not found"))
+	return isMissingRemoteBranchCloneError(err, res)
 }
 
 func (h Harness) runCodex(
