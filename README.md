@@ -69,6 +69,9 @@ docker compose up
 
 # hub mode when run config is absent and init exists
 /workspace/config/init.json
+
+# hub mode from env when both config files are absent
+MOLTEN_HUB_TOKEN (+ optional MOLTEN_HUB_URL, MOLTEN_HUB_SESSION_KEY)
 ```
 
 Hub mode example:

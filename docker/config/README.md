@@ -6,6 +6,7 @@ Provide one of these files:
 
 - `config.json` to run `harness run --config /workspace/config/config.json`
 - `init.json` to run `harness hub --init /workspace/config/init.json` when `config.json` is absent
+- if both files are absent and `MOLTEN_HUB_TOKEN` is set, `with-config` auto-generates a temporary init config and starts hub mode
 
 You can bootstrap from examples:
 
