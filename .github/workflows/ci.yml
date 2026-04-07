@@ -2,6 +2,11 @@ name: CI
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
+      - "moltenhub-*"
+  workflow_dispatch:
 
 permissions:
   contents: read

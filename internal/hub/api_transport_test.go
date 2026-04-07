@@ -343,8 +343,8 @@ func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
 	if !ok {
 		t.Fatalf("skill.metadata = %#v", skill["metadata"])
 	}
-	if gotNames, want := meta["library_task_names"], []any{"security-review", "unit-test-coverage"}; !reflect.DeepEqual(gotNames, want) {
-		t.Fatalf("library_task_names = %#v, want %#v", gotNames, want)
+	if gotNames, want := meta["libraryTaskNames"], []any{"security-review", "unit-test-coverage"}; !reflect.DeepEqual(gotNames, want) {
+		t.Fatalf("libraryTaskNames = %#v, want %#v", gotNames, want)
 	}
 }
 

@@ -219,17 +219,17 @@ func (c APIClient) RegisterRuntime(ctx context.Context, token string, cfg InitCo
 			"dispatch_type": runtimeSkill.DispatchType,
 			"result_type":   runtimeSkill.ResultType,
 			"metadata": map[string]any{
-				"run_config_modes":    []string{"prompt", "library_task"},
-				"library_task_names":  libraryNames,
-				"library_task_count":  len(libraryNames),
-				"library_tasks":       libraryTasks,
-				"supports_branch_key": true,
+				"runConfigModes":    []string{"prompt", "libraryTask"},
+				"libraryTaskNames":  libraryNames,
+				"libraryTaskCount":  len(libraryNames),
+				"libraryTasks":      libraryTasks,
+				"supportsBranchKey": true,
 			},
 		}},
 		"metadata": map[string]any{
-			"agent_type":         runtimeIdentifier,
-			"library_task_names": libraryNames,
-			"library_task_count": len(libraryNames),
+			"agentType":        runtimeIdentifier,
+			"libraryTaskNames": libraryNames,
+			"libraryTaskCount": len(libraryNames),
 		},
 	}
 	ok, trace := c.tryAny(ctx, token, []apiAttempt{
