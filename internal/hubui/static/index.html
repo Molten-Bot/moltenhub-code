@@ -101,25 +101,24 @@
             <div id="prompt-builder-panel" class="prompt-panel grid gap-2.5">
               <div class="prompt-grid">
                 <label id="builder-repo-history-field" class="prompt-field prompt-field-repo-history">
-                  <span class="prompt-label">Repo History</span>
+                  <span class="prompt-label">Git Repository</span>
                   <select id="builder-repo-select" class="prompt-control">
                     <option value="">Enter repo manually</option>
                   </select>
                 </label>
                 <label class="prompt-field prompt-field-repository">
-                  <span class="prompt-label">Repository</span>
-                  <input id="builder-repo-input" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="git@github.com:org/repo.git">
+                  <input id="builder-repo-input" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="git@github.com:org/repo.git" aria-label="Git Repository">
                 </label>
                 <label class="prompt-field prompt-field-base-branch">
-                  <span class="prompt-label">Base Branch</span>
+                  <span class="prompt-label">Branch</span>
                   <input id="builder-base-branch" class="prompt-control prompt-input" type="text" value="main" spellcheck="false" placeholder="main">
                 </label>
                 <label class="prompt-field prompt-field-target-subdir">
-                  <span class="prompt-label">Target Subdir</span>
+                  <span class="prompt-label">Directory</span>
                   <input id="builder-target-subdir" class="prompt-control prompt-input" type="text" value="." spellcheck="false" placeholder=".">
                 </label>
                 <label class="prompt-field md:col-span-2">
-                  <span class="prompt-label">Library Task</span>
+                  <span class="prompt-label">Library</span>
                   <select id="builder-library-task" class="prompt-control">
                     <option value="">Custom prompt</option>
                   </select>
@@ -162,7 +161,7 @@
   "library_task_name": "unit-test-coverage"
 }'></textarea>
             </div>
-            <div id="local-prompt-hint" class="prompt-hint text-[0.74rem] leading-[1.3] text-hub-muted">Select a repo, branch, subdir, and prompt in Builder mode. Use Raw JSON for multi-repo runs or advanced fields.</div>
+            <div id="local-prompt-hint" class="prompt-hint text-[0.74rem] leading-[1.3] text-hub-muted">Select a repository, branch, directory, and prompt in Builder mode. Use Raw JSON for multi-repo runs or advanced fields.</div>
             <div class="prompt-actions flex flex-wrap items-center justify-between gap-2.5">
               <button id="local-prompt-submit" class="prompt-submit rounded-lg border border-[#597695] bg-[#2f4864] px-3 py-2 text-[0.8rem] font-semibold text-hub-text transition hover:-translate-y-px hover:border-[#83a3c4] disabled:opacity-65 disabled:translate-y-0" type="submit">Run</button>
               <span id="local-prompt-status" class="submit-status min-h-[1.3em] text-[0.74rem] leading-[1.3] text-hub-muted">Idle</span>
@@ -745,7 +744,7 @@
     function builderPayload() {
       const repo = normalizeRepoValue(builderRepoInput.value);
       if (!repo) {
-        throw new Error("Repository is required.");
+        throw new Error("Git repository is required.");
       }
 
       const libraryTaskName = selectedLibraryTaskName();
