@@ -114,6 +114,21 @@ func TestDuplicateSubmissionDetailsNonMatchAndNil(t *testing.T) {
 	}
 }
 
+func TestParseTruthyQueryParam(t *testing.T) {
+	t.Parallel()
+
+	for _, raw := range []string{"1", "true", "TRUE", "yes", "on", " y "} {
+		if !parseTruthyQueryParam(raw) {
+			t.Fatalf("parseTruthyQueryParam(%q) = false, want true", raw)
+		}
+	}
+	for _, raw := range []string{"", "0", "false", "off", "no"} {
+		if parseTruthyQueryParam(raw) {
+			t.Fatalf("parseTruthyQueryParam(%q) = true, want false", raw)
+		}
+	}
+}
+
 func TestLibraryEndpointMethodAndLoaderVariants(t *testing.T) {
 	t.Parallel()
 

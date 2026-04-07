@@ -809,6 +809,9 @@ func TestHandlerTaskRerunAccepted(t *testing.T) {
 	if ok, _ := body["ok"].(bool); !ok {
 		t.Fatalf("ok = %#v, want true", body["ok"])
 	}
+	if forced, _ := body["forced"].(bool); forced {
+		t.Fatalf("forced = %#v, want false", body["forced"])
+	}
 	if gotRequestID, _ := body["request_id"].(string); gotRequestID != "local-456" {
 		t.Fatalf("request_id = %q, want %q", gotRequestID, "local-456")
 	}
@@ -828,15 +831,17 @@ func TestHandlerTaskRerunUsesDedicatedSubmitterWhenConfigured(t *testing.T) {
 	var (
 		gotRequestID string
 		gotBody      string
+		gotForce     bool
 	)
 	srv := NewServer("", b)
 	srv.SubmitLocalPrompt = func(_ context.Context, _ []byte) (string, error) {
 		t.Fatal("SubmitLocalPrompt should not be called when SubmitTaskRerun is configured")
 		return "", nil
 	}
-	srv.SubmitTaskRerun = func(_ context.Context, rerunOf string, body []byte) (string, error) {
+	srv.SubmitTaskRerun = func(_ context.Context, rerunOf string, body []byte, force bool) (string, error) {
 		gotRequestID = rerunOf
 		gotBody = string(body)
+		gotForce = force
 		return "local-999", nil
 	}
 
@@ -857,6 +862,55 @@ func TestHandlerTaskRerunUsesDedicatedSubmitterWhenConfigured(t *testing.T) {
 	}
 	if gotBody != payload {
 		t.Fatalf("submitted body = %q, want %q", gotBody, payload)
+	}
+	if gotForce {
+		t.Fatal("force = true, want false")
+	}
+}
+
+func TestHandlerTaskRerunPropagatesForceFlag(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-rerun-force"
+	payload := `{"repo":"git@github.com:acme/repo.git","baseBranch":"main","targetSubdir":".","prompt":"rerun this"}`
+	b.RecordTaskRunConfig(requestID, []byte(payload))
+
+	var gotForce bool
+	srv := NewServer("", b)
+	srv.SubmitTaskRerun = func(_ context.Context, rerunOf string, body []byte, force bool) (string, error) {
+		if rerunOf != requestID {
+			t.Fatalf("rerunOf = %q, want %q", rerunOf, requestID)
+		}
+		if string(body) != payload {
+			t.Fatalf("submitted body = %q, want %q", string(body), payload)
+		}
+		gotForce = force
+		return "local-force-1", nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/"+requestID+"/rerun?force=yes", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/%s/rerun?force=yes error = %v", requestID, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusAccepted)
+	}
+	if !gotForce {
+		t.Fatal("force = false, want true")
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if forced, _ := body["forced"].(bool); !forced {
+		t.Fatalf("forced = %#v, want true", body["forced"])
 	}
 }
 

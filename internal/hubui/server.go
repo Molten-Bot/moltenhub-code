@@ -29,7 +29,7 @@ type Server struct {
 	AutomaticMode     bool
 	Logf              func(string, ...any)
 	SubmitLocalPrompt func(context.Context, []byte) (string, error)
-	SubmitTaskRerun   func(context.Context, string, []byte) (string, error)
+	SubmitTaskRerun   func(context.Context, string, []byte, bool) (string, error)
 	CloseTask         func(context.Context, string) error
 	PauseTask         func(context.Context, string) error
 	RunTask           func(context.Context, string) error
@@ -537,12 +537,14 @@ func (s Server) handleTaskRerun(w http.ResponseWriter, r *http.Request, requestI
 		return
 	}
 
+	force := parseTruthyQueryParam(r.URL.Query().Get("force"))
+
 	submit := func(ctx context.Context, body []byte) (string, error) {
 		return s.SubmitLocalPrompt(ctx, body)
 	}
 	if s.SubmitTaskRerun != nil {
 		submit = func(ctx context.Context, body []byte) (string, error) {
-			return s.SubmitTaskRerun(ctx, requestID, body)
+			return s.SubmitTaskRerun(ctx, requestID, body, force)
 		}
 	}
 
@@ -568,6 +570,7 @@ func (s Server) handleTaskRerun(w http.ResponseWriter, r *http.Request, requestI
 
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"ok":         true,
+		"forced":     force,
 		"request_id": newRequestID,
 		"rerun_of":   requestID,
 	})
@@ -652,4 +655,13 @@ func duplicateSubmissionDetails(err error) (requestID string, state string, ok b
 		return "", "", false
 	}
 	return strings.TrimSpace(duplicateErr.DuplicateRequestID()), strings.TrimSpace(duplicateErr.DuplicateState()), true
+}
+
+func parseTruthyQueryParam(raw string) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "1", "t", "true", "y", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
