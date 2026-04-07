@@ -225,6 +225,109 @@ func TestDaemonRunUsesStoredRuntimeConfigBaseURLWhenInitBaseURLOmitted(t *testin
 	t.Fatalf("missing configured base URL log %q in logs=%v", wantLog, logs)
 }
 
+func TestDaemonRunUsesStoredRuntimeConfigPullTimeout(t *testing.T) {
+	root := t.TempDir()
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	const pullTimeoutMs = 4321
+
+	var (
+		reqMu       sync.Mutex
+		pullQueries []string
+		pullSeen    = make(chan struct{})
+		pullOnce    sync.Once
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/agents/me":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case "/v1/openclaw/messages/register-plugin":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case "/v1/agents/me/metadata", "/v1/agents/me/status":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case "/v1/openclaw/messages/ws":
+			http.Error(w, "upgrade required", http.StatusUpgradeRequired)
+		case "/v1/openclaw/messages/pull":
+			reqMu.Lock()
+			pullQueries = append(pullQueries, r.URL.RawQuery)
+			reqMu.Unlock()
+			pullOnce.Do(func() {
+				close(pullSeen)
+			})
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	runtimeCfgPath := filepath.Join(root, ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(runtimeCfgPath), 0o755); err != nil {
+		t.Fatalf("mkdir runtime config dir: %v", err)
+	}
+	runtimeCfgJSON := fmt.Sprintf(
+		`{"baseUrl":%q,"token":"agent_saved","sessionKey":"main","timeoutMs":%d}`,
+		server.URL+"/v1",
+		pullTimeoutMs,
+	)
+	if err := os.WriteFile(runtimeCfgPath, []byte(runtimeCfgJSON), 0o600); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+
+	d := NewDaemon(execx.OSRunner{})
+	d.ReconnectDelay = 10 * time.Millisecond
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	runDone := make(chan error, 1)
+	go func() {
+		runDone <- d.Run(ctx, InitConfig{})
+	}()
+
+	select {
+	case <-pullSeen:
+		cancel()
+	case <-time.After(2 * time.Second):
+		cancel()
+		t.Fatal("timed out waiting for pull request")
+	}
+
+	select {
+	case err := <-runDone:
+		if err != nil {
+			t.Fatalf("Daemon.Run() error = %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for daemon shutdown")
+	}
+
+	reqMu.Lock()
+	defer reqMu.Unlock()
+	if len(pullQueries) == 0 {
+		t.Fatal("expected at least one pull query")
+	}
+	if got, want := pullQueries[0], fmt.Sprintf("timeout_ms=%d", pullTimeoutMs); got != want {
+		t.Fatalf("pull query = %q, want %q", got, want)
+	}
+}
+
 func TestIncomingSkillName(t *testing.T) {
 	t.Parallel()
 

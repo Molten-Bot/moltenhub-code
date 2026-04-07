@@ -86,7 +86,7 @@
       <div class="right-col grid gap-4 [grid-template-rows:minmax(220px,30%)_minmax(220px,32%)_minmax(260px,1fr)] max-[980px]:[grid-template-rows:minmax(250px,40vh)_minmax(220px,34vh)_minmax(260px,46vh)]">
         <section class="panel prompt-wrap min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
           <div class="panel-header flex items-center justify-between gap-2 border-b border-hub-border bg-black/15 px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
-            <span>Prompt Studio</span>
+            <span>Studio</span>
             <button id="prompt-visibility-toggle" class="prompt-visibility-toggle" type="button" aria-pressed="true">Hide</button>
           </div>
           <form id="local-prompt-form" class="prompt-form grid gap-2.5 p-3">
@@ -1043,7 +1043,7 @@
         promptVisibilityToggle.setAttribute("aria-pressed", visible ? "true" : "false");
       }
       if (automatic) {
-        setLocalPromptStatus("warn", "Automatic mode enabled; Prompt Studio is hidden.");
+        setLocalPromptStatus("warn", "Automatic mode enabled; Studio is hidden.");
       }
     }
 

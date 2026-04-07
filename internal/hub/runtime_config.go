@@ -11,14 +11,15 @@ import (
 const (
 	runtimeConfigPath = "./.moltenhub/config.json"
 	runtimeTimeoutMs  = 20000
+	runtimeSessionKey = "main"
 )
 
 // RuntimeConfig is persisted after successful hub auth so subsequent runs can reuse the token.
 type RuntimeConfig struct {
 	BaseURL    string `json:"baseUrl"`
 	Token      string `json:"token"`
-	SessionKey string `json:"sessionKey"`
-	TimeoutMs  int    `json:"timeoutMs"`
+	SessionKey string `json:"sessionKey,omitempty"`
+	TimeoutMs  int    `json:"timeoutMs,omitempty"`
 }
 
 // LoadRuntimeConfig reads and validates a persisted runtime config JSON file.
@@ -49,7 +50,7 @@ func LoadRuntimeConfig(path string) (RuntimeConfig, error) {
 		return RuntimeConfig{}, fmt.Errorf("runtime config token is required")
 	}
 	if cfg.SessionKey == "" {
-		cfg.SessionKey = "main"
+		cfg.SessionKey = runtimeSessionKey
 	}
 	if cfg.TimeoutMs <= 0 {
 		cfg.TimeoutMs = runtimeTimeoutMs
@@ -72,7 +73,7 @@ func SaveRuntimeConfig(path, baseURL, token, sessionKey string) error {
 		TimeoutMs:  runtimeTimeoutMs,
 	}
 	if cfg.SessionKey == "" {
-		cfg.SessionKey = "main"
+		cfg.SessionKey = runtimeSessionKey
 	}
 	if cfg.BaseURL == "" {
 		return fmt.Errorf("baseUrl is required")

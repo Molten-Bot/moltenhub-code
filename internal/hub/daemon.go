@@ -52,7 +52,11 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	}
 
 	runtimeCfgPath := defaultRuntimeConfigPath()
+	pullTimeoutMs := runtimeTimeoutMs
 	if stored, loadedPath, err := loadStoredRuntimeConfig(runtimeCfgPath); err == nil {
+		if stored.TimeoutMs > 0 {
+			pullTimeoutMs = stored.TimeoutMs
+		}
 		if applied := applyStoredRuntimeConfig(&cfg, stored); applied {
 			d.logf("hub.runtime_config status=loaded path=%s", loadedPath)
 		}
@@ -131,7 +135,7 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	if wsURLErr != nil {
 		d.logf("hub.ws status=disabled err=%q", wsURLErr)
 		d.logf("hub.transport mode=openclaw_pull")
-		return d.runPullLoop(ctx, api, cfg, dispatchController, &workers, deduper)
+		return d.runPullLoop(ctx, api, cfg, dispatchController, &workers, deduper, pullTimeoutMs)
 	}
 
 	for {
@@ -159,7 +163,7 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 			if ctx.Err() != nil {
 				return nil
 			}
-			if err := d.pullOnce(ctx, api, cfg, dispatchController, &workers, deduper); err != nil {
+			if err := d.pullOnce(ctx, api, cfg, dispatchController, &workers, deduper, pullTimeoutMs); err != nil {
 				if isUnauthorizedHubError(err) {
 					return fmt.Errorf("hub auth: %w", err)
 				}
@@ -179,12 +183,13 @@ func (d Daemon) runPullLoop(
 	dispatchController *AdaptiveDispatchController,
 	workers *sync.WaitGroup,
 	deduper *dispatchDeduper,
+	pullTimeoutMs int,
 ) error {
 	for {
 		if ctx.Err() != nil {
 			return nil
 		}
-		if err := d.pullOnce(ctx, api, cfg, dispatchController, workers, deduper); err != nil {
+		if err := d.pullOnce(ctx, api, cfg, dispatchController, workers, deduper, pullTimeoutMs); err != nil {
 			if isUnauthorizedHubError(err) {
 				return fmt.Errorf("hub auth: %w", err)
 			}
@@ -203,8 +208,9 @@ func (d Daemon) pullOnce(
 	dispatchController *AdaptiveDispatchController,
 	workers *sync.WaitGroup,
 	deduper *dispatchDeduper,
+	pullTimeoutMs int,
 ) error {
-	pulled, found, err := api.PullOpenClawMessage(ctx, runtimeTimeoutMs)
+	pulled, found, err := api.PullOpenClawMessage(ctx, pullTimeoutMs)
 	if err != nil {
 		return err
 	}

@@ -189,7 +189,7 @@ func runHub(args []string) int {
 	initPath := fs.String("init", "", "Path to hub init JSON")
 	parallel := fs.Int("parallel", 0, "Optional override for dispatcher max parallel workers")
 	uiListen := fs.String("ui-listen", "127.0.0.1:7777", "Optional monitor web UI listen address (empty to disable)")
-	uiAutomatic := fs.Bool("ui-automatic", false, "Hide the browser Prompt Studio form and run the monitor UI in automatic mode")
+	uiAutomatic := fs.Bool("ui-automatic", false, "Hide the browser Studio form and run the monitor UI in automatic mode")
 
 	if err := fs.Parse(args); err != nil {
 		return harness.ExitUsage

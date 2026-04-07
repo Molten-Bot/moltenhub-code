@@ -125,11 +125,11 @@ If the ping check fails, hub mode exits early instead of entering transport retr
 
 Hub mode starts a local monitor UI by default at `http://127.0.0.1:7777`.
 
-The Prompt Studio panel defaults to a schema builder that stores requested repositories in browser local storage and reuses them as a repo picker. In Builder mode, you can paste clipboard PNG screenshots into the prompt field and they will be attached to the initial Codex run. Raw JSON mode remains available for advanced or multi-repo payloads. The UI also includes a browser-local `Hide` toggle so you can collapse that section without restarting the harness.
+The Studio panel defaults to a schema builder that stores requested repositories in browser local storage and reuses them as a repo picker. In Builder mode, you can paste clipboard PNG screenshots into the prompt field and they will be attached to the initial Codex run. Raw JSON mode remains available for advanced or multi-repo payloads. The UI also includes a browser-local `Hide` toggle so you can collapse that section without restarting the harness.
 
 The Tasks panel includes a session `History` section that lists all prompts observed in the current monitor session and shows the task history count there.
 
-Automatic mode is available as a runtime flag and hides the browser Prompt Studio form entirely:
+Automatic mode is available as a runtime flag and hides the browser Studio form entirely:
 
 ```bash
 ./bin/harness hub --init templates/init.example.json --ui-automatic
@@ -187,6 +187,7 @@ Key fields:
 - `dispatcher.*` (adaptive worker parallelism)
 
 After first successful activation, runtime auth is persisted to `./.moltenhub/config.json`, so `bind_token` and `handle` are not required in `init.json` for subsequent runs.
+Runtime config keys `sessionKey` and `timeoutMs` are optional; missing values default to `main` and `20000`.
 
 Runtime-owned fields:
 

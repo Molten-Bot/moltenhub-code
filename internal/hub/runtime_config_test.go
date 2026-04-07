@@ -129,6 +129,31 @@ func TestLoadRuntimeConfigMissingFile(t *testing.T) {
 	}
 }
 
+func TestLoadRuntimeConfigDefaultsOptionalSessionKeyAndTimeout(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "moltenhub", "config.json")
+	data := `{"baseUrl":"https://na.hub.molten.bot/v1","token":"agent_123"}`
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	got, err := LoadRuntimeConfig(path)
+	if err != nil {
+		t.Fatalf("LoadRuntimeConfig() error = %v", err)
+	}
+	if got.SessionKey != runtimeSessionKey {
+		t.Fatalf("SessionKey = %q, want %q", got.SessionKey, runtimeSessionKey)
+	}
+	if got.TimeoutMs != runtimeTimeoutMs {
+		t.Fatalf("TimeoutMs = %d, want %d", got.TimeoutMs, runtimeTimeoutMs)
+	}
+}
+
 func TestLoadRuntimeConfigRejectsMissingToken(t *testing.T) {
 	t.Parallel()
 
