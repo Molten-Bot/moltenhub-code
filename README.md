@@ -239,34 +239,6 @@ Runtime-owned fields:
 
 Example: [`templates/init.example.json`](templates/init.example.json)
 
-## Logs And Failure Follow-Up
-
-Runtime logs are mirrored to `.log`:
-
-- aggregate stream: `.log/terminal.log`
-- per task/request stream: `.log/<identifier parts>/terminal.log`
-
-When a task fails (local or hub-dispatched), the harness queues a follow-up local task that:
-
-- includes relevant failing log paths in prompt context
-- uses run config shape: `{"repos":["<same_repo_as_failed_task>"],"baseBranch":"main","targetSubdir":".","prompt":"..."}`
-- asks for root-cause fixes (not superficial bandaids)
-
-Hub skill failure responses also include an explicit failure message and error details in the published result payload so the calling agent gets a clear failure reason.
-
-## Exit Codes
-
-- `0` success
-- `2` usage error
-- `10` config error
-- `20` preflight/tooling error
-- `21` auth error
-- `30` workspace error
-- `40` clone error
-- `50` agent execution error
-- `60` git workflow error
-- `70` PR/checks error
-
 ## Test
 
 ```bash
