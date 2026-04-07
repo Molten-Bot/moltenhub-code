@@ -7,4 +7,5 @@
 !.github/workflows/*.yml
 !.github/workflows/*.yaml
 !.dockerignore
+!.env.example
 bin/*

@@ -1,0 +1,13 @@
+services:
+  harness:
+    image: moltenhub-code:latest
+    build:
+      context: .
+    env_file:
+      - .env
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    stdin_open: true
+    tty: true
+    command: ["harness", "run", "--config", "templates/run.example.json"]

@@ -38,6 +38,34 @@ Build a container image:
 docker build -t moltenhub-code:latest .
 ```
 
+Pass secrets at container runtime, not at build time. `.env` is excluded from Docker build context via `.dockerignore` so tokens are never copied into image layers.
+
+Create a local env file:
+
+```bash
+cp .env.example .env
+```
+
+`./.env`:
+
+```dotenv
+GITHUB_TOKEN=ghp_xxx
+OPENAI_API_KEY=sk_xxx
+```
+
+Run with Docker Compose (`docker-compose.yml`):
+
+```bash
+docker compose run --rm harness
+```
+
+Override command examples:
+
+```bash
+docker compose run --rm harness harness run --config templates/run.example.json
+docker compose run --rm --service-ports harness harness hub --init templates/init.example.json
+```
+
 GitHub Actions publish flow:
 
 - `deploy-vnext` runs automatically on pushes to `main` (including PR merges) and publishes:
@@ -46,11 +74,12 @@ GitHub Actions publish flow:
 - `deploy-prod` is manual-only (`workflow_dispatch`) and promotes a selected source tag (default `vnext`) to `moltenai/moltenhub-code:latest` without rebuilding
 - required repository secret: `DOCKERHUB_TOKEN`
 
-Run with PAT auth via `GITHUB_TOKEN`:
+Equivalent direct `docker run`:
 
 ```bash
 docker run --rm -it \
   -e GITHUB_TOKEN=ghp_xxx \
+  -e OPENAI_API_KEY=sk_xxx \
   -v "$PWD:/workspace" \
   -w /workspace \
   moltenhub-code:latest \
