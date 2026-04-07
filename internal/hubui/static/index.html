@@ -1122,6 +1122,12 @@
       return `[${repos.join(", ")}]`;
     }
 
+    function formatTaskBranch(task) {
+      const branch = String(task?.branch || "").trim();
+      if (!branch) return "-";
+      return branch;
+    }
+
     function taskPromptText(task) {
       if (!task || typeof task.prompt !== "string") return "";
       return task.prompt.replace(/\s+/g, " ").trim();
@@ -1143,9 +1149,9 @@
       }
       const preview = taskPromptPreview(task);
       if (!preview) {
-        return id;
+        return "(prompt unavailable)";
       }
-      return `${id} | ${preview}`;
+      return preview;
     }
 
     function statusClass(status) {
@@ -1664,7 +1670,7 @@
         id.textContent = taskDisplayLabel(task);
         const prompt = taskPromptText(task);
         if (prompt) {
-          id.title = `${task.display_id || task.request_id}: ${prompt}`;
+          id.title = prompt;
         }
 
         const badge = document.createElement("span");
@@ -1725,42 +1731,43 @@
           const meta = document.createElement("div");
           meta.className = "task-meta";
 
-          const stage = document.createElement("div");
-          const stageLabel = task.stage ? `${task.stage}${task.stage_status ? ` (${task.stage_status})` : ""}` : "-";
-          stage.textContent = `stage: ${stageLabel}`;
-          const skill = document.createElement("div");
-          skill.textContent = `skill: ${task.skill || "-"}`;
           const repos = document.createElement("div");
           repos.textContent = `repos: ${formatTaskRepos(task)}`;
+          const skill = document.createElement("div");
+          skill.textContent = `skill: ${task.skill || "-"}`;
+          const branch = document.createElement("div");
+          branch.textContent = `branch: ${formatTaskBranch(task)}`;
           const update = document.createElement("div");
           update.textContent = `updated: ${relativeTime(task.updated_at)}`;
-          meta.append(stage, skill, repos, update);
+          meta.append(repos, skill, branch, update);
 
           const progress = renderTaskProgress(task);
 
+          if (!outputExpanded) {
+            if (progress) {
+              node.append(meta, progress);
+            } else {
+              node.append(meta);
+            }
+            listNode.appendChild(node);
+            continue;
+          }
+
           const output = document.createElement("div");
           output.className = "task-output-list";
-
-          if (!outputExpanded) {
+          const previews = taskPreviewLines(task);
+          if (!previews.length) {
             const empty = document.createElement("div");
             empty.className = "task-output-line meta";
-            empty.textContent = "Output hidden. Use Open Output to preview.";
+            empty.textContent = "No output yet.";
             output.appendChild(empty);
           } else {
-            const previews = taskPreviewLines(task);
-            if (!previews.length) {
-              const empty = document.createElement("div");
-              empty.className = "task-output-line meta";
-              empty.textContent = "No output yet.";
-              output.appendChild(empty);
-            } else {
-              for (const row of previews) {
-                const line = document.createElement("div");
-                const stream = row.stream || "meta";
-                line.className = `task-output-line ${stream}`;
-                line.textContent = previewText(row);
-                output.appendChild(line);
-              }
+            for (const row of previews) {
+              const line = document.createElement("div");
+              const stream = row.stream || "meta";
+              line.className = `task-output-line ${stream}`;
+              line.textContent = previewText(row);
+              output.appendChild(line);
             }
           }
 

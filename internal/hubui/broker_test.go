@@ -319,6 +319,9 @@ func TestBrokerTaskRunConfigSupportsRerunMetadata(t *testing.T) {
 	if snap.Tasks[0].Prompt != "rerun me" {
 		t.Fatalf("task.Prompt = %q, want %q", snap.Tasks[0].Prompt, "rerun me")
 	}
+	if snap.Tasks[0].Branch != "main" {
+		t.Fatalf("task.Branch = %q, want %q", snap.Tasks[0].Branch, "main")
+	}
 
 	got, ok := b.TaskRunConfig(requestID)
 	if !ok {
@@ -445,7 +448,7 @@ func TestBrokerAppliesPromptWhenConfigRecordedAfterTaskStart(t *testing.T) {
 	requestID := "req-after-start"
 
 	b.IngestLog("dispatch status=start request_id=req-after-start skill=moltenhub_code_run repo=git@github.com:acme/repo.git")
-	b.RecordTaskRunConfig(requestID, []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"late prompt value"}`))
+	b.RecordTaskRunConfig(requestID, []byte(`{"repo":"git@github.com:acme/repo.git","base_branch":"release/2026.04","prompt":"late prompt value"}`))
 
 	snap := b.Snapshot()
 	if len(snap.Tasks) != 1 {
@@ -453,6 +456,9 @@ func TestBrokerAppliesPromptWhenConfigRecordedAfterTaskStart(t *testing.T) {
 	}
 	if snap.Tasks[0].Prompt != "late prompt value" {
 		t.Fatalf("task.Prompt = %q, want %q", snap.Tasks[0].Prompt, "late prompt value")
+	}
+	if snap.Tasks[0].Branch != "release/2026.04" {
+		t.Fatalf("task.Branch = %q, want %q", snap.Tasks[0].Branch, "release/2026.04")
 	}
 }
 
@@ -492,6 +498,52 @@ func TestPromptFromRunConfigJSON(t *testing.T) {
 			t.Parallel()
 			if got := promptFromRunConfigJSON(tt.raw); got != tt.want {
 				t.Fatalf("promptFromRunConfigJSON() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBranchFromRunConfigJSON(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		raw  []byte
+		want string
+	}{
+		{
+			name: "base branch",
+			raw:  []byte(`{"base_branch":"main"}`),
+			want: "main",
+		},
+		{
+			name: "branch alias",
+			raw:  []byte(`{"branch":"release/2026.04"}`),
+			want: "release/2026.04",
+		},
+		{
+			name: "prefer base branch",
+			raw:  []byte(`{"base_branch":"main","branch":"feature-x"}`),
+			want: "main",
+		},
+		{
+			name: "missing branch",
+			raw:  []byte(`{"prompt":"run tests"}`),
+			want: "",
+		},
+		{
+			name: "invalid json",
+			raw:  []byte(`{"base_branch":"main"`),
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := branchFromRunConfigJSON(tt.raw); got != tt.want {
+				t.Fatalf("branchFromRunConfigJSON() = %q, want %q", got, tt.want)
 			}
 		})
 	}

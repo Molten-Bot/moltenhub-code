@@ -175,6 +175,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function renderTaskProgress(") {
 		t.Fatalf("expected index html to include renderTaskProgress handler")
 	}
+	if !strings.Contains(markup, "function formatTaskBranch(") {
+		t.Fatalf("expected index html to include branch formatter for task metadata")
+	}
 	if !strings.Contains(markup, "function toggleTaskOutput(") {
 		t.Fatalf("expected index html to include task output toggle handler")
 	}
@@ -264,6 +267,24 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "setTerminalOutputOpen(task.request_id, nextOpen);") {
 		t.Fatalf("expected index html to open full terminal output from task Open Output action")
+	}
+	if strings.Contains(markup, "Output hidden. Use Open Output to preview.") {
+		t.Fatalf("expected index html to remove collapsed task output placeholder copy")
+	}
+	if strings.Contains(markup, "stage.textContent = `stage:") {
+		t.Fatalf("expected index html to remove stage metadata line from task cards")
+	}
+	if !strings.Contains(markup, "branch.textContent = `branch: ${formatTaskBranch(task)}`;") {
+		t.Fatalf("expected index html to render branch metadata beneath repos")
+	}
+	if strings.Contains(markup, "return `${id} | ${preview}`;") {
+		t.Fatalf("expected index html to remove request id prefix from task display title")
+	}
+	if !strings.Contains(markup, "return \"(prompt unavailable)\";") {
+		t.Fatalf("expected index html to provide prompt-only task titles with fallback text")
+	}
+	if !strings.Contains(markup, "id.title = prompt;") {
+		t.Fatalf("expected index html task title tooltip to contain prompt text only")
 	}
 	if !strings.Contains(markup, `id="local-conn-text"`) {
 		t.Fatalf("expected index html to include local connection indicator")
