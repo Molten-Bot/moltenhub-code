@@ -232,8 +232,20 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="local-conn-text"`) {
 		t.Fatalf("expected index html to include local connection indicator")
 	}
+	if !strings.Contains(markup, `title="Local: Connecting..."`) {
+		t.Fatalf("expected index html to initialize local indicator tooltip copy")
+	}
 	if !strings.Contains(markup, `id="hub-conn-text"`) {
 		t.Fatalf("expected index html to include moltenhub connection indicator")
+	}
+	if !strings.Contains(markup, `title="Molten Hub: Waiting for hub status..."`) {
+		t.Fatalf("expected index html to initialize hub indicator tooltip copy")
+	}
+	if !strings.Contains(markup, `setIndicator(localConnItem, localConnDot, localConnText, "Local", online, text);`) {
+		t.Fatalf("expected index html to render local indicator label as Local")
+	}
+	if !strings.Contains(markup, `setIndicator(hubConnItem, hubConnDot, hubConnText, "Molten Hub", online, text);`) {
+		t.Fatalf("expected index html to render hub indicator label as Molten Hub")
 	}
 	if !strings.Contains(markup, `id="prompt-visibility-toggle"`) {
 		t.Fatalf("expected index html to include prompt studio visibility toggle")
