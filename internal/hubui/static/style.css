@@ -109,16 +109,22 @@ body.task-fullscreen-open {
 }
 
 .prompt-visibility-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid rgba(246, 179, 106, 0.42);
   background: rgba(48, 37, 22, 0.55);
   color: #f3cf9f;
   border-radius: 999px;
-  padding: 6px 11px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
   min-height: 30px;
-  font-size: 0.68rem;
+  font-size: 0.82rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1;
   transition: border-color .12s ease, color .12s ease, transform .12s ease, opacity .12s ease;
   flex-shrink: 0;
 }
@@ -813,11 +819,14 @@ select.prompt-control {
   background: rgba(12, 23, 36, 0.7);
   color: #b7c7d8;
   border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 0.62rem;
+  min-width: 24px;
+  min-height: 22px;
+  padding: 0 6px;
+  font-size: 0.74rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
   transition: border-color .12s ease, color .12s ease, transform .12s ease;
 }
 
@@ -839,11 +848,14 @@ select.prompt-control {
   background: rgba(78, 57, 21, 0.65);
   color: #ffe4af;
   border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 0.62rem;
+  min-width: 24px;
+  min-height: 22px;
+  padding: 0 6px;
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
   transition: border-color .12s ease, color .12s ease, transform .12s ease, opacity .12s ease;
 }
 
@@ -852,11 +864,14 @@ select.prompt-control {
   background: rgba(78, 25, 25, 0.72);
   color: #ffd2d2;
   border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 0.62rem;
+  min-width: 24px;
+  min-height: 22px;
+  padding: 0 6px;
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
   transition: border-color .12s ease, color .12s ease, transform .12s ease, opacity .12s ease;
 }
 

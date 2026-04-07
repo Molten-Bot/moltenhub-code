@@ -325,6 +325,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="prompt-visibility-toggle"`) {
 		t.Fatalf("expected index html to include studio visibility toggle")
 	}
+	if !strings.Contains(markup, `aria-label="Minimize Studio panel"`) || !strings.Contains(markup, `title="Minimize Studio panel">▾</button>`) {
+		t.Fatalf("expected index html to initialize the studio toggle as an arrow minimize control")
+	}
 	if !strings.Contains(markup, ">Studio<") {
 		t.Fatalf("expected index html to label the prompt panel as Studio")
 	}
@@ -452,6 +455,18 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "function applyPromptVisibility(") {
 		t.Fatalf("expected index html to include prompt visibility renderer")
+	}
+	if !strings.Contains(markup, `promptVisibilityToggle.textContent = visible ? "▾" : "▸";`) {
+		t.Fatalf("expected index html to render studio toggle arrow icons for minimize/expand")
+	}
+	if !strings.Contains(markup, `pauseRun.textContent = paused ? "▶" : "||";`) {
+		t.Fatalf("expected index html to render task pause/run icon control")
+	}
+	if !strings.Contains(markup, `stop.textContent = "■";`) {
+		t.Fatalf("expected index html to render task stop icon control")
+	}
+	if !strings.Contains(markup, `close.textContent = "X";`) {
+		t.Fatalf("expected index html to render task close icon control")
 	}
 	if !strings.Contains(markup, `const PROMPT_VISIBILITY_KEY = "hubui.localPromptVisible";`) {
 		t.Fatalf("expected index html to persist prompt visibility preference")
