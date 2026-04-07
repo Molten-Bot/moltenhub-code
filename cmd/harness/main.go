@@ -220,6 +220,7 @@ func runHub(args []string) int {
 	}
 	localSubmitDeduper := newLocalSubmissionDeduper(localSubmissionDedupTTL)
 	var localDispatchSeq uint64
+	taskControls := newTaskControlRegistry(daemonLogger)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -287,6 +288,7 @@ func runHub(args []string) int {
 				return "", newDuplicateSubmissionError(duplicateOf, state)
 			}
 		}
+		taskControls.register(requestID)
 		if runConfigJSON, ok := marshalRunConfigJSON(runCfg); ok {
 			monitorBroker.RecordTaskRunConfig(requestID, runConfigJSON)
 		}
@@ -298,8 +300,32 @@ func runHub(args []string) int {
 					localSubmitDeduper.Done(dedupeKey, requestID, finalState)
 				}()
 			}
-			release, acquireErr := dispatchController.Acquire(ctx, requestID)
+			taskCtx, taskCleanup := taskControls.bindContext(ctx, requestID)
+			defer taskCleanup()
+			defer taskControls.complete(requestID)
+
+			if waitErr := taskControls.waitUntilRunnable(taskCtx, requestID); waitErr != nil {
+				if taskControls.isStopRequested(requestID) || errors.Is(waitErr, errTaskControlStopped) {
+					finalState = "stopped"
+					return
+				}
+				finalState = "error"
+				daemonLogger("dispatch status=error request_id=%s err=%q", requestID, waitErr)
+				if allowFailureFollowUp && queueFailureFollowUp != nil {
+					queueFailureFollowUp(requestID, harness.Result{
+						ExitCode: harness.ExitPreflight,
+						Err:      fmt.Errorf("dispatch wait runnable: %w", waitErr),
+					}, runCfg)
+				}
+				return
+			}
+
+			release, acquireErr := dispatchController.Acquire(taskCtx, requestID)
 			if acquireErr != nil {
+				if taskControls.isStopRequested(requestID) || errors.Is(acquireErr, context.Canceled) {
+					finalState = "stopped"
+					return
+				}
 				finalState = "error"
 				daemonLogger("dispatch status=error request_id=%s err=%q", requestID, acquireErr)
 				if !errors.Is(acquireErr, context.Canceled) && allowFailureFollowUp && queueFailureFollowUp != nil {
@@ -312,7 +338,31 @@ func runHub(args []string) int {
 			}
 			defer release()
 
-			outcome := runLocalDispatch(ctx, runner, daemonLogger, cfg.Skill.Name, requestID, runCfg)
+			if waitErr := taskControls.waitUntilRunnable(taskCtx, requestID); waitErr != nil {
+				if taskControls.isStopRequested(requestID) || errors.Is(waitErr, errTaskControlStopped) {
+					finalState = "stopped"
+					return
+				}
+				finalState = "error"
+				daemonLogger("dispatch status=error request_id=%s err=%q", requestID, waitErr)
+				if allowFailureFollowUp && queueFailureFollowUp != nil {
+					queueFailureFollowUp(requestID, harness.Result{
+						ExitCode: harness.ExitPreflight,
+						Err:      fmt.Errorf("dispatch wait runnable: %w", waitErr),
+					}, runCfg)
+				}
+				return
+			}
+
+			outcome := runLocalDispatch(
+				taskCtx,
+				runner,
+				daemonLogger,
+				cfg.Skill.Name,
+				requestID,
+				runCfg,
+				func() bool { return taskControls.isStopRequested(requestID) },
+			)
 			finalState = outcome.State
 			if !allowFailureFollowUp || outcome.State != "error" {
 				return
@@ -371,6 +421,15 @@ func runHub(args []string) int {
 			}
 			daemonLogger("dispatch status=ok action=task_close_cleanup request_id=%s log_dir=%s", requestID, logDir)
 			return nil
+		}
+		uiServer.PauseTask = func(_ context.Context, requestID string) error {
+			return mapTaskControlError(taskControls.pause(requestID))
+		}
+		uiServer.RunTask = func(_ context.Context, requestID string) error {
+			return mapTaskControlError(taskControls.run(requestID))
+		}
+		uiServer.StopTask = func(_ context.Context, requestID string) error {
+			return mapTaskControlError(taskControls.stop(requestID))
 		}
 		logger.Printf("hub.ui status=ready url=%s", monitorURL(*uiListen))
 		go func() {
@@ -435,6 +494,7 @@ func runLocalDispatch(
 	skill string,
 	requestID string,
 	runCfg config.Config,
+	isStopRequested func() bool,
 ) localDispatchOutcome {
 	logf(
 		"dispatch status=start request_id=%s skill=%s repo=%s repos=%s",
@@ -452,6 +512,18 @@ func runLocalDispatch(
 
 	res := h.Run(ctx, runCfg)
 	if res.Err != nil {
+		if isStopRequested != nil && isStopRequested() {
+			logf(
+				"dispatch status=stopped request_id=%s exit_code=%d workspace=%s branch=%s pr_url=%s err=%q",
+				requestID,
+				res.ExitCode,
+				res.WorkspaceDir,
+				res.Branch,
+				res.PRURL,
+				res.Err,
+			)
+			return localDispatchOutcome{State: "stopped", Result: res}
+		}
 		logf(
 			"dispatch status=error request_id=%s exit_code=%d workspace=%s branch=%s pr_url=%s err=%q",
 			requestID,
@@ -639,6 +711,24 @@ func marshalRunConfigJSON(cfg config.Config) ([]byte, bool) {
 		return nil, false
 	}
 	return payload, true
+}
+
+func mapTaskControlError(err error) error {
+	if err == nil {
+		return nil
+	}
+	switch {
+	case errors.Is(err, errTaskControlNotFound):
+		return hubui.ErrTaskNotFound
+	case errors.Is(err, errTaskControlCompleted),
+		errors.Is(err, errTaskControlAlreadyPaused),
+		errors.Is(err, errTaskControlAlreadyRunning),
+		errors.Is(err, errTaskControlStopRequested),
+		errors.Is(err, errTaskControlStopped):
+		return fmt.Errorf("%w: %v", hubui.ErrTaskActionConflict, err)
+	default:
+		return err
+	}
 }
 
 type runtimeConfigLoader func() (hub.RuntimeConfig, error)

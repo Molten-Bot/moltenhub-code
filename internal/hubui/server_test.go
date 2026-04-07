@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -163,11 +164,20 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `"task-rerun"`) {
 		t.Fatalf("expected index html to include task rerun class usage")
 	}
+	if !strings.Contains(markup, "task-pause-run") {
+		t.Fatalf("expected index html to include task pause/run class usage")
+	}
+	if !strings.Contains(markup, "task-stop") {
+		t.Fatalf("expected index html to include task stop class usage")
+	}
 	if !strings.Contains(markup, "function dismissTask(") {
 		t.Fatalf("expected index html to include dismissTask handler")
 	}
 	if !strings.Contains(markup, "function rerunTask(") {
 		t.Fatalf("expected index html to include rerunTask handler")
+	}
+	if !strings.Contains(markup, "function controlTask(") {
+		t.Fatalf("expected index html to include controlTask handler")
 	}
 	if !strings.Contains(markup, `"task-progress"`) {
 		t.Fatalf("expected index html to include task progress class usage")
@@ -445,6 +455,12 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".task-rerun") {
 		t.Fatalf("expected stylesheet to include task rerun styles")
+	}
+	if !strings.Contains(css, ".task-pause-run") {
+		t.Fatalf("expected stylesheet to include task pause/run styles")
+	}
+	if !strings.Contains(css, ".task-stop") {
+		t.Fatalf("expected stylesheet to include task stop styles")
 	}
 	if !strings.Contains(css, ".task-output-toggle") {
 		t.Fatalf("expected stylesheet to include task output toggle styles")
@@ -807,6 +823,161 @@ func TestHandlerTaskRerunMethodNotAllowed(t *testing.T) {
 	resp, err := http.Get(ts.URL + "/api/tasks/req-2/rerun")
 	if err != nil {
 		t.Fatalf("GET /api/tasks/req-2/rerun error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusMethodNotAllowed)
+	}
+	if allow := resp.Header.Get("Allow"); allow != http.MethodPost {
+		t.Fatalf("Allow = %q, want %q", allow, http.MethodPost)
+	}
+}
+
+func TestHandlerTaskPauseAccepted(t *testing.T) {
+	t.Parallel()
+
+	var pausedID string
+	srv := NewServer("", NewBroker())
+	srv.PauseTask = func(_ context.Context, requestID string) error {
+		pausedID = requestID
+		return nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/local-1/pause", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/local-1/pause error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if pausedID != "local-1" {
+		t.Fatalf("paused request id = %q, want %q", pausedID, "local-1")
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if action, _ := body["action"].(string); action != "pause" {
+		t.Fatalf("action = %q, want %q", action, "pause")
+	}
+	if state, _ := body["state"].(string); state != "paused" {
+		t.Fatalf("state = %q, want %q", state, "paused")
+	}
+}
+
+func TestHandlerTaskRunAndStopAccepted(t *testing.T) {
+	t.Parallel()
+
+	var runID string
+	var stopID string
+	srv := NewServer("", NewBroker())
+	srv.RunTask = func(_ context.Context, requestID string) error {
+		runID = requestID
+		return nil
+	}
+	srv.StopTask = func(_ context.Context, requestID string) error {
+		stopID = requestID
+		return nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	runResp, err := http.Post(ts.URL+"/api/tasks/local-2/run", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/local-2/run error = %v", err)
+	}
+	defer runResp.Body.Close()
+	if runResp.StatusCode != http.StatusOK {
+		t.Fatalf("run status = %d, want %d", runResp.StatusCode, http.StatusOK)
+	}
+	if runID != "local-2" {
+		t.Fatalf("run request id = %q, want %q", runID, "local-2")
+	}
+
+	stopResp, err := http.Post(ts.URL+"/api/tasks/local-2/stop", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/local-2/stop error = %v", err)
+	}
+	defer stopResp.Body.Close()
+	if stopResp.StatusCode != http.StatusOK {
+		t.Fatalf("stop status = %d, want %d", stopResp.StatusCode, http.StatusOK)
+	}
+	if stopID != "local-2" {
+		t.Fatalf("stop request id = %q, want %q", stopID, "local-2")
+	}
+}
+
+func TestHandlerTaskControlUnavailable(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/local-3/pause", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/local-3/pause error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNotImplemented {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotImplemented)
+	}
+}
+
+func TestHandlerTaskControlConflictAndNotFound(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	srv.PauseTask = func(_ context.Context, requestID string) error {
+		if requestID == "missing" {
+			return ErrTaskNotFound
+		}
+		return fmt.Errorf("%w: already paused", ErrTaskActionConflict)
+	}
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	conflictResp, err := http.Post(ts.URL+"/api/tasks/local-4/pause", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/local-4/pause error = %v", err)
+	}
+	defer conflictResp.Body.Close()
+	if conflictResp.StatusCode != http.StatusConflict {
+		t.Fatalf("conflict status = %d, want %d", conflictResp.StatusCode, http.StatusConflict)
+	}
+
+	notFoundResp, err := http.Post(ts.URL+"/api/tasks/missing/pause", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/missing/pause error = %v", err)
+	}
+	defer notFoundResp.Body.Close()
+	if notFoundResp.StatusCode != http.StatusNotFound {
+		t.Fatalf("not found status = %d, want %d", notFoundResp.StatusCode, http.StatusNotFound)
+	}
+}
+
+func TestHandlerTaskControlMethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	srv.StopTask = func(_ context.Context, requestID string) error {
+		return nil
+	}
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/tasks/local-5/stop")
+	if err != nil {
+		t.Fatalf("GET /api/tasks/local-5/stop error = %v", err)
 	}
 	defer resp.Body.Close()
 

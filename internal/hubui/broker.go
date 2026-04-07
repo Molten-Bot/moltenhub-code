@@ -20,8 +20,9 @@ const (
 )
 
 var (
-	ErrTaskNotFound     = errors.New("task not found")
-	ErrTaskNotCompleted = errors.New("task is not completed")
+	ErrTaskNotFound       = errors.New("task not found")
+	ErrTaskNotCompleted   = errors.New("task is not completed")
+	ErrTaskActionConflict = errors.New("task action conflicts with current state")
 )
 
 // Event is one monitor timeline entry.
@@ -396,6 +397,12 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 		}
 	}
 
+	if strings.HasPrefix(line, "dispatch status=running") {
+		t.Status = "running"
+		t.Stage = firstNonEmpty(t.Stage, "dispatch")
+		t.StageStatus = firstNonEmpty(fields["action"], "running", t.StageStatus)
+	}
+
 	if strings.HasPrefix(line, "dispatch status=ok") {
 		t.Status = "ok"
 		t.WorkspaceDir = firstNonEmpty(fields["workspace"], fields["workspace_dir"], t.WorkspaceDir)
@@ -417,6 +424,25 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 		t.WorkspaceDir = firstNonEmpty(fields["workspace"], fields["workspace_dir"], t.WorkspaceDir)
 		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
 		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
+		t.Error = firstNonEmpty(parseFieldValue(line, "err"), parseFieldValue(line, "error"), t.Error)
+	}
+
+	if strings.HasPrefix(line, "dispatch status=paused") {
+		t.Status = "paused"
+		t.Stage = firstNonEmpty(t.Stage, "dispatch")
+		t.StageStatus = firstNonEmpty(fields["action"], "paused", t.StageStatus)
+	}
+
+	if strings.HasPrefix(line, "dispatch status=stopped") {
+		t.Status = "stopped"
+		if code, ok := parseIntField(fields["exit_code"]); ok {
+			t.ExitCode = code
+		}
+		t.WorkspaceDir = firstNonEmpty(fields["workspace"], fields["workspace_dir"], t.WorkspaceDir)
+		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
+		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
+		t.Stage = firstNonEmpty(t.Stage, "dispatch")
+		t.StageStatus = firstNonEmpty(fields["action"], "stopped", t.StageStatus)
 		t.Error = firstNonEmpty(parseFieldValue(line, "err"), parseFieldValue(line, "error"), t.Error)
 	}
 
@@ -776,7 +802,7 @@ func promptFromRunConfigJSON(runConfigJSON []byte) string {
 
 func isCompletedTaskStatus(status string) bool {
 	switch strings.TrimSpace(status) {
-	case "ok", "no_changes", "error", "invalid", "duplicate":
+	case "ok", "no_changes", "error", "invalid", "duplicate", "stopped":
 		return true
 	default:
 		return false

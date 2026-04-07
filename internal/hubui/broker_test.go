@@ -238,6 +238,34 @@ func TestBrokerParsesStageErrorTextWithEscapedQuotes(t *testing.T) {
 	}
 }
 
+func TestBrokerTracksPausedAndStoppedStatuses(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog("dispatch status=start request_id=local-42")
+	b.IngestLog("dispatch status=paused request_id=local-42 action=user_pause")
+	b.IngestLog("dispatch status=running request_id=local-42 action=user_run")
+	b.IngestLog(`dispatch status=stopped request_id=local-42 action=user_stop exit_code=130 err="killed by user"`)
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	task := snap.Tasks[0]
+	if task.Status != "stopped" {
+		t.Fatalf("status = %q, want stopped", task.Status)
+	}
+	if task.StageStatus != "user_stop" {
+		t.Fatalf("stage status = %q, want user_stop", task.StageStatus)
+	}
+	if task.ExitCode != 130 {
+		t.Fatalf("exit code = %d, want 130", task.ExitCode)
+	}
+	if task.Error != "killed by user" {
+		t.Fatalf("error = %q, want %q", task.Error, "killed by user")
+	}
+}
+
 func TestBrokerCapturesWorkspaceAndBranchFromErrorStatus(t *testing.T) {
 	t.Parallel()
 
@@ -376,6 +404,23 @@ func TestBrokerCloseTaskRejectsIncompleteTask(t *testing.T) {
 	snap := b.Snapshot()
 	if len(snap.Tasks) != 1 {
 		t.Fatalf("len(tasks) = %d, want 1", len(snap.Tasks))
+	}
+}
+
+func TestBrokerCloseTaskAllowsStoppedTask(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-stopped"
+	b.IngestLog("dispatch status=start request_id=req-stopped")
+	b.IngestLog(`dispatch status=stopped request_id=req-stopped action=user_stop err="killed"`)
+
+	if err := b.CloseTask(requestID); err != nil {
+		t.Fatalf("CloseTask() error = %v", err)
+	}
+
+	if got := len(b.Snapshot().Tasks); got != 0 {
+		t.Fatalf("len(tasks) = %d, want 0", got)
 	}
 }
 

@@ -2,6 +2,7 @@ package execx
 
 import (
 	"context"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -107,5 +108,47 @@ func TestSummarizeOutputTailUsesLastNonEmptyLines(t *testing.T) {
 	want = "line-2 | line-3 | line-4"
 	if got != want {
 		t.Fatalf("summarizeOutputTail(last 3) = %q, want %q", got, want)
+	}
+}
+
+type testProcessObserver struct {
+	mu      sync.Mutex
+	started bool
+	exited  bool
+}
+
+func (o *testProcessObserver) OnProcessStart(process *os.Process) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.started = process != nil
+}
+
+func (o *testProcessObserver) OnProcessExit() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.exited = true
+}
+
+func TestOSRunnerWithProcessObserver(t *testing.T) {
+	t.Parallel()
+
+	observer := &testProcessObserver{}
+	ctx := WithProcessObserver(context.Background(), observer)
+
+	r := OSRunner{}
+	if _, err := r.Run(ctx, Command{
+		Name: "bash",
+		Args: []string{"-lc", "printf observed"},
+	}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	observer.mu.Lock()
+	defer observer.mu.Unlock()
+	if !observer.started {
+		t.Fatal("observer started = false, want true")
+	}
+	if !observer.exited {
+		t.Fatal("observer exited = false, want true")
 	}
 }

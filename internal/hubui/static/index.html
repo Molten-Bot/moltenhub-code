@@ -248,7 +248,7 @@
     const PROMPT_MODE_KEY = "hubui.localPromptMode";
     const PROMPT_VISIBILITY_KEY = "hubui.localPromptVisible";
     const QUEUED_STATUS_TIMEOUT_MS = 8_000;
-    const COMPLETED_STATUSES = new Set(["ok", "no_changes", "error", "invalid", "duplicate"]);
+    const COMPLETED_STATUSES = new Set(["ok", "no_changes", "error", "invalid", "duplicate", "stopped"]);
     const TASK_PROGRESS_STEPS = [
       { id: "received", label: "Task Received", detail: "Dispatch accepted by hub." },
       { id: "run", label: "Run Started", detail: "Harness run initialized." },
@@ -325,6 +325,7 @@
       promptImages: [],
       rerunInFlight: new Set(),
       closeInFlight: new Set(),
+      controlInFlight: new Set(),
       expandedTaskOutputIDs: new Set(),
       openTerminalTaskIDs: new Set(),
       taskFullscreenOpen: false,
@@ -1321,6 +1322,38 @@
       return Boolean(task.can_rerun);
     }
 
+    function isTaskControllable(task) {
+      if (!task || task.request_id === MAIN_TASK_ID) {
+        return false;
+      }
+      const requestID = String(task.request_id || "");
+      if (!requestID.startsWith("local-")) {
+        return false;
+      }
+      return !isCompletedTask(task);
+    }
+
+    function canPauseRunTask(task) {
+      if (!isTaskControllable(task)) {
+        return false;
+      }
+      const status = String(task.status || "").toLowerCase();
+      return status === "pending" || status === "active" || status === "running" || status === "paused";
+    }
+
+    function canStopTask(task) {
+      if (!isTaskControllable(task)) {
+        return false;
+      }
+      const status = String(task.status || "").toLowerCase();
+      return status === "pending" || status === "active" || status === "running" || status === "paused";
+    }
+
+    function pauseRunAction(task) {
+      const status = String(task?.status || "").toLowerCase();
+      return status === "paused" ? "run" : "pause";
+    }
+
     async function rerunTask(requestID) {
       if (!requestID || state.rerunInFlight.has(requestID)) {
         return;
@@ -1359,6 +1392,49 @@
       }
     }
 
+    async function controlTask(requestID, action) {
+      if (!requestID || !action || state.controlInFlight.has(requestID)) {
+        return;
+      }
+      state.controlInFlight.add(requestID);
+      render(state.snapshot);
+
+      const actionLabel = action === "run" ? "Running" : (action === "pause" ? "Pausing" : "Stopping");
+      setLocalPromptStatus("warn", `${actionLabel} ${requestID}...`);
+
+      try {
+        const response = await fetch(`/api/tasks/${encodeURIComponent(requestID)}/${action}`, {
+          method: "POST",
+        });
+
+        let body = null;
+        try {
+          body = await response.json();
+        } catch (_err) {
+          body = null;
+        }
+
+        if (!response.ok) {
+          throw new Error(body?.error || `${action} http ${response.status}`);
+        }
+
+        const stateText = body?.state || (action === "run" ? "running" : action === "pause" ? "paused" : "stopped");
+        if (action === "run") {
+          setLocalPromptStatus("ok", `Running task ${requestID} (${stateText}).`);
+        } else if (action === "pause") {
+          setLocalPromptStatus("ok", `Paused task ${requestID} (${stateText}).`);
+        } else {
+          setLocalPromptStatus("ok", `Stopped task ${requestID} (${stateText}).`);
+        }
+      } catch (err) {
+        const title = action === "run" ? "Run" : (action === "pause" ? "Pause" : "Stop");
+        setLocalPromptStatus("error", `${title} failed: ${err.message}`);
+      } finally {
+        state.controlInFlight.delete(requestID);
+        render(state.snapshot);
+      }
+    }
+
     function extractField(line, key) {
       if (!line || !key) return "";
       const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -1386,11 +1462,13 @@
     function taskActivityRank(task) {
       const status = String(task?.status || "").toLowerCase();
       if (status === "running") return 0;
-      if (status === "pending" || status === "active") return 1;
-      if (status === "error" || status === "invalid") return 2;
-      if (status === "duplicate") return 3;
-      if (status === "ok" || status === "no_changes") return 4;
-      return 5;
+      if (status === "paused") return 1;
+      if (status === "pending" || status === "active") return 2;
+      if (status === "error" || status === "invalid") return 3;
+      if (status === "duplicate") return 4;
+      if (status === "stopped") return 5;
+      if (status === "ok" || status === "no_changes") return 6;
+      return 7;
     }
 
     function sortTasksByActivity(tasks) {
@@ -1580,7 +1658,7 @@
       }
 
       const status = task.status || "";
-      if (status !== "ok" && status !== "no_changes" && status !== "error" && status !== "invalid" && status !== "duplicate") {
+      if (status !== "ok" && status !== "no_changes" && status !== "error" && status !== "invalid" && status !== "duplicate" && status !== "stopped") {
         return;
       }
 
@@ -1602,6 +1680,9 @@
       } else if (status === "duplicate") {
         title.textContent = "Duplicate Ignored";
         detail.textContent = task.error ? task.error : "An equivalent prompt/repo/branch submission was ignored.";
+      } else if (status === "stopped") {
+        title.textContent = "Task Stopped";
+        detail.textContent = task.error ? task.error : "Task execution was stopped.";
       } else {
         title.textContent = "Task Failed";
         detail.textContent = task.error ? task.error : "See logs for failure details.";
@@ -1688,6 +1769,34 @@
           setTerminalOutputOpen(task.request_id, nextOpen);
         });
         topActions.appendChild(outputToggle);
+
+        if (canPauseRunTask(task)) {
+          const pauseRun = document.createElement("button");
+          pauseRun.type = "button";
+          pauseRun.className = "task-control task-pause-run";
+          pauseRun.textContent = pauseRunAction(task) === "run" ? "Run" : "Pause";
+          pauseRun.title = pauseRunAction(task) === "run" ? "Resume this task" : "Pause this task";
+          pauseRun.disabled = state.controlInFlight.has(task.request_id);
+          pauseRun.addEventListener("click", (event) => {
+            event.stopPropagation();
+            controlTask(task.request_id, pauseRunAction(task));
+          });
+          topActions.appendChild(pauseRun);
+        }
+
+        if (canStopTask(task)) {
+          const stop = document.createElement("button");
+          stop.type = "button";
+          stop.className = "task-control task-stop";
+          stop.textContent = "Stop";
+          stop.title = "Kill this task";
+          stop.disabled = state.controlInFlight.has(task.request_id);
+          stop.addEventListener("click", (event) => {
+            event.stopPropagation();
+            controlTask(task.request_id, "stop");
+          });
+          topActions.appendChild(stop);
+        }
 
         if (canRerunTask(task)) {
           const rerun = document.createElement("button");

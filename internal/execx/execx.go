@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -26,6 +27,14 @@ type Result struct {
 
 // StreamLineHandler receives one output line from a subprocess stream.
 type StreamLineHandler func(stream, line string)
+
+// ProcessObserver receives lifecycle callbacks for each started subprocess.
+type ProcessObserver interface {
+	OnProcessStart(process *os.Process)
+	OnProcessExit()
+}
+
+type processObserverContextKey struct{}
 
 // Runner executes subprocesses.
 type Runner interface {
@@ -50,6 +59,22 @@ func (OSRunner) RunStream(ctx context.Context, cmd Command, handler StreamLineHa
 	return runWithStream(ctx, cmd, handler)
 }
 
+// WithProcessObserver returns a context that receives subprocess lifecycle callbacks.
+func WithProcessObserver(ctx context.Context, observer ProcessObserver) context.Context {
+	if observer == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, processObserverContextKey{}, observer)
+}
+
+func processObserverFromContext(ctx context.Context) ProcessObserver {
+	if ctx == nil {
+		return nil
+	}
+	observer, _ := ctx.Value(processObserverContextKey{}).(ProcessObserver)
+	return observer
+}
+
 func runWithStream(ctx context.Context, cmd Command, handler StreamLineHandler) (Result, error) {
 	c := exec.CommandContext(ctx, cmd.Name, cmd.Args...)
 	if cmd.Dir != "" {
@@ -66,7 +91,15 @@ func runWithStream(ctx context.Context, cmd Command, handler StreamLineHandler) 
 	c.Stdout = io.MultiWriter(&stdout, &stdoutEmitter)
 	c.Stderr = io.MultiWriter(&stderr, &stderrEmitter)
 
-	err := c.Run()
+	if err := c.Start(); err != nil {
+		return Result{}, fmt.Errorf("run %s %v: %w", cmd.Name, cmd.Args, err)
+	}
+	if observer := processObserverFromContext(ctx); observer != nil && c.Process != nil {
+		observer.OnProcessStart(c.Process)
+		defer observer.OnProcessExit()
+	}
+
+	err := c.Wait()
 	stdoutEmitter.Flush()
 	stderrEmitter.Flush()
 	res := Result{Stdout: stdout.String(), Stderr: stderr.String()}
