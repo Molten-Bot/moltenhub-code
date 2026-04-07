@@ -245,7 +245,7 @@ func (s Server) handleLocalPrompt(w http.ResponseWriter, r *http.Request) {
 	if s.SubmitLocalPrompt == nil {
 		writeJSON(w, http.StatusNotImplemented, map[string]any{
 			"ok":    false,
-			"error": "local prompt submit is unavailable",
+			"error": "prompt studio submit is unavailable",
 		})
 		return
 	}

@@ -85,9 +85,9 @@ Hub listener:
 
 Hub mode starts a local monitor UI by default at `http://127.0.0.1:7777`.
 
-The local prompt panel defaults to a schema builder that stores requested repositories in browser local storage and reuses them as a repo picker. In Builder mode, you can paste clipboard PNG screenshots into the prompt field and they will be attached to the initial Codex run. Raw JSON mode remains available for advanced or multi-repo payloads. The UI also includes a browser-local `Hide Local Prompt` toggle so you can collapse that section without restarting the harness.
+The Prompt Studio panel defaults to a schema builder that stores requested repositories in browser local storage and reuses them as a repo picker. In Builder mode, you can paste clipboard PNG screenshots into the prompt field and they will be attached to the initial Codex run. Raw JSON mode remains available for advanced or multi-repo payloads. The UI also includes a browser-local `Hide` toggle so you can collapse that section without restarting the harness.
 
-Automatic mode is available as a runtime flag and hides the browser-local prompt form entirely:
+Automatic mode is available as a runtime flag and hides the browser Prompt Studio form entirely:
 
 ```bash
 ./bin/harness hub --init templates/init.example.json --ui-automatic
