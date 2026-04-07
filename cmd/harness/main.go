@@ -206,7 +206,10 @@ func runHub(args []string) int {
 		return harness.ExitUsage
 	}
 
-	var cfg hub.InitConfig
+	var (
+		cfg hub.InitConfig
+		err error
+	)
 	if strings.TrimSpace(*configPath) != "" {
 		runtimeCfg, err := hub.LoadRuntimeConfig(*configPath)
 		if err != nil {
