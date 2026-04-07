@@ -111,14 +111,14 @@ func TestSaveRuntimeConfigDefaultsSessionKey(t *testing.T) {
 	}
 }
 
-func TestSaveRuntimeConfigRequiresBaseURLAndToken(t *testing.T) {
+func TestSaveRuntimeConfigDefaultsBaseURLAndRequiresToken(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "moltenhub", "config.json")
 
-	if err := SaveRuntimeConfig(path, InitConfig{}, "agent_123"); err == nil {
-		t.Fatal("expected error for empty base URL")
+	if err := SaveRuntimeConfig(path, InitConfig{}, "agent_123"); err != nil {
+		t.Fatalf("SaveRuntimeConfig() with default base URL error = %v", err)
 	}
 	if err := SaveRuntimeConfig(path, InitConfig{BaseURL: "https://na.hub.molten.bot/v1"}, ""); err == nil {
 		t.Fatal("expected error for empty token")

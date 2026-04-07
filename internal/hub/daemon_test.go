@@ -29,9 +29,11 @@ func TestApplyStoredRuntimeConfigSkipsWhenInitBindTokenProvided(t *testing.T) {
 		SessionKey: "main",
 	}
 	stored := RuntimeConfig{
-		BaseURL:    "https://na.hub.molten.bot/v1",
-		AgentToken: "agent_saved",
-		SessionKey: "saved-session",
+		InitConfig: InitConfig{
+			BaseURL:    "https://na.hub.molten.bot/v1",
+			AgentToken: "agent_saved",
+			SessionKey: "saved-session",
+		},
 	}
 
 	applied := applyStoredRuntimeConfig(&cfg, stored)
@@ -71,9 +73,11 @@ func TestApplyStoredRuntimeConfigKeepsExplicitAgentToken(t *testing.T) {
 		SessionKey: "main",
 	}
 	stored := RuntimeConfig{
-		BaseURL:    "https://na.hub.molten.bot/v1",
-		AgentToken: "agent_saved",
-		SessionKey: "saved-session",
+		InitConfig: InitConfig{
+			BaseURL:    "https://na.hub.molten.bot/v1",
+			AgentToken: "agent_saved",
+			SessionKey: "saved-session",
+		},
 	}
 
 	applied := applyStoredRuntimeConfig(&cfg, stored)
@@ -92,9 +96,11 @@ func TestApplyStoredRuntimeConfigKeepsInitBaseURL(t *testing.T) {
 		BaseURL: "https://na.hub.molten.bot/v1",
 	}
 	stored := RuntimeConfig{
-		BaseURL:    "http://127.0.0.1:37991/v1",
-		AgentToken: "agent_saved",
-		SessionKey: "saved-session",
+		InitConfig: InitConfig{
+			BaseURL:    "http://127.0.0.1:37991/v1",
+			AgentToken: "agent_saved",
+			SessionKey: "saved-session",
+		},
 	}
 
 	applied := applyStoredRuntimeConfig(&cfg, stored)
