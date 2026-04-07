@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jef/moltenhub-code/internal/config"
+	"github.com/jef/moltenhub-code/internal/harness"
 	"github.com/jef/moltenhub-code/internal/library"
 )
 
@@ -189,6 +191,124 @@ func TestProcessInboundMessageDuplicateDeliveryIsAckedWithoutDispatch(t *testing
 	}
 	if len(api.published) != 0 {
 		t.Fatalf("published results = %d, want 0 for duplicate dispatch", len(api.published))
+	}
+}
+
+func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *testing.T) {
+	t.Parallel()
+
+	d := NewDaemon(failingRunner{err: errors.New("runner exploded")})
+	api := &stubMoltenHubAPI{token: "t"}
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:         "code_for_me",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+	}
+
+	runCfg := config.Config{
+		Repo:         "git@github.com:acme/repo.git",
+		BaseBranch:   "release",
+		TargetSubdir: "internal/hub",
+		Prompt:       "fix failing checks",
+	}
+	runCfg.ApplyDefaults()
+
+	d.handleDispatch(
+		context.Background(),
+		api,
+		cfg,
+		SkillDispatch{
+			RequestID: "req-follow-up",
+			Skill:     "code_for_me",
+			ReplyTo:   "agent-123",
+			Config:    runCfg,
+		},
+		"",
+		false,
+	)
+
+	api.mu.Lock()
+	defer api.mu.Unlock()
+
+	if got, want := len(api.published), 2; got != want {
+		t.Fatalf("published payload count = %d, want %d", got, want)
+	}
+
+	resultPayload := api.published[0]
+	if got := resultPayload["type"]; got != "skill_result" {
+		t.Fatalf("result payload type = %#v", got)
+	}
+	if got := resultPayload["reply_to"]; got != "agent-123" {
+		t.Fatalf("result payload reply_to = %#v", got)
+	}
+
+	followUpPayload := api.published[1]
+	if got := followUpPayload["type"]; got != "skill_request" {
+		t.Fatalf("follow-up payload type = %#v", got)
+	}
+	if got := followUpPayload["skill"]; got != "code_for_me" {
+		t.Fatalf("follow-up payload skill = %#v", got)
+	}
+	if got := followUpPayload["request_id"]; got != "req-follow-up-failure-review" {
+		t.Fatalf("follow-up request_id = %#v", got)
+	}
+	if _, hasReplyTo := followUpPayload["reply_to"]; hasReplyTo {
+		t.Fatalf("follow-up payload unexpectedly routed to caller: %#v", followUpPayload["reply_to"])
+	}
+
+	runConfig, _ := followUpPayload["config"].(map[string]any)
+	if runConfig == nil {
+		t.Fatalf("follow-up config missing: %#v", followUpPayload)
+	}
+	if got := runConfig["baseBranch"]; got != "main" {
+		t.Fatalf("follow-up baseBranch = %#v", got)
+	}
+	if got := runConfig["targetSubdir"]; got != "." {
+		t.Fatalf("follow-up targetSubdir = %#v", got)
+	}
+	repos, _ := runConfig["repos"].([]string)
+	if len(repos) != 1 || repos[0] != "git@github.com:acme/repo.git" {
+		t.Fatalf("follow-up repos = %#v", runConfig["repos"])
+	}
+	prompt, _ := runConfig["prompt"].(string)
+	if !strings.Contains(prompt, failureFollowUpPromptBase) {
+		t.Fatalf("follow-up prompt = %q", prompt)
+	}
+	if !strings.Contains(prompt, "No workspace or log path was captured before the failure.") {
+		t.Fatalf("follow-up prompt missing empty-path guidance: %q", prompt)
+	}
+}
+
+func TestFailureFollowUpPromptIncludesWorkspaceAndTargetPath(t *testing.T) {
+	t.Parallel()
+
+	runCfg := config.Config{
+		Repo:         "git@github.com:acme/repo.git",
+		BaseBranch:   "main",
+		TargetSubdir: "internal/hub",
+		Prompt:       "fix failing checks",
+	}
+	runCfg.ApplyDefaults()
+
+	result := harness.Result{
+		WorkspaceDir: "/tmp/run-123",
+		RepoResults: []harness.RepoResult{{
+			RepoURL: "git@github.com:acme/repo.git",
+			RepoDir: "/tmp/run-123/repo",
+		}},
+	}
+
+	prompt := failureFollowUpPrompt(runCfg, result)
+	if !strings.Contains(prompt, "/tmp/run-123") {
+		t.Fatalf("prompt missing workspace dir: %q", prompt)
+	}
+	if !strings.Contains(prompt, "/tmp/run-123/repo") {
+		t.Fatalf("prompt missing repo dir: %q", prompt)
+	}
+	if !strings.Contains(prompt, "/tmp/run-123/repo/internal/hub") {
+		t.Fatalf("prompt missing repo target dir: %q", prompt)
 	}
 }
 

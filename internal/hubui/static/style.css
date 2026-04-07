@@ -673,7 +673,7 @@ select.prompt-control {
 
 .prompt-actions {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   flex-wrap: wrap;
   gap: 10px;
 }
@@ -681,7 +681,9 @@ select.prompt-control {
 .prompt-action-paste {
   display: flex;
   align-items: center;
-  flex: 1 1 260px;
+  flex: 0 1 30%;
+  width: 30%;
+  max-width: 30%;
   min-width: 0;
   min-height: 36px;
   border: 1px dashed #4e6986;
@@ -695,6 +697,14 @@ select.prompt-control {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.submit-status-inline {
+  display: inline-flex;
+  align-items: center;
+  flex: 1 1 0;
+  min-width: 140px;
+  margin-right: auto;
 }
 
 .prompt-action-paste:focus-visible {
@@ -1457,7 +1467,16 @@ body.task-fullscreen-open #task-fullscreen-toggle {
   }
 
   .prompt-action-paste {
-    flex-basis: 100%;
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: none;
+  }
+
+  .submit-status-inline {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+    margin-right: 0;
   }
 
   .prompt-action-button {

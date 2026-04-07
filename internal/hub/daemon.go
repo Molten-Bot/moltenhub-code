@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +30,7 @@ type Daemon struct {
 const wsFallbackWindow = 30 * time.Second
 const dispatchDedupTTL = 2 * time.Hour
 const agentStatusUpdateTimeout = 5 * time.Second
+const failureFollowUpPromptBase = "Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."
 
 // NewDaemon returns a hub daemon with defaults.
 func NewDaemon(runner execx.Runner) Daemon {
@@ -394,9 +396,14 @@ func (d Daemon) processInboundMessage(
 							d.logf("dispatch status=nack_error delivery_id=%s err=%q", deliveryID, nackErr)
 						}
 					}
-				} else if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
-					if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
-						d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
+				} else {
+					if followUpErr := queueFailureFollowUp(ctx, api, cfg, dispatch, failRes); followUpErr != nil {
+						d.logf("dispatch status=follow_up_error request_id=%s err=%q", dispatch.RequestID, followUpErr)
+					}
+					if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
+						if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
+							d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
+						}
 					}
 				}
 				d.logf(
@@ -572,6 +579,11 @@ func (d Daemon) handleDispatch(
 		}
 		return
 	}
+	if res.Err != nil {
+		if err := queueFailureFollowUp(ctx, api, cfg, dispatch, res); err != nil {
+			d.logf("dispatch status=follow_up_error request_id=%s err=%q", dispatch.RequestID, err)
+		}
+	}
 	if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
 		if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
 			d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
@@ -661,6 +673,84 @@ func failureResponseMessage(errText string) string {
 		return "Failure: task failed. Error details: unknown error."
 	}
 	return "Failure: task failed. Error details: " + errText
+}
+
+func queueFailureFollowUp(ctx context.Context, api MoltenHubAPI, cfg InitConfig, dispatch SkillDispatch, res harness.Result) error {
+	if api == nil {
+		return fmt.Errorf("moltenhub api client is required")
+	}
+	repos := dispatch.Config.RepoList()
+	if len(repos) == 0 {
+		return fmt.Errorf("failed dispatch is missing repository context")
+	}
+
+	runConfig := map[string]any{
+		"repos":        repos,
+		"baseBranch":   "main",
+		"targetSubdir": ".",
+		"prompt":       failureFollowUpPrompt(dispatch.Config, res),
+	}
+
+	payload := map[string]any{
+		"type":       cfg.Skill.DispatchType,
+		"skill":      firstNonEmpty(cfg.Skill.Name, dispatch.Skill),
+		"request_id": failureFollowUpRequestID(dispatch.RequestID),
+		"config":     runConfig,
+	}
+
+	return api.PublishResult(ctx, payload)
+}
+
+func failureFollowUpPrompt(runCfg config.Config, res harness.Result) string {
+	paths := failureLogPaths(runCfg, res)
+	if len(paths) == 0 {
+		return failureFollowUpPromptBase + "\n\nNo workspace or log path was captured before the failure. Investigate the task history and runtime error details first."
+	}
+
+	var b strings.Builder
+	b.WriteString(failureFollowUpPromptBase)
+	b.WriteString("\n\nFailing workspace/log paths to review first:")
+	for _, path := range paths {
+		b.WriteString("\n- ")
+		b.WriteString(path)
+	}
+	return b.String()
+}
+
+func failureLogPaths(runCfg config.Config, res harness.Result) []string {
+	seen := map[string]struct{}{}
+	paths := make([]string, 0, len(res.RepoResults)+2)
+	appendPath := func(path string) {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			return
+		}
+		if _, exists := seen[path]; exists {
+			return
+		}
+		seen[path] = struct{}{}
+		paths = append(paths, path)
+	}
+
+	appendPath(res.WorkspaceDir)
+	for _, repo := range res.RepoResults {
+		appendPath(repo.RepoDir)
+		if repoDir := strings.TrimSpace(repo.RepoDir); repoDir != "" {
+			targetSubdir := strings.TrimSpace(runCfg.TargetSubdir)
+			if targetSubdir != "" && targetSubdir != "." {
+				appendPath(filepath.Join(repoDir, targetSubdir))
+			}
+		}
+	}
+	return paths
+}
+
+func failureFollowUpRequestID(requestID string) string {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return "failure-review"
+	}
+	return requestID + "-failure-review"
 }
 
 func joinRepoPRURLs(results []harness.RepoResult) string {
