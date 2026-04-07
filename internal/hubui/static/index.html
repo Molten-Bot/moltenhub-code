@@ -57,11 +57,11 @@
       <div class="status-row flex flex-wrap items-center gap-2.5 text-sm text-hub-muted">
         <div id="local-conn-item" class="status-item status-item-compact flex min-h-[30px] items-center rounded-full border border-hub-border bg-hub-panel/75" title="Local: Connecting..." aria-label="Local: Connecting..." tabindex="0">
           <span id="local-conn-dot" class="dot"></span>
-          <span id="local-conn-text" class="status-tooltip text-xs leading-tight text-slate-200">Local: Connecting...</span>
+          <span id="local-conn-text" class="status-tooltip text-xs leading-tight">Local: Connecting...</span>
         </div>
         <div id="hub-conn-item" class="status-item status-item-compact flex min-h-[30px] items-center rounded-full border border-hub-border bg-hub-panel/75" title="Molten Hub: Waiting for hub status..." aria-label="Molten Hub: Waiting for hub status..." tabindex="0">
           <span id="hub-conn-dot" class="dot"></span>
-          <span id="hub-conn-text" class="status-tooltip text-xs leading-tight text-slate-200">Molten Hub: Waiting for hub status...</span>
+          <span id="hub-conn-text" class="status-tooltip text-xs leading-tight">Molten Hub: Waiting for hub status...</span>
         </div>
         <div class="status-item status-item-metrics flex min-h-[30px] items-center rounded-full border border-hub-border bg-hub-panel/75 px-2.5 py-1">
           <span class="metric-chip">
@@ -70,7 +70,7 @@
                 <path d="M7 3h2v2h6V3h2v2h2a2 2 0 0 1 2 2v2h-2V7H5v2H3V7a2 2 0 0 1 2-2h2V3Zm12 12h2v2a2 2 0 0 1-2 2h-2v2h-2v-2H9v2H7v-2H5a2 2 0 0 1-2-2v-2h2v2h14v-2Zm-14-3h14V9H5v3Zm5-2h4v2h-4v-2Z"></path>
               </svg>
             </span>
-            <span id="resource-cpu-text" class="status-value metric-value text-xs leading-tight text-slate-200">CPU --</span>
+            <span id="resource-cpu-text" class="status-value metric-value text-xs leading-tight">CPU --</span>
           </span>
           <span class="metric-chip">
             <span id="resource-mem-icon" class="metric-icon metric-icon-neutral" aria-hidden="true">
@@ -78,9 +78,9 @@
                 <path d="M4 7h16a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-1v2h-2v-2H7v2H5v-2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Zm0 2v6h16V9H4Zm2 1h2v4H6v-4Zm4 0h2v4h-2v-4Zm4 0h2v4h-2v-4Zm4 0h2v4h-2v-4Z"></path>
               </svg>
             </span>
-            <span id="resource-mem-text" class="status-value metric-value text-xs leading-tight text-slate-200">MEM --</span>
+            <span id="resource-mem-text" class="status-value metric-value text-xs leading-tight">MEM --</span>
           </span>
-          <span id="resource-metrics-text" class="status-value metric-value text-xs leading-tight text-slate-200">DISK --</span>
+          <span id="resource-metrics-text" class="status-value metric-value text-xs leading-tight">DISK --</span>
         </div>
       </div>
     </div>
@@ -88,13 +88,13 @@
     <div class="layout min-h-[calc(100vh-130px)] max-[980px]:min-h-0">
       <div class="right-col grid gap-4 [grid-template-rows:minmax(220px,30%)_minmax(220px,32%)_minmax(260px,1fr)] max-[980px]:[grid-template-rows:minmax(250px,40vh)_minmax(220px,34vh)_minmax(260px,46vh)]">
         <section class="panel prompt-wrap min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
-          <div class="panel-header flex items-center justify-between gap-2 border-b border-hub-border bg-black/15 px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
+          <div class="panel-header flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
             <span>Studio</span>
             <button id="prompt-visibility-toggle" class="prompt-visibility-toggle" type="button" aria-pressed="true" aria-label="Minimize Studio panel" title="Minimize Studio panel">▾</button>
           </div>
           <form id="local-prompt-form" class="prompt-form grid gap-2.5 p-3">
             <div class="prompt-mode-row flex flex-wrap items-center gap-2">
-              <div class="prompt-mode-tabs inline-flex rounded-lg border border-hub-border bg-[#0d1825] p-1">
+              <div class="prompt-mode-tabs inline-flex rounded-lg border border-hub-border p-1">
                 <button id="prompt-mode-builder" class="prompt-mode-tab active" type="button">Builder</button>
                 <button id="prompt-mode-library" class="prompt-mode-tab" type="button">Library</button>
                 <button id="prompt-mode-json" class="prompt-mode-tab" type="button">JSON</button>
@@ -134,7 +134,7 @@
                 <span class="prompt-label">Prompt</span>
                 <textarea
                   id="builder-prompt-input"
-                  class="prompt-text prompt-control h-[calc(6*1.4em+18px)] min-h-[calc(6*1.4em+18px)] w-full resize-y rounded-lg border border-hub-border bg-[#0d1825] p-2.5 font-mono text-[0.79rem] leading-[1.4] text-slate-200 focus:border-[#6a8aac] focus:outline-none focus:ring-1 focus:ring-[#6a8aac]"
+                  class="prompt-text prompt-control h-[calc(6*1.4em+18px)] min-h-[calc(6*1.4em+18px)] w-full resize-y rounded-lg border border-hub-border p-2.5 font-mono text-[0.79rem] leading-[1.4]"
                   rows="6"
                   spellcheck="false"
                   placeholder="Describe the change you want"></textarea>
@@ -169,7 +169,7 @@
             <div id="prompt-raw-panel" class="prompt-panel hidden">
               <textarea
                 id="local-prompt-input"
-                class="prompt-text h-[calc(7*1.4em+20px)] min-h-[calc(7*1.4em+20px)] w-full resize-y rounded-lg border border-hub-border bg-[#0d1825] p-2.5 font-mono text-[0.79rem] leading-[1.4] text-slate-200 focus:border-[#6a8aac] focus:outline-none focus:ring-1 focus:ring-[#6a8aac]"
+                class="prompt-text prompt-control h-[calc(7*1.4em+20px)] min-h-[calc(7*1.4em+20px)] w-full resize-y rounded-lg border border-hub-border p-2.5 font-mono text-[0.79rem] leading-[1.4]"
                 rows="7"
                 spellcheck="false"
                 placeholder='{
@@ -197,7 +197,7 @@
         </section>
 
         <section class="panel min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
-          <div class="panel-header flex items-center justify-end gap-2 border-b border-hub-border bg-black/15 px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
+          <div class="panel-header flex items-center justify-end gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
             <button id="task-fullscreen-toggle" class="task-fullscreen-toggle" type="button" aria-expanded="false" aria-label="Open full screen tasks">Full Screen</button>
           </div>
           <div class="scroll task-scroll h-[calc(100%-48px)] overflow-auto">
@@ -211,7 +211,7 @@
             <button id="task-terminal-toggle" class="task-terminal-toggle" type="button">Open Output</button>
           </div>
           <div id="task-result" class="task-result hidden flex-wrap items-center gap-2.5 border-b border-hub-border px-3.5 py-2 text-[0.78rem]"></div>
-          <pre id="terminal" class="term task-scroll m-0 h-full overflow-auto whitespace-pre-wrap break-words bg-[#0c1724] p-3 font-mono text-[0.79rem] leading-[1.35] text-[#dbe6f2]"></pre>
+          <pre id="terminal" class="term task-scroll m-0 h-full overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-[0.79rem] leading-[1.35]"></pre>
         </section>
       </div>
     </div>
@@ -868,7 +868,7 @@
 
       state.promptImages.forEach((image, index) => {
         const row = document.createElement("div");
-        row.className = "rounded-lg border border-hub-border bg-[#0d1825] px-3 py-2 text-[0.74rem] leading-[1.35] text-slate-200";
+        row.className = "prompt-image-chip";
         row.textContent = `${promptImageName(image, index)} (${String(image.mediaType || "image/png").trim() || "image/png"})`;
         builderImageList.appendChild(row);
       });
