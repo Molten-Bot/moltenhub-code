@@ -19,6 +19,7 @@ type MoltenHubAPI interface {
 	SyncProfile(ctx context.Context, cfg InitConfig) error
 	UpdateAgentStatus(ctx context.Context, status string) error
 	MarkOpenClawOffline(ctx context.Context, sessionKey, reason string) error
+	RecordGitHubTaskCompleteActivity(ctx context.Context) error
 	RegisterRuntime(ctx context.Context, cfg InitConfig, libraryTasks []library.TaskSummary) error
 	PublishResult(ctx context.Context, payload map[string]any) error
 	PublishResultAsync(ctx context.Context, payload map[string]any) <-chan error
@@ -106,6 +107,15 @@ func (c *AsyncAPIClient) MarkOpenClawOffline(ctx context.Context, sessionKey, re
 		return err
 	}
 	return c.client.MarkOpenClawOffline(ctx, token, sessionKey, reason)
+}
+
+// RecordGitHubTaskCompleteActivity appends a minimal completion activity entry.
+func (c *AsyncAPIClient) RecordGitHubTaskCompleteActivity(ctx context.Context) error {
+	token, err := c.requireToken()
+	if err != nil {
+		return err
+	}
+	return c.client.RecordGitHubTaskCompleteActivity(ctx, token)
 }
 
 // RegisterRuntime registers runtime metadata for the configured token.
