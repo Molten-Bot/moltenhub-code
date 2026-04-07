@@ -39,6 +39,18 @@ func TestNewServerDefaultsAndLogfHelper(t *testing.T) {
 	}
 }
 
+func TestNewServerDefaultLibraryLoaderSuccessAndFailure(t *testing.T) {
+	srv := NewServer("", NewBroker())
+
+	tasks, err := srv.LoadLibraryTasks()
+	if err != nil {
+		t.Fatalf("default LoadLibraryTasks() error = %v", err)
+	}
+	if len(tasks) == 0 {
+		t.Fatal("default LoadLibraryTasks() returned no tasks")
+	}
+}
+
 func TestServerRunValidationAndShutdownPaths(t *testing.T) {
 	t.Parallel()
 
