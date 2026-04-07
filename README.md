@@ -81,6 +81,14 @@ Hub listener:
 ./bin/harness hub --init templates/init.example.json
 ```
 
+On startup, hub mode emits a boot diagnosis checklist for:
+
+- `git` CLI availability
+- `gh` CLI availability
+- `codex` CLI availability
+- `gh auth` readiness
+- a Molten Hub connection recommendation (`https://molten.bot/hub`) when the runtime is not connected yet
+
 ## UI
 
 Hub mode starts a local monitor UI by default at `http://127.0.0.1:7777`.
@@ -163,6 +171,8 @@ When a task fails (local or hub-dispatched), the harness queues a follow-up loca
 - includes relevant failing log paths in prompt context
 - uses run config shape: `{"repos":["<same_repo_as_failed_task>"],"base_branch":"main","target_subdir":".","prompt":"..."}`
 - asks for root-cause fixes (not superficial bandaids)
+
+Hub skill failure responses also include an explicit failure message and error details in the published result payload so the calling agent gets a clear failure reason.
 
 ## Exit Codes
 

@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -285,6 +286,90 @@ func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
 
 	if publishRequests != 1 {
 		t.Fatalf("publish requests = %d, want 1", publishRequests)
+	}
+}
+
+func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
+	t.Parallel()
+
+	var (
+		mu             sync.Mutex
+		publishedMsg   map[string]any
+		publishRequest int
+	)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/openclaw/messages/publish" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		defer r.Body.Close()
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode publish body: %v", err)
+		}
+		message, _ := body["message"].(map[string]any)
+
+		mu.Lock()
+		publishRequest++
+		publishedMsg = message
+		mu.Unlock()
+
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"ok":true,"result":{"status":"queued"}}`))
+	}))
+	defer server.Close()
+
+	d := NewDaemon(nil)
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:         "code_for_me",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+		Dispatcher: DispatcherConfig{MaxParallel: 1},
+	}
+
+	dispatchController := NewAdaptiveDispatchController(cfg.Dispatcher, nil)
+	dispatchController.close()
+
+	msg := map[string]any{
+		"type":       "skill_request",
+		"skill":      "code_for_me",
+		"request_id": "req-closed-controller",
+		"config": map[string]any{
+			"repo":   "git@github.com:acme/repo.git",
+			"prompt": "ship it",
+		},
+	}
+
+	var workers sync.WaitGroup
+	d.processInboundMessage(
+		context.Background(),
+		NewAPIClient(server.URL+"/v1"),
+		"agent-token",
+		cfg,
+		msg,
+		"",
+		"",
+		dispatchController,
+		&workers,
+		nil,
+	)
+	workers.Wait()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if publishRequest != 1 {
+		t.Fatalf("publish requests = %d, want 1", publishRequest)
+	}
+	if got := fmt.Sprint(publishedMsg["status"]); got != "error" {
+		t.Fatalf("message.status = %v, want error", publishedMsg["status"])
+	}
+	if got := fmt.Sprint(publishedMsg["message"]); !strings.Contains(got, "Task failed. Error details: dispatch acquire: dispatch controller is closed") {
+		t.Fatalf("message.message = %q", got)
+	}
+	if got := fmt.Sprint(publishedMsg["error"]); !strings.Contains(got, "dispatch acquire: dispatch controller is closed") {
+		t.Fatalf("message.error = %q", got)
 	}
 }
 
