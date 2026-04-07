@@ -155,7 +155,6 @@ func TestDaemonRunPublishesAgentLifecycleStatus(t *testing.T) {
 }
 
 func TestDaemonRunReturnsAuthErrorWhenTransportIsUnauthorized(t *testing.T) {
-	// This test changes process cwd, so it cannot run in parallel.
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/agents/me":
@@ -188,6 +187,7 @@ func TestDaemonRunReturnsAuthErrorWhenTransportIsUnauthorized(t *testing.T) {
 		t.Fatalf("Getwd() error = %v", err)
 	}
 	tmpDir := t.TempDir()
+	// This test mutates process working directory; keep it non-parallel.
 	if err := os.Chdir(tmpDir); err != nil {
 		t.Fatalf("Chdir(%q) error = %v", tmpDir, err)
 	}

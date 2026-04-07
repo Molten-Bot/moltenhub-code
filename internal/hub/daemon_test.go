@@ -174,7 +174,9 @@ func TestDaemonRunUsesStoredRuntimeConfigBaseURLWhenInitBaseURLOmitted(t *testin
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		case "/v1/openclaw/messages/pull":
+			reqMu.Lock()
 			pullTimeouts = append(pullTimeouts, r.URL.Query().Get("timeout_ms"))
+			reqMu.Unlock()
 			w.WriteHeader(http.StatusNoContent)
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -567,8 +569,7 @@ func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
 
 	d.handleDispatch(
 		context.Background(),
-		NewAPIClient(server.URL+"/v1"),
-		"test-token",
+		NewAsyncAPIClientFrom(NewAPIClient(server.URL+"/v1"), "test-token"),
 		cfg,
 		SkillDispatch{
 			RequestID: "req-fail",
@@ -625,6 +626,16 @@ func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
 	defer server.Close()
 
 	d := NewDaemon(nil)
+	failed := make(chan harness.Result, 1)
+	d.OnDispatchFailed = func(requestID string, failedRunCfg config.Config, result harness.Result) {
+		if requestID != "req-closed-controller" {
+			t.Fatalf("requestID = %q, want %q", requestID, "req-closed-controller")
+		}
+		if got, want := strings.Join(failedRunCfg.RepoList(), ","), "git@github.com:acme/repo.git"; got != want {
+			t.Fatalf("failed run repos = %q, want %q", got, want)
+		}
+		failed <- result
+	}
 	cfg := InitConfig{
 		Skill: SkillConfig{
 			Name:         "code_for_me",
@@ -650,8 +661,7 @@ func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
 	var workers sync.WaitGroup
 	d.processInboundMessage(
 		context.Background(),
-		NewAPIClient(server.URL+"/v1"),
-		"agent-token",
+		NewAsyncAPIClientFrom(NewAPIClient(server.URL+"/v1"), "agent-token"),
 		cfg,
 		msg,
 		"",
@@ -661,6 +671,18 @@ func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
 		nil,
 	)
 	workers.Wait()
+
+	select {
+	case result := <-failed:
+		if result.Err == nil {
+			t.Fatal("result.Err = nil, want non-nil")
+		}
+		if got := result.Err.Error(); !strings.Contains(got, "dispatch controller is closed") {
+			t.Fatalf("result.Err = %q, want dispatch controller closed detail", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for OnDispatchFailed callback")
+	}
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -675,6 +697,91 @@ func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
 	}
 	if got := fmt.Sprint(publishedMsg["error"]); !strings.Contains(got, "dispatch acquire: dispatch controller is closed") {
 		t.Fatalf("message.error = %q", got)
+	}
+}
+
+func TestProcessInboundMessageInvokesOnDispatchFailedForAcquireFailure(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/openclaw/messages/publish" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"ok":true,"result":{"status":"queued"}}`))
+	}))
+	defer server.Close()
+
+	d := NewDaemon(nil)
+	failed := make(chan struct {
+		requestID string
+		runCfg    config.Config
+		result    harness.Result
+	}, 1)
+	d.OnDispatchFailed = func(requestID string, failedRunCfg config.Config, result harness.Result) {
+		failed <- struct {
+			requestID string
+			runCfg    config.Config
+			result    harness.Result
+		}{
+			requestID: requestID,
+			runCfg:    failedRunCfg,
+			result:    result,
+		}
+	}
+
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:         "code_for_me",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+		Dispatcher: DispatcherConfig{MaxParallel: 1},
+	}
+
+	dispatchController := NewAdaptiveDispatchController(cfg.Dispatcher, nil)
+	dispatchController.close()
+
+	msg := map[string]any{
+		"type":       "skill_request",
+		"skill":      "code_for_me",
+		"request_id": "req-acquire-fail",
+		"config": map[string]any{
+			"repo":   "git@github.com:acme/repo.git",
+			"prompt": "ship it",
+		},
+	}
+
+	var workers sync.WaitGroup
+	d.processInboundMessage(
+		context.Background(),
+		NewAsyncAPIClientFrom(NewAPIClient(server.URL+"/v1"), "agent-token"),
+		cfg,
+		msg,
+		"",
+		"",
+		dispatchController,
+		&workers,
+		nil,
+	)
+	workers.Wait()
+
+	select {
+	case got := <-failed:
+		if got.requestID != "req-acquire-fail" {
+			t.Fatalf("requestID = %q, want %q", got.requestID, "req-acquire-fail")
+		}
+		if gotRepos, wantRepos := strings.Join(got.runCfg.RepoList(), ","), "git@github.com:acme/repo.git"; gotRepos != wantRepos {
+			t.Fatalf("failed run repos = %q, want %q", gotRepos, wantRepos)
+		}
+		if got.result.Err == nil {
+			t.Fatal("result.Err = nil, want non-nil")
+		}
+		if !strings.Contains(got.result.Err.Error(), "dispatch acquire: dispatch controller is closed") {
+			t.Fatalf("result.Err = %q", got.result.Err.Error())
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for OnDispatchFailed callback")
 	}
 }
 
@@ -701,8 +808,7 @@ func TestProcessInboundMessageSkipsIgnoredLogForUnknownSkill(t *testing.T) {
 	var workers sync.WaitGroup
 	d.processInboundMessage(
 		context.Background(),
-		APIClient{},
-		"",
+		NewAsyncAPIClientFrom(APIClient{}, ""),
 		cfg,
 		map[string]any{"type": "status_update"},
 		"",
@@ -740,8 +846,7 @@ func TestProcessInboundMessageLogsIgnoredKnownSkill(t *testing.T) {
 	var workers sync.WaitGroup
 	d.processInboundMessage(
 		context.Background(),
-		APIClient{},
-		"",
+		NewAsyncAPIClientFrom(APIClient{}, ""),
 		cfg,
 		map[string]any{
 			"type":  "skill_request",
@@ -807,7 +912,7 @@ func TestProcessInboundMessageInvokesOnDispatchQueued(t *testing.T) {
 			"prompt": "ship rerun button",
 		},
 	}
-	d.processInboundMessage(ctx, APIClient{}, "", cfg, msg, "", "", dispatchController, &workers, nil)
+	d.processInboundMessage(ctx, NewAsyncAPIClientFrom(APIClient{}, ""), cfg, msg, "", "", dispatchController, &workers, nil)
 
 	mu.Lock()
 	defer mu.Unlock()

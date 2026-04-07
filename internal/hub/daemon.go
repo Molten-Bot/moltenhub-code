@@ -68,15 +68,16 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 		return fmt.Errorf("init config: %w", err)
 	}
 
-	api := NewAPIClient(cfg.BaseURL)
-	api.Logf = d.logf
+	transport := NewAPIClient(cfg.BaseURL)
+	transport.Logf = d.logf
+	api := NewAsyncAPIClientFrom(transport, cfg.AgentToken)
 
 	token, err := api.ResolveAgentToken(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("hub auth: %w", err)
 	}
-	if strings.TrimSpace(api.BaseURL) != "" {
-		cfg.BaseURL = strings.TrimRight(strings.TrimSpace(api.BaseURL), "/")
+	if strings.TrimSpace(api.BaseURL()) != "" {
+		cfg.BaseURL = strings.TrimRight(strings.TrimSpace(api.BaseURL()), "/")
 	}
 	d.logf("hub.connection status=configured base_url=%s", cfg.BaseURL)
 	d.logf("hub.auth status=ok")
@@ -91,19 +92,19 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	} else {
 		d.logf("hub.library status=loaded tasks=%d", len(libraryCatalog.Tasks))
 	}
-	if err := api.RegisterRuntime(ctx, token, cfg, libraryCatalog.Summaries()); err != nil {
+	if err := api.RegisterRuntime(ctx, cfg, libraryCatalog.Summaries()); err != nil {
 		d.logf("hub.runtime status=warn action=register err=%q", err)
 	} else {
 		d.logf("hub.runtime status=registered skills=1 library_tasks=%d", len(libraryCatalog.Tasks))
 	}
 
-	if err := api.SyncProfile(ctx, token, cfg); err != nil {
+	if err := api.SyncProfile(ctx, cfg); err != nil {
 		d.logf("hub.profile status=warn err=%q", err)
 	} else {
 		d.logf("hub.profile status=ok")
 	}
 
-	if err := api.UpdateAgentStatus(ctx, token, "online"); err != nil {
+	if err := api.UpdateAgentStatus(ctx, "online"); err != nil {
 		d.logf("hub.agent status=warn state=online err=%q", err)
 	} else {
 		d.logf("hub.agent status=online")
@@ -111,7 +112,7 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), agentStatusUpdateTimeout)
 		defer cancel()
-		if err := api.UpdateAgentStatus(shutdownCtx, token, "offline"); err != nil {
+		if err := api.UpdateAgentStatus(shutdownCtx, "offline"); err != nil {
 			d.logf("hub.agent status=warn state=offline err=%q", err)
 			return
 		}
@@ -134,7 +135,7 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	if wsURLErr != nil {
 		d.logf("hub.ws status=disabled err=%q", wsURLErr)
 		d.logf("hub.transport mode=openclaw_pull")
-		return d.runPullLoop(ctx, api, token, cfg, dispatchController, &workers, deduper, pullTimeoutMs)
+		return d.runPullLoop(ctx, api, cfg, dispatchController, &workers, deduper, pullTimeoutMs)
 	}
 
 	for {
@@ -142,7 +143,7 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 			return nil
 		}
 
-		if err := d.runWebsocketLoop(ctx, wsURL, api, token, cfg, dispatchController, &workers, deduper); err == nil {
+		if err := d.runWebsocketLoop(ctx, wsURL, api, cfg, dispatchController, &workers, deduper); err == nil {
 			return nil
 		} else if ctx.Err() != nil {
 			return nil
@@ -162,7 +163,7 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 			if ctx.Err() != nil {
 				return nil
 			}
-			if err := d.pullOnce(ctx, api, token, cfg, dispatchController, &workers, deduper, pullTimeoutMs); err != nil {
+			if err := d.pullOnce(ctx, api, cfg, dispatchController, &workers, deduper, pullTimeoutMs); err != nil {
 				if isUnauthorizedHubError(err) {
 					return fmt.Errorf("hub auth: %w", err)
 				}
@@ -177,8 +178,7 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 
 func (d Daemon) runPullLoop(
 	ctx context.Context,
-	api APIClient,
-	token string,
+	api MoltenHubAPI,
 	cfg InitConfig,
 	dispatchController *AdaptiveDispatchController,
 	workers *sync.WaitGroup,
@@ -189,7 +189,7 @@ func (d Daemon) runPullLoop(
 		if ctx.Err() != nil {
 			return nil
 		}
-		if err := d.pullOnce(ctx, api, token, cfg, dispatchController, workers, deduper, pullTimeoutMs); err != nil {
+		if err := d.pullOnce(ctx, api, cfg, dispatchController, workers, deduper, pullTimeoutMs); err != nil {
 			if isUnauthorizedHubError(err) {
 				return fmt.Errorf("hub auth: %w", err)
 			}
@@ -203,8 +203,7 @@ func (d Daemon) runPullLoop(
 
 func (d Daemon) pullOnce(
 	ctx context.Context,
-	api APIClient,
-	token string,
+	api MoltenHubAPI,
 	cfg InitConfig,
 	dispatchController *AdaptiveDispatchController,
 	workers *sync.WaitGroup,
@@ -214,28 +213,27 @@ func (d Daemon) pullOnce(
 	if pullTimeoutMs <= 0 {
 		pullTimeoutMs = runtimeTimeoutMs
 	}
-	pulled, found, err := api.PullOpenClawMessage(ctx, token, pullTimeoutMs)
+	pulled, found, err := api.PullOpenClawMessage(ctx, pullTimeoutMs)
 	if err != nil {
 		return err
 	}
 	if !found {
 		return nil
 	}
-	d.processInboundMessage(ctx, api, token, cfg, pulled.Message, pulled.DeliveryID, pulled.MessageID, dispatchController, workers, deduper)
+	d.processInboundMessage(ctx, api, cfg, pulled.Message, pulled.DeliveryID, pulled.MessageID, dispatchController, workers, deduper)
 	return nil
 }
 
 func (d Daemon) runWebsocketLoop(
 	ctx context.Context,
 	wsURL string,
-	api APIClient,
-	token string,
+	api MoltenHubAPI,
 	cfg InitConfig,
 	dispatchController *AdaptiveDispatchController,
 	workers *sync.WaitGroup,
 	deduper *dispatchDeduper,
 ) error {
-	ws, err := DialWebsocket(ctx, wsURL, token)
+	ws, err := DialWebsocket(ctx, wsURL, api.Token())
 	if err != nil {
 		return err
 	}
@@ -287,14 +285,13 @@ func (d Daemon) runWebsocketLoop(
 		if len(inbound.Message) == 0 {
 			continue
 		}
-		d.processInboundMessage(ctx, api, token, cfg, inbound.Message, inbound.DeliveryID, inbound.MessageID, dispatchController, workers, deduper)
+		d.processInboundMessage(ctx, api, cfg, inbound.Message, inbound.DeliveryID, inbound.MessageID, dispatchController, workers, deduper)
 	}
 }
 
 func (d Daemon) processInboundMessage(
 	ctx context.Context,
-	api APIClient,
-	token string,
+	api MoltenHubAPI,
 	cfg InitConfig,
 	msg map[string]any,
 	deliveryID string,
@@ -309,7 +306,7 @@ func (d Daemon) processInboundMessage(
 			d.logf("dispatch status=ignored skill=%s", skill)
 		}
 		if strings.TrimSpace(deliveryID) != "" {
-			if err := api.AckOpenClawDelivery(ctx, token, deliveryID); err != nil {
+			if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
 				d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
 			}
 		}
@@ -318,17 +315,17 @@ func (d Daemon) processInboundMessage(
 	if parseErr != nil {
 		d.logf("dispatch status=invalid request_id=%s err=%q", dispatch.RequestID, parseErr)
 		payload := dispatchParseErrorPayload(cfg, dispatch, parseErr)
-		if err := api.PublishResult(ctx, token, payload); err != nil {
+		if err := api.PublishResult(ctx, payload); err != nil {
 			d.logf("dispatch status=publish_error request_id=%s err=%q", dispatch.RequestID, err)
 			if strings.TrimSpace(deliveryID) != "" {
-				if nackErr := api.NackOpenClawDelivery(ctx, token, deliveryID); nackErr != nil {
+				if nackErr := api.NackOpenClawDelivery(ctx, deliveryID); nackErr != nil {
 					d.logf("dispatch status=nack_error delivery_id=%s err=%q", deliveryID, nackErr)
 				}
 			}
 			return
 		}
 		if strings.TrimSpace(deliveryID) != "" {
-			if err := api.AckOpenClawDelivery(ctx, token, deliveryID); err != nil {
+			if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
 				d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
 			}
 		}
@@ -340,7 +337,7 @@ func (d Daemon) processInboundMessage(
 		if accepted, state := deduper.Begin(dupKey); !accepted {
 			d.logf("dispatch status=duplicate request_id=%s state=%s", firstNonEmpty(dispatch.RequestID, dupKey), state)
 			if strings.TrimSpace(deliveryID) != "" {
-				if err := api.AckOpenClawDelivery(ctx, token, deliveryID); err != nil {
+				if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
 					d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
 				}
 			}
@@ -357,7 +354,7 @@ func (d Daemon) processInboundMessage(
 
 	ackedEarly := false
 	if strings.TrimSpace(deliveryID) != "" {
-		if err := api.AckOpenClawDelivery(ctx, token, deliveryID); err != nil {
+		if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
 			d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
 		} else {
 			ackedEarly = true
@@ -377,16 +374,19 @@ func (d Daemon) processInboundMessage(
 					ExitCode: harness.ExitPreflight,
 					Err:      failErr,
 				}
+				if d.OnDispatchFailed != nil {
+					d.OnDispatchFailed(dispatch.RequestID, dispatch.Config, failRes)
+				}
 				payload := dispatchResultPayload(cfg, dispatch, failRes)
-				if err := api.PublishResult(ctx, token, payload); err != nil {
+				if err := api.PublishResult(ctx, payload); err != nil {
 					d.logf("dispatch status=publish_error request_id=%s err=%q", dispatch.RequestID, err)
 					if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
-						if nackErr := api.NackOpenClawDelivery(ctx, token, deliveryID); nackErr != nil {
+						if nackErr := api.NackOpenClawDelivery(ctx, deliveryID); nackErr != nil {
 							d.logf("dispatch status=nack_error delivery_id=%s err=%q", deliveryID, nackErr)
 						}
 					}
 				} else if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
-					if err := api.AckOpenClawDelivery(ctx, token, deliveryID); err != nil {
+					if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
 						d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
 					}
 				}
@@ -411,7 +411,7 @@ func (d Daemon) processInboundMessage(
 				deduper.Done(dedupeKey)
 			}
 		}()
-		d.handleDispatch(ctx, api, token, cfg, dispatch, deliveryID, ackedEarly)
+		d.handleDispatch(ctx, api, cfg, dispatch, deliveryID, ackedEarly)
 	}(dispatch, deliveryID, dupKey, ackedEarly)
 }
 
@@ -525,8 +525,7 @@ func (d *dispatchDeduper) gcLocked(now time.Time) {
 
 func (d Daemon) handleDispatch(
 	ctx context.Context,
-	api APIClient,
-	token string,
+	api MoltenHubAPI,
 	cfg InitConfig,
 	dispatch SkillDispatch,
 	deliveryID string,
@@ -555,17 +554,17 @@ func (d Daemon) handleDispatch(
 		d.OnDispatchFailed(dispatch.RequestID, dispatch.Config, res)
 	}
 	payload := dispatchResultPayload(cfg, dispatch, res)
-	if err := api.PublishResult(ctx, token, payload); err != nil {
+	if err := api.PublishResult(ctx, payload); err != nil {
 		d.logf("dispatch status=publish_error request_id=%s err=%q", dispatch.RequestID, err)
 		if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
-			if nackErr := api.NackOpenClawDelivery(ctx, token, deliveryID); nackErr != nil {
+			if nackErr := api.NackOpenClawDelivery(ctx, deliveryID); nackErr != nil {
 				d.logf("dispatch status=nack_error delivery_id=%s err=%q", deliveryID, nackErr)
 			}
 		}
 		return
 	}
 	if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
-		if err := api.AckOpenClawDelivery(ctx, token, deliveryID); err != nil {
+		if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
 			d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
 		}
 	}

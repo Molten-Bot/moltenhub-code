@@ -277,6 +277,11 @@ func resolveCatalogDir(dir string) string {
 			return path
 		}
 	}
+	if _, sourceFile, _, ok := runtime.Caller(0); ok {
+		if path, ok := findDirUpward(filepath.Dir(sourceFile), dir); ok {
+			return path
+		}
+	}
 	return dir
 }
 

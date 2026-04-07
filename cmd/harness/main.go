@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -301,6 +302,12 @@ func runHub(args []string) int {
 			if acquireErr != nil {
 				finalState = "error"
 				daemonLogger("dispatch status=error request_id=%s err=%q", requestID, acquireErr)
+				if !errors.Is(acquireErr, context.Canceled) && allowFailureFollowUp && queueFailureFollowUp != nil {
+					queueFailureFollowUp(requestID, harness.Result{
+						ExitCode: harness.ExitPreflight,
+						Err:      fmt.Errorf("dispatch acquire: %w", acquireErr),
+					}, runCfg)
+				}
 				return
 			}
 			defer release()
