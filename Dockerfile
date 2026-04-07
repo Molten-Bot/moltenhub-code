@@ -54,7 +54,7 @@ RUN useradd --create-home --shell /bin/sh app \
 WORKDIR /workspace
 
 COPY --from=build /out/harness /usr/local/bin/harness
-COPY library/AGENTS.md /opt/moltenhub/library/AGENTS.md
+COPY library /opt/moltenhub/library
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint
 COPY docker/with-config.sh /usr/local/bin/with-config
 RUN chmod +x /usr/local/bin/harness /usr/local/bin/entrypoint /usr/local/bin/with-config
