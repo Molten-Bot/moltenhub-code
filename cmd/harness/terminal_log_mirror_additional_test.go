@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -68,5 +69,50 @@ func TestIdentifierSubdirAndSanitizeFallbacks(t *testing.T) {
 	}
 	if got := sanitizeLogPathPart("a__b--c/***d"); got != "a_b_c_d" {
 		t.Fatalf("sanitizeLogPathPart() = %q, want %q", got, "a_b_c_d")
+	}
+}
+
+func TestDefaultLogRootFallsBackToTempWhenWorkingDirectoryIsUnavailable(t *testing.T) {
+	t.Parallel()
+
+	failingPrimary := true
+	root, err := defaultLogRootForWorkingDir("/workspace/project", func(path string) error {
+		if failingPrimary {
+			failingPrimary = false
+			return fmt.Errorf("permission denied")
+		}
+		if filepath.Base(path) != logDirectoryName {
+			t.Fatalf("fallback base path = %q, want %q", filepath.Base(path), logDirectoryName)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("defaultLogRootForWorkingDir() error = %v", err)
+	}
+	if filepath.Base(root) != logDirectoryName {
+		t.Fatalf("base(defaultLogRootForWorkingDir()) = %q, want %q", filepath.Base(root), logDirectoryName)
+	}
+	wantPrefix := filepath.Join(os.TempDir(), "moltenhub-code", "logs")
+	if got := root; len(got) < len(wantPrefix) || got[:len(wantPrefix)] != wantPrefix {
+		t.Fatalf("defaultLogRootForWorkingDir() = %q, want prefix %q", got, wantPrefix)
+	}
+}
+
+func TestLogRootHashIsStable(t *testing.T) {
+	t.Parallel()
+
+	const input = "/workspace/project"
+	got := logRootHash(input)
+	if got == "" {
+		t.Fatal("logRootHash() = empty")
+	}
+	if want := logRootHash(input); got != want {
+		t.Fatalf("logRootHash() = %q, want stable %q", got, want)
+	}
+	if len(got) != 16 {
+		t.Fatalf("len(logRootHash()) = %d, want 16", len(got))
+	}
+	if _, err := fmt.Sscanf(got, "%x", new(uint64)); err != nil {
+		t.Fatalf("logRootHash() = %q, want hex: %v", got, err)
 	}
 }

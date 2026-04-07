@@ -205,3 +205,18 @@ func TestDefaultRuntimeConfigPath(t *testing.T) {
 		t.Fatalf("defaultRuntimeConfigPath() = %q, want %q", got, runtimeConfigPath)
 	}
 }
+
+func TestRuntimeConfigCandidatePathsDefaultIncludesLegacyLocation(t *testing.T) {
+	t.Parallel()
+
+	got := runtimeConfigCandidatePaths("")
+	want := []string{runtimeConfigPath, legacyRuntimeConfigPath}
+	if len(got) != len(want) {
+		t.Fatalf("len(runtimeConfigCandidatePaths()) = %d, want %d (%v)", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("runtimeConfigCandidatePaths()[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}

@@ -245,7 +245,9 @@ Key fields:
 - `agent_command` (optional CLI executable override)
 - `dispatcher.*` (adaptive worker parallelism)
 
-After first successful activation, runtime auth is persisted to `./.moltenhub/config.json`, so `bind_token` and `handle` are not required in `init.json` for subsequent runs.
+After first successful activation, runtime auth is persisted to `./.moltenhub/config.json`. The runtime also reads the legacy path `./.moltenhub/config/config.json` for compatibility with existing mounts.
+
+The live Hub OpenAPI spec is published at `https://na.hub.molten.bot/openapi.yaml`.
 Runtime config keys `sessionKey` and `timeoutMs` are optional; missing values default to `main` and `20000`.
 
 Local-only behavior:

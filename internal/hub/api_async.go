@@ -18,6 +18,7 @@ type MoltenHubAPI interface {
 	ResolveAgentToken(ctx context.Context, cfg InitConfig) (string, error)
 	SyncProfile(ctx context.Context, cfg InitConfig) error
 	UpdateAgentStatus(ctx context.Context, status string) error
+	MarkOpenClawOffline(ctx context.Context, sessionKey, reason string) error
 	RegisterRuntime(ctx context.Context, cfg InitConfig, libraryTasks []library.TaskSummary) error
 	PublishResult(ctx context.Context, payload map[string]any) error
 	PublishResultAsync(ctx context.Context, payload map[string]any) <-chan error
@@ -96,6 +97,15 @@ func (c *AsyncAPIClient) UpdateAgentStatus(ctx context.Context, status string) e
 		return err
 	}
 	return c.client.UpdateAgentStatus(ctx, token, status)
+}
+
+// MarkOpenClawOffline marks websocket transport offline for the configured token.
+func (c *AsyncAPIClient) MarkOpenClawOffline(ctx context.Context, sessionKey, reason string) error {
+	token, err := c.requireToken()
+	if err != nil {
+		return err
+	}
+	return c.client.MarkOpenClawOffline(ctx, token, sessionKey, reason)
 }
 
 // RegisterRuntime registers runtime metadata for the configured token.

@@ -9,9 +9,11 @@ import (
 )
 
 const (
-	runtimeConfigPath = "./.moltenhub/config.json"
-	runtimeTimeoutMs  = 20000
-	runtimeSessionKey = "main"
+	runtimeConfigPath           = "./.moltenhub/config.json"
+	legacyRuntimeConfigPath     = "./.moltenhub/config/config.json"
+	runtimeTimeoutMs            = 20000
+	runtimeSessionKey           = "main"
+	transportOfflineReasonAgent = "harness_shutdown"
 )
 
 // RuntimeConfig is persisted after successful hub auth so subsequent runs can reuse the token.
@@ -123,4 +125,12 @@ func SaveRuntimeConfig(path, baseURL, token, sessionKey string) error {
 
 func defaultRuntimeConfigPath() string {
 	return runtimeConfigPath
+}
+
+func runtimeConfigCandidatePaths(path string) []string {
+	path = strings.TrimSpace(path)
+	if path != "" {
+		return []string{path}
+	}
+	return []string{runtimeConfigPath, legacyRuntimeConfigPath}
 }
