@@ -30,6 +30,9 @@ type Server struct {
 	Logf              func(string, ...any)
 	SubmitLocalPrompt func(context.Context, []byte) (string, error)
 	CloseTask         func(context.Context, string) error
+	PauseTask         func(context.Context, string) error
+	RunTask           func(context.Context, string) error
+	StopTask          func(context.Context, string) error
 	LoadLibraryTasks  func() ([]library.TaskSummary, error)
 }
 
@@ -296,6 +299,12 @@ func (s Server) handleTaskAction(w http.ResponseWriter, r *http.Request) {
 		action = "rerun"
 	case strings.HasSuffix(path, "/close"):
 		action = "close"
+	case strings.HasSuffix(path, "/pause"):
+		action = "pause"
+	case strings.HasSuffix(path, "/run"):
+		action = "run"
+	case strings.HasSuffix(path, "/stop"):
+		action = "stop"
 	default:
 		http.NotFound(w, r)
 		return
@@ -325,9 +334,58 @@ func (s Server) handleTaskAction(w http.ResponseWriter, r *http.Request) {
 		s.handleTaskRerun(w, r, decoded)
 	case "close":
 		s.handleTaskClose(w, r, decoded)
+	case "pause":
+		s.handleTaskControl(w, r, decoded, "pause", "paused", s.PauseTask)
+	case "run":
+		s.handleTaskControl(w, r, decoded, "run", "running", s.RunTask)
+	case "stop":
+		s.handleTaskControl(w, r, decoded, "stop", "stopped", s.StopTask)
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (s Server) handleTaskControl(
+	w http.ResponseWriter,
+	r *http.Request,
+	requestID string,
+	action string,
+	status string,
+	handler func(context.Context, string) error,
+) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if handler == nil {
+		writeJSON(w, http.StatusNotImplemented, map[string]any{
+			"ok":    false,
+			"error": fmt.Sprintf("task %s is unavailable", action),
+		})
+		return
+	}
+	if err := handler(r.Context(), requestID); err != nil {
+		switch {
+		case errors.Is(err, ErrTaskNotFound):
+			writeJSON(w, http.StatusNotFound, map[string]any{
+				"ok":    false,
+				"error": "task not found",
+			})
+		default:
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"ok":    false,
+				"error": err.Error(),
+			})
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":         true,
+		"request_id": requestID,
+		"action":     action,
+		"status":     status,
+	})
 }
 
 func (s Server) handleTaskRerun(w http.ResponseWriter, r *http.Request, requestID string) {

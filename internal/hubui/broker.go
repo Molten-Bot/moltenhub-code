@@ -429,6 +429,34 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
 	}
 
+	if strings.HasPrefix(line, "dispatch status=paused") {
+		t.Status = "paused"
+		t.Stage = firstNonEmpty(t.Stage, "dispatch")
+		t.StageStatus = firstNonEmpty(fields["status"], "paused")
+	}
+
+	if strings.HasPrefix(line, "dispatch status=resumed") {
+		if t.Status == "" || t.Status == "paused" || t.Status == "pending" {
+			t.Status = "pending"
+		}
+		t.Stage = firstNonEmpty(t.Stage, "dispatch")
+		t.StageStatus = firstNonEmpty(fields["status"], "resumed")
+	}
+
+	if strings.HasPrefix(line, "dispatch status=stopped") {
+		t.Status = "stopped"
+		if code, ok := parseIntField(fields["exit_code"]); ok {
+			t.ExitCode = code
+		}
+		t.WorkspaceDir = firstNonEmpty(fields["workspace"], fields["workspace_dir"], t.WorkspaceDir)
+		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
+		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
+		t.Error = firstNonEmpty(parseFieldValue(line, "err"), parseFieldValue(line, "error"), t.Error)
+		if strings.TrimSpace(t.Error) == "" {
+			t.Error = "task stopped by operator"
+		}
+	}
+
 	if strings.HasPrefix(line, "dispatch status=error") {
 		t.Status = "error"
 		if code, ok := parseIntField(fields["exit_code"]); ok {
@@ -824,7 +852,7 @@ func branchFromRunConfigJSON(runConfigJSON []byte) string {
 
 func isCompletedTaskStatus(status string) bool {
 	switch strings.TrimSpace(status) {
-	case "ok", "no_changes", "error", "invalid", "duplicate":
+	case "ok", "no_changes", "error", "invalid", "duplicate", "stopped":
 		return true
 	default:
 		return false

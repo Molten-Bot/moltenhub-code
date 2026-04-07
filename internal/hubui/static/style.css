@@ -788,6 +788,32 @@ select.prompt-control {
   transition: border-color .12s ease, color .12s ease, transform .12s ease, opacity .12s ease;
 }
 
+.task-control-toggle {
+  border: 1px solid rgba(255, 214, 136, 0.45);
+  background: rgba(78, 57, 21, 0.65);
+  color: #ffe4af;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: border-color .12s ease, color .12s ease, transform .12s ease, opacity .12s ease;
+}
+
+.task-stop {
+  border: 1px solid rgba(244, 131, 131, 0.48);
+  background: rgba(78, 25, 25, 0.72);
+  color: #ffd2d2;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: border-color .12s ease, color .12s ease, transform .12s ease, opacity .12s ease;
+}
+
 .task-output-toggle {
   border: 1px solid rgba(246, 179, 106, 0.42);
   background: rgba(48, 37, 22, 0.55);
@@ -813,6 +839,18 @@ select.prompt-control {
   transform: translateY(-1px);
 }
 
+.task-control-toggle:hover {
+  border-color: #ffe5be;
+  color: #fff4dd;
+  transform: translateY(-1px);
+}
+
+.task-stop:hover {
+  border-color: #ffadad;
+  color: #ffe7e7;
+  transform: translateY(-1px);
+}
+
 .task-output-toggle:hover {
   border-color: #ffd39f;
   color: #ffe8cb;
@@ -829,12 +867,28 @@ select.prompt-control {
   outline-offset: 1px;
 }
 
+.task-control-toggle:focus-visible {
+  outline: 1px solid #ffe5be;
+  outline-offset: 1px;
+}
+
+.task-stop:focus-visible {
+  outline: 1px solid #ffadad;
+  outline-offset: 1px;
+}
+
 .task-output-toggle:focus-visible {
   outline: 1px solid #ffd39f;
   outline-offset: 1px;
 }
 
 .task-rerun:disabled {
+  opacity: 0.6;
+  transform: none;
+}
+
+.task-control-toggle:disabled,
+.task-stop:disabled {
   opacity: 0.6;
   transform: none;
 }
@@ -861,7 +915,9 @@ select.prompt-control {
 .badge.active { background: #7eb8eb; }
 .badge.ok { background: var(--good); }
 .badge.no_changes { background: var(--warn); }
+.badge.paused { background: #f2be77; color: #3d2d1a; }
 .badge.duplicate { background: var(--warn); color: #2e2620; }
+.badge.stopped { background: #e09f9f; color: #321a1a; }
 .badge.error, .badge.invalid { background: var(--bad); color: #2d1515; }
 
 .task-meta {

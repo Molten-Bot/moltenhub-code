@@ -429,6 +429,52 @@ func TestBrokerCloseTaskMissingReturnsNotFound(t *testing.T) {
 	}
 }
 
+func TestBrokerTracksPausedResumedAndStoppedStatuses(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog("dispatch status=paused request_id=req-control")
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("len(tasks) after pause = %d, want 1", len(snap.Tasks))
+	}
+	if got := snap.Tasks[0].Status; got != "paused" {
+		t.Fatalf("status after pause = %q, want %q", got, "paused")
+	}
+
+	b.IngestLog("dispatch status=resumed request_id=req-control")
+	snap = b.Snapshot()
+	if got := snap.Tasks[0].Status; got != "pending" {
+		t.Fatalf("status after resume = %q, want %q", got, "pending")
+	}
+
+	b.IngestLog(`dispatch status=stopped request_id=req-control err="task was stopped by operator"`)
+	snap = b.Snapshot()
+	if got := snap.Tasks[0].Status; got != "stopped" {
+		t.Fatalf("status after stop = %q, want %q", got, "stopped")
+	}
+	if got := snap.Tasks[0].Error; got != "task was stopped by operator" {
+		t.Fatalf("error after stop = %q, want %q", got, "task was stopped by operator")
+	}
+}
+
+func TestBrokerCloseTaskAllowsStoppedTasks(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-stopped-close"
+	b.RecordTaskRunConfig(requestID, []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"stop me"}`))
+	b.IngestLog(`dispatch status=stopped request_id=req-stopped-close err="task stopped by operator"`)
+
+	if err := b.CloseTask(requestID); err != nil {
+		t.Fatalf("CloseTask() for stopped task error = %v", err)
+	}
+	if _, ok := b.TaskRunConfig(requestID); ok {
+		t.Fatal("TaskRunConfig() found = true after CloseTask(stopped), want false")
+	}
+}
+
 func TestBrokerHidesCompletedOKTasksAfterFiveMinutes(t *testing.T) {
 	t.Parallel()
 
