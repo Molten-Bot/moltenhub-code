@@ -301,6 +301,64 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 	if !strings.Contains(prompt, `Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.`) {
 		t.Fatalf("follow-up prompt missing execution contract: %q", prompt)
 	}
+	if !strings.Contains(prompt, "If no file changes are required, return a clear no-op result with concrete evidence instead of forcing an empty PR.") {
+		t.Fatalf("follow-up prompt missing no-op completion carve-out: %q", prompt)
+	}
+}
+
+func TestHandleDispatchSkipsFailureFollowUpForNoDeltaFailures(t *testing.T) {
+	t.Parallel()
+
+	d := NewDaemon(failingRunner{err: errors.New("task failed: this branch has no delta from `main`; No commits between main and moltenhub-fix")})
+	api := &stubMoltenHubAPI{token: "t"}
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:         "code_for_me",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+	}
+
+	runCfg := config.Config{
+		Repo:   "git@github.com:acme/repo.git",
+		Prompt: "fix failing checks",
+	}
+	runCfg.ApplyDefaults()
+
+	d.handleDispatch(
+		context.Background(),
+		api,
+		cfg,
+		SkillDispatch{
+			RequestID: "req-no-delta",
+			Skill:     "code_for_me",
+			Config:    runCfg,
+		},
+		"",
+		false,
+	)
+
+	api.mu.Lock()
+	defer api.mu.Unlock()
+
+	if got, want := len(api.published), 1; got != want {
+		t.Fatalf("published payload count = %d, want %d", got, want)
+	}
+	if got := api.published[0]["status"]; got != "error" {
+		t.Fatalf("result payload status = %#v, want error", got)
+	}
+}
+
+func TestShouldQueueFailureFollowUpErrorSkipsNoDeltaFailures(t *testing.T) {
+	t.Parallel()
+
+	ok, reason := shouldQueueFailureFollowUpError(errors.New("Failure: no delta from `main`; No commits between main and moltenhub-fix"))
+	if ok {
+		t.Fatal("shouldQueueFailureFollowUpError() = true, want false")
+	}
+	if reason != "no delta from" {
+		t.Fatalf("reason = %q, want %q", reason, "no delta from")
+	}
 }
 
 func TestFailureFollowUpPromptIncludesWorkspaceAndTargetPath(t *testing.T) {

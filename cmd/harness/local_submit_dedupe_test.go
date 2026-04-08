@@ -227,3 +227,60 @@ func TestDuplicateSubmissionErrorDetails(t *testing.T) {
 		t.Fatalf("Error() = %q", dup.Error())
 	}
 }
+
+func TestDuplicateSubmissionErrorMessageVariants(t *testing.T) {
+	t.Parallel()
+
+	var nilErr *duplicateSubmissionError
+	if got, want := nilErr.Error(), "duplicate submission ignored"; got != want {
+		t.Fatalf("nil receiver Error() = %q, want %q", got, want)
+	}
+
+	tests := []struct {
+		name      string
+		requestID string
+		state     string
+		want      string
+	}{
+		{
+			name:      "empty request and state",
+			requestID: "   ",
+			state:     "\t",
+			want:      "duplicate submission ignored",
+		},
+		{
+			name:      "state only",
+			requestID: "",
+			state:     " completed ",
+			want:      "duplicate submission ignored (state=completed)",
+		},
+		{
+			name:      "request only",
+			requestID: " local-21 ",
+			state:     "",
+			want:      "duplicate submission ignored (request_id=local-21)",
+		},
+		{
+			name:      "request and state",
+			requestID: " local-22 ",
+			state:     " in_flight ",
+			want:      "duplicate submission ignored (request_id=local-22 state=in_flight)",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := newDuplicateSubmissionError(tt.requestID, tt.state)
+			dup, ok := err.(*duplicateSubmissionError)
+			if !ok {
+				t.Fatalf("error type = %T, want *duplicateSubmissionError", err)
+			}
+			if got := dup.Error(); got != tt.want {
+				t.Fatalf("Error() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
