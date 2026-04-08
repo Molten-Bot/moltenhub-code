@@ -399,6 +399,80 @@ exit 1
 	})
 }
 
+func TestClaudeAuthGateVerifyCompletesWhenCredentialsAreReadyBeforeLoginExit(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	claudeConfigDir := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", claudeConfigDir)
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("CLAUDE_CODE_USE_BEDROCK", "")
+	t.Setenv("CLAUDE_CODE_USE_VERTEX", "")
+	t.Setenv("CLAUDE_CODE_USE_FOUNDRY", "")
+	t.Setenv("GH_TOKEN", "ghp_ready")
+
+	capturedPath := filepath.Join(t.TempDir(), "captured-code.txt")
+	cmdPath := filepath.Join(t.TempDir(), "claude-login-verify-ready.sh")
+	if err := os.WriteFile(cmdPath, []byte(`#!/bin/sh
+if [ "$1" != "auth" ] || [ "$2" != "login" ]; then
+  exit 64
+fi
+echo "Choose account:"
+if ! read choice; then
+  exit 2
+fi
+echo "Continue at https://claude.ai/login/verify-ready"
+if ! read authcode; then
+  exit 3
+fi
+printf "%s" "$authcode" > "`+capturedPath+`"
+mkdir -p "$CLAUDE_CONFIG_DIR"
+printf '{"accessToken":"ok"}' > "$CLAUDE_CONFIG_DIR/.credentials.json"
+sleep 30
+`), 0o755); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	baseCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	g := newClaudeAuthGate(baseCtx, cmdPath, nil)
+	if _, err := g.StartDeviceAuth(context.Background()); err != nil {
+		t.Fatalf("StartDeviceAuth() error = %v", err)
+	}
+
+	waitForCondition(t, 5*time.Second, func() bool {
+		s, _ := g.Status(context.Background())
+		return strings.Contains(s.AuthURL, "https://claude.ai/login/verify-ready")
+	})
+
+	const submittedCode = "auth-code-from-browser"
+	if _, err := g.Configure(context.Background(), submittedCode); err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+
+	waitForCondition(t, 5*time.Second, func() bool {
+		data, err := os.ReadFile(capturedPath)
+		if err != nil {
+			return false
+		}
+		return string(data) == submittedCode
+	})
+
+	status, err := g.Verify(context.Background())
+	if err != nil {
+		t.Fatalf("Verify() error = %v", err)
+	}
+	if !status.Ready {
+		t.Fatalf("Verify() ready = false, want true; status=%+v", status)
+	}
+	if got, want := status.State, "ready"; got != want {
+		t.Fatalf("Verify() state = %q, want %q", got, want)
+	}
+	if status.AuthURL != "" {
+		t.Fatalf("Verify() authURL = %q, want empty", status.AuthURL)
+	}
+}
+
 func TestClaudeAuthHelpers(t *testing.T) {
 	t.Parallel()
 
