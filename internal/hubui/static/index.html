@@ -233,6 +233,7 @@
 
   <div id="task-fullscreen" class="task-fullscreen hidden" aria-hidden="true">
     <div class="task-fullscreen-shell">
+      <button id="task-fullscreen-close" class="task-fullscreen-close hidden" type="button" aria-label="Close full screen tasks">Close</button>
       <div id="task-fullscreen-body" class="task-fullscreen-body task-output-hidden">
         <section class="panel task-fullscreen-panel">
           <div class="panel-header">
@@ -451,6 +452,7 @@
     const taskPanel = document.getElementById("task-panel");
     const taskFullscreenToggle = document.getElementById("task-fullscreen-toggle");
     const taskFullscreen = document.getElementById("task-fullscreen");
+    const taskFullscreenClose = document.getElementById("task-fullscreen-close");
     const taskFullscreenBody = document.getElementById("task-fullscreen-body");
     const taskFullscreenCount = document.getElementById("task-fullscreen-count");
     const taskFullscreenList = document.getElementById("task-fullscreen-list");
@@ -1941,9 +1943,11 @@
         const hasTasks = displayTasks(state.snapshot).length > 0;
         taskFullscreenToggle.disabled = !hasTasks;
         taskFullscreenToggle.setAttribute("aria-expanded", state.taskFullscreenOpen ? "true" : "false");
-        taskFullscreenToggle.classList.toggle("task-fullscreen-close", state.taskFullscreenOpen);
-        taskFullscreenToggle.textContent = state.taskFullscreenOpen ? "X" : "Full Screen";
-        taskFullscreenToggle.setAttribute("aria-label", state.taskFullscreenOpen ? "Close full screen tasks" : "Open full screen tasks");
+        taskFullscreenToggle.setAttribute("aria-label", "Open full screen tasks");
+      }
+      if (taskFullscreenClose) {
+        taskFullscreenClose.classList.toggle("hidden", !state.taskFullscreenOpen);
+        taskFullscreenClose.setAttribute("aria-hidden", state.taskFullscreenOpen ? "false" : "true");
       }
       if (state.taskFullscreenOpen) {
         document.body.classList.add("task-fullscreen-open");
@@ -2546,9 +2550,11 @@
       if (taskFullscreenToggle) {
         taskFullscreenToggle.disabled = !hasTasks;
         taskFullscreenToggle.setAttribute("aria-expanded", state.taskFullscreenOpen ? "true" : "false");
-        taskFullscreenToggle.classList.toggle("task-fullscreen-close", state.taskFullscreenOpen);
-        taskFullscreenToggle.textContent = state.taskFullscreenOpen ? "X" : "Full Screen";
-        taskFullscreenToggle.setAttribute("aria-label", state.taskFullscreenOpen ? "Close full screen tasks" : "Open full screen tasks");
+        taskFullscreenToggle.setAttribute("aria-label", "Open full screen tasks");
+      }
+      if (taskFullscreenClose) {
+        taskFullscreenClose.classList.toggle("hidden", !state.taskFullscreenOpen);
+        taskFullscreenClose.setAttribute("aria-hidden", state.taskFullscreenOpen ? "false" : "true");
       }
       if (taskFullscreen) {
         taskFullscreen.classList.toggle("hidden", !state.taskFullscreenOpen);
@@ -2840,6 +2846,9 @@
     });
     taskFullscreenToggle.addEventListener("click", () => {
       setTaskFullscreen(!state.taskFullscreenOpen);
+    });
+    taskFullscreenClose.addEventListener("click", () => {
+      setTaskFullscreen(false);
     });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && state.taskFullscreenOpen) {

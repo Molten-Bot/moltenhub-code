@@ -1349,28 +1349,26 @@ select.prompt-control {
 }
 
 .task-fullscreen-close {
-  width: 44px;
-  height: 44px;
-  min-inline-size: 44px;
-  min-height: 44px;
-  padding: 0;
-  border-radius: 14px;
-  border-color: rgba(15, 27, 51, 0.2);
-  color: #fff;
-  background: rgba(15, 27, 51, 0.92);
-  box-shadow: 0 16px 36px rgba(10, 44, 102, 0.22);
-  font-size: 1.08rem;
-  font-weight: 900;
-  letter-spacing: 0;
-  text-transform: none;
-  line-height: 1;
-}
-
-body.task-fullscreen-open #task-fullscreen-toggle {
   position: fixed;
   top: max(16px, env(safe-area-inset-top));
   right: max(16px, env(safe-area-inset-right));
   z-index: 90;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 78px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 27, 51, 0.2);
+  color: #fff;
+  background: rgba(15, 27, 51, 0.92);
+  box-shadow: 0 16px 36px rgba(10, 44, 102, 0.22);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  line-height: 1;
 }
 
 .task-fullscreen-close:hover,
