@@ -1,0 +1,17 @@
+{
+  "repo": "git@github.com:acme/target-repo.git",
+  "baseBranch": "main",
+  "targetSubdir": ".",
+  "agentHarness": "codex",
+  // Optional for containerized Auggie runs: full session JSON from `auggie token print`.
+  // "augmentSessionAuth": "{\"accessToken\":\"XXX\",\"tenantURL\":\"YYY\",\"scopes\":[\"email\"]}",
+  // optional override when executable name differs from harness default
+  // "agentCommand": "codex",
+  "githubHandle": "octocat",
+  "prompt": "Add your prompt here."
+  // library task example:
+  // "libraryTaskName": "code-review",
+  // "review": {
+  //   "prNumber": 123
+  // }
+}
