@@ -199,7 +199,7 @@ func TestClaudeAuthGateStartDeviceAuthRunsLoginAndCapturesURL(t *testing.T) {
 
 	cmdPath := filepath.Join(t.TempDir(), "claude-login-stub.sh")
 	if err := os.WriteFile(cmdPath, []byte(`#!/bin/sh
-if [ "$1" != "auth" ] || [ "$2" != "login" ]; then
+if [ "$1" != "login" ]; then
   echo "unexpected args: $*" >&2
   exit 64
 fi
@@ -233,7 +233,7 @@ exit 1
 		t.Fatalf("initial status = %+v", status)
 	}
 
-	waitForCondition(t, 2*time.Second, func() bool {
+	waitForCondition(t, 5*time.Second, func() bool {
 		s, _ := g.Status(context.Background())
 		return strings.Contains(s.AuthURL, "https://claude.ai/login/device?flow=test")
 	})
@@ -265,7 +265,7 @@ func TestClaudeAuthGateVerifyStartsLoginWhenNotReady(t *testing.T) {
 
 	cmdPath := filepath.Join(t.TempDir(), "claude-login-verify-stub.sh")
 	if err := os.WriteFile(cmdPath, []byte(`#!/bin/sh
-if [ "$1" != "auth" ] || [ "$2" != "login" ]; then
+if [ "$1" != "login" ]; then
   exit 64
 fi
 echo "Choose account:"
@@ -288,9 +288,54 @@ exit 1
 		t.Fatalf("Verify() status = %+v, want pending_browser_login", status)
 	}
 
-	waitForCondition(t, 2*time.Second, func() bool {
+	waitForCondition(t, 5*time.Second, func() bool {
 		s, _ := g.Status(context.Background())
 		return strings.Contains(s.AuthURL, "https://claude.ai/login/verify-flow")
+	})
+}
+
+func TestClaudeAuthGateStartDeviceAuthSendsInitialPromptAdvance(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("CLAUDE_CODE_USE_BEDROCK", "")
+	t.Setenv("CLAUDE_CODE_USE_VERTEX", "")
+	t.Setenv("CLAUDE_CODE_USE_FOUNDRY", "")
+	t.Setenv("GH_TOKEN", "ghp_ready")
+
+	cmdPath := filepath.Join(t.TempDir(), "claude-login-initial-enter.sh")
+	if err := os.WriteFile(cmdPath, []byte(`#!/bin/sh
+if [ "$1" != "login" ]; then
+  exit 64
+fi
+if ! read choice; then
+  echo "read failed" >&2
+  exit 3
+fi
+echo "https://claude.ai/login/device?flow=initial-enter"
+exit 1
+`), 0o755); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	g := &claudeAuthGate{
+		baseCtx:   context.Background(),
+		command:   cmdPath,
+		required:  true,
+		state:     "needs_browser_login",
+		message:   "auth required",
+		updatedAt: time.Now().UTC(),
+		logf:      func(string, ...any) {},
+	}
+
+	if _, err := g.StartDeviceAuth(context.Background()); err != nil {
+		t.Fatalf("StartDeviceAuth() error = %v", err)
+	}
+
+	waitForCondition(t, 5*time.Second, func() bool {
+		s, _ := g.Status(context.Background())
+		return strings.Contains(s.AuthURL, "https://claude.ai/login/device?flow=initial-enter")
 	})
 }
 
@@ -302,6 +347,9 @@ func TestClaudeAuthHelpers(t *testing.T) {
 	}
 	if got, want := extractClaudeAuthURL("Read docs at https://code.claude.com/docs/en/authentication and sign in at https://claude.ai/login/device?flow=x"), "https://claude.ai/login/device?flow=x"; got != want {
 		t.Fatalf("extractClaudeAuthURL() should ignore docs URL and keep login URL: got %q, want %q", got, want)
+	}
+	if got, want := extractClaudeAuthURL("\x1b]8;;https://claude.ai/login/device?flow=osc-test\x1b\\Authorize Claude\x1b]8;;\x1b\\"), "https://claude.ai/login/device?flow=osc-test"; got != want {
+		t.Fatalf("extractClaudeAuthURL(osc-hyperlink) = %q, want %q", got, want)
 	}
 	if got := extractClaudeAuthURL("Read docs at https://code.claude.com/docs/en/authentication"); got != "" {
 		t.Fatalf("extractClaudeAuthURL(docs-url-only) = %q, want empty", got)

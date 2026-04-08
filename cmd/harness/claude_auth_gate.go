@@ -186,7 +186,7 @@ func (g *claudeAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthStat
 	}
 
 	procCtx, cancel := context.WithCancel(baseCtx)
-	cmd := exec.CommandContext(procCtx, command, "auth", "login")
+	cmd := exec.CommandContext(procCtx, command, "login")
 	cmd.Dir = tmpDir
 
 	stdoutPipe, err := cmd.StdoutPipe()
@@ -230,11 +230,18 @@ func (g *claudeAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthStat
 	g.procRunning = true
 	g.procCancel = cancel
 	g.procInput = stdinPipe
+	g.lastPromptAdvance = time.Now().UTC()
 	g.state = "pending_browser_login"
 	g.message = "Starting Claude login. Follow prompts, complete browser sign-in, then click Done."
 	g.updatedAt = time.Now().UTC()
 	snap := g.snapshotLocked()
 	g.mu.Unlock()
+
+	// Prompt-driven login flows can emit non-newline terminal controls; proactively
+	// send Enter once so default selections continue and the browser URL is printed.
+	if _, err := io.WriteString(stdinPipe, "\n"); err != nil {
+		g.logf("hub.auth status=warn harness=claude action=advance_login_prompt err=%q", err)
+	}
 
 	go g.readLoginStream(stdoutPipe)
 	go g.readLoginStream(stderrPipe)
@@ -481,13 +488,42 @@ func (g *claudeAuthGate) waitLogin(cmd *exec.Cmd, tempDir string) {
 func extractClaudeAuthURL(line string) string {
 	matches := claudeAuthURLPattern.FindAllString(strings.TrimSpace(stripANSI(line)), -1)
 	for _, match := range matches {
-		candidate := strings.TrimRight(strings.TrimSpace(match), ".,);]}>")
+		candidate := sanitizeClaudeAuthURL(match)
 		if candidate == "" || isClaudeDocsURL(candidate) {
+			continue
+		}
+		parsed, err := url.Parse(candidate)
+		if err != nil {
+			continue
+		}
+		if !strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https") {
+			continue
+		}
+		if strings.TrimSpace(parsed.Host) == "" {
 			continue
 		}
 		return candidate
 	}
 	return ""
+}
+
+func sanitizeClaudeAuthURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	// Terminal hyperlink escapes can wrap URLs with control bytes and a trailing backslash.
+	raw = strings.Map(func(r rune) rune {
+		if r < 32 || r == 127 {
+			return -1
+		}
+		return r
+	}, raw)
+	if idx := strings.Index(raw, `\`); idx >= 0 {
+		raw = raw[:idx]
+	}
+	raw = strings.TrimRight(strings.TrimSpace(raw), ".,);]}>\\")
+	return raw
 }
 
 func shouldAdvanceClaudeLoginPrompt(line string) bool {
