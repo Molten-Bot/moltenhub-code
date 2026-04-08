@@ -145,6 +145,18 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 
 	markup := resp.Body.String()
+	if !strings.Contains(markup, `function configureTailwindRuntime()`) {
+		t.Fatalf("expected index html to isolate tailwind runtime setup in a guarded bootstrap function")
+	}
+	if !strings.Contains(markup, `window.tailwind = tw;`) {
+		t.Fatalf("expected index html to initialize window.tailwind before setting runtime config")
+	}
+	if !strings.Contains(markup, `window.tailwind.config = {`) {
+		t.Fatalf("expected index html to assign tailwind runtime config through window.tailwind")
+	}
+	if !strings.Contains(markup, `catch (_err)`) {
+		t.Fatalf("expected index html to tolerate tailwind runtime setup errors without aborting UI boot")
+	}
 	if !strings.Contains(markup, `src="https://cdn.tailwindcss.com"`) {
 		t.Fatalf("expected index html to include tailwind runtime")
 	}
@@ -830,6 +842,9 @@ func TestHandlerIndexIncludesClaudeBrowserCodeFlow(t *testing.T) {
 	required := []string{
 		`id="agent-auth-url-logo"`,
 		`src="https://molten.bot/logos/claude-code.svg"`,
+		`agentAuthURLLogo.addEventListener("error", () => {`,
+		`state.agentAuthURLLogoBroken = true;`,
+		`agentAuthURLText.textContent = "Open Claude login";`,
 		`function authHarness(auth) {`,
 		`return configuredHarnessName();`,
 		`function isClaudeBrowserCodeAwaitingSubmission(auth) {`,
