@@ -1227,8 +1227,8 @@
       if (!builderImageList || !builderImagesClear) return;
       builderImageList.replaceChildren();
       const hasImages = state.promptImages.length > 0;
-      builderImagesClear.disabled = !hasImages;
       builderImageList.classList.toggle("hidden", !hasImages);
+      syncBuilderDraftClearState();
 
       if (!hasImages) {
         return;
@@ -1259,9 +1259,23 @@
       }
     }
 
+    function hasBuilderDraftToClear() {
+      const promptDirty = String(builderPromptInput?.value || "").trim() !== "";
+      const branchDirty = !["", "main"].includes(String(builderBaseBranch?.value || "").trim());
+      const targetSubdirDirty = !["", "."].includes(String(builderTargetSubdir?.value || "").trim());
+      const rawDirty = String(localPromptInput?.value || "").trim() !== "";
+      return promptDirty || branchDirty || targetSubdirDirty || rawDirty || state.promptImages.length > 0;
+    }
+
+    function syncBuilderDraftClearState() {
+      if (!builderImagesClear) return;
+      builderImagesClear.disabled = !hasBuilderDraftToClear();
+    }
+
     function clearSubmittedPromptDraft() {
       builderPromptInput.value = "";
       localPromptInput.value = "";
+      syncBuilderDraftClearState();
     }
 
     function clearSubmittedPromptState() {
@@ -1269,6 +1283,7 @@
       clearPromptImages(false);
       resetBuilderTargetSubdir();
       resetBaseBranchToMain(false);
+      syncBuilderDraftClearState();
     }
 
     function readFileAsDataURL(file) {
@@ -1466,6 +1481,7 @@
       builderBaseBranch.value = "main";
       libraryBaseBranch.value = "main";
       syncBaseBranchClearState();
+      syncBuilderDraftClearState();
       if (syncRaw && state.promptMode === "json") {
         try {
           syncRawFromMode("builder");
@@ -1577,6 +1593,7 @@
       builderTargetSubdir.value = String(payload.targetSubdir || ".").trim() || ".";
       builderPromptInput.value = String(payload.prompt || "").trim();
       setPromptImages(payload.images);
+      syncBuilderDraftClearState();
       state.selectedLibraryTask = String(payload.libraryTaskName || "").trim();
       renderRepoHistoryOptions();
       renderLibraryTaskOptions();
@@ -1596,6 +1613,7 @@
 
     function resetBuilderTargetSubdir() {
       builderTargetSubdir.value = ".";
+      syncBuilderDraftClearState();
     }
 
     function clearBuilderPromptDraft() {
@@ -2882,17 +2900,22 @@
     builderBaseBranch.addEventListener("input", () => {
       libraryBaseBranch.value = builderBaseBranch.value;
       syncBaseBranchClearState();
+      syncBuilderDraftClearState();
     });
 
     libraryBaseBranch.addEventListener("input", () => {
       builderBaseBranch.value = libraryBaseBranch.value;
       syncBaseBranchClearState();
+      syncBuilderDraftClearState();
     });
     builderBaseBranchClear.addEventListener("click", resetBaseBranchToMain);
 
+    builderPromptInput.addEventListener("input", syncBuilderDraftClearState);
+    builderTargetSubdir.addEventListener("input", syncBuilderDraftClearState);
     builderPromptInput.addEventListener("paste", handlePromptImagePaste);
     builderImagePasteTarget.addEventListener("paste", handlePromptImagePaste);
     builderImagesClear.addEventListener("click", clearBuilderPromptDraft);
+    localPromptInput.addEventListener("input", syncBuilderDraftClearState);
     if (agentAuthURL) {
       agentAuthURL.addEventListener("click", markAgentAuthInteraction);
     }
@@ -2968,6 +2991,7 @@
     renderLibraryTaskOptions();
     renderPromptImages();
     syncBaseBranchClearState();
+    syncBuilderDraftClearState();
     try {
       syncRawFromMode(state.promptMode === "library" ? "library" : "builder");
     } catch (_err) {
