@@ -169,7 +169,7 @@ func formatTerminalLogLine(line string) (string, terminalLogMode) {
 		return line, terminalLogModeSinkOnly
 	}
 
-	if progress, ok := compactCodexProgressLine(line); ok {
+	if progress, ok := compactAgentProgressLine(line); ok {
 		return progress, terminalLogModeProgress
 	}
 
@@ -183,13 +183,14 @@ func formatTerminalLogLine(line string) (string, terminalLogMode) {
 	return line, terminalLogModeNormal
 }
 
-func compactCodexProgressLine(line string) (string, bool) {
-	if !strings.Contains(line, "stage=codex") || !strings.Contains(line, "status=running") {
+func compactAgentProgressLine(line string) (string, bool) {
+	if !strings.Contains(line, "status=running") {
 		return "", false
 	}
 
 	fields := parseSimpleKVFields(line)
-	if fields["stage"] != "codex" || fields["status"] != "running" {
+	stage := strings.ToLower(strings.TrimSpace(fields["stage"]))
+	if !isCompactableAgentStage(stage) || fields["status"] != "running" {
 		return "", false
 	}
 	if fields["request_id"] != "" || fields["session"] != "" {
@@ -198,9 +199,18 @@ func compactCodexProgressLine(line string) (string, bool) {
 
 	elapsed := strings.TrimSpace(fields["elapsed_s"])
 	if elapsed == "" {
-		return "codex running...", true
+		return fmt.Sprintf("%s running...", stage), true
 	}
-	return fmt.Sprintf("codex running... %ss", elapsed), true
+	return fmt.Sprintf("%s running... %ss", stage, elapsed), true
+}
+
+func isCompactableAgentStage(stage string) bool {
+	switch stage {
+	case "agent", "codex", "claude", "auggie":
+		return true
+	default:
+		return false
+	}
 }
 
 func decodeCommandLogLine(line string) (text string, handled bool, drop bool) {

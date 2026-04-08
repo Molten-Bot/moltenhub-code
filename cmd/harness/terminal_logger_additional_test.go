@@ -71,13 +71,13 @@ func TestTerminalLoggerProgressRenderingInTTYMode(t *testing.T) {
 
 	var out strings.Builder
 	logger := newTerminalLogger(&out, true)
-	logger.Print("stage=codex status=running elapsed_s=3")
-	logger.Print("stage=codex status=running elapsed_s=5")
+	logger.Print("stage=claude status=running elapsed_s=3")
+	logger.Print("stage=claude status=running elapsed_s=5")
 	logger.Print("stage=git status=ok")
 	logger.Close()
 
 	text := out.String()
-	if !strings.Contains(text, "codex running... 3s") || !strings.Contains(text, "codex running... 5s") {
+	if !strings.Contains(text, "claude running... 3s") || !strings.Contains(text, "claude running... 5s") {
 		t.Fatalf("tty progress output missing compact heartbeat lines: %q", text)
 	}
 	if !strings.Contains(text, "stage=git status=ok") {

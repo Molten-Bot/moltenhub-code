@@ -130,6 +130,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	if err != nil {
 		return h.fail(ExitConfig, "config", err, "")
 	}
+	agentStage := runtimeLogStage(runtime)
 
 	h.logf("stage=preflight status=start")
 	for _, cmd := range preflightCommandsWithRuntime(runtime) {
@@ -291,12 +292,12 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 	codexTargetLabel := codexTargetLabel(cfg.TargetSubdir, len(repos) > 1)
 
-	h.logf("stage=codex status=start target=%s", codexTargetLabel)
+	h.logf("stage=%s status=start target=%s", agentStage, codexTargetLabel)
 	codexStart := time.Now()
 	if err := h.runCodex(ctx, runtime, codexDir, codexBasePrompt, codexOpts, agentsPath); err != nil {
-		return h.fail(ExitCodex, "codex", err, runDir)
+		return h.fail(ExitCodex, agentStage, err, runDir)
 	}
-	h.logf("stage=codex status=ok elapsed_s=%d", int(time.Since(codexStart).Seconds()))
+	h.logf("stage=%s status=ok elapsed_s=%d", agentStage, int(time.Since(codexStart).Seconds()))
 
 	for i := range repos {
 		statusRes, err := h.runCommand(ctx, "git", statusCommand(repos[i].Dir))
@@ -334,6 +335,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 			codexBasePrompt,
 			agentsPath,
 			codexTargetLabel,
+			agentStage,
 			len(repos) > 1,
 		); err != nil {
 			return h.fail(exitCode, stage, err, runDir)
@@ -355,6 +357,7 @@ func (h Harness) processChangedRepo(
 	codexBasePrompt string,
 	agentsPath string,
 	codexTargetLabel string,
+	agentStage string,
 	multiRepo bool,
 ) (int, string, error) {
 	if repo == nil {
@@ -541,7 +544,8 @@ func (h Harness) processChangedRepo(
 			multiRepo,
 		)
 		h.logf(
-			"stage=codex status=start target=%s mode=remediation attempt=%d repo=%s repo_dir=%s",
+			"stage=%s status=start target=%s mode=remediation attempt=%d repo=%s repo_dir=%s",
+			agentStage,
 			codexTargetLabel,
 			attempt+1,
 			repo.URL,
@@ -549,10 +553,11 @@ func (h Harness) processChangedRepo(
 		)
 		codexStart := time.Now()
 		if err := h.runCodex(ctx, runtime, codexDir, repairPrompt, codexOpts, agentsPath); err != nil {
-			return ExitCodex, "codex", err
+			return ExitCodex, agentStage, err
 		}
 		h.logf(
-			"stage=codex status=ok elapsed_s=%d mode=remediation attempt=%d repo=%s repo_dir=%s",
+			"stage=%s status=ok elapsed_s=%d mode=remediation attempt=%d repo=%s repo_dir=%s",
+			agentStage,
 			int(time.Since(codexStart).Seconds()),
 			attempt+1,
 			repo.URL,
@@ -564,7 +569,7 @@ func (h Harness) processChangedRepo(
 			return ExitGit, "git", err
 		}
 		if strings.TrimSpace(statusRes.Stdout) == "" {
-			return ExitPR, "checks", fmt.Errorf("required PR checks failed and codex produced no remediation changes for repo %s", repo.URL)
+			return ExitPR, "checks", fmt.Errorf("required PR checks failed and agent produced no remediation changes for repo %s", repo.URL)
 		}
 
 		h.logf("stage=git status=start action=repair_commit attempt=%d repo=%s repo_dir=%s", attempt+1, repo.URL, repo.RelDir)
@@ -1223,7 +1228,7 @@ func (h Harness) runCodex(
 		stagedAgentsPath, stagedCleanup, err := stageAgentsPromptFile(targetDir, trimmedAgentsPath)
 		if err != nil {
 			h.logf(
-				"stage=workspace status=warn action=stage_agents_for_codex target=%s source=%s err=%q",
+				"stage=workspace status=warn action=stage_agents_for_agent target=%s source=%s err=%q",
 				targetDir,
 				trimmedAgentsPath,
 				err,
@@ -1236,7 +1241,7 @@ func (h Harness) runCodex(
 		targetAgentsPath, targetAgentsCleanup, ensureErr := ensureTargetAgentsPromptFile(targetDir, stagedAgentsPath)
 		if ensureErr != nil {
 			h.logf(
-				"stage=workspace status=warn action=ensure_target_agents_for_codex target=%s source=%s err=%q",
+				"stage=workspace status=warn action=ensure_target_agents_for_agent target=%s source=%s err=%q",
 				targetDir,
 				stagedAgentsPath,
 				ensureErr,
@@ -1252,8 +1257,10 @@ func (h Harness) runCodex(
 
 	res, err := h.runCodexWithHeartbeat(ctx, runtime, targetDir, finalPrompt, opts, "")
 	if shouldRetryCodexWithoutSandbox(res, err) {
+		agentStage := runtimeLogStage(runtime)
 		h.logf(
-			"stage=codex status=warn action=retry_without_sandbox reason=%q",
+			"stage=%s status=warn action=retry_without_sandbox reason=%q",
+			agentStage,
 			"detected bubblewrap namespace sandbox failure; retrying with danger-full-access",
 		)
 		_, retryErr := h.runCodexWithHeartbeat(ctx, runtime, targetDir, finalPrompt, opts, "danger-full-access")
@@ -1261,7 +1268,7 @@ func (h Harness) runCodex(
 	}
 	if cleanupErr := cleanup(); cleanupErr != nil {
 		h.logf(
-			"stage=workspace status=warn action=cleanup_agents_for_codex target=%s err=%q",
+			"stage=workspace status=warn action=cleanup_agents_for_agent target=%s err=%q",
 			targetDir,
 			cleanupErr,
 		)
@@ -1407,8 +1414,9 @@ func (h Harness) runCodexWithHeartbeat(
 		err error
 	}
 	done := make(chan codexRunResult, 1)
+	agentStage := runtimeLogStage(runtime)
 	go func() {
-		runRes, runErr := h.runCommand(ctx, "codex", cmd)
+		runRes, runErr := h.runCommand(ctx, agentStage, cmd)
 		done <- codexRunResult{res: runRes, err: runErr}
 	}()
 
@@ -1421,17 +1429,17 @@ func (h Harness) runCodexWithHeartbeat(
 		case run := <-done:
 			if run.err == nil {
 				if failed, detail := codexReportedFailure(run.res); failed {
-					return run.res, fmt.Errorf("codex reported failure: %s", detail)
+					return run.res, fmt.Errorf("%s reported failure: %s", agentStage, detail)
 				}
 			}
 			return run.res, run.err
 		case <-ticker.C:
-			h.logf("stage=codex status=running elapsed_s=%d", int(time.Since(start).Seconds()))
+			h.logf("stage=%s status=running elapsed_s=%d", agentStage, int(time.Since(start).Seconds()))
 		case <-ctx.Done():
 			run := <-done
 			if run.err == nil {
 				if failed, detail := codexReportedFailure(run.res); failed {
-					return run.res, fmt.Errorf("codex reported failure: %s", detail)
+					return run.res, fmt.Errorf("%s reported failure: %s", agentStage, detail)
 				}
 			}
 			if run.err != nil {
@@ -1627,6 +1635,20 @@ func agentCommandWithOptions(
 	opts codexRunOptions,
 ) (execx.Command, error) {
 	return runtime.BuildCommand(targetDir, withCompletionGatePrompt(prompt), opts)
+}
+
+func runtimeLogStage(runtime agentruntime.Runtime) string {
+	stage := strings.ToLower(strings.TrimSpace(runtime.Harness))
+	if stage == "" {
+		return "agent"
+	}
+	for _, r := range stage {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			continue
+		}
+		return "agent"
+	}
+	return stage
 }
 
 func codexImageArgs(targetDir string, imagePaths []string) ([]string, error) {

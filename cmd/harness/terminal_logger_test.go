@@ -64,14 +64,26 @@ func TestFormatTerminalLogLineKeepsImportantCodexOutput(t *testing.T) {
 	}
 }
 
-func TestFormatTerminalLogLineCompactsSingleRunCodexHeartbeat(t *testing.T) {
+func TestFormatTerminalLogLineCompactsSingleRunAgentHeartbeat(t *testing.T) {
 	t.Parallel()
 
-	got, mode := formatTerminalLogLine("stage=codex status=running elapsed_s=45")
+	got, mode := formatTerminalLogLine("stage=claude status=running elapsed_s=45")
 	if mode != terminalLogModeProgress {
 		t.Fatalf("mode = %v, want progress", mode)
 	}
-	if got != "codex running... 45s" {
+	if got != "claude running... 45s" {
+		t.Fatalf("got %q, want compact progress line", got)
+	}
+}
+
+func TestFormatTerminalLogLineCompactsGenericAgentHeartbeat(t *testing.T) {
+	t.Parallel()
+
+	got, mode := formatTerminalLogLine("stage=agent status=running elapsed_s=8")
+	if mode != terminalLogModeProgress {
+		t.Fatalf("mode = %v, want progress", mode)
+	}
+	if got != "agent running... 8s" {
 		t.Fatalf("got %q, want compact progress line", got)
 	}
 }
