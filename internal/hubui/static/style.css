@@ -2054,6 +2054,30 @@ select.prompt-control {
   color: var(--surface-auth-link);
 }
 
+.agent-auth-url-logo-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: fit-content;
+  text-decoration: none;
+}
+
+.agent-auth-url-logo {
+  display: block;
+  width: 58px;
+  height: 58px;
+  padding: 9px;
+  border: 1px solid var(--surface-auth-button-border);
+  border-radius: 16px;
+  background: var(--surface-auth-button-bg);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.22);
+}
+
+.agent-auth-url-logo-link:hover .agent-auth-url-logo,
+.agent-auth-url-logo-link:focus-visible .agent-auth-url-logo {
+  background: var(--surface-auth-button-hover-bg);
+}
+
 .agent-auth-verify {
   border-color: var(--border);
   background: var(--surface-auth-verify-bg);

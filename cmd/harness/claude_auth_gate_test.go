@@ -339,6 +339,66 @@ exit 1
 	})
 }
 
+func TestClaudeAuthGateConfigureSubmitsBrowserCodeToRunningLogin(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("CLAUDE_CODE_USE_BEDROCK", "")
+	t.Setenv("CLAUDE_CODE_USE_VERTEX", "")
+	t.Setenv("CLAUDE_CODE_USE_FOUNDRY", "")
+	t.Setenv("GH_TOKEN", "ghp_ready")
+
+	capturedPath := filepath.Join(t.TempDir(), "captured-code.txt")
+	cmdPath := filepath.Join(t.TempDir(), "claude-login-submit-code.sh")
+	if err := os.WriteFile(cmdPath, []byte(`#!/bin/sh
+if [ "$1" != "auth" ] || [ "$2" != "login" ]; then
+  exit 64
+fi
+echo "Select login method:"
+if ! read choice; then
+  exit 2
+fi
+echo "Open browser:"
+echo "https://claude.ai/login/device?flow=submit-code"
+if ! read authcode; then
+  exit 3
+fi
+printf "%s" "$authcode" > "`+capturedPath+`"
+sleep 1
+exit 1
+`), 0o755); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	g := newClaudeAuthGate(context.Background(), cmdPath, nil)
+	if _, err := g.StartDeviceAuth(context.Background()); err != nil {
+		t.Fatalf("StartDeviceAuth() error = %v", err)
+	}
+
+	waitForCondition(t, 5*time.Second, func() bool {
+		s, _ := g.Status(context.Background())
+		return strings.Contains(s.AuthURL, "https://claude.ai/login/device?flow=submit-code")
+	})
+
+	const submittedCode = "7zhfhHRjHhqZKEwd0T3hN4npff2bJOBx0NJYCWSggMrzXlTi#O_nyYiogHRbCqVf0kOk0oSWejds77rLgKVbzVCcenKQ"
+	status, err := g.Configure(context.Background(), submittedCode)
+	if err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	if got, want := status.State, "pending_browser_login"; got != want {
+		t.Fatalf("Configure() state = %q, want %q", got, want)
+	}
+
+	waitForCondition(t, 5*time.Second, func() bool {
+		data, err := os.ReadFile(capturedPath)
+		if err != nil {
+			return false
+		}
+		return string(data) == submittedCode
+	})
+}
+
 func TestClaudeAuthHelpers(t *testing.T) {
 	t.Parallel()
 

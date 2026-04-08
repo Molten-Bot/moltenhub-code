@@ -802,6 +802,37 @@ func TestHandlerIndexInjectsConfiguredHarness(t *testing.T) {
 	}
 }
 
+func TestHandlerIndexIncludesClaudeBrowserCodeFlow(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	srv.ConfiguredHarness = "claude"
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+
+	markup := resp.Body.String()
+	required := []string{
+		`id="agent-auth-url-logo"`,
+		`src="https://molten.bot/logos/claude-code.svg"`,
+		`function authHarness(auth) {`,
+		`return configuredHarnessName();`,
+		`const showBrowserCode = isClaudeBrowserCodeState() && state.agentAuthInteracted;`,
+		`const useClaudeLogoLink = authHarness(state.agentAuth) === "claude" && authURL !== "";`,
+		`(!requiresClaudeBrowserCode || hasClaudeBrowserCode)`,
+		`agentAuthURL.addEventListener("click", markAgentAuthInteraction);`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(markup, needle) {
+			t.Fatalf("expected index html to include %q", needle)
+		}
+	}
+}
+
 func TestHandlerServesStaticCSS(t *testing.T) {
 	t.Parallel()
 

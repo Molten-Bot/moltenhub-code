@@ -366,6 +366,8 @@ type agentAuthConfigureRequest struct {
 	SessionAuthAlias        string `json:"sessionAuth"`
 	GitHubToken             string `json:"github_token"`
 	GitHubTokenAlias        string `json:"githubToken"`
+	ClaudeAuthCode          string `json:"claude_auth_code"`
+	ClaudeAuthCodeAlias     string `json:"claudeAuthCode"`
 	Value                   string `json:"value"`
 }
 
@@ -411,6 +413,8 @@ func (s Server) handleAgentAuthConfigure(w http.ResponseWriter, r *http.Request)
 		req.SessionAuthAlias,
 		req.GitHubToken,
 		req.GitHubTokenAlias,
+		req.ClaudeAuthCode,
+		req.ClaudeAuthCodeAlias,
 		req.Value,
 	)
 	if sessionAuth == "" {

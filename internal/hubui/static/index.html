@@ -277,7 +277,23 @@
           <div id="agent-auth-code" class="font-mono text-[1.15rem] tracking-[0.22em] text-hub-text"></div>
           <button id="agent-auth-copy" class="agent-auth-copy rounded-md px-2.5 py-1.5 text-xs font-medium" type="button">Copy</button>
         </div>
-        <a id="agent-auth-url" class="agent-auth-url block break-all text-[1.05rem] underline decoration-dotted underline-offset-2" href="" target="_blank" rel="noopener noreferrer"></a>
+        <a id="agent-auth-url" class="agent-auth-url block break-all text-[1.05rem] underline decoration-dotted underline-offset-2" href="" target="_blank" rel="noopener noreferrer">
+          <img
+            id="agent-auth-url-logo"
+            class="agent-auth-url-logo hidden"
+            src="https://molten.bot/logos/claude-code.svg"
+            alt="Open Claude login">
+          <span id="agent-auth-url-text"></span>
+        </a>
+        <div id="agent-auth-browser-code" class="hidden space-y-2">
+          <label class="text-sm font-medium text-hub-text/85" for="agent-auth-browser-code-input">Paste Claude authentication code</label>
+          <textarea
+            id="agent-auth-browser-code-input"
+            class="prompt-text min-h-[96px] font-mono text-[0.9rem]"
+            placeholder="Paste the code from the Claude page"
+            spellcheck="false"></textarea>
+          <p id="agent-auth-browser-code-error" class="hidden text-sm text-rose-200"></p>
+        </div>
       </div>
 
       <div id="agent-auth-configure" class="mt-5 hidden space-y-3">
@@ -341,6 +357,7 @@
       augment: "https://molten.bot/logos/augment.svg",
     });
     const GITHUB_LOGO_URL = "https://molten.bot/logos/github.svg";
+    const CLAUDE_AUTH_LOGO_URL = "https://molten.bot/logos/claude-code.svg";
 
     function normalizeUIConfig(raw) {
       const config = raw && typeof raw === "object" ? raw : {};
@@ -496,6 +513,7 @@
       agentAuthInteracted: false,
       agentAuthVerifyPending: false,
       agentAuthChallengeKey: "",
+      agentAuthBrowserCode: "",
     };
     let agentAuthRefreshTimer = null;
 
@@ -563,8 +581,13 @@
     const agentAuthMessage = document.getElementById("agent-auth-message");
     const agentAuthDetails = document.getElementById("agent-auth-details");
     const agentAuthURL = document.getElementById("agent-auth-url");
+    const agentAuthURLLogo = document.getElementById("agent-auth-url-logo");
+    const agentAuthURLText = document.getElementById("agent-auth-url-text");
     const agentAuthCode = document.getElementById("agent-auth-code");
     const agentAuthCopy = document.getElementById("agent-auth-copy");
+    const agentAuthBrowserCode = document.getElementById("agent-auth-browser-code");
+    const agentAuthBrowserCodeInput = document.getElementById("agent-auth-browser-code-input");
+    const agentAuthBrowserCodeError = document.getElementById("agent-auth-browser-code-error");
     const agentAuthConfigure = document.getElementById("agent-auth-configure");
     const agentAuthConfigureCommand = document.getElementById("agent-auth-configure-command");
     const agentAuthConfigureLabel = document.getElementById("agent-auth-configure-label");
@@ -855,6 +878,9 @@
       if (agentAuthConfigureInput) {
         agentAuthConfigureInput.disabled = state.agentAuthBusy;
       }
+      if (agentAuthBrowserCodeInput) {
+        agentAuthBrowserCodeInput.disabled = state.agentAuthBusy;
+      }
       if (agentAuthVerify) {
         agentAuthVerify.disabled = state.agentAuthBusy;
       }
@@ -865,13 +891,13 @@
 
     function isAuggieConfigureState(auth) {
       const current = auth && typeof auth === "object" ? auth : state.agentAuth;
-      const harness = String(current?.harness || "").trim().toLowerCase();
+      const harness = authHarness(current);
       return harness === "auggie" && isManualConfigureState(current) && !isGitHubTokenConfigureState(current);
     }
 
     function isClaudeGitHubConfigureState(auth) {
       const current = auth && typeof auth === "object" ? auth : state.agentAuth;
-      const harness = String(current?.harness || "").trim().toLowerCase();
+      const harness = authHarness(current);
       return isManualConfigureState(current) && (harness === "claude" || isGitHubTokenConfigureState(current));
     }
 
@@ -894,6 +920,32 @@
       return gateState === "needs_configure";
     }
 
+    function authHarness(auth) {
+      const current = auth && typeof auth === "object" ? auth : state.agentAuth;
+      const explicit = String(current?.harness || "").trim().toLowerCase();
+      if (explicit) {
+        return explicit;
+      }
+      return configuredHarnessName();
+    }
+
+    function isClaudeBrowserCodeState(auth) {
+      const current = auth && typeof auth === "object" ? auth : state.agentAuth;
+      const harness = authHarness(current);
+      if (harness !== "claude" || isManualConfigureState(current)) {
+        return false;
+      }
+      const gateState = String(current?.state || "").trim().toLowerCase();
+      if (gateState !== "pending_browser_login") {
+        return false;
+      }
+      return String(current?.authURL || "").trim() !== "";
+    }
+
+    function claudeBrowserCodeValue() {
+      return String(state.agentAuthBrowserCode || "").trim();
+    }
+
     function setAuggieConfigureError(message) {
       if (!agentAuthConfigureError) return;
       const text = String(message || "").trim();
@@ -901,13 +953,30 @@
       agentAuthConfigureError.classList.toggle("hidden", text === "");
     }
 
+    function setAgentAuthBrowserCodeError(message) {
+      if (!agentAuthBrowserCodeError) return;
+      const text = String(message || "").trim();
+      agentAuthBrowserCodeError.textContent = text;
+      agentAuthBrowserCodeError.classList.toggle("hidden", text === "");
+    }
+
+    function syncAgentAuthBrowserCodeVisibility() {
+      if (!agentAuthBrowserCode) return;
+      const showBrowserCode = isClaudeBrowserCodeState() && state.agentAuthInteracted;
+      agentAuthBrowserCode.classList.toggle("hidden", !showBrowserCode);
+    }
+
     function updateAgentAuthDoneVisibility() {
       if (!agentAuthVerify) return;
       const requiresManualConfigure = isManualConfigureState();
       const hasCodeChallenge = Boolean(state.agentAuth.authURL || state.agentAuth.deviceCode);
+      const requiresClaudeBrowserCode = isClaudeBrowserCodeState();
+      const hasClaudeBrowserCode = claudeBrowserCodeValue() !== "";
+      const meetsAuthInteractionRequirement = requiresManualConfigure || (!hasCodeChallenge || state.agentAuthInteracted);
       const visible = state.agentAuth.required &&
         !state.agentAuth.ready &&
-        (requiresManualConfigure || (!hasCodeChallenge || state.agentAuthInteracted)) &&
+        meetsAuthInteractionRequirement &&
+        (!requiresClaudeBrowserCode || hasClaudeBrowserCode) &&
         !state.agentAuthVerifyPending;
       agentAuthVerify.classList.toggle("hidden", !visible);
     }
@@ -915,6 +984,7 @@
     function markAgentAuthInteraction() {
       if (state.agentAuthInteracted) return;
       state.agentAuthInteracted = true;
+      syncAgentAuthBrowserCodeVisibility();
       updateAgentAuthDoneVisibility();
     }
 
@@ -994,9 +1064,19 @@
         state.agentAuthChallengeKey = challengeKey;
         state.agentAuthInteracted = false;
         state.agentAuthVerifyPending = false;
+        state.agentAuthBrowserCode = "";
+        if (agentAuthBrowserCodeInput) {
+          agentAuthBrowserCodeInput.value = "";
+        }
+        setAgentAuthBrowserCodeError("");
       }
       if (!gateVisible) {
         state.agentAuthVerifyPending = false;
+        state.agentAuthBrowserCode = "";
+        if (agentAuthBrowserCodeInput) {
+          agentAuthBrowserCodeInput.value = "";
+        }
+        setAgentAuthBrowserCodeError("");
       }
 
       if (agentAuthGate) {
@@ -1024,10 +1104,20 @@
         agentAuthDetails.classList.toggle("hidden", !hasChallenge);
       }
       if (agentAuthURL) {
-        agentAuthURL.textContent = state.agentAuth.authURL || "";
+        const authURL = state.agentAuth.authURL || "";
+        const useClaudeLogoLink = authHarness(state.agentAuth) === "claude" && authURL !== "";
         agentAuthURL.href = state.agentAuth.authURL || "#";
-        agentAuthURL.classList.toggle("pointer-events-none", !state.agentAuth.authURL);
-        agentAuthURL.classList.toggle("hidden", !state.agentAuth.authURL);
+        agentAuthURL.classList.toggle("pointer-events-none", !authURL);
+        agentAuthURL.classList.toggle("hidden", !authURL);
+        agentAuthURL.classList.toggle("agent-auth-url-logo-link", useClaudeLogoLink);
+        if (agentAuthURLLogo) {
+          agentAuthURLLogo.src = CLAUDE_AUTH_LOGO_URL;
+          agentAuthURLLogo.classList.toggle("hidden", !useClaudeLogoLink);
+        }
+        if (agentAuthURLText) {
+          agentAuthURLText.textContent = useClaudeLogoLink ? "" : authURL;
+          agentAuthURLText.classList.toggle("hidden", useClaudeLogoLink || !authURL);
+        }
       }
       if (agentAuthCode) {
         agentAuthCode.textContent = state.agentAuth.deviceCode || "";
@@ -1062,7 +1152,11 @@
       if (!requiresManualConfigure) {
         setAuggieConfigureError("");
       }
+      if (!isClaudeBrowserCodeState(state.agentAuth)) {
+        setAgentAuthBrowserCodeError("");
+      }
 
+      syncAgentAuthBrowserCodeVisibility();
       updateAgentAuthDoneVisibility();
       if (localPromptSubmit) {
         const submitDisabled = state.agentAuthBusy || (state.agentAuth.required && !state.agentAuth.ready);
@@ -1215,7 +1309,7 @@
           required: true,
           ready: false,
           state: "error",
-          message: "",
+          message: err && err.message ? `Auth status failed: ${err.message}` : "Auth status failed.",
         });
       }
     }
@@ -1227,7 +1321,46 @@
         const auth = await requestAgentAuth("/api/agent-auth/start-device", "POST");
         applyAgentAuthGate(auth);
       } catch (err) {
+        const message = err && err.message ? err.message : "device auth start failed";
+        setLocalPromptStatus("error", `${currentAgentLabel()} auth start failed: ${message}`);
         return;
+      } finally {
+        setAgentAuthBusy(false);
+      }
+    }
+
+    async function configureClaudeBrowserCode() {
+      setAgentAuthBrowserCodeError("");
+      const code = claudeBrowserCodeValue();
+      if (!code) {
+        setAgentAuthBrowserCodeError("Paste the Claude authentication code first.");
+        return;
+      }
+
+      setAgentAuthVerifyPending(true);
+      setAgentAuthBusy(true);
+      try {
+        const auth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
+          claude_auth_code: code,
+        });
+        applyAgentAuthGate(auth);
+        const verified = await requestAgentAuth("/api/agent-auth/verify", "POST");
+        applyAgentAuthGate(verified);
+        if (verified.ready) {
+          setAgentAuthBrowserCodeError("");
+          state.agentAuthBrowserCode = "";
+          if (agentAuthBrowserCodeInput) {
+            agentAuthBrowserCodeInput.value = "";
+          }
+          setLocalPromptStatus("ok", `${currentAgentLabel()} auth is ready.`);
+        } else {
+          setAgentAuthVerifyPending(false);
+        }
+      } catch (err) {
+        const message = err && err.message ? err.message : "Claude code submission failed.";
+        setAgentAuthVerifyPending(false);
+        setAgentAuthBrowserCodeError(message);
+        setLocalPromptStatus("error", `${currentAgentLabel()} configure failed: ${message}`);
       } finally {
         setAgentAuthBusy(false);
       }
@@ -1316,6 +1449,10 @@
         await configureClaudeGitHubToken();
         return;
       }
+      if (isClaudeBrowserCodeState()) {
+        await configureClaudeBrowserCode();
+        return;
+      }
       markAgentAuthInteraction();
       setAgentAuthVerifyPending(true);
       setAgentAuthBusy(true);
@@ -1331,6 +1468,8 @@
           setAgentAuthVerifyPending(false);
         }
       } catch (err) {
+        const message = err && err.message ? err.message : "device auth verify failed";
+        setLocalPromptStatus("error", `${currentAgentLabel()} auth verify failed: ${message}`);
         setAgentAuthVerifyPending(false);
         return;
       } finally {
@@ -3181,6 +3320,13 @@
     if (agentAuthConfigureInput) {
       agentAuthConfigureInput.addEventListener("input", () => {
         setAuggieConfigureError("");
+      });
+    }
+    if (agentAuthBrowserCodeInput) {
+      agentAuthBrowserCodeInput.addEventListener("input", () => {
+        state.agentAuthBrowserCode = String(agentAuthBrowserCodeInput.value || "");
+        setAgentAuthBrowserCodeError("");
+        updateAgentAuthDoneVisibility();
       });
     }
     if (hubConnItem) {

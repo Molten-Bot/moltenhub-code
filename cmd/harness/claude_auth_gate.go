@@ -237,15 +237,15 @@ func (g *claudeAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthStat
 	snap := g.snapshotLocked()
 	g.mu.Unlock()
 
+	go g.readLoginStream(stdoutPipe)
+	go g.readLoginStream(stderrPipe)
+	go g.waitLogin(cmd, tmpDir)
+
 	// Prompt-driven login flows can emit non-newline terminal controls; proactively
 	// send Enter once so default selections continue and the browser URL is printed.
 	if _, err := io.WriteString(stdinPipe, "\n"); err != nil {
 		g.logf("hub.auth status=warn harness=claude action=advance_login_prompt err=%q", err)
 	}
-
-	go g.readLoginStream(stdoutPipe)
-	go g.readLoginStream(stderrPipe)
-	go g.waitLogin(cmd, tmpDir)
 
 	return snap, nil
 }
@@ -272,6 +272,11 @@ func (g *claudeAuthGate) Verify(ctx context.Context) (hubui.AgentAuthState, erro
 }
 
 func (g *claudeAuthGate) Configure(_ context.Context, rawInput string) (hubui.AgentAuthState, error) {
+	status, _ := g.Status(context.Background())
+	if status.State == "pending_browser_login" {
+		return g.submitBrowserCode(rawInput)
+	}
+
 	token := strings.TrimSpace(rawInput)
 	if token == "" {
 		state := g.needsGitHubTokenState("GitHub token is required. Paste a GitHub token below, then click Done.")
@@ -298,6 +303,69 @@ func (g *claudeAuthGate) Configure(_ context.Context, rawInput string) (hubui.Ag
 
 	state, _ := g.Status(context.Background())
 	return state, nil
+}
+
+func (g *claudeAuthGate) submitBrowserCode(rawInput string) (hubui.AgentAuthState, error) {
+	if g == nil {
+		return hubui.AgentAuthState{
+			Required: false,
+			Ready:    true,
+			State:    "ready",
+			Message:  "Agent auth is ready.",
+		}, nil
+	}
+
+	code := strings.TrimSpace(rawInput)
+	if code == "" {
+		state, _ := g.Status(context.Background())
+		if strings.TrimSpace(state.State) == "" {
+			state.State = "pending_browser_login"
+		}
+		state.Message = "Claude authentication code is required. Paste the code from the browser, then click Done."
+		return state, fmt.Errorf("claude authentication code is required")
+	}
+
+	var input io.WriteCloser
+	g.mu.Lock()
+	if g.procRunning && g.procInput != nil {
+		input = g.procInput
+	}
+	g.mu.Unlock()
+
+	if input == nil {
+		g.mu.Lock()
+		if !g.ready {
+			g.state = "needs_browser_login"
+			g.message = "Claude login is not waiting for a code. Click Done to restart browser login."
+			g.updatedAt = time.Now().UTC()
+		}
+		snap := g.snapshotLocked()
+		g.mu.Unlock()
+		return snap, fmt.Errorf("claude login is not waiting for a code")
+	}
+
+	if _, err := io.WriteString(input, code+"\n"); err != nil {
+		g.mu.Lock()
+		if !g.ready {
+			g.state = "pending_browser_login"
+			g.message = fmt.Sprintf("submit claude authentication code: %v", err)
+			g.updatedAt = time.Now().UTC()
+		}
+		snap := g.snapshotLocked()
+		g.mu.Unlock()
+		return snap, err
+	}
+
+	g.mu.Lock()
+	if !g.ready {
+		g.state = "pending_browser_login"
+		g.message = "Claude authentication code received. Finish browser login, then click Done."
+		g.updatedAt = time.Now().UTC()
+	}
+	snap := g.snapshotLocked()
+	g.mu.Unlock()
+
+	return snap, nil
 }
 
 func (g *claudeAuthGate) snapshotLocked() hubui.AgentAuthState {

@@ -337,6 +337,40 @@ func TestAgentAuthConfigureEndpointAcceptsGitHubTokenPayload(t *testing.T) {
 	}
 }
 
+func TestAgentAuthConfigureEndpointAcceptsClaudeAuthCodePayload(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	srv.ConfigureAgentAuth = func(_ context.Context, value string) (AgentAuthState, error) {
+		if got, want := strings.TrimSpace(value), "code-from-claude"; got != want {
+			t.Fatalf("configure value = %q, want %q", got, want)
+		}
+		return AgentAuthState{
+			Harness:  "claude",
+			Required: true,
+			Ready:    false,
+			State:    "pending_browser_login",
+			Message:  "code received",
+		}, nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(
+		ts.URL+"/api/agent-auth/configure",
+		"application/json",
+		bytes.NewBufferString(`{"claude_auth_code":"code-from-claude"}`),
+	)
+	if err != nil {
+		t.Fatalf("POST /api/agent-auth/configure error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /api/agent-auth/configure status = %d, want 200", resp.StatusCode)
+	}
+}
+
 func TestTaskPanelStylesConstrainHorizontalOverflow(t *testing.T) {
 	t.Parallel()
 
@@ -580,5 +614,20 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	}
 	if !strings.Contains(html, "function isGitHubTokenConfigureState(auth)") {
 		t.Fatalf("expected auth gate to detect GitHub token configure flows across harnesses")
+	}
+	if !strings.Contains(html, "id=\"agent-auth-url-logo\"") {
+		t.Fatalf("expected auth gate to include Claude logo link element")
+	}
+	if !strings.Contains(html, "id=\"agent-auth-browser-code-input\"") {
+		t.Fatalf("expected auth gate to include Claude browser-code input")
+	}
+	if !strings.Contains(html, "function isClaudeBrowserCodeState(auth)") {
+		t.Fatalf("expected auth gate to detect Claude browser-code submission state")
+	}
+	if !strings.Contains(html, "(!requiresClaudeBrowserCode || hasClaudeBrowserCode)") {
+		t.Fatalf("expected Done button visibility to require Claude browser code when needed")
+	}
+	if !strings.Contains(html, "claude_auth_code: code") {
+		t.Fatalf("expected Claude browser code configure payload support in auth UI")
 	}
 }
