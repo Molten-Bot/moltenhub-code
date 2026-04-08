@@ -101,16 +101,16 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	} else {
 		d.logf("hub.library status=loaded tasks=%d", len(libraryCatalog.Tasks))
 	}
-	if err := api.RegisterRuntime(ctx, cfg, libraryCatalog.Summaries()); err != nil {
-		d.logf("hub.runtime status=warn action=register err=%q", err)
-	} else {
-		d.logf("hub.runtime status=registered skills=1 library_tasks=%d", len(libraryCatalog.Tasks))
-	}
-
 	if err := api.SyncProfile(ctx, cfg); err != nil {
 		d.logf("hub.profile status=warn err=%q", err)
 	} else {
 		d.logf("hub.profile status=ok")
+	}
+
+	if err := api.RegisterRuntime(ctx, cfg, libraryCatalog.Summaries()); err != nil {
+		d.logf("hub.runtime status=warn action=register err=%q", err)
+	} else {
+		d.logf("hub.runtime status=registered skills=1 library_tasks=%d", len(libraryCatalog.Tasks))
 	}
 
 	if err := api.UpdateAgentStatus(ctx, "online"); err != nil {

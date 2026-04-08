@@ -294,40 +294,22 @@ func (c APIClient) AgentMetadata(ctx context.Context, token string) (map[string]
 
 // RegisterRuntime sends plugin/runtime metadata to hub.
 func (c APIClient) RegisterRuntime(ctx context.Context, token string, cfg InitConfig, libraryTasks []library.TaskSummary) error {
-	runtimeSkill := runtimeSkillConfig()
-	libraryNames := make([]string, 0, len(libraryTasks))
-	for _, task := range libraryTasks {
-		name := strings.TrimSpace(task.Name)
-		if name == "" {
-			continue
-		}
-		libraryNames = append(libraryNames, name)
+	if strings.TrimSpace(token) == "" {
+		return fmt.Errorf("register runtime requires token")
 	}
 
-	body := map[string]any{
-		"plugin_id":   runtimeIdentifier,
-		"runtime_id":  runtimeIdentifier,
-		"session_key": cfg.SessionKey,
-		"skills": []map[string]any{{
-			"name":          runtimeSkill.Name,
-			"dispatch_type": runtimeSkill.DispatchType,
-			"result_type":   runtimeSkill.ResultType,
-			"metadata": map[string]any{
-				"run_config_modes":    []string{"prompt", "library_task"},
-				"library_task_names":  libraryNames,
-				"library_task_count":  len(libraryNames),
-				"library_tasks":       libraryTasks,
-				"supports_branch_key": true,
-			},
-		}},
-		"metadata": map[string]any{
-			"agent_type":         runtimeIdentifier,
-			"library_task_names": libraryNames,
-			"library_task_count": len(libraryNames),
-		},
+	metadata, err := c.AgentMetadata(ctx, token)
+	if err != nil {
+		return fmt.Errorf("load agent metadata: %w", err)
 	}
+	metadata = cloneMetadataMap(metadata)
+	mergeRuntimeRegistrationMetadata(metadata, cfg, libraryTasks)
+
 	ok, trace := c.tryAny(ctx, token, []apiAttempt{
-		{Method: http.MethodPost, Path: "/openclaw/messages/register-plugin", Body: body},
+		{Method: http.MethodPatch, Path: "/agents/me/metadata", Body: map[string]any{"metadata": metadata}},
+		{Method: http.MethodPatch, Path: "/agents/me", Body: map[string]any{"metadata": metadata}},
+		{Method: http.MethodPost, Path: "/agents/me/metadata", Body: map[string]any{"metadata": metadata}},
+		{Method: http.MethodPost, Path: "/agents/me", Body: map[string]any{"metadata": metadata}},
 	})
 	if !ok {
 		return fmt.Errorf("register runtime failed: %s", trace)
@@ -897,6 +879,31 @@ func buildAgentMetadata(cfg InitConfig) map[string]any {
 	metadata["skills"] = normalizeSkillsMetadata(nil, fallbackName, fallbackDescription)
 
 	return metadata
+}
+
+func mergeRuntimeRegistrationMetadata(metadata map[string]any, cfg InitConfig, libraryTasks []library.TaskSummary) {
+	if metadata == nil {
+		return
+	}
+
+	for key, value := range buildAgentMetadata(cfg) {
+		metadata[key] = value
+	}
+
+	libraryNames := make([]string, 0, len(libraryTasks))
+	for _, task := range libraryTasks {
+		name := strings.TrimSpace(task.Name)
+		if name == "" {
+			continue
+		}
+		libraryNames = append(libraryNames, name)
+	}
+
+	metadata["library_task_names"] = libraryNames
+	metadata["library_task_count"] = len(libraryNames)
+	metadata["library_tasks"] = libraryTasks
+	metadata["run_config_modes"] = []string{"prompt", "library_task"}
+	metadata["supports_branch_key"] = true
 }
 
 func cloneMetadataMap(src map[string]any) map[string]any {
