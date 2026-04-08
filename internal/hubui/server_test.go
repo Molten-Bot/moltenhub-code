@@ -842,6 +842,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task-fullscreen-shell {\n  position: relative;") || !strings.Contains(css, "width: 100%;") {
 		t.Fatalf("expected stylesheet to make full screen task shell span viewport width")
 	}
+	if !strings.Contains(css, "min-height: 100dvh;") || !strings.Contains(css, "height: 100dvh;") {
+		t.Fatalf("expected stylesheet to size the full screen shell to the dynamic viewport height")
+	}
 	if strings.Contains(css, ".task-fullscreen-body.task-output-hidden") {
 		t.Fatalf("expected stylesheet to remove full screen hidden-output task layout styles")
 	}
@@ -853,6 +856,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".task-fullscreen-output-panel") {
 		t.Fatalf("expected stylesheet to include focused full screen output panel styles")
+	}
+	if !strings.Contains(css, "grid-template-rows: auto auto minmax(0, 1fr);") {
+		t.Fatalf("expected stylesheet to dedicate remaining full screen height to the task output terminal")
 	}
 	if !strings.Contains(css, ".task.task-collapsed") {
 		t.Fatalf("expected stylesheet to include collapsed task styles")

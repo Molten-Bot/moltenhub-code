@@ -294,6 +294,15 @@ func TestTaskPanelStylesConstrainHorizontalOverflow(t *testing.T) {
 	if !strings.Contains(css, ".task-scroll {\n  scrollbar-width: thin;\n  scrollbar-color: var(--surface-scroll-thumb) rgba(17, 28, 42, 0.35);\n  overflow-x: hidden;\n}") {
 		t.Fatalf("expected task scroll containers to hide horizontal overflow")
 	}
+	if !strings.Contains(css, ".task-fullscreen-shell {\n  position: relative;\n  display: grid;\n  grid-template-rows: minmax(0, 1fr);\n  width: 100%;\n  min-height: 100dvh;\n  height: 100dvh;\n}") {
+		t.Fatalf("expected full screen shell to fill the dynamic viewport height")
+	}
+	if !strings.Contains(css, ".task-fullscreen-output-panel {\n  min-height: 0;\n  overflow: hidden;\n  display: grid;\n  grid-template-rows: auto auto minmax(0, 1fr);\n}") {
+		t.Fatalf("expected full screen output panel to reserve the remaining viewport for terminal output")
+	}
+	if !strings.Contains(css, "#task-fullscreen-terminal {\n  min-height: 0;\n  height: 100%;\n  padding-right: 10px;\n  scrollbar-gutter: stable;\n  overscroll-behavior: contain;\n}") {
+		t.Fatalf("expected full screen terminal to stabilize its vertical scrollbar gutter")
+	}
 }
 
 func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
