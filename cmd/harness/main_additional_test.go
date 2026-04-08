@@ -184,6 +184,9 @@ func TestFailureFollowUpPromptDefaultWhenNoPaths(t *testing.T) {
 	if !strings.Contains(got, `"baseBranch":"main","targetSubdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."`) {
 		t.Fatalf("prompt missing follow-up payload shape: %q", got)
 	}
+	if !strings.Contains(got, "If no file changes are required, return a clear no-op result with concrete evidence instead of forcing an empty PR.") {
+		t.Fatalf("prompt missing no-op completion carve-out: %q", got)
+	}
 }
 
 func TestFailureFollowUpPromptIncludesFailureContext(t *testing.T) {
@@ -218,6 +221,22 @@ func TestFailureFollowUpPromptIncludesFailureContext(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("prompt missing %q: %q", want, got)
 		}
+	}
+}
+
+func TestShouldQueueFailureFollowUpSkipsNoDeltaFailures(t *testing.T) {
+	t.Parallel()
+
+	result := harness.Result{
+		Err: errors.New("task failed to meet completion requirements because this branch has no delta from `main`; No commits between main and moltenhub-fix"),
+	}
+
+	ok, reason := shouldQueueFailureFollowUp(result)
+	if ok {
+		t.Fatal("shouldQueueFailureFollowUp() = true, want false for no-delta failures")
+	}
+	if reason != "no delta from" {
+		t.Fatalf("reason = %q, want %q", reason, "no delta from")
 	}
 }
 

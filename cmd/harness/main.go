@@ -717,6 +717,11 @@ var failureFollowUpNonRemediableMarkers = []string{
 	"invalid api key",
 	"invalid_authentication",
 	"authentication error",
+	"no delta from",
+	"no commits between",
+	"head sha can't be blank",
+	"base sha can't be blank",
+	"head ref must be a branch",
 }
 
 func shouldQueueFailureFollowUp(failedResult harness.Result) (bool, string) {

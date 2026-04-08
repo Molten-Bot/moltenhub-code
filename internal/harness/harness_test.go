@@ -1872,20 +1872,20 @@ func TestShouldRetryCodexWithoutSandbox(t *testing.T) {
 		err  error
 		want bool
 	}{
-			{
-				name: "bwrap namespace error",
-				res: execx.Result{
-					Stderr: "bwrap: namespace error: Operation not permitted",
-				},
-				want: true,
+		{
+			name: "bwrap namespace error",
+			res: execx.Result{
+				Stderr: "bwrap: namespace error: Operation not permitted",
 			},
-			{
-				name: "explicit no-permissions namespace text",
-				res: execx.Result{
-					Stderr: "bwrap: No permissions to create a new namespace",
-				},
-				want: true,
+			want: true,
+		},
+		{
+			name: "explicit no-permissions namespace text",
+			res: execx.Result{
+				Stderr: "bwrap: No permissions to create a new namespace",
 			},
+			want: true,
+		},
 		{
 			name: "model reports command start failure due sandbox",
 			res: execx.Result{
@@ -1942,6 +1942,7 @@ func TestWithCompletionGatePromptIncludesFailureQueueContract(t *testing.T) {
 		"Pass the relevant failing file/folder log path(s) into that follow-up task context.",
 		`{"repos":["<same_repo_as_failed_task>"],"baseBranch":"main","targetSubdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."}`,
 		"Completion requirements:",
+		"If no file changes are required, return a clear no-op result with concrete evidence instead of forcing an empty PR.",
 	}
 	for _, snippet := range wantSnippets {
 		if !strings.Contains(got, snippet) {
