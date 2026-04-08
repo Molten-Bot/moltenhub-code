@@ -266,6 +266,7 @@
     const REPO_HISTORY_KEY = "hubui.repoHistory.v1";
     const PROMPT_MODE_KEY = "hubui.localPromptMode";
     const PROMPT_VISIBILITY_KEY = "hubui.localPromptVisible";
+    const CLOSE_TASK_ANIMATION_MS = 360;
     const QUEUED_STATUS_TIMEOUT_MS = 8_000;
     const COMPLETED_STATUSES = new Set(["ok", "no_changes", "error", "invalid", "duplicate", "stopped"]);
     const TASK_PROGRESS_STEPS = [
@@ -362,6 +363,8 @@
       promptImages: [],
       rerunInFlight: new Set(),
       closeInFlight: new Set(),
+      closingTaskIDs: new Set(),
+      closingTaskTimers: new Map(),
       taskControlInFlight: new Set(),
       expandedTaskOutputIDs: new Set(),
       openTerminalTaskIDs: new Set(),
@@ -1491,6 +1494,32 @@
       return COMPLETED_STATUSES.has(task.status || "");
     }
 
+    function isTaskClosing(requestID) {
+      requestID = String(requestID || "").trim();
+      if (!requestID) return false;
+      return state.closingTaskIDs.has(requestID);
+    }
+
+    function clearClosingTaskTimer(requestID) {
+      const timer = state.closingTaskTimers.get(requestID);
+      if (!timer) return;
+      window.clearTimeout(timer);
+      state.closingTaskTimers.delete(requestID);
+    }
+
+    function completeTaskDismissal(requestID) {
+      requestID = String(requestID || "").trim();
+      if (!requestID) return;
+      clearClosingTaskTimer(requestID);
+      state.closingTaskIDs.delete(requestID);
+      state.dismissedTaskIDs.add(requestID);
+      persistDismissedTaskIDs();
+      if (state.selectedTaskId === requestID) {
+        state.selectedTaskId = "";
+      }
+      render(state.snapshot);
+    }
+
     function triggerTaskSparkle(requestID) {
       requestID = String(requestID || "").trim();
       if (!requestID) return;
@@ -1637,12 +1666,13 @@
           throw new Error(body?.error || `close http ${response.status}`);
         }
 
-        state.dismissedTaskIDs.add(requestID);
-        persistDismissedTaskIDs();
-        if (state.selectedTaskId === requestID) {
-          state.selectedTaskId = "";
-        }
+        clearClosingTaskTimer(requestID);
+        state.closingTaskIDs.add(requestID);
         setLocalPromptStatus("ok", `Closed task ${requestID}`);
+        const closeTimer = window.setTimeout(() => {
+          completeTaskDismissal(requestID);
+        }, CLOSE_TASK_ANIMATION_MS);
+        state.closingTaskTimers.set(requestID, closeTimer);
         render(state.snapshot);
       } catch (err) {
         setLocalPromptStatus("error", `Close failed: ${err.message}`);
@@ -1995,6 +2025,7 @@
       for (const task of tasks) {
         const outputExpanded = isTaskOutputExpanded(task);
         const collapsed = isMinimizedTask(task) && !outputExpanded;
+        const closing = isTaskClosing(task.request_id);
         const node = document.createElement("article");
         node.className = "task";
         if (task.request_id === state.selectedTaskId) {
@@ -2002,6 +2033,9 @@
         }
         if (collapsed) {
           node.classList.add("task-collapsed");
+        }
+        if (closing) {
+          node.classList.add("task-closing");
         }
         node.addEventListener("click", () => selectTask(task.request_id));
 
@@ -2106,7 +2140,10 @@
           close.textContent = "X";
           close.title = "Abandon completed task";
           close.setAttribute("aria-label", "Close task");
-          close.disabled = state.closeInFlight.has(task.request_id);
+          if (closing) {
+            close.classList.add("task-closing");
+          }
+          close.disabled = closing || state.closeInFlight.has(task.request_id);
           close.addEventListener("click", (event) => {
             event.stopPropagation();
             dismissTask(task.request_id);

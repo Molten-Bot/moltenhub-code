@@ -160,11 +160,23 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `"task-close"`) {
 		t.Fatalf("expected index html to include task close class usage")
 	}
+	if !strings.Contains(markup, `"task-closing"`) {
+		t.Fatalf("expected index html to include task closing class usage")
+	}
 	if !strings.Contains(markup, `"task-rerun"`) {
 		t.Fatalf("expected index html to include task rerun class usage")
 	}
 	if !strings.Contains(markup, "function dismissTask(") {
 		t.Fatalf("expected index html to include dismissTask handler")
+	}
+	if !strings.Contains(markup, "const CLOSE_TASK_ANIMATION_MS = 360;") {
+		t.Fatalf("expected index html to include close task animation timing")
+	}
+	if !strings.Contains(markup, "closingTaskIDs: new Set()") {
+		t.Fatalf("expected index html to track closing tasks")
+	}
+	if !strings.Contains(markup, "completeTaskDismissal(requestID)") {
+		t.Fatalf("expected index html to include delayed task dismissal helper")
 	}
 	if !strings.Contains(markup, "function rerunTask(") {
 		t.Fatalf("expected index html to include rerunTask handler")
@@ -578,6 +590,12 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	css := resp.Body.String()
 	if !strings.Contains(css, ".task-close") {
 		t.Fatalf("expected stylesheet to include task close styles")
+	}
+	if !strings.Contains(css, ".task.task-closing") {
+		t.Fatalf("expected stylesheet to include task closing styles")
+	}
+	if !strings.Contains(css, "@keyframes taskCloseWiggleFade") {
+		t.Fatalf("expected stylesheet to include close wiggle animation")
 	}
 	if !strings.Contains(css, ".task-rerun") {
 		t.Fatalf("expected stylesheet to include task rerun styles")
