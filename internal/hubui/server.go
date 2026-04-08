@@ -380,6 +380,7 @@ func (s Server) handleAgentAuthVerify(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	s.logf("hub.ui status=start endpoint=agent_auth_verify")
 	if s.VerifyAgentAuth == nil {
 		writeJSON(w, http.StatusNotImplemented, map[string]any{
 			"ok":    false,
@@ -390,6 +391,7 @@ func (s Server) handleAgentAuthVerify(w http.ResponseWriter, r *http.Request) {
 	}
 	state, err := s.VerifyAgentAuth(r.Context())
 	if err != nil {
+		s.logf("hub.ui status=error endpoint=agent_auth_verify state=%s err=%q", strings.TrimSpace(state.State), err)
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":    false,
 			"error": err.Error(),
@@ -397,6 +399,7 @@ func (s Server) handleAgentAuthVerify(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	s.logf("hub.ui status=ok endpoint=agent_auth_verify state=%s ready=%t", strings.TrimSpace(state.State), state.Ready)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":   true,
 		"auth": state,
@@ -421,6 +424,7 @@ func (s Server) handleAgentAuthConfigure(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	s.logf("hub.ui status=start endpoint=agent_auth_configure")
 	if s.ConfigureAgentAuth == nil {
 		writeJSON(w, http.StatusNotImplemented, map[string]any{
 			"ok":    false,
@@ -472,6 +476,7 @@ func (s Server) handleAgentAuthConfigure(w http.ResponseWriter, r *http.Request)
 
 	state, err := s.ConfigureAgentAuth(r.Context(), sessionAuth)
 	if err != nil {
+		s.logf("hub.ui status=error endpoint=agent_auth_configure state=%s err=%q", strings.TrimSpace(state.State), err)
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":    false,
 			"error": err.Error(),
@@ -479,6 +484,7 @@ func (s Server) handleAgentAuthConfigure(w http.ResponseWriter, r *http.Request)
 		})
 		return
 	}
+	s.logf("hub.ui status=ok endpoint=agent_auth_configure state=%s ready=%t", strings.TrimSpace(state.State), state.Ready)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":   true,
 		"auth": state,

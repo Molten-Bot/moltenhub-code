@@ -519,11 +519,60 @@ func (g *claudeAuthGate) probeClaude() (bool, string) {
 	if strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY")) != "" {
 		return true, "Claude Code is configured via ANTHROPIC_API_KEY."
 	}
+	if loggedIn, statusMessage := g.probeClaudeAuthStatus(); loggedIn {
+		return true, statusMessage
+	}
 	if path := claudeCredentialsPath(); path != "" {
 		return true, fmt.Sprintf("Claude Code credentials were found at %s.", path)
 	}
 
 	return false, claudeBrowserLoginRequiredMessage()
+}
+
+func (g *claudeAuthGate) probeClaudeAuthStatus() (bool, string) {
+	command := strings.TrimSpace(g.command)
+	if command == "" {
+		command = agentruntime.HarnessClaude
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	res, err := exec.CommandContext(ctx, command, "auth", "status").CombinedOutput()
+	if err != nil {
+		return false, ""
+	}
+
+	trimmed := strings.TrimSpace(string(res))
+	if trimmed == "" {
+		return false, ""
+	}
+
+	var payload struct {
+		LoggedIn    bool   `json:"loggedIn"`
+		AuthMethod  string `json:"authMethod"`
+		APIProvider string `json:"apiProvider"`
+	}
+	if err := json.Unmarshal([]byte(trimmed), &payload); err == nil {
+		if !payload.LoggedIn {
+			return false, ""
+		}
+		method := strings.TrimSpace(payload.AuthMethod)
+		provider := strings.TrimSpace(payload.APIProvider)
+		if method == "" && provider == "" {
+			return true, "Claude Code and GitHub token are ready."
+		}
+		return true, fmt.Sprintf(
+			"Claude Code and GitHub token are ready (%s/%s).",
+			firstNonEmptyString(provider, "firstParty"),
+			firstNonEmptyString(method, "session"),
+		)
+	}
+
+	if strings.Contains(strings.ToLower(trimmed), `"loggedin": true`) {
+		return true, "Claude Code and GitHub token are ready."
+	}
+	return false, ""
 }
 
 func (g *claudeAuthGate) readLoginStream(r io.ReadCloser) {
@@ -780,20 +829,57 @@ func envEnabled(key string) bool {
 }
 
 func claudeCredentialsPath() string {
-	base := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR"))
-	if base == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return ""
+	for _, path := range claudeCredentialCandidates() {
+		info, err := os.Stat(path)
+		if err != nil || info.IsDir() || info.Size() == 0 {
+			continue
 		}
-		base = filepath.Join(home, ".claude")
+		return path
 	}
-	path := filepath.Join(base, ".credentials.json")
-	info, err := os.Stat(path)
-	if err != nil || info.IsDir() || info.Size() == 0 {
-		return ""
+	return ""
+}
+
+func claudeCredentialCandidates() []string {
+	candidates := make([]string, 0, 8)
+	seen := make(map[string]struct{}, 8)
+	addCandidate := func(path string) {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			return
+		}
+		if _, ok := seen[path]; ok {
+			return
+		}
+		seen[path] = struct{}{}
+		candidates = append(candidates, path)
 	}
-	return path
+
+	configDir := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR"))
+	if configDir != "" {
+		if strings.HasSuffix(strings.ToLower(configDir), ".json") {
+			addCandidate(configDir)
+		} else {
+			addCandidate(filepath.Join(configDir, ".credentials.json"))
+		}
+	}
+
+	homeValues := make([]string, 0, 2)
+	if homeEnv := strings.TrimSpace(os.Getenv("HOME")); homeEnv != "" {
+		homeValues = append(homeValues, homeEnv)
+	}
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		homeDir = strings.TrimSpace(homeDir)
+		if homeDir != "" {
+			homeValues = append(homeValues, homeDir)
+		}
+	}
+
+	for _, home := range homeValues {
+		addCandidate(filepath.Join(home, ".claude", ".credentials.json"))
+		addCandidate(filepath.Join(home, ".config", "claude", ".credentials.json"))
+	}
+
+	return candidates
 }
 
 func claudeBrowserLoginRequiredMessage() string {

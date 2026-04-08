@@ -151,6 +151,67 @@ func TestClaudeAuthGateRecognizesCredentialFile(t *testing.T) {
 	}
 }
 
+func TestClaudeAuthGateRecognizesCredentialFileFromHomeConfigDirectory(t *testing.T) {
+	homeDir := t.TempDir()
+	credentialsPath := filepath.Join(homeDir, ".config", "claude", ".credentials.json")
+	if err := os.MkdirAll(filepath.Dir(credentialsPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(credentialsPath, []byte(`{"token":"abc"}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	t.Setenv("HOME", homeDir)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv("GH_TOKEN", "ghp_ready")
+
+	g := newClaudeAuthGate(context.Background(), "", nil)
+	status, err := g.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if !status.Ready {
+		t.Fatalf("status = %+v", status)
+	}
+	if got, want := status.Message, "Claude Code and GitHub token are ready."; got != want {
+		t.Fatalf("message = %q, want %q", got, want)
+	}
+}
+
+func TestClaudeAuthGateRecognizesCLIAuthStatusWhenLoggedIn(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("CLAUDE_CODE_USE_BEDROCK", "")
+	t.Setenv("CLAUDE_CODE_USE_VERTEX", "")
+	t.Setenv("CLAUDE_CODE_USE_FOUNDRY", "")
+	t.Setenv("GH_TOKEN", "ghp_ready")
+
+	cmdPath := filepath.Join(t.TempDir(), "claude-auth-status-ready.sh")
+	if err := os.WriteFile(cmdPath, []byte(`#!/bin/sh
+if [ "$1" = "auth" ] && [ "$2" = "status" ]; then
+  echo '{"loggedIn":true,"authMethod":"oauth","apiProvider":"firstParty"}'
+  exit 0
+fi
+exit 1
+`), 0o755); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	g := newClaudeAuthGate(context.Background(), cmdPath, nil)
+	status, err := g.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if !status.Ready {
+		t.Fatalf("status = %+v", status)
+	}
+	if !strings.Contains(status.Message, "ready") {
+		t.Fatalf("message = %q, want readiness message", status.Message)
+	}
+}
+
 func TestClaudeAuthGateConfigurePersistsGitHubTokenAndEnvironment(t *testing.T) {
 	t.Setenv("GH_TOKEN", "")
 	t.Setenv("GITHUB_TOKEN", "")

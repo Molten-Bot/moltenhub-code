@@ -316,7 +316,7 @@
       </div>
 
       <div class="mt-auto flex justify-end pt-4">
-        <button id="agent-auth-verify" class="agent-auth-verify hidden rounded-lg border px-3 py-2 text-sm font-medium" type="button">Done</button>
+        <button id="agent-auth-verify" class="agent-auth-verify hidden rounded-lg border px-3 py-2 text-sm font-medium" type="button" onclick="return window.__hubAuthVerifyClick ? window.__hubAuthVerifyClick(event) : true;">Done</button>
       </div>
     </div>
   </div>
@@ -526,9 +526,11 @@
       agentAuthVerifyPending: false,
       agentAuthChallengeKey: "",
       agentAuthBrowserCode: "",
+      agentAuthLastAutoSubmittedCode: "",
       agentAuthURLLogoBroken: false,
     };
     let agentAuthRefreshTimer = null;
+    let agentAuthAutoSubmitTimer = null;
     let pendingStreamSnapshotText = "";
     let streamRenderTimer = null;
 
@@ -903,8 +905,53 @@
       }, 700);
     }
 
+    function clearAgentAuthAutoSubmitTimer() {
+      if (agentAuthAutoSubmitTimer === null) {
+        return;
+      }
+      clearTimeout(agentAuthAutoSubmitTimer);
+      agentAuthAutoSubmitTimer = null;
+    }
+
+    function shouldAutoSubmitClaudeBrowserCode(code) {
+      return String(code || "").trim().length >= 20;
+    }
+
+    function scheduleClaudeBrowserCodeAutoSubmit() {
+      if (!isClaudeBrowserCodeState()) {
+        clearAgentAuthAutoSubmitTimer();
+        return;
+      }
+      if (state.agentAuthBusy || state.agentAuthVerifyPending) {
+        return;
+      }
+      const code = claudeBrowserCodeValue();
+      if (!shouldAutoSubmitClaudeBrowserCode(code)) {
+        clearAgentAuthAutoSubmitTimer();
+        return;
+      }
+      if (code === state.agentAuthLastAutoSubmittedCode) {
+        clearAgentAuthAutoSubmitTimer();
+        return;
+      }
+      clearAgentAuthAutoSubmitTimer();
+      agentAuthAutoSubmitTimer = window.setTimeout(() => {
+        agentAuthAutoSubmitTimer = null;
+        if (state.agentAuthBusy || state.agentAuthVerifyPending) {
+          return;
+        }
+        state.agentAuthLastAutoSubmittedCode = code;
+        markAgentAuthInteraction();
+        setLocalPromptStatus("warn", `Submitting ${currentAgentLabel()} authentication code...`);
+        void verifyAgentDeviceAuth();
+      }, 250);
+    }
+
     function setAgentAuthBusy(busy) {
       state.agentAuthBusy = Boolean(busy);
+      if (state.agentAuthBusy) {
+        clearAgentAuthAutoSubmitTimer();
+      }
       if (agentAuthCopy) {
         agentAuthCopy.disabled = state.agentAuthBusy;
       }
@@ -1019,7 +1066,7 @@
 
     function syncAgentAuthBrowserCodeVisibility() {
       if (!agentAuthBrowserCode) return;
-      const showBrowserCode = isClaudeBrowserCodeAwaitingSubmission() && state.agentAuthInteracted;
+      const showBrowserCode = isClaudeBrowserCodeState() && state.agentAuthInteracted;
       agentAuthBrowserCode.classList.toggle("hidden", !showBrowserCode);
     }
 
@@ -1119,6 +1166,7 @@
         state.agentAuthInteracted = false;
         state.agentAuthVerifyPending = false;
         state.agentAuthBrowserCode = "";
+        state.agentAuthLastAutoSubmittedCode = "";
         if (agentAuthBrowserCodeInput) {
           agentAuthBrowserCodeInput.value = "";
         }
@@ -1127,10 +1175,15 @@
       if (!gateVisible) {
         state.agentAuthVerifyPending = false;
         state.agentAuthBrowserCode = "";
+        state.agentAuthLastAutoSubmittedCode = "";
+        clearAgentAuthAutoSubmitTimer();
         if (agentAuthBrowserCodeInput) {
           agentAuthBrowserCodeInput.value = "";
         }
         setAgentAuthBrowserCodeError("");
+      }
+      if (!isClaudeBrowserCodeState(state.agentAuth)) {
+        clearAgentAuthAutoSubmitTimer();
       }
 
       if (agentAuthGate) {
@@ -1226,6 +1279,7 @@
 
       syncAgentAuthBrowserCodeVisibility();
       updateAgentAuthDoneVisibility();
+      scheduleClaudeBrowserCodeAutoSubmit();
       if (localPromptSubmit) {
         const submitDisabled = state.agentAuthBusy || (state.agentAuth.required && !state.agentAuth.ready);
         localPromptSubmit.disabled = submitDisabled;
@@ -1412,23 +1466,19 @@
           claude_auth_code: code,
         });
         applyAgentAuthGate(auth);
-        if (hasClaudeBrowserCodeBeenAccepted(auth)) {
-          state.agentAuthBrowserCode = "";
-          if (agentAuthBrowserCodeInput) {
-            agentAuthBrowserCodeInput.value = "";
-          }
-        }
         const verified = await requestAgentAuth("/api/agent-auth/verify", "POST");
         applyAgentAuthGate(verified);
         if (verified.ready) {
           setAgentAuthBrowserCodeError("");
           state.agentAuthBrowserCode = "";
+          state.agentAuthLastAutoSubmittedCode = "";
           if (agentAuthBrowserCodeInput) {
             agentAuthBrowserCodeInput.value = "";
           }
           setLocalPromptStatus("ok", `${currentAgentLabel()} auth is ready.`);
         } else {
           setAgentAuthVerifyPending(false);
+          setLocalPromptStatus("warn", `${currentAgentLabel()} login is still pending. You can paste the code again and click Done.`);
         }
       } catch (err) {
         const message = err && err.message ? err.message : "Claude code submission failed.";
@@ -1515,41 +1565,48 @@
     }
 
     async function verifyAgentDeviceAuth() {
-      markAgentAuthInteraction();
-      if (isAuggieConfigureState()) {
-        await configureAuggieAuth();
-        return;
-      }
-      if (isClaudeGitHubConfigureState()) {
-        await configureClaudeGitHubToken();
-        return;
-      }
-      if (isClaudeBrowserCodeAwaitingSubmission()) {
-        const code = claudeBrowserCodeValue();
-        if (code !== "") {
-          await configureClaudeBrowserCode();
+      try {
+        markAgentAuthInteraction();
+        if (isAuggieConfigureState()) {
+          await configureAuggieAuth();
           return;
         }
-      }
-      setAgentAuthVerifyPending(true);
-      setAgentAuthBusy(true);
-      try {
-        const auth = await requestAgentAuth("/api/agent-auth/verify", "POST");
-        applyAgentAuthGate(auth);
-        if (auth.ready) {
-          setLocalPromptStatus("ok", `${currentAgentLabel()} auth is ready.`);
-        } else if (auth.state === "needs_device_auth") {
+        if (isClaudeGitHubConfigureState()) {
+          await configureClaudeGitHubToken();
+          return;
+        }
+        if (isClaudeBrowserCodeState()) {
+          const code = claudeBrowserCodeValue();
+          if (code !== "") {
+            await configureClaudeBrowserCode();
+            return;
+          }
+        }
+        setAgentAuthVerifyPending(true);
+        setAgentAuthBusy(true);
+        try {
+          const auth = await requestAgentAuth("/api/agent-auth/verify", "POST");
+          applyAgentAuthGate(auth);
+          if (auth.ready) {
+            setLocalPromptStatus("ok", `${currentAgentLabel()} auth is ready.`);
+          } else if (auth.state === "needs_device_auth") {
+            setAgentAuthVerifyPending(false);
+            await startAgentDeviceAuth();
+          } else {
+            setAgentAuthVerifyPending(false);
+          }
+        } catch (err) {
+          const message = err && err.message ? err.message : "device auth verify failed";
+          setLocalPromptStatus("error", `${currentAgentLabel()} auth verify failed: ${message}`);
           setAgentAuthVerifyPending(false);
-          await startAgentDeviceAuth();
-        } else {
-          setAgentAuthVerifyPending(false);
+          return;
+        } finally {
+          setAgentAuthBusy(false);
         }
       } catch (err) {
-        const message = err && err.message ? err.message : "device auth verify failed";
-        setLocalPromptStatus("error", `${currentAgentLabel()} auth verify failed: ${message}`);
+        const message = err && err.message ? err.message : "unexpected auth handler error";
+        setLocalPromptStatus("error", `${currentAgentLabel()} auth handler failed: ${message}`);
         setAgentAuthVerifyPending(false);
-        return;
-      } finally {
         setAgentAuthBusy(false);
       }
     }
@@ -3473,8 +3530,23 @@
     if (agentAuthBrowserCodeInput) {
       agentAuthBrowserCodeInput.addEventListener("input", () => {
         state.agentAuthBrowserCode = normalizeClaudeBrowserCode(agentAuthBrowserCodeInput.value || "");
+        if (state.agentAuthBrowserCode !== state.agentAuthLastAutoSubmittedCode) {
+          state.agentAuthLastAutoSubmittedCode = "";
+        }
         setAgentAuthBrowserCodeError("");
         updateAgentAuthDoneVisibility();
+        scheduleClaudeBrowserCodeAutoSubmit();
+      });
+      agentAuthBrowserCodeInput.addEventListener("paste", () => {
+        window.setTimeout(() => {
+          state.agentAuthBrowserCode = normalizeClaudeBrowserCode(agentAuthBrowserCodeInput.value || "");
+          if (state.agentAuthBrowserCode !== state.agentAuthLastAutoSubmittedCode) {
+            state.agentAuthLastAutoSubmittedCode = "";
+          }
+          setAgentAuthBrowserCodeError("");
+          updateAgentAuthDoneVisibility();
+          scheduleClaudeBrowserCodeAutoSubmit();
+        }, 0);
       });
     }
     if (agentAuthURLLogo) {
@@ -3497,7 +3569,14 @@
         }
       });
     }
-    agentAuthVerify.addEventListener("click", verifyAgentDeviceAuth);
+    window.__hubAuthVerifyClick = (event) => {
+      if (event && typeof event.preventDefault === "function") {
+        event.preventDefault();
+      }
+      void verifyAgentDeviceAuth();
+      return false;
+    };
+    agentAuthVerify.addEventListener("click", window.__hubAuthVerifyClick);
     promptVisibilityToggle.addEventListener("click", togglePromptVisibility);
     taskFullscreenToggle.addEventListener("click", () => {
       setTaskFullscreen(!state.taskFullscreenOpen);

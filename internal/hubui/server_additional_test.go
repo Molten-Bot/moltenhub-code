@@ -788,7 +788,7 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	if !strings.Contains(html, "claude_auth_code: code") {
 		t.Fatalf("expected Claude browser code configure payload support in auth UI")
 	}
-	if !strings.Contains(html, "if (isClaudeBrowserCodeAwaitingSubmission()) {") ||
+	if !strings.Contains(html, "if (isClaudeBrowserCodeState()) {") ||
 		!strings.Contains(html, "const code = claudeBrowserCodeValue();") ||
 		!strings.Contains(html, "if (code !== \"\") {") {
 		t.Fatalf("expected Done handler to submit Claude browser code only when a code is provided")
