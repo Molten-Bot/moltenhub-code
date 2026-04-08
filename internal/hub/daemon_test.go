@@ -437,6 +437,37 @@ func TestDispatchParseErrorPayloadIncludesRequiredSchema(t *testing.T) {
 	if _, ok := result["requiredSchema"]; !ok {
 		t.Fatalf("requiredSchema missing: %#v", result)
 	}
+	if got := payload["status"]; got != "error" {
+		t.Fatalf("status = %#v, want %q", got, "error")
+	}
+	if got := payload["message"]; got != `Failure: task failed. Error details: dispatch parse: bad payload` {
+		t.Fatalf("message = %#v", got)
+	}
+	if got := payload["error"]; got != "dispatch parse: bad payload" {
+		t.Fatalf("error = %#v", got)
+	}
+	if got := result["status"]; got != "failed" {
+		t.Fatalf("result.status = %#v", got)
+	}
+	if got := result["message"]; got != `Failure: task failed. Error details: dispatch parse: bad payload` {
+		t.Fatalf("result.message = %#v", got)
+	}
+	if got := result["error"]; got != "dispatch parse: bad payload" {
+		t.Fatalf("result.error = %#v", got)
+	}
+	failure, ok := payload["failure"].(map[string]any)
+	if !ok {
+		t.Fatalf("failure missing or wrong type: %#v", payload["failure"])
+	}
+	if got := failure["status"]; got != "failed" {
+		t.Fatalf("failure.status = %#v", got)
+	}
+	if got := failure["message"]; got != `Failure: task failed. Error details: dispatch parse: bad payload` {
+		t.Fatalf("failure.message = %#v", got)
+	}
+	if got := failure["error"]; got != "dispatch parse: bad payload" {
+		t.Fatalf("failure.error = %#v", got)
+	}
 }
 
 func TestDispatchResultPayloadIncludesRepoResults(t *testing.T) {
