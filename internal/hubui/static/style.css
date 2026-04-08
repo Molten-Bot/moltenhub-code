@@ -962,12 +962,8 @@ select.prompt-control {
 
 .task.task-closing {
   pointer-events: none;
-  transform-origin: top right;
-  animation: taskCloseWiggleFade 360ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-.task.task-closing .task-close {
-  animation: taskCloseButtonWiggle 220ms ease-in-out 1;
+  transform-origin: left center;
+  animation: taskCloseSlideFade 4000ms ease-out forwards;
 }
 
 .task:hover {
@@ -1480,45 +1476,22 @@ select.prompt-control {
   }
 }
 
-@keyframes taskCloseButtonWiggle {
-  0% {
-    transform: rotate(0deg) scale(1);
-  }
-  25% {
-    transform: rotate(-14deg) scale(1.06);
-  }
-  50% {
-    transform: rotate(12deg) scale(1.08);
-  }
-  75% {
-    transform: rotate(-8deg) scale(1.02);
-  }
-  100% {
-    transform: rotate(0deg) scale(1);
-  }
-}
-
-@keyframes taskCloseWiggleFade {
+@keyframes taskCloseSlideFade {
   0% {
     opacity: 1;
-    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+    transform: translate3d(0, 0, 0) scale(1);
   }
-  18% {
-    transform: translate3d(-3px, 0, 0) rotate(-1.6deg) scale(1.01);
-  }
-  34% {
-    transform: translate3d(4px, 0, 0) rotate(1.8deg) scale(1.01);
-  }
-  52% {
-    transform: translate3d(-3px, 1px, 0) rotate(-1.2deg) scale(0.995);
+  40% {
+    opacity: 0.92;
+    transform: translate3d(12px, 0, 0) scale(0.94);
   }
   72% {
-    opacity: 0.72;
-    transform: translate3d(5px, -2px, 0) rotate(1.1deg) scale(0.985);
+    opacity: 0.54;
+    transform: translate3d(28px, 0, 0) scale(0.84);
   }
   100% {
     opacity: 0;
-    transform: translate3d(18px, -10px, 0) rotate(3deg) scale(0.9);
+    transform: translate3d(48px, 0, 0) scale(0.72);
   }
 }
 
