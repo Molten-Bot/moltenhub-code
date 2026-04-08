@@ -121,6 +121,10 @@ if [ "${config_path}" = "" ]; then
     config_path="${config_dir}/config.json"
 fi
 
+if [ "${HARNESS_RUNTIME_CONFIG_PATH:-}" = "" ] && [ "${config_path}" != "" ]; then
+    export HARNESS_RUNTIME_CONFIG_PATH="${config_path}"
+fi
+
 if [ "${GH_TOKEN:-}" = "" ] && [ "${GITHUB_TOKEN:-}" = "" ]; then
     github_token_from_init="$(read_json_key "${init_path}" "github_token")"
     if [ "${github_token_from_init}" != "" ]; then
@@ -174,7 +178,7 @@ if ! git config --global --get-all url."https://github.com/".insteadOf 2>/dev/nu
 fi
 
 if [ "${GH_TOKEN:-}" = "" ] && [ "${GITHUB_TOKEN:-}" = "" ]; then
-    echo "warning: missing GitHub token: set GITHUB_TOKEN/GH_TOKEN or add github_token to ${init_path}; continuing so the UI can capture configuration" >&2
+    echo "warning: missing GitHub token: set GITHUB_TOKEN/GH_TOKEN or add github_token to ${config_path} or ${init_path}; continuing so the UI can capture configuration" >&2
 else
     if ! gh auth status >/dev/null 2>&1; then
         echo "warning: gh auth status failed; continuing so runtime UI can capture updated GitHub token configuration" >&2

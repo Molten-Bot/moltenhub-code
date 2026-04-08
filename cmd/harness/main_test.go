@@ -71,14 +71,12 @@ func TestRunMultiplexUsageMissingConfigFlag(t *testing.T) {
 	}
 }
 
-func TestRunHubUsageMissingInitOrConfigFlag(t *testing.T) {
-	orig := os.Args
+func TestLoadHubBootConfigWithoutFlagsUsesDefaultsWhenRuntimeConfigMissing(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
 	tempDir := t.TempDir()
-	t.Cleanup(func() { os.Args = orig })
 	t.Cleanup(func() {
 		if err := os.Chdir(wd); err != nil {
 			t.Fatalf("restore cwd: %v", err)
@@ -87,10 +85,19 @@ func TestRunHubUsageMissingInitOrConfigFlag(t *testing.T) {
 	if err := os.Chdir(tempDir); err != nil {
 		t.Fatalf("chdir temp dir: %v", err)
 	}
-	os.Args = []string{"harness", "hub"}
 
-	if code := run(); code != 2 {
-		t.Fatalf("run() = %d, want 2", code)
+	cfg, exitCode, err := loadHubBootConfig("", "")
+	if err != nil {
+		t.Fatalf("loadHubBootConfig() error = %v", err)
+	}
+	if exitCode != harness.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	}
+	if got, want := cfg.BaseURL, "https://na.hub.molten.bot/v1"; got != want {
+		t.Fatalf("BaseURL = %q, want %q", got, want)
+	}
+	if got, want := cfg.RuntimeConfigPath, "./.moltenhub/config.json"; got != want {
+		t.Fatalf("RuntimeConfigPath = %q, want %q", got, want)
 	}
 }
 

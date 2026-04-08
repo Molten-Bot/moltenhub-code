@@ -106,27 +106,24 @@ func TestWithConfigScriptBuildsInitFromEnvToken(t *testing.T) {
 	}
 }
 
-func TestWithConfigScriptMissingConfigReturnsGuidance(t *testing.T) {
+func TestWithConfigScriptMissingConfigStartsHubOnboardingMode(t *testing.T) {
 	t.Parallel()
 
 	env := newWithConfigTestEnv(t)
 	output, err := runWithConfigScript(t, env, nil)
-	if err == nil {
-		t.Fatalf("with-config expected error")
+	if err != nil {
+		t.Fatalf("with-config error: %v\noutput: %s", err, output)
 	}
 
-	exitErr, ok := err.(*exec.ExitError)
-	if !ok {
-		t.Fatalf("with-config error type = %T, want *exec.ExitError", err)
-	}
-	if got, want := exitErr.ExitCode(), 10; got != want {
-		t.Fatalf("exit code = %d, want %d\noutput: %s", got, want, output)
+	args := readFileTrimmed(t, env.argsPath)
+	if got, want := args, "hub"; got != want {
+		t.Fatalf("harness args = %q, want %q", got, want)
 	}
 
 	for _, want := range []string{
-		"missing config file:",
-		"cp /workspace/templates/run.example.json",
-		"cp /workspace/templates/init.example.json",
+		"starting hub onboarding mode with defaults",
+		"optional run config path:",
+		"optional init config path:",
 		"set MOLTEN_HUB_TOKEN",
 	} {
 		if !strings.Contains(output, want) {
@@ -158,7 +155,7 @@ func newWithConfigTestEnv(t *testing.T) withConfigTestEnv {
 	argsPath := filepath.Join(root, "harness.args")
 	initPath := filepath.Join(root, "harness.init.json")
 	stubPath := filepath.Join(binDir, "harness")
-stub := `#!/bin/sh
+	stub := `#!/bin/sh
 set -eu
 printf '%s' "$*" > "${HARNESS_STUB_ARGS_FILE}"
 if [ "${1:-}" = "hub" ] && [ "${2:-}" = "--init" ] && [ "${3:-}" != "" ]; then
