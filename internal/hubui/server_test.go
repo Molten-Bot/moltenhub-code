@@ -286,6 +286,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="task-fullscreen-close"`) {
 		t.Fatalf("expected index html to include a dedicated full screen close control")
 	}
+	if !strings.Contains(markup, `class="task-fullscreen-close-icon"`) || !strings.Contains(markup, "&times;") {
+		t.Fatalf("expected index html to render the full screen close control as an X icon button")
+	}
+	if !strings.Contains(markup, `<span class="sr-only">Close full screen tasks</span>`) {
+		t.Fatalf("expected index html to preserve an accessible close label for the full screen icon button")
+	}
 	if strings.Contains(markup, "task-fullscreen-subtitle") || strings.Contains(markup, "Focused task/running/state view") {
 		t.Fatalf("expected index html to omit full screen subtitle copy")
 	}
@@ -315,6 +321,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "taskFullscreenClose.addEventListener(\"click\", () => {") {
 		t.Fatalf("expected index html to bind the dedicated full screen close control")
+	}
+	if !strings.Contains(markup, "if (event.key === \"Escape\" && state.taskFullscreenOpen) {") {
+		t.Fatalf("expected index html to close full screen tasks on Escape")
+	}
+	if !strings.Contains(markup, "event.preventDefault();") {
+		t.Fatalf("expected index html to treat Escape as a modal-dismiss action for full screen tasks")
 	}
 	if strings.Contains(markup, "function setTaskOutputPanelVisibility(") {
 		t.Fatalf("expected index html to remove standard output panel visibility handler")
@@ -803,6 +815,12 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task-fullscreen-close") {
 		t.Fatalf("expected stylesheet to include full screen close-state button styles")
 	}
+	if !strings.Contains(css, ".task-fullscreen-close-icon") {
+		t.Fatalf("expected stylesheet to include dedicated full screen close icon styles")
+	}
+	if !strings.Contains(css, ".sr-only") {
+		t.Fatalf("expected stylesheet to include screen-reader-only utility styles for icon buttons")
+	}
 	if strings.Contains(css, "body.task-fullscreen-open #task-fullscreen-toggle") {
 		t.Fatalf("expected stylesheet to stop reusing the panel toggle as the fullscreen close control")
 	}
@@ -811,6 +829,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, "background: var(--surface-fullscreen-close-bg);") || !strings.Contains(css, "color: #fff;") {
 		t.Fatalf("expected stylesheet to give the full screen close control high-contrast styling")
+	}
+	if !strings.Contains(css, "inline-size: 48px;") {
+		t.Fatalf("expected stylesheet to size the full screen close control as a compact icon button")
 	}
 	if !strings.Contains(css, ".task-fullscreen") {
 		t.Fatalf("expected stylesheet to include full screen task layout styles")
