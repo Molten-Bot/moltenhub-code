@@ -57,6 +57,7 @@ type TaskSummary struct {
 	Name        string `json:"name"`
 	DisplayName string `json:"displayName,omitempty"`
 	Description string `json:"description,omitempty"`
+	Prompt      string `json:"prompt,omitempty"`
 }
 
 // Catalog contains all loaded library task definitions.
@@ -133,6 +134,7 @@ func (c Catalog) Summaries() []TaskSummary {
 			Name:        task.Name,
 			DisplayName: task.DisplayName,
 			Description: task.Description,
+			Prompt:      task.Prompt,
 		})
 	}
 	return out

@@ -828,9 +828,9 @@ select.prompt-control {
 
 .library-task-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
-  max-height: 210px;
+  max-height: 280px;
   overflow: auto;
   padding-right: 2px;
 }
@@ -852,12 +852,12 @@ select.prompt-control {
 
 .library-task-option {
   display: grid;
-  gap: 4px;
+  gap: 0;
   width: 100%;
   text-align: left;
   color: var(--text);
-  padding: 10px 12px;
   transition: border-color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease;
+  overflow: hidden;
 }
 
 .library-task-option:hover {
@@ -871,23 +871,38 @@ select.prompt-control {
   box-shadow: inset 0 0 0 1px rgba(10, 132, 255, 0.14), 0 10px 22px rgba(10, 44, 102, 0.08);
 }
 
+.library-task-option-toggle {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 11px 12px;
+}
+
 .library-task-option-title {
   color: var(--text);
-  font-size: 0.79rem;
+  font-size: 0.8rem;
   font-weight: 800;
   line-height: 1.25;
 }
 
-.library-task-option-name {
-  color: var(--meta);
-  font-size: 0.69rem;
-  letter-spacing: 0.02em;
-}
-
-.library-task-option-description {
+.library-task-option-prompt {
+  border-top: 1px solid rgba(17, 34, 68, 0.08);
   color: var(--muted);
   font-size: 0.73rem;
-  line-height: 1.35;
+  line-height: 1.45;
+  padding: 10px 12px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.library-task-option-toggle:focus-visible {
+  outline: 2px solid rgba(10, 132, 255, 0.28);
+  outline-offset: -2px;
 }
 
 .task {

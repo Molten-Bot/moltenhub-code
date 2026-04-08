@@ -1007,7 +1007,7 @@
       if (displayName) {
         return displayName;
       }
-      return String(task.name || "").trim();
+      return "Untitled task";
     }
 
     function renderLibraryTaskOptions() {
@@ -1021,7 +1021,7 @@
         entries.push({
           name,
           displayName: libraryTaskDisplayName(task),
-          description: String(task.description || "").trim(),
+          prompt: String(task.prompt || "").trim(),
         });
       }
 
@@ -1041,34 +1041,23 @@
       }
 
       for (const entry of entries) {
+        const item = document.createElement("div");
+        item.className = "library-task-option";
+        if (entry.name === selected) {
+          item.classList.add("active");
+        }
+
         const button = document.createElement("button");
         button.type = "button";
-        button.className = "library-task-option";
-        if (entry.name === selected) {
-          button.classList.add("active");
-        }
+        button.className = "library-task-option-toggle";
+        button.setAttribute("aria-expanded", String(entry.name === selected));
 
         const title = document.createElement("div");
         title.className = "library-task-option-title";
-        title.textContent = entry.displayName || entry.name;
-
-        const name = document.createElement("div");
-        name.className = "library-task-option-name";
-        name.textContent = entry.name;
-
-        button.append(title, name);
-
-        if (entry.description) {
-          const description = document.createElement("div");
-          description.className = "library-task-option-description";
-          description.textContent = entry.description;
-          button.appendChild(description);
-        }
+        title.textContent = entry.displayName;
+        button.appendChild(title);
 
         button.addEventListener("click", () => {
-          if (state.selectedLibraryTask === entry.name) {
-            return;
-          }
           state.selectedLibraryTask = entry.name;
           renderLibraryTaskOptions();
           if (state.promptMode === "json") {
@@ -1080,7 +1069,16 @@
           }
         });
 
-        libraryTaskList.appendChild(button);
+        item.appendChild(button);
+
+        if (entry.name === selected) {
+          const prompt = document.createElement("div");
+          prompt.className = "library-task-option-prompt";
+          prompt.textContent = entry.prompt || "Prompt unavailable.";
+          item.appendChild(prompt);
+        }
+
+        libraryTaskList.appendChild(item);
       }
     }
 
