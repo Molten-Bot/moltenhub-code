@@ -865,6 +865,29 @@ select.prompt-control {
   transition: border-color 0.14s ease, color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease, opacity 0.14s ease;
 }
 
+.task-fullscreen-toggle {
+  width: 32px;
+  height: 32px;
+  min-inline-size: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  color: var(--text-soft);
+  background: transparent;
+  box-shadow: none;
+}
+
+.task-fullscreen-toggle-icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .prompt-action-button:hover,
 .task-rerun:hover,
 .task-output-toggle:hover,
@@ -875,6 +898,15 @@ select.prompt-control {
   color: var(--accent);
   transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
+}
+
+.task-fullscreen-toggle:hover,
+.task-fullscreen-toggle:focus-visible {
+  border-color: transparent;
+  color: var(--running);
+  background: rgba(10, 132, 255, 0.08);
+  transform: none;
+  box-shadow: none;
 }
 
 .prompt-action-clear {
@@ -1929,6 +1961,12 @@ html[data-hover-mode="on"] .prompt-visibility-toggle:not(:disabled) {
   border-color: color-mix(in srgb, var(--running) 36%, var(--border));
   color: var(--running);
   box-shadow: var(--shadow-sm);
+}
+
+html[data-hover-mode="on"] .task-fullscreen-toggle:not(:disabled) {
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
 }
 
 html[data-hover-mode="off"] .task,
