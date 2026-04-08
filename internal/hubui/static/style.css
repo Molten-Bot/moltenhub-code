@@ -1873,83 +1873,46 @@ select.prompt-control {
   z-index: 60;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
   border-radius: 18px;
   border: 1px solid var(--theme-dock-border);
   background: var(--theme-dock-bg);
   box-shadow: var(--theme-dock-shadow);
   backdrop-filter: blur(18px) saturate(140%);
   -webkit-backdrop-filter: blur(18px) saturate(140%);
-  padding: 10px 12px;
-}
-
-.theme-control-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.theme-control-label {
-  font-size: 0.72rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--theme-dock-label);
-  font-weight: 700;
+  padding: 4px;
 }
 
 .theme-cycle-button {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  min-width: 132px;
-  border: 1px solid var(--theme-button-border);
+  justify-content: center;
+  min-width: 96px;
+  border: 0;
   border-radius: 14px;
-  background: var(--theme-button-bg);
-  box-shadow: var(--theme-button-shadow);
+  background: transparent;
+  box-shadow: none;
   color: var(--theme-button-text);
-  padding: 9px 12px 9px 14px;
-  text-align: left;
+  padding: 8px 14px;
+  text-align: center;
   line-height: 1.1;
-  transition: border-color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease;
-}
-
-.theme-cycle-button::after {
-  content: "";
-  width: 12px;
-  height: 12px;
-  flex: 0 0 12px;
-  margin-left: auto;
-  border-top: 2px solid var(--theme-button-meta);
-  border-right: 2px solid var(--theme-button-meta);
-  transform: rotate(45deg);
-}
-
-.theme-cycle-current,
-.theme-cycle-next {
-  display: block;
+  transition: color 0.14s ease, transform 0.14s ease, background 0.14s ease;
 }
 
 .theme-cycle-current {
   font-size: 0.9rem;
   font-weight: 700;
+  letter-spacing: 0.02em;
   color: var(--theme-button-text);
-}
-
-.theme-cycle-next {
-  font-size: 0.68rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--theme-button-meta);
 }
 
 .theme-cycle-button:hover,
 .theme-cycle-button:focus-visible {
   transform: translateY(-1px);
-  border-color: rgba(63, 122, 228, 0.52);
+  color: var(--theme-button-text);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .theme-cycle-button:focus-visible {
-  border-color: rgba(63, 122, 228, 0.52);
   box-shadow: var(--theme-button-focus);
   outline: none;
 }
@@ -2200,11 +2163,6 @@ html.night .theme-controls {
   box-shadow: var(--theme-dock-shadow);
 }
 
-html.dark .theme-control-label,
-html.night .theme-control-label {
-  color: var(--theme-dock-label);
-}
-
 html[data-hover-mode="on"] .prompt-action-button:not(:disabled),
 html[data-hover-mode="on"] .task-rerun:not(:disabled),
 html[data-hover-mode="on"] .task-output-toggle:not(:disabled),
@@ -2284,11 +2242,7 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
     max-width: calc(100vw - 24px);
   }
 
-  .theme-control-group {
-    min-width: 0;
-  }
-
   .theme-cycle-button {
-    min-width: 104px;
+    min-width: 88px;
   }
 }

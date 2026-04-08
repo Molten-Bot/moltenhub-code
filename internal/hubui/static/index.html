@@ -282,13 +282,9 @@
   </div>
 
   <div id="appearance-controls" class="theme-controls" role="group" aria-label="Appearance controls">
-    <div class="theme-control-group">
-      <span class="theme-control-label">Theme</span>
-      <button id="theme-cycle" class="theme-cycle-button" type="button" aria-live="polite">
-        <span id="theme-cycle-current" class="theme-cycle-current">Light</span>
-        <span id="theme-cycle-next" class="theme-cycle-next">Next: Dark</span>
-      </button>
-    </div>
+    <button id="theme-cycle" class="theme-cycle-button" type="button" aria-live="polite">
+      <span id="theme-cycle-current" class="theme-cycle-current">Light</span>
+    </button>
   </div>
 
   <script>
@@ -518,7 +514,6 @@
     const agentAuthVerify = document.getElementById("agent-auth-verify");
     const themeCycleButton = document.getElementById("theme-cycle");
     const themeCycleCurrent = document.getElementById("theme-cycle-current");
-    const themeCycleNext = document.getElementById("theme-cycle-next");
     const hoverSelect = document.getElementById("hover-select");
 
     function themeLabel(theme) {
@@ -538,7 +533,7 @@
     }
 
     function syncThemeCycleButton(theme) {
-      if (!themeCycleButton || !themeCycleCurrent || !themeCycleNext) {
+      if (!themeCycleButton || !themeCycleCurrent) {
         return;
       }
       const currentTheme = THEME_MODES.includes(theme) ? theme : "light";
@@ -546,7 +541,6 @@
       const currentLabel = themeLabel(currentTheme);
       const nextLabel = themeLabel(nextTheme);
       themeCycleCurrent.textContent = currentLabel;
-      themeCycleNext.textContent = `Next: ${nextLabel}`;
       themeCycleButton.setAttribute("aria-label", `Current theme ${currentLabel}. Switch to ${nextLabel}.`);
       themeCycleButton.setAttribute("title", `Switch theme to ${nextLabel}`);
     }

@@ -684,6 +684,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="theme-cycle"`) || !strings.Contains(markup, `function nextThemeMode(theme)`) {
 		t.Fatalf("expected index html to include docked theme cycle control")
 	}
+	if strings.Contains(markup, `theme-cycle-next`) || strings.Contains(markup, `>Theme<`) || strings.Contains(markup, `Next: Dark`) {
+		t.Fatalf("expected index html to render the theme dock as a single cycling label")
+	}
 	if !strings.Contains(markup, `rgb(var(--hub-panel-rgb) / <alpha-value>)`) || !strings.Contains(markup, `rgb(var(--hub-text-rgb) / <alpha-value>)`) {
 		t.Fatalf("expected index html to drive tailwind hub colors from CSS theme variables")
 	}
@@ -751,6 +754,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".theme-controls") || !strings.Contains(css, ".theme-cycle-button") {
 		t.Fatalf("expected stylesheet to include docked theme cycle styles")
+	}
+	if strings.Contains(css, ".theme-cycle-button::after") || strings.Contains(css, ".theme-control-label") || strings.Contains(css, ".theme-cycle-next") {
+		t.Fatalf("expected stylesheet to remove the extra theme dock label, next-state text, and chevron")
 	}
 	if !strings.Contains(css, "--theme-button-bg:") || !strings.Contains(css, "--surface-control-bg:") {
 		t.Fatalf("expected stylesheet to define reusable theme tokens for controls")
