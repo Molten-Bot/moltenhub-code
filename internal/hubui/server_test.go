@@ -640,6 +640,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function clearBuilderPromptDraft(") {
 		t.Fatalf("expected index html to include prompt clear handler")
 	}
+	if !strings.Contains(markup, "function submitBuilderPromptOnEnter(event)") ||
+		!strings.Contains(markup, "if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey || event.isComposing)") ||
+		!strings.Contains(markup, "localPromptForm.requestSubmit();") ||
+		!strings.Contains(markup, "builderPromptInput.addEventListener(\"keydown\", submitBuilderPromptOnEnter);") {
+		t.Fatalf("expected index html to submit builder prompts on Enter while preserving Shift+Enter multiline input")
+	}
 	if !strings.Contains(markup, "function hasBuilderDraftToClear(") ||
 		!strings.Contains(markup, "const promptDirty = String(builderPromptInput?.value || \"\").trim() !== \"\";") ||
 		!strings.Contains(markup, "const branchDirty = ![\"\", \"main\"].includes(String(builderBaseBranch?.value || \"\").trim());") ||
