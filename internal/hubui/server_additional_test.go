@@ -309,20 +309,20 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	}
 
 	css := resp.Body.String()
-	if !strings.Contains(css, ".prompt-wrap .panel-header {\n  border-bottom-color: rgba(116, 160, 213, 0.2);\n  background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08));\n  color: #6f88ad;\n  letter-spacing: 0.11em;\n  position: relative;\n  justify-content: center;\n}") {
-		t.Fatalf("expected Studio title bar to center its contents")
+	if !strings.Contains(css, ".prompt-wrap .panel-header {\n  border-bottom-color: rgba(116, 160, 213, 0.2);\n  background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08));\n  color: #6f88ad;\n  letter-spacing: 0.11em;\n  position: relative;\n  justify-content: flex-start;\n}") {
+		t.Fatalf("expected Studio title bar to align its controls with the panel content")
 	}
-	if !strings.Contains(css, ".prompt-titlebar {\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);\n  align-items: center;\n") {
-		t.Fatalf("expected Studio title bar to reserve centered space for the mode switcher")
+	if !strings.Contains(css, ".prompt-titlebar {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n}") {
+		t.Fatalf("expected Studio title bar to use a simple left-aligned control row")
 	}
-	if !strings.Contains(css, ".prompt-mode-tabs-titlebar {\n  justify-self: center;\n  align-self: center;\n}") {
-		t.Fatalf("expected Studio mode tabs to be centered inside the title bar")
+	if !strings.Contains(css, ".prompt-mode-tabs-titlebar {\n  justify-self: start;\n  align-self: center;\n}") {
+		t.Fatalf("expected Studio mode tabs to stay left-aligned inside the title bar")
 	}
 	if !strings.Contains(css, ".prompt-wrap.panel {\n  display: flex;\n  flex-direction: column;\n  border-color: rgba(74, 118, 178, 0.18);") {
 		t.Fatalf("expected studio panel to stack header/form without clipping")
 	}
-	if !strings.Contains(css, ".prompt-mode-tabs {\n  display: inline-flex;\n  gap: 4px;\n  padding: 5px;\n  border-radius: 14px;") {
-		t.Fatalf("expected studio mode tabs to use the refined segmented-control spacing")
+	if !strings.Contains(css, ".prompt-mode-tabs {\n  display: inline-flex;\n  gap: 4px;\n  padding: 5px;\n  border-radius: 14px;\n  border: 1px solid rgba(112, 163, 221, 0.28);\n  background: linear-gradient(180deg, rgba(248, 252, 255, 0.96), rgba(226, 239, 255, 0.92));") {
+		t.Fatalf("expected studio mode tabs to use the refreshed light segmented-control treatment")
 	}
 	if !strings.Contains(css, ".prompt-form {\n  display: grid;\n  gap: 10px;\n  padding: 14px 14px 13px;\n  min-width: 0;\n  min-height: 0;\n  overflow-y: auto;\n}") {
 		t.Fatalf("expected studio form content to scroll instead of clipping controls")
@@ -366,8 +366,11 @@ func TestStudioStylesUseRefinedPanelAndInputTreatment(t *testing.T) {
 	if !strings.Contains(css, ".prompt-wrap.panel {\n  display: flex;\n  flex-direction: column;\n  border-color: rgba(74, 118, 178, 0.18);\n  background:\n    linear-gradient(180deg, rgba(223, 241, 255, 0.96), rgba(245, 250, 255, 0.9) 18%, rgba(255, 255, 255, 0.92) 100%),") {
 		t.Fatalf("expected studio panel to use the refreshed blue-tint shell treatment")
 	}
-	if !strings.Contains(css, ".prompt-wrap .panel-header {\n  border-bottom-color: rgba(116, 160, 213, 0.2);\n  background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08));\n  color: #6f88ad;\n  letter-spacing: 0.11em;\n  position: relative;\n  justify-content: center;\n}") {
-		t.Fatalf("expected studio header to use the lighter section title styling")
+	if !strings.Contains(css, ".prompt-wrap .panel-header {\n  border-bottom-color: rgba(116, 160, 213, 0.2);\n  background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08));\n  color: #6f88ad;\n  letter-spacing: 0.11em;\n  position: relative;\n  justify-content: flex-start;\n}") {
+		t.Fatalf("expected studio header to keep its controls aligned to the left")
+	}
+	if !strings.Contains(css, ".prompt-mode-tab.active {\n  background: linear-gradient(135deg, #fefefe 0%, #e7f2ff 48%, #d7eaff 100%);\n  border: 1px solid rgba(112, 163, 221, 0.34);") {
+		t.Fatalf("expected active studio mode tab to use the light shell treatment instead of the dark accent pill")
 	}
 	if !strings.Contains(css, ".prompt-control,\n.prompt-text,\n.prompt-action-paste {\n  width: 100%;\n  border: 1px solid rgba(112, 163, 221, 0.34);\n  border-radius: 16px;\n  background: linear-gradient(180deg, rgba(251, 254, 255, 0.98), rgba(234, 245, 255, 0.88));") {
 		t.Fatalf("expected studio controls to use the updated light-blue input treatment")

@@ -385,11 +385,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `aria-label="Minimize Studio panel"`) || !strings.Contains(markup, `title="Minimize Studio panel">▾</button>`) {
 		t.Fatalf("expected index html to initialize the studio toggle as an arrow minimize control")
 	}
-	if !strings.Contains(markup, ">Studio<") {
-		t.Fatalf("expected index html to label the prompt panel as Studio")
-	}
-	if !strings.Contains(markup, `class="panel-title">Studio</span>`) {
-		t.Fatalf("expected index html to render Studio as the title-bar label")
+	if strings.Contains(markup, `class="panel-title">Studio</span>`) || strings.Contains(markup, ">Studio<") {
+		t.Fatalf("expected index html to remove the Studio title-bar label")
 	}
 	if !strings.Contains(markup, "library-task-option-prompt") {
 		t.Fatalf("expected index html to include expandable library prompt sections")
@@ -431,7 +428,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to include json mode toggle")
 	}
 	if !strings.Contains(markup, `class="prompt-mode-tabs prompt-mode-tabs-titlebar`) {
-		t.Fatalf("expected index html to center the mode toggles inside the Studio title bar")
+		t.Fatalf("expected index html to render the mode toggles inside the prompt title bar")
 	}
 	if !strings.Contains(markup, `id="builder-repo-select"`) {
 		t.Fatalf("expected index html to include repo history select")
