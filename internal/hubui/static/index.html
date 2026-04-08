@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -41,7 +41,15 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="/static/style.css">
 </head>
-<body class="min-h-screen bg-hub-bg text-hub-text antialiased">
+<body class="min-h-screen antialiased">
+  <div class="site-bg" aria-hidden="true">
+    <canvas id="snowfall-canvas" class="snowfall-canvas"></canvas>
+    <div class="glow glow-a"></div>
+    <div class="glow glow-b"></div>
+    <div class="glow glow-c"></div>
+    <div class="grain"></div>
+  </div>
+
   <div class="app mx-auto grid w-full max-w-[1500px] gap-4 p-5">
     <div class="header flex flex-wrap items-center justify-between gap-3">
       <div class="brand-lockup flex items-center gap-3">
@@ -265,11 +273,34 @@
     </div>
   </div>
 
+  <div id="appearance-controls" class="theme-controls" role="group" aria-label="Appearance controls">
+    <label class="theme-control-group" for="theme-select">
+      <span class="theme-control-label">Theme</span>
+      <select id="theme-select" class="theme-control-select" aria-label="Theme mode">
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+        <option value="night">Night</option>
+      </select>
+    </label>
+    <label class="theme-control-group" for="hover-select">
+      <span class="theme-control-label">Hover</span>
+      <select id="hover-select" class="theme-control-select" aria-label="Hover mode">
+        <option value="auto">Auto</option>
+        <option value="on">On</option>
+        <option value="off">Off</option>
+      </select>
+    </label>
+  </div>
+
   <script>
     const DISMISSED_TASKS_KEY = "hubui.dismissedTaskIds";
     const REPO_HISTORY_KEY = "hubui.repoHistory.v1";
     const PROMPT_MODE_KEY = "hubui.localPromptMode";
     const PROMPT_VISIBILITY_KEY = "hubui.localPromptVisible";
+    const THEME_KEY = "hubui.theme";
+    const HOVER_MODE_KEY = "hubui.hoverMode";
+    const THEME_MODES = ["light", "dark", "night"];
+    const HOVER_MODES = ["auto", "on", "off"];
     const CLOSE_TASK_ANIMATION_MS = 360;
     const QUEUED_STATUS_TIMEOUT_MS = 8_000;
     const HUB_CONNECT_URL = "https://app.molten.bot";
@@ -351,6 +382,24 @@
         return localStorage.getItem(PROMPT_VISIBILITY_KEY) !== "hidden";
       } catch (_err) {
         return true;
+      }
+    }
+
+    function loadThemeMode() {
+      try {
+        const raw = localStorage.getItem(THEME_KEY);
+        return THEME_MODES.includes(raw) ? raw : "light";
+      } catch (_err) {
+        return "light";
+      }
+    }
+
+    function loadHoverMode() {
+      try {
+        const raw = localStorage.getItem(HOVER_MODE_KEY);
+        return HOVER_MODES.includes(raw) ? raw : "auto";
+      } catch (_err) {
+        return "auto";
       }
     }
 
@@ -452,6 +501,188 @@
     const agentAuthCode = document.getElementById("agent-auth-code");
     const agentAuthCopy = document.getElementById("agent-auth-copy");
     const agentAuthVerify = document.getElementById("agent-auth-verify");
+    const themeSelect = document.getElementById("theme-select");
+    const hoverSelect = document.getElementById("hover-select");
+
+    function applyThemeMode(theme, persist) {
+      const normalized = THEME_MODES.includes(theme) ? theme : "light";
+      const root = document.documentElement;
+      root.classList.remove("light", "dark", "night");
+      root.classList.add(normalized);
+      root.setAttribute("data-theme", normalized);
+      if (themeSelect && themeSelect.value !== normalized) {
+        themeSelect.value = normalized;
+      }
+      if (persist) {
+        try {
+          localStorage.setItem(THEME_KEY, normalized);
+        } catch (_err) {
+          // Ignore localStorage failures.
+        }
+      }
+    }
+
+    function applyHoverMode(mode, persist) {
+      const normalized = HOVER_MODES.includes(mode) ? mode : "auto";
+      const root = document.documentElement;
+      root.setAttribute("data-hover-mode", normalized);
+      if (hoverSelect && hoverSelect.value !== normalized) {
+        hoverSelect.value = normalized;
+      }
+      if (persist) {
+        try {
+          localStorage.setItem(HOVER_MODE_KEY, normalized);
+        } catch (_err) {
+          // Ignore localStorage failures.
+        }
+      }
+    }
+
+    function initAppearanceControls() {
+      applyThemeMode(loadThemeMode(), false);
+      applyHoverMode(loadHoverMode(), false);
+
+      if (themeSelect) {
+        themeSelect.addEventListener("change", () => {
+          applyThemeMode(themeSelect.value, true);
+        });
+      }
+      if (hoverSelect) {
+        hoverSelect.addEventListener("change", () => {
+          applyHoverMode(hoverSelect.value, true);
+        });
+      }
+    }
+
+    function initSnowfallBackground() {
+      const canvas = document.getElementById("snowfall-canvas");
+      if (!canvas) return;
+      if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      const ctx = canvas.getContext("2d", { alpha: true });
+      if (!ctx) return;
+
+      let rafID = null;
+      let particles = [];
+      let bgGradient = null;
+      let canvasW = 0;
+      let canvasH = 0;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const density = 55;
+
+      function buildSprite() {
+        const SIZE = 64;
+        const c = document.createElement("canvas");
+        c.width = SIZE;
+        c.height = SIZE;
+        const cctx = c.getContext("2d");
+        if (!cctx) return c;
+        const center = SIZE / 2;
+        const grad = cctx.createRadialGradient(center, center, 0, center, center, center);
+        grad.addColorStop(0, "rgba(255,255,255,1)");
+        grad.addColorStop(0.5, "rgba(255,255,255,0.6)");
+        grad.addColorStop(1, "rgba(255,255,255,0)");
+        cctx.fillStyle = grad;
+        cctx.beginPath();
+        cctx.arc(center, center, center, 0, Math.PI * 2);
+        cctx.fill();
+        return c;
+      }
+
+      const sprite = buildSprite();
+
+      function resize() {
+        const rect = canvas.getBoundingClientRect();
+        canvasW = rect.width;
+        canvasH = rect.height;
+        canvas.width = Math.max(1, Math.floor(canvasW * dpr));
+        canvas.height = Math.max(1, Math.floor(canvasH * dpr));
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        bgGradient = ctx.createRadialGradient(canvasW / 2, canvasH / 2, 0, canvasW / 2, canvasH / 2, canvasW * 0.6);
+        bgGradient.addColorStop(0, "rgba(255,255,255,0.04)");
+        bgGradient.addColorStop(1, "rgba(255,255,255,0)");
+
+        const count = Math.floor(((canvasW * canvasH) / 10000) * density / 10);
+        particles = Array.from({ length: count }, () => {
+          const baseRadius = 1 + Math.random() * 6;
+          const baseAlpha = 0.05 + Math.random() * 0.35;
+          return {
+            x: Math.random() * canvasW,
+            y: Math.random() * canvasH,
+            baseRadius,
+            radius: baseRadius,
+            baseAlpha,
+            alpha: baseAlpha,
+            speed: 0.2 + Math.random(),
+            drift: (Math.random() - 0.5) * 1.2,
+            pulsePhase: Math.random() * Math.PI * 2,
+            pulseSpeed: 0.03 * (0.8 + Math.random() * 0.4),
+            opacityPhase: Math.random() * Math.PI * 2,
+            opacitySpeed: 0.01 + Math.random() * 0.02,
+            driftPhase: Math.random() * Math.PI * 2,
+            driftSpeed: 0.008 + Math.random() * 0.012,
+          };
+        });
+      }
+
+      let last = performance.now();
+      function tick(now) {
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        ctx.clearRect(0, 0, canvasW, canvasH);
+        if (bgGradient) {
+          ctx.fillStyle = bgGradient;
+          ctx.fillRect(0, 0, canvasW, canvasH);
+        }
+
+        for (const particle of particles) {
+          particle.pulsePhase += particle.pulseSpeed;
+          particle.radius = particle.baseRadius * (1 + Math.sin(particle.pulsePhase) * 0.7);
+          particle.opacityPhase += particle.opacitySpeed;
+          particle.alpha = particle.baseAlpha * (0.5 + Math.sin(particle.opacityPhase) * 0.5);
+          particle.driftPhase += particle.driftSpeed;
+          const drift = Math.sin(particle.driftPhase) * 0.6;
+          const halo = particle.radius * 1.8;
+
+          ctx.globalAlpha = particle.alpha * 0.25;
+          ctx.drawImage(sprite, particle.x - halo, particle.y - halo, halo * 2, halo * 2);
+          ctx.globalAlpha = particle.alpha;
+          ctx.drawImage(sprite, particle.x - particle.radius, particle.y - particle.radius, particle.radius * 2, particle.radius * 2);
+          ctx.globalAlpha = 1;
+
+          particle.y += particle.speed * dt * 60;
+          if (particle.y - particle.radius > canvasH) {
+            particle.y = -particle.radius;
+            particle.x = Math.random() * canvasW;
+          }
+
+          particle.x += (particle.drift + drift) * dt * 60;
+          if (particle.x < -20) particle.x = canvasW + 20;
+          if (particle.x > canvasW + 20) particle.x = -20;
+        }
+
+        rafID = window.requestAnimationFrame(tick);
+      }
+
+      function onVisibilityChange() {
+        if (document.hidden) {
+          if (rafID !== null) {
+            window.cancelAnimationFrame(rafID);
+            rafID = null;
+          }
+          return;
+        }
+        if (rafID === null) {
+          last = performance.now();
+          rafID = window.requestAnimationFrame(tick);
+        }
+      }
+
+      resize();
+      window.addEventListener("resize", resize);
+      document.addEventListener("visibilitychange", onVisibilityChange);
+      rafID = window.requestAnimationFrame(tick);
+    }
 
     function setIndicator(itemNode, dot, textNode, label, online, text) {
       const message = `${label}: ${text}`;
@@ -2662,6 +2893,8 @@
     } catch (_err) {
       // Prompt fields start empty until the user fills them in.
     }
+    initAppearanceControls();
+    initSnowfallBackground();
     setPromptMode(state.promptMode);
     applyPromptVisibility();
     applyAgentAuthGate(state.agentAuth);

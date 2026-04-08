@@ -1663,3 +1663,233 @@ body.task-fullscreen-open #task-fullscreen-toggle {
     grid-template-columns: 1fr;
   }
 }
+
+/* Redesign extras merged from redesign branch */
+.site-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.snowfall-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.glow {
+  position: absolute;
+  border-radius: 999px;
+  transition: opacity 0.7s ease;
+}
+
+.glow-a {
+  width: 600px;
+  height: 600px;
+  top: -25%;
+  left: -25%;
+  background: radial-gradient(circle, var(--running) 0%, transparent 70%);
+  opacity: var(--glow-opacity, 0.08);
+}
+
+.glow-b {
+  width: 800px;
+  height: 800px;
+  bottom: -25%;
+  right: -25%;
+  background: radial-gradient(circle, var(--running) 0%, transparent 70%);
+  opacity: calc(var(--glow-opacity, 0.08) * 0.7);
+}
+
+.glow-c {
+  width: 1000px;
+  height: 600px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(ellipse, var(--accent) 0%, transparent 60%);
+  opacity: calc(var(--glow-opacity, 0.08) * 0.35);
+}
+
+.grain {
+  position: absolute;
+  inset: 0;
+  opacity: var(--noise-opacity, 0.015);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 128px 128px;
+  transition: opacity 0.7s ease;
+  z-index: 4;
+}
+
+.theme-controls {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel-strong);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  padding: 8px 10px;
+}
+
+.theme-control-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.theme-control-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--meta);
+  font-weight: 700;
+}
+
+.theme-control-select {
+  font-size: 0.72rem;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  padding: 6px 8px;
+  min-width: 86px;
+  outline: none;
+}
+
+.theme-control-select:focus-visible {
+  border-color: var(--running);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.22);
+}
+
+html.dark,
+html.night {
+  color-scheme: dark;
+}
+
+html.dark {
+  --bg: #0f1627;
+  --bg-soft: rgba(20, 29, 49, 0.88);
+  --bg-elevated: #18233a;
+  --bg-panel: rgba(20, 30, 52, 0.78);
+  --bg-panel-strong: rgba(26, 38, 63, 0.9);
+  --bg-panel-muted: rgba(34, 48, 78, 0.82);
+  --border: rgba(150, 179, 230, 0.24);
+  --border-strong: rgba(92, 157, 255, 0.4);
+  --text: #e8f0ff;
+  --text-soft: #b8caea;
+  --muted: #9fb2d6;
+  --meta: #8ca2cc;
+  --accent-soft: rgba(123, 97, 255, 0.24);
+  --shadow-sm: 0 10px 28px rgba(4, 11, 27, 0.38);
+  --shadow-md: 0 18px 44px rgba(4, 11, 27, 0.5);
+  --shadow-lg: 0 28px 72px rgba(4, 11, 27, 0.62);
+}
+
+html.night {
+  --bg: #080b14;
+  --bg-soft: rgba(9, 14, 24, 0.92);
+  --bg-elevated: #0f1626;
+  --bg-panel: rgba(14, 21, 36, 0.86);
+  --bg-panel-strong: rgba(16, 24, 42, 0.94);
+  --bg-panel-muted: rgba(25, 35, 58, 0.9);
+  --border: rgba(122, 147, 191, 0.28);
+  --border-strong: rgba(98, 172, 255, 0.44);
+  --text: #edf3ff;
+  --text-soft: #bed0ef;
+  --muted: #9badcf;
+  --meta: #8ca1c9;
+  --accent-soft: rgba(123, 97, 255, 0.28);
+  --shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.46);
+  --shadow-md: 0 18px 44px rgba(0, 0, 0, 0.58);
+  --shadow-lg: 0 28px 72px rgba(0, 0, 0, 0.7);
+}
+
+html[data-hover-mode="on"] .prompt-action-button:not(:disabled),
+html[data-hover-mode="on"] .task-rerun:not(:disabled),
+html[data-hover-mode="on"] .task-output-toggle:not(:disabled),
+html[data-hover-mode="on"] .task-terminal-toggle:not(:disabled),
+html[data-hover-mode="on"] .task-fullscreen-toggle:not(:disabled),
+html[data-hover-mode="on"] .prompt-visibility-toggle:not(:disabled),
+html[data-hover-mode="on"] .task-close:not(:disabled),
+html[data-hover-mode="on"] .task-control-toggle:not(:disabled),
+html[data-hover-mode="on"] .task-stop:not(:disabled),
+html[data-hover-mode="on"] .task:not(.task-closing) {
+  transform: translateY(-1px);
+}
+
+html[data-hover-mode="on"] .task:not(.task-closing) {
+  border-color: color-mix(in srgb, var(--running) 34%, var(--border));
+  box-shadow: var(--shadow-md);
+}
+
+html[data-hover-mode="on"] .prompt-action-button:not(:disabled),
+html[data-hover-mode="on"] .task-rerun:not(:disabled),
+html[data-hover-mode="on"] .task-output-toggle:not(:disabled),
+html[data-hover-mode="on"] .task-terminal-toggle:not(:disabled),
+html[data-hover-mode="on"] .task-fullscreen-toggle:not(:disabled),
+html[data-hover-mode="on"] .prompt-visibility-toggle:not(:disabled) {
+  border-color: color-mix(in srgb, var(--running) 36%, var(--border));
+  color: var(--running);
+  box-shadow: var(--shadow-sm);
+}
+
+html[data-hover-mode="off"] .task,
+html[data-hover-mode="off"] .task-close,
+html[data-hover-mode="off"] .task-control-toggle,
+html[data-hover-mode="off"] .task-stop,
+html[data-hover-mode="off"] .prompt-action-button,
+html[data-hover-mode="off"] .task-rerun,
+html[data-hover-mode="off"] .task-output-toggle,
+html[data-hover-mode="off"] .task-terminal-toggle,
+html[data-hover-mode="off"] .task-fullscreen-toggle,
+html[data-hover-mode="off"] .prompt-visibility-toggle {
+  transition: none !important;
+}
+
+html[data-hover-mode="off"] .task:hover,
+html[data-hover-mode="off"] .task-close:hover,
+html[data-hover-mode="off"] .task-control-toggle:hover,
+html[data-hover-mode="off"] .task-stop:hover,
+html[data-hover-mode="off"] .prompt-action-button:hover,
+html[data-hover-mode="off"] .task-rerun:hover,
+html[data-hover-mode="off"] .task-output-toggle:hover,
+html[data-hover-mode="off"] .task-terminal-toggle:hover,
+html[data-hover-mode="off"] .task-fullscreen-toggle:hover,
+html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 700px) {
+  .theme-controls {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .theme-control-group {
+    flex: 1 1 calc(50% - 4px);
+    justify-content: space-between;
+  }
+
+  .theme-control-select {
+    min-width: 0;
+    width: 100%;
+  }
+}
