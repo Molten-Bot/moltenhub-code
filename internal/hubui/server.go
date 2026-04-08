@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jef/moltenhub-code/internal/agentruntime"
 	"github.com/jef/moltenhub-code/internal/library"
 )
 
@@ -27,6 +28,7 @@ type Server struct {
 	Addr              string
 	Broker            *Broker
 	AutomaticMode     bool
+	ConfiguredHarness string
 	Logf              func(string, ...any)
 	SubmitLocalPrompt func(context.Context, []byte) (string, error)
 	SubmitTaskRerun   func(context.Context, string, []byte, bool) (string, error)
@@ -151,8 +153,15 @@ func (s Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) injectIndexConfig(data []byte) []byte {
-	cfg, err := json.Marshal(map[string]bool{
-		"automaticMode": s.AutomaticMode,
+	type indexConfig struct {
+		AutomaticMode        bool   `json:"automaticMode"`
+		ConfiguredHarness    string `json:"configuredHarness"`
+		ConfiguredAgentLabel string `json:"configuredAgentLabel"`
+	}
+	cfg, err := json.Marshal(indexConfig{
+		AutomaticMode:        s.AutomaticMode,
+		ConfiguredHarness:    strings.TrimSpace(s.ConfiguredHarness),
+		ConfiguredAgentLabel: agentruntime.DisplayName(s.ConfiguredHarness),
 	})
 	if err != nil {
 		s.logf("hub.ui status=warn event=marshal_index_config err=%q", err)

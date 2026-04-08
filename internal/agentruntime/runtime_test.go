@@ -99,6 +99,23 @@ func TestResolveRejectsUnknownHarness(t *testing.T) {
 	}
 }
 
+func TestDisplayName(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]string{
+		"":              "Codex",
+		HarnessCodex:    "Codex",
+		HarnessClaude:   "Claude",
+		HarnessAuggie:   "Auggie",
+		"  CLAUDE  ":    "Claude",
+	}
+	for harness, want := range cases {
+		if got := DisplayName(harness); got != want {
+			t.Fatalf("DisplayName(%q) = %q, want %q", harness, got, want)
+		}
+	}
+}
+
 func TestBuildCommandCodex(t *testing.T) {
 	t.Parallel()
 

@@ -16,6 +16,12 @@ const (
 
 const defaultHarness = HarnessCodex
 
+var harnessDisplayNames = map[string]string{
+	HarnessAuggie: "Auggie",
+	HarnessClaude: "Claude",
+	HarnessCodex:  "Codex",
+}
+
 // RunOptions controls provider-specific execution behavior.
 type RunOptions struct {
 	SkipGitRepoCheck bool
@@ -95,6 +101,15 @@ func SupportedHarnesses() []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// DisplayName returns the user-facing harness label.
+func DisplayName(harness string) string {
+	normalized := normalizeHarness(harness)
+	if label, ok := harnessDisplayNames[normalized]; ok {
+		return label
+	}
+	return harnessDisplayNames[defaultHarness]
 }
 
 // RequirementName returns the boot diagnostic requirement key for this runtime.

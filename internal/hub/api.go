@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jef/moltenhub-code/internal/agentruntime"
 	"github.com/jef/moltenhub-code/internal/library"
 )
 
@@ -862,10 +863,13 @@ func truncateBody(body []byte) string {
 }
 
 func buildAgentMetadata(cfg InitConfig) map[string]any {
+	harness := strings.TrimSpace(cfg.AgentHarness)
 	metadata := map[string]any{
-		"agent_type": normalizeAgentType(nil),
-		"runtime":    runtimeIdentifier,
-		"harness":    runtimeIdentifier + "@v1",
+		"agent_type":          normalizeAgentType(nil),
+		"runtime":             runtimeIdentifier,
+		"harness":             runtimeIdentifier + "@v1",
+		"agent_harness":       harness,
+		"agent_harness_label": agentruntime.DisplayName(harness),
 	}
 
 	if strings.TrimSpace(cfg.Profile.DisplayName) != "" {

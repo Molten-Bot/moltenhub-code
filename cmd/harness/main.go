@@ -451,6 +451,7 @@ func runHub(args []string) int {
 	if strings.TrimSpace(*uiListen) != "" {
 		uiServer := hubui.NewServer(*uiListen, monitorBroker)
 		uiServer.AutomaticMode = *uiAutomatic
+		uiServer.ConfiguredHarness = cfg.AgentHarness
 		uiServer.Logf = logger.Printf
 		if codexAuth != nil {
 			uiServer.AgentAuthStatus = codexAuth.Status
@@ -532,6 +533,7 @@ func runHub(args []string) int {
 	daemon := hub.NewDaemon(runner)
 	daemon.Logf = daemonLogger
 	daemon.DispatchController = dispatchController
+	daemon.TaskLogRoot = logRoot
 	daemon.OnDispatchQueued = func(requestID string, runCfg config.Config) {
 		if runConfigJSON, ok := marshalRunConfigJSON(runCfg); ok {
 			monitorBroker.RecordTaskRunConfig(requestID, runConfigJSON)
@@ -699,7 +701,7 @@ func failureFollowUpRunConfig(
 	failedRunCfg config.Config,
 	logRoot string,
 ) config.Config {
-	logPaths := taskLogPaths(logRoot, failedRequestID)
+	logPaths := failurefollowup.TaskLogPaths(logRoot, failedRequestID)
 	return config.Config{
 		Repos:        failureFollowUpRepos(failedResult, failedRunCfg),
 		BaseBranch:   "main",
@@ -860,36 +862,11 @@ func failureFollowUpContextRepos(failedResult harness.Result, failedRunCfg confi
 }
 
 func taskLogPaths(logRoot, requestID string) []string {
-	logDir, ok := taskLogDir(logRoot, requestID)
-	if !ok {
-		return nil
-	}
-	return []string{
-		logDir,
-		filepath.Join(logDir, legacyTaskLogFileName),
-		filepath.Join(logDir, logFileName),
-	}
+	return failurefollowup.TaskLogPaths(logRoot, requestID)
 }
 
 func taskLogDir(logRoot, requestID string) (string, bool) {
-	logRoot = strings.TrimSpace(logRoot)
-	requestID = strings.TrimSpace(requestID)
-	if logRoot == "" || requestID == "" {
-		return "", false
-	}
-
-	subdir, ok := identifierSubdir(requestID)
-	if !ok {
-		return "", false
-	}
-	subdir = filepath.Clean(subdir)
-	if subdir == "." || subdir == "" || subdir == ".." {
-		return "", false
-	}
-	if filepath.IsAbs(subdir) || strings.HasPrefix(subdir, ".."+string(filepath.Separator)) {
-		return "", false
-	}
-	return filepath.Join(logRoot, subdir), true
+	return failurefollowup.TaskLogDir(logRoot, requestID)
 }
 
 func localTaskLogDir(logRoot, requestID string) (string, bool) {

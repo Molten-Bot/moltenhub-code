@@ -26,6 +26,7 @@ type Daemon struct {
 	OnDispatchFailed   func(requestID string, runCfg config.Config, result harness.Result)
 	DispatchController *AdaptiveDispatchController
 	ReconnectDelay     time.Duration
+	TaskLogRoot        string
 }
 
 const wsFallbackWindow = 30 * time.Second
@@ -405,7 +406,7 @@ func (d Daemon) processInboundMessage(
 							dispatch.RequestID,
 							fmt.Sprintf("non-remediable failure detected: %s", reason),
 						)
-					} else if followUpErr := queueFailureFollowUp(ctx, api, cfg, dispatch, failRes); followUpErr != nil {
+					} else if followUpErr := queueFailureFollowUp(ctx, api, cfg, dispatch, failRes, d.TaskLogRoot); followUpErr != nil {
 						d.logf("dispatch status=follow_up_error request_id=%s err=%q", dispatch.RequestID, followUpErr)
 					}
 					if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
@@ -594,7 +595,7 @@ func (d Daemon) handleDispatch(
 				dispatch.RequestID,
 				fmt.Sprintf("non-remediable failure detected: %s", reason),
 			)
-		} else if err := queueFailureFollowUp(ctx, api, cfg, dispatch, res); err != nil {
+		} else if err := queueFailureFollowUp(ctx, api, cfg, dispatch, res, d.TaskLogRoot); err != nil {
 			d.logf("dispatch status=follow_up_error request_id=%s err=%q", dispatch.RequestID, err)
 		}
 	}
@@ -733,7 +734,7 @@ func shouldQueueFailureFollowUpError(err error) (bool, string) {
 	return true, ""
 }
 
-func queueFailureFollowUp(ctx context.Context, api MoltenHubAPI, cfg InitConfig, dispatch SkillDispatch, res harness.Result) error {
+func queueFailureFollowUp(ctx context.Context, api MoltenHubAPI, cfg InitConfig, dispatch SkillDispatch, res harness.Result, taskLogRoot string) error {
 	if api == nil {
 		return fmt.Errorf("moltenhub api client is required")
 	}
@@ -746,7 +747,7 @@ func queueFailureFollowUp(ctx context.Context, api MoltenHubAPI, cfg InitConfig,
 		"repos":        repos,
 		"baseBranch":   "main",
 		"targetSubdir": ".",
-		"prompt":       failureFollowUpPrompt(dispatch, res),
+		"prompt":       failureFollowUpPrompt(taskLogRoot, dispatch, res),
 	}
 
 	payload := map[string]any{
@@ -759,8 +760,8 @@ func queueFailureFollowUp(ctx context.Context, api MoltenHubAPI, cfg InitConfig,
 	return api.PublishResult(ctx, payload)
 }
 
-func failureFollowUpPrompt(dispatch SkillDispatch, res harness.Result) string {
-	paths := failureLogPaths(dispatch.Config, res)
+func failureFollowUpPrompt(logRoot string, dispatch SkillDispatch, res harness.Result) string {
+	paths := failureLogPaths(logRoot, dispatch.RequestID, dispatch.Config, res)
 	var b strings.Builder
 	b.WriteString(failureFollowUpPromptBase)
 	b.WriteString("\n\nRelevant failing log path(s):")
@@ -806,9 +807,9 @@ func failureFollowUpContext(dispatch SkillDispatch, res harness.Result) string {
 	return strings.Join(lines, "\n")
 }
 
-func failureLogPaths(runCfg config.Config, res harness.Result) []string {
+func failureLogPaths(logRoot, requestID string, runCfg config.Config, res harness.Result) []string {
 	seen := map[string]struct{}{}
-	paths := make([]string, 0, len(res.RepoResults)+2)
+	paths := make([]string, 0, len(res.RepoResults)+5)
 	appendPath := func(path string) {
 		path = strings.TrimSpace(path)
 		if path == "" {
@@ -821,6 +822,9 @@ func failureLogPaths(runCfg config.Config, res harness.Result) []string {
 		paths = append(paths, path)
 	}
 
+	for _, path := range failurefollowup.TaskLogPaths(logRoot, requestID) {
+		appendPath(path)
+	}
 	appendPath(res.WorkspaceDir)
 	for _, repo := range res.RepoResults {
 		appendPath(repo.RepoDir)

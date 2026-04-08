@@ -109,6 +109,12 @@ func TestSyncProfileUsesOpenAPICompatiblePayloads(t *testing.T) {
 	if got := meta["visibility"]; got != "public" {
 		t.Fatalf("visibility = %#v", got)
 	}
+	if got := meta["agent_harness"]; got != "codex" {
+		t.Fatalf("agent_harness = %#v", got)
+	}
+	if got := meta["agent_harness_label"]; got != "Codex" {
+		t.Fatalf("agent_harness_label = %#v", got)
+	}
 	markdown, _ := meta["profile_markdown"].(string)
 	if !strings.Contains(markdown, "🎮") {
 		t.Fatalf("profile_markdown missing emoji: %q", markdown)
@@ -171,6 +177,7 @@ func TestSyncProfileIgnoresProfileMetadataOverridesFromInit(t *testing.T) {
 
 	client := NewAPIClient(ts.URL + "/v1")
 	cfg := InitConfig{
+		AgentHarness: "claude",
 		Profile: ProfileConfig{
 			Metadata: map[string]any{
 				"public":     false,
@@ -214,6 +221,12 @@ func TestSyncProfileIgnoresProfileMetadataOverridesFromInit(t *testing.T) {
 	}
 	if got := meta["agent_type"]; got != runtimeIdentifier {
 		t.Fatalf("agent_type = %#v", got)
+	}
+	if got := meta["agent_harness"]; got != "claude" {
+		t.Fatalf("agent_harness = %#v", got)
+	}
+	if got := meta["agent_harness_label"]; got != "Claude" {
+		t.Fatalf("agent_harness_label = %#v", got)
 	}
 
 	skills, ok := meta["skills"].([]any)
