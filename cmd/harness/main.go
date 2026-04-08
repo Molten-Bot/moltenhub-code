@@ -219,7 +219,7 @@ func runHub(args []string) int {
 	}
 
 	runtimeCfg, runtimeErr := agentruntime.Resolve(cfg.AgentHarness, cfg.AgentCommand)
-	var codexAuth *codexAuthGate
+	var authGate agentAuthGate
 
 	localSubmitDeduper := newLocalSubmissionDeduper(localSubmissionDedupTTL)
 	localTaskController := newLocalTaskController()
@@ -228,8 +228,8 @@ func runHub(args []string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if runtimeErr == nil && runtimeCfg.Harness == agentruntime.HarnessCodex {
-		codexAuth = newCodexAuthGate(ctx, runner, runtimeCfg.Command, daemonLogger)
+	if runtimeErr == nil {
+		authGate = newAgentAuthGate(ctx, runner, runtimeCfg, daemonLogger)
 	}
 
 	if ok := runHubBootDiagnostics(ctx, runner, daemonLogger, cfg); !ok {
@@ -248,15 +248,15 @@ func runHub(args []string) int {
 	var queueFailureFollowUp func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config)
 	var enqueueLocalRun func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string, force bool) (string, error)
 	enqueueLocalRun = func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string, force bool) (string, error) {
-		if codexAuth != nil {
-			authState, authErr := codexAuth.Status(reqCtx)
+		if authGate != nil {
+			authState, authErr := authGate.Status(reqCtx)
 			if authErr != nil {
-				return "", fmt.Errorf("check codex auth status: %w", authErr)
+				return "", fmt.Errorf("check agent auth status: %w", authErr)
 			}
 			if authState.Required && !authState.Ready {
 				return "", fmt.Errorf(
 					"agent auth required: %s",
-					firstNonEmptyString(authState.Message, "complete Codex device authorization in the UI"),
+					firstNonEmptyString(authState.Message, "complete agent authorization in the UI"),
 				)
 			}
 		}
@@ -452,10 +452,10 @@ func runHub(args []string) int {
 		uiServer := hubui.NewServer(*uiListen, monitorBroker)
 		uiServer.AutomaticMode = *uiAutomatic
 		uiServer.Logf = logger.Printf
-		if codexAuth != nil {
-			uiServer.AgentAuthStatus = codexAuth.Status
-			uiServer.StartAgentAuth = codexAuth.StartDeviceAuth
-			uiServer.VerifyAgentAuth = codexAuth.Verify
+		if authGate != nil {
+			uiServer.AgentAuthStatus = authGate.Status
+			uiServer.StartAgentAuth = authGate.StartDeviceAuth
+			uiServer.VerifyAgentAuth = authGate.Verify
 		}
 		uiServer.SubmitLocalPrompt = func(reqCtx context.Context, body []byte) (string, error) {
 			runCfg, err := hub.ParseRunConfigJSON(body)

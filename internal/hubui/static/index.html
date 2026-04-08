@@ -261,7 +261,8 @@
 
   <div id="agent-auth-gate" class="fixed inset-0 z-[95] hidden items-center justify-center bg-[#040911]/85 p-4 backdrop-blur-sm" aria-live="polite">
     <div class="flex min-h-[220px] w-full max-w-xl flex-col p-2">
-      <h2 class="text-[2rem] font-semibold leading-tight text-hub-text">Authorize Codex to get started</h2>
+      <h2 id="agent-auth-title" class="text-[2rem] font-semibold leading-tight text-hub-text">Authorize Agent to get started</h2>
+      <p id="agent-auth-message" class="mt-3 max-w-lg text-base leading-7 text-hub-text/85"></p>
 
       <div id="agent-auth-details" class="mt-5 hidden space-y-3">
         <div class="flex flex-wrap items-center gap-2.5">
@@ -332,6 +333,14 @@
         deviceCode: String(auth.device_code || auth.deviceCode || "").trim(),
         updatedAt: String(auth.updated_at || auth.updatedAt || "").trim(),
       };
+    }
+
+    function agentAuthLabel(harness) {
+      const normalized = String(harness || "").trim().toLowerCase();
+      if (normalized === "codex") return "Codex";
+      if (normalized === "claude") return "Claude Code";
+      if (normalized === "auggie") return "Auggie";
+      return "Agent";
     }
 
     function loadDismissedTaskIDs() {
@@ -494,6 +503,8 @@
     const promptWrap = document.querySelector(".prompt-wrap");
     const promptVisibilityToggle = document.getElementById("prompt-visibility-toggle");
     const agentAuthGate = document.getElementById("agent-auth-gate");
+    const agentAuthTitle = document.getElementById("agent-auth-title");
+    const agentAuthMessage = document.getElementById("agent-auth-message");
     const agentAuthDetails = document.getElementById("agent-auth-details");
     const agentAuthURL = document.getElementById("agent-auth-url");
     const agentAuthCode = document.getElementById("agent-auth-code");
@@ -753,9 +764,10 @@
 
     function updateAgentAuthDoneVisibility() {
       if (!agentAuthVerify) return;
+      const hasChallenge = Boolean(state.agentAuth.authURL || state.agentAuth.deviceCode);
       const visible = state.agentAuth.required &&
         !state.agentAuth.ready &&
-        state.agentAuthInteracted &&
+        (!hasChallenge || state.agentAuthInteracted) &&
         !state.agentAuthVerifyPending;
       agentAuthVerify.classList.toggle("hidden", !visible);
     }
@@ -788,6 +800,13 @@
       if (agentAuthGate) {
         agentAuthGate.classList.toggle("hidden", !gateVisible);
         agentAuthGate.classList.toggle("flex", gateVisible);
+      }
+      if (agentAuthTitle) {
+        agentAuthTitle.textContent = `Authorize ${agentAuthLabel(state.agentAuth.harness)} to get started`;
+      }
+      if (agentAuthMessage) {
+        agentAuthMessage.textContent = state.agentAuth.message || "";
+        agentAuthMessage.classList.toggle("hidden", !state.agentAuth.message);
       }
 
       const hasChallenge = Boolean(state.agentAuth.authURL || state.agentAuth.deviceCode);
@@ -908,7 +927,7 @@
         const auth = await requestAgentAuth("/api/agent-auth/verify", "POST");
         applyAgentAuthGate(auth);
         if (auth.ready) {
-          setLocalPromptStatus("ok", "Codex auth is ready.");
+          setLocalPromptStatus("ok", `${agentAuthLabel(auth.harness)} auth is ready.`);
         } else if (auth.state === "needs_device_auth") {
           setAgentAuthVerifyPending(false);
           await startAgentDeviceAuth();
@@ -2734,7 +2753,7 @@
     async function submitLocalPrompt(event) {
       event.preventDefault();
       if (state.agentAuth.required && !state.agentAuth.ready) {
-        setLocalPromptStatus("error", "Codex auth is required. Complete the authorization screen first.");
+        setLocalPromptStatus("error", `${agentAuthLabel(state.agentAuth.harness)} auth is required. Complete the authorization screen first.`);
         return;
       }
       let normalized = null;
