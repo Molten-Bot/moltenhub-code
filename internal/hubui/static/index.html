@@ -298,7 +298,7 @@
     const HOVER_MODE_KEY = "hubui.hoverMode";
     const THEME_MODES = ["light", "dark", "night"];
     const HOVER_MODES = ["auto", "on", "off"];
-    const CLOSE_TASK_ANIMATION_MS = 4000;
+    const CLOSE_TASK_FADE_MS = 2000;
     const QUEUED_STATUS_TIMEOUT_MS = 8_000;
     const HUB_CONNECT_URL = "https://app.molten.bot";
     const COMPLETED_STATUSES = new Set(["ok", "no_changes", "error", "invalid", "duplicate", "stopped"]);
@@ -2041,7 +2041,7 @@
         setLocalPromptStatus("ok", `Closed task ${requestID}`);
         const closeTimer = window.setTimeout(() => {
           completeTaskDismissal(requestID);
-        }, CLOSE_TASK_ANIMATION_MS);
+        }, CLOSE_TASK_FADE_MS);
         state.closingTaskTimers.set(requestID, closeTimer);
         render(state.snapshot);
       } catch (err) {

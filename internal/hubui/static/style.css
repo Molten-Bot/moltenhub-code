@@ -1011,14 +1011,13 @@ select.prompt-control {
 .task {
   border-radius: 18px;
   padding: 10px 11px;
-  transition: border-color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease;
+  transition: border-color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease, opacity 2000ms ease;
   min-width: 0;
 }
 
 .task.task-closing {
   pointer-events: none;
-  transform-origin: left center;
-  animation: taskCloseSlideFade 4000ms ease-out forwards;
+  opacity: 0;
 }
 
 .task:hover {
@@ -1525,25 +1524,6 @@ select.prompt-control {
   100% {
     opacity: 0;
     transform: translate(calc(var(--sparkle-x) * 1.2), calc(var(--sparkle-y) * 1.2)) scale(0.2);
-  }
-}
-
-@keyframes taskCloseSlideFade {
-  0% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  40% {
-    opacity: 0.92;
-    transform: translate3d(12px, 0, 0) scale(0.94);
-  }
-  72% {
-    opacity: 0.54;
-    transform: translate3d(28px, 0, 0) scale(0.84);
-  }
-  100% {
-    opacity: 0;
-    transform: translate3d(48px, 0, 0) scale(0.72);
   }
 }
 

@@ -172,8 +172,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function dismissTask(") {
 		t.Fatalf("expected index html to include dismissTask handler")
 	}
-	if !strings.Contains(markup, "const CLOSE_TASK_ANIMATION_MS = 4000;") {
-		t.Fatalf("expected index html to include close task animation timing")
+	if !strings.Contains(markup, "const CLOSE_TASK_FADE_MS = 2000;") {
+		t.Fatalf("expected index html to include close task fade timing")
 	}
 	if !strings.Contains(markup, "closingTaskIDs: new Set()") {
 		t.Fatalf("expected index html to track closing tasks")
@@ -717,11 +717,11 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task.task-closing") {
 		t.Fatalf("expected stylesheet to include task closing styles")
 	}
-	if !strings.Contains(css, "@keyframes taskCloseSlideFade") {
-		t.Fatalf("expected stylesheet to include close slide animation")
+	if !strings.Contains(css, ".task.task-closing {\n  pointer-events: none;\n  opacity: 0;") {
+		t.Fatalf("expected stylesheet to fade closing tasks instead of animating them")
 	}
-	if strings.Contains(css, "@keyframes taskCloseWiggleFade") || strings.Contains(css, "@keyframes taskCloseButtonWiggle") {
-		t.Fatalf("expected stylesheet to remove close wiggle animations")
+	if strings.Contains(css, "@keyframes taskCloseSlideFade") || strings.Contains(css, "@keyframes taskCloseWiggleFade") || strings.Contains(css, "@keyframes taskCloseButtonWiggle") {
+		t.Fatalf("expected stylesheet to remove close animations")
 	}
 	if !strings.Contains(css, ".task-rerun") {
 		t.Fatalf("expected stylesheet to include task rerun styles")
