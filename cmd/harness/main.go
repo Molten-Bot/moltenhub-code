@@ -1151,8 +1151,11 @@ func hubCredentialsConfigured(cfg hub.InitConfig, loadRuntimeConfig runtimeConfi
 	if loadRuntimeConfig == nil {
 		return false
 	}
-	_, err := loadRuntimeConfig()
-	return err == nil
+	stored, err := loadRuntimeConfig()
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(stored.AgentToken) != "" || strings.TrimSpace(stored.BindToken) != ""
 }
 
 func collectConfigPaths(inputs []string) ([]string, error) {

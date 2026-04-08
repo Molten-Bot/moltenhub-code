@@ -74,9 +74,6 @@ func (c RuntimeConfig) Validate() error {
 	if err := c.InitConfig.Validate(); err != nil {
 		return err
 	}
-	if strings.TrimSpace(c.AgentToken) == "" && strings.TrimSpace(c.BindToken) == "" {
-		return fmt.Errorf("runtime config requires agent_token or bind_token")
-	}
 	if c.TimeoutMs <= 0 {
 		return fmt.Errorf("runtime config timeout_ms must be > 0")
 	}
@@ -122,13 +119,17 @@ func SaveRuntimeConfig(path string, initCfg InitConfig, token string) error {
 		path = defaultRuntimeConfigPath()
 	}
 
+	token = strings.TrimSpace(token)
 	cfg := RuntimeConfig{
 		InitConfig: initCfg,
 		TimeoutMs:  runtimeTimeoutMs,
 	}
 	cfg.RuntimeConfigPath = path
-	cfg.AgentToken = strings.TrimSpace(token)
+	cfg.AgentToken = token
 	cfg.ApplyDefaults()
+	if strings.TrimSpace(cfg.AgentToken) == "" && strings.TrimSpace(cfg.BindToken) == "" {
+		return fmt.Errorf("runtime config requires agent_token or bind_token")
+	}
 	if err := cfg.Validate(); err != nil {
 		return err
 	}

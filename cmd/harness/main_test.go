@@ -143,7 +143,7 @@ func TestLoadHubBootConfigUsesDefaultRuntimeConfigWhenFlagsOmitted(t *testing.T)
 	}
 }
 
-func TestLoadHubBootConfigWithoutFlagsReturnsConfigErrorForInvalidDefaultRuntimeConfig(t *testing.T) {
+func TestLoadHubBootConfigWithoutFlagsAllowsDefaultRuntimeConfigWithoutCredentials(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -169,15 +169,18 @@ func TestLoadHubBootConfigWithoutFlagsReturnsConfigErrorForInvalidDefaultRuntime
 		}
 	})
 
-	_, exitCode, err := loadHubBootConfig("", "")
-	if err == nil {
-		t.Fatal("loadHubBootConfig() error = nil, want error")
+	cfg, exitCode, err := loadHubBootConfig("", "")
+	if err != nil {
+		t.Fatalf("loadHubBootConfig() error = %v", err)
 	}
-	if exitCode != harness.ExitConfig {
-		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitConfig)
+	if exitCode != harness.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
 	}
-	if !strings.Contains(err.Error(), "runtime config error:") {
-		t.Fatalf("error = %q, want runtime config error prefix", err)
+	if got, want := cfg.BaseURL, "https://na.hub.molten.bot/v1"; got != want {
+		t.Fatalf("BaseURL = %q, want %q", got, want)
+	}
+	if cfg.AgentToken != "" || cfg.BindToken != "" {
+		t.Fatalf("expected no credentials, got AgentToken=%q BindToken=%q", cfg.AgentToken, cfg.BindToken)
 	}
 }
 
@@ -515,6 +518,11 @@ func TestHubCredentialsConfigured(t *testing.T) {
 		return hub.RuntimeConfig{InitConfig: hub.InitConfig{AgentToken: "saved-token"}}, nil
 	}) {
 		t.Fatal("hubCredentialsConfigured() = false with runtime config token, want true")
+	}
+	if hubCredentialsConfigured(hub.InitConfig{}, func() (hub.RuntimeConfig, error) {
+		return hub.RuntimeConfig{}, nil
+	}) {
+		t.Fatal("hubCredentialsConfigured() = true with tokenless runtime config, want false")
 	}
 	if hubCredentialsConfigured(hub.InitConfig{}, func() (hub.RuntimeConfig, error) {
 		return hub.RuntimeConfig{}, errors.New("not found")
