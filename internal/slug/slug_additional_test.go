@@ -22,3 +22,19 @@ func TestFromPromptTruncatesAndTrimsBoundarySeparators(t *testing.T) {
 		t.Fatalf("FromPrompt() = %q ends with '-'", got)
 	}
 }
+
+func TestFromPromptEmptyFallsBackToTask(t *testing.T) {
+	t.Parallel()
+
+	if got := FromPrompt(" \n\t "); got != "task" {
+		t.Fatalf("FromPrompt(empty) = %q, want task", got)
+	}
+}
+
+func TestTrimGeneratedPromptSuffixEmptyInput(t *testing.T) {
+	t.Parallel()
+
+	if got := trimGeneratedPromptSuffix(" "); got != "" {
+		t.Fatalf("trimGeneratedPromptSuffix(empty) = %q, want empty", got)
+	}
+}
