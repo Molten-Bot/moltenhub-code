@@ -370,6 +370,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function renderResourceMetrics(") {
 		t.Fatalf("expected index html to include renderResourceMetrics handler")
 	}
+	if !strings.Contains(markup, `window.matchMedia("(max-width: 720px)")`) {
+		t.Fatalf("expected index html to switch metrics into compact mode across mobile widths")
+	}
+	if !strings.Contains(markup, "function formatCompactMetricNumber(") {
+		t.Fatalf("expected index html to include compact metric formatter")
+	}
 	if !strings.Contains(markup, `id="prompt-mode-builder"`) {
 		t.Fatalf("expected index html to include builder mode toggle")
 	}
