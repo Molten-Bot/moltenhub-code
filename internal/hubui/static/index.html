@@ -210,7 +210,17 @@
 
         <section id="task-panel" class="panel min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))] hidden" aria-hidden="true">
           <div class="panel-header flex items-center justify-end gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
-            <button id="task-fullscreen-toggle" class="task-fullscreen-toggle" type="button" aria-expanded="false" aria-label="Open full screen tasks">Full Screen</button>
+            <button
+              id="task-fullscreen-toggle"
+              class="task-fullscreen-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-label="Open full screen tasks"
+              title="Open full screen tasks">
+              <svg class="task-fullscreen-toggle-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"></path>
+              </svg>
+            </button>
           </div>
           <div class="scroll task-scroll h-[calc(100%-48px)] overflow-auto">
             <div id="task-list" class="task-list grid gap-2 p-3"></div>
