@@ -764,25 +764,13 @@ func queueFailureFollowUp(ctx context.Context, api MoltenHubAPI, cfg InitConfig,
 
 func failureFollowUpPrompt(logRoot string, dispatch SkillDispatch, res harness.Result) string {
 	paths := failureLogPaths(logRoot, dispatch.RequestID, dispatch.Config, res)
-	var b strings.Builder
-	b.WriteString(failureFollowUpPromptBase)
-	b.WriteString("\n\nRelevant failing log path(s):")
-	if len(paths) == 0 {
-		b.WriteString("\n- ")
-		b.WriteString(failureFollowUpNoPathGuidance)
-	} else {
-		for _, path := range paths {
-			b.WriteString("\n- ")
-			b.WriteString(path)
-		}
-	}
-	if contextBlock := failureFollowUpContext(dispatch, res); contextBlock != "" {
-		b.WriteString("\n\n")
-		b.WriteString(contextBlock)
-	}
-	b.WriteString("\n\n")
-	b.WriteString(failurefollowup.ExecutionContract)
-	return b.String()
+	return failurefollowup.ComposePrompt(
+		failureFollowUpPromptBase,
+		paths,
+		nil,
+		failureFollowUpNoPathGuidance,
+		failureFollowUpContext(dispatch, res),
+	)
 }
 
 func failureFollowUpContext(dispatch SkillDispatch, res harness.Result) string {

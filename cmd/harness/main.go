@@ -30,7 +30,6 @@ import (
 )
 
 const failureFollowUpRequiredPrompt = failurefollowup.RequiredPrompt
-const failureFollowUpExecutionContract = failurefollowup.ExecutionContract
 
 const hubBootRecommendation = "Recommended: connect this runtime to Molten Hub at https://molten.bot/hub so agents can dispatch work to it."
 
@@ -797,32 +796,17 @@ func singleRepoFromResults(results []harness.RepoResult) string {
 }
 
 func failureFollowUpPrompt(logPaths []string, failedResult harness.Result, failedRunCfg config.Config) string {
-	var b strings.Builder
-	b.WriteString(failureFollowUpRequiredPrompt)
-
-	b.WriteString("\n\nRelevant failing log path(s):")
-	if len(logPaths) == 0 {
-		b.WriteString("\n- .log/local/<request timestamp>/<request sequence>")
-		b.WriteString("\n- .log/local/<request timestamp>/<request sequence>/term")
-		b.WriteString("\n- .log/local/<request timestamp>/<request sequence>/terminal.log")
-	} else {
-		for _, path := range logPaths {
-			trimmed := strings.TrimSpace(path)
-			if trimmed == "" {
-				continue
-			}
-			b.WriteString("\n- ")
-			b.WriteString(trimmed)
-		}
-	}
-	if contextBlock := failureFollowUpFailureContext(failedResult, failedRunCfg); contextBlock != "" {
-		b.WriteString("\n\n")
-		b.WriteString(contextBlock)
-	}
-	b.WriteString("\n\n")
-	b.WriteString(failureFollowUpExecutionContract)
-
-	return strings.TrimSpace(b.String())
+	return failurefollowup.ComposePrompt(
+		failureFollowUpRequiredPrompt,
+		logPaths,
+		[]string{
+			".log/local/<request timestamp>/<request sequence>",
+			".log/local/<request timestamp>/<request sequence>/term",
+			".log/local/<request timestamp>/<request sequence>/terminal.log",
+		},
+		"",
+		failureFollowUpFailureContext(failedResult, failedRunCfg),
+	)
 }
 
 func failureFollowUpFailureContext(failedResult harness.Result, failedRunCfg config.Config) string {

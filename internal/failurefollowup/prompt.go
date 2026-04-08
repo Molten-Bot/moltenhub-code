@@ -32,6 +32,47 @@ const (
 	fallbackLogSubdir     = "main"
 )
 
+func WithExecutionContract(base string) string {
+	base = strings.TrimSpace(base)
+	if base == "" {
+		return ExecutionContract
+	}
+	return base + "\n\n" + ExecutionContract
+}
+
+func ComposePrompt(requiredPrompt string, logPaths, fallbackLogPaths []string, noPathGuidance, contextBlock string) string {
+	var b strings.Builder
+	b.WriteString(strings.TrimSpace(requiredPrompt))
+	b.WriteString("\n\nRelevant failing log path(s):")
+
+	appendPaths := func(paths []string) bool {
+		wrote := false
+		for _, path := range paths {
+			path = strings.TrimSpace(path)
+			if path == "" {
+				continue
+			}
+			b.WriteString("\n- ")
+			b.WriteString(path)
+			wrote = true
+		}
+		return wrote
+	}
+
+	if !appendPaths(logPaths) && !appendPaths(fallbackLogPaths) && strings.TrimSpace(noPathGuidance) != "" {
+		b.WriteString("\n- ")
+		b.WriteString(strings.TrimSpace(noPathGuidance))
+	}
+
+	contextBlock = strings.TrimSpace(contextBlock)
+	if contextBlock != "" {
+		b.WriteString("\n\n")
+		b.WriteString(contextBlock)
+	}
+
+	return WithExecutionContract(b.String())
+}
+
 func TaskLogPaths(logRoot, requestID string) []string {
 	logDir, ok := TaskLogDir(logRoot, requestID)
 	if !ok {
