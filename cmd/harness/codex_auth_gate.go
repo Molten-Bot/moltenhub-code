@@ -146,12 +146,7 @@ func newCodexAuthGateWithConfig(
 
 func (g *codexAuthGate) Status(_ context.Context) (hubui.AgentAuthState, error) {
 	if g == nil {
-		return hubui.AgentAuthState{
-			Required: false,
-			Ready:    true,
-			State:    "ready",
-			Message:  "Agent auth is ready.",
-		}, nil
+		return readyAgentAuthState(), nil
 	}
 
 	if blocked, state := g.githubTokenRequirementState(); blocked {
@@ -194,12 +189,7 @@ func (g *codexAuthGate) Status(_ context.Context) (hubui.AgentAuthState, error) 
 
 func (g *codexAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthState, error) {
 	if g == nil {
-		return hubui.AgentAuthState{
-			Required: false,
-			Ready:    true,
-			State:    "ready",
-			Message:  "Agent auth is ready.",
-		}, nil
+		return readyAgentAuthState(), nil
 	}
 
 	if blocked, state := g.githubTokenRequirementState(); blocked {
@@ -282,12 +272,7 @@ func (g *codexAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthState
 
 func (g *codexAuthGate) Verify(ctx context.Context) (hubui.AgentAuthState, error) {
 	if g == nil {
-		return hubui.AgentAuthState{
-			Required: false,
-			Ready:    true,
-			State:    "ready",
-			Message:  "Agent auth is ready.",
-		}, nil
+		return readyAgentAuthState(), nil
 	}
 
 	if blocked, state := g.githubTokenRequirementState(); blocked {
@@ -339,12 +324,7 @@ func (g *codexAuthGate) Verify(ctx context.Context) (hubui.AgentAuthState, error
 
 func (g *codexAuthGate) Configure(_ context.Context, rawInput string) (hubui.AgentAuthState, error) {
 	if g == nil {
-		return hubui.AgentAuthState{
-			Required: false,
-			Ready:    true,
-			State:    "ready",
-			Message:  "Agent auth is ready.",
-		}, nil
+		return readyAgentAuthState(), nil
 	}
 
 	token := strings.TrimSpace(rawInput)
@@ -521,20 +501,7 @@ func (g *codexAuthGate) snapshotLocked() hubui.AgentAuthState {
 }
 
 func (g *codexAuthGate) needsGitHubTokenState(message string) hubui.AgentAuthState {
-	message = firstNonEmptyString(
-		message,
-		"GitHub token is required. Set GITHUB_TOKEN/GH_TOKEN or paste a token below, then click Done.",
-	)
-	return hubui.AgentAuthState{
-		Harness:              agentruntime.HarnessCodex,
-		Required:             true,
-		Ready:                false,
-		State:                "needs_configure",
-		Message:              message,
-		ConfigureCommand:     claudeGitHubConfigureCommand,
-		ConfigurePlaceholder: claudeGitHubConfigurePlaceholder,
-		UpdatedAt:            time.Now().UTC().Format(time.RFC3339Nano),
-	}
+	return githubTokenNeedsConfigureState(agentruntime.HarnessCodex, message)
 }
 
 func (g *codexAuthGate) githubTokenRequirementState() (bool, hubui.AgentAuthState) {
@@ -563,16 +530,6 @@ func stripANSI(text string) string {
 		return text
 	}
 	return ansiEscapePattern.ReplaceAllString(text, "")
-}
-
-func firstNonEmptyString(values ...string) string {
-	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if trimmed != "" {
-			return trimmed
-		}
-	}
-	return ""
 }
 
 func normalizeCodexStatusMessage(raw string) string {

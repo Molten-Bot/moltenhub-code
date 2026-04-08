@@ -64,12 +64,7 @@ func newAuggieAuthGate(runtimeConfigPath string, initCfg hub.InitConfig) *auggie
 
 func (g *auggieAuthGate) Status(_ context.Context) (hubui.AgentAuthState, error) {
 	if g == nil {
-		return hubui.AgentAuthState{
-			Required: false,
-			Ready:    true,
-			State:    "ready",
-			Message:  "Agent auth is ready.",
-		}, nil
+		return readyAgentAuthState(), nil
 	}
 
 	g.mu.Lock()
@@ -80,12 +75,7 @@ func (g *auggieAuthGate) Status(_ context.Context) (hubui.AgentAuthState, error)
 
 func (g *auggieAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthState, error) {
 	if g == nil {
-		return hubui.AgentAuthState{
-			Required: false,
-			Ready:    true,
-			State:    "ready",
-			Message:  "Agent auth is ready.",
-		}, nil
+		return readyAgentAuthState(), nil
 	}
 
 	g.mu.Lock()
@@ -96,12 +86,7 @@ func (g *auggieAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthStat
 
 func (g *auggieAuthGate) Verify(_ context.Context) (hubui.AgentAuthState, error) {
 	if g == nil {
-		return hubui.AgentAuthState{
-			Required: false,
-			Ready:    true,
-			State:    "ready",
-			Message:  "Agent auth is ready.",
-		}, nil
+		return readyAgentAuthState(), nil
 	}
 
 	g.mu.Lock()
@@ -112,12 +97,7 @@ func (g *auggieAuthGate) Verify(_ context.Context) (hubui.AgentAuthState, error)
 
 func (g *auggieAuthGate) Configure(_ context.Context, rawInput string) (hubui.AgentAuthState, error) {
 	if g == nil {
-		return hubui.AgentAuthState{
-			Required: false,
-			Ready:    true,
-			State:    "ready",
-			Message:  "Agent auth is ready.",
-		}, nil
+		return readyAgentAuthState(), nil
 	}
 
 	g.mu.Lock()
@@ -318,36 +298,10 @@ func firstConfiguredAuggieSessionAuth(runtimeConfigPath string, initCfg hub.Init
 	if init := strings.TrimSpace(initCfg.AugmentSessionAuth); init != "" {
 		return init, "init config"
 	}
-	if persisted := loadPersistedAuggieSessionAuth(runtimeConfigPath); persisted != "" {
+	if persisted := hub.ReadRuntimeConfigString(runtimeConfigPath, "augment_session_auth", "augmentSessionAuth", "AUGMENT_SESSION_AUTH"); persisted != "" {
 		return persisted, "runtime config"
 	}
 	return "", ""
-}
-
-func loadPersistedAuggieSessionAuth(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return ""
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return ""
-	}
-
-	var doc map[string]any
-	if err := json.Unmarshal(data, &doc); err != nil {
-		return ""
-	}
-	return firstNonEmptyString(
-		stringValue(doc["augment_session_auth"]),
-		stringValue(doc["augmentSessionAuth"]),
-		stringValue(doc["AUGMENT_SESSION_AUTH"]),
-	)
-}
-
-func stringValue(v any) string {
-	s, _ := v.(string)
-	return strings.TrimSpace(s)
 }
 
 func normalizeAuggieSessionAuth(rawInput string) (string, error) {

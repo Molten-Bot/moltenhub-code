@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
@@ -104,12 +103,7 @@ func newClaudeAuthGateWithContextAndConfig(
 
 func (g *claudeAuthGate) Status(_ context.Context) (hubui.AgentAuthState, error) {
 	if g == nil {
-		return hubui.AgentAuthState{
-			Required: false,
-			Ready:    true,
-			State:    "ready",
-			Message:  "Agent auth is ready.",
-		}, nil
+		return readyAgentAuthState(), nil
 	}
 
 	if blocked, state := g.githubTokenRequirementState(); blocked {
@@ -146,12 +140,7 @@ func (g *claudeAuthGate) Status(_ context.Context) (hubui.AgentAuthState, error)
 
 func (g *claudeAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthState, error) {
 	if g == nil {
-		return hubui.AgentAuthState{
-			Required: false,
-			Ready:    true,
-			State:    "ready",
-			Message:  "Agent auth is ready.",
-		}, nil
+		return readyAgentAuthState(), nil
 	}
 
 	status, _ := g.Status(context.Background())
@@ -260,12 +249,7 @@ func (g *claudeAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthStat
 
 func (g *claudeAuthGate) Verify(ctx context.Context) (hubui.AgentAuthState, error) {
 	if g == nil {
-		return hubui.AgentAuthState{
-			Required: false,
-			Ready:    true,
-			State:    "ready",
-			Message:  "Agent auth is ready.",
-		}, nil
+		return readyAgentAuthState(), nil
 	}
 
 	status, _ := g.Status(context.Background())
@@ -322,12 +306,7 @@ func (g *claudeAuthGate) Configure(_ context.Context, rawInput string) (hubui.Ag
 
 func (g *claudeAuthGate) submitBrowserCode(rawInput string) (hubui.AgentAuthState, error) {
 	if g == nil {
-		return hubui.AgentAuthState{
-			Required: false,
-			Ready:    true,
-			State:    "ready",
-			Message:  "Agent auth is ready.",
-		}, nil
+		return readyAgentAuthState(), nil
 	}
 
 	code := normalizeClaudeBrowserCode(rawInput)
@@ -476,20 +455,7 @@ func (g *claudeAuthGate) snapshotLocked() hubui.AgentAuthState {
 }
 
 func (g *claudeAuthGate) needsGitHubTokenState(message string) hubui.AgentAuthState {
-	message = firstNonEmptyString(
-		message,
-		"GitHub token is required. Set GITHUB_TOKEN/GH_TOKEN or paste a token below, then click Done.",
-	)
-	return hubui.AgentAuthState{
-		Harness:              agentruntime.HarnessClaude,
-		Required:             true,
-		Ready:                false,
-		State:                "needs_configure",
-		Message:              message,
-		ConfigureCommand:     claudeGitHubConfigureCommand,
-		ConfigurePlaceholder: claudeGitHubConfigurePlaceholder,
-		UpdatedAt:            time.Now().UTC().Format(time.RFC3339Nano),
-	}
+	return githubTokenNeedsConfigureState(agentruntime.HarnessClaude, message)
 }
 
 func (g *claudeAuthGate) githubTokenRequirementState() (bool, hubui.AgentAuthState) {
@@ -699,57 +665,6 @@ func shouldAdvanceClaudeLoginPrompt(line string) bool {
 		}
 	}
 	return false
-}
-
-func firstConfiguredGitHubToken(runtimeConfigPath string, initCfg hub.InitConfig) (value string, source string) {
-	if env := strings.TrimSpace(os.Getenv("GH_TOKEN")); env != "" {
-		return env, "environment"
-	}
-	if env := strings.TrimSpace(os.Getenv("GITHUB_TOKEN")); env != "" {
-		return env, "environment"
-	}
-	if init := strings.TrimSpace(initCfg.GitHubToken); init != "" {
-		return init, "init config"
-	}
-	if persisted := loadPersistedGitHubToken(runtimeConfigPath); persisted != "" {
-		return persisted, "runtime config"
-	}
-	return "", ""
-}
-
-func loadPersistedGitHubToken(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return ""
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return ""
-	}
-
-	var doc map[string]any
-	if err := json.Unmarshal(data, &doc); err != nil {
-		return ""
-	}
-	return firstNonEmptyString(
-		stringValue(doc["github_token"]),
-		stringValue(doc["githubToken"]),
-		stringValue(doc["GITHUB_TOKEN"]),
-	)
-}
-
-func setGitHubTokenEnvironment(token string) error {
-	token = strings.TrimSpace(token)
-	if token == "" {
-		return fmt.Errorf("github token is required")
-	}
-	if err := os.Setenv("GITHUB_TOKEN", token); err != nil {
-		return err
-	}
-	if err := os.Setenv("GH_TOKEN", token); err != nil {
-		return err
-	}
-	return nil
 }
 
 func firstClaudeEnabledProvider() string {

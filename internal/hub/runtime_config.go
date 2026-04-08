@@ -145,34 +145,77 @@ func SaveRuntimeConfig(path string, initCfg InitConfig, token string) error {
 // SaveRuntimeConfigAuggieAuth persists augment_session_auth to the runtime
 // config JSON while preserving other configuration fields.
 func SaveRuntimeConfigAuggieAuth(path string, initCfg InitConfig, augmentSessionAuth string) error {
+	return saveRuntimeConfigStringField(
+		path,
+		initCfg,
+		augmentSessionAuth,
+		"augment session auth is required",
+		"augment_session_auth",
+	)
+}
+
+// SaveRuntimeConfigGitHubToken persists github_token to the runtime config JSON
+// while preserving other configuration fields.
+func SaveRuntimeConfigGitHubToken(path string, initCfg InitConfig, gitHubToken string) error {
+	return saveRuntimeConfigStringField(
+		path,
+		initCfg,
+		gitHubToken,
+		"github token is required",
+		"github_token",
+	)
+}
+
+// ReadRuntimeConfigString returns the first non-empty string for the provided
+// keys from a runtime config file. It returns an empty string when the file
+// cannot be read or parsed.
+func ReadRuntimeConfigString(path string, keys ...string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	if len(keys) == 0 {
+		return ""
+	}
+
+	doc, err := readRuntimeConfigDoc(path)
+	if err != nil {
+		return ""
+	}
+	for _, key := range keys {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if value := docStringValue(doc[key]); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func saveRuntimeConfigStringField(
+	path string,
+	initCfg InitConfig,
+	value string,
+	emptyErr string,
+	field string,
+) error {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		path = defaultRuntimeConfigPath()
 	}
 
-	augmentSessionAuth = strings.TrimSpace(augmentSessionAuth)
-	if augmentSessionAuth == "" {
-		return fmt.Errorf("augment session auth is required")
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return errors.New(emptyErr)
 	}
 
-	doc := map[string]any{}
-	data, err := os.ReadFile(path)
-	switch {
-	case err == nil:
-		if err := json.Unmarshal(data, &doc); err != nil {
-			return fmt.Errorf("parse runtime config: %w", err)
-		}
-	case errors.Is(err, os.ErrNotExist):
-		baseDoc, buildErr := runtimeConfigBaseDoc(initCfg)
-		if buildErr != nil {
-			return buildErr
-		}
-		doc = baseDoc
-	default:
-		return fmt.Errorf("read runtime config: %w", err)
+	doc, err := loadRuntimeConfigDoc(path, initCfg)
+	if err != nil {
+		return err
 	}
-
-	doc["augment_session_auth"] = augmentSessionAuth
+	doc[field] = value
 
 	encoded, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
@@ -182,44 +225,42 @@ func SaveRuntimeConfigAuggieAuth(path string, initCfg InitConfig, augmentSession
 	return writeRuntimeConfigFile(path, encoded)
 }
 
-// SaveRuntimeConfigGitHubToken persists github_token to the runtime config JSON
-// while preserving other configuration fields.
-func SaveRuntimeConfigGitHubToken(path string, initCfg InitConfig, gitHubToken string) error {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		path = defaultRuntimeConfigPath()
-	}
-
-	gitHubToken = strings.TrimSpace(gitHubToken)
-	if gitHubToken == "" {
-		return fmt.Errorf("github token is required")
-	}
-
-	doc := map[string]any{}
+func loadRuntimeConfigDoc(path string, initCfg InitConfig) (map[string]any, error) {
 	data, err := os.ReadFile(path)
 	switch {
 	case err == nil:
+		doc := map[string]any{}
 		if err := json.Unmarshal(data, &doc); err != nil {
-			return fmt.Errorf("parse runtime config: %w", err)
+			return nil, fmt.Errorf("parse runtime config: %w", err)
 		}
+		return doc, nil
 	case errors.Is(err, os.ErrNotExist):
 		baseDoc, buildErr := runtimeConfigBaseDoc(initCfg)
 		if buildErr != nil {
-			return buildErr
+			return nil, buildErr
 		}
-		doc = baseDoc
+		return baseDoc, nil
 	default:
-		return fmt.Errorf("read runtime config: %w", err)
+		return nil, fmt.Errorf("read runtime config: %w", err)
 	}
+}
 
-	doc["github_token"] = gitHubToken
-
-	encoded, err := json.MarshalIndent(doc, "", "  ")
+func readRuntimeConfigDoc(path string) (map[string]any, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("encode runtime config: %w", err)
+		return nil, err
 	}
-	encoded = append(encoded, '\n')
-	return writeRuntimeConfigFile(path, encoded)
+
+	doc := map[string]any{}
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return nil, err
+	}
+	return doc, nil
+}
+
+func docStringValue(v any) string {
+	s, _ := v.(string)
+	return strings.TrimSpace(s)
 }
 
 func runtimeConfigBaseDoc(initCfg InitConfig) (map[string]any, error) {

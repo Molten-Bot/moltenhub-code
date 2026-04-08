@@ -259,3 +259,41 @@ func TestSaveRuntimeConfigGitHubTokenMergesIntoExistingConfig(t *testing.T) {
 		t.Fatalf("custom = %#v, want %q", got["custom"], "preserved")
 	}
 }
+
+func TestReadRuntimeConfigString(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(path, []byte(`{"github_token":"ghp_saved","augment_session_auth":"{\"accessToken\":\"a\"}"}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	if got, want := ReadRuntimeConfigString(path, "github_token", "githubToken"), "ghp_saved"; got != want {
+		t.Fatalf("ReadRuntimeConfigString(github_token) = %q, want %q", got, want)
+	}
+	if got, want := ReadRuntimeConfigString(path, "missing", "augment_session_auth"), `{"accessToken":"a"}`; got != want {
+		t.Fatalf("ReadRuntimeConfigString(augment_session_auth) = %q, want %q", got, want)
+	}
+}
+
+func TestReadRuntimeConfigStringInvalidInputs(t *testing.T) {
+	t.Parallel()
+
+	if got := ReadRuntimeConfigString("", "github_token"); got != "" {
+		t.Fatalf("ReadRuntimeConfigString(empty path) = %q, want empty", got)
+	}
+	if got := ReadRuntimeConfigString(filepath.Join(t.TempDir(), "missing.json"), "github_token"); got != "" {
+		t.Fatalf("ReadRuntimeConfigString(missing path) = %q, want empty", got)
+	}
+
+	path := filepath.Join(t.TempDir(), "bad.json")
+	if err := os.WriteFile(path, []byte("{"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	if got := ReadRuntimeConfigString(path, "github_token"); got != "" {
+		t.Fatalf("ReadRuntimeConfigString(malformed) = %q, want empty", got)
+	}
+}
