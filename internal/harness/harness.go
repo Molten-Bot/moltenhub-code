@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -425,6 +426,7 @@ func (h Harness) processChangedRepo(
 			checkSummary string
 		)
 		for noReportRetry := 0; ; noReportRetry++ {
+			requiredChecksOnly := true
 			h.logf("stage=checks status=start repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt+1)
 			checkRes, checkErr = h.runCommand(ctx, "checks", prChecksCommand(repo.Dir, repo.PRURL))
 			if checkErr != nil && isNoRequiredChecksReported(checkRes, checkErr) {
@@ -435,6 +437,7 @@ func (h Harness) processChangedRepo(
 					repo.PRURL,
 					attempt+1,
 				)
+				requiredChecksOnly = false
 				checkRes, checkErr = h.runCommand(ctx, "checks", prChecksAnyCommand(repo.Dir, repo.PRURL))
 			}
 			if checkErr == nil {
@@ -443,6 +446,32 @@ func (h Harness) processChangedRepo(
 			}
 
 			checkSummary = summarizeCheckOutput(checkRes)
+			if shouldReconcileChecksAfterFailure(checkRes, checkErr) {
+				if reconciled, latestSummary, reconcileErr := h.reconcileChecksAfterFailure(ctx, *repo, requiredChecksOnly); reconcileErr == nil {
+					if latestSummary != "" {
+						checkSummary = latestSummary
+					}
+					if reconciled {
+						h.logf(
+							"stage=checks status=ok reason=latest_snapshot repo=%s repo_dir=%s pr_url=%s attempt=%d",
+							repo.URL,
+							repo.RelDir,
+							repo.PRURL,
+							attempt+1,
+						)
+						return ExitSuccess, "", nil
+					}
+				} else {
+					h.logf(
+						"stage=checks status=warn action=latest_snapshot reason=query_failed repo=%s repo_dir=%s pr_url=%s attempt=%d err=%q",
+						repo.URL,
+						repo.RelDir,
+						repo.PRURL,
+						attempt+1,
+						reconcileErr,
+					)
+				}
+			}
 			noChecksReported := isNoChecksReported(checkRes, checkErr)
 			if noChecksReported && noReportRetry == 0 {
 				h.logf(
@@ -1101,6 +1130,14 @@ func isNoRequiredChecksReported(res execx.Result, err error) bool {
 	}
 	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
 	return strings.Contains(text, "no required checks")
+}
+
+func shouldReconcileChecksAfterFailure(res execx.Result, err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr}, "\n"))
+	return strings.Contains(text, "\tpass\t") && strings.Contains(text, "\tfail\t")
 }
 
 func existingPRURLFromCreateFailure(res execx.Result, err error) (string, bool) {
@@ -1797,6 +1834,21 @@ func prChecksAnyCommand(repoDir, prURL string) execx.Command {
 	}
 }
 
+func prChecksJSONCommand(repoDir, prURL string, requiredOnly bool) execx.Command {
+	args := []string{
+		"pr", "checks", prURL,
+		"--json", "name,bucket,completedAt,startedAt",
+	}
+	if requiredOnly {
+		args = append(args, "--required")
+	}
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: args,
+	}
+}
+
 func workflowDispatchCommand(repoDir, branch string) execx.Command {
 	return execx.Command{
 		Dir:  repoDir,
@@ -1850,6 +1902,101 @@ func summarizeCheckOutput(res execx.Result) string {
 		return text
 	}
 	return strings.TrimSpace(text[:maxCheckSummaryChars]) + "...(truncated)"
+}
+
+type ghPRCheck struct {
+	Name        string `json:"name"`
+	Bucket      string `json:"bucket"`
+	CompletedAt string `json:"completedAt"`
+	StartedAt   string `json:"startedAt"`
+}
+
+type latestCheckState struct {
+	Bucket string
+	Time   time.Time
+	Index  int
+}
+
+func (h Harness) reconcileChecksAfterFailure(ctx context.Context, repo repoWorkspace, requiredOnly bool) (bool, string, error) {
+	res, err := h.runCommand(ctx, "checks", prChecksJSONCommand(repo.Dir, repo.PRURL, requiredOnly))
+	if err != nil {
+		return false, "", err
+	}
+
+	var checks []ghPRCheck
+	if parseErr := json.Unmarshal([]byte(strings.TrimSpace(res.Stdout)), &checks); parseErr != nil {
+		return false, "", fmt.Errorf("decode checks snapshot: %w", parseErr)
+	}
+	if len(checks) == 0 {
+		return false, "", nil
+	}
+
+	latestByName := make(map[string]latestCheckState, len(checks))
+	for i, check := range checks {
+		name := strings.TrimSpace(check.Name)
+		if name == "" {
+			continue
+		}
+		bucket := strings.ToLower(strings.TrimSpace(check.Bucket))
+		candidate := latestCheckState{
+			Bucket: bucket,
+			Time:   checkSnapshotTime(check),
+			Index:  i,
+		}
+		prev, exists := latestByName[name]
+		if !exists || shouldReplaceCheckSnapshot(prev, candidate) {
+			latestByName[name] = candidate
+		}
+	}
+	if len(latestByName) == 0 {
+		return false, "", nil
+	}
+
+	names := make([]string, 0, len(latestByName))
+	for name := range latestByName {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	lines := make([]string, 0, len(names))
+	allPassing := true
+	for _, name := range names {
+		state := latestByName[name]
+		lines = append(lines, fmt.Sprintf("%s\t%s", name, state.Bucket))
+		if state.Bucket != "pass" && state.Bucket != "skipping" {
+			allPassing = false
+		}
+	}
+	return allPassing, strings.Join(lines, "\n"), nil
+}
+
+func checkSnapshotTime(check ghPRCheck) time.Time {
+	for _, raw := range []string{check.CompletedAt, check.StartedAt} {
+		ts := strings.TrimSpace(raw)
+		if ts == "" {
+			continue
+		}
+		if parsed, err := time.Parse(time.RFC3339, ts); err == nil {
+			return parsed
+		}
+	}
+	return time.Time{}
+}
+
+func shouldReplaceCheckSnapshot(prev, candidate latestCheckState) bool {
+	if candidate.Time.After(prev.Time) {
+		return true
+	}
+	if prev.Time.After(candidate.Time) {
+		return false
+	}
+	if prev.Time.IsZero() && !candidate.Time.IsZero() {
+		return true
+	}
+	if !prev.Time.IsZero() && candidate.Time.IsZero() {
+		return false
+	}
+	return candidate.Index > prev.Index
 }
 
 func remediationCommitMessage(base string, attempt int) string {
