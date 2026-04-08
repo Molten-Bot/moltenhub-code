@@ -46,6 +46,13 @@ func TestLoadCatalogReadsJSONTasks(t *testing.T) {
 	if got, want := catalog.Tasks[0].DisplayName, "Security Review"; got != want {
 		t.Fatalf("DisplayName = %q, want %q", got, want)
 	}
+	summaries := catalog.Summaries()
+	if got, want := len(summaries), 1; got != want {
+		t.Fatalf("len(Summaries()) = %d, want %d", got, want)
+	}
+	if got, want := summaries[0].Prompt, "Review the repository."; got != want {
+		t.Fatalf("Summaries()[0].Prompt = %q, want %q", got, want)
+	}
 }
 
 func TestLoadCatalogSupportsMultipleKeyedTasksInOneFile(t *testing.T) {

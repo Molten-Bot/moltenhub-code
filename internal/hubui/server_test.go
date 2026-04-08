@@ -68,8 +68,8 @@ func TestHandlerLibraryEndpointReturnsTasks(t *testing.T) {
 	srv := NewServer("", NewBroker())
 	srv.LoadLibraryTasks = func() ([]library.TaskSummary, error) {
 		return []library.TaskSummary{
-			{Name: "security-review", Description: "Audit security boundaries."},
-			{Name: "unit-test-coverage"},
+			{Name: "security-review", DisplayName: "Security Review", Prompt: "Review the repository."},
+			{Name: "unit-test-coverage", DisplayName: "100% Unit Test Coverage", Prompt: "Raise coverage."},
 		}, nil
 	}
 
@@ -93,6 +93,9 @@ func TestHandlerLibraryEndpointReturnsTasks(t *testing.T) {
 	}
 	if got, want := len(body.Tasks), 2; got != want {
 		t.Fatalf("len(tasks) = %d, want %d", got, want)
+	}
+	if got, want := body.Tasks[0].Prompt, "Review the repository."; got != want {
+		t.Fatalf("tasks[0].prompt = %q, want %q", got, want)
 	}
 }
 
@@ -369,6 +372,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `class="panel-title">Studio</span>`) {
 		t.Fatalf("expected index html to render Studio as the title-bar label")
+	}
+	if !strings.Contains(markup, "library-task-option-prompt") {
+		t.Fatalf("expected index html to include expandable library prompt sections")
+	}
+	if !strings.Contains(markup, "button.setAttribute(\"aria-expanded\", String(entry.name === selected));") {
+		t.Fatalf("expected index html to mark the selected library task as expanded")
+	}
+	if strings.Contains(markup, "library-task-option-name") {
+		t.Fatalf("expected index html to stop rendering library task internal names")
 	}
 	if !strings.Contains(markup, `id="resource-metrics-text"`) {
 		t.Fatalf("expected index html to include resource metrics indicator")
