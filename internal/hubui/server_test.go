@@ -247,6 +247,18 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="task-panel"`) {
 		t.Fatalf("expected index html to include task panel wrapper")
 	}
+	if !strings.Contains(markup, `class="panel prompt-wrap`) {
+		t.Fatalf("expected index html to include prompt wrap panel")
+	}
+	if !strings.Contains(markup, `promptWrap.classList.toggle("prompt-hidden-dock", !visible);`) {
+		t.Fatalf("expected index html to toggle hidden dock mode for collapsed studio")
+	}
+	if !strings.Contains(markup, `promptVisibilityToggle.hidden = !visible || automatic;`) {
+		t.Fatalf("expected index html to hide the minimize toggle unless studio is expanded")
+	}
+	if !strings.Contains(markup, `if (!state.promptVisible && !Boolean(state.ui?.automaticMode)) {`) {
+		t.Fatalf("expected index html to auto-expand studio when a mode tab is selected")
+	}
 	if !strings.Contains(markup, `id="task-panel" class="panel min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))] hidden" aria-hidden="true"`) {
 		t.Fatalf("expected index html to keep task panel hidden before tasks exist")
 	}

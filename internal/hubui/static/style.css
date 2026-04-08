@@ -436,20 +436,21 @@ textarea {
 
 body .right-col {
   display: grid;
-  grid-template-rows: auto minmax(220px, 32%) minmax(260px, 1fr);
+  grid-template-rows: minmax(240px, 0.72fr) minmax(280px, 1fr) auto;
   gap: 16px;
+  align-content: stretch;
 }
 
 body .right-col.prompt-collapsed {
-  grid-template-rows: min-content minmax(220px, 32%) minmax(260px, 1fr);
+  grid-template-rows: minmax(240px, 0.72fr) minmax(280px, 1fr) 84px;
 }
 
 body .right-col.task-output-hidden {
-  grid-template-rows: auto minmax(260px, 1fr);
+  grid-template-rows: minmax(340px, 1fr) auto;
 }
 
 body .right-col.prompt-collapsed.task-output-hidden {
-  grid-template-rows: min-content minmax(260px, 1fr);
+  grid-template-rows: minmax(340px, 1fr) 84px;
 }
 
 body .right-col.task-list-hidden {
@@ -457,10 +458,12 @@ body .right-col.task-list-hidden {
 }
 
 body .right-col.prompt-collapsed.task-list-hidden {
-  grid-template-rows: min-content;
+  grid-template-rows: 84px;
 }
 
 .prompt-wrap.panel {
+  order: 3;
+  position: relative;
   display: flex;
   flex-direction: column;
   border-color: rgba(74, 118, 178, 0.18);
@@ -470,6 +473,9 @@ body .right-col.prompt-collapsed.task-list-hidden {
   box-shadow:
     0 18px 42px rgba(83, 132, 197, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  transform-origin: center bottom;
+  transform: translateY(0);
+  transition: transform 0.24s ease, opacity 0.24s ease, box-shadow 0.24s ease, background 0.24s ease, border-color 0.24s ease;
 }
 
 .prompt-wrap .panel-header {
@@ -485,16 +491,35 @@ body .right-col.prompt-collapsed.task-list-hidden {
   display: flex;
   align-items: center;
   gap: 12px;
+  justify-content: flex-end;
+  min-height: 62px;
+  padding-bottom: 24px;
 }
 
 .prompt-wrap.prompt-collapsed {
+  min-height: 84px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  transform: translateY(8px);
+}
+
+.prompt-wrap.prompt-hidden-dock .panel-header {
   min-height: 0;
+  padding: 0;
+  border-bottom: 0;
+  background: transparent;
+}
+
+.prompt-wrap.prompt-hidden-dock .prompt-titlebar {
+  min-height: 0;
+  padding: 0;
 }
 
 .prompt-form {
   display: grid;
   gap: 10px;
-  padding: 14px 14px 13px;
+  padding: 14px 14px 88px;
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
@@ -524,8 +549,13 @@ body .right-col.prompt-collapsed.task-list-hidden {
 }
 
 .prompt-mode-tabs-titlebar {
-  justify-self: start;
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  z-index: 2;
+  justify-self: center;
   align-self: center;
+  transform: translate(-50%, 50%);
 }
 
 .prompt-mode-tab {
@@ -567,7 +597,15 @@ body .right-col.prompt-collapsed.task-list-hidden {
 }
 
 .prompt-titlebar .prompt-visibility-toggle {
-  margin-left: auto;
+  margin-left: 0;
+}
+
+#task-panel {
+  order: 1;
+}
+
+#task-output-panel {
+  order: 2;
 }
 
 .prompt-grid {
@@ -1451,20 +1489,17 @@ select.prompt-control {
 
 @media (max-width: 860px) {
   .prompt-titlebar {
-    flex-wrap: wrap;
     align-items: flex-start;
   }
 
   .prompt-mode-tabs-titlebar {
-    justify-self: stretch;
-    order: 2;
-    width: 100%;
+    width: max-content;
+    max-width: calc(100% - 24px);
     overflow-x: auto;
   }
 
   .prompt-visibility-toggle {
-    order: 1;
-    margin-left: auto;
+    margin-left: 0;
   }
 }
 
@@ -1536,19 +1571,19 @@ select.prompt-control {
   }
 
   body .right-col {
-    grid-template-rows: auto minmax(220px, 34vh) minmax(260px, 46vh);
+    grid-template-rows: minmax(220px, 0.7fr) minmax(240px, 1fr) auto;
   }
 
   body .right-col.prompt-collapsed {
-    grid-template-rows: min-content minmax(220px, 34vh) minmax(260px, 46vh);
+    grid-template-rows: minmax(220px, 0.7fr) minmax(240px, 1fr) 76px;
   }
 
   body .right-col.task-output-hidden {
-    grid-template-rows: auto minmax(220px, 1fr);
+    grid-template-rows: minmax(240px, 1fr) auto;
   }
 
   body .right-col.prompt-collapsed.task-output-hidden {
-    grid-template-rows: min-content minmax(220px, 1fr);
+    grid-template-rows: minmax(240px, 1fr) 76px;
   }
 
   body .right-col.task-list-hidden {
@@ -1556,7 +1591,7 @@ select.prompt-control {
   }
 
   body .right-col.prompt-collapsed.task-list-hidden {
-    grid-template-rows: min-content;
+    grid-template-rows: 76px;
   }
 
   .task-fullscreen-body {

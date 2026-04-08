@@ -101,8 +101,8 @@
     </div>
 
     <div class="layout min-h-[calc(100vh-130px)] max-[980px]:min-h-0">
-      <div class="right-col grid gap-4 [grid-template-rows:minmax(220px,30%)_minmax(220px,32%)_minmax(260px,1fr)] max-[980px]:[grid-template-rows:minmax(250px,40vh)_minmax(220px,34vh)_minmax(260px,46vh)]">
-        <section class="panel prompt-wrap min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
+      <div class="right-col grid gap-4">
+        <section class="panel prompt-wrap min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
           <div class="panel-header prompt-titlebar flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
             <div class="prompt-mode-tabs prompt-mode-tabs-titlebar inline-flex rounded-lg border border-hub-border p-1" role="tablist" aria-label="Studio mode">
               <button id="prompt-mode-builder" class="prompt-mode-tab active" type="button">Builder</button>
@@ -1655,6 +1655,11 @@
       promptRawPanel.classList.toggle("hidden", !isJSON);
       builderImagePasteTarget.classList.toggle("hidden", isLibrary);
       builderImagesClear.classList.toggle("hidden", isLibrary);
+      if (!state.promptVisible && !Boolean(state.ui?.automaticMode)) {
+        state.promptVisible = true;
+        persistPromptVisibility();
+        applyPromptVisibility();
+      }
     }
 
     function clearLocalPromptStatusTimer() {
@@ -1677,6 +1682,7 @@
       const visible = !automatic && state.promptVisible;
       if (promptWrap) {
         promptWrap.classList.toggle("prompt-collapsed", !visible);
+        promptWrap.classList.toggle("prompt-hidden-dock", !visible);
       }
       if (localPromptForm) {
         localPromptForm.classList.toggle("hidden", !visible);
@@ -1686,6 +1692,8 @@
       }
       if (promptVisibilityToggle) {
         promptVisibilityToggle.disabled = automatic;
+        promptVisibilityToggle.hidden = !visible || automatic;
+        promptVisibilityToggle.setAttribute("aria-hidden", !visible || automatic ? "true" : "false");
         promptVisibilityToggle.textContent = visible ? "▾" : "▸";
         promptVisibilityToggle.setAttribute("aria-label", visible ? "Minimize Studio panel" : "Expand Studio panel");
         promptVisibilityToggle.title = visible ? "Minimize Studio panel" : "Expand Studio panel";
@@ -2894,7 +2902,7 @@
     });
 
     promptModeBuilder.addEventListener("click", () => {
-      if (state.promptMode === "builder") return;
+      if (state.promptMode === "builder" && state.promptVisible) return;
       if (state.promptMode === "json") {
         try {
           syncFormsFromPayload(parseLocalPromptPayload(localPromptInput.value));
@@ -2906,7 +2914,7 @@
     });
 
     promptModeLibrary.addEventListener("click", () => {
-      if (state.promptMode === "library") return;
+      if (state.promptMode === "library" && state.promptVisible) return;
       if (state.promptMode === "json") {
         try {
           syncFormsFromPayload(parseLocalPromptPayload(localPromptInput.value));
@@ -2918,7 +2926,7 @@
     });
 
     promptModeJSON.addEventListener("click", () => {
-      if (state.promptMode === "json") return;
+      if (state.promptMode === "json" && state.promptVisible) return;
       try {
         syncRawFromMode(state.promptMode === "library" ? "library" : "builder");
       } catch (_err) {
