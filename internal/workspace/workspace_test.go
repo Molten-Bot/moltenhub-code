@@ -11,10 +11,10 @@ func TestSelectBasePrefersDevShm(t *testing.T) {
 	t.Parallel()
 
 	m := Manager{
-		PathExists: func(path string) bool { return path == "/dev/shm" },
+		PathExists: func(path string) bool { return path == defaultRAMBase },
 		CanExec:    func(string) bool { return true },
 	}
-	if got := m.SelectBase(); got != "/dev/shm" {
+	if got := m.SelectBase(); got != defaultRAMBase {
 		t.Fatalf("SelectBase() = %q", got)
 	}
 }
@@ -23,7 +23,7 @@ func TestSelectBaseFallsBackToTmp(t *testing.T) {
 	t.Parallel()
 
 	m := Manager{PathExists: func(string) bool { return false }}
-	if got := m.SelectBase(); got != "/tmp" {
+	if got := m.SelectBase(); got != defaultDiskBase {
 		t.Fatalf("SelectBase() = %q", got)
 	}
 }
@@ -32,10 +32,10 @@ func TestSelectBaseFallsBackToTmpWhenDevShmIsNoExec(t *testing.T) {
 	t.Parallel()
 
 	m := Manager{
-		PathExists: func(path string) bool { return path == "/dev/shm" },
-		CanExec:    func(path string) bool { return path != "/dev/shm" },
+		PathExists: func(path string) bool { return path == defaultRAMBase },
+		CanExec:    func(path string) bool { return path != defaultRAMBase },
 	}
-	if got := m.SelectBase(); got != "/tmp" {
+	if got := m.SelectBase(); got != defaultDiskBase {
 		t.Fatalf("SelectBase() = %q", got)
 	}
 }
@@ -45,7 +45,7 @@ func TestCreateRunDirUsesGUIDSubfolder(t *testing.T) {
 
 	var createdPath string
 	m := Manager{
-		PathExists: func(path string) bool { return path == "/dev/shm" },
+		PathExists: func(path string) bool { return path == defaultRAMBase },
 		CanExec:    func(string) bool { return true },
 		NewGUID:    func() string { return "abc123" },
 		MkdirAll: func(path string, _ os.FileMode) error {
@@ -61,7 +61,7 @@ func TestCreateRunDirUsesGUIDSubfolder(t *testing.T) {
 	if guid != "abc123" {
 		t.Fatalf("guid = %q", guid)
 	}
-	want := filepath.Join("/dev/shm", "temp", "abc123")
+	want := filepath.Join(defaultRAMBase, defaultWorkspaceRoot, "abc123")
 	if runDir != want {
 		t.Fatalf("runDir = %q, want %q", runDir, want)
 	}
@@ -90,7 +90,7 @@ func TestCreateRunDirFallsBackToTmpTempRoot(t *testing.T) {
 	if guid != "abc123" {
 		t.Fatalf("guid = %q", guid)
 	}
-	want := filepath.Join("/tmp", "temp", "abc123")
+	want := filepath.Join(defaultDiskBase, defaultWorkspaceRoot, "abc123")
 	if runDir != want {
 		t.Fatalf("runDir = %q, want %q", runDir, want)
 	}
@@ -121,12 +121,13 @@ func TestCreateRunDirFallsBackWhenDevShmCreateFails(t *testing.T) {
 
 	var created []string
 	m := Manager{
-		PathExists: func(path string) bool { return path == "/dev/shm" },
+		PathExists: func(path string) bool { return path == defaultRAMBase },
 		CanExec:    func(string) bool { return true },
 		NewGUID:    func() string { return "abc123" },
 		MkdirAll: func(path string, _ os.FileMode) error {
 			created = append(created, path)
-			if path == filepath.Join("/dev/shm", "temp", "abc123") {
+			if path == filepath.Join(defaultRAMBase, defaultWorkspaceRoot) ||
+				path == filepath.Join(defaultRAMBase, defaultWorkspaceRoot, "abc123") {
 				return errors.New("permission denied")
 			}
 			return nil
@@ -140,12 +141,12 @@ func TestCreateRunDirFallsBackWhenDevShmCreateFails(t *testing.T) {
 	if guid != "abc123" {
 		t.Fatalf("guid = %q", guid)
 	}
-	want := filepath.Join("/tmp", "temp", "abc123")
+	want := filepath.Join(defaultDiskBase, defaultWorkspaceRoot, "abc123")
 	if runDir != want {
 		t.Fatalf("runDir = %q, want %q", runDir, want)
 	}
-	if len(created) != 2 {
-		t.Fatalf("mkdir attempts = %d, want 2 (%v)", len(created), created)
+	if len(created) != 3 {
+		t.Fatalf("mkdir attempts = %d, want 3 (%v)", len(created), created)
 	}
 }
 
@@ -172,7 +173,7 @@ func TestSeedAgentsFileCopiesSeedIntoRunDir(t *testing.T) {
 		},
 	}
 
-	runDir := filepath.Join("/tmp", "temp", "abc123")
+	runDir := filepath.Join(defaultDiskBase, defaultWorkspaceRoot, "abc123")
 	seedPath, err := m.SeedAgentsFile(runDir)
 	if err != nil {
 		t.Fatalf("SeedAgentsFile() error = %v", err)
@@ -205,7 +206,7 @@ func TestSeedAgentsFileReadError(t *testing.T) {
 		},
 	}
 
-	if _, err := m.SeedAgentsFile(filepath.Join("/tmp", "temp", "abc123")); err == nil {
+	if _, err := m.SeedAgentsFile(filepath.Join(defaultDiskBase, defaultWorkspaceRoot, "abc123")); err == nil {
 		t.Fatal("expected error, got nil")
 	}
 }
@@ -222,8 +223,55 @@ func TestSeedAgentsFileWriteError(t *testing.T) {
 		},
 	}
 
-	if _, err := m.SeedAgentsFile(filepath.Join("/tmp", "temp", "abc123")); err == nil {
+	if _, err := m.SeedAgentsFile(filepath.Join(defaultDiskBase, defaultWorkspaceRoot, "abc123")); err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestPrepareRootsUsesConfiguredWorkspaceRoot(t *testing.T) {
+	t.Parallel()
+
+	var created []string
+	m := Manager{
+		PathExists: func(path string) bool { return path == defaultRAMBase },
+		CanExec:    func(string) bool { return true },
+		MkdirAll: func(path string, _ os.FileMode) error {
+			created = append(created, path)
+			return nil
+		},
+	}
+
+	if err := m.PrepareRoots(); err != nil {
+		t.Fatalf("PrepareRoots() error = %v", err)
+	}
+
+	want := filepath.Join(defaultRAMBase, defaultWorkspaceRoot)
+	if len(created) != 1 || created[0] != want {
+		t.Fatalf("PrepareRoots() created = %v, want [%q]", created, want)
+	}
+}
+
+func TestSelectBaseHonorsConfiguredBases(t *testing.T) {
+	t.Setenv(workspaceRAMBaseEnv, "/ramdisk")
+	t.Setenv(workspaceDiskBaseEnv, "/slowdisk")
+
+	m := Manager{
+		PathExists: func(path string) bool { return path == "/ramdisk" },
+		CanExec:    func(string) bool { return true },
+	}
+	if got := m.SelectBase(); got != "/ramdisk" {
+		t.Fatalf("SelectBase() = %q, want /ramdisk", got)
+	}
+}
+
+func TestConfiguredWorkspaceRootNameRejectsUnsafeValues(t *testing.T) {
+	for _, tc := range []string{"/abs/path", "..", "../escape", "."} {
+		t.Run(tc, func(t *testing.T) {
+			t.Setenv(workspaceRootNameEnv, tc)
+			if got := configuredWorkspaceRootName(); got != defaultWorkspaceRoot {
+				t.Fatalf("configuredWorkspaceRootName() = %q, want %q", got, defaultWorkspaceRoot)
+			}
+		})
 	}
 }
 

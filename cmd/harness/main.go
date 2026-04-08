@@ -26,6 +26,7 @@ import (
 	"github.com/jef/moltenhub-code/internal/hub"
 	"github.com/jef/moltenhub-code/internal/hubui"
 	"github.com/jef/moltenhub-code/internal/multiplex"
+	"github.com/jef/moltenhub-code/internal/workspace"
 )
 
 const failureFollowUpRequiredPrompt = failurefollowup.RequiredPrompt
@@ -48,10 +49,22 @@ func run() int {
 
 	switch os.Args[1] {
 	case "run":
+		if err := workspace.PrepareDefaultRoots(); err != nil {
+			fmt.Fprintf(os.Stderr, "workspace init error: %v\n", err)
+			return harness.ExitWorkspace
+		}
 		return runSingle(os.Args[2:])
 	case "multiplex":
+		if err := workspace.PrepareDefaultRoots(); err != nil {
+			fmt.Fprintf(os.Stderr, "workspace init error: %v\n", err)
+			return harness.ExitWorkspace
+		}
 		return runMultiplex(os.Args[2:])
 	case "hub":
+		if err := workspace.PrepareDefaultRoots(); err != nil {
+			fmt.Fprintf(os.Stderr, "workspace init error: %v\n", err)
+			return harness.ExitWorkspace
+		}
 		return runHub(os.Args[2:])
 	default:
 		printUsage()

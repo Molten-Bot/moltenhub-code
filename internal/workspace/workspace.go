@@ -9,16 +9,22 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 )
 
 const (
-	defaultRAMBase  = "/dev/shm"
-	defaultDiskBase = "/tmp"
-	defaultRunRoot  = "temp"
-	agentsSeedPath  = "library/AGENTS.md"
-	agentsFileName  = "AGENTS.md"
-	agentsSeedEnv   = "HARNESS_AGENTS_SEED_PATH"
+	defaultRAMBase       = "/dev/shm"
+	defaultDiskBase      = "/tmp"
+	defaultWorkspaceRoot = "moltenhub-code/tasks"
+	agentsSeedPath       = "library/AGENTS.md"
+	agentsFileName       = "AGENTS.md"
+	agentsSeedEnv        = "HARNESS_AGENTS_SEED_PATH"
+	workspaceRAMBaseEnv  = "HARNESS_WORKSPACE_RAM_BASE"
+	workspaceDiskBaseEnv = "HARNESS_WORKSPACE_DISK_BASE"
+	workspaceRootNameEnv = "HARNESS_WORKSPACE_ROOT_NAME"
 )
+
+var baseAllowsExecCache sync.Map
 
 // Manager creates isolated run directories.
 type Manager struct {
@@ -42,6 +48,11 @@ func NewManager() Manager {
 	}
 }
 
+// PrepareDefaultRoots eagerly creates the process workspace root.
+func PrepareDefaultRoots() error {
+	return NewManager().PrepareRoots()
+}
+
 // SelectBase chooses /dev/shm when available and executable, else /tmp.
 func (m Manager) SelectBase() string {
 	exists := m.PathExists
@@ -52,13 +63,36 @@ func (m Manager) SelectBase() string {
 	if canExec == nil {
 		canExec = baseAllowsExec
 	}
-	if exists(defaultRAMBase) && canExec(defaultRAMBase) {
-		return defaultRAMBase
+	ramBase := configuredRAMBase()
+	if exists(ramBase) && canExec(ramBase) {
+		return ramBase
 	}
-	return defaultDiskBase
+	return configuredDiskBase()
 }
 
-// CreateRunDir creates a GUID-named run directory under <base>/temp.
+// PrepareRoots ensures the workspace root exists on the preferred base.
+func (m Manager) PrepareRoots() error {
+	mkdirAll := m.MkdirAll
+	if mkdirAll == nil {
+		mkdirAll = os.MkdirAll
+	}
+
+	var lastErr error
+	for _, rootDir := range m.rootCandidates() {
+		if err := mkdirAll(rootDir, 0o755); err != nil {
+			lastErr = err
+			continue
+		}
+		return nil
+	}
+
+	if lastErr != nil {
+		return fmt.Errorf("prepare workspace root: %w", lastErr)
+	}
+	return fmt.Errorf("prepare workspace root: no workspace root candidates")
+}
+
+// CreateRunDir creates a GUID-named run directory under the configured workspace root.
 func (m Manager) CreateRunDir() (string, string, error) {
 	mkdirAll := m.MkdirAll
 	if mkdirAll == nil {
@@ -74,20 +108,14 @@ func (m Manager) CreateRunDir() (string, string, error) {
 		return "", "", fmt.Errorf("generated empty guid")
 	}
 
-	preferredBase := m.SelectBase()
-	fallbackBase := defaultDiskBase
-	if preferredBase == defaultDiskBase {
-		fallbackBase = ""
-	}
-
-	candidates := []string{preferredBase}
-	if fallbackBase != "" && fallbackBase != preferredBase {
-		candidates = append(candidates, fallbackBase)
-	}
-
 	var lastErr error
-	for _, base := range candidates {
-		runDir := filepath.Join(base, defaultRunRoot, guid)
+	for _, rootDir := range m.rootCandidates() {
+		if err := mkdirAll(rootDir, 0o755); err != nil {
+			lastErr = err
+			continue
+		}
+
+		runDir := filepath.Join(rootDir, guid)
 		if err := mkdirAll(runDir, 0o755); err != nil {
 			lastErr = err
 			continue
@@ -142,16 +170,23 @@ func baseAllowsExec(path string) bool {
 	if path == "" {
 		return true
 	}
+	if cached, ok := baseAllowsExecCache.Load(path); ok {
+		return cached.(bool)
+	}
 	if runtime.GOOS != "linux" {
+		baseAllowsExecCache.Store(path, true)
 		return true
 	}
 	opts, ok := mountOptionsForPath(path)
 	if !ok {
 		// If mount details are unavailable, keep existing behavior.
+		baseAllowsExecCache.Store(path, true)
 		return true
 	}
 	_, noExec := opts["noexec"]
-	return !noExec
+	allowed := !noExec
+	baseAllowsExecCache.Store(path, allowed)
+	return allowed
 }
 
 func mountOptionsForPath(targetPath string) (map[string]struct{}, bool) {
@@ -355,4 +390,49 @@ func findPathUpward(startDir, relPath string) (string, bool) {
 		}
 		current = parent
 	}
+}
+
+func (m Manager) rootCandidates() []string {
+	preferredBase := m.SelectBase()
+	fallbackBase := configuredDiskBase()
+	if preferredBase == fallbackBase {
+		return []string{workspaceRootForBase(preferredBase)}
+	}
+	return []string{
+		workspaceRootForBase(preferredBase),
+		workspaceRootForBase(fallbackBase),
+	}
+}
+
+func configuredRAMBase() string {
+	if configured := strings.TrimSpace(os.Getenv(workspaceRAMBaseEnv)); configured != "" {
+		return configured
+	}
+	return defaultRAMBase
+}
+
+func configuredDiskBase() string {
+	if configured := strings.TrimSpace(os.Getenv(workspaceDiskBaseEnv)); configured != "" {
+		return configured
+	}
+	return defaultDiskBase
+}
+
+func configuredWorkspaceRootName() string {
+	configured := strings.TrimSpace(os.Getenv(workspaceRootNameEnv))
+	if configured == "" {
+		return defaultWorkspaceRoot
+	}
+	configured = filepath.Clean(configured)
+	if configured == "." || configured == "" || filepath.IsAbs(configured) {
+		return defaultWorkspaceRoot
+	}
+	if configured == ".." || strings.HasPrefix(configured, ".."+string(filepath.Separator)) {
+		return defaultWorkspaceRoot
+	}
+	return configured
+}
+
+func workspaceRootForBase(base string) string {
+	return filepath.Join(base, configuredWorkspaceRootName())
 }

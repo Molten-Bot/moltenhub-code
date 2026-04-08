@@ -29,3 +29,26 @@ func TestRedactSensitiveLogTextLeavesNonSensitiveInputUntouched(t *testing.T) {
 		t.Fatalf("redactSensitiveLogText() = %q, want %q", got, input)
 	}
 }
+
+func TestRedactSensitiveLogTextDetectsUppercaseMarkers(t *testing.T) {
+	t.Parallel()
+
+	input := `AUTHORIZATION=Bearer SECRET_TOKEN`
+	output := redactSensitiveLogText(input)
+	if strings.Contains(output, "SECRET_TOKEN") {
+		t.Fatalf("redaction failed for uppercase marker: %q", output)
+	}
+}
+
+func TestContainsSensitiveMarker(t *testing.T) {
+	t.Parallel()
+
+	for _, input := range []string{"token=abc", "Authorization: Bearer abc", "BEARER xyz"} {
+		if !containsSensitiveMarker(input) {
+			t.Fatalf("containsSensitiveMarker(%q) = false, want true", input)
+		}
+	}
+	if containsSensitiveMarker("dispatch status=ok") {
+		t.Fatal("containsSensitiveMarker(non-sensitive) = true, want false")
+	}
+}
