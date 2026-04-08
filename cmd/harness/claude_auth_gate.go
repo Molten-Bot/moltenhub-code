@@ -403,7 +403,7 @@ func (g *claudeAuthGate) submitBrowserCode(rawInput string) (hubui.AgentAuthStat
 	g.mu.Lock()
 	if !g.ready {
 		g.state = "pending_browser_login"
-		g.message = "Claude authentication code received. Finish browser login in the opened page, or paste `~/.claude/.credentials.json` if needed."
+		g.message = "Claude authentication code received. If auth does not complete, paste `~/.claude/.credentials.json` (or token) and click Done."
 		g.updatedAt = time.Now().UTC()
 	}
 	snap := g.snapshotLocked()
@@ -857,7 +857,7 @@ func (g *claudeAuthGate) ingestLoginLine(line string) {
 		g.authURL = authURL
 		if !g.ready {
 			g.state = "pending_browser_login"
-			g.message = "Open the Claude login URL and complete sign-in. If needed, run `cat ~/.claude/.credentials.json` locally and paste it here, then click Done."
+			g.message = "Run `claude setup-token` locally and complete sign-in. Then paste browser code, token, or `~/.claude/.credentials.json` contents here and click Done."
 		}
 		update = true
 	}

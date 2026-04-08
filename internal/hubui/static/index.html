@@ -1316,11 +1316,12 @@
       }
       if (agentAuthURL) {
         const authURL = state.agentAuth.authURL || "";
-        const useClaudeLogoLink = authHarness(state.agentAuth) === "claude" && authURL !== "";
+        const useClaudeCommandFlow = isClaudePendingBrowserLoginState(state.agentAuth);
+        const useClaudeLogoLink = authHarness(state.agentAuth) === "claude" && authURL !== "" && !useClaudeCommandFlow;
         const showClaudeLogoLink = useClaudeLogoLink && !state.agentAuthURLLogoBroken;
         agentAuthURL.href = state.agentAuth.authURL || "#";
         agentAuthURL.classList.toggle("pointer-events-none", !authURL);
-        agentAuthURL.classList.toggle("hidden", !authURL);
+        agentAuthURL.classList.toggle("hidden", !authURL || useClaudeCommandFlow);
         agentAuthURL.classList.toggle("agent-auth-url-logo-link", showClaudeLogoLink);
         if (agentAuthURLLogo) {
           if (agentAuthURLLogo.getAttribute("src") !== CLAUDE_AUTH_LOGO_URL) {
@@ -1406,6 +1407,16 @@
     async function copyAuggieConfigureCommand() {
       const command = String(state.agentAuth.configureCommand || "").trim() || "auggie token print";
       await copyTextToClipboard(command, agentAuthConfigureCopy);
+    }
+
+    async function copyClaudeBrowserPrimaryCommand() {
+      const command = agentAuthBrowserCommandPrimary ? String(agentAuthBrowserCommandPrimary.textContent || "").trim() : "";
+      await copyTextToClipboard(command, agentAuthBrowserCommandPrimaryCopy);
+    }
+
+    async function copyClaudeBrowserSecondaryCommand() {
+      const command = agentAuthBrowserCommandSecondary ? String(agentAuthBrowserCommandSecondary.textContent || "").trim() : "";
+      await copyTextToClipboard(command, agentAuthBrowserCommandSecondaryCopy);
     }
 
     async function copyTextToClipboard(value, buttonNode) {
@@ -3636,6 +3647,12 @@
     }
     if (agentAuthConfigureCopy) {
       agentAuthConfigureCopy.addEventListener("click", copyAuggieConfigureCommand);
+    }
+    if (agentAuthBrowserCommandPrimaryCopy) {
+      agentAuthBrowserCommandPrimaryCopy.addEventListener("click", copyClaudeBrowserPrimaryCommand);
+    }
+    if (agentAuthBrowserCommandSecondaryCopy) {
+      agentAuthBrowserCommandSecondaryCopy.addEventListener("click", copyClaudeBrowserSecondaryCommand);
     }
     if (agentAuthConfigureInput) {
       agentAuthConfigureInput.addEventListener("input", () => {
