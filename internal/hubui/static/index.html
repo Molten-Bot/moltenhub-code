@@ -55,12 +55,13 @@
       <div class="brand-lockup flex items-center gap-3">
         <div class="brand-logo-group">
           <img
-            class="brand-logo"
+            id="moltenhub-logo"
+            class="brand-logo rotating-brand-logo brand-logo-visible"
             src="https://molten.bot/logo.svg"
             alt="MoltenHub logo">
           <img
             id="configured-agent-logo"
-            class="brand-logo configured-agent-logo"
+            class="brand-logo configured-agent-logo rotating-brand-logo"
             src="https://molten.bot/logos/codex-cli.svg"
             alt="Codex logo">
         </div>
@@ -323,6 +324,7 @@
     const HOVER_MODES = ["auto", "on", "off"];
     const CLOSE_TASK_FADE_MS = 2000;
     const QUEUED_STATUS_TIMEOUT_MS = 8_000;
+    const LOGO_ROTATION_INTERVAL_MS = 8_000;
     const HUB_CONNECT_URL = "https://app.molten.bot";
     const COMPLETED_STATUSES = new Set(["ok", "no_changes", "error", "invalid", "duplicate", "stopped"]);
     const TASK_PROGRESS_STEPS = [
@@ -555,6 +557,7 @@
     const promptWrap = document.querySelector(".prompt-wrap");
     const promptVisibilityToggle = document.getElementById("prompt-visibility-toggle");
     const agentAuthGate = document.getElementById("agent-auth-gate");
+    const moltenHubLogo = document.getElementById("moltenhub-logo");
     const configuredAgentLogo = document.getElementById("configured-agent-logo");
     const configuredAgentSubtitle = document.getElementById("configured-agent-subtitle");
     const configuredAgentGorillaSubtitle = document.getElementById("configured-agent-gorilla-subtitle");
@@ -573,6 +576,8 @@
     const themeCycleButton = document.getElementById("theme-cycle");
     const themeCycleCurrent = document.getElementById("theme-cycle-current");
     const hoverSelect = document.getElementById("hover-select");
+    let brandLogoRotationTimer = null;
+    let brandLogoRotationPhase = 0;
 
     function themeLabel(theme) {
       const normalized = THEME_MODES.includes(theme) ? theme : DEFAULT_THEME_MODE;
@@ -890,6 +895,48 @@
       updateAgentAuthDoneVisibility();
     }
 
+    function setBrandLogoVisibility(showConfiguredLogo) {
+      if (moltenHubLogo) {
+        moltenHubLogo.classList.toggle("brand-logo-visible", !showConfiguredLogo);
+      }
+      if (configuredAgentLogo) {
+        configuredAgentLogo.classList.toggle("brand-logo-visible", showConfiguredLogo);
+      }
+    }
+
+    function stopBrandLogoRotation() {
+      if (brandLogoRotationTimer !== null) {
+        clearInterval(brandLogoRotationTimer);
+        brandLogoRotationTimer = null;
+      }
+    }
+
+    function shouldRotateBrandLogos() {
+      if (!configuredAgentLogo || configuredAgentLogo.classList.contains("hidden")) {
+        return false;
+      }
+      if (typeof window.matchMedia === "function" &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        return false;
+      }
+      return true;
+    }
+
+    function syncBrandLogoRotation() {
+      stopBrandLogoRotation();
+      if (!shouldRotateBrandLogos()) {
+        brandLogoRotationPhase = 0;
+        setBrandLogoVisibility(false);
+        return;
+      }
+      brandLogoRotationPhase = 0;
+      setBrandLogoVisibility(false);
+      brandLogoRotationTimer = window.setInterval(() => {
+        brandLogoRotationPhase = brandLogoRotationPhase === 0 ? 1 : 0;
+        setBrandLogoVisibility(brandLogoRotationPhase === 1);
+      }, LOGO_ROTATION_INTERVAL_MS);
+    }
+
     function renderConfiguredAgent() {
       const label = configuredAgentLabel();
       if (configuredAgentSubtitle) {
@@ -903,6 +950,7 @@
           configuredAgentLogo.alt = `${label} logo`;
         }
       }
+      syncBrandLogoRotation();
       if (configuredAgentGorillaSubtitle) {
         configuredAgentGorillaSubtitle.textContent = `${label} is now a 600LB Gorilla!`;
       }

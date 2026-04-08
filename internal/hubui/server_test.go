@@ -166,6 +166,18 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `src="https://molten.bot/logo.svg"`) {
 		t.Fatalf("expected index html to include moltenhub logo")
 	}
+	if !strings.Contains(markup, `id="moltenhub-logo"`) {
+		t.Fatalf("expected index html to include moltenhub logo rotation anchor id")
+	}
+	if !strings.Contains(markup, `const LOGO_ROTATION_INTERVAL_MS = 8_000;`) {
+		t.Fatalf("expected index html to rotate brand logos every 8 seconds")
+	}
+	if !strings.Contains(markup, "function syncBrandLogoRotation()") {
+		t.Fatalf("expected index html to include brand logo rotation controller")
+	}
+	if !strings.Contains(markup, "window.setInterval(() => {") || !strings.Contains(markup, "LOGO_ROTATION_INTERVAL_MS") {
+		t.Fatalf("expected index html to rotate logos with interval-driven updates")
+	}
 	if !strings.Contains(markup, `"task-close"`) {
 		t.Fatalf("expected index html to include task close class usage")
 	}
@@ -916,6 +928,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".brand-logo") {
 		t.Fatalf("expected stylesheet to include brand logo styles")
+	}
+	if !strings.Contains(css, ".rotating-brand-logo") || !strings.Contains(css, ".brand-logo-visible") {
+		t.Fatalf("expected stylesheet to include rotating brand logo cross-fade styles")
 	}
 	if !strings.Contains(css, ".status-item-metrics") {
 		t.Fatalf("expected stylesheet to include metrics pill styles")

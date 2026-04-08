@@ -237,9 +237,10 @@ textarea {
 }
 
 .brand-logo-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  position: relative;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
 }
 
 .brand-logo {
@@ -252,6 +253,23 @@ textarea {
   border-radius: 16px;
   background: var(--surface-glass-strong);
   box-shadow: 0 14px 30px rgba(10, 44, 102, 0.12);
+}
+
+.rotating-brand-logo {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.96);
+  transition: opacity 0.65s ease, transform 0.65s ease, visibility 0.65s ease;
+  will-change: opacity, transform;
+}
+
+.rotating-brand-logo.brand-logo-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
 }
 
 .configured-agent-logo {
@@ -1870,7 +1888,8 @@ select.prompt-control {
   }
 
   .brand-logo-group {
-    gap: 8px;
+    width: 42px;
+    height: 42px;
   }
 
   .configured-agent-logo {
