@@ -23,7 +23,7 @@ import (
 const claudeAuthDocsURL = "https://code.claude.com/docs/en/authentication"
 const claudeGitHubConfigureCommand = "gh auth token"
 const claudeGitHubConfigurePlaceholder = "ghp_xxx"
-const claudeLoginCommand = "claude login"
+const claudeLoginCommand = "claude auth login"
 
 var claudeAuthURLPattern = regexp.MustCompile(`https?://[^\s"'<>()]+`)
 
@@ -186,7 +186,7 @@ func (g *claudeAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthStat
 	}
 
 	procCtx, cancel := context.WithCancel(baseCtx)
-	cmd := exec.CommandContext(procCtx, command, "login")
+	cmd := exec.CommandContext(procCtx, command, "auth", "login")
 	cmd.Dir = tmpDir
 
 	stdoutPipe, err := cmd.StdoutPipe()
@@ -644,7 +644,7 @@ func claudeCredentialsPath() string {
 }
 
 func claudeBrowserLoginRequiredMessage() string {
-	return "Claude Code login is required. Run `claude login`, complete browser sign-in, then click Done.\nReference docs (not an authorization link): " + claudeAuthDocsURL
+	return "Claude Code login is required. Run `claude auth login`, complete browser sign-in, then click Done.\nReference docs (not an authorization link): " + claudeAuthDocsURL
 }
 
 func isClaudeDocsURL(raw string) bool {

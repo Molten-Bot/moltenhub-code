@@ -67,7 +67,7 @@ func TestClaudeAuthGateRequiresBrowserLoginWhenClaudeCredentialsAreMissing(t *te
 	if got := status.AuthURL; got != "" {
 		t.Fatalf("AuthURL = %q, want empty until login command emits a browser URL", got)
 	}
-	if !strings.Contains(status.Message, "Run `claude login`") {
+	if !strings.Contains(status.Message, "Run `claude auth login`") {
 		t.Fatalf("message = %q", status.Message)
 	}
 	if !strings.Contains(status.Message, "not an authorization link") {
@@ -199,7 +199,7 @@ func TestClaudeAuthGateStartDeviceAuthRunsLoginAndCapturesURL(t *testing.T) {
 
 	cmdPath := filepath.Join(t.TempDir(), "claude-login-stub.sh")
 	if err := os.WriteFile(cmdPath, []byte(`#!/bin/sh
-if [ "$1" != "login" ]; then
+if [ "$1" != "auth" ] || [ "$2" != "login" ]; then
   echo "unexpected args: $*" >&2
   exit 64
 fi
@@ -265,7 +265,7 @@ func TestClaudeAuthGateVerifyStartsLoginWhenNotReady(t *testing.T) {
 
 	cmdPath := filepath.Join(t.TempDir(), "claude-login-verify-stub.sh")
 	if err := os.WriteFile(cmdPath, []byte(`#!/bin/sh
-if [ "$1" != "login" ]; then
+if [ "$1" != "auth" ] || [ "$2" != "login" ]; then
   exit 64
 fi
 echo "Choose account:"
@@ -306,7 +306,7 @@ func TestClaudeAuthGateStartDeviceAuthSendsInitialPromptAdvance(t *testing.T) {
 
 	cmdPath := filepath.Join(t.TempDir(), "claude-login-initial-enter.sh")
 	if err := os.WriteFile(cmdPath, []byte(`#!/bin/sh
-if [ "$1" != "login" ]; then
+if [ "$1" != "auth" ] || [ "$2" != "login" ]; then
   exit 64
 fi
 if ! read choice; then
@@ -344,6 +344,9 @@ func TestClaudeAuthHelpers(t *testing.T) {
 
 	if got, want := extractClaudeAuthURL("Use https://claude.ai/login/device?x=y); now"), "https://claude.ai/login/device?x=y"; got != want {
 		t.Fatalf("extractClaudeAuthURL() = %q, want %q", got, want)
+	}
+	if got, want := extractClaudeAuthURL("If the browser didn't open, visit: https://claude.ai/oauth/authorize?code=true&client_id=abc123&scope=user%3Aprofile"), "https://claude.ai/oauth/authorize?code=true&client_id=abc123&scope=user%3Aprofile"; got != want {
+		t.Fatalf("extractClaudeAuthURL() should parse oauth authorize URL: got %q, want %q", got, want)
 	}
 	if got, want := extractClaudeAuthURL("Read docs at https://code.claude.com/docs/en/authentication and sign in at https://claude.ai/login/device?flow=x"), "https://claude.ai/login/device?flow=x"; got != want {
 		t.Fatalf("extractClaudeAuthURL() should ignore docs URL and keep login URL: got %q, want %q", got, want)

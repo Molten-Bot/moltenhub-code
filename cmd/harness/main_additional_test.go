@@ -224,7 +224,7 @@ func TestMaybeStartAgentAuthLogsStartErrors(t *testing.T) {
 			Required: true,
 			Ready:    false,
 			State:    "error",
-			Message:  "start claude login: exit status 2",
+			Message:  "start claude auth login: exit status 2",
 		},
 		startErr: errors.New("exit status 2"),
 	}
@@ -242,7 +242,7 @@ func TestMaybeStartAgentAuthLogsStartErrors(t *testing.T) {
 	if got, want := gate.startCalls, 1; got != want {
 		t.Fatalf("startCalls = %d, want %d", got, want)
 	}
-	if got := strings.Join(logs, "\n"); !strings.Contains(got, `status=warn harness=claude action=start_device_auth err="exit status 2" detail="start claude login: exit status 2"`) {
+	if got := strings.Join(logs, "\n"); !strings.Contains(got, `status=warn harness=claude action=start_device_auth err="exit status 2" detail="start claude auth login: exit status 2"`) {
 		t.Fatalf("logs missing detailed start failure: %q", got)
 	}
 }
