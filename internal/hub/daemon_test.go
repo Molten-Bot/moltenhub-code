@@ -528,6 +528,19 @@ func TestDispatchResultPayloadIncludesTopLevelFailureMessage(t *testing.T) {
 	if got := payload["message"]; got != "Failure: task failed. Error details: codex: process exited with status 1" {
 		t.Fatalf("message = %#v", got)
 	}
+	result, _ := payload["result"].(map[string]any)
+	if result == nil {
+		t.Fatal("result payload missing")
+	}
+	if got := result["status"]; got != "failed" {
+		t.Fatalf("result.status = %#v", got)
+	}
+	if got := result["message"]; got != "Failure: task failed. Error details: codex: process exited with status 1" {
+		t.Fatalf("result.message = %#v", got)
+	}
+	if got := result["error"]; got != "codex: process exited with status 1" {
+		t.Fatalf("result.error = %#v", got)
+	}
 	failure, _ := payload["failure"].(map[string]any)
 	if failure == nil {
 		t.Fatal("failure payload missing")
@@ -540,6 +553,19 @@ func TestDispatchResultPayloadIncludesTopLevelFailureMessage(t *testing.T) {
 	}
 	if got := failure["error"]; got != "codex: process exited with status 1" {
 		t.Fatalf("failure.error = %#v", got)
+	}
+	details, _ := failure["details"].(map[string]any)
+	if details == nil {
+		t.Fatal("failure.details missing")
+	}
+	if got := details["status"]; got != "failed" {
+		t.Fatalf("failure.details.status = %#v", got)
+	}
+	if got := details["message"]; got != "Failure: task failed. Error details: codex: process exited with status 1" {
+		t.Fatalf("failure.details.message = %#v", got)
+	}
+	if got := details["error"]; got != "codex: process exited with status 1" {
+		t.Fatalf("failure.details.error = %#v", got)
 	}
 }
 
