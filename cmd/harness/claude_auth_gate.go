@@ -264,7 +264,14 @@ func (g *claudeAuthGate) Verify(ctx context.Context) (hubui.AgentAuthState, erro
 	if status.Ready {
 		return status, nil
 	}
-	if status.State == "needs_configure" || status.State == "pending_browser_login" {
+	if status.State == "needs_configure" {
+		return status, nil
+	}
+	if status.State == "pending_browser_login" {
+		if snap, ok := g.completePendingBrowserLoginIfReady(); ok {
+			return snap, nil
+		}
+		g.advanceLoginPrompt()
 		return status, nil
 	}
 
@@ -366,6 +373,69 @@ func (g *claudeAuthGate) submitBrowserCode(rawInput string) (hubui.AgentAuthStat
 	g.mu.Unlock()
 
 	return snap, nil
+}
+
+func (g *claudeAuthGate) completePendingBrowserLoginIfReady() (hubui.AgentAuthState, bool) {
+	if g == nil {
+		return hubui.AgentAuthState{}, false
+	}
+
+	ready, _ := g.probeClaude()
+	if !ready {
+		return hubui.AgentAuthState{}, false
+	}
+
+	var (
+		cancel context.CancelFunc
+		input  io.WriteCloser
+	)
+
+	g.mu.Lock()
+	cancel = g.procCancel
+	input = g.procInput
+	g.ready = true
+	g.state = "ready"
+	g.message = "Claude Code and GitHub token are ready."
+	g.authURL = ""
+	g.procRunning = false
+	g.procCancel = nil
+	g.procInput = nil
+	g.updatedAt = time.Now().UTC()
+	snap := g.snapshotLocked()
+	g.mu.Unlock()
+
+	if input != nil {
+		_ = input.Close()
+	}
+	if cancel != nil {
+		cancel()
+	}
+
+	return snap, true
+}
+
+func (g *claudeAuthGate) advanceLoginPrompt() {
+	if g == nil {
+		return
+	}
+
+	var input io.WriteCloser
+	g.mu.Lock()
+	if g.procRunning && g.procInput != nil {
+		now := time.Now().UTC()
+		if now.Sub(g.lastPromptAdvance) >= 250*time.Millisecond {
+			g.lastPromptAdvance = now
+			input = g.procInput
+		}
+	}
+	g.mu.Unlock()
+
+	if input == nil {
+		return
+	}
+	if _, err := io.WriteString(input, "\n"); err != nil {
+		g.logf("hub.auth status=warn harness=claude action=advance_login_prompt err=%q", err)
+	}
 }
 
 func (g *claudeAuthGate) snapshotLocked() hubui.AgentAuthState {

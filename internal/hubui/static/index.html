@@ -944,7 +944,24 @@
       return String(current?.authURL || "").trim() !== "";
     }
 
+    function hasClaudeBrowserCodeBeenAccepted(auth) {
+      const current = auth && typeof auth === "object" ? auth : state.agentAuth;
+      if (!isClaudeBrowserCodeState(current)) {
+        return false;
+      }
+      const message = String(current?.message || "").trim().toLowerCase();
+      return message.includes("authentication code received");
+    }
+
+    function isClaudeBrowserCodeAwaitingSubmission(auth) {
+      return isClaudeBrowserCodeState(auth) && !hasClaudeBrowserCodeBeenAccepted(auth);
+    }
+
     function claudeBrowserCodeValue() {
+      const liveValue = agentAuthBrowserCodeInput ? String(agentAuthBrowserCodeInput.value || "").trim() : "";
+      if (liveValue !== "") {
+        return liveValue;
+      }
       return String(state.agentAuthBrowserCode || "").trim();
     }
 
@@ -964,7 +981,7 @@
 
     function syncAgentAuthBrowserCodeVisibility() {
       if (!agentAuthBrowserCode) return;
-      const showBrowserCode = isClaudeBrowserCodeState() && state.agentAuthInteracted;
+      const showBrowserCode = isClaudeBrowserCodeAwaitingSubmission() && state.agentAuthInteracted;
       agentAuthBrowserCode.classList.toggle("hidden", !showBrowserCode);
     }
 
@@ -972,7 +989,7 @@
       if (!agentAuthVerify) return;
       const requiresManualConfigure = isManualConfigureState();
       const hasCodeChallenge = Boolean(state.agentAuth.authURL || state.agentAuth.deviceCode);
-      const requiresClaudeBrowserCode = isClaudeBrowserCodeState();
+      const requiresClaudeBrowserCode = isClaudeBrowserCodeAwaitingSubmission();
       const hasClaudeBrowserCode = claudeBrowserCodeValue() !== "";
       const meetsAuthInteractionRequirement = requiresManualConfigure || (!hasCodeChallenge || state.agentAuthInteracted);
       const visible = state.agentAuth.required &&
@@ -1346,6 +1363,12 @@
           claude_auth_code: code,
         });
         applyAgentAuthGate(auth);
+        if (hasClaudeBrowserCodeBeenAccepted(auth)) {
+          state.agentAuthBrowserCode = "";
+          if (agentAuthBrowserCodeInput) {
+            agentAuthBrowserCodeInput.value = "";
+          }
+        }
         const verified = await requestAgentAuth("/api/agent-auth/verify", "POST");
         applyAgentAuthGate(verified);
         if (verified.ready) {
@@ -1451,7 +1474,7 @@
         await configureClaudeGitHubToken();
         return;
       }
-      if (isClaudeBrowserCodeState()) {
+      if (isClaudeBrowserCodeAwaitingSubmission()) {
         await configureClaudeBrowserCode();
         return;
       }
