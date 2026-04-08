@@ -237,15 +237,15 @@ func (g *claudeAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthStat
 	snap := g.snapshotLocked()
 	g.mu.Unlock()
 
+	go g.readLoginStream(stdoutPipe)
+	go g.readLoginStream(stderrPipe)
+	go g.waitLogin(cmd, tmpDir)
+
 	// Prompt-driven login flows can emit non-newline terminal controls; proactively
 	// send Enter once so default selections continue and the browser URL is printed.
 	if _, err := io.WriteString(stdinPipe, "\n"); err != nil {
 		g.logf("hub.auth status=warn harness=claude action=advance_login_prompt err=%q", err)
 	}
-
-	go g.readLoginStream(stdoutPipe)
-	go g.readLoginStream(stderrPipe)
-	go g.waitLogin(cmd, tmpDir)
 
 	return snap, nil
 }
