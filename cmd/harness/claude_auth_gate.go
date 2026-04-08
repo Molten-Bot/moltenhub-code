@@ -186,7 +186,7 @@ func (g *claudeAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthStat
 	}
 
 	procCtx, cancel := context.WithCancel(baseCtx)
-	cmd := exec.CommandContext(procCtx, command, "auth", "login")
+	cmd := exec.CommandContext(procCtx, command, "login")
 	cmd.Dir = tmpDir
 
 	stdoutPipe, err := cmd.StdoutPipe()

@@ -248,6 +248,7 @@ func runHub(args []string) int {
 		writeStderrLine(logger, "error: hub endpoint ping precheck failed; ensure <hub-host>/ping returns 2xx before connecting")
 		return harness.ExitPreflight
 	}
+	maybeStartAgentAuth(ctx, runtimeCfg, authGate, daemonLogger)
 
 	dispatchController := hub.NewAdaptiveDispatchController(cfg.Dispatcher, daemonLogger)
 	dispatchController.Start(ctx)
@@ -1078,6 +1079,47 @@ func applyDefaultAgentRuntimeConfig(runCfg config.Config, initCfg hub.InitConfig
 		runCfg.AgentCommand = strings.TrimSpace(initCfg.AgentCommand)
 	}
 	return runCfg
+}
+
+func maybeStartAgentAuth(ctx context.Context, runtime agentruntime.Runtime, gate agentAuthGate, logf func(string, ...any)) {
+	if gate == nil || logf == nil {
+		return
+	}
+	if strings.TrimSpace(runtime.Harness) != agentruntime.HarnessClaude {
+		return
+	}
+
+	status, err := gate.Status(ctx)
+	if err != nil {
+		logf("hub.auth status=warn harness=%s action=check err=%q", runtime.Harness, err)
+		return
+	}
+	if !status.Required || status.Ready {
+		return
+	}
+	switch strings.TrimSpace(status.State) {
+	case "needs_configure", "pending_browser_login":
+		return
+	}
+	if strings.TrimSpace(status.AuthURL) != "" {
+		return
+	}
+
+	started, startErr := gate.StartDeviceAuth(ctx)
+	if startErr != nil {
+		logf(
+			"hub.auth status=warn harness=%s action=start_device_auth err=%q detail=%q",
+			runtime.Harness,
+			startErr,
+			firstNonEmptyString(started.Message, status.Message),
+		)
+		return
+	}
+	logf(
+		"hub.auth status=start harness=%s action=start_device_auth state=%s",
+		runtime.Harness,
+		firstNonEmptyString(started.State, "pending_browser_login"),
+	)
 }
 
 func diagnosticDetailForResult(res execx.Result) string {

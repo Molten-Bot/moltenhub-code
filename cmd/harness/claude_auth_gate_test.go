@@ -199,7 +199,7 @@ func TestClaudeAuthGateStartDeviceAuthRunsLoginAndCapturesURL(t *testing.T) {
 
 	cmdPath := filepath.Join(t.TempDir(), "claude-login-stub.sh")
 	if err := os.WriteFile(cmdPath, []byte(`#!/bin/sh
-if [ "$1" != "auth" ] || [ "$2" != "login" ]; then
+if [ "$1" != "login" ]; then
   echo "unexpected args: $*" >&2
   exit 64
 fi
@@ -265,7 +265,7 @@ func TestClaudeAuthGateVerifyStartsLoginWhenNotReady(t *testing.T) {
 
 	cmdPath := filepath.Join(t.TempDir(), "claude-login-verify-stub.sh")
 	if err := os.WriteFile(cmdPath, []byte(`#!/bin/sh
-if [ "$1" != "auth" ] || [ "$2" != "login" ]; then
+if [ "$1" != "login" ]; then
   exit 64
 fi
 echo "Choose account:"

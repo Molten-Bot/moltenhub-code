@@ -11,11 +11,41 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jef/moltenhub-code/internal/agentruntime"
 	"github.com/jef/moltenhub-code/internal/config"
 	"github.com/jef/moltenhub-code/internal/execx"
 	"github.com/jef/moltenhub-code/internal/harness"
 	"github.com/jef/moltenhub-code/internal/hub"
+	"github.com/jef/moltenhub-code/internal/hubui"
 )
+
+type stubAgentAuthGate struct {
+	statusState hubui.AgentAuthState
+	statusErr   error
+	startState  hubui.AgentAuthState
+	startErr    error
+	startCalls  int
+}
+
+func (g *stubAgentAuthGate) Status(context.Context) (hubui.AgentAuthState, error) {
+	return g.statusState, g.statusErr
+}
+
+func (g *stubAgentAuthGate) StartDeviceAuth(context.Context) (hubui.AgentAuthState, error) {
+	g.startCalls++
+	if g.startState.State == "" {
+		g.startState = g.statusState
+	}
+	return g.startState, g.startErr
+}
+
+func (g *stubAgentAuthGate) Verify(context.Context) (hubui.AgentAuthState, error) {
+	return g.statusState, nil
+}
+
+func (g *stubAgentAuthGate) Configure(context.Context, string) (hubui.AgentAuthState, error) {
+	return g.statusState, nil
+}
 
 func TestStringListFlagSetAndString(t *testing.T) {
 	t.Parallel()
@@ -119,6 +149,101 @@ func TestShouldFallbackToLocalOnlyMode(t *testing.T) {
 				t.Fatalf("shouldFallbackToLocalOnlyMode(%q, %v) = %v, want %v", tt.uiListen, tt.err, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestMaybeStartAgentAuthStartsClaudeLoginWhenBrowserAuthIsNeeded(t *testing.T) {
+	t.Parallel()
+
+	gate := &stubAgentAuthGate{
+		statusState: hubui.AgentAuthState{
+			Required: true,
+			Ready:    false,
+			State:    "needs_browser_login",
+			Message:  "Claude login required",
+		},
+		startState: hubui.AgentAuthState{
+			Required: true,
+			Ready:    false,
+			State:    "pending_browser_login",
+		},
+	}
+
+	var logs []string
+	maybeStartAgentAuth(
+		context.Background(),
+		agentruntime.Runtime{Harness: agentruntime.HarnessClaude, Command: "claude"},
+		gate,
+		func(format string, args ...any) {
+			logs = append(logs, fmt.Sprintf(format, args...))
+		},
+	)
+
+	if got, want := gate.startCalls, 1; got != want {
+		t.Fatalf("startCalls = %d, want %d", got, want)
+	}
+	if got := strings.Join(logs, "\n"); !strings.Contains(got, "hub.auth status=start harness=claude action=start_device_auth") {
+		t.Fatalf("logs missing start marker: %q", got)
+	}
+}
+
+func TestMaybeStartAgentAuthSkipsWhenClaudeNeedsManualConfigure(t *testing.T) {
+	t.Parallel()
+
+	gate := &stubAgentAuthGate{
+		statusState: hubui.AgentAuthState{
+			Required: true,
+			Ready:    false,
+			State:    "needs_configure",
+		},
+	}
+
+	maybeStartAgentAuth(
+		context.Background(),
+		agentruntime.Runtime{Harness: agentruntime.HarnessClaude, Command: "claude"},
+		gate,
+		func(string, ...any) {},
+	)
+
+	if got := gate.startCalls; got != 0 {
+		t.Fatalf("startCalls = %d, want 0", got)
+	}
+}
+
+func TestMaybeStartAgentAuthLogsStartErrors(t *testing.T) {
+	t.Parallel()
+
+	gate := &stubAgentAuthGate{
+		statusState: hubui.AgentAuthState{
+			Required: true,
+			Ready:    false,
+			State:    "needs_browser_login",
+			Message:  "Claude login required",
+		},
+		startState: hubui.AgentAuthState{
+			Required: true,
+			Ready:    false,
+			State:    "error",
+			Message:  "start claude login: exit status 2",
+		},
+		startErr: errors.New("exit status 2"),
+	}
+
+	var logs []string
+	maybeStartAgentAuth(
+		context.Background(),
+		agentruntime.Runtime{Harness: agentruntime.HarnessClaude, Command: "claude"},
+		gate,
+		func(format string, args ...any) {
+			logs = append(logs, fmt.Sprintf(format, args...))
+		},
+	)
+
+	if got, want := gate.startCalls, 1; got != want {
+		t.Fatalf("startCalls = %d, want %d", got, want)
+	}
+	if got := strings.Join(logs, "\n"); !strings.Contains(got, `status=warn harness=claude action=start_device_auth err="exit status 2" detail="start claude login: exit status 2"`) {
+		t.Fatalf("logs missing detailed start failure: %q", got)
 	}
 }
 
