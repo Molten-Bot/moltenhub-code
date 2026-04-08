@@ -557,8 +557,24 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function clearBuilderPromptDraft(") {
 		t.Fatalf("expected index html to include prompt clear handler")
 	}
+	if !strings.Contains(markup, "function hasBuilderDraftToClear(") ||
+		!strings.Contains(markup, "const promptDirty = String(builderPromptInput?.value || \"\").trim() !== \"\";") ||
+		!strings.Contains(markup, "const branchDirty = ![\"\", \"main\"].includes(String(builderBaseBranch?.value || \"\").trim());") ||
+		!strings.Contains(markup, "const targetSubdirDirty = ![\"\", \".\"].includes(String(builderTargetSubdir?.value || \"\").trim());") ||
+		!strings.Contains(markup, "const rawDirty = String(localPromptInput?.value || \"\").trim() !== \"\";") {
+		t.Fatalf("expected index html to detect clearable builder draft changes")
+	}
+	if !strings.Contains(markup, "function syncBuilderDraftClearState(") ||
+		!strings.Contains(markup, "builderImagesClear.disabled = !hasBuilderDraftToClear();") {
+		t.Fatalf("expected index html to keep the shared Clear button enabled for any clearable draft state")
+	}
 	if !strings.Contains(markup, "builderImagesClear.addEventListener(\"click\", clearBuilderPromptDraft);") {
 		t.Fatalf("expected index html Clear button to reset the full builder draft")
+	}
+	if !strings.Contains(markup, "builderPromptInput.addEventListener(\"input\", syncBuilderDraftClearState);") ||
+		!strings.Contains(markup, "builderTargetSubdir.addEventListener(\"input\", syncBuilderDraftClearState);") ||
+		!strings.Contains(markup, "localPromptInput.addEventListener(\"input\", syncBuilderDraftClearState);") {
+		t.Fatalf("expected index html to update shared Clear availability as prompt fields change")
 	}
 	if !strings.Contains(markup, "builderImagePasteTarget.classList.toggle(\"hidden\", isLibrary);") {
 		t.Fatalf("expected index html to hide screenshot paste in library mode only")
