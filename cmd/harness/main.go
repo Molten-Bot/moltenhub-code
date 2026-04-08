@@ -482,7 +482,7 @@ func runHub(args []string) int {
 			uiServer.AgentAuthStatus = authGate.Status
 			uiServer.StartAgentAuth = authGate.StartDeviceAuth
 			uiServer.VerifyAgentAuth = authGate.Verify
-			if runtimeCfg.Harness == agentruntime.HarnessAuggie || runtimeCfg.Harness == agentruntime.HarnessClaude {
+			if shouldEnableAgentAuthConfigure(runtimeCfg.Harness) {
 				uiServer.ConfigureAgentAuth = authGate.Configure
 			}
 		}
@@ -1189,6 +1189,15 @@ func maybeStartAgentAuth(ctx context.Context, runtime agentruntime.Runtime, gate
 		runtime.Harness,
 		firstNonEmptyString(started.State, "pending_browser_login"),
 	)
+}
+
+func shouldEnableAgentAuthConfigure(harness string) bool {
+	switch strings.TrimSpace(strings.ToLower(harness)) {
+	case agentruntime.HarnessCodex, agentruntime.HarnessClaude, agentruntime.HarnessAuggie:
+		return true
+	default:
+		return false
+	}
 }
 
 func diagnosticDetailForResult(res execx.Result) string {

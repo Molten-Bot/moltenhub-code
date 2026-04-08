@@ -279,6 +279,33 @@ func TestMaybeStartAgentAuthLogsStartErrors(t *testing.T) {
 	}
 }
 
+func TestShouldEnableAgentAuthConfigure(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		harness string
+		want    bool
+	}{
+		{name: "codex", harness: agentruntime.HarnessCodex, want: true},
+		{name: "claude", harness: agentruntime.HarnessClaude, want: true},
+		{name: "auggie", harness: agentruntime.HarnessAuggie, want: true},
+		{name: "mixed-case-codex", harness: "  CoDeX  ", want: true},
+		{name: "unknown", harness: "custom", want: false},
+		{name: "empty", harness: "", want: false},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := shouldEnableAgentAuthConfigure(tt.harness); got != tt.want {
+				t.Fatalf("shouldEnableAgentAuthConfigure(%q) = %v, want %v", tt.harness, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestJoinPRURLsAndCountChangedRepos(t *testing.T) {
 	t.Parallel()
 
