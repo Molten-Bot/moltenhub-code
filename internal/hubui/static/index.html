@@ -11,32 +11,40 @@
     window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"codex","configuredAgentLabel":"Codex"};
   </script>
   <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            hub: {
-              bg: "rgb(var(--hub-bg-rgb) / <alpha-value>)",
-              panel: "rgb(var(--hub-panel-rgb) / <alpha-value>)",
-              panelSoft: "rgb(var(--hub-panel-soft-rgb) / <alpha-value>)",
-              border: "rgb(var(--hub-border-rgb) / <alpha-value>)",
-              text: "rgb(var(--hub-text-rgb) / <alpha-value>)",
-              muted: "rgb(var(--hub-muted-rgb) / <alpha-value>)",
-              good: "rgb(var(--hub-good-rgb) / <alpha-value>)",
-              warn: "rgb(var(--hub-warn-rgb) / <alpha-value>)",
-              bad: "rgb(var(--hub-bad-rgb) / <alpha-value>)",
-              running: "rgb(var(--hub-running-rgb) / <alpha-value>)",
-              meta: "rgb(var(--hub-meta-rgb) / <alpha-value>)",
-              accent: "rgb(var(--hub-accent-rgb) / <alpha-value>)"
+    (function configureTailwindRuntime() {
+      try {
+        const tw = window.tailwind || {};
+        window.tailwind = tw;
+        window.tailwind.config = {
+          theme: {
+            extend: {
+              colors: {
+                hub: {
+                  bg: "rgb(var(--hub-bg-rgb) / <alpha-value>)",
+                  panel: "rgb(var(--hub-panel-rgb) / <alpha-value>)",
+                  panelSoft: "rgb(var(--hub-panel-soft-rgb) / <alpha-value>)",
+                  border: "rgb(var(--hub-border-rgb) / <alpha-value>)",
+                  text: "rgb(var(--hub-text-rgb) / <alpha-value>)",
+                  muted: "rgb(var(--hub-muted-rgb) / <alpha-value>)",
+                  good: "rgb(var(--hub-good-rgb) / <alpha-value>)",
+                  warn: "rgb(var(--hub-warn-rgb) / <alpha-value>)",
+                  bad: "rgb(var(--hub-bad-rgb) / <alpha-value>)",
+                  running: "rgb(var(--hub-running-rgb) / <alpha-value>)",
+                  meta: "rgb(var(--hub-meta-rgb) / <alpha-value>)",
+                  accent: "rgb(var(--hub-accent-rgb) / <alpha-value>)"
+                }
+              },
+              fontFamily: {
+                sans: ["Instrument Sans", "Segoe UI", "sans-serif"],
+                mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "monospace"]
+              }
             }
-          },
-          fontFamily: {
-            sans: ["Instrument Sans", "Segoe UI", "sans-serif"],
-            mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "monospace"]
           }
-        }
+        };
+      } catch (_err) {
+        // Keep UI booting even if the Tailwind runtime cannot be configured.
       }
-    };
+    })();
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="/static/style.css">
@@ -516,6 +524,7 @@
       agentAuthVerifyPending: false,
       agentAuthChallengeKey: "",
       agentAuthBrowserCode: "",
+      agentAuthURLLogoBroken: false,
     };
     let agentAuthRefreshTimer = null;
 
@@ -957,12 +966,16 @@
       return isClaudeBrowserCodeState(auth) && !hasClaudeBrowserCodeBeenAccepted(auth);
     }
 
+    function normalizeClaudeBrowserCode(raw) {
+      return String(raw || "").replace(/\s+/g, "");
+    }
+
     function claudeBrowserCodeValue() {
-      const liveValue = agentAuthBrowserCodeInput ? String(agentAuthBrowserCodeInput.value || "").trim() : "";
+      const liveValue = agentAuthBrowserCodeInput ? normalizeClaudeBrowserCode(agentAuthBrowserCodeInput.value || "") : "";
       if (liveValue !== "") {
         return liveValue;
       }
-      return String(state.agentAuthBrowserCode || "").trim();
+      return normalizeClaudeBrowserCode(state.agentAuthBrowserCode || "");
     }
 
     function setAuggieConfigureError(message) {
@@ -1127,17 +1140,31 @@
       if (agentAuthURL) {
         const authURL = state.agentAuth.authURL || "";
         const useClaudeLogoLink = authHarness(state.agentAuth) === "claude" && authURL !== "";
+        const showClaudeLogoLink = useClaudeLogoLink && !state.agentAuthURLLogoBroken;
         agentAuthURL.href = state.agentAuth.authURL || "#";
         agentAuthURL.classList.toggle("pointer-events-none", !authURL);
         agentAuthURL.classList.toggle("hidden", !authURL);
-        agentAuthURL.classList.toggle("agent-auth-url-logo-link", useClaudeLogoLink);
+        agentAuthURL.classList.toggle("agent-auth-url-logo-link", showClaudeLogoLink);
         if (agentAuthURLLogo) {
-          agentAuthURLLogo.src = CLAUDE_AUTH_LOGO_URL;
-          agentAuthURLLogo.classList.toggle("hidden", !useClaudeLogoLink);
+          if (agentAuthURLLogo.getAttribute("src") !== CLAUDE_AUTH_LOGO_URL) {
+            agentAuthURLLogo.src = CLAUDE_AUTH_LOGO_URL;
+          }
+          agentAuthURLLogo.classList.toggle("hidden", !showClaudeLogoLink);
         }
         if (agentAuthURLText) {
-          agentAuthURLText.textContent = useClaudeLogoLink ? "" : authURL;
-          agentAuthURLText.classList.toggle("hidden", useClaudeLogoLink || !authURL);
+          if (!authURL) {
+            agentAuthURLText.textContent = "";
+            agentAuthURLText.classList.add("hidden");
+          } else if (showClaudeLogoLink) {
+            agentAuthURLText.textContent = "";
+            agentAuthURLText.classList.add("hidden");
+          } else if (useClaudeLogoLink) {
+            agentAuthURLText.textContent = "Open Claude login";
+            agentAuthURLText.classList.remove("hidden");
+          } else {
+            agentAuthURLText.textContent = authURL;
+            agentAuthURLText.classList.remove("hidden");
+          }
         }
       }
       if (agentAuthCode) {
@@ -1468,6 +1495,7 @@
     }
 
     async function verifyAgentDeviceAuth() {
+      markAgentAuthInteraction();
       if (isAuggieConfigureState()) {
         await configureAuggieAuth();
         return;
@@ -1480,7 +1508,6 @@
         await configureClaudeBrowserCode();
         return;
       }
-      markAgentAuthInteraction();
       setAgentAuthVerifyPending(true);
       setAgentAuthBusy(true);
       try {
@@ -3375,9 +3402,21 @@
     }
     if (agentAuthBrowserCodeInput) {
       agentAuthBrowserCodeInput.addEventListener("input", () => {
-        state.agentAuthBrowserCode = String(agentAuthBrowserCodeInput.value || "");
+        state.agentAuthBrowserCode = normalizeClaudeBrowserCode(agentAuthBrowserCodeInput.value || "");
         setAgentAuthBrowserCodeError("");
         updateAgentAuthDoneVisibility();
+      });
+    }
+    if (agentAuthURLLogo) {
+      agentAuthURLLogo.addEventListener("load", () => {
+        if (!state.agentAuthURLLogoBroken) return;
+        state.agentAuthURLLogoBroken = false;
+        applyAgentAuthGate(state.agentAuth);
+      });
+      agentAuthURLLogo.addEventListener("error", () => {
+        if (state.agentAuthURLLogoBroken) return;
+        state.agentAuthURLLogoBroken = true;
+        applyAgentAuthGate(state.agentAuth);
       });
     }
     if (hubConnItem) {
