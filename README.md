@@ -260,6 +260,7 @@ Key fields:
 After first successful activation, runtime auth is persisted to a sibling `config.json` next to the init file used for startup. With the default repo-root layout, that remains `./.moltenhub/config.json`. The runtime also reads the legacy `config/config.json` path next to that file for compatibility with existing mounts.
 
 The live Hub OpenAPI spec is published at `https://na.hub.molten.bot/openapi.yaml`.
+A focused local runtime snapshot is checked in at [`na.hub.molten.bot.openapi.yaml`](na.hub.molten.bot.openapi.yaml) for offline review of the routes this harness depends on.
 Runtime config keys `sessionKey` and `timeoutMs` are optional; missing values default to `main` and `20000`.
 
 Local-only behavior:

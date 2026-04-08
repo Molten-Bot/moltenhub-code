@@ -93,6 +93,10 @@ func TestAsyncAPIClientTokenBoundMethods(t *testing.T) {
 		seen = append(seen, r.Method+" "+r.URL.Path)
 
 		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":true,"result":{"agent":{"metadata":{}}}}`))
+			return
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/openclaw/messages/pull"):
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -131,13 +135,14 @@ func TestAsyncAPIClientTokenBoundMethods(t *testing.T) {
 
 	sort.Strings(seen)
 	wantContains := []string{
+		"GET /v1/agents/me",
 		"GET /v1/openclaw/messages/pull",
 		"PATCH /v1/agents/me/status",
 		"POST /v1/agents/me/metadata",
 		"POST /v1/openclaw/messages/ack",
 		"POST /v1/openclaw/messages/nack",
 		"POST /v1/openclaw/messages/offline",
-		"POST /v1/openclaw/messages/register-plugin",
+		"PATCH /v1/agents/me/metadata",
 	}
 	for _, want := range wantContains {
 		found := false

@@ -299,20 +299,31 @@ func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
 	t.Parallel()
 
 	type captured struct {
+		Method string
 		Path string
 		Body map[string]any
 	}
-	var got captured
+	var calls []captured
 	client := NewAPIClient("http://example.test/v1")
 	client.HTTPClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-			defer r.Body.Close()
-			data, _ := io.ReadAll(r.Body)
 			var body map[string]any
-			_ = json.Unmarshal(data, &body)
-			got = captured{Path: r.URL.Path, Body: body}
+			if r.Body != nil {
+				defer r.Body.Close()
+				data, _ := io.ReadAll(r.Body)
+				_ = json.Unmarshal(data, &body)
+			}
+			calls = append(calls, captured{Method: r.Method, Path: r.URL.Path, Body: body})
+			if r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me" {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     http.Header{"Content-Type": []string{"application/json"}},
+					Body:       io.NopCloser(strings.NewReader(`{"ok":true,"result":{"agent":{"metadata":{"existing":"keep"}}}}`)),
+					Request:    r,
+				}, nil
+			}
 			return &http.Response{
-				StatusCode: http.StatusAccepted,
+				StatusCode: http.StatusOK,
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 				Body:       io.NopCloser(strings.NewReader(`{"ok":true}`)),
 				Request:    r,
@@ -328,23 +339,31 @@ func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
 		t.Fatalf("RegisterRuntime() error = %v", err)
 	}
 
-	if got.Path != "/v1/openclaw/messages/register-plugin" {
-		t.Fatalf("path = %q", got.Path)
+	if len(calls) != 2 {
+		t.Fatalf("calls = %d, want 2", len(calls))
 	}
-	skills, ok := got.Body["skills"].([]any)
-	if !ok || len(skills) != 1 {
-		t.Fatalf("skills = %#v", got.Body["skills"])
+	if calls[0].Method != http.MethodGet || calls[0].Path != "/v1/agents/me" {
+		t.Fatalf("first call = %s %s, want GET /v1/agents/me", calls[0].Method, calls[0].Path)
 	}
-	skill, ok := skills[0].(map[string]any)
+	if calls[1].Method != http.MethodPatch || calls[1].Path != "/v1/agents/me/metadata" {
+		t.Fatalf("second call = %s %s, want PATCH /v1/agents/me/metadata", calls[1].Method, calls[1].Path)
+	}
+
+	meta, ok := calls[1].Body["metadata"].(map[string]any)
 	if !ok {
-		t.Fatalf("skill = %#v", skills[0])
+		t.Fatalf("metadata wrapper missing: %#v", calls[1].Body)
 	}
-	meta, ok := skill["metadata"].(map[string]any)
-	if !ok {
-		t.Fatalf("skill.metadata = %#v", skill["metadata"])
+	if got := meta["existing"]; got != "keep" {
+		t.Fatalf("existing metadata = %#v, want preserved", got)
+	}
+	if got := meta["agent_harness"]; got != "codex" {
+		t.Fatalf("agent_harness = %#v", got)
 	}
 	if gotNames, want := meta["library_task_names"], []any{"security-review", "unit-test-coverage"}; !reflect.DeepEqual(gotNames, want) {
 		t.Fatalf("library_task_names = %#v, want %#v", gotNames, want)
+	}
+	if got := meta["library_task_count"]; got != float64(2) {
+		t.Fatalf("library_task_count = %#v, want 2", got)
 	}
 }
 
