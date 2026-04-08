@@ -397,7 +397,7 @@
     const resourceDiskIcon = document.getElementById("resource-disk-icon");
     const resourceMetricsText = document.getElementById("resource-metrics-text");
     const compactMetricsMediaQuery = typeof window.matchMedia === "function"
-      ? window.matchMedia("(max-width: 640px)")
+      ? window.matchMedia("(max-width: 720px)")
       : null;
     let latestResourceMetrics = { cpu: NaN, mem: NaN, disk: NaN };
     const taskList = document.getElementById("task-list");
@@ -714,11 +714,14 @@
       return `${label} ${value.toFixed(1)}${suffix}`;
     }
 
-    function formatMetricNumber(value, suffix = "") {
+    function formatCompactMetricNumber(value, suffix = "") {
       if (!Number.isFinite(value) || value < 0) {
         return "--";
       }
-      return `${value.toFixed(1)}${suffix}`;
+      if (Math.abs(value) < 10 && Math.abs(value % 1) > 0) {
+        return `${value.toFixed(1)}${suffix}`;
+      }
+      return `${Math.round(value)}${suffix}`;
     }
 
     function useCompactMetricLayout() {
@@ -743,17 +746,17 @@
       const compact = useCompactMetricLayout();
       if (resourceCPUText) {
         resourceCPUText.textContent = compact
-          ? formatMetricNumber(cpu, "%")
+          ? formatCompactMetricNumber(cpu, "%")
           : formatMetricValue("CPU", cpu, "%");
       }
       if (resourceMemText) {
         resourceMemText.textContent = compact
-          ? formatMetricNumber(mem, "%")
+          ? formatCompactMetricNumber(mem, "%")
           : formatMetricValue("MEM", mem, "%");
       }
       if (resourceMetricsText) {
         resourceMetricsText.textContent = compact
-          ? formatMetricNumber(disk)
+          ? formatCompactMetricNumber(disk)
           : formatMetricValue("DISK", disk, " MB/s");
       }
       setMetricIcon(resourceCPUIcon, cpu);

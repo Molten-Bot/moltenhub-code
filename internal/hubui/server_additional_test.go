@@ -381,7 +381,7 @@ func TestHeaderStatusStylesStayReadable(t *testing.T) {
 	}
 
 	css := resp.Body.String()
-	if !strings.Contains(css, ".status-item-compact {\n  position: relative;\n  justify-content: center;\n  gap: 0;\n  width: 38px;\n  min-width: 38px;\n  height: 38px;\n  min-height: 38px;") {
+	if !strings.Contains(css, ".status-item-compact {\n  position: relative;\n  justify-content: center;\n  gap: 0;\n  width: 42px;\n  min-width: 42px;\n  height: 42px;\n  min-height: 42px;") {
 		t.Fatalf("expected compact status dots to use the larger readable pill sizing")
 	}
 	if !strings.Contains(css, ".header {\n  position: relative;\n  z-index: 5;") {
@@ -390,10 +390,13 @@ func TestHeaderStatusStylesStayReadable(t *testing.T) {
 	if !strings.Contains(css, ".status-item-compact:hover,\n.status-item-compact:focus-visible,\n.status-item-compact:focus-within {\n  z-index: 7;\n}") {
 		t.Fatalf("expected connection status hover state to rise above adjacent panels")
 	}
-	if !strings.Contains(css, ".status-item-metrics {\n  gap: 12px;\n  padding-left: 12px;\n  padding-right: 14px;\n  min-height: 38px;") {
+	if !strings.Contains(css, ".status-item-metrics {\n  gap: 12px;\n  padding-left: 12px;\n  padding-right: 14px;\n  min-height: 42px;\n  height: 42px;") {
 		t.Fatalf("expected metrics pill to use stronger spacing and height")
 	}
-	if !strings.Contains(css, ".status-item-metrics .status-value {\n  color: var(--text-soft);\n}") {
+	if !strings.Contains(css, ".status-item-metrics .status-value {\n  color: var(--text-soft);\n  font-size: 0.9rem;") {
 		t.Fatalf("expected metrics text to use readable status color tokens")
+	}
+	if !strings.Contains(css, "@media (max-width: 720px) {\n  .status-row {\n    flex-wrap: nowrap;\n    gap: 8px;\n  }\n\n  .status-item-metrics {\n    flex: 1 1 auto;\n    width: auto;\n    min-width: 0;") {
+		t.Fatalf("expected status row to stay on one line through mobile widths")
 	}
 }
