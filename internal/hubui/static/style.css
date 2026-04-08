@@ -1,5 +1,17 @@
 :root {
   color-scheme: light;
+  --hub-bg-rgb: 244 248 255;
+  --hub-panel-rgb: 255 255 255;
+  --hub-panel-soft-rgb: 232 239 255;
+  --hub-border-rgb: 17 34 68;
+  --hub-text-rgb: 15 27 51;
+  --hub-muted-rgb: 90 111 149;
+  --hub-good-rgb: 43 182 115;
+  --hub-warn-rgb: 245 158 11;
+  --hub-bad-rgb: 239 68 68;
+  --hub-running-rgb: 10 132 255;
+  --hub-meta-rgb: 113 136 177;
+  --hub-accent-rgb: 123 97 255;
   --bg: #f4f8ff;
   --bg-soft: rgba(255, 255, 255, 0.84);
   --bg-elevated: #ffffff;
@@ -19,6 +31,11 @@
   --accent: #7b61ff;
   --accent-soft: rgba(123, 97, 255, 0.12);
   --brand-gradient: linear-gradient(135deg, #3ecbff 0%, #0a84ff 48%, #7b61ff 100%);
+  --body-radial-left: radial-gradient(1300px 600px at -10% -15%, rgba(10, 132, 255, 0.16), transparent 60%);
+  --body-radial-right: radial-gradient(980px 560px at 110% 8%, rgba(123, 97, 255, 0.12), transparent 62%);
+  --body-linear: linear-gradient(180deg, #f8fbff, #f2f7ff 55%, #ecf3ff);
+  --body-orb-a: radial-gradient(circle, rgba(62, 203, 255, 0.24) 0%, rgba(62, 203, 255, 0) 66%);
+  --body-orb-b: radial-gradient(circle, rgba(123, 97, 255, 0.2) 0%, rgba(123, 97, 255, 0) 70%);
   --shadow-sm: 0 10px 28px rgba(10, 44, 102, 0.08);
   --shadow-md: 0 18px 44px rgba(10, 44, 102, 0.14);
   --shadow-lg: 0 28px 72px rgba(10, 44, 102, 0.18);
@@ -39,9 +56,9 @@ body {
   overflow-x: hidden;
   color: var(--text);
   background:
-    radial-gradient(1300px 600px at -10% -15%, rgba(10, 132, 255, 0.16), transparent 60%),
-    radial-gradient(980px 560px at 110% 8%, rgba(123, 97, 255, 0.12), transparent 62%),
-    linear-gradient(180deg, #f8fbff, #f2f7ff 55%, #ecf3ff);
+    var(--body-radial-left),
+    var(--body-radial-right),
+    var(--body-linear);
   font-family: "Instrument Sans", "Segoe UI", sans-serif;
 }
 
@@ -61,7 +78,7 @@ body::before {
   width: 40rem;
   height: 40rem;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(62, 203, 255, 0.24) 0%, rgba(62, 203, 255, 0) 66%);
+  background: var(--body-orb-a);
   animation: moltenFloatA 18s ease-in-out infinite alternate;
 }
 
@@ -71,7 +88,7 @@ body::after {
   width: 34rem;
   height: 34rem;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(123, 97, 255, 0.2) 0%, rgba(123, 97, 255, 0) 70%);
+  background: var(--body-orb-b);
   animation: moltenFloatB 22s ease-in-out infinite alternate;
 }
 
@@ -1802,6 +1819,18 @@ html.night {
 }
 
 html.dark {
+  --hub-bg-rgb: 15 22 39;
+  --hub-panel-rgb: 24 35 58;
+  --hub-panel-soft-rgb: 34 48 78;
+  --hub-border-rgb: 150 179 230;
+  --hub-text-rgb: 232 240 255;
+  --hub-muted-rgb: 159 178 214;
+  --hub-meta-rgb: 140 162 204;
+  --body-radial-left: radial-gradient(1200px 620px at -12% -12%, rgba(10, 132, 255, 0.28), transparent 58%);
+  --body-radial-right: radial-gradient(880px 540px at 108% 4%, rgba(123, 97, 255, 0.22), transparent 60%);
+  --body-linear: linear-gradient(180deg, #0d1424, #0a1120 58%, #09101d);
+  --body-orb-a: radial-gradient(circle, rgba(10, 132, 255, 0.22) 0%, rgba(10, 132, 255, 0) 68%);
+  --body-orb-b: radial-gradient(circle, rgba(123, 97, 255, 0.18) 0%, rgba(123, 97, 255, 0) 72%);
   --bg: #0f1627;
   --bg-soft: rgba(20, 29, 49, 0.88);
   --bg-elevated: #18233a;
@@ -1821,6 +1850,18 @@ html.dark {
 }
 
 html.night {
+  --hub-bg-rgb: 8 11 20;
+  --hub-panel-rgb: 15 22 38;
+  --hub-panel-soft-rgb: 25 35 58;
+  --hub-border-rgb: 122 147 191;
+  --hub-text-rgb: 237 243 255;
+  --hub-muted-rgb: 155 173 207;
+  --hub-meta-rgb: 140 161 201;
+  --body-radial-left: radial-gradient(1100px 560px at -12% -16%, rgba(48, 124, 255, 0.2), transparent 56%);
+  --body-radial-right: radial-gradient(920px 520px at 112% 2%, rgba(86, 112, 255, 0.16), transparent 60%);
+  --body-linear: linear-gradient(180deg, #05070d, #070b14 55%, #090f1a);
+  --body-orb-a: radial-gradient(circle, rgba(55, 120, 255, 0.16) 0%, rgba(55, 120, 255, 0) 70%);
+  --body-orb-b: radial-gradient(circle, rgba(99, 117, 255, 0.14) 0%, rgba(99, 117, 255, 0) 74%);
   --bg: #080b14;
   --bg-soft: rgba(9, 14, 24, 0.92);
   --bg-elevated: #0f1626;

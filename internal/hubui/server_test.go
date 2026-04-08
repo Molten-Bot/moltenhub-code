@@ -641,6 +641,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="theme-select"`) {
 		t.Fatalf("expected index html to include docked theme selector")
 	}
+	if !strings.Contains(markup, `rgb(var(--hub-panel-rgb) / <alpha-value>)`) || !strings.Contains(markup, `rgb(var(--hub-text-rgb) / <alpha-value>)`) {
+		t.Fatalf("expected index html to drive tailwind hub colors from CSS theme variables")
+	}
 	if strings.Contains(markup, `id="hover-select"`) || strings.Contains(markup, ">Hover<") {
 		t.Fatalf("expected index html to remove the docked hover selector")
 	}
@@ -692,6 +695,12 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, "html.dark .theme-controls") || !strings.Contains(css, "html.night .theme-controls") {
 		t.Fatalf("expected stylesheet to include dark and night docked theme selector treatments")
+	}
+	if !strings.Contains(css, "--hub-panel-rgb: 255 255 255;") || !strings.Contains(css, "--hub-panel-rgb: 15 22 38;") {
+		t.Fatalf("expected stylesheet to define theme-aware rgb tokens for hub panels")
+	}
+	if !strings.Contains(css, "--body-linear: linear-gradient(180deg, #0d1424, #0a1120 58%, #09101d);") || !strings.Contains(css, "--body-linear: linear-gradient(180deg, #05070d, #070b14 55%, #090f1a);") {
+		t.Fatalf("expected stylesheet to define distinct dark and night backgrounds")
 	}
 	if !strings.Contains(css, ".task.task-closing") {
 		t.Fatalf("expected stylesheet to include task closing styles")
