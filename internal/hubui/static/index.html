@@ -54,7 +54,7 @@
     <div class="header flex flex-wrap items-center justify-between gap-3">
       <div class="brand-lockup flex items-center gap-3">
         <img
-          class="brand-logo h-11 w-11 shrink-0 rounded-xl border border-white/10 bg-white/5 p-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.25)]"
+          class="brand-logo"
           src="https://molten.bot/logo.svg"
           alt="MoltenHub logo">
         <div>
@@ -210,7 +210,17 @@
 
         <section id="task-panel" class="panel min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))] hidden" aria-hidden="true">
           <div class="panel-header flex items-center justify-end gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
-            <button id="task-fullscreen-toggle" class="task-fullscreen-toggle" type="button" aria-expanded="false" aria-label="Open full screen tasks">Full Screen</button>
+            <button
+              id="task-fullscreen-toggle"
+              class="task-fullscreen-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-label="Open full screen tasks"
+              title="Open full screen tasks">
+              <svg class="task-fullscreen-toggle-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"></path>
+              </svg>
+            </button>
           </div>
           <div class="scroll task-scroll h-[calc(100%-48px)] overflow-auto">
             <div id="task-list" class="task-list grid gap-2 p-3"></div>
@@ -244,7 +254,7 @@
     </div>
   </div>
 
-  <div id="agent-auth-gate" class="fixed inset-0 z-[95] hidden items-center justify-center bg-[#040911]/85 p-4 backdrop-blur-sm" aria-live="polite">
+  <div id="agent-auth-gate" class="agent-auth-gate fixed inset-0 z-[95] hidden items-center justify-center p-4 backdrop-blur-sm" aria-live="polite">
     <div class="flex min-h-[220px] w-full max-w-xl flex-col p-2">
       <h2 id="agent-auth-title" class="text-[2rem] font-semibold leading-tight text-hub-text">Authorize Agent to get started</h2>
       <p id="agent-auth-message" class="mt-3 max-w-lg text-base leading-7 text-hub-text/85"></p>
@@ -252,13 +262,13 @@
       <div id="agent-auth-details" class="mt-5 hidden space-y-3">
         <div class="flex flex-wrap items-center gap-2.5">
           <div id="agent-auth-code" class="font-mono text-[1.15rem] tracking-[0.22em] text-hub-text"></div>
-          <button id="agent-auth-copy" class="rounded-md border border-white/20 bg-white/5 px-2.5 py-1.5 text-xs font-medium text-hub-text hover:bg-white/10" type="button">Copy</button>
+          <button id="agent-auth-copy" class="agent-auth-copy rounded-md px-2.5 py-1.5 text-xs font-medium" type="button">Copy</button>
         </div>
-        <a id="agent-auth-url" class="block break-all text-[1.05rem] text-[#8dc6ff] underline decoration-dotted underline-offset-2" href="" target="_blank" rel="noopener noreferrer"></a>
+        <a id="agent-auth-url" class="agent-auth-url block break-all text-[1.05rem] underline decoration-dotted underline-offset-2" href="" target="_blank" rel="noopener noreferrer"></a>
       </div>
 
       <div class="mt-auto flex justify-end pt-4">
-        <button id="agent-auth-verify" class="hidden rounded-lg border border-hub-border bg-[#173d2b] px-3 py-2 text-sm font-medium text-hub-text hover:bg-[#1f533a]" type="button">Done</button>
+        <button id="agent-auth-verify" class="agent-auth-verify hidden rounded-lg border px-3 py-2 text-sm font-medium" type="button">Done</button>
       </div>
     </div>
   </div>
@@ -272,14 +282,13 @@
   </div>
 
   <div id="appearance-controls" class="theme-controls" role="group" aria-label="Appearance controls">
-    <label class="theme-control-group" for="theme-select">
+    <div class="theme-control-group">
       <span class="theme-control-label">Theme</span>
-      <select id="theme-select" class="theme-control-select" aria-label="Theme mode">
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-        <option value="night">Night</option>
-      </select>
-    </label>
+      <button id="theme-cycle" class="theme-cycle-button" type="button" aria-live="polite">
+        <span id="theme-cycle-current" class="theme-cycle-current">Light</span>
+        <span id="theme-cycle-next" class="theme-cycle-next">Next: Dark</span>
+      </button>
+    </div>
   </div>
 
   <script>
@@ -507,8 +516,40 @@
     const agentAuthCode = document.getElementById("agent-auth-code");
     const agentAuthCopy = document.getElementById("agent-auth-copy");
     const agentAuthVerify = document.getElementById("agent-auth-verify");
-    const themeSelect = document.getElementById("theme-select");
+    const themeCycleButton = document.getElementById("theme-cycle");
+    const themeCycleCurrent = document.getElementById("theme-cycle-current");
+    const themeCycleNext = document.getElementById("theme-cycle-next");
     const hoverSelect = document.getElementById("hover-select");
+
+    function themeLabel(theme) {
+      const normalized = THEME_MODES.includes(theme) ? theme : "light";
+      return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+    }
+
+    function currentThemeMode() {
+      const activeTheme = document.documentElement.getAttribute("data-theme");
+      return THEME_MODES.includes(activeTheme) ? activeTheme : loadThemeMode();
+    }
+
+    function nextThemeMode(theme) {
+      const currentIndex = THEME_MODES.indexOf(theme);
+      const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+      return THEME_MODES[(safeIndex + 1) % THEME_MODES.length];
+    }
+
+    function syncThemeCycleButton(theme) {
+      if (!themeCycleButton || !themeCycleCurrent || !themeCycleNext) {
+        return;
+      }
+      const currentTheme = THEME_MODES.includes(theme) ? theme : "light";
+      const nextTheme = nextThemeMode(currentTheme);
+      const currentLabel = themeLabel(currentTheme);
+      const nextLabel = themeLabel(nextTheme);
+      themeCycleCurrent.textContent = currentLabel;
+      themeCycleNext.textContent = `Next: ${nextLabel}`;
+      themeCycleButton.setAttribute("aria-label", `Current theme ${currentLabel}. Switch to ${nextLabel}.`);
+      themeCycleButton.setAttribute("title", `Switch theme to ${nextLabel}`);
+    }
 
     function applyThemeMode(theme, persist) {
       const normalized = THEME_MODES.includes(theme) ? theme : "light";
@@ -516,9 +557,7 @@
       root.classList.remove("light", "dark", "night");
       root.classList.add(normalized);
       root.setAttribute("data-theme", normalized);
-      if (themeSelect && themeSelect.value !== normalized) {
-        themeSelect.value = normalized;
-      }
+      syncThemeCycleButton(normalized);
       if (persist) {
         try {
           localStorage.setItem(THEME_KEY, normalized);
@@ -548,9 +587,9 @@
       applyThemeMode(loadThemeMode(), false);
       applyHoverMode(loadHoverMode(), false);
 
-      if (themeSelect) {
-        themeSelect.addEventListener("change", () => {
-          applyThemeMode(themeSelect.value, true);
+      if (themeCycleButton) {
+        themeCycleButton.addEventListener("click", () => {
+          applyThemeMode(nextThemeMode(currentThemeMode()), true);
         });
       }
       if (hoverSelect) {

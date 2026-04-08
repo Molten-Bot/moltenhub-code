@@ -122,8 +122,9 @@ GitHub Actions publish flow:
   - `moltenai/moltenhub-code:vnext-codex|claude|auggie`
   - `moltenai/moltenhub-code:<yyyy.mm.dd.run_number>-codex|claude|auggie`
 - `deploy-prod` is manual-only (`workflow_dispatch`) and promotes:
-  - selected source tag (default `vnext`) to `moltenai/moltenhub-code:latest-codex` (and keeps `latest` as an alias)
-  - selected source tag variants (`-claude`, `-auggie`) to `latest-claude`, `latest-auggie`
+  - selected source tag family through one concurrent release matrix for `codex`, `claude`, and `auggie`
+  - `vnext` promotes to `latest-codex` and keeps `latest` as a Codex alias
+  - `vnext-claude`, `vnext-auggie` promote to `latest-claude`, `latest-auggie`
 - required repository secret: `DOCKERHUB_TOKEN`
 
 Equivalent direct `docker run`:

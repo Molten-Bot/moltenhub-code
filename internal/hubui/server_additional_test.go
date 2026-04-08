@@ -291,7 +291,7 @@ func TestTaskPanelStylesConstrainHorizontalOverflow(t *testing.T) {
 	if !strings.Contains(css, ".task-meta > div {\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}") {
 		t.Fatalf("expected task metadata rows to truncate instead of widening cards")
 	}
-	if !strings.Contains(css, ".task-scroll {\n  scrollbar-width: thin;\n  scrollbar-color: rgba(136, 162, 189, 0.55) rgba(17, 28, 42, 0.35);\n  overflow-x: hidden;\n}") {
+	if !strings.Contains(css, ".task-scroll {\n  scrollbar-width: thin;\n  scrollbar-color: var(--surface-scroll-thumb) rgba(17, 28, 42, 0.35);\n  overflow-x: hidden;\n}") {
 		t.Fatalf("expected task scroll containers to hide horizontal overflow")
 	}
 	if !strings.Contains(css, ".task-fullscreen-shell {\n  position: relative;\n  display: grid;\n  grid-template-rows: minmax(0, 1fr);\n  width: 100%;\n  min-height: 100dvh;\n  height: 100dvh;\n}") {
@@ -318,8 +318,8 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	}
 
 	css := resp.Body.String()
-	if !strings.Contains(css, ".prompt-wrap .panel-header {\n  border-bottom-color: rgba(116, 160, 213, 0.2);\n  background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08));\n  color: #6f88ad;\n  letter-spacing: 0.11em;\n  justify-content: flex-end;\n}") {
-		t.Fatalf("expected Studio title bar to right-align the minimize control once the mode switcher is docked globally")
+	if !strings.Contains(css, ".prompt-wrap .panel-header {\n  border-bottom-color: var(--surface-header-border);\n  background: var(--surface-header);\n  color: var(--surface-label);\n  letter-spacing: 0.11em;\n  justify-content: flex-end;\n}") {
+		t.Fatalf("expected Studio title bar to keep theme-aware styling while right-aligning minimize controls")
 	}
 	if !strings.Contains(css, ".prompt-titlebar {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  justify-content: flex-end;\n  min-height: 52px;\n}") {
 		t.Fatalf("expected Studio title bar to keep a compact header once the mode dock moves to the page bottom")
@@ -330,11 +330,11 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".prompt-mode-tabs-dock {\n  width: max-content;\n  max-width: calc(100vw - 28px);\n  overflow-x: auto;\n}") {
 		t.Fatalf("expected Studio mode tabs to remain scrollable within the bottom dock on narrow viewports")
 	}
-	if !strings.Contains(css, ".prompt-wrap.panel {\n  order: 3;\n  display: flex;\n  flex-direction: column;\n  border-color: rgba(74, 118, 178, 0.18);") {
+	if !strings.Contains(css, ".prompt-wrap.panel {\n  order: 3;\n  display: flex;\n  flex-direction: column;\n  border-color: var(--surface-glow-border);") {
 		t.Fatalf("expected studio panel to stack header and form without owning the bottom dock positioning")
 	}
-	if !strings.Contains(css, ".prompt-mode-tabs {\n  display: inline-flex;\n  gap: 4px;\n  padding: 5px;\n  border-radius: 14px;\n  border: 1px solid rgba(112, 163, 221, 0.28);\n  background: linear-gradient(180deg, rgba(248, 252, 255, 0.96), rgba(226, 239, 255, 0.92));") {
-		t.Fatalf("expected studio mode tabs to use the refreshed light segmented-control treatment")
+	if !strings.Contains(css, ".prompt-mode-tabs {\n  display: inline-flex;\n  gap: 4px;\n  padding: 5px;\n  border-radius: 14px;\n  border: 1px solid var(--surface-tab-border);\n  background: var(--surface-tab-bg);") {
+		t.Fatalf("expected studio mode tabs to use theme-aware segmented-control treatment")
 	}
 	if !strings.Contains(css, ".prompt-form {\n  display: grid;\n  gap: 10px;\n  padding: 14px;\n  min-width: 0;\n  min-height: 0;\n  overflow-y: auto;\n}") {
 		t.Fatalf("expected studio form content to use the full panel now that the mode dock lives outside it")
@@ -360,8 +360,8 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".submit-status-inline {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  flex: 0 1 280px;\n  min-width: 140px;\n  text-align: center;\n}") {
 		t.Fatalf("expected inline status to sit between the screenshot area and the action buttons")
 	}
-	if !strings.Contains(css, ".prompt-image-chip {\n  border-radius: 14px;\n  border: 1px solid var(--border);\n  background: linear-gradient(160deg, rgba(255, 255, 255, 0.94), rgba(240, 246, 255, 0.88));") {
-		t.Fatalf("expected screenshot chips to use the shared light panel treatment")
+	if !strings.Contains(css, ".prompt-image-chip {\n  border-radius: 14px;\n  border: 1px solid var(--border);\n  background: var(--surface-glass-strong);") {
+		t.Fatalf("expected screenshot chips to use the shared theme-aware panel treatment")
 	}
 	if !strings.Contains(css, "@media (max-width: 700px) {\n  .page-bottom-dock {\n    bottom: max(12px, env(safe-area-inset-bottom));\n    max-width: calc(100vw - 24px);\n  }\n\n  .prompt-mode-tabs-dock {\n    max-width: calc(100vw - 24px);\n  }\n\n  .theme-controls {\n    right: 12px;\n    bottom: 76px;\n    left: auto;\n    max-width: calc(100vw - 24px);\n  }") {
 		t.Fatalf("expected mobile layout to keep the bottom mode dock and theme selector from colliding")
@@ -405,20 +405,20 @@ func TestStudioStylesUseRefinedPanelAndInputTreatment(t *testing.T) {
 	}
 
 	css := resp.Body.String()
-	if !strings.Contains(css, ".prompt-wrap.panel {\n  order: 3;\n  display: flex;\n  flex-direction: column;\n  border-color: rgba(74, 118, 178, 0.18);\n  background:\n    linear-gradient(180deg, rgba(223, 241, 255, 0.96), rgba(245, 250, 255, 0.9) 18%, rgba(255, 255, 255, 0.92) 100%),") {
-		t.Fatalf("expected studio panel to use the refreshed blue-tint shell treatment")
+	if !strings.Contains(css, ".prompt-wrap.panel {\n  order: 3;\n  display: flex;\n  flex-direction: column;\n  border-color: var(--surface-glow-border);\n  background: var(--surface-glow);\n  box-shadow: var(--surface-glow-shadow);") {
+		t.Fatalf("expected studio panel to use theme-aware shell tokens")
 	}
-	if !strings.Contains(css, ".prompt-wrap .panel-header {\n  border-bottom-color: rgba(116, 160, 213, 0.2);\n  background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08));\n  color: #6f88ad;\n  letter-spacing: 0.11em;\n  justify-content: flex-end;\n}") {
+	if !strings.Contains(css, ".prompt-wrap .panel-header {\n  border-bottom-color: var(--surface-header-border);\n  background: var(--surface-header);\n  color: var(--surface-label);\n  letter-spacing: 0.11em;\n  justify-content: flex-end;\n}") {
 		t.Fatalf("expected studio header to keep its minimize control aligned to the right")
 	}
-	if !strings.Contains(css, ".prompt-mode-tab.active {\n  background: linear-gradient(135deg, #fefefe 0%, #e7f2ff 48%, #d7eaff 100%);\n  border: 1px solid rgba(112, 163, 221, 0.34);") {
-		t.Fatalf("expected active studio mode tab to use the light shell treatment instead of the dark accent pill")
+	if !strings.Contains(css, ".prompt-mode-tab.active {\n  background: var(--surface-tab-active-bg);\n  border: 1px solid var(--surface-tab-active-border);") {
+		t.Fatalf("expected active studio mode tab to use theme-aware shell tokens")
 	}
-	if !strings.Contains(css, ".prompt-control,\n.prompt-text,\n.prompt-action-paste {\n  width: 100%;\n  border: 1px solid rgba(112, 163, 221, 0.34);\n  border-radius: 16px;\n  background: linear-gradient(180deg, rgba(251, 254, 255, 0.98), rgba(234, 245, 255, 0.88));") {
-		t.Fatalf("expected studio controls to use the updated light-blue input treatment")
+	if !strings.Contains(css, ".prompt-control,\n.prompt-text,\n.prompt-action-paste {\n  width: 100%;\n  border: 1px solid var(--surface-control-border);\n  border-radius: 16px;\n  background: var(--surface-control-bg);") {
+		t.Fatalf("expected studio controls to use theme-aware input tokens")
 	}
-	if !strings.Contains(css, "select.prompt-control {\n  appearance: none;\n  background-image:\n    linear-gradient(45deg, transparent 50%, #3d82dc 50%),\n    linear-gradient(135deg, #3d82dc 50%, transparent 50%);") {
-		t.Fatalf("expected repository selector to use the refreshed blue chevron treatment")
+	if !strings.Contains(css, "select.prompt-control {\n  appearance: none;\n  background-image:\n    linear-gradient(45deg, transparent 50%, var(--surface-control-arrow) 50%),\n    linear-gradient(135deg, var(--surface-control-arrow) 50%, transparent 50%);") {
+		t.Fatalf("expected repository selector to use theme-aware chevron treatment")
 	}
 }
 

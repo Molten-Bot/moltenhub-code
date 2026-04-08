@@ -244,6 +244,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="task-fullscreen-toggle"`) {
 		t.Fatalf("expected index html to include tasks full screen toggle")
 	}
+	if strings.Contains(markup, `>Full Screen</button>`) {
+		t.Fatalf("expected task fullscreen control to render as an icon instead of button text")
+	}
+	if !strings.Contains(markup, `class="task-fullscreen-toggle-icon"`) {
+		t.Fatalf("expected index html to include the task fullscreen expand icon")
+	}
 	if !strings.Contains(markup, `id="task-panel"`) {
 		t.Fatalf("expected index html to include task panel wrapper")
 	}
@@ -666,8 +672,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"","configuredAgentLabel":"Codex"};`) {
 		t.Fatalf("expected index html to include default UI config")
 	}
-	if !strings.Contains(markup, `id="theme-select"`) {
-		t.Fatalf("expected index html to include docked theme selector")
+	if !strings.Contains(markup, `id="theme-cycle"`) || !strings.Contains(markup, `function nextThemeMode(theme)`) {
+		t.Fatalf("expected index html to include docked theme cycle control")
 	}
 	if !strings.Contains(markup, `rgb(var(--hub-panel-rgb) / <alpha-value>)`) || !strings.Contains(markup, `rgb(var(--hub-text-rgb) / <alpha-value>)`) {
 		t.Fatalf("expected index html to drive tailwind hub colors from CSS theme variables")
@@ -734,14 +740,14 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task-close") {
 		t.Fatalf("expected stylesheet to include task close styles")
 	}
-	if !strings.Contains(css, ".theme-controls") || !strings.Contains(css, ".theme-control-select") {
-		t.Fatalf("expected stylesheet to include docked theme selector styles")
+	if !strings.Contains(css, ".theme-controls") || !strings.Contains(css, ".theme-cycle-button") {
+		t.Fatalf("expected stylesheet to include docked theme cycle styles")
 	}
-	if !strings.Contains(css, "appearance: none;") {
-		t.Fatalf("expected stylesheet to render the theme selector with custom select chrome")
+	if !strings.Contains(css, "--theme-button-bg:") || !strings.Contains(css, "--surface-control-bg:") {
+		t.Fatalf("expected stylesheet to define reusable theme tokens for controls")
 	}
 	if !strings.Contains(css, "html.dark .theme-controls") || !strings.Contains(css, "html.night .theme-controls") {
-		t.Fatalf("expected stylesheet to include dark and night docked theme selector treatments")
+		t.Fatalf("expected stylesheet to include dark and night docked theme control treatments")
 	}
 	if !strings.Contains(css, "--hub-panel-rgb: 255 255 255;") || !strings.Contains(css, "--hub-panel-rgb: 15 22 38;") {
 		t.Fatalf("expected stylesheet to define theme-aware rgb tokens for hub panels")
@@ -770,6 +776,15 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task-fullscreen-toggle") {
 		t.Fatalf("expected stylesheet to include task full screen toggle styles")
 	}
+	if !strings.Contains(css, ".task-fullscreen-toggle-icon") {
+		t.Fatalf("expected stylesheet to include task full screen icon styles")
+	}
+	if !strings.Contains(css, ".task-fullscreen-toggle {\n  width: 32px;\n  height: 32px;") {
+		t.Fatalf("expected stylesheet to size the task full screen control as a compact icon affordance")
+	}
+	if !strings.Contains(css, "background: transparent;") || !strings.Contains(css, "border: 0;") {
+		t.Fatalf("expected stylesheet to remove button chrome from the task full screen control")
+	}
 	if !strings.Contains(css, ".task-fullscreen-close") {
 		t.Fatalf("expected stylesheet to include full screen close-state button styles")
 	}
@@ -779,7 +794,7 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, "top: max(16px, env(safe-area-inset-top));") || !strings.Contains(css, "right: max(16px, env(safe-area-inset-right));") {
 		t.Fatalf("expected stylesheet to keep the full screen close control clear of viewport edges")
 	}
-	if !strings.Contains(css, "background: rgba(15, 27, 51, 0.92);") || !strings.Contains(css, "color: #fff;") {
+	if !strings.Contains(css, "background: var(--surface-fullscreen-close-bg);") || !strings.Contains(css, "color: #fff;") {
 		t.Fatalf("expected stylesheet to give the full screen close control high-contrast styling")
 	}
 	if !strings.Contains(css, ".task-fullscreen") {
