@@ -229,6 +229,18 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function renderTaskProgress(") {
 		t.Fatalf("expected index html to include renderTaskProgress handler")
 	}
+	if !strings.Contains(markup, `icon: "moltenhub"`) || !strings.Contains(markup, `icon: "github"`) || !strings.Contains(markup, `icon: "agent"`) {
+		t.Fatalf("expected index html to classify task progress steps by logo type")
+	}
+	if !strings.Contains(markup, "function taskProgressStepIconURL(") {
+		t.Fatalf("expected index html to include task progress icon URL resolver")
+	}
+	if !strings.Contains(markup, "task-progress-step-icon") {
+		t.Fatalf("expected index html to render task progress step icons")
+	}
+	if !strings.Contains(markup, "stage === \"claude\"") || !strings.Contains(markup, "stage === \"auggie\"") {
+		t.Fatalf("expected index html to map claude and auggie stages into the agent progress step")
+	}
 	if strings.Contains(markup, "current step:") {
 		t.Fatalf("expected index html to remove current step label text from task progress")
 	}
@@ -917,6 +929,12 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".task-rerun") {
 		t.Fatalf("expected stylesheet to include task rerun styles")
+	}
+	if !strings.Contains(css, ".task-progress-step.current {\n  background: var(--running);\n  border-color: rgba(10, 132, 255, 0.34);\n  box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.12);\n  transform: scale(2);") {
+		t.Fatalf("expected stylesheet to render the active task progress step at 2x size")
+	}
+	if !strings.Contains(css, ".task-progress-step-icon") {
+		t.Fatalf("expected stylesheet to include task progress step icon styles")
 	}
 	if !strings.Contains(css, ".task-body") {
 		t.Fatalf("expected stylesheet to include task body column styles")

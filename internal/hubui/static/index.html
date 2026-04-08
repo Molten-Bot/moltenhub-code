@@ -353,12 +353,12 @@
     const HUB_CONNECT_URL = "https://app.molten.bot/login";
     const COMPLETED_STATUSES = new Set(["ok", "no_changes", "error", "invalid", "duplicate", "stopped"]);
     const TASK_PROGRESS_STEPS = [
-      { id: "received", label: "Task Received", detail: "Dispatch accepted by hub." },
-      { id: "run", label: "Run Started", detail: "Harness run initialized." },
-      { id: "prepare", label: "Prepare", detail: "Preflight, auth, and workspace setup." },
-      { id: "clone", label: "Git Clone", detail: "Repository clone and branch setup." },
-      { id: "codex", label: "Agent", detail: "Agent execution in progress." },
-      { id: "finalize", label: "Finalize", detail: "Commit, PR, and checks." },
+      { id: "received", label: "Task Received", detail: "Dispatch accepted by hub.", icon: "moltenhub" },
+      { id: "run", label: "Run Started", detail: "Harness run initialized.", icon: "moltenhub" },
+      { id: "prepare", label: "Prepare", detail: "Preflight, auth, and workspace setup.", icon: "moltenhub" },
+      { id: "clone", label: "Git Clone", detail: "Repository clone and branch setup.", icon: "github" },
+      { id: "agent", label: "Agent", detail: "Agent execution in progress.", icon: "agent" },
+      { id: "finalize", label: "Finalize", detail: "Commit, PR, and checks.", icon: "github" },
     ];
     const AGENT_LOGO_URLS = Object.freeze({
       codex: "/static/logos/codex-cli.svg",
@@ -366,6 +366,7 @@
       auggie: "/static/logos/augment.svg",
       augment: "/static/logos/augment.svg",
     });
+    const MOLTENHUB_LOGO_URL = "/static/logo.svg";
     const GITHUB_LOGO_URL = "/static/logos/github.svg";
     const TASK_PR_LINK_SIZE_PX = "34px";
     const TASK_PR_LOGO_SIZE = 20;
@@ -398,6 +399,39 @@
       if (label.includes("claude")) return AGENT_LOGO_URLS.claude;
       if (label.includes("auggie") || label.includes("augment")) return AGENT_LOGO_URLS.auggie;
       if (label.includes("codex")) return AGENT_LOGO_URLS.codex;
+      return "";
+    }
+
+    function resolveAgentLogoURL(harnessLabel) {
+      const label = String(harnessLabel || "").trim().toLowerCase();
+      if (AGENT_LOGO_URLS[label]) {
+        return AGENT_LOGO_URLS[label];
+      }
+      if (label.includes("claude")) return AGENT_LOGO_URLS.claude;
+      if (label.includes("auggie") || label.includes("augment")) return AGENT_LOGO_URLS.auggie;
+      if (label.includes("codex")) return AGENT_LOGO_URLS.codex;
+      return "";
+    }
+
+    function taskAgentLogoURL(task) {
+      const stageLogo = resolveAgentLogoURL(task?.stage);
+      if (stageLogo) {
+        return stageLogo;
+      }
+      return configuredAgentLogoURL() || AGENT_LOGO_URLS.codex;
+    }
+
+    function taskProgressStepIconURL(step, task) {
+      const iconKey = String(step?.icon || "").trim().toLowerCase();
+      if (iconKey === "moltenhub") {
+        return MOLTENHUB_LOGO_URL;
+      }
+      if (iconKey === "github") {
+        return GITHUB_LOGO_URL;
+      }
+      if (iconKey === "agent") {
+        return taskAgentLogoURL(task);
+      }
       return "";
     }
 
@@ -2810,9 +2844,15 @@
         index = Math.max(index, 2);
       } else if (stage === "clone") {
         index = Math.max(index, 3);
-      } else if (stage === "codex") {
+      } else if (
+        stage === "codex" ||
+        stage === "claude" ||
+        stage === "auggie" ||
+        stage === "augment" ||
+        stage === "agent"
+      ) {
         index = Math.max(index, 4);
-      } else if (stage === "git" || stage === "pr" || stage === "checks") {
+      } else if (stage === "git" || stage === "pr" || stage === "checks" || stage === "finalize") {
         index = Math.max(index, 5);
       }
 
@@ -2860,6 +2900,16 @@
         } else if (i === index) {
           marker.classList.add("current");
           stateText = "current";
+        }
+
+        const iconURL = taskProgressStepIconURL(step, task);
+        if (iconURL) {
+          marker.classList.add("has-icon");
+          const icon = document.createElement("img");
+          icon.className = "task-progress-step-icon";
+          icon.src = iconURL;
+          icon.alt = `${step.label} logo`;
+          marker.appendChild(icon);
         }
 
         marker.title = `${step.label}: ${stateText}. ${step.detail}`;

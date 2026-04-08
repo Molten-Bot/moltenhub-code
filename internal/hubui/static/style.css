@@ -1448,13 +1448,13 @@ select.prompt-control {
 
 .task-progress-track {
   position: relative;
-  height: 14px;
+  height: 28px;
 }
 
 .task-progress-line {
   position: absolute;
-  left: 7px;
-  right: 7px;
+  left: 14px;
+  right: 14px;
   top: 50%;
   height: 3px;
   transform: translateY(-50%);
@@ -1475,15 +1475,33 @@ select.prompt-control {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-height: 28px;
 }
 
 .task-progress-step {
   width: 14px;
   height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
   border-radius: 50%;
   border: 2px solid rgba(113, 136, 177, 0.45);
   background: var(--surface-progress-step);
-  transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+  transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+}
+
+.task-progress-step.has-icon {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.task-progress-step-icon {
+  width: 8px;
+  height: 8px;
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
 }
 
 .task-progress-step.done {
@@ -1491,10 +1509,20 @@ select.prompt-control {
   border-color: rgba(43, 182, 115, 0.3);
 }
 
+.task-progress-step.done.has-icon {
+  background: rgba(43, 182, 115, 0.18);
+}
+
 .task-progress-step.current {
   background: var(--running);
   border-color: rgba(10, 132, 255, 0.34);
   box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.12);
+  transform: scale(2);
+  z-index: 1;
+}
+
+.task-progress-step.current.has-icon {
+  background: rgba(10, 132, 255, 0.18);
 }
 
 .task-output-list {
