@@ -366,7 +366,7 @@ func TestStudioStylesUseRefinedPanelAndInputTreatment(t *testing.T) {
 	if !strings.Contains(css, ".prompt-wrap.panel {\n  display: flex;\n  flex-direction: column;\n  border-color: rgba(74, 118, 178, 0.18);\n  background:\n    linear-gradient(180deg, rgba(223, 241, 255, 0.96), rgba(245, 250, 255, 0.9) 18%, rgba(255, 255, 255, 0.92) 100%),") {
 		t.Fatalf("expected studio panel to use the refreshed blue-tint shell treatment")
 	}
-	if !strings.Contains(css, ".prompt-wrap .panel-header {\n  border-bottom-color: rgba(116, 160, 213, 0.2);\n  background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08));\n  color: #6f88ad;\n  letter-spacing: 0.11em;\n}") {
+	if !strings.Contains(css, ".prompt-wrap .panel-header {\n  border-bottom-color: rgba(116, 160, 213, 0.2);\n  background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08));\n  color: #6f88ad;\n  letter-spacing: 0.11em;\n  position: relative;\n  justify-content: center;\n}") {
 		t.Fatalf("expected studio header to use the lighter section title styling")
 	}
 	if !strings.Contains(css, ".prompt-control,\n.prompt-text,\n.prompt-action-paste {\n  width: 100%;\n  border: 1px solid rgba(112, 163, 221, 0.34);\n  border-radius: 16px;\n  background: linear-gradient(180deg, rgba(251, 254, 255, 0.98), rgba(234, 245, 255, 0.88));") {
