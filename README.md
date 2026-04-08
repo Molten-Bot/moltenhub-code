@@ -80,13 +80,7 @@ Supported harness values:
 
 Pass secrets at container runtime, not at build time. `.env` is excluded from Docker build context via `.dockerignore` so tokens are never copied into image layers.
 
-Optional `.env` flow:
-
-```bash
-cp .env.example .env
-```
-
-`./.env`:
+Optional `.env` flow (`./.env`):
 
 ```dotenv
 GITHUB_TOKEN=ghp_xxx
@@ -103,39 +97,30 @@ MOLTEN_HUB_TOKEN=agent_or_bind_token
 Run with Docker Compose (`docker-compose.yml`):
 
 ```bash
-mkdir -p moltenhub
-cp templates/run.example.json moltenhub/config.json
-docker compose up
+mkdir -p .moltenhub
+cp init.example.json .moltenhub/init.json
+
+HOST_UID="$(id -u)" HOST_GID="$(id -g)" docker compose up
 ```
 
-`docker compose` uses a persistent bind mount at `./moltenhub -> /workspace/config` and starts `with-config`, which auto-selects:
+`docker compose` uses a persistent bind mount at `./.moltenhub -> /workspace` and starts:
 
 ```bash
-# hub mode when config.json contains hub runtime fields
-/workspace/config/config.json
-
-# run mode when config.json contains task-run fields
-/workspace/config/config.json
-
-# hub mode when config.json is absent and init exists
-/workspace/config/init.json
-
-# hub mode from env when both config files are absent
-MOLTEN_HUB_TOKEN (+ optional MOLTEN_HUB_URL, MOLTEN_HUB_SESSION_KEY)
+harness hub --init /workspace/init.json --ui-listen :7777
 ```
 
-Hub mode example:
+To avoid passing IDs on every run, create a local `.env` once:
 
-```bash
-rm -f moltenhub/config.json
-cp templates/init.example.json moltenhub/init.json
-docker compose up
+```dotenv
+HOST_UID=<output of id -u>
+HOST_GID=<output of id -g>
 ```
 
-For `init.json`-only startup, ensure the container user can read the file:
+With this layout:
 
 ```bash
-chmod 644 moltenhub/init.json
+/workspace/init.json   -> ./.moltenhub/init.json
+/workspace/config.json -> ./.moltenhub/config.json
 ```
 
 After the first successful hub auth, the runtime persists a hub-bootable `config.json` next to `init.json`, so later boots can start from `config.json` directly.
@@ -156,12 +141,15 @@ Equivalent direct `docker run`:
 
 ```bash
 docker run --rm -it \
+  -u "$(id -u):$(id -g)" \
+  -e HOME=/tmp \
   -e GITHUB_TOKEN=ghp_xxx \
   -e OPENAI_API_KEY=sk_xxx \
-  -v "$PWD/moltenhub:/workspace/config" \
+  -p 3300:7777 \
+  -v "$PWD/.moltenhub:/workspace" \
   -w /workspace \
   moltenhub-code:latest \
-  with-config
+  harness hub --init /workspace/init.json --ui-listen :7777
 ```
 
 Container startup pre-registers auth before any agent stage:

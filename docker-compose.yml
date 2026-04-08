@@ -4,8 +4,11 @@ services:
       context: .
       dockerfile: Dockerfile
     image: moltenhub-code:local
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      HOME: /tmp
     ports:
       - 3300:7777
     volumes:
-      - ./.moltenhub/moltenbot000:/workspace/
+      - ./.moltenhub:/workspace/
     command: ["harness", "hub", "--init", "/workspace/init.json", "--ui-listen", ":7777"]
