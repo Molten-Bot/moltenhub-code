@@ -1497,8 +1497,8 @@ select.prompt-control {
 }
 
 .task-progress-step-icon {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   display: block;
   object-fit: contain;
   pointer-events: none;
@@ -1510,7 +1510,9 @@ select.prompt-control {
 }
 
 .task-progress-step.done.has-icon {
-  background: rgba(43, 182, 115, 0.18);
+  background: #fff;
+  border-color: rgba(43, 182, 115, 0.58);
+  box-shadow: 0 0 0 1px rgba(43, 182, 115, 0.2);
 }
 
 .task-progress-step.current {
@@ -1522,7 +1524,13 @@ select.prompt-control {
 }
 
 .task-progress-step.current.has-icon {
-  background: rgba(10, 132, 255, 0.18);
+  background: #fff;
+  border-color: rgba(10, 132, 255, 0.58);
+}
+
+.task-progress-step.current .task-progress-step-icon {
+  width: 10px;
+  height: 10px;
 }
 
 .task-output-list {
