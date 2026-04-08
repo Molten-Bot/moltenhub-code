@@ -352,6 +352,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, ">Studio<") {
 		t.Fatalf("expected index html to label the prompt panel as Studio")
 	}
+	if !strings.Contains(markup, `class="panel-title">Studio</span>`) {
+		t.Fatalf("expected index html to render Studio as the title-bar label")
+	}
 	if !strings.Contains(markup, `id="resource-metrics-text"`) {
 		t.Fatalf("expected index html to include resource metrics indicator")
 	}
@@ -375,6 +378,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `id="prompt-mode-json"`) {
 		t.Fatalf("expected index html to include json mode toggle")
+	}
+	if !strings.Contains(markup, `class="prompt-mode-tabs prompt-mode-tabs-titlebar`) {
+		t.Fatalf("expected index html to center the mode toggles inside the Studio title bar")
 	}
 	if !strings.Contains(markup, `id="builder-repo-select"`) {
 		t.Fatalf("expected index html to include repo history select")
