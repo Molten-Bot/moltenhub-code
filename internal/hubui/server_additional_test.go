@@ -327,6 +327,12 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".prompt-mode-tabs {\n  display: inline-flex;\n  gap: 4px;\n  padding: 5px;\n  border-radius: 14px;\n  border: 1px solid var(--surface-tab-border);\n  background: var(--surface-tab-bg);") {
 		t.Fatalf("expected studio mode tabs to use theme-aware segmented-control treatment")
 	}
+	if !strings.Contains(css, ".prompt-mode-link {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;") {
+		t.Fatalf("expected Studio mode controls to render as clickable link text inside the dock")
+	}
+	if !strings.Contains(css, ".prompt-mode-link.active {\n  color: var(--surface-tab-active-text);\n  box-shadow: inset 0 -2px 0 var(--surface-tab-active-text);\n}") {
+		t.Fatalf("expected active Studio mode link to stay visually highlighted without button sections")
+	}
 	if !strings.Contains(css, ".prompt-form {\n  display: grid;\n  gap: 10px;\n  padding: 14px;\n  min-width: 0;\n  min-height: 0;\n  overflow-y: auto;\n}") {
 		t.Fatalf("expected studio form content to use the full panel now that the mode dock lives outside it")
 	}
@@ -402,8 +408,8 @@ func TestStudioStylesUseRefinedPanelAndInputTreatment(t *testing.T) {
 	if !strings.Contains(css, ".prompt-wrap .panel-header {\n  border-bottom-color: var(--surface-header-border);\n  background: var(--surface-header);\n  color: var(--surface-label);\n  letter-spacing: 0.11em;\n  justify-content: flex-end;\n}") {
 		t.Fatalf("expected studio header to keep its minimize control aligned to the right")
 	}
-	if !strings.Contains(css, ".prompt-mode-tab.active {\n  background: var(--surface-tab-active-bg);\n  border: 1px solid var(--surface-tab-active-border);") {
-		t.Fatalf("expected active studio mode tab to use theme-aware shell tokens")
+	if !strings.Contains(css, ".prompt-mode-link.active {\n  color: var(--surface-tab-active-text);\n  box-shadow: inset 0 -2px 0 var(--surface-tab-active-text);\n}") {
+		t.Fatalf("expected active studio mode link to stay highlighted after removing button sections")
 	}
 	if !strings.Contains(css, ".prompt-control,\n.prompt-text,\n.prompt-action-paste {\n  width: 100%;\n  border: 1px solid var(--surface-control-border);\n  border-radius: 16px;\n  background: var(--surface-control-bg);") {
 		t.Fatalf("expected studio controls to use theme-aware input tokens")

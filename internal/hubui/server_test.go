@@ -451,6 +451,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="prompt-mode-json"`) {
 		t.Fatalf("expected index html to include json mode toggle")
 	}
+	if !strings.Contains(markup, `class="prompt-mode-link active" href="#studio-builder" role="tab" aria-selected="true"`) {
+		t.Fatalf("expected builder mode to render as an anchor-style control instead of a button section")
+	}
+	if !strings.Contains(markup, `class="prompt-mode-link" href="#studio-library" role="tab" aria-selected="false"`) {
+		t.Fatalf("expected library mode to render as an anchor-style control instead of a button section")
+	}
+	if !strings.Contains(markup, `class="prompt-mode-link" href="#studio-json" role="tab" aria-selected="false"`) {
+		t.Fatalf("expected json mode to render as an anchor-style control instead of a button section")
+	}
 	if !strings.Contains(markup, `class="page-bottom-dock"`) || !strings.Contains(markup, `class="prompt-mode-tabs prompt-mode-tabs-dock"`) {
 		t.Fatalf("expected index html to render the mode toggles in the bottom dock")
 	}
@@ -827,8 +836,8 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if strings.Contains(css, ".task-history-list") {
 		t.Fatalf("expected stylesheet to remove prompt history list styles")
 	}
-	if !strings.Contains(css, ".prompt-mode-tab") {
-		t.Fatalf("expected stylesheet to include prompt mode tab styles")
+	if !strings.Contains(css, ".prompt-mode-link") {
+		t.Fatalf("expected stylesheet to include prompt mode link styles")
 	}
 	if !strings.Contains(css, ".prompt-visibility-toggle") {
 		t.Fatalf("expected stylesheet to include studio visibility toggle styles")
