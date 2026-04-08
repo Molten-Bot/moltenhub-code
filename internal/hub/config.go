@@ -32,8 +32,9 @@ type InitConfig struct {
 	SessionKey        string           `json:"session_key"`
 	Handle            string           `json:"handle"`
 	Profile           ProfileConfig    `json:"profile"`
-	GitHubToken       string           `json:"github_token,omitempty"`
-	OpenAIAPIKey      string           `json:"openai_api_key,omitempty"`
+	GitHubToken        string           `json:"github_token,omitempty"`
+	OpenAIAPIKey       string           `json:"openai_api_key,omitempty"`
+	AugmentSessionAuth string           `json:"augment_session_auth,omitempty"`
 	Skill             SkillConfig      `json:"-"`
 	RuntimeConfigPath string           `json:"-"`
 	Dispatcher        DispatcherConfig `json:"dispatcher"`
@@ -103,6 +104,7 @@ func (c *InitConfig) ApplyDefaults() {
 	c.AgentToken = strings.TrimSpace(c.AgentToken)
 	c.GitHubToken = strings.TrimSpace(c.GitHubToken)
 	c.OpenAIAPIKey = strings.TrimSpace(c.OpenAIAPIKey)
+	c.AugmentSessionAuth = strings.TrimSpace(c.AugmentSessionAuth)
 	c.AgentHarness = strings.ToLower(strings.TrimSpace(c.AgentHarness))
 	if c.AgentHarness == "" {
 		c.AgentHarness = strings.ToLower(strings.TrimSpace(os.Getenv("HARNESS_AGENT_HARNESS")))

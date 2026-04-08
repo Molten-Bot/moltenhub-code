@@ -151,6 +151,18 @@ if [ "${OPENAI_API_KEY:-}" = "" ]; then
     fi
 fi
 
+if [ "${AUGMENT_SESSION_AUTH:-}" = "" ]; then
+    augment_session_auth_from_init="$(read_json_key "${init_path}" "augment_session_auth,augmentSessionAuth,AUGMENT_SESSION_AUTH")"
+    if [ "${augment_session_auth_from_init}" != "" ]; then
+        export AUGMENT_SESSION_AUTH="${augment_session_auth_from_init}"
+    else
+        augment_session_auth_from_config="$(read_json_key "${config_path}" "augment_session_auth,augmentSessionAuth,AUGMENT_SESSION_AUTH")"
+        if [ "${augment_session_auth_from_config}" != "" ]; then
+            export AUGMENT_SESSION_AUTH="${augment_session_auth_from_config}"
+        fi
+    fi
+fi
+
 if [ "${GH_TOKEN:-}" = "" ] && [ "${GITHUB_TOKEN:-}" = "" ]; then
     echo "missing required GitHub token: set GITHUB_TOKEN/GH_TOKEN or add github_token to ${init_path}" >&2
     exit 21

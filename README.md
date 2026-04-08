@@ -73,6 +73,7 @@ MOLTEN_HUB_TOKEN=agent_or_bind_token
 
 - Add `github_token` to satisfy `gh` auth setup
 - Add `openai_api_key` when using the Codex harness
+- Add `augment_session_auth` when using the Auggie harness; use the full session JSON from `auggie token print`
 
 Run with Docker Compose (`docker-compose.yml`):
 
@@ -144,6 +145,7 @@ Container startup pre-registers auth before any agent stage:
 - runs `gh auth status` and `gh auth setup-git`
 - configures GitHub URL rewrites so `git@github.com:*` and `ssh://git@github.com/*` can use PAT-backed HTTPS
 - for Codex, it reads `openai_api_key` from init JSON when `OPENAI_API_KEY` is unset and performs `codex login --with-api-key`
+- for Auggie, it reads `augment_session_auth` from init/config JSON when `AUGMENT_SESSION_AUTH` is unset and exports it for non-interactive CLI runs
 - when Codex auth is still missing, the UI now shows an authorization pre-screen:
   - startup checks `codex login status` from an empty temp working directory
   - it automatically launches `codex login --device-auth` and surfaces URL/code in the pre-screen
@@ -249,6 +251,9 @@ Key fields:
 - `agent_harness` (optional: `codex`, `claude`, `auggie`; defaults to `codex` or `HARNESS_AGENT_HARNESS`)
 - `agent_command` (optional CLI executable override)
 - `dispatcher.*` (adaptive worker parallelism)
+- `github_token` (optional GitHub PAT for container bootstrap)
+- `openai_api_key` (optional Codex API key for container bootstrap)
+- `augment_session_auth` (optional Auggie session JSON for container bootstrap)
 
 After first successful activation, runtime auth is persisted to a sibling `config.json` next to the init file used for startup. With the default repo-root layout, that remains `./.moltenhub/config.json`. The runtime also reads the legacy `config/config.json` path next to that file for compatibility with existing mounts.
 
