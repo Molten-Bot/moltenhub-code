@@ -166,7 +166,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="configured-agent-gorilla-subtitle" class="text-base font-semibold text-hub-meta"`) {
 		t.Fatalf("expected index html to render a larger gorilla subtitle")
 	}
-	if !strings.Contains(markup, `src="https://molten.bot/logo.svg"`) {
+	if !strings.Contains(markup, `src="/static/logo.svg"`) {
 		t.Fatalf("expected index html to include moltenhub logo")
 	}
 	if !strings.Contains(markup, `id="moltenhub-logo"`) {
@@ -835,7 +835,7 @@ func TestHandlerIndexIncludesClaudeBrowserCodeFlow(t *testing.T) {
 	markup := resp.Body.String()
 	required := []string{
 		`id="agent-auth-url-logo"`,
-		`src="https://molten.bot/logos/claude-code.svg"`,
+		`src="/static/logos/claude-code.svg"`,
 		`function authHarness(auth) {`,
 		`return configuredHarnessName();`,
 		`function isClaudeBrowserCodeAwaitingSubmission(auth) {`,
@@ -1034,6 +1034,25 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if strings.Contains(css, "cursor-not-allowed") {
 		t.Fatalf("expected stylesheet to avoid cursor utility classes")
+	}
+}
+
+func TestHandlerServesStaticLogoAsset(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodGet, "/static/logos/codex-cli.svg", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+	if ct := resp.Header().Get("Content-Type"); !strings.Contains(ct, "image/svg+xml") {
+		t.Fatalf("content-type = %q", ct)
+	}
+	if body := resp.Body.String(); !strings.Contains(body, "<svg") {
+		t.Fatalf("expected svg payload, got %q", body)
 	}
 }
 

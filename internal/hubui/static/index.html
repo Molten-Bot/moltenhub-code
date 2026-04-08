@@ -57,12 +57,12 @@
           <img
             id="moltenhub-logo"
             class="brand-logo rotating-brand-logo brand-logo-visible"
-            src="https://molten.bot/logo.svg"
+            src="/static/logo.svg"
             alt="MoltenHub logo">
           <img
             id="configured-agent-logo"
             class="brand-logo configured-agent-logo rotating-brand-logo"
-            src="https://molten.bot/logos/codex-cli.svg"
+            src="/static/logos/codex-cli.svg"
             alt="Codex logo">
         </div>
         <div>
@@ -281,7 +281,7 @@
           <img
             id="agent-auth-url-logo"
             class="agent-auth-url-logo hidden"
-            src="https://molten.bot/logos/claude-code.svg"
+            src="/static/logos/claude-code.svg"
             alt="Open Claude login">
           <span id="agent-auth-url-text"></span>
         </a>
@@ -351,15 +351,15 @@
       { id: "finalize", label: "Finalize", detail: "Commit, PR, and checks." },
     ];
     const AGENT_LOGO_URLS = Object.freeze({
-      codex: "https://molten.bot/logos/codex-cli.svg",
-      claude: "https://molten.bot/logos/claude-code.svg",
-      auggie: "https://molten.bot/logos/augment.svg",
-      augment: "https://molten.bot/logos/augment.svg",
+      codex: "/static/logos/codex-cli.svg",
+      claude: "/static/logos/claude-code.svg",
+      auggie: "/static/logos/augment.svg",
+      augment: "/static/logos/augment.svg",
     });
-    const GITHUB_LOGO_URL = "https://molten.bot/logos/github.svg";
+    const GITHUB_LOGO_URL = "/static/logos/github.svg";
     const TASK_PR_LINK_SIZE_PX = "34px";
     const TASK_PR_LOGO_SIZE = 20;
-    const CLAUDE_AUTH_LOGO_URL = "https://molten.bot/logos/claude-code.svg";
+    const CLAUDE_AUTH_LOGO_URL = "/static/logos/claude-code.svg";
 
     function normalizeUIConfig(raw) {
       const config = raw && typeof raw === "object" ? raw : {};
