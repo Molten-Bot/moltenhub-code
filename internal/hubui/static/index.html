@@ -53,10 +53,17 @@
   <div class="app mx-auto grid w-full max-w-[1500px] gap-4 p-5">
     <div class="header flex flex-wrap items-center justify-between gap-3">
       <div class="brand-lockup flex items-center gap-3">
-        <img
-          class="brand-logo"
-          src="https://molten.bot/logo.svg"
-          alt="MoltenHub logo">
+        <div class="brand-logo-group">
+          <img
+            class="brand-logo"
+            src="https://molten.bot/logo.svg"
+            alt="MoltenHub logo">
+          <img
+            id="configured-agent-logo"
+            class="brand-logo configured-agent-logo"
+            src="https://molten.bot/logos/codex-cli.svg"
+            alt="Codex logo">
+        </div>
         <div>
           <div class="title text-[1.4rem] font-bold uppercase tracking-[0.04em]">Molten Hub Code</div>
           <div id="configured-agent-subtitle" class="sub text-sm text-hub-muted">Configured agent: Codex</div>
@@ -326,6 +333,13 @@
       { id: "codex", label: "Agent", detail: "Agent execution in progress." },
       { id: "finalize", label: "Finalize", detail: "Commit, PR, and checks." },
     ];
+    const AGENT_LOGO_URLS = Object.freeze({
+      codex: "https://molten.bot/logos/codex-cli.svg",
+      claude: "https://molten.bot/logos/claude-code.svg",
+      auggie: "https://molten.bot/logos/augment.svg",
+      augment: "https://molten.bot/logos/augment.svg",
+    });
+    const GITHUB_LOGO_URL = "https://molten.bot/logos/github.svg";
 
     function normalizeUIConfig(raw) {
       const config = raw && typeof raw === "object" ? raw : {};
@@ -338,6 +352,23 @@
 
     function configuredAgentLabel() {
       return String(state.ui.configuredAgentLabel || "Codex").trim() || "Codex";
+    }
+
+    function configuredHarnessName() {
+      return String(state.ui.configuredHarness || "").trim().toLowerCase();
+    }
+
+    function configuredAgentLogoURL() {
+      const harness = configuredHarnessName();
+      if (AGENT_LOGO_URLS[harness]) {
+        return AGENT_LOGO_URLS[harness];
+      }
+
+      const label = configuredAgentLabel().toLowerCase();
+      if (label.includes("claude")) return AGENT_LOGO_URLS.claude;
+      if (label.includes("auggie") || label.includes("augment")) return AGENT_LOGO_URLS.auggie;
+      if (label.includes("codex")) return AGENT_LOGO_URLS.codex;
+      return "";
     }
 
     function currentAgentLabel() {
@@ -524,6 +555,7 @@
     const promptWrap = document.querySelector(".prompt-wrap");
     const promptVisibilityToggle = document.getElementById("prompt-visibility-toggle");
     const agentAuthGate = document.getElementById("agent-auth-gate");
+    const configuredAgentLogo = document.getElementById("configured-agent-logo");
     const configuredAgentSubtitle = document.getElementById("configured-agent-subtitle");
     const configuredAgentGorillaSubtitle = document.getElementById("configured-agent-gorilla-subtitle");
     const agentAuthTitle = document.getElementById("agent-auth-title");
@@ -862,6 +894,14 @@
       const label = configuredAgentLabel();
       if (configuredAgentSubtitle) {
         configuredAgentSubtitle.textContent = `Configured agent: ${label}`;
+      }
+      if (configuredAgentLogo) {
+        const logoURL = configuredAgentLogoURL();
+        configuredAgentLogo.classList.toggle("hidden", !logoURL);
+        if (logoURL) {
+          configuredAgentLogo.src = logoURL;
+          configuredAgentLogo.alt = `${label} logo`;
+        }
       }
       if (configuredAgentGorillaSubtitle) {
         configuredAgentGorillaSubtitle.textContent = `${label} is now a 600LB Gorilla!`;
@@ -2522,15 +2562,6 @@
       }
       node.appendChild(detail);
 
-      if (status === "ok" && task.pr_url) {
-        const link = document.createElement("a");
-        link.className = "task-result-link";
-        link.href = task.pr_url;
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-        link.textContent = task.pr_url;
-        node.appendChild(link);
-      }
     }
 
     function selectTask(id) {
@@ -2592,6 +2623,27 @@
         const topActions = document.createElement("div");
         topActions.className = "task-top-actions";
         topActions.appendChild(badge);
+
+        const prURL = String(task.pr_url || "").trim();
+        if (prURL) {
+          const prLink = document.createElement("a");
+          prLink.className = "task-pr-link";
+          prLink.href = prURL;
+          prLink.target = "_blank";
+          prLink.rel = "noopener noreferrer";
+          prLink.title = "Open pull request";
+          prLink.setAttribute("aria-label", "Open pull request");
+          const prLogo = document.createElement("img");
+          prLogo.src = GITHUB_LOGO_URL;
+          prLogo.alt = "GitHub";
+          prLogo.loading = "lazy";
+          prLink.appendChild(prLogo);
+          prLink.addEventListener("click", (event) => {
+            event.stopPropagation();
+          });
+          topActions.appendChild(prLink);
+        }
+
         if (shouldSparkleTask(task)) {
           const sparklet = document.createElement("span");
           sparklet.className = "task-sparklet";

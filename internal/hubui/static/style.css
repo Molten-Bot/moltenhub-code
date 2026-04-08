@@ -236,6 +236,12 @@ textarea {
   min-width: 0;
 }
 
+.brand-logo-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .brand-logo {
   display: block;
   width: 48px;
@@ -246,6 +252,13 @@ textarea {
   border-radius: 16px;
   background: var(--surface-glass-strong);
   box-shadow: 0 14px 30px rgba(10, 44, 102, 0.12);
+}
+
+.configured-agent-logo {
+  width: 42px;
+  height: 42px;
+  padding: 7px;
+  border-radius: 14px;
 }
 
 .title {
@@ -1266,6 +1279,36 @@ select.prompt-control {
   transition: border-color 0.12s ease, color 0.12s ease, transform 0.12s ease, opacity 0.12s ease, box-shadow 0.12s ease;
 }
 
+.task-pr-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid rgba(17, 34, 68, 0.12);
+  background: var(--surface-task-button-bg);
+  transition: border-color 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.task-pr-link img {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+
+.task-pr-link:hover {
+  transform: translateY(-1px);
+  border-color: rgba(10, 132, 255, 0.45);
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.12);
+}
+
+.task-pr-link:focus-visible {
+  outline: none;
+  border-color: rgba(10, 132, 255, 0.52);
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.15);
+}
+
 .badge {
   font-size: 0.64rem;
   letter-spacing: 0.06em;
@@ -1824,6 +1867,15 @@ select.prompt-control {
   .brand-logo {
     width: 42px;
     height: 42px;
+  }
+
+  .brand-logo-group {
+    gap: 8px;
+  }
+
+  .configured-agent-logo {
+    width: 38px;
+    height: 38px;
   }
 
   .status-item-compact .status-tooltip {
