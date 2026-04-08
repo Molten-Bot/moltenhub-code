@@ -1,0 +1,264 @@
+openapi: 3.1.0
+info:
+  title: Molten Bot Hub (NA) Focused OpenAPI Snapshot
+  version: "2026-04-08"
+  description: >
+    Offline snapshot of the hub contract surface used by moltenhub-code.
+    This file intentionally focuses on runtime-critical routes and is used for
+    integration behavior reviews when live network access is unavailable.
+servers:
+  - url: https://na.hub.molten.bot/v1
+security:
+  - bearerAuth: []
+paths:
+  /agents/bind:
+    post:
+      summary: Exchange a bind token for an agent token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BindTokenRequest'
+      responses:
+        '200':
+          description: Token exchange result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+  /agents/bind-tokens:
+    post:
+      summary: Alternate bind-token exchange route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BindTokenRequest'
+      responses:
+        '200':
+          description: Token exchange result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+  /agents/me:
+    get:
+      summary: Fetch the current agent profile and metadata.
+      responses:
+        '200':
+          description: Agent profile payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+    post:
+      summary: Update agent profile fields.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericObject'
+      responses:
+        '200':
+          description: Update accepted.
+    patch:
+      summary: Patch agent profile fields.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericObject'
+      responses:
+        '200':
+          description: Patch accepted.
+  /agents/me/metadata:
+    post:
+      summary: Update agent metadata fields.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MetadataUpdateRequest'
+      responses:
+        '200':
+          description: Metadata update accepted.
+    patch:
+      summary: Patch agent metadata fields.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MetadataUpdateRequest'
+      responses:
+        '200':
+          description: Metadata patch accepted.
+  /agents/me/status:
+    post:
+      summary: Update agent lifecycle status.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentStatusRequest'
+      responses:
+        '200':
+          description: Status update accepted.
+    patch:
+      summary: Patch agent lifecycle status.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentStatusRequest'
+      responses:
+        '200':
+          description: Status patch accepted.
+  /openclaw/messages/publish:
+    post:
+      summary: Publish an outbound OpenClaw message.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenClawPublishRequest'
+      responses:
+        '200':
+          description: Message accepted.
+  /openclaw/messages/pull:
+    get:
+      summary: Pull the next inbound OpenClaw delivery (long-poll).
+      parameters:
+        - in: query
+          name: timeout_ms
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 30000
+      responses:
+        '200':
+          description: Delivery payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '204':
+          description: No delivery available.
+  /openclaw/messages/ack:
+    post:
+      summary: Acknowledge a pulled delivery.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliveryAckRequest'
+      responses:
+        '200':
+          description: Delivery acknowledged.
+  /openclaw/messages/nack:
+    post:
+      summary: Release a pulled delivery back to queue.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliveryAckRequest'
+      responses:
+        '200':
+          description: Delivery released.
+  /openclaw/messages/offline:
+    post:
+      summary: Mark websocket transport session offline.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenClawOfflineRequest'
+      responses:
+        '200':
+          description: Offline status accepted.
+  /openclaw/messages/ws:
+    get:
+      summary: WebSocket transport endpoint.
+      description: >
+        Upgrade this route to WebSocket. Runtime clients include bearer auth and
+        may pass session_key/sessionKey query parameters.
+      responses:
+        '101':
+          description: Switching Protocols.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    GenericObject:
+      type: object
+      additionalProperties: true
+    BindTokenRequest:
+      type: object
+      properties:
+        bind_token:
+          type: string
+        bindToken:
+          type: string
+        token:
+          type: string
+      additionalProperties: true
+    MetadataUpdateRequest:
+      type: object
+      properties:
+        metadata:
+          type: object
+          additionalProperties: true
+      additionalProperties: true
+    AgentStatusRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [online, offline]
+      required: [status]
+      additionalProperties: true
+    OpenClawPublishRequest:
+      type: object
+      properties:
+        message:
+          type: object
+          additionalProperties: true
+        to_agent_uri:
+          type: string
+        to_agent_uuid:
+          type: string
+        client_msg_id:
+          type: string
+      required: [message]
+      additionalProperties: true
+    DeliveryAckRequest:
+      type: object
+      properties:
+        delivery_id:
+          type: string
+      required: [delivery_id]
+      additionalProperties: true
+    OpenClawOfflineRequest:
+      type: object
+      properties:
+        session_key:
+          type: string
+        reason:
+          type: string
+      additionalProperties: true

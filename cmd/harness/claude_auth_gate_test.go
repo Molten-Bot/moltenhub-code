@@ -64,11 +64,14 @@ func TestClaudeAuthGateRequiresBrowserLoginWhenClaudeCredentialsAreMissing(t *te
 	if got, want := status.State, "needs_browser_login"; got != want {
 		t.Fatalf("State = %q, want %q", got, want)
 	}
-	if got, want := status.AuthURL, claudeAuthDocsURL; got != want {
-		t.Fatalf("AuthURL = %q, want %q", got, want)
+	if got := status.AuthURL; got != "" {
+		t.Fatalf("AuthURL = %q, want empty until login command emits a browser URL", got)
 	}
-	if !strings.Contains(status.Message, "Run `claude auth login`") {
+	if !strings.Contains(status.Message, "Run `claude login`") {
 		t.Fatalf("message = %q", status.Message)
+	}
+	if !strings.Contains(status.Message, "not an authorization link") {
+		t.Fatalf("message should clarify docs URL semantics: %q", status.Message)
 	}
 }
 
@@ -296,6 +299,12 @@ func TestClaudeAuthHelpers(t *testing.T) {
 
 	if got, want := extractClaudeAuthURL("Use https://claude.ai/login/device?x=y); now"), "https://claude.ai/login/device?x=y"; got != want {
 		t.Fatalf("extractClaudeAuthURL() = %q, want %q", got, want)
+	}
+	if got, want := extractClaudeAuthURL("Read docs at https://code.claude.com/docs/en/authentication and sign in at https://claude.ai/login/device?flow=x"), "https://claude.ai/login/device?flow=x"; got != want {
+		t.Fatalf("extractClaudeAuthURL() should ignore docs URL and keep login URL: got %q, want %q", got, want)
+	}
+	if got := extractClaudeAuthURL("Read docs at https://code.claude.com/docs/en/authentication"); got != "" {
+		t.Fatalf("extractClaudeAuthURL(docs-url-only) = %q, want empty", got)
 	}
 	if got := extractClaudeAuthURL("no url here"); got != "" {
 		t.Fatalf("extractClaudeAuthURL(no-url) = %q, want empty", got)

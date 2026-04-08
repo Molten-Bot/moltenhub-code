@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,7 +23,7 @@ import (
 const claudeAuthDocsURL = "https://code.claude.com/docs/en/authentication"
 const claudeGitHubConfigureCommand = "gh auth token"
 const claudeGitHubConfigurePlaceholder = "ghp_xxx"
-const claudeLoginCommand = "claude auth login"
+const claudeLoginCommand = "claude login"
 
 var claudeAuthURLPattern = regexp.MustCompile(`https?://[^\s"'<>()]+`)
 
@@ -84,7 +85,7 @@ func newClaudeAuthGateWithContextAndConfig(
 		initCfg:           initCfg,
 		required:          true,
 		state:             "needs_browser_login",
-		message:           "Claude Code login is required. Run `claude auth login`, complete browser sign-in, then click Done.",
+		message:           claudeBrowserLoginRequiredMessage(),
 		updatedAt:         time.Now().UTC(),
 	}
 
@@ -131,11 +132,8 @@ func (g *claudeAuthGate) Status(_ context.Context) (hubui.AgentAuthState, error)
 			if g.state == "needs_browser_login" || strings.TrimSpace(g.message) == "" {
 				g.message = firstNonEmptyString(
 					probeMessage,
-					"Claude Code login is required. Run `claude auth login`, complete browser sign-in, then click Done.",
+					claudeBrowserLoginRequiredMessage(),
 				)
-			}
-			if strings.TrimSpace(g.authURL) == "" {
-				g.authURL = claudeAuthDocsURL
 			}
 		}
 		g.updatedAt = time.Now().UTC()
@@ -305,9 +303,6 @@ func (g *claudeAuthGate) snapshotLocked() hubui.AgentAuthState {
 		}
 	}
 	authURL := strings.TrimSpace(g.authURL)
-	if authURL == "" && !g.ready && state != "needs_configure" {
-		authURL = claudeAuthDocsURL
-	}
 	required := g.required
 	if !required {
 		required = true
@@ -371,7 +366,7 @@ func (g *claudeAuthGate) probeClaude() (bool, string) {
 		return true, fmt.Sprintf("Claude Code credentials were found at %s.", path)
 	}
 
-	return false, "Claude Code login is required. Run `claude auth login`, complete browser sign-in, then click Done."
+	return false, claudeBrowserLoginRequiredMessage()
 }
 
 func (g *claudeAuthGate) readLoginStream(r io.ReadCloser) {
@@ -484,11 +479,15 @@ func (g *claudeAuthGate) waitLogin(cmd *exec.Cmd, tempDir string) {
 }
 
 func extractClaudeAuthURL(line string) string {
-	match := claudeAuthURLPattern.FindString(strings.TrimSpace(stripANSI(line)))
-	if strings.TrimSpace(match) == "" {
-		return ""
+	matches := claudeAuthURLPattern.FindAllString(strings.TrimSpace(stripANSI(line)), -1)
+	for _, match := range matches {
+		candidate := strings.TrimRight(strings.TrimSpace(match), ".,);]}>")
+		if candidate == "" || isClaudeDocsURL(candidate) {
+			continue
+		}
+		return candidate
 	}
-	return strings.TrimRight(strings.TrimSpace(match), ".,);]}>")
+	return ""
 }
 
 func shouldAdvanceClaudeLoginPrompt(line string) bool {
@@ -606,4 +605,21 @@ func claudeCredentialsPath() string {
 		return ""
 	}
 	return path
+}
+
+func claudeBrowserLoginRequiredMessage() string {
+	return "Claude Code login is required. Run `claude login`, complete browser sign-in, then click Done.\nReference docs (not an authorization link): " + claudeAuthDocsURL
+}
+
+func isClaudeDocsURL(raw string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(strings.TrimSpace(parsed.Host))
+	path := strings.ToLower(strings.TrimSpace(parsed.Path))
+	if host != "code.claude.com" {
+		return false
+	}
+	return strings.HasPrefix(path, "/docs/")
 }

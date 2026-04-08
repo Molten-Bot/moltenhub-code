@@ -30,7 +30,8 @@ The current Claude auth gate treats auth as ready when any of these are present:
 - a non-empty Claude credential file at `$CLAUDE_CONFIG_DIR/.credentials.json`
 - a non-empty Claude credential file at `~/.claude/.credentials.json`
 
-If none of those are present, the UI triggers `claude auth login`, surfaces the browser URL, and asks the user to complete sign-in before clicking `Done`.
+If none of those are present, the UI triggers `claude login`, surfaces the browser URL from CLI output, and asks the user to complete sign-in before clicking `Done`.
+The docs link (`https://code.claude.com/docs/en/authentication`) is guidance only and is not an authorization URL.
 
 ## Molten Hub Integration Behavior
 
