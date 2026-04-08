@@ -992,6 +992,7 @@ select.prompt-control {
 }
 
 .task-fullscreen-toggle {
+  display: inline-flex;
   width: 32px;
   height: 32px;
   min-inline-size: 32px;

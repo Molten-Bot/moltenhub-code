@@ -370,6 +370,55 @@ func TestHandleDispatchQueuesFailureFollowUpWithTaskLogPaths(t *testing.T) {
 	}
 }
 
+func TestQueueFailureFollowUpUsesSingleRepoPayloadForMultiRepoFailures(t *testing.T) {
+	t.Parallel()
+
+	api := &stubMoltenHubAPI{token: "t"}
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:         "code_for_me",
+			DispatchType: "skill_request",
+		},
+	}
+	dispatch := SkillDispatch{
+		RequestID: "req-multi",
+		Skill:     "code_for_me",
+		Config: config.Config{
+			Repos: []string{
+				"git@github.com:acme/repo-a.git",
+				"git@github.com:acme/repo-b.git",
+			},
+		},
+	}
+	res := harness.Result{
+		Err: errors.New("task failed"),
+		RepoResults: []harness.RepoResult{
+			{RepoURL: "git@github.com:acme/repo-b.git"},
+			{RepoURL: "git@github.com:acme/repo-b.git"},
+		},
+	}
+
+	if err := queueFailureFollowUp(context.Background(), api, cfg, dispatch, res, ""); err != nil {
+		t.Fatalf("queueFailureFollowUp() error = %v", err)
+	}
+
+	api.mu.Lock()
+	defer api.mu.Unlock()
+
+	if len(api.published) != 1 {
+		t.Fatalf("published payload count = %d, want 1", len(api.published))
+	}
+
+	runConfig, _ := api.published[0]["config"].(map[string]any)
+	if runConfig == nil {
+		t.Fatalf("follow-up config missing: %#v", api.published[0])
+	}
+	repos, _ := runConfig["repos"].([]string)
+	if len(repos) != 1 || repos[0] != "git@github.com:acme/repo-b.git" {
+		t.Fatalf("follow-up repos = %#v", runConfig["repos"])
+	}
+}
+
 func TestHandleDispatchSkipsFailureFollowUpForNoDeltaFailures(t *testing.T) {
 	t.Parallel()
 

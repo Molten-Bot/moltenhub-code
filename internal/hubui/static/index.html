@@ -2571,8 +2571,7 @@
 
     function renderFullscreenTasks(snapshot) {
       const tasks = fullscreenTasks(snapshot);
-      const selected = tasks.find((task) => task.request_id === state.selectedTaskId) || tasks[0] || null;
-      renderTaskCollection(selected ? [selected] : [], taskFullscreenList, null, {
+      renderTaskCollection(tasks, taskFullscreenList, null, {
         showOutputAction: false,
         allowCollapse: false,
       });

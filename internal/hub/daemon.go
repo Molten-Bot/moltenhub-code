@@ -740,7 +740,7 @@ func queueFailureFollowUp(ctx context.Context, api MoltenHubAPI, cfg InitConfig,
 	if api == nil {
 		return fmt.Errorf("moltenhub api client is required")
 	}
-	repos := dispatch.Config.RepoList()
+	repos := failureFollowUpRepos(res, dispatch.Config)
 	if len(repos) == 0 {
 		return fmt.Errorf("failed dispatch is missing repository context")
 	}
@@ -760,6 +760,45 @@ func queueFailureFollowUp(ctx context.Context, api MoltenHubAPI, cfg InitConfig,
 	}
 
 	return api.PublishResult(ctx, payload)
+}
+
+func failureFollowUpRepos(res harness.Result, runCfg config.Config) []string {
+	if repo := singleRepoFromResults(res.RepoResults); repo != "" {
+		return []string{repo}
+	}
+	for _, repo := range runCfg.RepoList() {
+		repo = strings.TrimSpace(repo)
+		if repo == "" {
+			continue
+		}
+		return []string{repo}
+	}
+	for _, repoResult := range res.RepoResults {
+		repo := strings.TrimSpace(repoResult.RepoURL)
+		if repo == "" {
+			continue
+		}
+		return []string{repo}
+	}
+	return nil
+}
+
+func singleRepoFromResults(results []harness.RepoResult) string {
+	var repo string
+	for _, result := range results {
+		candidate := strings.TrimSpace(result.RepoURL)
+		if candidate == "" {
+			continue
+		}
+		if repo == "" {
+			repo = candidate
+			continue
+		}
+		if repo != candidate {
+			return ""
+		}
+	}
+	return repo
 }
 
 func failureFollowUpPrompt(logRoot string, dispatch SkillDispatch, res harness.Result) string {
