@@ -250,6 +250,7 @@ func TestLoadRuntimeConfigSupportsInitStyleWholeConfig(t *testing.T) {
   "session_key": "main",
   "github_token": "ghp_saved",
   "openai_api_key": "sk_saved",
+  "augment_session_auth": "{\"accessToken\":\"token_saved\",\"tenantURL\":\"https://tenant.example\"}",
   "profile": {
     "display_name": "moltenbot000 hub coder",
     "emoji": "🤙🏻",
@@ -284,6 +285,9 @@ func TestLoadRuntimeConfigSupportsInitStyleWholeConfig(t *testing.T) {
 	}
 	if got.OpenAIAPIKey != "sk_saved" {
 		t.Fatalf("OpenAIAPIKey = %q", got.OpenAIAPIKey)
+	}
+	if got.AugmentSessionAuth != "{\"accessToken\":\"token_saved\",\"tenantURL\":\"https://tenant.example\"}" {
+		t.Fatalf("AugmentSessionAuth = %q", got.AugmentSessionAuth)
 	}
 	if got.Dispatcher.MaxParallel != 4 {
 		t.Fatalf("Dispatcher.MaxParallel = %d", got.Dispatcher.MaxParallel)

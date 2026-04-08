@@ -15,6 +15,7 @@ When running hub mode, `init.json` may also include runtime secrets:
 
 - `github_token` for GitHub auth bootstrap
 - `openai_api_key` for Codex CLI login when using the Codex harness
+- `augment_session_auth` for Auggie CLI auth when using the Auggie harness; set it to the full session JSON from `auggie token print`
 
 After the first successful hub auth, those hub runtime fields are persisted into `config.json` so later boots can use `config.json` directly.
 
