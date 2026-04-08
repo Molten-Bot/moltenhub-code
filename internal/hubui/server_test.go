@@ -157,11 +157,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `>Molten Hub Code</div>`) {
 		t.Fatalf("expected index html to render app heading as Molten Hub Code")
 	}
-	if !strings.Contains(markup, `id="configured-agent-subtitle"`) || !strings.Contains(markup, "Configured agent: Codex") {
-		t.Fatalf("expected index html to include configured agent label copy")
+	if strings.Contains(markup, `id="configured-agent-subtitle"`) || strings.Contains(markup, "Configured agent: Codex") {
+		t.Fatalf("expected index html to remove the configured agent subtitle copy")
 	}
 	if !strings.Contains(markup, `id="configured-agent-gorilla-subtitle"`) || !strings.Contains(markup, "Codex is now a 600LB Gorilla!") {
 		t.Fatalf("expected index html to include gorilla subtitle copy")
+	}
+	if !strings.Contains(markup, `id="configured-agent-gorilla-subtitle" class="text-base font-semibold text-hub-meta"`) {
+		t.Fatalf("expected index html to render a larger gorilla subtitle")
 	}
 	if !strings.Contains(markup, `src="https://molten.bot/logo.svg"`) {
 		t.Fatalf("expected index html to include moltenhub logo")

@@ -66,8 +66,7 @@
         </div>
         <div>
           <div class="title text-[1.4rem] font-bold uppercase tracking-[0.04em]">Molten Hub Code</div>
-          <div id="configured-agent-subtitle" class="sub text-sm text-hub-muted">Configured agent: Codex</div>
-          <div id="configured-agent-gorilla-subtitle" class="sub text-xs text-hub-meta">Codex is now a 600LB Gorilla!</div>
+          <div id="configured-agent-gorilla-subtitle" class="text-base font-semibold text-hub-meta">Codex is now a 600LB Gorilla!</div>
         </div>
       </div>
       <div class="status-row flex flex-wrap items-center gap-2.5 text-sm text-hub-muted">
@@ -556,7 +555,6 @@
     const promptVisibilityToggle = document.getElementById("prompt-visibility-toggle");
     const agentAuthGate = document.getElementById("agent-auth-gate");
     const configuredAgentLogo = document.getElementById("configured-agent-logo");
-    const configuredAgentSubtitle = document.getElementById("configured-agent-subtitle");
     const configuredAgentGorillaSubtitle = document.getElementById("configured-agent-gorilla-subtitle");
     const agentAuthTitle = document.getElementById("agent-auth-title");
     const agentAuthMessage = document.getElementById("agent-auth-message");
@@ -892,9 +890,6 @@
 
     function renderConfiguredAgent() {
       const label = configuredAgentLabel();
-      if (configuredAgentSubtitle) {
-        configuredAgentSubtitle.textContent = `Configured agent: ${label}`;
-      }
       if (configuredAgentLogo) {
         const logoURL = configuredAgentLogoURL();
         configuredAgentLogo.classList.toggle("hidden", !logoURL);
