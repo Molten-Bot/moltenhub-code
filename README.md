@@ -22,15 +22,40 @@ For each run:
 
 If a task fails, no PR is created for that run, and the workspace path is logged.
 
-## Commands
+## Run
 
+### Go
 Build:
 
 ```bash
 go build -o bin/harness ./cmd/harness
 ```
 
-## Container
+Single run:
+
+```bash
+./bin/harness run --config ./run.example.json
+```
+
+Parallel local runs:
+
+```bash
+./bin/harness multiplex --config ./tasks --parallel 4
+```
+
+Hub listener:
+
+```bash
+./bin/harness hub --init ./init.example.json
+```
+
+Already Configured:
+
+```bash
+./bin/harness hub
+```
+
+### Container
 
 Build a container image:
 
@@ -153,24 +178,6 @@ Container startup pre-registers auth before any agent stage:
   - `Done` re-checks readiness before allowing Studio submissions
 - for Claude, the UI now blocks Studio submissions until Claude auth is ready and points users to the browser-login flow described in [doc/CLAUDE.md](doc/CLAUDE.md)
 - if remote Hub auth fails (`401`) and the UI is enabled, harness now remains in local-only mode so you can still complete Codex device auth and run local Studio tasks
-
-Single run:
-
-```bash
-./bin/harness run --config templates/run.example.json
-```
-
-Parallel local runs:
-
-```bash
-./bin/harness multiplex --config ./tasks --parallel 4
-```
-
-Hub listener:
-
-```bash
-./bin/harness hub --init templates/init.example.json
-```
 
 On startup, hub mode emits a boot diagnosis checklist for:
 

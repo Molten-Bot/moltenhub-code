@@ -9,4 +9,5 @@ harness
 .codex
 .moltenhub
 moltenhub
-./templates
+init.example.json
+run.example.json
