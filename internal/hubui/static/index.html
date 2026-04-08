@@ -104,11 +104,6 @@
       <div class="right-col grid gap-4">
         <section class="panel prompt-wrap min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
           <div class="panel-header prompt-titlebar flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
-            <div class="prompt-mode-tabs prompt-mode-tabs-titlebar inline-flex rounded-lg border border-hub-border p-1" role="tablist" aria-label="Studio mode">
-              <button id="prompt-mode-builder" class="prompt-mode-tab active" type="button">Builder</button>
-              <button id="prompt-mode-library" class="prompt-mode-tab" type="button">Library</button>
-              <button id="prompt-mode-json" class="prompt-mode-tab" type="button">JSON</button>
-            </div>
             <button id="prompt-visibility-toggle" class="prompt-visibility-toggle" type="button" aria-pressed="true" aria-label="Minimize Studio panel" title="Minimize Studio panel">▾</button>
           </div>
           <form id="local-prompt-form" class="prompt-form grid gap-2.5 p-3">
@@ -275,6 +270,14 @@
       <div class="mt-auto flex justify-end pt-4">
         <button id="agent-auth-verify" class="hidden rounded-lg border border-hub-border bg-[#173d2b] px-3 py-2 text-sm font-medium text-hub-text hover:bg-[#1f533a]" type="button">Done</button>
       </div>
+    </div>
+  </div>
+
+  <div class="page-bottom-dock" aria-hidden="false">
+    <div class="prompt-mode-tabs prompt-mode-tabs-dock" role="tablist" aria-label="Studio mode">
+      <button id="prompt-mode-builder" class="prompt-mode-tab active" type="button">Builder</button>
+      <button id="prompt-mode-library" class="prompt-mode-tab" type="button">Library</button>
+      <button id="prompt-mode-json" class="prompt-mode-tab" type="button">JSON</button>
     </div>
   </div>
 
