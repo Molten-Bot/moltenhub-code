@@ -1734,45 +1734,68 @@ body.task-fullscreen-open #task-fullscreen-toggle {
   z-index: 60;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  background: var(--bg-panel-strong);
-  box-shadow: var(--shadow-md);
-  backdrop-filter: blur(20px) saturate(140%);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
-  padding: 8px 10px;
+  gap: 8px;
+  border-radius: 18px;
+  border: 1px solid rgba(128, 148, 190, 0.22);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 249, 255, 0.88));
+  box-shadow:
+    0 14px 36px rgba(94, 116, 165, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  padding: 10px 12px;
 }
 
 .theme-control-group {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .theme-control-label {
-  font-size: 0.68rem;
-  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--meta);
+  color: #6d82ac;
   font-weight: 700;
 }
 
 .theme-control-select {
-  font-size: 0.72rem;
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-elevated);
-  padding: 6px 8px;
-  min-width: 86px;
+  appearance: none;
+  -webkit-appearance: none;
+  font-size: 0.88rem;
+  line-height: 1.2;
+  color: #364766;
+  border: 1px solid rgba(135, 152, 188, 0.34);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(242, 246, 252, 0.98));
+  padding: 9px 38px 9px 14px;
+  min-width: 112px;
   outline: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 1px 2px rgba(85, 107, 148, 0.08);
+  background-image:
+    linear-gradient(45deg, transparent 50%, #5b6f96 50%),
+    linear-gradient(135deg, #5b6f96 50%, transparent 50%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));
+  background-position:
+    calc(100% - 18px) calc(50% - 2px),
+    calc(100% - 12px) calc(50% - 2px),
+    0 0;
+  background-size:
+    6px 6px,
+    6px 6px,
+    100% 100%;
+  background-repeat: no-repeat;
 }
 
 .theme-control-select:focus-visible {
-  border-color: var(--running);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.22);
+  border-color: rgba(63, 122, 228, 0.52);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 0 0 3px rgba(76, 133, 233, 0.18);
 }
 
 html.dark,
@@ -1816,6 +1839,35 @@ html.night {
   --shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.46);
   --shadow-md: 0 18px 44px rgba(0, 0, 0, 0.58);
   --shadow-lg: 0 28px 72px rgba(0, 0, 0, 0.7);
+}
+
+html.dark .theme-controls,
+html.night .theme-controls {
+  border-color: rgba(104, 122, 159, 0.36);
+  background: linear-gradient(180deg, rgba(23, 29, 43, 0.94), rgba(15, 20, 31, 0.94));
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+html.dark .theme-control-label,
+html.night .theme-control-label {
+  color: #96a3bf;
+}
+
+html.dark .theme-control-select,
+html.night .theme-control-select {
+  color: #c7d0e2;
+  border-color: rgba(103, 119, 154, 0.42);
+  background:
+    linear-gradient(180deg, rgba(33, 39, 54, 0.98), rgba(24, 29, 40, 0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 1px 2px rgba(0, 0, 0, 0.28);
+  background-image:
+    linear-gradient(45deg, transparent 50%, #9aa8c4 50%),
+    linear-gradient(135deg, #9aa8c4 50%, transparent 50%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));
 }
 
 html[data-hover-mode="on"] .prompt-action-button:not(:disabled),
@@ -1876,20 +1928,17 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
 
 @media (max-width: 700px) {
   .theme-controls {
-    left: 12px;
     right: 12px;
     bottom: 12px;
-    justify-content: space-between;
-    gap: 8px;
+    left: auto;
+    max-width: calc(100vw - 24px);
   }
 
   .theme-control-group {
-    flex: 1 1 calc(50% - 4px);
-    justify-content: space-between;
+    min-width: 0;
   }
 
   .theme-control-select {
-    min-width: 0;
-    width: 100%;
+    min-width: 104px;
   }
 }

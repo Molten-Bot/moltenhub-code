@@ -629,6 +629,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":false};`) {
 		t.Fatalf("expected index html to include default UI config")
 	}
+	if !strings.Contains(markup, `id="theme-select"`) {
+		t.Fatalf("expected index html to include docked theme selector")
+	}
+	if strings.Contains(markup, `id="hover-select"`) || strings.Contains(markup, ">Hover<") {
+		t.Fatalf("expected index html to remove the docked hover selector")
+	}
 }
 
 func TestHandlerIndexInjectsAutomaticModeConfig(t *testing.T) {
@@ -668,6 +674,15 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	css := resp.Body.String()
 	if !strings.Contains(css, ".task-close") {
 		t.Fatalf("expected stylesheet to include task close styles")
+	}
+	if !strings.Contains(css, ".theme-controls") || !strings.Contains(css, ".theme-control-select") {
+		t.Fatalf("expected stylesheet to include docked theme selector styles")
+	}
+	if !strings.Contains(css, "appearance: none;") {
+		t.Fatalf("expected stylesheet to render the theme selector with custom select chrome")
+	}
+	if !strings.Contains(css, "html.dark .theme-controls") || !strings.Contains(css, "html.night .theme-controls") {
+		t.Fatalf("expected stylesheet to include dark and night docked theme selector treatments")
 	}
 	if !strings.Contains(css, ".task.task-closing") {
 		t.Fatalf("expected stylesheet to include task closing styles")
