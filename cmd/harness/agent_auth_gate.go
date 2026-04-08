@@ -25,7 +25,15 @@ func newAgentAuthGate(
 ) agentAuthGate {
 	switch runtime.Harness {
 	case agentruntime.HarnessCodex:
-		return newCodexAuthGate(ctx, runner, runtime.Command, logf)
+		return newCodexAuthGateWithConfig(
+			ctx,
+			runner,
+			runtime.Command,
+			initCfg.RuntimeConfigPath,
+			initCfg,
+			true,
+			logf,
+		)
 	case agentruntime.HarnessClaude:
 		return newClaudeAuthGateWithContextAndConfig(ctx, runtime.Command, initCfg.RuntimeConfigPath, initCfg, logf)
 	case agentruntime.HarnessAuggie:
