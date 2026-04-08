@@ -625,7 +625,14 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 	runtimeCfg, err := hub.LoadRuntimeConfig("")
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return hub.InitConfig{}, harness.ExitUsage, fmt.Errorf("missing required --init or --config flag")
+			cfg := hub.InitConfig{
+				RuntimeConfigPath: hub.ResolveRuntimeConfigPath(""),
+			}
+			cfg.ApplyDefaults()
+			if err := cfg.Validate(); err != nil {
+				return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("init config error: %w", err)
+			}
+			return cfg, harness.ExitSuccess, nil
 		}
 		return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("runtime config error: %w", err)
 	}

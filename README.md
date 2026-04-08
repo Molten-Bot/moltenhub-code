@@ -46,13 +46,14 @@ Parallel local runs:
 Hub listener:
 
 ```bash
-./bin/harness hub --init ./init.example.json
+./bin/harness hub
 ```
 
-Already Configured:
+Optional explicit startup:
 
 ```bash
-./bin/harness hub
+./bin/harness hub --init ./init.example.json
+./bin/harness hub --config ./.moltenhub/config.json
 ```
 
 ### Container
@@ -88,7 +89,7 @@ OPENAI_API_KEY=sk_xxx
 MOLTEN_HUB_TOKEN=agent_or_bind_token
 ```
 
-`init.json` flow (no `.env` required for hub mode):
+Optional `init.json` bootstrap flow (no `.env` required for hub mode):
 
 - Add `github_token` to satisfy `gh` auth setup
 - Add `openai_api_key` when using the Codex harness
@@ -98,15 +99,14 @@ Run with Docker Compose (`docker-compose.yml`):
 
 ```bash
 mkdir -p .moltenhub
-cp init.example.json .moltenhub/init.json
 
 HOST_UID="$(id -u)" HOST_GID="$(id -g)" docker compose up
 ```
 
-`docker compose` uses a persistent bind mount at `./.moltenhub -> /workspace` and starts:
+`docker compose` uses a persistent bind mount at `./.moltenhub -> /workspace/config` and starts:
 
 ```bash
-harness hub --init /workspace/init.json --ui-listen :7777
+harness hub --ui-listen :7777
 ```
 
 To avoid passing IDs on every run, create a local `.env` once:
@@ -119,11 +119,10 @@ HOST_GID=<output of id -g>
 With this layout:
 
 ```bash
-/workspace/init.json   -> ./.moltenhub/init.json
-/workspace/config.json -> ./.moltenhub/config.json
+/workspace/config/config.json -> ./.moltenhub/config.json
 ```
 
-After the first successful hub auth, the runtime persists a hub-bootable `config.json` next to `init.json`, so later boots can start from `config.json` directly.
+After the first successful onboarding/auth flow, the runtime persists a hub-bootable `config.json` so later boots can start directly from persisted config.
 
 GitHub Actions publish flow:
 
@@ -143,23 +142,25 @@ Equivalent direct `docker run`:
 docker run --rm -it \
   -u "$(id -u):$(id -g)" \
   -e HOME=/tmp \
+  -e HARNESS_RUNTIME_CONFIG_PATH=/workspace/config/config.json \
   -e GITHUB_TOKEN=ghp_xxx \
   -e OPENAI_API_KEY=sk_xxx \
   -p 3300:7777 \
-  -v "$PWD/.moltenhub:/workspace" \
+  -v "$PWD/.moltenhub:/workspace/config" \
   -w /workspace \
   moltenhub-code:latest \
-  harness hub --init /workspace/init.json --ui-listen :7777
+  harness hub --ui-listen :7777
 ```
 
 Container startup pre-registers auth before any agent stage:
 
 - maps `GITHUB_TOKEN` to `GH_TOKEN` for `gh` commands
-- if `GITHUB_TOKEN`/`GH_TOKEN` are not set, it reads `github_token` from init JSON and exports it
+- if `GITHUB_TOKEN`/`GH_TOKEN` are not set, it reads `github_token` from runtime/init JSON and exports it
 - runs `gh auth status` and `gh auth setup-git`
 - configures GitHub URL rewrites so `git@github.com:*` and `ssh://git@github.com/*` can use PAT-backed HTTPS
-- for Codex, it reads `openai_api_key` from init JSON when `OPENAI_API_KEY` is unset and performs `codex login --with-api-key`
-- for Auggie, it reads `augment_session_auth` from init/config JSON when `AUGMENT_SESSION_AUTH` is unset and exports it for non-interactive CLI runs
+- for Codex, it reads `openai_api_key` from runtime/init JSON when `OPENAI_API_KEY` is unset and performs `codex login --with-api-key`
+- for Auggie, it reads `augment_session_auth` from runtime/init JSON when `AUGMENT_SESSION_AUTH` is unset and exports it for non-interactive CLI runs
+- for all harnesses (`codex`, `claude`, `auggie`), startup now blocks Studio task submission until GitHub auth is configured
 - when Auggie auth is missing, the UI now shows an `Auggie Configure` screen:
   - copy `auggie token print`, run it locally, and paste the returned JSON
   - the payload is schema-validated and persisted to runtime `config.json` as `augment_session_auth`
@@ -195,14 +196,14 @@ The Tasks panel shows live task cards sorted by activity, with inline output pre
 Automatic mode is available as a runtime flag and hides the browser Studio form entirely:
 
 ```bash
-./bin/harness hub --init templates/init.example.json --ui-automatic
+./bin/harness hub --ui-automatic
 ```
 
 Override or disable:
 
 ```bash
-./bin/harness hub --init templates/init.example.json --ui-listen :8088
-./bin/harness hub --init templates/init.example.json --ui-listen ""
+./bin/harness hub --ui-listen :8088
+./bin/harness hub --ui-listen ""
 ```
 
 ## Run Config (`v1`)
@@ -228,7 +229,7 @@ Common optional fields:
 
 Run payloads and library task JSON definitions use camelCase keys only. Legacy snake_case aliases are rejected.
 
-Example: [`templates/run.example.json`](templates/run.example.json)
+Example: [`run.example.json`](run.example.json)
 
 Library-backed runs can also use:
 
@@ -266,6 +267,7 @@ Runtime config keys `sessionKey` and `timeoutMs` are optional; missing values de
 
 Local-only behavior:
 
+- If `harness hub` is started without `--init`/`--config` and no persisted runtime config exists, startup now uses defaults and enters onboarding/local mode (no `init.json` required).
 - If `bind_token`/`agent_token` are missing and no persisted runtime token exists, `harness hub` now starts in local-only mode instead of exiting with auth error.
 - If Hub ping precheck fails but the UI is enabled, `harness hub` stays available in local-only mode and skips remote transport startup.
 - If Hub ping precheck fails with `--ui-listen ""` and Hub credentials are configured, `harness hub` continues remote startup (the ping probe can be transient).
@@ -277,7 +279,7 @@ Runtime-owned fields:
 - skill contract is fixed to `code_for_me` / `skill_request` / `skill_result`
 - profile visibility metadata is managed by runtime and forced public
 
-Example: [`templates/init.example.json`](templates/init.example.json)
+Example: [`init.example.json`](init.example.json)
 
 ## Test
 

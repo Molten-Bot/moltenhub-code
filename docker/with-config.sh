@@ -123,10 +123,13 @@ if try_run_hub_from_env; then
     :
 fi
 
-echo "missing config file: expected ${run_config_path} (run mode) or ${init_config_path} (hub mode)" >&2
-echo "bootstrap run mode with:" >&2
-echo "  cp ${template_dir}/run.example.json ${run_config_path}" >&2
-echo "bootstrap hub mode with:" >&2
-echo "  cp ${template_dir}/init.example.json ${init_config_path}" >&2
-echo "or set MOLTEN_HUB_TOKEN (and optionally MOLTEN_HUB_URL) to auto-start hub mode." >&2
-exit 10
+if [ "${HARNESS_RUNTIME_CONFIG_PATH:-}" = "" ]; then
+    export HARNESS_RUNTIME_CONFIG_PATH="${run_config_path}"
+fi
+
+echo "no config file found; starting hub onboarding mode with defaults" >&2
+echo "optional run config path: ${run_config_path}" >&2
+echo "optional init config path: ${init_config_path}" >&2
+echo "or set MOLTEN_HUB_TOKEN (and optionally MOLTEN_HUB_URL) for remote-hub bootstrap." >&2
+
+exec harness hub

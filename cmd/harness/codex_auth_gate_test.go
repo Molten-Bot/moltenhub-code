@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/jef/moltenhub-code/internal/agentruntime"
 	"github.com/jef/moltenhub-code/internal/execx"
+	"github.com/jef/moltenhub-code/internal/hub"
 )
 
 type authGateRunnerStub struct {
@@ -26,6 +28,10 @@ func (s *authGateRunnerStub) Run(ctx context.Context, cmd execx.Command) (execx.
 		return execx.Result{}, nil
 	}
 	return s.run(ctx, cmd)
+}
+
+func codexGitHubReadyInitCfg() hub.InitConfig {
+	return hub.InitConfig{GitHubToken: "ghp_ready"}
 }
 
 func TestCodexAuthGateNilReceiversReturnReady(t *testing.T) {
@@ -72,7 +78,7 @@ func TestNewCodexAuthGateUsesProbeResultWhenReady(t *testing.T) {
 		},
 	}
 
-	g := newCodexAuthGate(context.Background(), runner, "", nil)
+	g := newCodexAuthGate(context.Background(), runner, "", "", codexGitHubReadyInitCfg(), nil)
 	status, err := g.Status(context.Background())
 	if err != nil {
 		t.Fatalf("Status() error = %v", err)
@@ -94,7 +100,7 @@ func TestNewCodexAuthGateSetsErrorWhenCLIUnavailable(t *testing.T) {
 		},
 	}
 
-	g := newCodexAuthGate(context.Background(), runner, "codex", nil)
+	g := newCodexAuthGate(context.Background(), runner, "codex", "", codexGitHubReadyInitCfg(), nil)
 	status, err := g.Status(context.Background())
 	if err != nil {
 		t.Fatalf("Status() error = %v", err)
@@ -107,12 +113,78 @@ func TestNewCodexAuthGateSetsErrorWhenCLIUnavailable(t *testing.T) {
 	}
 }
 
+func TestNewCodexAuthGateRequiresGitHubConfigureWhenTokenMissing(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+
+	runner := &authGateRunnerStub{
+		run: func(_ context.Context, _ execx.Command) (execx.Result, error) {
+			return execx.Result{Stdout: "logged in"}, nil
+		},
+	}
+
+	g := newCodexAuthGate(context.Background(), runner, "codex", filepath.Join(t.TempDir(), ".moltenhub", "config.json"), hub.InitConfig{}, nil)
+	status, err := g.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if status.Ready || status.State != "needs_configure" {
+		t.Fatalf("status = %+v", status)
+	}
+	if got, want := status.ConfigureCommand, claudeGitHubConfigureCommand; got != want {
+		t.Fatalf("ConfigureCommand = %q, want %q", got, want)
+	}
+}
+
+func TestCodexAuthGateConfigurePersistsGitHubToken(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+
+	runner := &authGateRunnerStub{
+		run: func(_ context.Context, _ execx.Command) (execx.Result, error) {
+			return execx.Result{Stdout: "logged in"}, nil
+		},
+	}
+
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	g := newCodexAuthGate(context.Background(), runner, "codex", configPath, hub.InitConfig{
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		AgentHarness: "codex",
+	}, nil)
+
+	status, err := g.Configure(context.Background(), "ghp_saved_token")
+	if err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	if !status.Ready || status.State != "ready" {
+		t.Fatalf("status = %+v", status)
+	}
+	if got, want := os.Getenv("GH_TOKEN"), "ghp_saved_token"; got != want {
+		t.Fatalf("GH_TOKEN = %q, want %q", got, want)
+	}
+	if got, want := os.Getenv("GITHUB_TOKEN"), "ghp_saved_token"; got != want {
+		t.Fatalf("GITHUB_TOKEN = %q, want %q", got, want)
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if got, want := doc["github_token"], "ghp_saved_token"; got != want {
+		t.Fatalf("github_token = %#v, want %q", got, want)
+	}
+}
+
 func TestStartDeviceAuthRespectsExistingState(t *testing.T) {
 	t.Parallel()
 
 	t.Run("ready", func(t *testing.T) {
 		t.Parallel()
-		g := &codexAuthGate{required: true, ready: true, state: "ready", message: "ok", updatedAt: time.Now().UTC()}
+		g := &codexAuthGate{required: true, ready: true, state: "ready", message: "ok", updatedAt: time.Now().UTC(), initCfg: codexGitHubReadyInitCfg()}
 		status, err := g.StartDeviceAuth(context.Background())
 		if err != nil {
 			t.Fatalf("StartDeviceAuth() error = %v", err)
@@ -124,7 +196,7 @@ func TestStartDeviceAuthRespectsExistingState(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		t.Parallel()
-		g := &codexAuthGate{required: true, state: "error", message: "boom", updatedAt: time.Now().UTC()}
+		g := &codexAuthGate{required: true, state: "error", message: "boom", updatedAt: time.Now().UTC(), initCfg: codexGitHubReadyInitCfg()}
 		status, err := g.StartDeviceAuth(context.Background())
 		if err == nil {
 			t.Fatal("StartDeviceAuth() error = nil, want non-nil")
@@ -139,7 +211,7 @@ func TestStartDeviceAuthRespectsExistingState(t *testing.T) {
 
 	t.Run("already-running", func(t *testing.T) {
 		t.Parallel()
-		g := &codexAuthGate{required: true, procRunning: true, updatedAt: time.Now().UTC()}
+		g := &codexAuthGate{required: true, procRunning: true, updatedAt: time.Now().UTC(), initCfg: codexGitHubReadyInitCfg()}
 		status, err := g.StartDeviceAuth(context.Background())
 		if err != nil {
 			t.Fatalf("StartDeviceAuth() error = %v", err)
@@ -157,7 +229,7 @@ func TestStartDeviceAuthFailsWhenTempDirCannotBeCreated(t *testing.T) {
 	}
 	t.Setenv("TMPDIR", badTempRoot)
 
-	g := &codexAuthGate{baseCtx: context.Background(), command: "sh", required: true, state: "needs_device_auth", updatedAt: time.Now().UTC()}
+	g := &codexAuthGate{baseCtx: context.Background(), command: "sh", required: true, state: "needs_device_auth", updatedAt: time.Now().UTC(), initCfg: codexGitHubReadyInitCfg()}
 	_, err := g.StartDeviceAuth(context.Background())
 	if err == nil {
 		t.Fatal("StartDeviceAuth() error = nil, want non-nil")
@@ -170,7 +242,7 @@ func TestStartDeviceAuthFailsWhenTempDirCannotBeCreated(t *testing.T) {
 func TestStartDeviceAuthFailsWhenCommandCannotStart(t *testing.T) {
 	t.Parallel()
 
-	g := &codexAuthGate{baseCtx: context.Background(), command: filepath.Join(t.TempDir(), "missing-codex"), required: true, state: "needs_device_auth", updatedAt: time.Now().UTC()}
+	g := &codexAuthGate{baseCtx: context.Background(), command: filepath.Join(t.TempDir(), "missing-codex"), required: true, state: "needs_device_auth", updatedAt: time.Now().UTC(), initCfg: codexGitHubReadyInitCfg()}
 	status, err := g.StartDeviceAuth(context.Background())
 	if err == nil {
 		t.Fatal("StartDeviceAuth() error = nil, want non-nil")
@@ -186,7 +258,7 @@ func TestStartDeviceAuthFailsWhenCommandCannotStart(t *testing.T) {
 func TestStartDeviceAuthStreamsAndCompletes(t *testing.T) {
 	t.Parallel()
 
-	g := &codexAuthGate{baseCtx: context.Background(), command: "true", required: true, state: "needs_device_auth", message: "auth required", updatedAt: time.Now().UTC()}
+	g := &codexAuthGate{baseCtx: context.Background(), command: "true", required: true, state: "needs_device_auth", message: "auth required", updatedAt: time.Now().UTC(), initCfg: codexGitHubReadyInitCfg()}
 
 	status, err := g.StartDeviceAuth(context.Background())
 	if err != nil {
@@ -205,7 +277,7 @@ func TestStartDeviceAuthStreamsAndCompletes(t *testing.T) {
 func TestStartDeviceAuthFailureRequiresRetryWhenHintsMissing(t *testing.T) {
 	t.Parallel()
 
-	g := &codexAuthGate{baseCtx: context.Background(), command: "false", required: true, state: "needs_device_auth", updatedAt: time.Now().UTC()}
+	g := &codexAuthGate{baseCtx: context.Background(), command: "false", required: true, state: "needs_device_auth", updatedAt: time.Now().UTC(), initCfg: codexGitHubReadyInitCfg()}
 
 	if _, err := g.StartDeviceAuth(context.Background()); err != nil {
 		t.Fatalf("StartDeviceAuth() error = %v", err)
@@ -225,7 +297,7 @@ func TestVerifyTransitions(t *testing.T) {
 		runner := &authGateRunnerStub{run: func(_ context.Context, _ execx.Command) (execx.Result, error) {
 			return execx.Result{}, errors.New("command not found")
 		}}
-		g := &codexAuthGate{baseCtx: context.Background(), runner: runner, command: "codex", required: true, state: "needs_device_auth", updatedAt: time.Now().UTC()}
+		g := &codexAuthGate{baseCtx: context.Background(), runner: runner, command: "codex", required: true, state: "needs_device_auth", updatedAt: time.Now().UTC(), initCfg: codexGitHubReadyInitCfg()}
 		status, err := g.Verify(context.Background())
 		if err == nil {
 			t.Fatal("Verify() error = nil, want non-nil")
@@ -250,6 +322,7 @@ func TestVerifyTransitions(t *testing.T) {
 			procRunning: true,
 			procCancel:  func() { canceled = true },
 			updatedAt:   time.Now().UTC(),
+			initCfg:     codexGitHubReadyInitCfg(),
 		}
 		status, err := g.Verify(context.Background())
 		if err != nil {
@@ -268,7 +341,7 @@ func TestVerifyTransitions(t *testing.T) {
 		runner := &authGateRunnerStub{run: func(_ context.Context, _ execx.Command) (execx.Result, error) {
 			return execx.Result{}, errors.New("not logged in")
 		}}
-		g := &codexAuthGate{baseCtx: context.Background(), runner: runner, command: "codex", required: true, procRunning: true, updatedAt: time.Now().UTC()}
+		g := &codexAuthGate{baseCtx: context.Background(), runner: runner, command: "codex", required: true, procRunning: true, updatedAt: time.Now().UTC(), initCfg: codexGitHubReadyInitCfg()}
 		status, err := g.Verify(context.Background())
 		if err != nil {
 			t.Fatalf("Verify() error = %v", err)
@@ -283,7 +356,7 @@ func TestVerifyTransitions(t *testing.T) {
 		runner := &authGateRunnerStub{run: func(_ context.Context, _ execx.Command) (execx.Result, error) {
 			return execx.Result{}, errors.New("not logged in")
 		}}
-		g := &codexAuthGate{baseCtx: context.Background(), runner: runner, command: "codex", required: true, updatedAt: time.Now().UTC()}
+		g := &codexAuthGate{baseCtx: context.Background(), runner: runner, command: "codex", required: true, updatedAt: time.Now().UTC(), initCfg: codexGitHubReadyInitCfg()}
 		status, err := g.Verify(context.Background())
 		if err != nil {
 			t.Fatalf("Verify() error = %v", err)
@@ -400,7 +473,7 @@ func TestProbeClassificationAndHelpers(t *testing.T) {
 func TestReadAndIngestDeviceAuthStream(t *testing.T) {
 	t.Parallel()
 
-	g := &codexAuthGate{required: true, state: "needs_device_auth", updatedAt: time.Now().UTC()}
+	g := &codexAuthGate{required: true, state: "needs_device_auth", updatedAt: time.Now().UTC(), initCfg: codexGitHubReadyInitCfg()}
 	g.readDeviceAuthStream(io.NopCloser(strings.NewReader("noise\nVisit https://auth.openai.com/device\nCode: abcd-efgh\n")))
 
 	status, err := g.Status(context.Background())
@@ -434,7 +507,7 @@ func TestWaitDeviceAuthHandlesExitScenarios(t *testing.T) {
 		if err := cmd.Start(); err != nil {
 			t.Fatalf("Start() error = %v", err)
 		}
-		g := &codexAuthGate{required: true, state: "pending_device_auth", procRunning: true, updatedAt: time.Now().UTC()}
+		g := &codexAuthGate{required: true, state: "pending_device_auth", procRunning: true, updatedAt: time.Now().UTC(), initCfg: codexGitHubReadyInitCfg()}
 		g.waitDeviceAuth(cmd, t.TempDir())
 		status, _ := g.Status(context.Background())
 		if !status.Ready || status.State != "ready" {
@@ -451,7 +524,7 @@ func TestWaitDeviceAuthHandlesExitScenarios(t *testing.T) {
 		if err := cmd.Start(); err != nil {
 			t.Fatalf("Start() error = %v", err)
 		}
-		g := &codexAuthGate{baseCtx: ctx, required: true, state: "pending_device_auth", procRunning: true, updatedAt: time.Now().UTC()}
+		g := &codexAuthGate{baseCtx: ctx, required: true, state: "pending_device_auth", procRunning: true, updatedAt: time.Now().UTC(), initCfg: codexGitHubReadyInitCfg()}
 		g.waitDeviceAuth(cmd, t.TempDir())
 		status, _ := g.Status(context.Background())
 		if status.State != "pending_device_auth" {
@@ -465,7 +538,7 @@ func TestWaitDeviceAuthHandlesExitScenarios(t *testing.T) {
 		if err := cmd.Start(); err != nil {
 			t.Fatalf("Start() error = %v", err)
 		}
-		g := &codexAuthGate{required: true, state: "pending_device_auth", procRunning: true, updatedAt: time.Now().UTC()}
+		g := &codexAuthGate{required: true, state: "pending_device_auth", procRunning: true, updatedAt: time.Now().UTC(), initCfg: codexGitHubReadyInitCfg()}
 		g.waitDeviceAuth(cmd, t.TempDir())
 		status, _ := g.Status(context.Background())
 		if status.State != "needs_device_auth" {
@@ -486,6 +559,7 @@ func TestWaitDeviceAuthHandlesExitScenarios(t *testing.T) {
 			authURL:     "https://auth.openai.com/device",
 			deviceCode:  "ABCD-EFGH",
 			updatedAt:   time.Now().UTC(),
+			initCfg:     codexGitHubReadyInitCfg(),
 		}
 		g.waitDeviceAuth(cmd, t.TempDir())
 		status, _ := g.Status(context.Background())
@@ -501,7 +575,7 @@ func TestCodexAuthGateSnapshotAndIngestEdgeCases(t *testing.T) {
 	var nilGate *codexAuthGate
 	nilGate.ingestDeviceAuthLine("https://auth.openai.com/device CODE-1234")
 
-	g := &codexAuthGate{required: true, ready: true, updatedAt: time.Now().UTC()}
+	g := &codexAuthGate{required: true, ready: true, updatedAt: time.Now().UTC(), initCfg: codexGitHubReadyInitCfg()}
 	if got := g.snapshotLocked().State; got != "ready" {
 		t.Fatalf("snapshotLocked().State = %q, want ready", got)
 	}
@@ -527,7 +601,7 @@ func TestNewCodexAuthGateAutoStartsWhenNotLoggedIn(t *testing.T) {
 		},
 	}
 
-	g := newCodexAuthGate(context.Background(), runner, "true", nil)
+	g := newCodexAuthGate(context.Background(), runner, "true", "", codexGitHubReadyInitCfg(), nil)
 	waitForCondition(t, 2*time.Second, func() bool {
 		s, _ := g.Status(context.Background())
 		return s.Ready && s.State == "ready"

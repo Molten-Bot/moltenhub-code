@@ -7,8 +7,9 @@ services:
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     environment:
       HOME: /tmp
+      HARNESS_RUNTIME_CONFIG_PATH: /workspace/config/config.json
     ports:
       - 3300:7777
     volumes:
-      - ./.moltenhub:/workspace/
-    command: ["harness", "hub", "--init", "/workspace/init.json", "--ui-listen", ":7777"]
+      - ./.moltenhub:/workspace/config
+    command: ["harness", "hub", "--ui-listen", ":7777"]
