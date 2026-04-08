@@ -779,13 +779,18 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	if !strings.Contains(html, "function isClaudeBrowserCodeState(auth)") {
 		t.Fatalf("expected auth gate to detect Claude browser-code submission state")
 	}
-	if !strings.Contains(html, "(!requiresClaudeBrowserCode || hasClaudeBrowserCode)") {
-		t.Fatalf("expected Done button visibility to require Claude browser code when needed")
+	if strings.Contains(html, "(!requiresClaudeBrowserCode || hasClaudeBrowserCode)") {
+		t.Fatalf("expected Done button visibility to allow verify flows even when Claude browser code is not pasted")
 	}
-	if !strings.Contains(html, "!claudeBrowserCodeSubmitted") {
-		t.Fatalf("expected Done button to stay hidden after Claude browser code submission is acknowledged")
+	if strings.Contains(html, "!claudeBrowserCodeSubmitted") {
+		t.Fatalf("expected Done button to remain available after Claude browser code submission for browser-login verification retries")
 	}
 	if !strings.Contains(html, "claude_auth_code: code") {
 		t.Fatalf("expected Claude browser code configure payload support in auth UI")
+	}
+	if !strings.Contains(html, "if (isClaudeBrowserCodeAwaitingSubmission()) {") ||
+		!strings.Contains(html, "const code = claudeBrowserCodeValue();") ||
+		!strings.Contains(html, "if (code !== \"\") {") {
+		t.Fatalf("expected Done handler to submit Claude browser code only when a code is provided")
 	}
 }

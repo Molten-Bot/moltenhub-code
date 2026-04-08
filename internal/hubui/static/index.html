@@ -1027,15 +1027,10 @@
       if (!agentAuthVerify) return;
       const requiresManualConfigure = isManualConfigureState();
       const hasCodeChallenge = Boolean(state.agentAuth.authURL || state.agentAuth.deviceCode);
-      const requiresClaudeBrowserCode = isClaudeBrowserCodeAwaitingSubmission();
-      const hasClaudeBrowserCode = claudeBrowserCodeValue() !== "";
-      const claudeBrowserCodeSubmitted = hasClaudeBrowserCodeBeenAccepted();
       const meetsAuthInteractionRequirement = requiresManualConfigure || (!hasCodeChallenge || state.agentAuthInteracted);
       const visible = state.agentAuth.required &&
         !state.agentAuth.ready &&
-        !claudeBrowserCodeSubmitted &&
         meetsAuthInteractionRequirement &&
-        (!requiresClaudeBrowserCode || hasClaudeBrowserCode) &&
         !state.agentAuthVerifyPending;
       agentAuthVerify.classList.toggle("hidden", !visible);
     }
@@ -1530,8 +1525,11 @@
         return;
       }
       if (isClaudeBrowserCodeAwaitingSubmission()) {
-        await configureClaudeBrowserCode();
-        return;
+        const code = claudeBrowserCodeValue();
+        if (code !== "") {
+          await configureClaudeBrowserCode();
+          return;
+        }
       }
       setAgentAuthVerifyPending(true);
       setAgentAuthBusy(true);

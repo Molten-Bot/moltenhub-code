@@ -856,7 +856,7 @@ func TestHandlerIndexIncludesClaudeBrowserCodeFlow(t *testing.T) {
 		`function isClaudeBrowserCodeAwaitingSubmission(auth) {`,
 		`const showBrowserCode = isClaudeBrowserCodeAwaitingSubmission() && state.agentAuthInteracted;`,
 		`const useClaudeLogoLink = authHarness(state.agentAuth) === "claude" && authURL !== "";`,
-		`(!requiresClaudeBrowserCode || hasClaudeBrowserCode)`,
+		`const code = claudeBrowserCodeValue();`,
 		`agentAuthURL.addEventListener("click", markAgentAuthInteraction);`,
 	}
 	for _, needle := range required {
