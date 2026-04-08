@@ -403,8 +403,19 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "const showTaskPRLink = isCompletedTask(task) && prURL !== \"\";") {
 		t.Fatalf("expected index html to gate task PR links to completed tasks with a pull request URL")
 	}
+	if !strings.Contains(markup, "const TASK_PR_LINK_SIZE_PX = \"34px\";") {
+		t.Fatalf("expected index html to define a stable runtime width for task PR links")
+	}
 	if !strings.Contains(markup, "node.classList.toggle(\"task-has-pr-link\", showTaskPRLink);") {
 		t.Fatalf("expected index html to mark task cards with right-side PR links")
+	}
+	if !strings.Contains(markup, "prLink.style.width = TASK_PR_LINK_SIZE_PX;") ||
+		!strings.Contains(markup, "prLink.style.height = TASK_PR_LINK_SIZE_PX;") ||
+		!strings.Contains(markup, "prLink.style.alignSelf = \"center\";") {
+		t.Fatalf("expected index html to size task PR links inline to avoid task-height expansion when css is stale")
+	}
+	if !strings.Contains(markup, "prLogo.width = TASK_PR_LOGO_SIZE;") || !strings.Contains(markup, "prLogo.height = TASK_PR_LOGO_SIZE;") {
+		t.Fatalf("expected index html to define deterministic task PR logo dimensions")
 	}
 	if !strings.Contains(markup, "body.className = \"task-body\";") {
 		t.Fatalf("expected index html to render a task body container alongside the PR link rail")

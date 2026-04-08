@@ -357,6 +357,8 @@
       augment: "https://molten.bot/logos/augment.svg",
     });
     const GITHUB_LOGO_URL = "https://molten.bot/logos/github.svg";
+    const TASK_PR_LINK_SIZE_PX = "34px";
+    const TASK_PR_LOGO_SIZE = 20;
     const CLAUDE_AUTH_LOGO_URL = "https://molten.bot/logos/claude-code.svg";
 
     function normalizeUIConfig(raw) {
@@ -3031,6 +3033,12 @@
         if (showTaskPRLink) {
           const prLink = document.createElement("a");
           prLink.className = "task-pr-link";
+          // Keep PR affordance size stable even if stale CSS is cached.
+          prLink.style.width = TASK_PR_LINK_SIZE_PX;
+          prLink.style.minWidth = TASK_PR_LINK_SIZE_PX;
+          prLink.style.height = TASK_PR_LINK_SIZE_PX;
+          prLink.style.flex = `0 0 ${TASK_PR_LINK_SIZE_PX}`;
+          prLink.style.alignSelf = "center";
           prLink.href = prURL;
           prLink.target = "_blank";
           prLink.rel = "noopener noreferrer";
@@ -3041,6 +3049,8 @@
           prLogo.src = GITHUB_LOGO_URL;
           prLogo.alt = "GitHub";
           prLogo.loading = "lazy";
+          prLogo.width = TASK_PR_LOGO_SIZE;
+          prLogo.height = TASK_PR_LOGO_SIZE;
           prLink.appendChild(prLogo);
 
           prLink.addEventListener("click", (event) => {
