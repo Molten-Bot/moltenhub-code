@@ -172,6 +172,9 @@ Container startup pre-registers auth before any agent stage:
 - configures GitHub URL rewrites so `git@github.com:*` and `ssh://git@github.com/*` can use PAT-backed HTTPS
 - for Codex, it reads `openai_api_key` from init JSON when `OPENAI_API_KEY` is unset and performs `codex login --with-api-key`
 - for Auggie, it reads `augment_session_auth` from init/config JSON when `AUGMENT_SESSION_AUTH` is unset and exports it for non-interactive CLI runs
+- when Auggie auth is missing, the UI now shows an `Auggie Configure` screen:
+  - copy `auggie token print`, run it locally, and paste the returned JSON
+  - the payload is schema-validated and persisted to runtime `config.json` as `augment_session_auth`
 - when Codex auth is still missing, the UI now shows an authorization pre-screen:
   - startup checks `codex login status` from an empty temp working directory
   - it automatically launches `codex login --device-auth` and surfaces URL/code in the pre-screen

@@ -4,7 +4,7 @@
   "targetSubdir": ".",
   "agentHarness": "codex",
   // Optional for containerized Auggie runs: full session JSON from `auggie token print`.
-  // "augmentSessionAuth": "{\"accessToken\":\"XXX\",\"tenantURL\":\"YYY\",\"scopes\":[\"email\"]}",
+  // "augmentSessionAuth": "{\"accessToken\":\"XXX\",\"tenantURL\":\"https://YYY/\",\"scopes\":[\"email\"]}",
   // optional override when executable name differs from harness default
   // "agentCommand": "codex",
   "githubHandle": "octocat",

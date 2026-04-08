@@ -38,6 +38,10 @@ func (g *claudeAuthGate) Verify(_ context.Context) (hubui.AgentAuthState, error)
 	return g.currentState(), nil
 }
 
+func (g *claudeAuthGate) Configure(_ context.Context, _ string) (hubui.AgentAuthState, error) {
+	return g.currentState(), fmt.Errorf("claude auth does not support manual config submission")
+}
+
 func (g *claudeAuthGate) currentState() hubui.AgentAuthState {
 	ready, message := g.probe()
 	state := "ready"

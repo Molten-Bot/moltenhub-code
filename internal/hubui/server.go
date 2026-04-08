@@ -22,36 +22,40 @@ import (
 var staticFiles embed.FS
 
 const maxLocalPromptBodyBytes = 16 << 20
+const maxAgentAuthConfigureBodyBytes = 1 << 20
 
 // Server provides an HTTP UI for live hub/task monitoring.
 type Server struct {
-	Addr              string
-	Broker            *Broker
-	AutomaticMode     bool
-	ConfiguredHarness string
-	Logf              func(string, ...any)
-	SubmitLocalPrompt func(context.Context, []byte) (string, error)
-	SubmitTaskRerun   func(context.Context, string, []byte, bool) (string, error)
-	CloseTask         func(context.Context, string) error
-	PauseTask         func(context.Context, string) error
-	RunTask           func(context.Context, string) error
-	StopTask          func(context.Context, string) error
-	LoadLibraryTasks  func() ([]library.TaskSummary, error)
-	AgentAuthStatus   func(context.Context) (AgentAuthState, error)
-	StartAgentAuth    func(context.Context) (AgentAuthState, error)
-	VerifyAgentAuth   func(context.Context) (AgentAuthState, error)
+	Addr               string
+	Broker             *Broker
+	AutomaticMode      bool
+	ConfiguredHarness  string
+	Logf               func(string, ...any)
+	SubmitLocalPrompt  func(context.Context, []byte) (string, error)
+	SubmitTaskRerun    func(context.Context, string, []byte, bool) (string, error)
+	CloseTask          func(context.Context, string) error
+	PauseTask          func(context.Context, string) error
+	RunTask            func(context.Context, string) error
+	StopTask           func(context.Context, string) error
+	LoadLibraryTasks   func() ([]library.TaskSummary, error)
+	AgentAuthStatus    func(context.Context) (AgentAuthState, error)
+	StartAgentAuth     func(context.Context) (AgentAuthState, error)
+	VerifyAgentAuth    func(context.Context) (AgentAuthState, error)
+	ConfigureAgentAuth func(context.Context, string) (AgentAuthState, error)
 }
 
 // AgentAuthState describes current runtime agent-auth readiness and device flow hints.
 type AgentAuthState struct {
-	Harness    string `json:"harness,omitempty"`
-	Required   bool   `json:"required"`
-	Ready      bool   `json:"ready"`
-	State      string `json:"state,omitempty"`
-	Message    string `json:"message,omitempty"`
-	AuthURL    string `json:"auth_url,omitempty"`
-	DeviceCode string `json:"device_code,omitempty"`
-	UpdatedAt  string `json:"updated_at,omitempty"`
+	Harness              string `json:"harness,omitempty"`
+	Required             bool   `json:"required"`
+	Ready                bool   `json:"ready"`
+	State                string `json:"state,omitempty"`
+	Message              string `json:"message,omitempty"`
+	AuthURL              string `json:"auth_url,omitempty"`
+	DeviceCode           string `json:"device_code,omitempty"`
+	ConfigureCommand     string `json:"configure_command,omitempty"`
+	ConfigurePlaceholder string `json:"configure_placeholder,omitempty"`
+	UpdatedAt            string `json:"updated_at,omitempty"`
 }
 
 // NewServer returns a monitor HTTP server.
@@ -121,6 +125,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/api/agent-auth", s.handleAgentAuthStatus)
 	mux.HandleFunc("/api/agent-auth/start-device", s.handleAgentAuthStart)
 	mux.HandleFunc("/api/agent-auth/verify", s.handleAgentAuthVerify)
+	mux.HandleFunc("/api/agent-auth/configure", s.handleAgentAuthConfigure)
 	mux.HandleFunc("/api/tasks/", s.handleTaskAction)
 	mux.HandleFunc("/healthz", s.handleHealth)
 	return mux
@@ -340,6 +345,80 @@ func (s Server) handleAgentAuthVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state, err := s.VerifyAgentAuth(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": err.Error(),
+			"auth":  state,
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":   true,
+		"auth": state,
+	})
+}
+
+type agentAuthConfigureRequest struct {
+	AugmentSessionAuth      string `json:"augment_session_auth"`
+	AugmentSessionAuthAlias string `json:"augmentSessionAuth"`
+	SessionAuth             string `json:"session_auth"`
+	SessionAuthAlias        string `json:"sessionAuth"`
+	Value                   string `json:"value"`
+}
+
+func (s Server) handleAgentAuthConfigure(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.ConfigureAgentAuth == nil {
+		writeJSON(w, http.StatusNotImplemented, map[string]any{
+			"ok":    false,
+			"error": "agent auth configure is unavailable",
+			"auth":  defaultAgentAuthState(),
+		})
+		return
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxAgentAuthConfigureBodyBytes))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": fmt.Sprintf("read request body: %v", err),
+			"auth":  defaultAgentAuthState(),
+		})
+		return
+	}
+
+	var req agentAuthConfigureRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": fmt.Sprintf("decode request body: %v", err),
+			"auth":  defaultAgentAuthState(),
+		})
+		return
+	}
+
+	sessionAuth := firstNonEmptyString(
+		req.AugmentSessionAuth,
+		req.AugmentSessionAuthAlias,
+		req.SessionAuth,
+		req.SessionAuthAlias,
+		req.Value,
+	)
+	if sessionAuth == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": "augment_session_auth is required",
+			"auth":  defaultAgentAuthState(),
+		})
+		return
+	}
+
+	state, err := s.ConfigureAgentAuth(r.Context(), sessionAuth)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":    false,
@@ -673,4 +752,14 @@ func parseTruthyQueryParam(raw string) bool {
 	default:
 		return false
 	}
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }

@@ -5,7 +5,7 @@
   // Optional for Codex harness: runtime OpenAI API key.
   // "openai_api_key": "sk-proj_replace_with_your_key",
   // Optional for Auggie harness: full session JSON from `auggie token print`.
-  // "augment_session_auth": "{\"accessToken\":\"XXX\",\"tenantURL\":\"YYY\",\"scopes\":[\"email\"]}",
+  // "augment_session_auth": "{\"accessToken\":\"XXX\",\"tenantURL\":\"https://YYY/\",\"scopes\":[\"email\"]}",
   "agent_token": "agent_replace_with_your_token",
   "agent_harness": "codex",
   // optional override when executable name differs from harness default

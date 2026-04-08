@@ -273,6 +273,17 @@
         <a id="agent-auth-url" class="agent-auth-url block break-all text-[1.05rem] underline decoration-dotted underline-offset-2" href="" target="_blank" rel="noopener noreferrer"></a>
       </div>
 
+      <div id="agent-auth-configure" class="mt-5 hidden space-y-3">
+        <div class="text-sm text-hub-text/80">Run in your terminal locally</div>
+        <div class="flex flex-wrap items-center gap-2.5">
+          <div id="agent-auth-configure-command" class="font-mono text-[1rem] tracking-[0.04em] text-hub-text">auggie token print</div>
+          <button id="agent-auth-configure-copy" class="agent-auth-copy rounded-md px-2.5 py-1.5 text-xs font-medium" type="button">Copy</button>
+        </div>
+        <label class="text-sm font-medium text-hub-text/85" for="agent-auth-configure-input">Paste Auggie session JSON</label>
+        <textarea id="agent-auth-configure-input" class="prompt-text min-h-[120px] font-mono text-[0.9rem]" placeholder='{"accessToken":"XXX","tenantURL":"https://YYY/","scopes":["email"]}' spellcheck="false"></textarea>
+        <p id="agent-auth-configure-error" class="hidden text-sm text-rose-200"></p>
+      </div>
+
       <div class="mt-auto flex justify-end pt-4">
         <button id="agent-auth-verify" class="agent-auth-verify hidden rounded-lg border px-3 py-2 text-sm font-medium" type="button">Done</button>
       </div>
@@ -350,6 +361,8 @@
         message: String(auth.message || "").trim(),
         authURL: String(auth.auth_url || auth.authURL || "").trim(),
         deviceCode: String(auth.device_code || auth.deviceCode || "").trim(),
+        configureCommand: String(auth.configure_command || auth.configureCommand || "").trim(),
+        configurePlaceholder: String(auth.configure_placeholder || auth.configurePlaceholder || "").trim(),
         updatedAt: String(auth.updated_at || auth.updatedAt || "").trim(),
       };
     }
@@ -519,6 +532,11 @@
     const agentAuthURL = document.getElementById("agent-auth-url");
     const agentAuthCode = document.getElementById("agent-auth-code");
     const agentAuthCopy = document.getElementById("agent-auth-copy");
+    const agentAuthConfigure = document.getElementById("agent-auth-configure");
+    const agentAuthConfigureCommand = document.getElementById("agent-auth-configure-command");
+    const agentAuthConfigureCopy = document.getElementById("agent-auth-configure-copy");
+    const agentAuthConfigureInput = document.getElementById("agent-auth-configure-input");
+    const agentAuthConfigureError = document.getElementById("agent-auth-configure-error");
     const agentAuthVerify = document.getElementById("agent-auth-verify");
     const themeCycleButton = document.getElementById("theme-cycle");
     const themeCycleCurrent = document.getElementById("theme-cycle-current");
@@ -776,6 +794,9 @@
         clearTimeout(agentAuthRefreshTimer);
         agentAuthRefreshTimer = null;
       }
+      if (isAuggieConfigureState()) {
+        return;
+      }
       const needsChallenge = state.agentAuth.required && !state.agentAuth.ready &&
         (!state.agentAuth.authURL || !state.agentAuth.deviceCode);
       if (!needsChallenge) {
@@ -792,6 +813,12 @@
       if (agentAuthCopy) {
         agentAuthCopy.disabled = state.agentAuthBusy;
       }
+      if (agentAuthConfigureCopy) {
+        agentAuthConfigureCopy.disabled = state.agentAuthBusy;
+      }
+      if (agentAuthConfigureInput) {
+        agentAuthConfigureInput.disabled = state.agentAuthBusy;
+      }
       if (agentAuthVerify) {
         agentAuthVerify.disabled = state.agentAuthBusy;
       }
@@ -800,12 +827,27 @@
       }
     }
 
+    function isAuggieConfigureState(auth) {
+      const current = auth && typeof auth === "object" ? auth : state.agentAuth;
+      const harness = String(current?.harness || "").trim().toLowerCase();
+      const gateState = String(current?.state || "").trim().toLowerCase();
+      return harness === "auggie" && gateState === "needs_configure";
+    }
+
+    function setAuggieConfigureError(message) {
+      if (!agentAuthConfigureError) return;
+      const text = String(message || "").trim();
+      agentAuthConfigureError.textContent = text;
+      agentAuthConfigureError.classList.toggle("hidden", text === "");
+    }
+
     function updateAgentAuthDoneVisibility() {
       if (!agentAuthVerify) return;
+      const requiresManualConfigure = isAuggieConfigureState();
       const hasChallenge = Boolean(state.agentAuth.authURL || state.agentAuth.deviceCode);
       const visible = state.agentAuth.required &&
         !state.agentAuth.ready &&
-        (!hasChallenge || state.agentAuthInteracted) &&
+        (requiresManualConfigure || (!hasChallenge || state.agentAuthInteracted)) &&
         !state.agentAuthVerifyPending;
       agentAuthVerify.classList.toggle("hidden", !visible);
     }
@@ -835,7 +877,8 @@
       state.agentAuth = normalizeAgentAuth(auth);
       renderConfiguredAgent();
       const gateVisible = state.agentAuth.required && !state.agentAuth.ready;
-      const challengeKey = `${state.agentAuth.deviceCode}|${state.agentAuth.authURL}`;
+      const challengeKey = `${state.agentAuth.state}|${state.agentAuth.deviceCode}|${state.agentAuth.authURL}`;
+      const needsAuggieConfigure = isAuggieConfigureState(state.agentAuth);
 
       if (state.agentAuthChallengeKey !== challengeKey) {
         state.agentAuthChallengeKey = challengeKey;
@@ -851,14 +894,18 @@
         agentAuthGate.classList.toggle("flex", gateVisible);
       }
       if (agentAuthTitle) {
-        agentAuthTitle.textContent = `Authorize ${currentAgentLabel()} to get started`;
+        if (needsAuggieConfigure) {
+          agentAuthTitle.textContent = "Auggie Configure";
+        } else {
+          agentAuthTitle.textContent = `Authorize ${currentAgentLabel()} to get started`;
+        }
       }
       if (agentAuthMessage) {
         agentAuthMessage.textContent = state.agentAuth.message || "";
         agentAuthMessage.classList.toggle("hidden", !state.agentAuth.message);
       }
 
-      const hasChallenge = Boolean(state.agentAuth.authURL || state.agentAuth.deviceCode);
+      const hasChallenge = Boolean(state.agentAuth.authURL || state.agentAuth.deviceCode) && !needsAuggieConfigure;
       if (agentAuthDetails) {
         agentAuthDetails.classList.toggle("hidden", !hasChallenge);
       }
@@ -875,6 +922,19 @@
       if (agentAuthCopy) {
         agentAuthCopy.classList.toggle("hidden", !state.agentAuth.deviceCode);
       }
+      if (agentAuthConfigure) {
+        agentAuthConfigure.classList.toggle("hidden", !needsAuggieConfigure);
+      }
+      if (agentAuthConfigureCommand) {
+        agentAuthConfigureCommand.textContent = state.agentAuth.configureCommand || "auggie token print";
+      }
+      if (agentAuthConfigureInput) {
+        const placeholder = state.agentAuth.configurePlaceholder || '{"accessToken":"XXX","tenantURL":"https://YYY/","scopes":["email"]}';
+        agentAuthConfigureInput.placeholder = placeholder;
+      }
+      if (!needsAuggieConfigure) {
+        setAuggieConfigureError("");
+      }
 
       updateAgentAuthDoneVisibility();
       if (localPromptSubmit) {
@@ -889,14 +949,24 @@
       const code = String(state.agentAuth.deviceCode || "").trim();
       const url = String(state.agentAuth.authURL || "").trim();
       const value = code || url;
-      if (!value || !agentAuthCopy) return;
+      await copyTextToClipboard(value, agentAuthCopy);
+    }
+
+    async function copyAuggieConfigureCommand() {
+      const command = String(state.agentAuth.configureCommand || "").trim() || "auggie token print";
+      await copyTextToClipboard(command, agentAuthConfigureCopy);
+    }
+
+    async function copyTextToClipboard(value, buttonNode) {
+      value = String(value || "").trim();
+      if (!value || !buttonNode) return;
 
       const setCopiedLabel = () => {
-        const original = agentAuthCopy.textContent;
-        agentAuthCopy.textContent = "Copied";
+        const original = buttonNode.textContent;
+        buttonNode.textContent = "Copied";
         window.setTimeout(() => {
-          if (agentAuthCopy) {
-            agentAuthCopy.textContent = original || "Copy";
+          if (buttonNode) {
+            buttonNode.textContent = original || "Copy";
           }
         }, 1200);
       };
@@ -926,8 +996,65 @@
       }
     }
 
-    async function requestAgentAuth(path, method) {
-      const response = await fetch(path, { method, cache: "no-store" });
+    function normalizeAuggieSessionAuthPayload(raw) {
+      const trimmed = String(raw || "").trim();
+      if (!trimmed) {
+        throw new Error("Paste Auggie session JSON first.");
+      }
+
+      let parsed = null;
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch (_err) {
+        throw new Error("Auggie session auth must be valid JSON.");
+      }
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Auggie session auth must be one JSON object.");
+      }
+
+      const accessToken = String(parsed.accessToken || "").trim();
+      if (!accessToken) {
+        throw new Error("accessToken is required.");
+      }
+      const tenantURL = String(parsed.tenantURL || "").trim();
+      if (!tenantURL) {
+        throw new Error("tenantURL is required.");
+      }
+
+      let parsedURL = null;
+      try {
+        parsedURL = new URL(tenantURL);
+      } catch (_err) {
+        throw new Error("tenantURL must be an absolute URL.");
+      }
+      if (parsedURL.protocol !== "https:") {
+        throw new Error("tenantURL must use https.");
+      }
+
+      const scopes = Array.isArray(parsed.scopes)
+        ? parsed.scopes.map((scope) => String(scope || "").trim()).filter((scope) => scope !== "")
+        : [];
+      if (!scopes.length) {
+        throw new Error("scopes must include at least one value.");
+      }
+      if (!scopes.some((scope) => scope.toLowerCase() === "email")) {
+        throw new Error("scopes must include \"email\".");
+      }
+
+      return JSON.stringify({
+        accessToken,
+        tenantURL,
+        scopes,
+      });
+    }
+
+    async function requestAgentAuth(path, method, requestBody) {
+      const init = { method, cache: "no-store" };
+      if (requestBody !== undefined) {
+        init.headers = { "Content-Type": "application/json" };
+        init.body = JSON.stringify(requestBody);
+      }
+      const response = await fetch(path, init);
       let body = null;
       try {
         body = await response.json();
@@ -968,7 +1095,48 @@
       }
     }
 
+    async function configureAuggieAuth() {
+      setAuggieConfigureError("");
+      let normalizedSessionAuth = "";
+      try {
+        normalizedSessionAuth = normalizeAuggieSessionAuthPayload(agentAuthConfigureInput ? agentAuthConfigureInput.value : "");
+      } catch (err) {
+        const message = err && err.message ? err.message : "Invalid Auggie session auth payload.";
+        setAuggieConfigureError(message);
+        return;
+      }
+
+      setAgentAuthVerifyPending(true);
+      setAgentAuthBusy(true);
+      try {
+        const auth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
+          augment_session_auth: normalizedSessionAuth,
+        });
+        applyAgentAuthGate(auth);
+        if (auth.ready) {
+          setAuggieConfigureError("");
+          if (agentAuthConfigureInput) {
+            agentAuthConfigureInput.value = "";
+          }
+          setLocalPromptStatus("ok", `${currentAgentLabel()} auth is ready.`);
+        } else {
+          setAgentAuthVerifyPending(false);
+        }
+      } catch (err) {
+        const message = err && err.message ? err.message : "Auggie auth configure failed.";
+        setAgentAuthVerifyPending(false);
+        setAuggieConfigureError(message);
+        setLocalPromptStatus("error", `${currentAgentLabel()} configure failed: ${message}`);
+      } finally {
+        setAgentAuthBusy(false);
+      }
+    }
+
     async function verifyAgentDeviceAuth() {
+      if (isAuggieConfigureState()) {
+        await configureAuggieAuth();
+        return;
+      }
       markAgentAuthInteraction();
       setAgentAuthVerifyPending(true);
       setAgentAuthBusy(true);
@@ -2807,6 +2975,14 @@
     }
     if (agentAuthCopy) {
       agentAuthCopy.addEventListener("click", copyAgentAuthCode);
+    }
+    if (agentAuthConfigureCopy) {
+      agentAuthConfigureCopy.addEventListener("click", copyAuggieConfigureCommand);
+    }
+    if (agentAuthConfigureInput) {
+      agentAuthConfigureInput.addEventListener("input", () => {
+        setAuggieConfigureError("");
+      });
     }
     if (hubConnItem) {
       hubConnItem.addEventListener("click", maybeOpenHubConnectPage);

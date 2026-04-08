@@ -1,6 +1,7 @@
 package hubui
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -201,6 +202,15 @@ func TestAgentAuthEndpointsDefaultAndMethodHandling(t *testing.T) {
 		t.Fatalf("POST /api/agent-auth/verify status = %d, want 501", verifyResp.StatusCode)
 	}
 
+	configureResp, err := http.Post(ts.URL+"/api/agent-auth/configure", "application/json", bytes.NewBufferString(`{"augment_session_auth":"{}"}`))
+	if err != nil {
+		t.Fatalf("POST /api/agent-auth/configure error = %v", err)
+	}
+	defer configureResp.Body.Close()
+	if configureResp.StatusCode != http.StatusNotImplemented {
+		t.Fatalf("POST /api/agent-auth/configure status = %d, want 501", configureResp.StatusCode)
+	}
+
 	methodResp, err := http.Post(ts.URL+"/api/agent-auth", "application/json", nil)
 	if err != nil {
 		t.Fatalf("POST /api/agent-auth error = %v", err)
@@ -240,6 +250,18 @@ func TestAgentAuthEndpointsWithCallbacks(t *testing.T) {
 			Message:  "ready",
 		}, nil
 	}
+	srv.ConfigureAgentAuth = func(_ context.Context, sessionAuth string) (AgentAuthState, error) {
+		if got, want := strings.TrimSpace(sessionAuth), `{"accessToken":"token_saved","tenantURL":"https://tenant.example/","scopes":["email"]}`; got != want {
+			t.Fatalf("sessionAuth = %q, want %q", got, want)
+		}
+		return AgentAuthState{
+			Harness:  "auggie",
+			Required: true,
+			Ready:    true,
+			State:    "ready",
+			Message:  "ready",
+		}, nil
+	}
 
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
@@ -269,6 +291,15 @@ func TestAgentAuthEndpointsWithCallbacks(t *testing.T) {
 	defer verifyResp.Body.Close()
 	if verifyResp.StatusCode != http.StatusOK {
 		t.Fatalf("POST /api/agent-auth/verify status = %d, want 200", verifyResp.StatusCode)
+	}
+
+	configureResp, err := http.Post(ts.URL+"/api/agent-auth/configure", "application/json", bytes.NewBufferString(`{"augment_session_auth":"{\"accessToken\":\"token_saved\",\"tenantURL\":\"https://tenant.example/\",\"scopes\":[\"email\"]}"}`))
+	if err != nil {
+		t.Fatalf("POST /api/agent-auth/configure error = %v", err)
+	}
+	defer configureResp.Body.Close()
+	if configureResp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /api/agent-auth/configure status = %d, want 200", configureResp.StatusCode)
 	}
 }
 
@@ -477,8 +508,8 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	if !strings.Contains(html, "agentAuthVerifyPending: false") {
 		t.Fatalf("expected auth gate state to track pending verification")
 	}
-	if !strings.Contains(html, "(!hasChallenge || state.agentAuthInteracted) &&") {
-		t.Fatalf("expected Done button visibility to allow non-device auth flows")
+	if !strings.Contains(html, "requiresManualConfigure || (!hasChallenge || state.agentAuthInteracted)") {
+		t.Fatalf("expected Done button visibility to support Auggie configure and existing auth challenge flows")
 	}
 	if !strings.Contains(html, "function setAgentAuthVerifyPending(pending)") {
 		t.Fatalf("expected helper to toggle pending verification state")
@@ -494,5 +525,14 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	}
 	if !strings.Contains(html, "function agentAuthLabel(harness)") {
 		t.Fatalf("expected auth gate labels to be harness-aware")
+	}
+	if !strings.Contains(html, "Auggie Configure") {
+		t.Fatalf("expected auggie configure heading support")
+	}
+	if !strings.Contains(html, "id=\"agent-auth-configure\"") {
+		t.Fatalf("expected auggie configure panel markup")
+	}
+	if !strings.Contains(html, "normalizeAuggieSessionAuthPayload") {
+		t.Fatalf("expected auggie configure JSON schema validator")
 	}
 }

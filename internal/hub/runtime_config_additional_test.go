@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -111,5 +112,88 @@ func TestSaveAndLoadRuntimeConfigUseDefaultResolvedPath(t *testing.T) {
 	}
 	if got.RuntimeConfigPath != envPath {
 		t.Fatalf("RuntimeConfigPath = %q, want %q", got.RuntimeConfigPath, envPath)
+	}
+}
+
+func TestSaveRuntimeConfigAuggieAuthCreatesConfigFromInitWhenMissing(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	sessionAuth := `{"accessToken":"token_saved","tenantURL":"https://tenant.example/","scopes":["email"]}`
+
+	if err := SaveRuntimeConfigAuggieAuth(path, InitConfig{
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		AgentHarness: "auggie",
+	}, sessionAuth); err != nil {
+		t.Fatalf("SaveRuntimeConfigAuggieAuth() error = %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if got["augment_session_auth"] != sessionAuth {
+		t.Fatalf("augment_session_auth = %#v, want %q", got["augment_session_auth"], sessionAuth)
+	}
+	if got["agent_harness"] != "auggie" {
+		t.Fatalf("agent_harness = %#v, want %q", got["agent_harness"], "auggie")
+	}
+}
+
+func TestSaveRuntimeConfigAuggieAuthMergesIntoExistingConfig(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(path, []byte(`{"base_url":"https://na.hub.molten.bot/v1","agent_token":"agent_saved","custom":"preserved"}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	sessionAuth := `{"accessToken":"token_saved","tenantURL":"https://tenant.example/","scopes":["email"]}`
+	if err := SaveRuntimeConfigAuggieAuth(path, InitConfig{}, sessionAuth); err != nil {
+		t.Fatalf("SaveRuntimeConfigAuggieAuth() error = %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if got["augment_session_auth"] != sessionAuth {
+		t.Fatalf("augment_session_auth = %#v, want %q", got["augment_session_auth"], sessionAuth)
+	}
+	if got["custom"] != "preserved" {
+		t.Fatalf("custom = %#v, want %q", got["custom"], "preserved")
+	}
+}
+
+func TestSaveRuntimeConfigAuggieAuthRejectsMalformedConfigJSON(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(path, []byte("{"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	err := SaveRuntimeConfigAuggieAuth(path, InitConfig{}, `{"accessToken":"token_saved","tenantURL":"https://tenant.example/","scopes":["email"]}`)
+	if err == nil {
+		t.Fatal("SaveRuntimeConfigAuggieAuth() error = nil, want non-nil")
+	}
+	if got := err.Error(); got == "" || got == "parse runtime config" {
+		t.Fatalf("error = %q, want parse detail", got)
 	}
 }

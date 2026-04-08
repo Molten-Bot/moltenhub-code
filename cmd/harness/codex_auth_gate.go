@@ -265,6 +265,11 @@ func (g *codexAuthGate) Verify(ctx context.Context) (hubui.AgentAuthState, error
 	return g.snapshotLocked(), nil
 }
 
+func (g *codexAuthGate) Configure(_ context.Context, _ string) (hubui.AgentAuthState, error) {
+	status, _ := g.Status(context.Background())
+	return status, fmt.Errorf("codex auth does not support manual config submission")
+}
+
 func (g *codexAuthGate) readDeviceAuthStream(r io.ReadCloser) {
 	defer r.Close()
 

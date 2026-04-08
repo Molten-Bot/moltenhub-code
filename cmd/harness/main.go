@@ -241,7 +241,7 @@ func runHub(args []string) int {
 	defer stop()
 
 	if runtimeErr == nil {
-		authGate = newAgentAuthGate(ctx, runner, runtimeCfg, daemonLogger)
+		authGate = newAgentAuthGate(ctx, runner, runtimeCfg, cfg, daemonLogger)
 	}
 
 	if ok := runHubBootDiagnostics(ctx, runner, daemonLogger, cfg); !ok {
@@ -469,6 +469,9 @@ func runHub(args []string) int {
 			uiServer.AgentAuthStatus = authGate.Status
 			uiServer.StartAgentAuth = authGate.StartDeviceAuth
 			uiServer.VerifyAgentAuth = authGate.Verify
+			if runtimeCfg.Harness == agentruntime.HarnessAuggie {
+				uiServer.ConfigureAgentAuth = authGate.Configure
+			}
 		}
 		uiServer.SubmitLocalPrompt = func(reqCtx context.Context, body []byte) (string, error) {
 			runCfg, err := hub.ParseRunConfigJSON(body)
