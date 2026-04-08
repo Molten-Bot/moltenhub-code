@@ -55,22 +55,22 @@
         </div>
       </div>
       <div class="status-row flex flex-wrap items-center gap-2.5 text-sm text-hub-muted">
-        <div id="local-conn-item" class="status-item status-item-compact flex min-h-[30px] items-center rounded-full border border-hub-border bg-hub-panel/75" title="Local: Connecting..." aria-label="Local: Connecting..." tabindex="0">
+        <div id="local-conn-item" class="status-item status-item-compact flex h-10 min-h-[40px] items-center rounded-full border border-hub-border bg-hub-panel/75" title="Local: Connecting..." aria-label="Local: Connecting..." tabindex="0">
           <span id="local-conn-dot" class="dot"></span>
           <span id="local-conn-text" class="status-tooltip text-xs leading-tight">Local: Connecting...</span>
         </div>
-        <div id="hub-conn-item" class="status-item status-item-compact flex min-h-[30px] items-center rounded-full border border-hub-border bg-hub-panel/75" title="Molten Hub: Waiting for hub status..." aria-label="Molten Hub: Waiting for hub status..." tabindex="0">
+        <div id="hub-conn-item" class="status-item status-item-compact flex h-10 min-h-[40px] items-center rounded-full border border-hub-border bg-hub-panel/75" title="Molten Hub: Waiting for hub status..." aria-label="Molten Hub: Waiting for hub status..." tabindex="0">
           <span id="hub-conn-dot" class="dot"></span>
           <span id="hub-conn-text" class="status-tooltip text-xs leading-tight">Molten Hub: Waiting for hub status...</span>
         </div>
-        <div class="status-item status-item-metrics flex min-h-[30px] items-center rounded-full border border-hub-border bg-hub-panel/75 px-2.5 py-1">
+        <div class="status-item status-item-metrics flex h-10 min-h-[40px] items-center rounded-full border border-hub-border bg-hub-panel/75 px-3 py-1">
           <span class="metric-chip">
             <span id="resource-cpu-icon" class="metric-icon metric-icon-neutral" aria-hidden="true">
               <svg viewBox="0 0 24 24" focusable="false">
                 <path d="M7 3h2v2h6V3h2v2h2a2 2 0 0 1 2 2v2h-2V7H5v2H3V7a2 2 0 0 1 2-2h2V3Zm12 12h2v2a2 2 0 0 1-2 2h-2v2h-2v-2H9v2H7v-2H5a2 2 0 0 1-2-2v-2h2v2h14v-2Zm-14-3h14V9H5v3Zm5-2h4v2h-4v-2Z"></path>
               </svg>
             </span>
-            <span id="resource-cpu-text" class="status-value metric-value text-xs leading-tight">CPU --</span>
+            <span id="resource-cpu-text" class="status-value metric-value text-sm leading-tight">CPU --</span>
           </span>
           <span class="metric-chip">
             <span id="resource-mem-icon" class="metric-icon metric-icon-neutral" aria-hidden="true">
@@ -78,9 +78,16 @@
                 <path d="M4 7h16a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-1v2h-2v-2H7v2H5v-2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Zm0 2v6h16V9H4Zm2 1h2v4H6v-4Zm4 0h2v4h-2v-4Zm4 0h2v4h-2v-4Zm4 0h2v4h-2v-4Z"></path>
               </svg>
             </span>
-            <span id="resource-mem-text" class="status-value metric-value text-xs leading-tight">MEM --</span>
+            <span id="resource-mem-text" class="status-value metric-value text-sm leading-tight">MEM --</span>
           </span>
-          <span id="resource-metrics-text" class="status-value metric-value text-xs leading-tight">DISK --</span>
+          <span class="metric-chip">
+            <span id="resource-disk-icon" class="metric-icon metric-icon-neutral" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 2v12h14V6H5Zm2 2h10v2H7V8Zm0 4h10v4H7v-4Zm2 1.5v1h2v-1H9Z"></path>
+              </svg>
+            </span>
+            <span id="resource-metrics-text" class="status-value metric-value text-sm leading-tight">DISK --</span>
+          </span>
         </div>
       </div>
     </div>
@@ -384,7 +391,12 @@
     const resourceCPUText = document.getElementById("resource-cpu-text");
     const resourceMemIcon = document.getElementById("resource-mem-icon");
     const resourceMemText = document.getElementById("resource-mem-text");
+    const resourceDiskIcon = document.getElementById("resource-disk-icon");
     const resourceMetricsText = document.getElementById("resource-metrics-text");
+    const compactMetricsMediaQuery = typeof window.matchMedia === "function"
+      ? window.matchMedia("(max-width: 720px)")
+      : null;
+    let latestResourceMetrics = { cpu: NaN, mem: NaN, disk: NaN };
     const taskList = document.getElementById("task-list");
     const taskFullscreenToggle = document.getElementById("task-fullscreen-toggle");
     const taskFullscreen = document.getElementById("task-fullscreen");
@@ -699,6 +711,20 @@
       return `${label} ${value.toFixed(1)}${suffix}`;
     }
 
+    function formatCompactMetricNumber(value, suffix = "") {
+      if (!Number.isFinite(value) || value < 0) {
+        return "--";
+      }
+      if (Math.abs(value) < 10 && Math.abs(value % 1) > 0) {
+        return `${value.toFixed(1)}${suffix}`;
+      }
+      return `${Math.round(value)}${suffix}`;
+    }
+
+    function useCompactMetricLayout() {
+      return !!(compactMetricsMediaQuery && compactMetricsMediaQuery.matches);
+    }
+
     function metricSeverityClass(value) {
       if (!Number.isFinite(value) || value < 0) return "metric-icon-neutral";
       if (value < 65) return "metric-icon-good";
@@ -713,17 +739,37 @@
     }
 
     function setMetricText(cpu, mem, disk) {
+      latestResourceMetrics = { cpu, mem, disk };
+      const compact = useCompactMetricLayout();
       if (resourceCPUText) {
-        resourceCPUText.textContent = formatMetricValue("CPU", cpu, "%");
+        resourceCPUText.textContent = compact
+          ? formatCompactMetricNumber(cpu, "%")
+          : formatMetricValue("CPU", cpu, "%");
       }
       if (resourceMemText) {
-        resourceMemText.textContent = formatMetricValue("MEM", mem, "%");
+        resourceMemText.textContent = compact
+          ? formatCompactMetricNumber(mem, "%")
+          : formatMetricValue("MEM", mem, "%");
       }
       if (resourceMetricsText) {
-        resourceMetricsText.textContent = formatMetricValue("DISK", disk, " MB/s");
+        resourceMetricsText.textContent = compact
+          ? formatCompactMetricNumber(disk)
+          : formatMetricValue("DISK", disk, " MB/s");
       }
       setMetricIcon(resourceCPUIcon, cpu);
       setMetricIcon(resourceMemIcon, mem);
+      setMetricIcon(resourceDiskIcon, NaN);
+    }
+
+    if (compactMetricsMediaQuery) {
+      const rerenderMetrics = () => {
+        setMetricText(latestResourceMetrics.cpu, latestResourceMetrics.mem, latestResourceMetrics.disk);
+      };
+      if (typeof compactMetricsMediaQuery.addEventListener === "function") {
+        compactMetricsMediaQuery.addEventListener("change", rerenderMetrics);
+      } else if (typeof compactMetricsMediaQuery.addListener === "function") {
+        compactMetricsMediaQuery.addListener(rerenderMetrics);
+      }
     }
 
     function renderResourceMetrics(snapshot) {

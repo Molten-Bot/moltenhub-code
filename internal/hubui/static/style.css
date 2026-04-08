@@ -167,17 +167,17 @@ textarea {
   gap: 8px;
   border-radius: 999px;
   padding: 6px 11px;
-  min-height: 34px;
+  min-height: 42px;
 }
 
 .status-item-compact {
   position: relative;
   justify-content: center;
   gap: 0;
-  width: 38px;
-  min-width: 38px;
-  height: 38px;
-  min-height: 38px;
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  min-height: 42px;
   padding: 0;
 }
 
@@ -226,9 +226,12 @@ textarea {
   gap: 12px;
   padding-left: 12px;
   padding-right: 14px;
-  min-height: 38px;
+  min-height: 42px;
+  height: 42px;
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.94), rgba(240, 246, 255, 0.9));
   border-color: rgba(17, 34, 68, 0.1);
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .metric-chip {
@@ -236,6 +239,7 @@ textarea {
   align-items: center;
   gap: 6px;
   min-width: 0;
+  flex: 0 1 auto;
 }
 
 .metric-icon {
@@ -294,6 +298,9 @@ textarea {
 
 .status-item-metrics .status-value {
   color: var(--text-soft);
+  font-size: 0.9rem;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .dot {
@@ -1533,6 +1540,42 @@ body.task-fullscreen-open #task-fullscreen-toggle {
   }
 }
 
+@media (max-width: 720px) {
+  .status-row {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .status-item-metrics {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    gap: 6px;
+    padding-left: 9px;
+    padding-right: 9px;
+  }
+
+  .metric-chip {
+    gap: 4px;
+  }
+
+  .metric-icon {
+    width: 13px;
+    height: 13px;
+  }
+
+  .metric-icon svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .metric-value,
+  .status-item-metrics .status-value {
+    white-space: nowrap;
+    font-size: 0.82rem;
+  }
+}
+
 @media (max-width: 640px) {
   .prompt-actions {
     gap: 6px;
@@ -1567,17 +1610,6 @@ body.task-fullscreen-open #task-fullscreen-toggle {
   .status-item-compact .status-tooltip {
     right: auto;
     left: 0;
-  }
-
-  .status-item-metrics {
-    width: 100%;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  .metric-value,
-  .status-item-metrics .status-value {
-    white-space: normal;
   }
   .prompt-action-paste,
   .prompt-action-button {
