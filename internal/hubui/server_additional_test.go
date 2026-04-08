@@ -542,8 +542,8 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	if !strings.Contains(html, "agentAuthVerifyPending: false") {
 		t.Fatalf("expected auth gate state to track pending verification")
 	}
-	if !strings.Contains(html, "requiresManualConfigure || (!hasChallenge || state.agentAuthInteracted)") {
-		t.Fatalf("expected Done button visibility to support Auggie configure and existing auth challenge flows")
+	if !strings.Contains(html, "requiresManualConfigure || (!hasCodeChallenge || state.agentAuthInteracted)") {
+		t.Fatalf("expected Done button visibility to support URL-only browser auth and code challenge flows")
 	}
 	if !strings.Contains(html, "function setAgentAuthVerifyPending(pending)") {
 		t.Fatalf("expected helper to toggle pending verification state")

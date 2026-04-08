@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jef/moltenhub-code/internal/agentruntime"
 	"github.com/jef/moltenhub-code/internal/hub"
@@ -23,7 +24,7 @@ func TestClaudeAuthGateRequiresGitHubConfigureWhenTokenIsMissing(t *testing.T) {
 	t.Setenv("GH_TOKEN", "")
 	t.Setenv("GITHUB_TOKEN", "")
 
-	g := newClaudeAuthGate("")
+	g := newClaudeAuthGate(context.Background(), "", nil)
 	status, err := g.Status(context.Background())
 	if err != nil {
 		t.Fatalf("Status() error = %v", err)
@@ -55,7 +56,7 @@ func TestClaudeAuthGateRequiresBrowserLoginWhenClaudeCredentialsAreMissing(t *te
 	t.Setenv("CLAUDE_CODE_USE_FOUNDRY", "")
 	t.Setenv("GH_TOKEN", "ghp_ready")
 
-	g := newClaudeAuthGate("")
+	g := newClaudeAuthGate(context.Background(), "", nil)
 	status, err := g.Status(context.Background())
 	if err != nil {
 		t.Fatalf("Status() error = %v", err)
@@ -66,7 +67,7 @@ func TestClaudeAuthGateRequiresBrowserLoginWhenClaudeCredentialsAreMissing(t *te
 	if got, want := status.AuthURL, claudeAuthDocsURL; got != want {
 		t.Fatalf("AuthURL = %q, want %q", got, want)
 	}
-	if !strings.Contains(status.Message, "Run `claude`") {
+	if !strings.Contains(status.Message, "Run `claude login`") {
 		t.Fatalf("message = %q", status.Message)
 	}
 }
@@ -75,7 +76,7 @@ func TestClaudeAuthGateRecognizesEnvironmentCredentials(t *testing.T) {
 	t.Run("api-key", func(t *testing.T) {
 		t.Setenv("GH_TOKEN", "ghp_ready")
 		t.Setenv("ANTHROPIC_API_KEY", "test-key")
-		g := newClaudeAuthGate("")
+		g := newClaudeAuthGate(context.Background(), "", nil)
 		status, err := g.Verify(context.Background())
 		if err != nil {
 			t.Fatalf("Verify() error = %v", err)
@@ -91,7 +92,7 @@ func TestClaudeAuthGateRecognizesEnvironmentCredentials(t *testing.T) {
 	t.Run("auth-token", func(t *testing.T) {
 		t.Setenv("GH_TOKEN", "ghp_ready")
 		t.Setenv("ANTHROPIC_AUTH_TOKEN", "token")
-		g := newClaudeAuthGate("")
+		g := newClaudeAuthGate(context.Background(), "", nil)
 		status, err := g.Verify(context.Background())
 		if err != nil {
 			t.Fatalf("Verify() error = %v", err)
@@ -107,7 +108,7 @@ func TestClaudeAuthGateRecognizesEnvironmentCredentials(t *testing.T) {
 	t.Run("cloud-provider", func(t *testing.T) {
 		t.Setenv("GH_TOKEN", "ghp_ready")
 		t.Setenv("CLAUDE_CODE_USE_BEDROCK", "true")
-		g := newClaudeAuthGate("")
+		g := newClaudeAuthGate(context.Background(), "", nil)
 		status, err := g.Verify(context.Background())
 		if err != nil {
 			t.Fatalf("Verify() error = %v", err)
@@ -133,7 +134,7 @@ func TestClaudeAuthGateRecognizesCredentialFile(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
 	t.Setenv("GH_TOKEN", "ghp_ready")
 
-	g := newClaudeAuthGate("")
+	g := newClaudeAuthGate(context.Background(), "", nil)
 	status, err := g.Status(context.Background())
 	if err != nil {
 		t.Fatalf("Status() error = %v", err)
@@ -180,6 +181,138 @@ func TestClaudeAuthGateConfigurePersistsGitHubTokenAndEnvironment(t *testing.T) 
 	}
 	if got, want := doc["github_token"], "ghp_saved_token"; got != want {
 		t.Fatalf("github_token = %#v, want %q", got, want)
+	}
+}
+
+func TestClaudeAuthGateStartDeviceAuthRunsLoginAndCapturesURL(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("CLAUDE_CODE_USE_BEDROCK", "")
+	t.Setenv("CLAUDE_CODE_USE_VERTEX", "")
+	t.Setenv("CLAUDE_CODE_USE_FOUNDRY", "")
+	t.Setenv("GH_TOKEN", "ghp_ready")
+
+	cmdPath := filepath.Join(t.TempDir(), "claude-login-stub.sh")
+	if err := os.WriteFile(cmdPath, []byte(`#!/bin/sh
+if [ "$1" != "login" ]; then
+  echo "unexpected args: $*" >&2
+  exit 64
+fi
+echo "Select login method:"
+if ! read choice; then
+  echo "read failed" >&2
+  exit 2
+fi
+echo "Open browser:"
+echo "https://claude.ai/login/device?flow=test"
+exit 1
+`), 0o755); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	g := &claudeAuthGate{
+		baseCtx:   context.Background(),
+		command:   cmdPath,
+		required:  true,
+		state:     "needs_browser_login",
+		message:   "auth required",
+		updatedAt: time.Now().UTC(),
+		logf:      func(string, ...any) {},
+	}
+
+	status, err := g.StartDeviceAuth(context.Background())
+	if err != nil {
+		t.Fatalf("StartDeviceAuth() error = %v", err)
+	}
+	if status.State != "pending_browser_login" {
+		t.Fatalf("initial status = %+v", status)
+	}
+
+	waitForCondition(t, 2*time.Second, func() bool {
+		s, _ := g.Status(context.Background())
+		return strings.Contains(s.AuthURL, "https://claude.ai/login/device?flow=test")
+	})
+
+	status, err = g.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if got, want := status.AuthURL, "https://claude.ai/login/device?flow=test"; got != want {
+		t.Fatalf("AuthURL = %q, want %q", got, want)
+	}
+	if status.Ready {
+		t.Fatalf("status = %+v, want not ready", status)
+	}
+	if got, want := status.State, "pending_browser_login"; got != want {
+		t.Fatalf("State = %q, want %q", got, want)
+	}
+}
+
+func TestClaudeAuthGateVerifyStartsLoginWhenNotReady(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("CLAUDE_CODE_USE_BEDROCK", "")
+	t.Setenv("CLAUDE_CODE_USE_VERTEX", "")
+	t.Setenv("CLAUDE_CODE_USE_FOUNDRY", "")
+	t.Setenv("GH_TOKEN", "ghp_ready")
+
+	cmdPath := filepath.Join(t.TempDir(), "claude-login-verify-stub.sh")
+	if err := os.WriteFile(cmdPath, []byte(`#!/bin/sh
+if [ "$1" != "login" ]; then
+  exit 64
+fi
+echo "Choose account:"
+if ! read choice; then
+  exit 3
+fi
+echo "Continue at https://claude.ai/login/verify-flow"
+sleep 0.1
+exit 1
+`), 0o755); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	g := newClaudeAuthGate(context.Background(), cmdPath, nil)
+	status, err := g.Verify(context.Background())
+	if err != nil {
+		t.Fatalf("Verify() error = %v", err)
+	}
+	if status.State != "pending_browser_login" {
+		t.Fatalf("Verify() status = %+v, want pending_browser_login", status)
+	}
+
+	waitForCondition(t, 2*time.Second, func() bool {
+		s, _ := g.Status(context.Background())
+		return strings.Contains(s.AuthURL, "https://claude.ai/login/verify-flow")
+	})
+}
+
+func TestClaudeAuthHelpers(t *testing.T) {
+	t.Parallel()
+
+	if got, want := extractClaudeAuthURL("Use https://claude.ai/login/device?x=y); now"), "https://claude.ai/login/device?x=y"; got != want {
+		t.Fatalf("extractClaudeAuthURL() = %q, want %q", got, want)
+	}
+	if got := extractClaudeAuthURL("no url here"); got != "" {
+		t.Fatalf("extractClaudeAuthURL(no-url) = %q, want empty", got)
+	}
+
+	for _, line := range []string{
+		"Select login method:",
+		"Choose account",
+		"Press Enter to continue",
+		"Which option would you like?",
+	} {
+		if !shouldAdvanceClaudeLoginPrompt(line) {
+			t.Fatalf("shouldAdvanceClaudeLoginPrompt(%q) = false, want true", line)
+		}
+	}
+	if shouldAdvanceClaudeLoginPrompt("Login URL: https://claude.ai/login") {
+		t.Fatalf("shouldAdvanceClaudeLoginPrompt(url line) = true, want false")
 	}
 }
 

@@ -891,10 +891,10 @@
     function updateAgentAuthDoneVisibility() {
       if (!agentAuthVerify) return;
       const requiresManualConfigure = isManualConfigureState();
-      const hasChallenge = Boolean(state.agentAuth.authURL || state.agentAuth.deviceCode);
+      const hasCodeChallenge = Boolean(state.agentAuth.authURL || state.agentAuth.deviceCode);
       const visible = state.agentAuth.required &&
         !state.agentAuth.ready &&
-        (requiresManualConfigure || (!hasChallenge || state.agentAuthInteracted)) &&
+        (requiresManualConfigure || (!hasCodeChallenge || state.agentAuthInteracted)) &&
         !state.agentAuthVerifyPending;
       agentAuthVerify.classList.toggle("hidden", !visible);
     }

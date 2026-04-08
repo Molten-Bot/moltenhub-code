@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -19,51 +23,252 @@ const claudeAuthDocsURL = "https://code.claude.com/docs/en/authentication"
 const claudeGitHubConfigureCommand = "gh auth token"
 const claudeGitHubConfigurePlaceholder = "ghp_xxx"
 
+var claudeAuthURLPattern = regexp.MustCompile(`https?://[^\s"'<>()]+`)
+
 type claudeAuthGate struct {
 	mu sync.Mutex
+
+	baseCtx context.Context
+	logf    func(string, ...any)
 
 	command           string
 	runtimeConfigPath string
 	initCfg           hub.InitConfig
+
+	required bool
+	ready    bool
+	state    string
+	message  string
+
+	authURL   string
+	updatedAt time.Time
+
+	procRunning       bool
+	procCancel        context.CancelFunc
+	procInput         io.WriteCloser
+	lastPromptAdvance time.Time
 }
 
-func newClaudeAuthGate(command string) *claudeAuthGate {
-	return newClaudeAuthGateWithConfig(command, "", hub.InitConfig{})
+func newClaudeAuthGate(ctx context.Context, command string, logf func(string, ...any)) *claudeAuthGate {
+	return newClaudeAuthGateWithContextAndConfig(ctx, command, "", hub.InitConfig{}, logf)
 }
 
 func newClaudeAuthGateWithConfig(command, runtimeConfigPath string, initCfg hub.InitConfig) *claudeAuthGate {
+	return newClaudeAuthGateWithContextAndConfig(context.Background(), command, runtimeConfigPath, initCfg, nil)
+}
+
+func newClaudeAuthGateWithContextAndConfig(
+	ctx context.Context,
+	command, runtimeConfigPath string,
+	initCfg hub.InitConfig,
+	logf func(string, ...any),
+) *claudeAuthGate {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if logf == nil {
+		logf = func(string, ...any) {}
+	}
+
 	command = strings.TrimSpace(command)
 	if command == "" {
 		command = agentruntime.HarnessClaude
 	}
-	return &claudeAuthGate{
+
+	g := &claudeAuthGate{
+		baseCtx:           ctx,
+		logf:              logf,
 		command:           command,
 		runtimeConfigPath: strings.TrimSpace(runtimeConfigPath),
 		initCfg:           initCfg,
+		required:          true,
+		state:             "needs_browser_login",
+		message:           "Claude Code login is required. Run `claude login`, complete browser sign-in, then click Done.",
+		updatedAt:         time.Now().UTC(),
 	}
+
+	status, _ := g.Status(context.Background())
+	g.mu.Lock()
+	g.required = status.Required
+	g.ready = status.Ready
+	g.state = strings.TrimSpace(status.State)
+	g.message = strings.TrimSpace(status.Message)
+	g.authURL = strings.TrimSpace(status.AuthURL)
+	g.updatedAt = time.Now().UTC()
+	g.mu.Unlock()
+
+	return g
 }
 
 func (g *claudeAuthGate) Status(_ context.Context) (hubui.AgentAuthState, error) {
-	return g.currentState(), nil
+	if g == nil {
+		return hubui.AgentAuthState{
+			Required: false,
+			Ready:    true,
+			State:    "ready",
+			Message:  "Agent auth is ready.",
+		}, nil
+	}
+
+	if blocked, state := g.githubTokenRequirementState(); blocked {
+		return state, nil
+	}
+
+	g.mu.Lock()
+	if !g.procRunning {
+		ready, probeMessage := g.probeClaude()
+		if ready {
+			g.ready = true
+			g.state = "ready"
+			g.message = "Claude Code and GitHub token are ready."
+			g.authURL = ""
+		} else {
+			g.ready = false
+			if g.state != "pending_browser_login" && g.state != "error" {
+				g.state = "needs_browser_login"
+			}
+			if g.state == "needs_browser_login" || strings.TrimSpace(g.message) == "" {
+				g.message = firstNonEmptyString(
+					probeMessage,
+					"Claude Code login is required. Run `claude login`, complete browser sign-in, then click Done.",
+				)
+			}
+			if strings.TrimSpace(g.authURL) == "" {
+				g.authURL = claudeAuthDocsURL
+			}
+		}
+		g.updatedAt = time.Now().UTC()
+	}
+	state := g.snapshotLocked()
+	g.mu.Unlock()
+
+	return state, nil
 }
 
 func (g *claudeAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthState, error) {
-	return g.currentState(), nil
+	if g == nil {
+		return hubui.AgentAuthState{
+			Required: false,
+			Ready:    true,
+			State:    "ready",
+			Message:  "Agent auth is ready.",
+		}, nil
+	}
+
+	status, _ := g.Status(context.Background())
+	if status.Ready {
+		return status, nil
+	}
+	if status.State == "needs_configure" {
+		return status, fmt.Errorf("github token is required")
+	}
+
+	g.mu.Lock()
+	if g.procRunning {
+		g.state = "pending_browser_login"
+		g.message = "Waiting for Claude browser sign-in. Complete auth, then click Done."
+		g.updatedAt = time.Now().UTC()
+		snap := g.snapshotLocked()
+		g.mu.Unlock()
+		return snap, nil
+	}
+	baseCtx := g.baseCtx
+	command := g.command
+	g.mu.Unlock()
+
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+
+	tmpDir, err := os.MkdirTemp("", "moltenhub-claude-auth-*")
+	if err != nil {
+		snap, _ := g.Status(context.Background())
+		return snap, fmt.Errorf("create claude login temp dir: %w", err)
+	}
+
+	procCtx, cancel := context.WithCancel(baseCtx)
+	cmd := exec.CommandContext(procCtx, command, "login")
+	cmd.Dir = tmpDir
+
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		_ = os.RemoveAll(tmpDir)
+		cancel()
+		snap, _ := g.Status(context.Background())
+		return snap, fmt.Errorf("open claude login stdout: %w", err)
+	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		_ = os.RemoveAll(tmpDir)
+		cancel()
+		snap, _ := g.Status(context.Background())
+		return snap, fmt.Errorf("open claude login stderr: %w", err)
+	}
+	stdinPipe, err := cmd.StdinPipe()
+	if err != nil {
+		_ = os.RemoveAll(tmpDir)
+		cancel()
+		snap, _ := g.Status(context.Background())
+		return snap, fmt.Errorf("open claude login stdin: %w", err)
+	}
+	if err := cmd.Start(); err != nil {
+		_ = os.RemoveAll(tmpDir)
+		cancel()
+		_ = stdinPipe.Close()
+		g.mu.Lock()
+		g.ready = false
+		g.state = "error"
+		g.message = fmt.Sprintf("start claude login: %v", err)
+		g.updatedAt = time.Now().UTC()
+		snap := g.snapshotLocked()
+		g.mu.Unlock()
+		return snap, err
+	}
+
+	g.mu.Lock()
+	g.required = true
+	g.ready = false
+	g.procRunning = true
+	g.procCancel = cancel
+	g.procInput = stdinPipe
+	g.state = "pending_browser_login"
+	g.message = "Starting Claude login. Follow prompts, complete browser sign-in, then click Done."
+	g.updatedAt = time.Now().UTC()
+	snap := g.snapshotLocked()
+	g.mu.Unlock()
+
+	go g.readLoginStream(stdoutPipe)
+	go g.readLoginStream(stderrPipe)
+	go g.waitLogin(cmd, tmpDir)
+
+	return snap, nil
 }
 
-func (g *claudeAuthGate) Verify(_ context.Context) (hubui.AgentAuthState, error) {
-	return g.currentState(), nil
+func (g *claudeAuthGate) Verify(ctx context.Context) (hubui.AgentAuthState, error) {
+	if g == nil {
+		return hubui.AgentAuthState{
+			Required: false,
+			Ready:    true,
+			State:    "ready",
+			Message:  "Agent auth is ready.",
+		}, nil
+	}
+
+	status, _ := g.Status(context.Background())
+	if status.Ready {
+		return status, nil
+	}
+	if status.State == "needs_configure" || status.State == "pending_browser_login" {
+		return status, nil
+	}
+
+	return g.StartDeviceAuth(ctx)
 }
 
 func (g *claudeAuthGate) Configure(_ context.Context, rawInput string) (hubui.AgentAuthState, error) {
 	token := strings.TrimSpace(rawInput)
 	if token == "" {
-		state := g.currentState()
-		state.Ready = false
-		state.State = "needs_configure"
-		state.Message = "GitHub token is required. Paste a GitHub token below, then click Done."
-		state.ConfigureCommand = claudeGitHubConfigureCommand
-		state.ConfigurePlaceholder = claudeGitHubConfigurePlaceholder
+		state := g.needsGitHubTokenState("GitHub token is required. Paste a GitHub token below, then click Done.")
 		return state, fmt.Errorf("github token is required")
 	}
 
@@ -73,21 +278,11 @@ func (g *claudeAuthGate) Configure(_ context.Context, rawInput string) (hubui.Ag
 	g.mu.Unlock()
 
 	if err := hub.SaveRuntimeConfigGitHubToken(runtimeConfigPath, initCfg, token); err != nil {
-		state := g.currentState()
-		state.Ready = false
-		state.State = "needs_configure"
-		state.Message = fmt.Sprintf("save github token: %v", err)
-		state.ConfigureCommand = claudeGitHubConfigureCommand
-		state.ConfigurePlaceholder = claudeGitHubConfigurePlaceholder
+		state := g.needsGitHubTokenState(fmt.Sprintf("save github token: %v", err))
 		return state, err
 	}
 	if err := setGitHubTokenEnvironment(token); err != nil {
-		state := g.currentState()
-		state.Ready = false
-		state.State = "needs_configure"
-		state.Message = fmt.Sprintf("set github token env: %v", err)
-		state.ConfigureCommand = claudeGitHubConfigureCommand
-		state.ConfigurePlaceholder = claudeGitHubConfigurePlaceholder
+		state := g.needsGitHubTokenState(fmt.Sprintf("set github token env: %v", err))
 		return state, err
 	}
 
@@ -95,63 +290,70 @@ func (g *claudeAuthGate) Configure(_ context.Context, rawInput string) (hubui.Ag
 	g.initCfg.GitHubToken = token
 	g.mu.Unlock()
 
-	return g.currentState(), nil
+	state, _ := g.Status(context.Background())
+	return state, nil
 }
 
-func (g *claudeAuthGate) currentState() hubui.AgentAuthState {
+func (g *claudeAuthGate) snapshotLocked() hubui.AgentAuthState {
+	state := strings.TrimSpace(g.state)
+	if state == "" {
+		if g.ready {
+			state = "ready"
+		} else {
+			state = "needs_browser_login"
+		}
+	}
+	authURL := strings.TrimSpace(g.authURL)
+	if authURL == "" && !g.ready && state != "needs_configure" {
+		authURL = claudeAuthDocsURL
+	}
+	required := g.required
+	if !required {
+		required = true
+	}
+	return hubui.AgentAuthState{
+		Harness:   agentruntime.HarnessClaude,
+		Required:  required,
+		Ready:     g.ready,
+		State:     state,
+		Message:   strings.TrimSpace(g.message),
+		AuthURL:   authURL,
+		UpdatedAt: g.updatedAt.UTC().Format(time.RFC3339Nano),
+	}
+}
+
+func (g *claudeAuthGate) needsGitHubTokenState(message string) hubui.AgentAuthState {
+	message = firstNonEmptyString(
+		message,
+		"GitHub token is required. Set GITHUB_TOKEN/GH_TOKEN or paste a token below, then click Done.",
+	)
+	return hubui.AgentAuthState{
+		Harness:              agentruntime.HarnessClaude,
+		Required:             true,
+		Ready:                false,
+		State:                "needs_configure",
+		Message:              message,
+		ConfigureCommand:     claudeGitHubConfigureCommand,
+		ConfigurePlaceholder: claudeGitHubConfigurePlaceholder,
+		UpdatedAt:            time.Now().UTC().Format(time.RFC3339Nano),
+	}
+}
+
+func (g *claudeAuthGate) githubTokenRequirementState() (bool, hubui.AgentAuthState) {
 	g.mu.Lock()
 	runtimeConfigPath := g.runtimeConfigPath
 	initCfg := g.initCfg
 	g.mu.Unlock()
 
 	githubToken, _ := firstConfiguredGitHubToken(runtimeConfigPath, initCfg)
-	if githubToken != "" {
-		if err := setGitHubTokenEnvironment(githubToken); err != nil {
-			return hubui.AgentAuthState{
-				Harness:   agentruntime.HarnessClaude,
-				Required:  true,
-				Ready:     false,
-				State:     "needs_configure",
-				Message:   fmt.Sprintf("set github token env: %v", err),
-				UpdatedAt: time.Now().UTC().Format(time.RFC3339Nano),
-			}
-		}
-	}
-
-	claudeReady, claudeMessage := g.probeClaude()
 	if strings.TrimSpace(githubToken) == "" {
-		return hubui.AgentAuthState{
-			Harness:              agentruntime.HarnessClaude,
-			Required:             true,
-			Ready:                false,
-			State:                "needs_configure",
-			Message:              "GitHub token is required. Set GITHUB_TOKEN/GH_TOKEN or paste a token below, then click Done.",
-			ConfigureCommand:     claudeGitHubConfigureCommand,
-			ConfigurePlaceholder: claudeGitHubConfigurePlaceholder,
-			UpdatedAt:            time.Now().UTC().Format(time.RFC3339Nano),
-		}
+		return true, g.needsGitHubTokenState("")
+	}
+	if err := setGitHubTokenEnvironment(githubToken); err != nil {
+		return true, g.needsGitHubTokenState(fmt.Sprintf("set github token env: %v", err))
 	}
 
-	if !claudeReady {
-		return hubui.AgentAuthState{
-			Harness:   agentruntime.HarnessClaude,
-			Required:  true,
-			Ready:     false,
-			State:     "needs_browser_login",
-			Message:   claudeMessage,
-			AuthURL:   claudeAuthDocsURL,
-			UpdatedAt: time.Now().UTC().Format(time.RFC3339Nano),
-		}
-	}
-
-	return hubui.AgentAuthState{
-		Harness:   agentruntime.HarnessClaude,
-		Required:  true,
-		Ready:     true,
-		State:     "ready",
-		Message:   "Claude Code and GitHub token are ready.",
-		UpdatedAt: time.Now().UTC().Format(time.RFC3339Nano),
-	}
+	return false, hubui.AgentAuthState{}
 }
 
 func (g *claudeAuthGate) probeClaude() (bool, string) {
@@ -168,7 +370,146 @@ func (g *claudeAuthGate) probeClaude() (bool, string) {
 		return true, fmt.Sprintf("Claude Code credentials were found at %s.", path)
 	}
 
-	return false, "Claude Code login is required. Run `claude`, complete the browser sign-in, then click Done."
+	return false, "Claude Code login is required. Run `claude login`, complete browser sign-in, then click Done."
+}
+
+func (g *claudeAuthGate) readLoginStream(r io.ReadCloser) {
+	defer r.Close()
+
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		g.ingestLoginLine(scanner.Text())
+	}
+}
+
+func (g *claudeAuthGate) ingestLoginLine(line string) {
+	if g == nil {
+		return
+	}
+
+	line = strings.TrimSpace(stripANSI(line))
+	if line == "" {
+		return
+	}
+
+	authURL := extractClaudeAuthURL(line)
+	promptAdvance := shouldAdvanceClaudeLoginPrompt(line)
+
+	var input io.WriteCloser
+	var update bool
+
+	g.mu.Lock()
+	if authURL != "" {
+		g.authURL = authURL
+		if !g.ready {
+			g.state = "pending_browser_login"
+			g.message = "Open the Claude login URL, complete sign-in, then click Done."
+		}
+		update = true
+	}
+	if promptAdvance && g.procRunning && g.procInput != nil {
+		now := time.Now().UTC()
+		if now.Sub(g.lastPromptAdvance) >= 250*time.Millisecond {
+			g.lastPromptAdvance = now
+			input = g.procInput
+			update = true
+		}
+	}
+	if update {
+		g.updatedAt = time.Now().UTC()
+	}
+	g.mu.Unlock()
+
+	if input != nil {
+		if _, err := io.WriteString(input, "\n"); err != nil {
+			g.logf("hub.auth status=warn harness=claude action=advance_login_prompt err=%q", err)
+		}
+	}
+}
+
+func (g *claudeAuthGate) waitLogin(cmd *exec.Cmd, tempDir string) {
+	err := cmd.Wait()
+	_ = os.RemoveAll(strings.TrimSpace(tempDir))
+
+	g.mu.Lock()
+	procInput := g.procInput
+	g.procRunning = false
+	g.procCancel = nil
+	g.procInput = nil
+	if procInput != nil {
+		_ = procInput.Close()
+	}
+
+	if g.ready {
+		g.mu.Unlock()
+		return
+	}
+	if g.baseCtx != nil && g.baseCtx.Err() != nil {
+		g.mu.Unlock()
+		return
+	}
+
+	if err == nil {
+		ready, probeMessage := g.probeClaude()
+		if ready {
+			g.ready = true
+			g.state = "ready"
+			g.message = "Claude Code and GitHub token are ready."
+			g.authURL = ""
+		} else {
+			g.ready = false
+			g.state = "needs_browser_login"
+			g.message = firstNonEmptyString(
+				probeMessage,
+				"Claude login process ended before authorization was detected. Click Done to retry.",
+			)
+		}
+		g.updatedAt = time.Now().UTC()
+		g.mu.Unlock()
+		return
+	}
+
+	g.ready = false
+	if strings.TrimSpace(g.authURL) == "" {
+		g.state = "needs_browser_login"
+		g.message = "Claude login did not provide a browser URL. Click Done to retry."
+	} else {
+		g.state = "pending_browser_login"
+		g.message = "Complete Claude browser sign-in, then click Done."
+	}
+	g.updatedAt = time.Now().UTC()
+	g.mu.Unlock()
+}
+
+func extractClaudeAuthURL(line string) string {
+	match := claudeAuthURLPattern.FindString(strings.TrimSpace(stripANSI(line)))
+	if strings.TrimSpace(match) == "" {
+		return ""
+	}
+	return strings.TrimRight(strings.TrimSpace(match), ".,);]}>")
+}
+
+func shouldAdvanceClaudeLoginPrompt(line string) bool {
+	text := strings.ToLower(strings.TrimSpace(stripANSI(line)))
+	if text == "" {
+		return false
+	}
+
+	for _, marker := range []string{
+		"select",
+		"choose",
+		"press enter",
+		"enter to continue",
+		"which account",
+		"which option",
+		"pick an option",
+	} {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func firstConfiguredGitHubToken(runtimeConfigPath string, initCfg hub.InitConfig) (value string, source string) {
