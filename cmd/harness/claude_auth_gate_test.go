@@ -499,8 +499,8 @@ exit 1
 	if got, want := status.State, "pending_browser_login"; got != want {
 		t.Fatalf("Configure() state = %q, want %q", got, want)
 	}
-	if strings.Contains(strings.ToLower(status.Message), "click done") {
-		t.Fatalf("Configure() message = %q, want no manual Done instruction after code submission", status.Message)
+	if !strings.Contains(strings.ToLower(status.Message), "credentials.json") {
+		t.Fatalf("Configure() message = %q, want fallback credentials hint", status.Message)
 	}
 
 	waitForCondition(t, 5*time.Second, func() bool {
