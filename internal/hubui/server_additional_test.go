@@ -456,8 +456,8 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	if !strings.Contains(html, "agentAuthVerifyPending: false") {
 		t.Fatalf("expected auth gate state to track pending verification")
 	}
-	if !strings.Contains(html, "!state.agentAuthVerifyPending;") {
-		t.Fatalf("expected Done button visibility to depend on pending verification state")
+	if !strings.Contains(html, "(!hasChallenge || state.agentAuthInteracted) &&") {
+		t.Fatalf("expected Done button visibility to allow non-device auth flows")
 	}
 	if !strings.Contains(html, "function setAgentAuthVerifyPending(pending)") {
 		t.Fatalf("expected helper to toggle pending verification state")
@@ -467,5 +467,11 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	}
 	if !strings.Contains(html, "setAgentAuthVerifyPending(false);") {
 		t.Fatalf("expected verify action to restore Done button after failed verification")
+	}
+	if !strings.Contains(html, "Authorize Agent to get started") {
+		t.Fatalf("expected generic auth gate heading")
+	}
+	if !strings.Contains(html, "function agentAuthLabel(harness)") {
+		t.Fatalf("expected auth gate labels to be harness-aware")
 	}
 }
