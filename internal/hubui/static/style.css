@@ -436,21 +436,13 @@ textarea {
 
 body .right-col {
   display: grid;
-  grid-template-rows: minmax(240px, 0.72fr) minmax(280px, 1fr) auto;
+  grid-template-rows: minmax(240px, 0.72fr) minmax(340px, 1fr);
   gap: 16px;
   align-content: stretch;
 }
 
 body .right-col.prompt-collapsed {
-  grid-template-rows: minmax(240px, 0.72fr) minmax(280px, 1fr) 84px;
-}
-
-body .right-col.task-output-hidden {
-  grid-template-rows: minmax(340px, 1fr) auto;
-}
-
-body .right-col.prompt-collapsed.task-output-hidden {
-  grid-template-rows: minmax(340px, 1fr) 84px;
+  grid-template-rows: minmax(240px, 0.72fr) minmax(340px, 1fr);
 }
 
 body .right-col.task-list-hidden {
@@ -602,10 +594,6 @@ body .right-col.prompt-collapsed.task-list-hidden {
 
 #task-panel {
   order: 1;
-}
-
-#task-output-panel {
-  order: 2;
 }
 
 .prompt-grid {
@@ -1455,18 +1443,24 @@ select.prompt-control {
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(320px, 38%) minmax(0, 1fr);
-  gap: 16px;
-  padding: 0;
-}
-
-.task-fullscreen-body.task-output-hidden {
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 16px;
+  padding: 20px;
 }
 
 .task-fullscreen-panel {
   min-height: 0;
   height: 100%;
+}
+
+.task-fullscreen-task-panel .scroll {
+  max-height: min(40vh, 320px);
+}
+
+.task-fullscreen-output-panel {
+  min-height: 0;
+  overflow: hidden;
 }
 
 .prompt-visibility-toggle {
@@ -1558,14 +1552,6 @@ select.prompt-control {
     grid-template-rows: minmax(220px, 0.7fr) minmax(240px, 1fr) 76px;
   }
 
-  body .right-col.task-output-hidden {
-    grid-template-rows: minmax(240px, 1fr) auto;
-  }
-
-  body .right-col.prompt-collapsed.task-output-hidden {
-    grid-template-rows: minmax(240px, 1fr) 76px;
-  }
-
   body .right-col.task-list-hidden {
     grid-template-rows: auto;
   }
@@ -1576,11 +1562,8 @@ select.prompt-control {
 
   .task-fullscreen-body {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(220px, 42%) minmax(260px, 1fr);
-  }
-
-  .task-fullscreen-body.task-output-hidden {
-    grid-template-rows: minmax(220px, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    padding: 16px;
   }
 
   .prompt-grid {

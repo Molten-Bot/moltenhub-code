@@ -202,11 +202,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function formatTaskBranch(") {
 		t.Fatalf("expected index html to include branch formatter for task metadata")
 	}
-	if !strings.Contains(markup, "function toggleTaskOutput(") {
-		t.Fatalf("expected index html to include task output toggle handler")
+	if !strings.Contains(markup, "function openTaskOutput(") {
+		t.Fatalf("expected index html to include focused task output opener")
 	}
-	if !strings.Contains(markup, "function toggleTerminalOutput(") {
-		t.Fatalf("expected index html to include terminal output toggle handler")
+	if strings.Contains(markup, "function toggleTaskOutput(") {
+		t.Fatalf("expected index html to remove inline task output toggle handler")
+	}
+	if strings.Contains(markup, "function toggleTerminalOutput(") {
+		t.Fatalf("expected index html to remove terminal output toggle handler")
 	}
 	if !strings.Contains(markup, "function setTaskFullscreen(") {
 		t.Fatalf("expected index html to include full screen task toggle handler")
@@ -232,14 +235,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `"task-collapsed"`) {
 		t.Fatalf("expected index html to include collapsed task class usage")
 	}
-	if !strings.Contains(markup, `id="task-terminal-toggle"`) {
-		t.Fatalf("expected index html to include terminal output open/close button")
+	if strings.Contains(markup, `id="task-terminal-toggle"`) {
+		t.Fatalf("expected index html to remove the standard output panel toggle")
 	}
-	if !strings.Contains(markup, `id="task-output-panel"`) {
-		t.Fatalf("expected index html to include standard output panel wrapper")
-	}
-	if !strings.Contains(markup, `id="task-output-panel" class="panel log-wrap hidden`) {
-		t.Fatalf("expected index html to keep standard output panel hidden by default")
+	if strings.Contains(markup, `id="task-output-panel"`) {
+		t.Fatalf("expected index html to remove the standard output panel wrapper")
 	}
 	if !strings.Contains(markup, `id="task-fullscreen-toggle"`) {
 		t.Fatalf("expected index html to include tasks full screen toggle")
@@ -298,8 +298,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function sortTasksByActivity(") {
 		t.Fatalf("expected index html to include activity-based task sorting for list rendering")
 	}
-	if !strings.Contains(markup, "taskFullscreenBody.classList.toggle(\"task-output-hidden\", !outputVisible);") {
-		t.Fatalf("expected index html to include full screen task-only mode when output is hidden")
+	if strings.Contains(markup, "taskFullscreenBody.classList.toggle(\"task-output-hidden\", !outputVisible);") {
+		t.Fatalf("expected index html to remove full screen output visibility toggling")
 	}
 	if !strings.Contains(markup, "const taskFullscreenClose = document.getElementById(\"task-fullscreen-close\");") {
 		t.Fatalf("expected index html to cache the dedicated full screen close control")
@@ -310,11 +310,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "taskFullscreenClose.addEventListener(\"click\", () => {") {
 		t.Fatalf("expected index html to bind the dedicated full screen close control")
 	}
-	if !strings.Contains(markup, "function setTaskOutputPanelVisibility(") {
-		t.Fatalf("expected index html to include standard output panel visibility handler")
+	if strings.Contains(markup, "function setTaskOutputPanelVisibility(") {
+		t.Fatalf("expected index html to remove standard output panel visibility handler")
 	}
-	if !strings.Contains(markup, "rightCol.classList.toggle(\"task-output-hidden\", !outputVisible);") {
-		t.Fatalf("expected index html to collapse the standard layout when output is hidden")
+	if strings.Contains(markup, "rightCol.classList.toggle(\"task-output-hidden\", !outputVisible);") {
+		t.Fatalf("expected index html to remove standard layout output hiding")
 	}
 	if !strings.Contains(markup, "rightCol.classList.toggle(\"task-list-hidden\", !hasTasks);") {
 		t.Fatalf("expected index html to collapse the standard layout when there are no tasks")
@@ -322,11 +322,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "taskPanel.classList.toggle(\"hidden\", !hasTasks);") {
 		t.Fatalf("expected index html to hide the task panel when there are no tasks")
 	}
-	if !strings.Contains(markup, "setTerminalOutputOpen(task.request_id, nextOpen);") {
-		t.Fatalf("expected index html to open full terminal output from task Open Output action")
+	if !strings.Contains(markup, "openTaskOutput(task.request_id);") {
+		t.Fatalf("expected index html to open focused full screen output from the task action")
 	}
-	if strings.Contains(markup, "Output hidden. Use Open Output to preview.") {
-		t.Fatalf("expected index html to remove collapsed task output placeholder copy")
+	if strings.Contains(markup, "Output hidden. Click Open Output to view terminal logs.") {
+		t.Fatalf("expected index html to remove hidden-output placeholder copy")
 	}
 	if strings.Contains(markup, "stage.textContent = `stage:") {
 		t.Fatalf("expected index html to remove stage metadata line from task cards")
@@ -756,11 +756,17 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task-fullscreen-shell {\n  position: relative;") || !strings.Contains(css, "width: 100%;") {
 		t.Fatalf("expected stylesheet to make full screen task shell span viewport width")
 	}
-	if !strings.Contains(css, ".task-fullscreen-body.task-output-hidden") {
-		t.Fatalf("expected stylesheet to include full screen hidden-output task layout styles")
+	if strings.Contains(css, ".task-fullscreen-body.task-output-hidden") {
+		t.Fatalf("expected stylesheet to remove full screen hidden-output task layout styles")
 	}
-	if !strings.Contains(css, ".right-col.task-output-hidden") {
-		t.Fatalf("expected stylesheet to include standard hidden-output task layout styles")
+	if strings.Contains(css, ".right-col.task-output-hidden") {
+		t.Fatalf("expected stylesheet to remove standard hidden-output task layout styles")
+	}
+	if !strings.Contains(css, ".task-fullscreen-task-panel .scroll") {
+		t.Fatalf("expected stylesheet to cap focused task metadata height in full screen view")
+	}
+	if !strings.Contains(css, ".task-fullscreen-output-panel") {
+		t.Fatalf("expected stylesheet to include focused full screen output panel styles")
 	}
 	if !strings.Contains(css, ".task.task-collapsed") {
 		t.Fatalf("expected stylesheet to include collapsed task styles")
