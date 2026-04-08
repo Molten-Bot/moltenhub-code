@@ -22,6 +22,7 @@ import (
 const claudeAuthDocsURL = "https://code.claude.com/docs/en/authentication"
 const claudeGitHubConfigureCommand = "gh auth token"
 const claudeGitHubConfigurePlaceholder = "ghp_xxx"
+const claudeLoginCommand = "claude auth login"
 
 var claudeAuthURLPattern = regexp.MustCompile(`https?://[^\s"'<>()]+`)
 
@@ -83,7 +84,7 @@ func newClaudeAuthGateWithContextAndConfig(
 		initCfg:           initCfg,
 		required:          true,
 		state:             "needs_browser_login",
-		message:           "Claude Code login is required. Run `claude login`, complete browser sign-in, then click Done.",
+		message:           "Claude Code login is required. Run `claude auth login`, complete browser sign-in, then click Done.",
 		updatedAt:         time.Now().UTC(),
 	}
 
@@ -130,7 +131,7 @@ func (g *claudeAuthGate) Status(_ context.Context) (hubui.AgentAuthState, error)
 			if g.state == "needs_browser_login" || strings.TrimSpace(g.message) == "" {
 				g.message = firstNonEmptyString(
 					probeMessage,
-					"Claude Code login is required. Run `claude login`, complete browser sign-in, then click Done.",
+					"Claude Code login is required. Run `claude auth login`, complete browser sign-in, then click Done.",
 				)
 			}
 			if strings.TrimSpace(g.authURL) == "" {
@@ -183,11 +184,11 @@ func (g *claudeAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthStat
 	tmpDir, err := os.MkdirTemp("", "moltenhub-claude-auth-*")
 	if err != nil {
 		snap, _ := g.Status(context.Background())
-		return snap, fmt.Errorf("create claude login temp dir: %w", err)
+		return snap, fmt.Errorf("create %s temp dir: %w", claudeLoginCommand, err)
 	}
 
 	procCtx, cancel := context.WithCancel(baseCtx)
-	cmd := exec.CommandContext(procCtx, command, "login")
+	cmd := exec.CommandContext(procCtx, command, "auth", "login")
 	cmd.Dir = tmpDir
 
 	stdoutPipe, err := cmd.StdoutPipe()
@@ -195,21 +196,21 @@ func (g *claudeAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthStat
 		_ = os.RemoveAll(tmpDir)
 		cancel()
 		snap, _ := g.Status(context.Background())
-		return snap, fmt.Errorf("open claude login stdout: %w", err)
+		return snap, fmt.Errorf("open %s stdout: %w", claudeLoginCommand, err)
 	}
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)
 		cancel()
 		snap, _ := g.Status(context.Background())
-		return snap, fmt.Errorf("open claude login stderr: %w", err)
+		return snap, fmt.Errorf("open %s stderr: %w", claudeLoginCommand, err)
 	}
 	stdinPipe, err := cmd.StdinPipe()
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)
 		cancel()
 		snap, _ := g.Status(context.Background())
-		return snap, fmt.Errorf("open claude login stdin: %w", err)
+		return snap, fmt.Errorf("open %s stdin: %w", claudeLoginCommand, err)
 	}
 	if err := cmd.Start(); err != nil {
 		_ = os.RemoveAll(tmpDir)
@@ -218,7 +219,7 @@ func (g *claudeAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthStat
 		g.mu.Lock()
 		g.ready = false
 		g.state = "error"
-		g.message = fmt.Sprintf("start claude login: %v", err)
+		g.message = fmt.Sprintf("start %s: %v", claudeLoginCommand, err)
 		g.updatedAt = time.Now().UTC()
 		snap := g.snapshotLocked()
 		g.mu.Unlock()
@@ -370,7 +371,7 @@ func (g *claudeAuthGate) probeClaude() (bool, string) {
 		return true, fmt.Sprintf("Claude Code credentials were found at %s.", path)
 	}
 
-	return false, "Claude Code login is required. Run `claude login`, complete browser sign-in, then click Done."
+	return false, "Claude Code login is required. Run `claude auth login`, complete browser sign-in, then click Done."
 }
 
 func (g *claudeAuthGate) readLoginStream(r io.ReadCloser) {

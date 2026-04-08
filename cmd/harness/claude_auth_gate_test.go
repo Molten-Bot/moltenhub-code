@@ -67,7 +67,7 @@ func TestClaudeAuthGateRequiresBrowserLoginWhenClaudeCredentialsAreMissing(t *te
 	if got, want := status.AuthURL, claudeAuthDocsURL; got != want {
 		t.Fatalf("AuthURL = %q, want %q", got, want)
 	}
-	if !strings.Contains(status.Message, "Run `claude login`") {
+	if !strings.Contains(status.Message, "Run `claude auth login`") {
 		t.Fatalf("message = %q", status.Message)
 	}
 }
@@ -196,7 +196,7 @@ func TestClaudeAuthGateStartDeviceAuthRunsLoginAndCapturesURL(t *testing.T) {
 
 	cmdPath := filepath.Join(t.TempDir(), "claude-login-stub.sh")
 	if err := os.WriteFile(cmdPath, []byte(`#!/bin/sh
-if [ "$1" != "login" ]; then
+if [ "$1" != "auth" ] || [ "$2" != "login" ]; then
   echo "unexpected args: $*" >&2
   exit 64
 fi
@@ -262,7 +262,7 @@ func TestClaudeAuthGateVerifyStartsLoginWhenNotReady(t *testing.T) {
 
 	cmdPath := filepath.Join(t.TempDir(), "claude-login-verify-stub.sh")
 	if err := os.WriteFile(cmdPath, []byte(`#!/bin/sh
-if [ "$1" != "login" ]; then
+if [ "$1" != "auth" ] || [ "$2" != "login" ]; then
   exit 64
 fi
 echo "Choose account:"
