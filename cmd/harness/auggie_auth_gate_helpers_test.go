@@ -10,29 +10,25 @@ import (
 )
 
 func TestLoadPersistedAuggieSessionAuthHandlesAliasesAndInvalidData(t *testing.T) {
-	t.Parallel()
-
-	if got := loadPersistedAuggieSessionAuth(""); got != "" {
-		t.Fatalf("loadPersistedAuggieSessionAuth(blank) = %q, want empty", got)
-	}
-	if got := loadPersistedAuggieSessionAuth(filepath.Join(t.TempDir(), "missing.json")); got != "" {
-		t.Fatalf("loadPersistedAuggieSessionAuth(missing) = %q, want empty", got)
+	t.Setenv(auggieSessionAuthEnv, "")
+	if got, source := firstConfiguredAuggieSessionAuth("", hub.InitConfig{}); got != "" || source != "" {
+		t.Fatalf("firstConfiguredAuggieSessionAuth(blank) = (%q, %q), want empty", got, source)
 	}
 
 	invalidPath := filepath.Join(t.TempDir(), "invalid.json")
 	if err := os.WriteFile(invalidPath, []byte("{"), 0o644); err != nil {
 		t.Fatalf("WriteFile(invalid) error = %v", err)
 	}
-	if got := loadPersistedAuggieSessionAuth(invalidPath); got != "" {
-		t.Fatalf("loadPersistedAuggieSessionAuth(invalid JSON) = %q, want empty", got)
+	if got, source := firstConfiguredAuggieSessionAuth(invalidPath, hub.InitConfig{}); got != "" || source != "" {
+		t.Fatalf("firstConfiguredAuggieSessionAuth(invalid JSON) = (%q, %q), want empty", got, source)
 	}
 
 	validPath := filepath.Join(t.TempDir(), "valid.json")
 	if err := os.WriteFile(validPath, []byte(`{"augmentSessionAuth":"session-from-alias"}`), 0o644); err != nil {
 		t.Fatalf("WriteFile(valid) error = %v", err)
 	}
-	if got := loadPersistedAuggieSessionAuth(validPath); got != "session-from-alias" {
-		t.Fatalf("loadPersistedAuggieSessionAuth(alias key) = %q, want session-from-alias", got)
+	if got, source := firstConfiguredAuggieSessionAuth(validPath, hub.InitConfig{}); got != "session-from-alias" || source != "runtime config" {
+		t.Fatalf("firstConfiguredAuggieSessionAuth(alias key) = (%q, %q), want runtime config value", got, source)
 	}
 }
 
