@@ -2,7 +2,6 @@ package hub
 
 import (
 	"regexp"
-	"strings"
 )
 
 var (
@@ -15,12 +14,52 @@ func redactSensitiveLogText(value string) string {
 	if value == "" {
 		return ""
 	}
-	lower := strings.ToLower(value)
-	if !strings.Contains(lower, "token") && !strings.Contains(lower, "authorization") && !strings.Contains(lower, "bearer") {
+	if !containsSensitiveMarker(value) {
 		return value
 	}
 	value = redactQueryPattern.ReplaceAllString(value, `${1}[REDACTED]`)
 	value = redactBearerPattern.ReplaceAllString(value, `${1}[REDACTED]`)
 	value = redactJSONFieldPattern.ReplaceAllString(value, `${1}[REDACTED]${3}`)
 	return value
+}
+
+func containsSensitiveMarker(value string) bool {
+	return containsASCIIFold(value, "token") ||
+		containsASCIIFold(value, "authorization") ||
+		containsASCIIFold(value, "bearer")
+}
+
+func containsASCIIFold(value, needle string) bool {
+	if len(needle) == 0 {
+		return true
+	}
+	if len(value) < len(needle) {
+		return false
+	}
+	limit := len(value) - len(needle)
+	for i := 0; i <= limit; i++ {
+		if hasASCIIFoldPrefix(value[i:], needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasASCIIFoldPrefix(value, prefix string) bool {
+	if len(value) < len(prefix) {
+		return false
+	}
+	for i := 0; i < len(prefix); i++ {
+		if lowerASCII(value[i]) != prefix[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func lowerASCII(b byte) byte {
+	if b >= 'A' && b <= 'Z' {
+		return b + ('a' - 'A')
+	}
+	return b
 }

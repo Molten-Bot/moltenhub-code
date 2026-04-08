@@ -148,13 +148,17 @@ func testWorkspaceManager(guid string) workspace.Manager {
 	}
 }
 
+func testRunDir(guid string) string {
+	return filepath.Join("/tmp", "moltenhub-code", "tasks", guid)
+}
+
 func TestRunHappyPathCreatesPR(t *testing.T) {
 	t.Parallel()
 
 	cfg := sampleConfig()
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
@@ -205,7 +209,7 @@ func TestRunPRCreateAlreadyExistsReusesExistingPR(t *testing.T) {
 	cfg := sampleConfig()
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
@@ -263,7 +267,7 @@ func TestRunBuildsReviewContextBeforeInvokingCodex(t *testing.T) {
 
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
@@ -316,7 +320,7 @@ func TestRunWithGitHubTokenRunsAuthSetupGitBeforeCodex(t *testing.T) {
 	cfg := sampleConfig()
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
@@ -368,7 +372,7 @@ func TestRunWithPromptImagesUsesCodexDirPaths(t *testing.T) {
 	}
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "fedcba987654"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
@@ -424,7 +428,7 @@ func TestRunNonMainBranchReusesExistingBranchAndPR(t *testing.T) {
 	cfg.BaseBranch = "release/2026.04-hotfix"
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
@@ -476,7 +480,7 @@ func TestRunNonMainBranchPushNonFastForwardRetriesWithRebase(t *testing.T) {
 	cfg.BaseBranch = "release/2026.04-hotfix"
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
@@ -533,7 +537,7 @@ func TestRunCodexFailureStopsBeforeCommitAndPR(t *testing.T) {
 	cfg := sampleConfig()
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
@@ -575,7 +579,7 @@ func TestRunNoChangesSkipsPR(t *testing.T) {
 	cfg := sampleConfig()
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
@@ -621,7 +625,7 @@ func TestRunFailedChecksTriggersCodexRemediation(t *testing.T) {
 	cfg := sampleConfig()
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
@@ -677,7 +681,7 @@ func TestRunFailedChecksWithNoRemediationChangesFails(t *testing.T) {
 	cfg := sampleConfig()
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
@@ -729,7 +733,7 @@ func TestRunNoChecksReportedRetriesBeforePassing(t *testing.T) {
 	cfg := sampleConfig()
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
@@ -790,7 +794,7 @@ func TestRunNoChecksReportedAfterRetryWindowTriggersRemediation(t *testing.T) {
 	cfg := sampleConfig()
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
@@ -866,7 +870,7 @@ func TestRunNoRequiredChecksFallsBackToAllChecks(t *testing.T) {
 	cfg := sampleConfig()
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
@@ -930,7 +934,7 @@ func TestRunMultiRepoCreatesPRsForEachChangedRepo(t *testing.T) {
 
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	branch := "moltenhub-build-api"
 
@@ -1005,7 +1009,7 @@ func TestRunMultiRepoRemediationUsesWorkspaceCodexOptions(t *testing.T) {
 
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	branch := "moltenhub-build-api"
 
@@ -1072,7 +1076,7 @@ func TestRunNonMainBranchReusesExistingPR(t *testing.T) {
 
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
@@ -1125,7 +1129,7 @@ func TestRunNonMainBranchCreatesPRWithoutExplicitBaseWhenNoOpenPR(t *testing.T) 
 
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
@@ -1176,7 +1180,7 @@ func TestRunMissingMoltenhubBaseBranchFallsBackToDefaultAndCreatesNewBranch(t *t
 
 	now := time.Date(2026, 4, 6, 19, 53, 52, 0, time.UTC)
 	guid := "9ded650b29c70708825082be50fbf433"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
@@ -1236,7 +1240,7 @@ func TestRunCloneRetriesTransientFailureThenSucceeds(t *testing.T) {
 	cfg := sampleConfig()
 	now := time.Date(2026, 4, 6, 19, 53, 52, 0, time.UTC)
 	guid := "9ded650b29c70708825082be50fbf433"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
@@ -1290,7 +1294,7 @@ func TestRunRepoNotFoundCloneFailsWithoutRetry(t *testing.T) {
 
 	cfg := sampleConfig()
 	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	repoDir := filepath.Join(runDir, "repo")
 	cloneRepoNotFound := execx.Result{
 		Stderr: "remote: Repository not found.\n" +
@@ -1331,7 +1335,7 @@ func TestRunMissingNonMoltenhubBaseBranchFailsClone(t *testing.T) {
 	cfg := sampleConfig()
 	cfg.BaseBranch = "release/2026.04-hotfix"
 	guid := "abcdef123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	repoDir := filepath.Join(runDir, "repo")
 
 	cloneMissingBranch := execx.Result{
@@ -1572,7 +1576,7 @@ func TestRunUsesConfiguredRuntimeCommand(t *testing.T) {
 	cfg.AgentCommand = "claude-custom"
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "runtimecmd123456"
-	runDir := filepath.Join("/tmp", "temp", guid)
+	runDir := testRunDir(guid)
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
