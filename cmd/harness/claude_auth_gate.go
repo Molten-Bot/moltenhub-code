@@ -370,6 +370,10 @@ func (g *claudeAuthGate) submitBrowserCode(rawInput string) (hubui.AgentAuthStat
 		g.mu.Unlock()
 		return snap, err
 	}
+	g.logf(
+		"hub.auth status=progress harness=claude action=submit_browser_code chars=%d",
+		len(code),
+	)
 
 	g.mu.Lock()
 	if !g.ready {
@@ -594,6 +598,9 @@ func (g *claudeAuthGate) ingestLoginLine(line string) {
 	if line == "" {
 		return
 	}
+	if shouldLogClaudeLoginLine(line) {
+		g.logf("hub.auth status=stream harness=claude line=%q", truncateClaudeAuthLine(line))
+	}
 
 	authURL := extractClaudeAuthURL(line)
 	promptAdvance := shouldAdvanceClaudeLoginPrompt(line)
@@ -635,6 +642,11 @@ func (g *claudeAuthGate) waitLogin(cmd *exec.Cmd, tempDir string, readerWG *sync
 		readerWG.Wait()
 	}
 	err := cmd.Wait()
+	if err != nil {
+		g.logf("hub.auth status=warn harness=claude action=login_process_exit err=%q", err)
+	} else {
+		g.logf("hub.auth status=ok harness=claude action=login_process_exit")
+	}
 	_ = os.RemoveAll(strings.TrimSpace(tempDir))
 
 	g.mu.Lock()
@@ -685,6 +697,44 @@ func (g *claudeAuthGate) waitLogin(cmd *exec.Cmd, tempDir string, readerWG *sync
 	}
 	g.updatedAt = time.Now().UTC()
 	g.mu.Unlock()
+}
+
+func shouldLogClaudeLoginLine(line string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(stripANSI(line)))
+	if normalized == "" {
+		return false
+	}
+	for _, marker := range []string{
+		"http://",
+		"https://",
+		"auth",
+		"login",
+		"browser",
+		"code",
+		"verify",
+		"success",
+		"complete",
+		"press enter",
+		"select",
+		"choose",
+		"option",
+		"error",
+		"failed",
+	} {
+		if strings.Contains(normalized, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func truncateClaudeAuthLine(line string) string {
+	line = strings.TrimSpace(line)
+	const max = 240
+	if len(line) <= max {
+		return line
+	}
+	return line[:max-3] + "..."
 }
 
 func extractClaudeAuthURL(line string) string {

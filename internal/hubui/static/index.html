@@ -1565,6 +1565,9 @@
     }
 
     async function verifyAgentDeviceAuth() {
+      if (state.agentAuthBusy || state.agentAuthVerifyPending) {
+        return;
+      }
       try {
         markAgentAuthInteraction();
         if (isAuggieConfigureState()) {
@@ -3573,10 +3576,13 @@
       if (event && typeof event.preventDefault === "function") {
         event.preventDefault();
       }
+      clearAgentAuthAutoSubmitTimer();
+      if (state.agentAuthBusy || state.agentAuthVerifyPending) {
+        return false;
+      }
       void verifyAgentDeviceAuth();
       return false;
     };
-    agentAuthVerify.addEventListener("click", window.__hubAuthVerifyClick);
     promptVisibilityToggle.addEventListener("click", togglePromptVisibility);
     taskFullscreenToggle.addEventListener("click", () => {
       setTaskFullscreen(!state.taskFullscreenOpen);
