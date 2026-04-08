@@ -309,23 +309,26 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	}
 
 	css := resp.Body.String()
-	if !strings.Contains(css, ".prompt-wrap .panel-header {\n  border-bottom-color: rgba(116, 160, 213, 0.2);\n  background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08));\n  color: #6f88ad;\n  letter-spacing: 0.11em;\n  position: relative;\n  justify-content: flex-start;\n}") {
-		t.Fatalf("expected Studio title bar to align its controls with the panel content")
+	if !strings.Contains(css, ".prompt-wrap .panel-header {\n  border-bottom-color: rgba(116, 160, 213, 0.2);\n  background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08));\n  color: #6f88ad;\n  letter-spacing: 0.11em;\n  justify-content: flex-end;\n}") {
+		t.Fatalf("expected Studio title bar to right-align the minimize control once the mode switcher is docked globally")
 	}
-	if !strings.Contains(css, ".prompt-titlebar {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  justify-content: flex-end;\n  min-height: 62px;\n  padding-bottom: 24px;\n}") {
-		t.Fatalf("expected Studio title bar to reserve room for the bottom dock while keeping the minimize control aligned")
+	if !strings.Contains(css, ".prompt-titlebar {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  justify-content: flex-end;\n  min-height: 52px;\n}") {
+		t.Fatalf("expected Studio title bar to keep a compact header once the mode dock moves to the page bottom")
 	}
-	if !strings.Contains(css, ".prompt-mode-tabs-titlebar {\n  position: absolute;\n  left: 50%;\n  bottom: 0;\n  z-index: 2;\n  justify-self: center;\n  align-self: center;\n  transform: translate(-50%, 50%);\n}") {
-		t.Fatalf("expected Studio mode tabs to dock at the centered bottom edge of the panel")
+	if !strings.Contains(css, ".page-bottom-dock {\n  position: fixed;\n  left: 50%;\n  bottom: max(16px, env(safe-area-inset-bottom));\n  z-index: 61;\n  display: flex;\n  justify-content: center;\n  width: min-content;\n  max-width: calc(100vw - 28px);\n  transform: translateX(-50%);\n}") {
+		t.Fatalf("expected Studio mode tabs to dock at the absolute bottom center of the page")
 	}
-	if !strings.Contains(css, ".prompt-wrap.panel {\n  order: 3;\n  position: relative;\n  display: flex;\n  flex-direction: column;\n  border-color: rgba(74, 118, 178, 0.18);") {
-		t.Fatalf("expected studio panel to stack header/form without clipping and anchor the dock")
+	if !strings.Contains(css, ".prompt-mode-tabs-dock {\n  width: max-content;\n  max-width: calc(100vw - 28px);\n  overflow-x: auto;\n}") {
+		t.Fatalf("expected Studio mode tabs to remain scrollable within the bottom dock on narrow viewports")
+	}
+	if !strings.Contains(css, ".prompt-wrap.panel {\n  order: 3;\n  display: flex;\n  flex-direction: column;\n  border-color: rgba(74, 118, 178, 0.18);") {
+		t.Fatalf("expected studio panel to stack header and form without owning the bottom dock positioning")
 	}
 	if !strings.Contains(css, ".prompt-mode-tabs {\n  display: inline-flex;\n  gap: 4px;\n  padding: 5px;\n  border-radius: 14px;\n  border: 1px solid rgba(112, 163, 221, 0.28);\n  background: linear-gradient(180deg, rgba(248, 252, 255, 0.96), rgba(226, 239, 255, 0.92));") {
 		t.Fatalf("expected studio mode tabs to use the refreshed light segmented-control treatment")
 	}
-	if !strings.Contains(css, ".prompt-form {\n  display: grid;\n  gap: 10px;\n  padding: 14px 14px 88px;\n  min-width: 0;\n  min-height: 0;\n  overflow-y: auto;\n}") {
-		t.Fatalf("expected studio form content to leave room for the bottom dock instead of clipping controls")
+	if !strings.Contains(css, ".prompt-form {\n  display: grid;\n  gap: 10px;\n  padding: 14px;\n  min-width: 0;\n  min-height: 0;\n  overflow-y: auto;\n}") {
+		t.Fatalf("expected studio form content to use the full panel now that the mode dock lives outside it")
 	}
 	if !strings.Contains(css, ".prompt-field-repository {\n  flex: 1 1 320px;\n  min-width: 280px;\n}") {
 		t.Fatalf("expected repository input to retain enough width beside the history selector")
@@ -350,6 +353,9 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	}
 	if !strings.Contains(css, ".prompt-image-chip {\n  border-radius: 14px;\n  border: 1px solid var(--border);\n  background: linear-gradient(160deg, rgba(255, 255, 255, 0.94), rgba(240, 246, 255, 0.88));") {
 		t.Fatalf("expected screenshot chips to use the shared light panel treatment")
+	}
+	if !strings.Contains(css, "@media (max-width: 700px) {\n  .page-bottom-dock {\n    bottom: max(12px, env(safe-area-inset-bottom));\n    max-width: calc(100vw - 24px);\n  }\n\n  .prompt-mode-tabs-dock {\n    max-width: calc(100vw - 24px);\n  }\n\n  .theme-controls {\n    right: 12px;\n    bottom: 76px;\n    left: auto;\n    max-width: calc(100vw - 24px);\n  }") {
+		t.Fatalf("expected mobile layout to keep the bottom mode dock and theme selector from colliding")
 	}
 	if !strings.Contains(css, "@media (max-width: 640px) {\n  .prompt-actions {\n    flex-wrap: wrap;\n    gap: 6px;\n  }\n\n  .prompt-actions-start,\n  .submit-status-inline,\n  .prompt-actions-end {\n    flex: 1 1 100%;\n    width: 100%;\n  }\n\n  .prompt-actions-end {\n    justify-content: flex-end;\n    margin-left: 0;\n  }\n\n  .prompt-action-paste {\n    max-width: none;\n  }\n\n  .submit-status-inline {\n    min-width: 0;\n  }\n\n  .prompt-action-button {\n    flex: 1 1 0;\n    min-inline-size: 0;\n  }") {
 		t.Fatalf("expected mobile layout to keep Studio action controls fully visible")
@@ -390,11 +396,11 @@ func TestStudioStylesUseRefinedPanelAndInputTreatment(t *testing.T) {
 	}
 
 	css := resp.Body.String()
-	if !strings.Contains(css, ".prompt-wrap.panel {\n  order: 3;\n  position: relative;\n  display: flex;\n  flex-direction: column;\n  border-color: rgba(74, 118, 178, 0.18);\n  background:\n    linear-gradient(180deg, rgba(223, 241, 255, 0.96), rgba(245, 250, 255, 0.9) 18%, rgba(255, 255, 255, 0.92) 100%),") {
+	if !strings.Contains(css, ".prompt-wrap.panel {\n  order: 3;\n  display: flex;\n  flex-direction: column;\n  border-color: rgba(74, 118, 178, 0.18);\n  background:\n    linear-gradient(180deg, rgba(223, 241, 255, 0.96), rgba(245, 250, 255, 0.9) 18%, rgba(255, 255, 255, 0.92) 100%),") {
 		t.Fatalf("expected studio panel to use the refreshed blue-tint shell treatment")
 	}
-	if !strings.Contains(css, ".prompt-wrap .panel-header {\n  border-bottom-color: rgba(116, 160, 213, 0.2);\n  background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08));\n  color: #6f88ad;\n  letter-spacing: 0.11em;\n  position: relative;\n  justify-content: flex-start;\n}") {
-		t.Fatalf("expected studio header to keep its controls aligned to the left")
+	if !strings.Contains(css, ".prompt-wrap .panel-header {\n  border-bottom-color: rgba(116, 160, 213, 0.2);\n  background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08));\n  color: #6f88ad;\n  letter-spacing: 0.11em;\n  justify-content: flex-end;\n}") {
+		t.Fatalf("expected studio header to keep its minimize control aligned to the right")
 	}
 	if !strings.Contains(css, ".prompt-mode-tab.active {\n  background: linear-gradient(135deg, #fefefe 0%, #e7f2ff 48%, #d7eaff 100%);\n  border: 1px solid rgba(112, 163, 221, 0.34);") {
 		t.Fatalf("expected active studio mode tab to use the light shell treatment instead of the dark accent pill")

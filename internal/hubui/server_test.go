@@ -445,8 +445,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="prompt-mode-json"`) {
 		t.Fatalf("expected index html to include json mode toggle")
 	}
-	if !strings.Contains(markup, `class="prompt-mode-tabs prompt-mode-tabs-titlebar`) {
-		t.Fatalf("expected index html to render the mode toggles inside the prompt title bar")
+	if !strings.Contains(markup, `class="page-bottom-dock"`) || !strings.Contains(markup, `class="prompt-mode-tabs prompt-mode-tabs-dock"`) {
+		t.Fatalf("expected index html to render the mode toggles in the bottom dock")
 	}
 	if !strings.Contains(markup, `id="builder-repo-select"`) {
 		t.Fatalf("expected index html to include repo history select")
