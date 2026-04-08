@@ -679,8 +679,8 @@
     function setHubConnection(mode, text) {
       const online = mode === "ws" || mode === "http_long_poll";
       const actionable = mode === "disconnected";
-      const message = actionable ? "Connect to Molten Hub" : text;
-      setIndicator(hubConnItem, hubConnDot, hubConnText, "Molten Hub", online, message);
+      text = actionable ? "Connect to Molten Hub" : text;
+      setIndicator(hubConnItem, hubConnDot, hubConnText, "Molten Hub", online, text);
       applyHubDotMode(mode);
       setHubConnectionActionable(actionable);
     }

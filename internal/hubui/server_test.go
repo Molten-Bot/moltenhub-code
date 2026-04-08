@@ -346,7 +346,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `const HUB_CONNECT_URL = "https://app.molten.bot";`) {
 		t.Fatalf("expected index html to define the molten hub connect url")
 	}
-	if !strings.Contains(markup, `const message = actionable ? "Connect to Molten Hub" : text;`) {
+	if !strings.Contains(markup, `text = actionable ? "Connect to Molten Hub" : text;`) {
 		t.Fatalf("expected index html to render connect CTA copy when hub is disconnected")
 	}
 	if !strings.Contains(markup, `hubConnItem.addEventListener("click", maybeOpenHubConnectPage);`) {

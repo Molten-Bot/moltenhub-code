@@ -223,7 +223,6 @@ textarea {
 }
 
 .status-item-action {
-  cursor: pointer;
   border-color: rgba(239, 68, 68, 0.22);
   box-shadow: 0 14px 34px rgba(239, 68, 68, 0.14);
 }
