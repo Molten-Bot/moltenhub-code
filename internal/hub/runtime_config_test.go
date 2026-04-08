@@ -218,7 +218,7 @@ func TestLoadRuntimeConfigDefaultsOptionalSessionKeyAndTimeout(t *testing.T) {
 	}
 }
 
-func TestLoadRuntimeConfigRejectsMissingToken(t *testing.T) {
+func TestLoadRuntimeConfigAllowsMissingToken(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -231,9 +231,15 @@ func TestLoadRuntimeConfigRejectsMissingToken(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	_, err := LoadRuntimeConfig(path)
-	if err == nil {
-		t.Fatal("expected error for missing token")
+	got, err := LoadRuntimeConfig(path)
+	if err != nil {
+		t.Fatalf("LoadRuntimeConfig() error = %v", err)
+	}
+	if got.AgentToken != "" {
+		t.Fatalf("AgentToken = %q, want empty", got.AgentToken)
+	}
+	if got.BindToken != "" {
+		t.Fatalf("BindToken = %q, want empty", got.BindToken)
 	}
 }
 
