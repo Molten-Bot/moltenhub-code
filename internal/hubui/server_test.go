@@ -650,8 +650,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":false};`) {
 		t.Fatalf("expected index html to include default UI config")
 	}
-	if !strings.Contains(markup, `id="theme-select"`) {
-		t.Fatalf("expected index html to include docked theme selector")
+	if !strings.Contains(markup, `id="theme-cycle"`) || !strings.Contains(markup, `function nextThemeMode(theme)`) {
+		t.Fatalf("expected index html to include docked theme cycle control")
 	}
 	if !strings.Contains(markup, `rgb(var(--hub-panel-rgb) / <alpha-value>)`) || !strings.Contains(markup, `rgb(var(--hub-text-rgb) / <alpha-value>)`) {
 		t.Fatalf("expected index html to drive tailwind hub colors from CSS theme variables")
@@ -699,14 +699,14 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task-close") {
 		t.Fatalf("expected stylesheet to include task close styles")
 	}
-	if !strings.Contains(css, ".theme-controls") || !strings.Contains(css, ".theme-control-select") {
-		t.Fatalf("expected stylesheet to include docked theme selector styles")
+	if !strings.Contains(css, ".theme-controls") || !strings.Contains(css, ".theme-cycle-button") {
+		t.Fatalf("expected stylesheet to include docked theme cycle styles")
 	}
-	if !strings.Contains(css, "appearance: none;") {
-		t.Fatalf("expected stylesheet to render the theme selector with custom select chrome")
+	if !strings.Contains(css, "--theme-button-bg:") || !strings.Contains(css, "--surface-control-bg:") {
+		t.Fatalf("expected stylesheet to define reusable theme tokens for controls")
 	}
 	if !strings.Contains(css, "html.dark .theme-controls") || !strings.Contains(css, "html.night .theme-controls") {
-		t.Fatalf("expected stylesheet to include dark and night docked theme selector treatments")
+		t.Fatalf("expected stylesheet to include dark and night docked theme control treatments")
 	}
 	if !strings.Contains(css, "--hub-panel-rgb: 255 255 255;") || !strings.Contains(css, "--hub-panel-rgb: 15 22 38;") {
 		t.Fatalf("expected stylesheet to define theme-aware rgb tokens for hub panels")

@@ -390,20 +390,20 @@ func TestStudioStylesUseRefinedPanelAndInputTreatment(t *testing.T) {
 	}
 
 	css := resp.Body.String()
-	if !strings.Contains(css, ".prompt-wrap.panel {\n  order: 3;\n  position: relative;\n  display: flex;\n  flex-direction: column;\n  border-color: rgba(74, 118, 178, 0.18);\n  background:\n    linear-gradient(180deg, rgba(223, 241, 255, 0.96), rgba(245, 250, 255, 0.9) 18%, rgba(255, 255, 255, 0.92) 100%),") {
-		t.Fatalf("expected studio panel to use the refreshed blue-tint shell treatment")
+	if !strings.Contains(css, ".prompt-wrap.panel {\n  order: 3;\n  position: relative;\n  display: flex;\n  flex-direction: column;\n  border-color: var(--surface-glow-border);\n  background: var(--surface-glow);\n  box-shadow: var(--surface-glow-shadow);") {
+		t.Fatalf("expected studio panel to use theme-aware shell tokens")
 	}
-	if !strings.Contains(css, ".prompt-wrap .panel-header {\n  border-bottom-color: rgba(116, 160, 213, 0.2);\n  background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08));\n  color: #6f88ad;\n  letter-spacing: 0.11em;\n  position: relative;\n  justify-content: flex-start;\n}") {
+	if !strings.Contains(css, ".prompt-wrap .panel-header {\n  border-bottom-color: var(--surface-header-border);\n  background: var(--surface-header);\n  color: var(--surface-label);\n  letter-spacing: 0.11em;\n  position: relative;\n  justify-content: flex-start;\n}") {
 		t.Fatalf("expected studio header to keep its controls aligned to the left")
 	}
-	if !strings.Contains(css, ".prompt-mode-tab.active {\n  background: linear-gradient(135deg, #fefefe 0%, #e7f2ff 48%, #d7eaff 100%);\n  border: 1px solid rgba(112, 163, 221, 0.34);") {
-		t.Fatalf("expected active studio mode tab to use the light shell treatment instead of the dark accent pill")
+	if !strings.Contains(css, ".prompt-mode-tab.active {\n  background: var(--surface-tab-active-bg);\n  border: 1px solid var(--surface-tab-active-border);") {
+		t.Fatalf("expected active studio mode tab to use theme-aware shell tokens")
 	}
-	if !strings.Contains(css, ".prompt-control,\n.prompt-text,\n.prompt-action-paste {\n  width: 100%;\n  border: 1px solid rgba(112, 163, 221, 0.34);\n  border-radius: 16px;\n  background: linear-gradient(180deg, rgba(251, 254, 255, 0.98), rgba(234, 245, 255, 0.88));") {
-		t.Fatalf("expected studio controls to use the updated light-blue input treatment")
+	if !strings.Contains(css, ".prompt-control,\n.prompt-text,\n.prompt-action-paste {\n  width: 100%;\n  border: 1px solid var(--surface-control-border);\n  border-radius: 16px;\n  background: var(--surface-control-bg);") {
+		t.Fatalf("expected studio controls to use theme-aware input tokens")
 	}
-	if !strings.Contains(css, "select.prompt-control {\n  appearance: none;\n  background-image:\n    linear-gradient(45deg, transparent 50%, #3d82dc 50%),\n    linear-gradient(135deg, #3d82dc 50%, transparent 50%);") {
-		t.Fatalf("expected repository selector to use the refreshed blue chevron treatment")
+	if !strings.Contains(css, "select.prompt-control {\n  appearance: none;\n  background-image:\n    linear-gradient(45deg, transparent 50%, var(--surface-control-arrow) 50%),\n    linear-gradient(135deg, var(--surface-control-arrow) 50%, transparent 50%);") {
+		t.Fatalf("expected repository selector to use theme-aware chevron treatment")
 	}
 }
 
