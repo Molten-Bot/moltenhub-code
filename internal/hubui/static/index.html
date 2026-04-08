@@ -187,13 +187,13 @@
                 class="prompt-control prompt-action-paste"
                 role="button"
                 tabindex="0">Paste screenshots.</div>
-              <span id="local-prompt-status" class="submit-status submit-status-inline min-h-[1.3em] text-[0.74rem] leading-[1.3] text-hub-muted"></span>
               <button
                 id="builder-images-clear"
                 class="prompt-action-button prompt-action-clear"
                 type="button"
                 disabled>Clear</button>
               <button id="local-prompt-submit" class="prompt-action-button prompt-submit" type="submit">Run</button>
+              <span id="local-prompt-status" class="submit-status submit-status-inline min-h-[1.3em] text-[0.74rem] leading-[1.3] text-hub-muted"></span>
             </div>
           </form>
         </section>
@@ -1303,6 +1303,8 @@
       promptBuilderPanel.classList.toggle("hidden", !isBuilder);
       promptLibraryPanel.classList.toggle("hidden", !isLibrary);
       promptRawPanel.classList.toggle("hidden", !isJSON);
+      builderImagePasteTarget.classList.toggle("hidden", isLibrary);
+      builderImagesClear.classList.toggle("hidden", isLibrary);
     }
 
     function clearLocalPromptStatusTimer() {

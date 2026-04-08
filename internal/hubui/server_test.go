@@ -434,8 +434,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	pasteIdx := strings.Index(markup, `id="builder-image-paste-target"`)
 	clearIdx := strings.Index(markup, `id="builder-images-clear"`)
 	runIdx := strings.Index(markup, `id="local-prompt-submit"`)
-	if statusIdx == -1 || pasteIdx == -1 || clearIdx == -1 || runIdx == -1 || pasteIdx > statusIdx || statusIdx > clearIdx || clearIdx > runIdx {
-		t.Fatalf("expected Paste/status/Clear/Run controls to render in left-to-right order")
+	if statusIdx == -1 || pasteIdx == -1 || clearIdx == -1 || runIdx == -1 || pasteIdx > clearIdx || clearIdx > runIdx || runIdx > statusIdx {
+		t.Fatalf("expected Paste/Clear/Run/status controls to render in left-to-right order")
 	}
 	if !strings.Contains(markup, `id="builder-repo-input" class="prompt-control prompt-input"`) || !strings.Contains(markup, `id="builder-target-subdir" class="prompt-control prompt-input"`) {
 		t.Fatalf("expected index html to include builder repo and target subdir inputs")
@@ -469,6 +469,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "builderImagesClear.addEventListener(\"click\", clearBuilderPromptDraft);") {
 		t.Fatalf("expected index html Clear button to reset the full builder draft")
+	}
+	if !strings.Contains(markup, "builderImagePasteTarget.classList.toggle(\"hidden\", isLibrary);") {
+		t.Fatalf("expected index html to hide screenshot paste in library mode only")
+	}
+	if !strings.Contains(markup, "builderImagesClear.classList.toggle(\"hidden\", isLibrary);") {
+		t.Fatalf("expected index html to hide screenshot clearing in library mode only")
 	}
 	if !strings.Contains(markup, `historyField.classList.toggle("hidden", !hasSavedHistory);`) {
 		t.Fatalf("expected index html to hide repo history when there are no saved repos")

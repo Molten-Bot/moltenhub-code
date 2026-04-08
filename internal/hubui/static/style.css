@@ -688,6 +688,7 @@ select.prompt-control {
 .prompt-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   flex-wrap: wrap;
   gap: 10px;
 }
@@ -715,7 +716,6 @@ select.prompt-control {
   align-items: center;
   flex: 1 1 0;
   min-width: 140px;
-  margin-right: auto;
 }
 
 .prompt-action-button,
@@ -1451,7 +1451,6 @@ body.task-fullscreen-open #task-fullscreen-toggle {
     flex: 1 1 100%;
     width: 100%;
     min-width: 0;
-    margin-right: 0;
   }
 
   .prompt-action-button {
