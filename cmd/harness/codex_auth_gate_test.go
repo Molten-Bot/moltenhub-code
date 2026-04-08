@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/jef/moltenhub-code/internal/agentruntime"
 	"github.com/jef/moltenhub-code/internal/execx"
+	"github.com/jef/moltenhub-code/internal/hub"
 )
 
 type authGateRunnerStub struct {
@@ -532,6 +534,95 @@ func TestNewCodexAuthGateAutoStartsWhenNotLoggedIn(t *testing.T) {
 		s, _ := g.Status(context.Background())
 		return s.Ready && s.State == "ready"
 	})
+}
+
+func TestNewCodexAuthGateWithConfigRequiresGitHubTokenWhenMissing(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+
+	runner := &authGateRunnerStub{
+		run: func(_ context.Context, _ execx.Command) (execx.Result, error) {
+			return execx.Result{}, errors.New("probe should not run when github token is missing")
+		},
+	}
+
+	g := newCodexAuthGateWithConfig(
+		context.Background(),
+		runner,
+		"codex",
+		filepath.Join(t.TempDir(), ".moltenhub", "config.json"),
+		hub.InitConfig{},
+		true,
+		nil,
+	)
+	status, err := g.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if status.Ready || status.State != "needs_configure" {
+		t.Fatalf("status = %+v", status)
+	}
+	if got, want := status.ConfigureCommand, claudeGitHubConfigureCommand; got != want {
+		t.Fatalf("ConfigureCommand = %q, want %q", got, want)
+	}
+	if got, want := status.ConfigurePlaceholder, claudeGitHubConfigurePlaceholder; got != want {
+		t.Fatalf("ConfigurePlaceholder = %q, want %q", got, want)
+	}
+	if got := len(runner.calls); got != 0 {
+		t.Fatalf("probe calls = %d, want 0", got)
+	}
+}
+
+func TestCodexAuthGateWithConfigConfigurePersistsGitHubTokenAndTransitionsState(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	runner := &authGateRunnerStub{
+		run: func(_ context.Context, _ execx.Command) (execx.Result, error) {
+			return execx.Result{}, errors.New("not logged in")
+		},
+	}
+
+	g := newCodexAuthGateWithConfig(
+		context.Background(),
+		runner,
+		"codex",
+		path,
+		hub.InitConfig{
+			BaseURL:      "https://na.hub.molten.bot/v1",
+			AgentToken:   "agent_token",
+			AgentHarness: agentruntime.HarnessCodex,
+		},
+		true,
+		nil,
+	)
+
+	status, err := g.Configure(context.Background(), "ghp_saved_token")
+	if err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	if status.Ready || status.State != "needs_device_auth" {
+		t.Fatalf("status = %+v", status)
+	}
+	if got, want := os.Getenv("GH_TOKEN"), "ghp_saved_token"; got != want {
+		t.Fatalf("GH_TOKEN = %q, want %q", got, want)
+	}
+	if got, want := os.Getenv("GITHUB_TOKEN"), "ghp_saved_token"; got != want {
+		t.Fatalf("GITHUB_TOKEN = %q, want %q", got, want)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if got, want := doc["github_token"], "ghp_saved_token"; got != want {
+		t.Fatalf("github_token = %#v, want %q", got, want)
+	}
 }
 
 func waitForCondition(t *testing.T, timeout time.Duration, check func() bool) {

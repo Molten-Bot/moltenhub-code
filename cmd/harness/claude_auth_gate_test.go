@@ -210,6 +210,7 @@ if ! read choice; then
 fi
 echo "Open browser:"
 echo "https://claude.ai/login/device?flow=test"
+sleep 0.1
 exit 1
 `), 0o755); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
