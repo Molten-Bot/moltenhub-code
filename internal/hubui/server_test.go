@@ -205,6 +205,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function fullscreenTasks(") {
 		t.Fatalf("expected index html to include full screen task list renderer")
 	}
+	if !strings.Contains(markup, "const taskPanel = document.getElementById(\"task-panel\");") {
+		t.Fatalf("expected index html to cache the task panel element")
+	}
+	if !strings.Contains(markup, "if (open && !displayTasks(state.snapshot).length) {") {
+		t.Fatalf("expected index html to block fullscreen when no tasks exist")
+	}
 	if !strings.Contains(markup, "function isMinimizedTask(") {
 		t.Fatalf("expected index html to include completed-task minimization handler")
 	}
@@ -228,6 +234,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `id="task-fullscreen-toggle"`) {
 		t.Fatalf("expected index html to include tasks full screen toggle")
+	}
+	if !strings.Contains(markup, `id="task-panel"`) {
+		t.Fatalf("expected index html to include task panel wrapper")
+	}
+	if !strings.Contains(markup, `id="task-panel" class="panel min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))] hidden" aria-hidden="true"`) {
+		t.Fatalf("expected index html to keep task panel hidden before tasks exist")
 	}
 	if strings.Contains(markup, "<span>Tasks</span>") {
 		t.Fatalf("expected index html to remove Tasks title label from panel header")
@@ -282,6 +294,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "rightCol.classList.toggle(\"task-output-hidden\", !outputVisible);") {
 		t.Fatalf("expected index html to collapse the standard layout when output is hidden")
+	}
+	if !strings.Contains(markup, "rightCol.classList.toggle(\"task-list-hidden\", !hasTasks);") {
+		t.Fatalf("expected index html to collapse the standard layout when there are no tasks")
+	}
+	if !strings.Contains(markup, "taskPanel.classList.toggle(\"hidden\", !hasTasks);") {
+		t.Fatalf("expected index html to hide the task panel when there are no tasks")
 	}
 	if !strings.Contains(markup, "setTerminalOutputOpen(task.request_id, nextOpen);") {
 		t.Fatalf("expected index html to open full terminal output from task Open Output action")

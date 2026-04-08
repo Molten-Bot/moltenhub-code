@@ -424,6 +424,14 @@ body .right-col.prompt-collapsed.task-output-hidden {
   grid-template-rows: min-content minmax(260px, 1fr);
 }
 
+body .right-col.task-list-hidden {
+  grid-template-rows: auto;
+}
+
+body .right-col.prompt-collapsed.task-list-hidden {
+  grid-template-rows: min-content;
+}
+
 .prompt-wrap.panel {
   display: flex;
   flex-direction: column;
@@ -1511,6 +1519,14 @@ body.task-fullscreen-open #task-fullscreen-toggle {
 
   body .right-col.prompt-collapsed.task-output-hidden {
     grid-template-rows: min-content minmax(220px, 1fr);
+  }
+
+  body .right-col.task-list-hidden {
+    grid-template-rows: auto;
+  }
+
+  body .right-col.prompt-collapsed.task-list-hidden {
+    grid-template-rows: min-content;
   }
 
   .task-fullscreen-body {

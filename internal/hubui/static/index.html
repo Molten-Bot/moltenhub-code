@@ -202,7 +202,7 @@
           </form>
         </section>
 
-        <section class="panel min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
+        <section id="task-panel" class="panel min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))] hidden" aria-hidden="true">
           <div class="panel-header flex items-center justify-end gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
             <button id="task-fullscreen-toggle" class="task-fullscreen-toggle" type="button" aria-expanded="false" aria-label="Open full screen tasks">Full Screen</button>
           </div>
@@ -398,6 +398,7 @@
       : null;
     let latestResourceMetrics = { cpu: NaN, mem: NaN, disk: NaN };
     const taskList = document.getElementById("task-list");
+    const taskPanel = document.getElementById("task-panel");
     const taskFullscreenToggle = document.getElementById("task-fullscreen-toggle");
     const taskFullscreen = document.getElementById("task-fullscreen");
     const taskFullscreenBody = document.getElementById("task-fullscreen-body");
@@ -1671,12 +1672,17 @@
     }
 
     function setTaskFullscreen(open) {
+      if (open && !displayTasks(state.snapshot).length) {
+        open = false;
+      }
       state.taskFullscreenOpen = Boolean(open);
       if (taskFullscreen) {
         taskFullscreen.classList.toggle("hidden", !state.taskFullscreenOpen);
         taskFullscreen.setAttribute("aria-hidden", state.taskFullscreenOpen ? "false" : "true");
       }
       if (taskFullscreenToggle) {
+        const hasTasks = displayTasks(state.snapshot).length > 0;
+        taskFullscreenToggle.disabled = !hasTasks;
         taskFullscreenToggle.setAttribute("aria-expanded", state.taskFullscreenOpen ? "true" : "false");
         taskFullscreenToggle.classList.toggle("task-fullscreen-close", state.taskFullscreenOpen);
         taskFullscreenToggle.textContent = state.taskFullscreenOpen ? "X" : "Full Screen";
@@ -2267,7 +2273,31 @@
     }
 
     function renderTasks(snapshot) {
-      renderTaskCollection(displayTasks(snapshot), taskList, null);
+      const tasks = displayTasks(snapshot);
+      const hasTasks = tasks.length > 0;
+      if (!hasTasks && state.taskFullscreenOpen) {
+        state.taskFullscreenOpen = false;
+        document.body.classList.remove("task-fullscreen-open");
+      }
+      if (rightCol) {
+        rightCol.classList.toggle("task-list-hidden", !hasTasks);
+      }
+      if (taskPanel) {
+        taskPanel.classList.toggle("hidden", !hasTasks);
+        taskPanel.setAttribute("aria-hidden", hasTasks ? "false" : "true");
+      }
+      if (taskFullscreenToggle) {
+        taskFullscreenToggle.disabled = !hasTasks;
+        taskFullscreenToggle.setAttribute("aria-expanded", state.taskFullscreenOpen ? "true" : "false");
+        taskFullscreenToggle.classList.toggle("task-fullscreen-close", state.taskFullscreenOpen);
+        taskFullscreenToggle.textContent = state.taskFullscreenOpen ? "X" : "Full Screen";
+        taskFullscreenToggle.setAttribute("aria-label", state.taskFullscreenOpen ? "Close full screen tasks" : "Open full screen tasks");
+      }
+      if (taskFullscreen) {
+        taskFullscreen.classList.toggle("hidden", !state.taskFullscreenOpen);
+        taskFullscreen.setAttribute("aria-hidden", state.taskFullscreenOpen ? "false" : "true");
+      }
+      renderTaskCollection(tasks, taskList, null);
     }
 
     function renderFullscreenTasks(snapshot) {
