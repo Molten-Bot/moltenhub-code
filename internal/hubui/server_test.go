@@ -343,6 +343,21 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "Connected via HTTP long polling") {
 		t.Fatalf("expected index html to include HTTP long-polling connection copy")
 	}
+	if !strings.Contains(markup, `const HUB_CONNECT_URL = "https://app.molten.bot";`) {
+		t.Fatalf("expected index html to define the molten hub connect url")
+	}
+	if !strings.Contains(markup, `const message = actionable ? "Connect to Molten Hub" : text;`) {
+		t.Fatalf("expected index html to render connect CTA copy when hub is disconnected")
+	}
+	if !strings.Contains(markup, `hubConnItem.addEventListener("click", maybeOpenHubConnectPage);`) {
+		t.Fatalf("expected index html to open the molten hub app when the disconnected indicator is clicked")
+	}
+	if !strings.Contains(markup, `window.open(HUB_CONNECT_URL, "_blank", "noopener,noreferrer");`) {
+		t.Fatalf("expected index html to open the molten hub app in a new page")
+	}
+	if !strings.Contains(markup, `hubConnItem.classList.toggle("status-item-action", actionable);`) {
+		t.Fatalf("expected index html to mark the disconnected hub indicator as actionable")
+	}
 	if !strings.Contains(markup, `id="prompt-visibility-toggle"`) {
 		t.Fatalf("expected index html to include studio visibility toggle")
 	}

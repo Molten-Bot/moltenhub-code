@@ -265,6 +265,7 @@
     const PROMPT_VISIBILITY_KEY = "hubui.localPromptVisible";
     const CLOSE_TASK_ANIMATION_MS = 360;
     const QUEUED_STATUS_TIMEOUT_MS = 8_000;
+    const HUB_CONNECT_URL = "https://app.molten.bot";
     const COMPLETED_STATUSES = new Set(["ok", "no_changes", "error", "invalid", "duplicate", "stopped"]);
     const TASK_PROGRESS_STEPS = [
       { id: "received", label: "Task Received", detail: "Dispatch accepted by hub." },
@@ -453,6 +454,30 @@
 
     function setLocalConnection(online, text) {
       setIndicator(localConnItem, localConnDot, localConnText, "Local", online, text);
+    }
+
+    function setHubConnectionActionable(actionable) {
+      if (!hubConnItem) return;
+      hubConnItem.classList.toggle("status-item-action", actionable);
+      hubConnItem.setAttribute("data-actionable", actionable ? "true" : "false");
+    }
+
+    function openHubConnectPage() {
+      if (typeof window.open === "function") {
+        window.open(HUB_CONNECT_URL, "_blank", "noopener,noreferrer");
+        return;
+      }
+      window.location.assign(HUB_CONNECT_URL);
+    }
+
+    function maybeOpenHubConnectPage(event) {
+      if (!hubConnItem || hubConnItem.getAttribute("data-actionable") !== "true") {
+        return;
+      }
+      if (event) {
+        event.preventDefault();
+      }
+      openHubConnectPage();
     }
 
     function scheduleAgentAuthRefresh() {
@@ -653,8 +678,11 @@
 
     function setHubConnection(mode, text) {
       const online = mode === "ws" || mode === "http_long_poll";
-      setIndicator(hubConnItem, hubConnDot, hubConnText, "Molten Hub", online, text);
+      const actionable = mode === "disconnected";
+      const message = actionable ? "Connect to Molten Hub" : text;
+      setIndicator(hubConnItem, hubConnDot, hubConnText, "Molten Hub", online, message);
       applyHubDotMode(mode);
+      setHubConnectionActionable(actionable);
     }
 
     function renderHubConnection(snapshot) {
@@ -2488,6 +2516,14 @@
     }
     if (agentAuthCopy) {
       agentAuthCopy.addEventListener("click", copyAgentAuthCode);
+    }
+    if (hubConnItem) {
+      hubConnItem.addEventListener("click", maybeOpenHubConnectPage);
+      hubConnItem.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          maybeOpenHubConnectPage(event);
+        }
+      });
     }
     agentAuthVerify.addEventListener("click", verifyAgentDeviceAuth);
     promptVisibilityToggle.addEventListener("click", togglePromptVisibility);

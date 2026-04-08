@@ -222,6 +222,18 @@ textarea {
   z-index: 7;
 }
 
+.status-item-action {
+  cursor: pointer;
+  border-color: rgba(239, 68, 68, 0.22);
+  box-shadow: 0 14px 34px rgba(239, 68, 68, 0.14);
+}
+
+.status-item-action:hover,
+.status-item-action:focus-visible,
+.status-item-action:focus-within {
+  transform: translateY(-1px);
+}
+
 .status-item-metrics {
   gap: 12px;
   padding-left: 12px;
