@@ -617,36 +617,34 @@ body .right-col.prompt-collapsed.task-list-hidden {
   box-shadow: var(--surface-tab-shadow);
 }
 
-.prompt-mode-tab {
-  border: 0;
-  background: transparent;
+.prompt-mode-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--surface-tab-text);
-  border-radius: 999px;
-  padding: 11px 18px;
+  padding: 9px 12px;
   font-size: 0.73rem;
   font-weight: 800;
   letter-spacing: 0.06em;
+  line-height: 1;
   text-transform: uppercase;
-  transition: background-color 0.14s ease, color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease;
+  text-decoration: none;
+  border-radius: 999px;
+  transition: color 0.14s ease, opacity 0.14s ease, box-shadow 0.14s ease;
 }
 
-.prompt-mode-tab:hover {
+.prompt-mode-link:hover {
   color: var(--surface-tab-hover-text);
-  background: var(--surface-tab-hover-bg);
+  opacity: 1;
 }
 
-.prompt-mode-tab.active {
-  background: var(--surface-tab-active-bg);
-  border: 1px solid var(--surface-tab-active-border);
-  margin: -1px;
-  padding: 10px 17px;
+.prompt-mode-link.active {
   color: var(--surface-tab-active-text);
-  text-shadow: none;
-  box-shadow: var(--surface-tab-active-shadow);
+  box-shadow: inset 0 -2px 0 var(--surface-tab-active-text);
 }
 
-.prompt-mode-tab:not(.active) {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+.prompt-mode-link:not(.active) {
+  opacity: 0.86;
 }
 
 .prompt-titlebar .prompt-visibility-toggle {
@@ -738,7 +736,7 @@ body .right-col.prompt-collapsed.task-list-hidden {
 .prompt-text:focus,
 .prompt-action-paste:focus-visible,
 .prompt-visibility-toggle:focus-visible,
-.prompt-mode-tab:focus-visible,
+.prompt-mode-link:focus-visible,
 .task-close:focus-visible,
 .task-rerun:focus-visible,
 .task-control-toggle:focus-visible,
