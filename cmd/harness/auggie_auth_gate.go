@@ -113,42 +113,24 @@ func (g *auggieAuthGate) Configure(_ context.Context, rawInput string) (hubui.Ag
 	g.mu.Unlock()
 
 	if configureCommand == claudeGitHubConfigureCommand {
-		token := strings.TrimSpace(rawInput)
-		if token == "" {
+		requiredMessage := fmt.Sprintf(
+			"GitHub token is required. Run `%s` in your terminal locally, paste the token below, then click Done.",
+			claudeGitHubConfigureCommand,
+		)
+		token, state, err := configureGitHubToken(
+			agentruntime.HarnessAuggie,
+			runtimeConfigPath,
+			initCfg,
+			rawInput,
+			requiredMessage,
+		)
+		if err != nil {
 			g.mu.Lock()
 			g.ready = false
 			g.state = "needs_configure"
-			g.configureCommand = claudeGitHubConfigureCommand
-			g.configurePlaceholder = claudeGitHubConfigurePlaceholder
-			g.message = fmt.Sprintf(
-				"GitHub token is required. Run `%s` in your terminal locally, paste the token below, then click Done.",
-				claudeGitHubConfigureCommand,
-			)
-			g.updatedAt = time.Now().UTC()
-			snap := g.snapshotLocked()
-			g.mu.Unlock()
-			return snap, fmt.Errorf("github token is required")
-		}
-
-		if err := hub.SaveRuntimeConfigGitHubToken(runtimeConfigPath, initCfg, token); err != nil {
-			g.mu.Lock()
-			g.ready = false
-			g.state = "needs_configure"
-			g.configureCommand = claudeGitHubConfigureCommand
-			g.configurePlaceholder = claudeGitHubConfigurePlaceholder
-			g.message = fmt.Sprintf("save github token: %v", err)
-			g.updatedAt = time.Now().UTC()
-			snap := g.snapshotLocked()
-			g.mu.Unlock()
-			return snap, err
-		}
-		if err := setGitHubTokenEnvironment(token); err != nil {
-			g.mu.Lock()
-			g.ready = false
-			g.state = "needs_configure"
-			g.configureCommand = claudeGitHubConfigureCommand
-			g.configurePlaceholder = claudeGitHubConfigurePlaceholder
-			g.message = fmt.Sprintf("set github token env: %v", err)
+			g.configureCommand = state.ConfigureCommand
+			g.configurePlaceholder = state.ConfigurePlaceholder
+			g.message = state.Message
 			g.updatedAt = time.Now().UTC()
 			snap := g.snapshotLocked()
 			g.mu.Unlock()

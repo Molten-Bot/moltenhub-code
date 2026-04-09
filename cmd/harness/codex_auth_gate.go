@@ -327,24 +327,20 @@ func (g *codexAuthGate) Configure(_ context.Context, rawInput string) (hubui.Age
 		return readyAgentAuthState(), nil
 	}
 
-	token := strings.TrimSpace(rawInput)
-	if token == "" {
-		state := g.needsGitHubTokenState("GitHub token is required. Paste a GitHub token below, then click Done.")
-		return state, fmt.Errorf("github token is required")
-	}
-
 	g.mu.Lock()
 	runtimeConfigPath := g.runtimeConfigPath
 	initCfg := g.initCfg
 	g.mu.Unlock()
 
-	if err := hub.SaveRuntimeConfigGitHubToken(runtimeConfigPath, initCfg, token); err != nil {
-		state := g.needsGitHubTokenState(fmt.Sprintf("save github token: %v", err))
-		return state, err
-	}
-	if err := setGitHubTokenEnvironment(token); err != nil {
-		state := g.needsGitHubTokenState(fmt.Sprintf("set github token env: %v", err))
-		return state, err
+	token, failureState, err := configureGitHubToken(
+		agentruntime.HarnessCodex,
+		runtimeConfigPath,
+		initCfg,
+		rawInput,
+		githubTokenPasteConfigureMessage,
+	)
+	if err != nil {
+		return failureState, err
 	}
 
 	g.mu.Lock()
@@ -500,10 +496,6 @@ func (g *codexAuthGate) snapshotLocked() hubui.AgentAuthState {
 	}
 }
 
-func (g *codexAuthGate) needsGitHubTokenState(message string) hubui.AgentAuthState {
-	return githubTokenNeedsConfigureState(agentruntime.HarnessCodex, message)
-}
-
 func (g *codexAuthGate) githubTokenRequirementState() (bool, hubui.AgentAuthState) {
 	if g == nil || !g.requireGitHubToken {
 		return false, hubui.AgentAuthState{}
@@ -514,15 +506,7 @@ func (g *codexAuthGate) githubTokenRequirementState() (bool, hubui.AgentAuthStat
 	initCfg := g.initCfg
 	g.mu.Unlock()
 
-	githubToken, _ := firstConfiguredGitHubToken(runtimeConfigPath, initCfg)
-	if strings.TrimSpace(githubToken) == "" {
-		return true, g.needsGitHubTokenState("")
-	}
-	if err := setGitHubTokenEnvironment(githubToken); err != nil {
-		return true, g.needsGitHubTokenState(fmt.Sprintf("set github token env: %v", err))
-	}
-
-	return false, hubui.AgentAuthState{}
+	return githubTokenRequirementState(agentruntime.HarnessCodex, runtimeConfigPath, initCfg)
 }
 
 func stripANSI(text string) string {
