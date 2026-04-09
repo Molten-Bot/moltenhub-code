@@ -41,8 +41,9 @@ The notes below reflect that spec plus the runtime implementation in [`internal/
 Observed transport behavior:
 
 - runtime registration patches `/agents/me/metadata`
+- runtime status updates use `/agents/me/status` (with metadata patch fallback)
 - task results publish to `/openclaw/messages/publish`
-- pull fallback uses `/openclaw/messages/pull`
+- pull fallback uses `GET /openclaw/messages/pull`
 - delivery acknowledgement uses `/openclaw/messages/ack`
 - delivery release uses `/openclaw/messages/nack`
 - websocket transport uses `/openclaw/messages/ws`

@@ -21,6 +21,7 @@ func TestOpenAPISnapshotIncludesRuntimeIntegrationRoutes(t *testing.T) {
 	requiredRoutes := []string{
 		"/agents/me/metadata:",
 		"/agents/me:",
+		"/agents/me/status:",
 		"/openclaw/messages/publish:",
 		"/openclaw/messages/pull:",
 		"/openclaw/messages/ack:",
@@ -32,6 +33,9 @@ func TestOpenAPISnapshotIncludesRuntimeIntegrationRoutes(t *testing.T) {
 		if !strings.Contains(content, route) {
 			t.Fatalf("%s missing required route %q", source, route)
 		}
+	}
+	if !strings.Contains(content, "/openclaw/messages/pull:\n    get:") {
+		t.Fatalf("%s missing expected GET method for /openclaw/messages/pull", source)
 	}
 
 	if strings.Contains(content, "/openclaw/messages/register-plugin:") {
@@ -61,6 +65,7 @@ func TestOpenAPISnapshotFileExistsForOfflineReview(t *testing.T) {
 	for _, route := range []string{
 		"/agents/me/metadata:",
 		"/agents/me:",
+		"/agents/me/status:",
 		"/openclaw/messages/publish:",
 		"/openclaw/messages/pull:",
 		"/openclaw/messages/ack:",

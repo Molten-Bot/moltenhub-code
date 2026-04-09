@@ -34,6 +34,17 @@ paths:
       responses:
         "200":
           description: OK
+  /agents/me/status:
+    patch:
+      summary: Update current agent online/offline status
+      responses:
+        "200":
+          description: OK
+    post:
+      summary: Alternate status update endpoint
+      responses:
+        "200":
+          description: OK
   /openclaw/messages/publish:
     post:
       summary: Publish message to OpenClaw transport
@@ -41,7 +52,7 @@ paths:
         "202":
           description: Accepted
   /openclaw/messages/pull:
-    post:
+    get:
       summary: Pull one or more queued messages
       responses:
         "200":
