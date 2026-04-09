@@ -703,6 +703,7 @@ body .right-col.prompt-collapsed.task-list-hidden {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   color: var(--surface-tab-text);
   padding: 9px 12px;
   font-size: 0.73rem;
@@ -727,6 +728,19 @@ body .right-col.prompt-collapsed.task-list-hidden {
 
 .prompt-mode-link:not(.active) {
   opacity: 0.86;
+}
+
+.prompt-mode-link img {
+  display: block;
+  width: 15px;
+  height: 15px;
+  object-fit: contain;
+  filter: var(--agent-logo-filter);
+}
+
+.prompt-mode-link-github {
+  min-width: 40px;
+  padding-inline: 12px;
 }
 
 .prompt-titlebar .prompt-visibility-toggle {
@@ -755,44 +769,6 @@ body .right-col.prompt-collapsed.task-list-hidden {
   width: max-content;
   max-width: calc(100vw - 28px);
   overflow-x: auto;
-}
-
-.page-bottom-dock-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 11px 14px;
-  border: 1px solid var(--surface-tab-border);
-  border-radius: 999px;
-  background: var(--surface-tab-bg);
-  box-shadow: var(--surface-tab-shadow);
-  color: var(--surface-tab-text);
-  font-size: 0.73rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  line-height: 1;
-  text-decoration: none;
-  text-transform: uppercase;
-  white-space: nowrap;
-  transition: color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease;
-}
-
-.page-bottom-dock-link:hover,
-.page-bottom-dock-link:focus-visible {
-  color: var(--surface-tab-hover-text);
-}
-
-.page-bottom-dock-link:focus-visible {
-  outline: none;
-  box-shadow: var(--theme-button-focus);
-}
-
-.page-bottom-dock-link img {
-  display: block;
-  width: 15px;
-  height: 15px;
-  object-fit: contain;
-  filter: var(--agent-logo-filter);
 }
 
 #task-panel {
@@ -2557,10 +2533,6 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
 
   .prompt-mode-tabs-dock {
     max-width: calc(100vw - 24px);
-  }
-
-  .page-bottom-dock-link {
-    flex-shrink: 0;
   }
 
   .theme-controls {

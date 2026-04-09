@@ -593,9 +593,6 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".prompt-mode-tabs-dock {\n  width: max-content;\n  max-width: calc(100vw - 28px);\n  overflow-x: auto;\n}") {
 		t.Fatalf("expected Studio mode tabs to remain scrollable within the bottom dock on narrow viewports")
 	}
-	if !strings.Contains(css, ".page-bottom-dock-link {\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n  padding: 11px 14px;") {
-		t.Fatalf("expected bottom dock to include a dedicated GitHub profile pill beside the Studio mode tabs")
-	}
 	if !strings.Contains(css, ".prompt-wrap.panel {\n  display: flex;\n  flex-direction: column;\n  position: relative;") {
 		t.Fatalf("expected studio panel to participate in the page flow instead of docking itself to the viewport")
 	}
@@ -607,6 +604,12 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	}
 	if !strings.Contains(css, ".prompt-mode-link.active {\n  color: var(--surface-tab-active-text);\n  box-shadow: inset 0 -2px 0 var(--surface-tab-active-text);\n}") {
 		t.Fatalf("expected active Studio mode link to stay visually highlighted without button sections")
+	}
+	if !strings.Contains(css, ".prompt-mode-link img {\n  display: block;\n  width: 15px;\n  height: 15px;\n  object-fit: contain;\n  filter: var(--agent-logo-filter);\n}") {
+		t.Fatalf("expected integrated dock icons to inherit the shared monochrome treatment")
+	}
+	if !strings.Contains(css, ".prompt-mode-link-github {\n  min-width: 40px;\n  padding-inline: 12px;\n}") {
+		t.Fatalf("expected the icon-only GitHub dock item to align with the main segmented menu")
 	}
 	if !strings.Contains(css, ".prompt-form {\n  display: grid;\n  gap: 10px;\n  padding: 14px;\n  min-width: 0;\n  min-height: 0;\n  overflow-y: auto;\n}") {
 		t.Fatalf("expected studio form content to use the full panel now that the mode dock lives outside it")
@@ -635,7 +638,7 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".prompt-image-chip {\n  border-radius: 14px;\n  border: 1px solid var(--border);\n  background: var(--surface-glass-strong);") {
 		t.Fatalf("expected screenshot chips to use the shared theme-aware panel treatment")
 	}
-	if !strings.Contains(css, "@media (max-width: 700px) {\n  .page-bottom-dock {\n    bottom: max(12px, env(safe-area-inset-bottom));\n    max-width: calc(100vw - 24px);\n  }\n\n  .prompt-mode-tabs-dock {\n    max-width: calc(100vw - 24px);\n  }\n\n  .page-bottom-dock-link {\n    flex-shrink: 0;\n  }\n\n  .theme-controls {\n    right: 12px;\n    bottom: 76px;\n    left: auto;\n    max-width: calc(100vw - 24px);\n  }") {
+	if !strings.Contains(css, "@media (max-width: 700px) {\n  .page-bottom-dock {\n    bottom: max(12px, env(safe-area-inset-bottom));\n    max-width: calc(100vw - 24px);\n  }\n\n  .prompt-mode-tabs-dock {\n    max-width: calc(100vw - 24px);\n  }\n\n  .theme-controls {\n    right: 12px;\n    bottom: 76px;\n    left: auto;\n    max-width: calc(100vw - 24px);\n  }") {
 		t.Fatalf("expected mobile layout to keep the bottom mode dock and theme selector from colliding")
 	}
 	if !strings.Contains(css, "@media (max-width: 640px) {\n  .prompt-actions {\n    flex-wrap: wrap;\n    gap: 6px;\n  }\n\n  .prompt-actions-start,\n  .submit-status-inline,\n  .prompt-actions-end {\n    flex: 1 1 100%;\n    width: 100%;\n  }\n\n  .prompt-actions-end {\n    justify-content: flex-end;\n    margin-left: 0;\n  }\n\n  .prompt-action-paste {\n    max-width: none;\n  }\n\n  .submit-status-inline {\n    min-width: 0;\n  }\n\n  .prompt-action-button {\n    flex: 1 1 0;\n    min-inline-size: 0;\n  }") {

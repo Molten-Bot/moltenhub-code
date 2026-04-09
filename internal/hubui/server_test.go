@@ -564,14 +564,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="prompt-mode-json"`) {
 		t.Fatalf("expected index html to include json mode toggle")
 	}
-	if !strings.Contains(markup, `class="prompt-mode-link active" href="#studio-builder" role="tab" aria-selected="true"`) {
-		t.Fatalf("expected builder mode to render as an anchor-style control instead of a button section")
+	if !strings.Contains(markup, `class="prompt-mode-link active" href="#studio-builder" aria-selected="true"`) {
+		t.Fatalf("expected builder mode to render as an anchor-style control inside the shared segmented dock")
 	}
-	if !strings.Contains(markup, `class="prompt-mode-link" href="#studio-library" role="tab" aria-selected="false"`) {
-		t.Fatalf("expected library mode to render as an anchor-style control instead of a button section")
+	if !strings.Contains(markup, `class="prompt-mode-link" href="#studio-library" aria-selected="false"`) {
+		t.Fatalf("expected library mode to render as an anchor-style control inside the shared segmented dock")
 	}
-	if !strings.Contains(markup, `class="prompt-mode-link" href="#studio-json" role="tab" aria-selected="false"`) {
-		t.Fatalf("expected json mode to render as an anchor-style control instead of a button section")
+	if !strings.Contains(markup, `class="prompt-mode-link" href="#studio-json" aria-selected="false"`) {
+		t.Fatalf("expected json mode to render as an anchor-style control inside the shared segmented dock")
 	}
 	if !strings.Contains(markup, `class="page-bottom-dock"`) || !strings.Contains(markup, `class="prompt-mode-tabs prompt-mode-tabs-dock"`) {
 		t.Fatalf("expected index html to render the mode toggles in the bottom dock")
@@ -579,10 +579,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="github-profile-link"`) ||
 		!strings.Contains(markup, `href="https://github.com/settings/profile"`) ||
 		!strings.Contains(markup, `target="_blank"`) {
-		t.Fatalf("expected index html to render a bottom-dock GitHub profile link that opens in a new window")
+		t.Fatalf("expected index html to render an integrated GitHub dock link that opens in a new window")
 	}
-	if !strings.Contains(markup, `src="/static/logos/github.svg"`) || !strings.Contains(markup, `>GitHub</span>`) {
-		t.Fatalf("expected index html to render the GitHub dock link with the GitHub logo and label")
+	if !strings.Contains(markup, `class="prompt-mode-link prompt-mode-link-github"`) ||
+		!strings.Contains(markup, `src="/static/logos/github.svg"`) {
+		t.Fatalf("expected index html to render GitHub as an icon-only item inside the shared segmented dock")
+	}
+	if strings.Contains(markup, `>GitHub<`) {
+		t.Fatalf("expected index html to remove visible GitHub text from the dock menu")
 	}
 	if strings.Index(markup, `id="task-panel"`) > strings.Index(markup, `class="panel prompt-wrap`) {
 		t.Fatalf("expected index html to render Task View before Studio in the page layout")
@@ -1052,12 +1056,14 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".page-bottom-dock {\n  position: fixed;\n  left: 50%;\n  bottom: max(16px, env(safe-area-inset-bottom));\n  z-index: 61;\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  justify-content: center;") {
 		t.Fatalf("expected stylesheet to align the bottom dock tabs and GitHub profile link on a shared row")
 	}
-	if !strings.Contains(css, ".page-bottom-dock-link {\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;") ||
-		!strings.Contains(css, "text-transform: uppercase;") {
-		t.Fatalf("expected stylesheet to include dedicated bottom-dock GitHub profile link styles")
+	if !strings.Contains(css, ".prompt-mode-link {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;") {
+		t.Fatalf("expected segmented dock links to support icon-and-text spacing within the shared menu")
 	}
-	if !strings.Contains(css, ".page-bottom-dock-link img {\n  display: block;\n  width: 15px;\n  height: 15px;") {
-		t.Fatalf("expected stylesheet to size the bottom-dock GitHub logo as a compact icon")
+	if !strings.Contains(css, ".prompt-mode-link img {\n  display: block;\n  width: 15px;\n  height: 15px;") {
+		t.Fatalf("expected stylesheet to size dock icons for integrated menu items")
+	}
+	if !strings.Contains(css, ".prompt-mode-link-github {\n  min-width: 40px;\n  padding-inline: 12px;\n}") {
+		t.Fatalf("expected stylesheet to keep the icon-only GitHub dock item balanced with the text tabs")
 	}
 	if !strings.Contains(css, ".task-fullscreen {\n  position: fixed;\n  inset: 0;\n  z-index: 80;\n  padding: 0;") {
 		t.Fatalf("expected stylesheet to make full screen task layout use full viewport padding")

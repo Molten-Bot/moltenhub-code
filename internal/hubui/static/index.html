@@ -332,22 +332,21 @@
   </div>
 
   <div class="page-bottom-dock" aria-hidden="false">
-    <div class="prompt-mode-tabs prompt-mode-tabs-dock" role="tablist" aria-label="Studio mode">
-      <a id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" role="tab" aria-selected="true">Builder</a>
-      <a id="prompt-mode-library" class="prompt-mode-link" href="#studio-library" role="tab" aria-selected="false">Library</a>
-      <a id="prompt-mode-json" class="prompt-mode-link" href="#studio-json" role="tab" aria-selected="false">JSON</a>
+    <div class="prompt-mode-tabs prompt-mode-tabs-dock" aria-label="Studio and GitHub navigation">
+      <a id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true">Builder</a>
+      <a id="prompt-mode-library" class="prompt-mode-link" href="#studio-library" aria-selected="false">Library</a>
+      <a id="prompt-mode-json" class="prompt-mode-link" href="#studio-json" aria-selected="false">JSON</a>
+      <a
+        id="github-profile-link"
+        class="prompt-mode-link prompt-mode-link-github"
+        href="https://github.com/settings/profile"
+        target="_blank"
+        rel="noreferrer noopener"
+        aria-label="Open your GitHub profile in a new window"
+        title="Open your GitHub profile in a new window">
+        <img src="/static/logos/github.svg" alt="" aria-hidden="true">
+      </a>
     </div>
-    <a
-      id="github-profile-link"
-      class="page-bottom-dock-link"
-      href="https://github.com/settings/profile"
-      target="_blank"
-      rel="noreferrer noopener"
-      aria-label="Open your GitHub profile in a new window"
-      title="Open your GitHub profile in a new window">
-      <img src="/static/logos/github.svg" alt="" aria-hidden="true">
-      <span>GitHub</span>
-    </a>
   </div>
 
   <div id="appearance-controls" class="theme-controls" role="group" aria-label="Appearance controls">
