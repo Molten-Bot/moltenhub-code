@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"github.com/jef/moltenhub-code/internal/execx"
 	"github.com/jef/moltenhub-code/internal/harness"
 	"github.com/jef/moltenhub-code/internal/hub"
+	"github.com/jef/moltenhub-code/internal/hubui"
 )
 
 func TestRunUsageMissingSubcommand(t *testing.T) {
@@ -672,4 +674,188 @@ func assertLogContains(t *testing.T, lines []string, want string) {
 		}
 	}
 	t.Fatalf("logs missing %q\nlogs:\n%s", want, strings.Join(lines, "\n"))
+}
+
+func TestCurrentHubSetupStateUsesStoredBindTokenAsNewAgentMode(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{
+  "version": "v1",
+  "base_url": "https://na.hub.molten.bot/v1",
+  "bind_token": "bind_saved",
+  "agent_token": "agent_saved",
+  "handle": "builder",
+  "profile": {
+    "display_name": "Builder",
+    "emoji": "🔥",
+    "bio": "Ships UI work"
+  },
+  "timeout_ms": 20000
+}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	state := currentHubSetupState(hub.InitConfig{RuntimeConfigPath: configPath})
+	if got, want := state.AgentMode, "new"; got != want {
+		t.Fatalf("AgentMode = %q, want %q", got, want)
+	}
+	if got, want := state.TokenType, "bind"; got != want {
+		t.Fatalf("TokenType = %q, want %q", got, want)
+	}
+	if got, want := state.Handle, "builder"; got != want {
+		t.Fatalf("Handle = %q, want %q", got, want)
+	}
+}
+
+func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
+	t.Parallel()
+
+	var bindCalled bool
+	var syncedHandle string
+	var syncedMetadata bool
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/bind-tokens":
+			bodyBytes, _ := io.ReadAll(r.Body)
+			if !strings.Contains(string(bodyBytes), `"bind_token":"bind-new"`) {
+				t.Fatalf("bind body = %s", string(bodyBytes))
+			}
+			bindCalled = true
+			_, _ = w.Write([]byte(`{"token":"agent-resolved"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
+			if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != "agent-resolved" {
+				t.Fatalf("GET /agents/me token = %q, want %q", got, "agent-resolved")
+			}
+			_, _ = w.Write([]byte(`{"handle":"new-builder","profile":{"display_name":"Molten Builder","emoji":"🔥","bio":"Builds things"}}`))
+		case (r.Method == http.MethodPost || r.Method == http.MethodPatch) && (r.URL.Path == "/v1/agents/me/metadata" || r.URL.Path == "/v1/agents/me"):
+			if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != "agent-resolved" {
+				t.Fatalf("sync token = %q, want %q", got, "agent-resolved")
+			}
+			bodyBytes, _ := io.ReadAll(r.Body)
+			body := string(bodyBytes)
+			if strings.Contains(body, `"handle":"new-builder"`) {
+				syncedHandle = "new-builder"
+			}
+			if strings.Contains(body, `"metadata"`) {
+				syncedMetadata = true
+			}
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	state, err := configureHubSetup(context.Background(), hub.InitConfig{
+		BaseURL:           server.URL + "/v1",
+		AgentHarness:      "codex",
+		RuntimeConfigPath: configPath,
+	}, hubui.HubSetupRequest{
+		AgentMode: "new",
+		Token:     "bind-new",
+		Handle:    "new-builder",
+		Profile: struct {
+			Bio         string `json:"bio"`
+			DisplayName string `json:"display_name"`
+			Emoji       string `json:"emoji"`
+		}{
+			Bio:         "Builds things",
+			DisplayName: "Molten Builder",
+			Emoji:       "🔥",
+		},
+	})
+	if err != nil {
+		t.Fatalf("configureHubSetup() error = %v", err)
+	}
+	if !bindCalled {
+		t.Fatal("expected bind token flow to be used for new agent setup")
+	}
+	if syncedHandle == "" || !syncedMetadata {
+		t.Fatalf("expected profile sync requests, got handle=%q metadata=%v", syncedHandle, syncedMetadata)
+	}
+	if got, want := state.AgentMode, "new"; got != want {
+		t.Fatalf("AgentMode = %q, want %q", got, want)
+	}
+	if got, want := state.TokenType, "bind"; got != want {
+		t.Fatalf("TokenType = %q, want %q", got, want)
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	contents := string(data)
+	if !strings.Contains(contents, `"bind_token": "bind-new"`) {
+		t.Fatalf("saved config missing bind_token: %s", contents)
+	}
+	if !strings.Contains(contents, `"agent_token": "agent-resolved"`) {
+		t.Fatalf("saved config missing resolved agent token: %s", contents)
+	}
+}
+
+func TestConfigureHubSetupExistingAgentUsesAgentTokenFlow(t *testing.T) {
+	t.Parallel()
+
+	var getCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me" {
+			getCalls++
+			if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != "agent-existing" {
+				t.Fatalf("GET /agents/me token = %q, want %q", got, "agent-existing")
+			}
+			_, _ = w.Write([]byte(`{"handle":"existing-agent","profile":{"display_name":"Existing Agent","emoji":"🤖","bio":"Owns automation"}}`))
+			return
+		}
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf(`{"base_url":%q,"bind_token":"stale_bind"}`, server.URL+"/v1")), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	state, err := configureHubSetup(context.Background(), hub.InitConfig{
+		BaseURL:           server.URL + "/v1",
+		AgentHarness:      "codex",
+		RuntimeConfigPath: configPath,
+	}, hubui.HubSetupRequest{
+		AgentMode: "existing",
+		Token:     "agent-existing",
+	})
+	if err != nil {
+		t.Fatalf("configureHubSetup() error = %v", err)
+	}
+	if getCalls < 2 {
+		t.Fatalf("GET /agents/me calls = %d, want at least 2", getCalls)
+	}
+	if got, want := state.AgentMode, "existing"; got != want {
+		t.Fatalf("AgentMode = %q, want %q", got, want)
+	}
+	if got, want := state.TokenType, "agent"; got != want {
+		t.Fatalf("TokenType = %q, want %q", got, want)
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	contents := string(data)
+	if strings.Contains(contents, `"bind_token"`) {
+		t.Fatalf("saved config should remove stale bind_token: %s", contents)
+	}
+	if !strings.Contains(contents, `"agent_token": "agent-existing"`) {
+		t.Fatalf("saved config missing agent token: %s", contents)
+	}
 }

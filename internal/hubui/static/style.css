@@ -2230,8 +2230,14 @@ select.prompt-control {
 .hub-setup-toggle-row {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 12px;
   justify-content: space-between;
+}
+
+.hub-setup-toggle-heading {
+  display: inline-flex;
+  align-items: center;
 }
 
 .hub-setup-toggle-group {
@@ -2279,6 +2285,35 @@ select.prompt-control {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+
+.hub-setup-signin-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  border-radius: 999px;
+  opacity: 0.68;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.hub-setup-signin-logo img {
+  width: 28px;
+  height: 28px;
+  display: block;
+  filter: grayscale(1) brightness(1.08);
+  transition: filter 180ms ease;
+}
+
+.hub-setup-signin-logo:hover,
+.hub-setup-signin-logo:focus-visible {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
+.hub-setup-signin-logo:hover img,
+.hub-setup-signin-logo:focus-visible img {
+  filter: none;
 }
 
 .hub-setup-actions {

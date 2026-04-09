@@ -61,7 +61,7 @@ func TestHandleHubSetupStatusAndConfigure(t *testing.T) {
 		t.Fatalf("GET hub setup body = %#v, want configured ok response", getBody)
 	}
 
-	postReq := httptest.NewRequest(http.MethodPost, "/api/hub-setup", strings.NewReader(`{"agent_mode":"existing","token_type":"bind","token":"bind-token"}`))
+	postReq := httptest.NewRequest(http.MethodPost, "/api/hub-setup", strings.NewReader(`{"agent_mode":"new","token_type":"bind","token":"bind-token"}`))
 	postReq.Header.Set("Content-Type", "application/json")
 	postResp := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(postResp, postReq)
@@ -76,7 +76,7 @@ func TestHandleHubSetupStatusAndConfigure(t *testing.T) {
 	if err := json.NewDecoder(postResp.Body).Decode(&postBody); err != nil {
 		t.Fatalf("decode POST body: %v", err)
 	}
-	if !postBody.OK || postBody.Hub.Handle != "saved-agent" || !postBody.Hub.NeedsRestart {
+	if !postBody.OK || postBody.Hub.Handle != "saved-agent" || !postBody.Hub.NeedsRestart || postBody.Hub.AgentMode != "new" || postBody.Hub.TokenType != "bind" {
 		t.Fatalf("POST hub setup body = %#v, want saved state", postBody)
 	}
 }
@@ -257,6 +257,9 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	}
 	if !strings.Contains(stylesheet, `.hub-setup-profile-grid {`) {
 		t.Fatalf("expected stylesheet to include hub setup profile grid styles")
+	}
+	if !strings.Contains(stylesheet, `.hub-setup-signin-logo {`) {
+		t.Fatalf("expected stylesheet to include the hub setup sign-in logo styles")
 	}
 }
 

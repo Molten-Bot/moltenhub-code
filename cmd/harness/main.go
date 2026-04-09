@@ -1472,7 +1472,7 @@ func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 		ConnectURL:   "https://app.molten.bot/signin?target=hub",
 		DashboardURL: "https://app.molten.bot/hub",
 		AgentMode:    "existing",
-		TokenType:    "bind",
+		TokenType:    "agent",
 	}
 
 	activeCfg := cfg
@@ -1489,9 +1489,11 @@ func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 	state.Profile.DisplayName = strings.TrimSpace(activeCfg.Profile.DisplayName)
 	state.Profile.Emoji = strings.TrimSpace(activeCfg.Profile.Emoji)
 	if state.Configured {
-		state.TokenType = "agent"
 		if strings.TrimSpace(activeCfg.BindToken) != "" {
+			state.AgentMode = "new"
 			state.TokenType = "bind"
+		} else {
+			state.TokenType = "agent"
 		}
 		state.Message = "Molten Hub credentials are saved locally."
 	}
@@ -1501,7 +1503,7 @@ func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSetupRequest) (hubui.HubSetupState, error) {
 	state := currentHubSetupState(cfg)
 	state.AgentMode = normalizeHubSetupMode(req.AgentMode)
-	state.TokenType = normalizeHubSetupTokenType(req.TokenType)
+	state.TokenType = hubSetupTokenTypeForMode(state.AgentMode)
 	state.Handle = strings.TrimSpace(req.Handle)
 	state.Profile.Bio = strings.TrimSpace(req.Profile.Bio)
 	state.Profile.DisplayName = strings.TrimSpace(req.Profile.DisplayName)
@@ -1522,7 +1524,7 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 
 	activeCfg.BindToken = ""
 	activeCfg.AgentToken = ""
-	if state.TokenType == "bind" {
+	if state.AgentMode == "new" {
 		activeCfg.BindToken = token
 	} else {
 		activeCfg.AgentToken = token
@@ -1591,6 +1593,13 @@ func normalizeHubSetupTokenType(tokenType string) string {
 	default:
 		return "bind"
 	}
+}
+
+func hubSetupTokenTypeForMode(mode string) string {
+	if normalizeHubSetupMode(mode) == "new" {
+		return normalizeHubSetupTokenType("bind")
+	}
+	return normalizeHubSetupTokenType("agent")
 }
 
 func mergeProfileConfig(primary, secondary hub.ProfileConfig) hub.ProfileConfig {

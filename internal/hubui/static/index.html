@@ -336,7 +336,7 @@
       <div class="flex items-start justify-between gap-4">
         <div>
           <h2 class="text-[2rem] font-semibold leading-tight text-hub-text">Connect Molten Hub</h2>
-          <p id="hub-setup-message" class="mt-3 max-w-xl text-base leading-7 text-hub-text/85">Save either a bind token or an agent token, then restart this runtime to enable remote Hub transport.</p>
+          <p id="hub-setup-message" class="mt-3 max-w-xl text-base leading-7 text-hub-text/85">Save your Molten Hub token, then restart this runtime to enable remote Hub transport.</p>
         </div>
         <button id="hub-setup-close" class="task-fullscreen-close !relative !top-0 !right-0 !flex" type="button" aria-label="Close Molten Hub setup" title="Close Molten Hub setup">
           <span class="task-fullscreen-close-icon" aria-hidden="true">&times;</span>
@@ -346,19 +346,18 @@
 
       <form id="hub-setup-form" class="mt-6 grid gap-4">
         <div class="hub-setup-toggle-row">
-          <div class="hub-setup-toggle-group" role="tablist" aria-label="Agent mode">
-            <button id="hub-setup-existing-toggle" class="hub-setup-toggle active" type="button" data-agent-mode="existing" aria-pressed="true">Existing agent</button>
-            <button id="hub-setup-new-toggle" class="hub-setup-toggle" type="button" data-agent-mode="new" aria-pressed="false">New agent</button>
+          <div class="hub-setup-toggle-heading">
+            <span class="prompt-label">Agent</span>
           </div>
-          <div class="hub-setup-toggle-group" role="tablist" aria-label="Token type">
-            <button id="hub-setup-bind-toggle" class="hub-setup-toggle active" type="button" data-token-type="bind" aria-pressed="true">Bind token</button>
-            <button id="hub-setup-agent-toggle" class="hub-setup-toggle" type="button" data-token-type="agent" aria-pressed="false">Agent token</button>
+          <div class="hub-setup-toggle-group" role="tablist" aria-label="Agent">
+            <button id="hub-setup-existing-toggle" class="hub-setup-toggle active" type="button" data-agent-mode="existing" aria-pressed="true">Existing</button>
+            <button id="hub-setup-new-toggle" class="hub-setup-toggle" type="button" data-agent-mode="new" aria-pressed="false">New</button>
           </div>
         </div>
 
         <label class="prompt-field">
-          <span class="prompt-label">Token</span>
-          <textarea id="hub-setup-token" class="prompt-text prompt-control min-h-[96px] w-full rounded-lg border border-hub-border p-2.5 font-mono text-[0.84rem] leading-[1.4]" rows="4" spellcheck="false" placeholder="Paste bind token or agent token"></textarea>
+          <span id="hub-setup-token-label" class="prompt-label">Agent Token</span>
+          <textarea id="hub-setup-token" class="prompt-text prompt-control min-h-[96px] w-full rounded-lg border border-hub-border p-2.5 font-mono text-[0.84rem] leading-[1.4]" rows="4" spellcheck="false" placeholder="Paste agent token"></textarea>
         </label>
 
         <div id="hub-setup-new-agent-fields" class="hub-setup-profile-grid hidden">
@@ -389,10 +388,20 @@
         </div>
 
         <div class="hub-setup-footer">
-          <a id="hub-setup-signin-link" class="agent-auth-url" href="https://app.molten.bot/signin?target=hub" target="_blank" rel="noopener noreferrer">Open Molten Hub sign-in</a>
+          <a
+            id="hub-setup-signin-link"
+            class="hub-setup-signin-logo"
+            href="https://app.molten.bot/signin?target=hub"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Open Molten Hub sign-in in a new window"
+            title="Open Molten Hub sign-in in a new window">
+            <img src="https://app.molten.bot/logo.svg" alt="" aria-hidden="true">
+            <span class="sr-only">Open Molten Hub sign-in</span>
+          </a>
           <div class="hub-setup-actions">
             <span id="hub-setup-status" class="submit-status submit-status-inline min-h-[1.3em] text-[0.74rem] leading-[1.3] text-hub-muted"></span>
-            <button id="hub-setup-submit" class="agent-auth-verify !block" type="submit">Save Hub setup</button>
+            <button id="hub-setup-submit" class="agent-auth-verify !block" type="submit">Done</button>
           </div>
         </div>
       </form>
@@ -570,10 +579,11 @@
     function normalizeHubSetup(raw) {
       const hub = raw && typeof raw === "object" ? raw : {};
       const profile = hub.profile && typeof hub.profile === "object" ? hub.profile : {};
+      const agentMode = String(hub.agent_mode || hub.agentMode || "").trim() || "existing";
       return {
         configured: Boolean(hub.configured),
-        agentMode: String(hub.agent_mode || hub.agentMode || "").trim() || "existing",
-        tokenType: String(hub.token_type || hub.tokenType || "").trim() || "bind",
+        agentMode,
+        tokenType: agentMode === "new" ? "bind" : "agent",
         handle: String(hub.handle || "").trim(),
         profile: {
           bio: String(profile.bio || "").trim(),
@@ -766,8 +776,7 @@
     const hubSetupClose = document.getElementById("hub-setup-close");
     const hubSetupExistingToggle = document.getElementById("hub-setup-existing-toggle");
     const hubSetupNewToggle = document.getElementById("hub-setup-new-toggle");
-    const hubSetupBindToggle = document.getElementById("hub-setup-bind-toggle");
-    const hubSetupAgentToggle = document.getElementById("hub-setup-agent-toggle");
+    const hubSetupTokenLabel = document.getElementById("hub-setup-token-label");
     const hubSetupToken = document.getElementById("hub-setup-token");
     const hubSetupNewAgentFields = document.getElementById("hub-setup-new-agent-fields");
     const hubSetupHandle = document.getElementById("hub-setup-handle");
@@ -1135,7 +1144,7 @@
         hubSetupSigninLink.href = state.hubSetup.connectURL;
       }
       if (hubSetupMessage) {
-        hubSetupMessage.textContent = state.hubSetup.message || "Save either a bind token or an agent token, then restart this runtime to enable remote Hub transport.";
+        hubSetupMessage.textContent = state.hubSetup.message || "Save your Molten Hub token, then restart this runtime to enable remote Hub transport.";
       }
       if (hubSetupHandle) {
         hubSetupHandle.value = state.hubSetup.handle || "";
@@ -1151,7 +1160,6 @@
       }
 
       const isNew = state.hubSetup.agentMode === "new";
-      const isBind = state.hubSetup.tokenType !== "agent";
       if (hubSetupExistingToggle) {
         hubSetupExistingToggle.classList.toggle("active", !isNew);
         hubSetupExistingToggle.setAttribute("aria-pressed", String(!isNew));
@@ -1160,19 +1168,14 @@
         hubSetupNewToggle.classList.toggle("active", isNew);
         hubSetupNewToggle.setAttribute("aria-pressed", String(isNew));
       }
-      if (hubSetupBindToggle) {
-        hubSetupBindToggle.classList.toggle("active", isBind);
-        hubSetupBindToggle.setAttribute("aria-pressed", String(isBind));
-      }
-      if (hubSetupAgentToggle) {
-        hubSetupAgentToggle.classList.toggle("active", !isBind);
-        hubSetupAgentToggle.setAttribute("aria-pressed", String(!isBind));
-      }
       if (hubSetupNewAgentFields) {
         hubSetupNewAgentFields.classList.toggle("hidden", !isNew);
       }
+      if (hubSetupTokenLabel) {
+        hubSetupTokenLabel.textContent = isNew ? "Bind Token" : "Agent Token";
+      }
       if (hubSetupToken) {
-        hubSetupToken.placeholder = isBind ? "Paste bind token" : "Paste agent token";
+        hubSetupToken.placeholder = isNew ? "Paste bind token" : "Paste agent token";
       }
       applyHubDockState();
       renderHubConnection(state.snapshot);
@@ -1212,9 +1215,10 @@
     }
 
     function currentHubSetupPayload() {
+      const isNew = state.hubSetup.agentMode === "new";
       return {
-        agent_mode: state.hubSetup.agentMode === "new" ? "new" : "existing",
-        token_type: state.hubSetup.tokenType === "agent" ? "agent" : "bind",
+        agent_mode: isNew ? "new" : "existing",
+        token_type: isNew ? "bind" : "agent",
         token: String(hubSetupToken?.value || "").trim(),
         handle: String(hubSetupHandle?.value || "").trim(),
         profile: {
@@ -1247,7 +1251,7 @@
       }
       const payload = currentHubSetupPayload();
       if (!payload.token) {
-        setHubSetupStatus("error", `${payload.token_type === "agent" ? "Agent" : "Bind"} token is required.`);
+        setHubSetupStatus("error", `${payload.agent_mode === "new" ? "Bind" : "Agent"} token is required.`);
         return;
       }
 
@@ -4307,16 +4311,6 @@
     if (hubSetupNewToggle) {
       hubSetupNewToggle.addEventListener("click", () => {
         applyHubSetupState(currentHubSetupDraft({ agentMode: "new" }));
-      });
-    }
-    if (hubSetupBindToggle) {
-      hubSetupBindToggle.addEventListener("click", () => {
-        applyHubSetupState(currentHubSetupDraft({ tokenType: "bind" }));
-      });
-    }
-    if (hubSetupAgentToggle) {
-      hubSetupAgentToggle.addEventListener("click", () => {
-        applyHubSetupState(currentHubSetupDraft({ tokenType: "agent" }));
       });
     }
     if (hubSetupClose) {

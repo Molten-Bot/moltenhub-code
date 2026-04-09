@@ -218,6 +218,18 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="hub-setup-signin-link"`) || !strings.Contains(markup, `https://app.molten.bot/signin?target=hub`) {
 		t.Fatalf("expected index html to include molten hub sign-in shortcut inside the setup dialog")
 	}
+	if !strings.Contains(markup, `class="hub-setup-signin-logo"`) {
+		t.Fatalf("expected index html to render the hub sign-in shortcut as a logo")
+	}
+	if !strings.Contains(markup, `id="hub-setup-token-label"`) {
+		t.Fatalf("expected index html to include the dynamic hub setup token label")
+	}
+	if strings.Contains(markup, `id="hub-setup-bind-toggle"`) || strings.Contains(markup, `id="hub-setup-agent-toggle"`) {
+		t.Fatalf("expected index html to remove the separate hub setup token type toggles")
+	}
+	if !strings.Contains(markup, `>Done</button>`) {
+		t.Fatalf("expected hub setup submit button copy to be updated")
+	}
 	if !strings.Contains(markup, `function normalizeHubSetup(raw)`) {
 		t.Fatalf("expected index html to include hub setup state normalization")
 	}
