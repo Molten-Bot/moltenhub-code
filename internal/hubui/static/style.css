@@ -738,16 +738,16 @@ body .right-col.prompt-collapsed.task-list-hidden {
   filter: var(--agent-logo-filter);
 }
 
-.prompt-mode-link-github {
+.prompt-mode-link-logo {
   min-width: 40px;
   padding-inline: 12px;
 }
 
-.prompt-mode-link-github {
+.prompt-mode-link-logo {
   position: relative;
 }
 
-.prompt-mode-link-github::before {
+.prompt-mode-link-logo-divider::before {
   content: "";
   display: block;
   width: 1px;
@@ -757,7 +757,7 @@ body .right-col.prompt-collapsed.task-list-hidden {
   background: rgba(112, 163, 221, 0.32);
 }
 
-.prompt-mode-link-github img {
+.prompt-mode-link-logo img {
   margin-left: 1px;
 }
 

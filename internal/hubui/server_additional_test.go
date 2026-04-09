@@ -134,6 +134,33 @@ func TestIndexAndStaticCacheHeaders(t *testing.T) {
 	}
 }
 
+func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodGet, "/static/style.css", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("GET /static/style.css status = %d, want 200", resp.Code)
+	}
+
+	stylesheet := resp.Body.String()
+	if !strings.Contains(stylesheet, `.prompt-mode-link-logo {`) {
+		t.Fatalf("expected stylesheet to define shared dock icon link styles")
+	}
+	if !strings.Contains(stylesheet, `.prompt-mode-link-logo-divider::before {`) {
+		t.Fatalf("expected stylesheet to define the dock icon divider style")
+	}
+	if !strings.Contains(stylesheet, `.prompt-mode-link-logo img {`) {
+		t.Fatalf("expected stylesheet to size dock icon images through shared logo styles")
+	}
+	if !strings.Contains(stylesheet, `filter: var(--agent-logo-filter);`) {
+		t.Fatalf("expected stylesheet to keep dock icons theme-reactive via agent logo filter")
+	}
+}
+
 func TestStreamEndpointCompactsEventsPayload(t *testing.T) {
 	t.Parallel()
 

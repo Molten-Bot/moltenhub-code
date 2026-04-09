@@ -196,6 +196,21 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `const LOGO_ROTATION_INTERVAL_MS = 8_000;`) {
 		t.Fatalf("expected index html to rotate brand logos every 8 seconds")
 	}
+	if !strings.Contains(markup, `id="moltenbot-hub-link"`) {
+		t.Fatalf("expected index html to include molten bot hub dock link")
+	}
+	if !strings.Contains(markup, `href="https://app.molten.bot/hub"`) {
+		t.Fatalf("expected index html to link dock icon to molten bot hub")
+	}
+	if !strings.Contains(markup, `img src="https://app.molten.bot/logo.svg"`) {
+		t.Fatalf("expected index html to use the remote molten bot logo asset")
+	}
+	if !strings.Contains(markup, `class="prompt-mode-link prompt-mode-link-logo prompt-mode-link-logo-divider"`) {
+		t.Fatalf("expected molten bot hub dock link to use shared icon-link styling with divider")
+	}
+	if !strings.Contains(markup, `class="prompt-mode-link prompt-mode-link-logo"`) {
+		t.Fatalf("expected github dock link to use shared icon-link styling")
+	}
 	if !strings.Contains(markup, "function syncBrandLogoRotation()") {
 		t.Fatalf("expected index html to include brand logo rotation controller")
 	}
