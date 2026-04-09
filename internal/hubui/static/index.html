@@ -295,7 +295,6 @@
         </a>
         <div id="agent-auth-browser-code" class="hidden space-y-2">
           <div id="agent-auth-browser-commands" class="space-y-2">
-            <div class="text-sm text-hub-text/80">Run locally</div>
             <div class="flex flex-wrap items-center gap-2.5">
               <div id="agent-auth-browser-command-primary" class="font-mono text-[1rem] tracking-[0.02em] text-hub-text">claude setup-token</div>
               <button id="agent-auth-browser-command-primary-copy" class="agent-auth-copy rounded-md px-2.5 py-1.5 text-xs font-medium" type="button">Copy</button>
@@ -306,10 +305,10 @@
               <button id="agent-auth-browser-command-secondary-copy" class="agent-auth-copy rounded-md px-2.5 py-1.5 text-xs font-medium" type="button">Copy</button>
             </div>
           </div>
-          <label class="text-sm font-medium text-hub-text/85" for="agent-auth-browser-code-input">Paste Claude authentication code, token, or credentials JSON</label>
           <textarea
             id="agent-auth-browser-code-input"
             class="prompt-text min-h-[96px] font-mono text-[0.9rem]"
+            aria-label="Authentication code or token input"
             placeholder="Paste browser code, token, or output of: cat ~/.claude/.credentials.json"
             spellcheck="false"></textarea>
           <p id="agent-auth-browser-code-error" class="hidden text-sm text-rose-200"></p>
@@ -317,12 +316,13 @@
       </div>
 
       <div id="agent-auth-configure" class="mt-5 hidden space-y-3">
+        <div id="agent-auth-configure-command-label" class="text-sm text-hub-text/80">Run in your terminal locally</div>
         <div class="flex flex-wrap items-center gap-2.5">
           <div id="agent-auth-configure-command" class="font-mono text-[1rem] tracking-[0.04em] text-hub-text">auggie token print</div>
           <button id="agent-auth-configure-copy" class="agent-auth-copy rounded-md px-2.5 py-1.5 text-xs font-medium" type="button">Copy</button>
         </div>
         <label id="agent-auth-configure-label" class="text-sm font-medium text-hub-text/85" for="agent-auth-configure-input">Paste configuration value</label>
-        <textarea id="agent-auth-configure-input" class="prompt-text min-h-[120px] font-mono text-[0.9rem]" placeholder='{"accessToken":"XXX","tenantURL":"https://YYY/","scopes":["email"]}' spellcheck="false"></textarea>
+        <textarea id="agent-auth-configure-input" class="prompt-text font-mono text-[0.9rem]" placeholder='{"accessToken":"XXX","tenantURL":"https://YYY/","scopes":["email"]}' spellcheck="false" rows="5" wrap="off"></textarea>
         <p id="agent-auth-configure-error" class="hidden text-sm text-rose-200"></p>
       </div>
 
@@ -556,6 +556,7 @@
       selectedTaskId: "",
       dismissedTaskIDs: loadDismissedTaskIDs(),
       libraryTasks: [],
+      libraryLoadError: "",
       repoHistory: loadRepoHistory(),
       promptMode: loadPromptMode(),
       selectedLibraryTask: "",
@@ -661,6 +662,7 @@
     const agentAuthBrowserCodeInput = document.getElementById("agent-auth-browser-code-input");
     const agentAuthBrowserCodeError = document.getElementById("agent-auth-browser-code-error");
     const agentAuthConfigure = document.getElementById("agent-auth-configure");
+    const agentAuthConfigureCommandLabel = document.getElementById("agent-auth-configure-command-label");
     const agentAuthConfigureCommand = document.getElementById("agent-auth-configure-command");
     const agentAuthConfigureLabel = document.getElementById("agent-auth-configure-label");
     const agentAuthConfigureCopy = document.getElementById("agent-auth-configure-copy");
@@ -1331,9 +1333,11 @@
         if (needsAuggieConfigure) {
           agentAuthTitle.textContent = "Setup Auggie";
         } else if (needsClaudeGitHubConfigure) {
-          agentAuthTitle.textContent = "GitHub Token Configure";
+          agentAuthTitle.textContent = "Setup GitHub";
         } else if (requiresManualConfigure) {
           agentAuthTitle.textContent = `${currentAgentLabel()} Configure`;
+        } else if (currentAgentLabel() === "Claude Code") {
+          agentAuthTitle.textContent = "Setup Claude";
         } else {
           agentAuthTitle.textContent = `Authorize ${currentAgentLabel()} to get started`;
         }
@@ -1392,12 +1396,18 @@
         const fallbackCommand = needsAuggieConfigure ? "auggie token print" : "gh auth token";
         agentAuthConfigureCommand.textContent = state.agentAuth.configureCommand || fallbackCommand;
       }
+      if (agentAuthConfigureCommandLabel) {
+        agentAuthConfigureCommandLabel.classList.toggle("hidden", needsClaudeGitHubConfigure);
+      }
       if (agentAuthConfigureLabel) {
         if (needsClaudeGitHubConfigure) {
           agentAuthConfigureLabel.textContent = "Paste GitHub token";
+        } else if (needsAuggieConfigure) {
+          agentAuthConfigureLabel.textContent = "Paste Auggie session JSON";
         } else {
           agentAuthConfigureLabel.textContent = "Paste configuration value";
         }
+        agentAuthConfigureLabel.classList.toggle("hidden", needsClaudeGitHubConfigure);
       }
       if (agentAuthConfigureInput) {
         const fallbackPlaceholder = needsAuggieConfigure
@@ -1405,6 +1415,8 @@
           : "ghp_xxx";
         const placeholder = state.agentAuth.configurePlaceholder || fallbackPlaceholder;
         agentAuthConfigureInput.placeholder = placeholder;
+        agentAuthConfigureInput.classList.toggle("agent-auth-configure-input-github", needsClaudeGitHubConfigure);
+        agentAuthConfigureInput.rows = needsClaudeGitHubConfigure ? 1 : 5;
       }
       if (!requiresManualConfigure) {
         setAuggieConfigureError("");
@@ -1544,12 +1556,19 @@
     function normalizeGitHubTokenPayload(raw) {
       const token = String(raw || "").trim();
       if (!token) {
-        throw new Error("Paste a GitHub token first.");
+        throw new Error("GitHub token is required.");
       }
       if (token.length < 8) {
         throw new Error("GitHub token appears too short.");
       }
       return token;
+    }
+
+    function shouldAutoStartClaudeSetupAfterGitHubConfigure(auth) {
+      const current = auth && typeof auth === "object" ? auth : state.agentAuth;
+      const harness = authHarness(current);
+      const gateState = String(current?.state || "").trim().toLowerCase();
+      return harness === "claude" && !current?.ready && gateState === "needs_browser_login";
     }
 
     async function requestAgentAuth(path, method, requestBody) {
@@ -1695,9 +1714,19 @@
       setAgentAuthVerifyPending(true);
       setAgentAuthBusy(true);
       try {
-        const auth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
+        const configuredAuth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
           github_token: token,
         });
+        let auth = configuredAuth;
+        if (shouldAutoStartClaudeSetupAfterGitHubConfigure(configuredAuth)) {
+          try {
+            auth = await requestAgentAuth("/api/agent-auth/start-device", "POST");
+          } catch (startErr) {
+            applyAgentAuthGate(configuredAuth);
+            const detail = startErr && startErr.message ? startErr.message : "Claude setup start failed.";
+            throw new Error(`GitHub token saved, but failed to start Claude setup: ${detail}`);
+          }
+        }
         applyAgentAuthGate(auth);
         if (auth.ready) {
           setAuggieConfigureError("");
@@ -2216,7 +2245,7 @@
       if (!entries.length) {
         const empty = document.createElement("div");
         empty.className = "library-task-empty";
-        empty.textContent = "No library tasks are available.";
+        empty.textContent = state.libraryLoadError || "No library tasks are available.";
         libraryTaskList.appendChild(empty);
         return;
       }
@@ -3494,15 +3523,25 @@
     }
 
     async function loadLibraryTasks() {
+      state.libraryLoadError = "";
       try {
         const response = await fetch("/api/library", { cache: "no-store" });
-        if (!response.ok) {
-          throw new Error(`library http ${response.status}`);
+        let body = null;
+        try {
+          body = await response.json();
+        } catch (_err) {
+          body = null;
         }
-        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(body?.error || `library http ${response.status}`);
+        }
+        if (body && body.ok === false) {
+          throw new Error(body.error || "library request failed");
+        }
         state.libraryTasks = Array.isArray(body?.tasks) ? body.tasks : [];
-      } catch (_err) {
+      } catch (err) {
         state.libraryTasks = [];
+        state.libraryLoadError = err && err.message ? err.message : "Unable to load library tasks.";
       }
       renderLibraryTaskOptions();
     }
@@ -3580,7 +3619,8 @@
       setLocalPromptStatus("warn", "Submitting...");
 
       try {
-        const response = await fetch("/api/local-prompt", {
+        const submitEndpoint = state.promptMode === "library" ? "/api/library/run" : "/api/local-prompt";
+        const response = await fetch(submitEndpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: normalized.compact,

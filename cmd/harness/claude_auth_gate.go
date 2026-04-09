@@ -808,7 +808,7 @@ func (g *claudeAuthGate) ingestLoginLine(line string) {
 		g.authURL = authURL
 		if !g.ready {
 			g.state = "pending_browser_login"
-			g.message = "Run `claude setup-token` locally and complete sign-in. Then paste browser code, token, or `~/.claude/.credentials.json` contents here and click Done."
+			g.message = ""
 		}
 		update = true
 	}

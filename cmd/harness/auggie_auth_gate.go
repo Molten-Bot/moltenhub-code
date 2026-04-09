@@ -113,10 +113,7 @@ func (g *auggieAuthGate) Configure(_ context.Context, rawInput string) (hubui.Ag
 	g.mu.Unlock()
 
 	if configureCommand == claudeGitHubConfigureCommand {
-		requiredMessage := fmt.Sprintf(
-			"GitHub token is required. Run `%s` in your terminal locally, paste the token below, then click Done.",
-			claudeGitHubConfigureCommand,
-		)
+		requiredMessage := "GitHub token is required."
 		token, state, err := configureGitHubToken(
 			agentruntime.HarnessAuggie,
 			runtimeConfigPath,
@@ -226,10 +223,7 @@ func (g *auggieAuthGate) refreshLocked() {
 	if strings.TrimSpace(githubToken) == "" {
 		g.configureCommand = claudeGitHubConfigureCommand
 		g.configurePlaceholder = claudeGitHubConfigurePlaceholder
-		g.message = fmt.Sprintf(
-			"GitHub token is required. Run `%s` in your terminal locally, paste the token below, then click Done.",
-			claudeGitHubConfigureCommand,
-		)
+		g.message = "GitHub token is required."
 		return
 	}
 	if err := setGitHubTokenEnvironment(githubToken); err != nil {

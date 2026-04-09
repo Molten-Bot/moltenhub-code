@@ -1116,6 +1116,27 @@ func TestHandlerServesStaticLogoAsset(t *testing.T) {
 	}
 }
 
+func TestIndexLibraryModeUsesDedicatedRunEndpointAndShowsLoadErrors(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+
+	markup := resp.Body.String()
+	if !strings.Contains(markup, `"/api/library/run"`) {
+		t.Fatalf("expected index html to submit library mode runs through /api/library/run")
+	}
+	if !strings.Contains(markup, `state.libraryLoadError || "No library tasks are available."`) {
+		t.Fatalf("expected index html to surface library load errors in the task list")
+	}
+}
+
 func TestHandlerLocalPromptSubmitAccepted(t *testing.T) {
 	t.Parallel()
 
@@ -1258,6 +1279,92 @@ func TestHandlerLocalPromptMethodNotAllowed(t *testing.T) {
 	resp, err := http.Get(ts.URL + "/api/local-prompt")
 	if err != nil {
 		t.Fatalf("GET /api/local-prompt error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusMethodNotAllowed)
+	}
+	if allow := resp.Header.Get("Allow"); allow != http.MethodPost {
+		t.Fatalf("Allow = %q, want %q", allow, http.MethodPost)
+	}
+}
+
+func TestHandlerLibraryRunSubmitAccepted(t *testing.T) {
+	t.Parallel()
+
+	var gotBody string
+	srv := NewServer("", NewBroker())
+	srv.SubmitLocalPrompt = func(_ context.Context, body []byte) (string, error) {
+		gotBody = string(body)
+		return "local-lib-123", nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	payload := `{"repo":"git@github.com:acme/repo.git","branch":"main","libraryTaskName":"unit-test-coverage"}`
+	resp, err := http.Post(ts.URL+"/api/library/run", "application/json", bytes.NewBufferString(payload))
+	if err != nil {
+		t.Fatalf("POST /api/library/run error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusAccepted)
+	}
+	if gotBody != payload {
+		t.Fatalf("submitted body = %q, want %q", gotBody, payload)
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if ok, _ := body["ok"].(bool); !ok {
+		t.Fatalf("ok = %#v, want true", body["ok"])
+	}
+	if requestID, _ := body["request_id"].(string); requestID != "local-lib-123" {
+		t.Fatalf("request_id = %q", requestID)
+	}
+}
+
+func TestHandlerLibraryRunUnavailable(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/library/run", "application/json", bytes.NewBufferString(`{}`))
+	if err != nil {
+		t.Fatalf("POST /api/library/run error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNotImplemented {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotImplemented)
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got, _ := body["error"].(string); got != "library task submit is unavailable" {
+		t.Fatalf("error = %q, want %q", got, "library task submit is unavailable")
+	}
+}
+
+func TestHandlerLibraryRunMethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/library/run")
+	if err != nil {
+		t.Fatalf("GET /api/library/run error = %v", err)
 	}
 	defer resp.Body.Close()
 

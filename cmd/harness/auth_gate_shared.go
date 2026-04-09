@@ -10,7 +10,7 @@ import (
 	"github.com/jef/moltenhub-code/internal/hubui"
 )
 
-const githubTokenPasteConfigureMessage = "GitHub token is required. Paste a GitHub token below, then click Done."
+const githubTokenPasteConfigureMessage = "GitHub token is required."
 
 func readyAgentAuthState() hubui.AgentAuthState {
 	return hubui.AgentAuthState{
@@ -24,7 +24,7 @@ func readyAgentAuthState() hubui.AgentAuthState {
 func githubTokenNeedsConfigureState(harness, message string) hubui.AgentAuthState {
 	message = firstNonEmptyString(
 		message,
-		"GitHub token is required. Set GITHUB_TOKEN/GH_TOKEN or paste a token below, then click Done.",
+		"GitHub token is required.",
 	)
 	return hubui.AgentAuthState{
 		Harness:              harness,

@@ -125,6 +125,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/api/state", s.handleState)
 	mux.HandleFunc("/api/library", s.handleLibrary)
+	mux.HandleFunc("/api/library/run", s.handleLibraryRun)
 	mux.HandleFunc("/api/stream", s.handleStream)
 	mux.HandleFunc("/api/local-prompt", s.handleLocalPrompt)
 	mux.HandleFunc("/api/agent-auth", s.handleAgentAuthStatus)
@@ -508,16 +509,29 @@ func (s Server) currentAgentAuthState(ctx context.Context) (AgentAuthState, erro
 }
 
 func (s Server) handleLocalPrompt(w http.ResponseWriter, r *http.Request) {
+	s.handlePromptSubmit(w, r, s.SubmitLocalPrompt, "studio submit is unavailable")
+}
+
+func (s Server) handleLibraryRun(w http.ResponseWriter, r *http.Request) {
+	s.handlePromptSubmit(w, r, s.SubmitLocalPrompt, "library task submit is unavailable")
+}
+
+func (s Server) handlePromptSubmit(
+	w http.ResponseWriter,
+	r *http.Request,
+	submit func(context.Context, []byte) (string, error),
+	unavailableMessage string,
+) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	if s.SubmitLocalPrompt == nil {
+	if submit == nil {
 		writeJSON(w, http.StatusNotImplemented, map[string]any{
 			"ok":    false,
-			"error": "studio submit is unavailable",
+			"error": unavailableMessage,
 		})
 		return
 	}
@@ -531,7 +545,7 @@ func (s Server) handleLocalPrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	requestID, err := s.SubmitLocalPrompt(r.Context(), body)
+	requestID, err := submit(r.Context(), body)
 	if err != nil {
 		if duplicateRequestID, duplicateState, ok := duplicateSubmissionDetails(err); ok {
 			writeJSON(w, http.StatusConflict, map[string]any{

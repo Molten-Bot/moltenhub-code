@@ -2112,6 +2112,17 @@ select.prompt-control {
   background: var(--surface-auth-verify-hover-bg);
 }
 
+.agent-auth-configure-input-github {
+  width: min(100%, 46ch);
+  min-height: 46px;
+  height: 46px;
+  max-height: 46px;
+  resize: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+}
+
 .theme-controls {
   position: fixed;
   right: 16px;
