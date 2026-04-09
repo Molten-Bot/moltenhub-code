@@ -902,17 +902,23 @@ func TestHeaderStatusStylesStayReadable(t *testing.T) {
 	}
 
 	css := resp.Body.String()
-	if !strings.Contains(css, ".status-item-compact {\n  position: relative;\n  justify-content: center;\n  gap: 0;\n  width: 42px;\n  min-width: 42px;\n  height: 42px;\n  min-height: 42px;") {
-		t.Fatalf("expected compact status dots to use the larger readable pill sizing")
+	if !strings.Contains(css, ".status-item-compact {\n  position: relative;\n  justify-content: center;\n  gap: 0;\n  width: 42px;\n  min-width: 42px;\n  height: 42px;\n  min-height: 42px;\n  padding: 0;\n  overflow: hidden;") {
+		t.Fatalf("expected compact status dots to stay clipped until the row expands them")
 	}
 	if !strings.Contains(css, ".header {\n  position: relative;\n  z-index: 5;") {
 		t.Fatalf("expected header to create a higher stacking context above the studio panel")
 	}
-	if !strings.Contains(css, ".status-item-compact:hover,\n.status-item-compact:focus-visible,\n.status-item-compact:focus-within {\n  z-index: 7;\n}") {
-		t.Fatalf("expected connection status hover state to rise above adjacent panels")
+	if !strings.Contains(css, ".status-row:hover .status-item-compact,\n.status-row:focus-within .status-item-compact {\n  width: auto;\n  min-width: 42px;\n  padding-left: 11px;\n  padding-right: 11px;\n  gap: 8px;\n}") {
+		t.Fatalf("expected connection status pills to slide open when the status row is hovered or focused")
 	}
 	if !strings.Contains(css, ".status-item-metrics {\n  gap: 12px;\n  padding-left: 12px;\n  padding-right: 14px;\n  min-height: 42px;\n  height: 42px;") {
 		t.Fatalf("expected metrics pill to use stronger spacing and height")
+	}
+	if !strings.Contains(css, ".metric-copy {\n  display: inline-flex;\n  align-items: center;\n  min-width: 0;\n  overflow: hidden;\n}") {
+		t.Fatalf("expected metrics pill to wrap labels, values, and units in an overflow-safe inline layout")
+	}
+	if !strings.Contains(css, ".status-row:hover .metric-label,\n.status-row:hover .metric-unit,\n.status-row:focus-within .metric-label,\n.status-row:focus-within .metric-unit {\n  max-width: 56px;\n  opacity: 1;\n  transform: translateX(0);\n}") {
+		t.Fatalf("expected metric labels and units to reveal on status row hover")
 	}
 	if !strings.Contains(css, ".status-item-metrics .status-value {\n  color: var(--text-soft);\n  font-size: 0.9rem;") {
 		t.Fatalf("expected metrics text to use readable status color tokens")
