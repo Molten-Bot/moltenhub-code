@@ -295,7 +295,6 @@
         </a>
         <div id="agent-auth-browser-code" class="hidden space-y-2">
           <div id="agent-auth-browser-commands" class="space-y-2">
-            <div class="text-sm text-hub-text/80">Run locally</div>
             <div class="flex flex-wrap items-center gap-2.5">
               <div id="agent-auth-browser-command-primary" class="font-mono text-[1rem] tracking-[0.02em] text-hub-text">claude setup-token</div>
               <button id="agent-auth-browser-command-primary-copy" class="agent-auth-copy rounded-md px-2.5 py-1.5 text-xs font-medium" type="button">Copy</button>
@@ -306,10 +305,10 @@
               <button id="agent-auth-browser-command-secondary-copy" class="agent-auth-copy rounded-md px-2.5 py-1.5 text-xs font-medium" type="button">Copy</button>
             </div>
           </div>
-          <label class="text-sm font-medium text-hub-text/85" for="agent-auth-browser-code-input">Paste Claude authentication code, token, or credentials JSON</label>
           <textarea
             id="agent-auth-browser-code-input"
             class="prompt-text min-h-[96px] font-mono text-[0.9rem]"
+            aria-label="Authentication code or token input"
             placeholder="Paste browser code, token, or output of: cat ~/.claude/.credentials.json"
             spellcheck="false"></textarea>
           <p id="agent-auth-browser-code-error" class="hidden text-sm text-rose-200"></p>
@@ -1335,6 +1334,8 @@
           agentAuthTitle.textContent = "GitHub Token Configure";
         } else if (requiresManualConfigure) {
           agentAuthTitle.textContent = `${currentAgentLabel()} Configure`;
+        } else if (currentAgentLabel() === "Claude Code") {
+          agentAuthTitle.textContent = "Setup Claude";
         } else {
           agentAuthTitle.textContent = `Authorize ${currentAgentLabel()} to get started`;
         }
