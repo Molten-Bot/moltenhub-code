@@ -527,6 +527,54 @@ func TestDispatchResultPayloadIncludesRepoResults(t *testing.T) {
 	}
 }
 
+func TestDispatchResultPayloadNoChangesIncludesExistingPRURLs(t *testing.T) {
+	t.Parallel()
+
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:       "code_for_me",
+			ResultType: "skill_result",
+		},
+	}
+	dispatch := SkillDispatch{
+		RequestID: "req-no-change",
+		Skill:     "code_for_me",
+	}
+	res := harness.Result{
+		ExitCode:  harness.ExitSuccess,
+		NoChanges: true,
+		PRURL:     "https://github.com/acme/repo-a/pull/10",
+		RepoResults: []harness.RepoResult{
+			{
+				RepoURL: "git@github.com:acme/repo-a.git",
+				RepoDir: "/tmp/run/repo",
+				Branch:  "release/2026.04-hotfix",
+				PRURL:   "https://github.com/acme/repo-a/pull/10",
+				Changed: false,
+			},
+		},
+	}
+
+	payload := dispatchResultPayload(cfg, dispatch, res)
+	if got := payload["status"]; got != "no_changes" {
+		t.Fatalf("status = %#v, want %q", got, "no_changes")
+	}
+	result, ok := payload["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("result missing or wrong type: %#v", payload["result"])
+	}
+	if got := result["prUrl"]; got != "https://github.com/acme/repo-a/pull/10" {
+		t.Fatalf("prUrl = %#v", got)
+	}
+	prURLs, ok := result["prUrls"].([]string)
+	if !ok {
+		t.Fatalf("prUrls missing or wrong type: %#v", result["prUrls"])
+	}
+	if len(prURLs) != 1 || prURLs[0] != "https://github.com/acme/repo-a/pull/10" {
+		t.Fatalf("prUrls = %#v, want [https://github.com/acme/repo-a/pull/10]", prURLs)
+	}
+}
+
 func TestDispatchResultPayloadIncludesTopLevelFailureMessage(t *testing.T) {
 	t.Parallel()
 

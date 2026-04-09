@@ -391,6 +391,7 @@ func TestRunWithPromptImagesUsesCodexDirPaths(t *testing.T) {
 			ImagePaths: []string{imageArg},
 		})},
 		{cmd: statusCommand(repoDir)},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch)},
 	}}
 
 	h := New(fake)
@@ -446,6 +447,7 @@ func TestRunNonMainBranchReusesExistingBranchAndPR(t *testing.T) {
 		{cmd: addCommand(repoDir)},
 		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
 		{cmd: pushCommand(repoDir, cfg.BaseBranch)},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "abc123\trefs/heads/" + cfg.BaseBranch + "\n"}},
 		{cmd: prLookupByHeadCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: prURL + "\n"}},
 		{cmd: prChecksCommand(repoDir, prURL)},
 	}}
@@ -504,6 +506,7 @@ func TestRunNonMainBranchPushNonFastForwardRetriesWithRebase(t *testing.T) {
 		{cmd: pushCommand(repoDir, cfg.BaseBranch), res: pushRejected, err: errors.New("push rejected")},
 		{cmd: pullRebaseCommand(repoDir, cfg.BaseBranch)},
 		{cmd: pushCommand(repoDir, cfg.BaseBranch)},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "abc123\trefs/heads/" + cfg.BaseBranch + "\n"}},
 		{cmd: prLookupByHeadCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: prURL + "\n"}},
 		{cmd: prChecksCommand(repoDir, prURL)},
 	}}
@@ -594,6 +597,7 @@ func TestRunNoChangesSkipsPR(t *testing.T) {
 		{cmd: branchCommand(repoDir, branch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "\n"}},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch)},
 	}}
 
 	h := New(fake)
@@ -613,6 +617,116 @@ func TestRunNoChangesSkipsPR(t *testing.T) {
 	}
 	if res.PRURL != "" {
 		t.Fatalf("PRURL = %q, want empty", res.PRURL)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunNoChangesOnMainReportsExistingPR(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+	prURL := "https://github.com/acme/repo/pull/123"
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "\n"}},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch), res: execx.Result{Stdout: "abc123\trefs/heads/" + branch + "\n"}},
+		{cmd: prLookupByHeadCommand(repoDir, branch), res: execx.Result{Stdout: "[{\"url\":\"" + prURL + "\"}]\n"}},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if !res.NoChanges {
+		t.Fatal("NoChanges = false, want true")
+	}
+	if got, want := res.PRURL, prURL; got != want {
+		t.Fatalf("PRURL = %q, want %q", got, want)
+	}
+	if len(res.RepoResults) != 1 {
+		t.Fatalf("RepoResults length = %d, want 1", len(res.RepoResults))
+	}
+	if got, want := res.RepoResults[0].PRURL, prURL; got != want {
+		t.Fatalf("RepoResults[0].PRURL = %q, want %q", got, want)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunNonMainBranchNoChangesReportsExistingPR(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.BaseBranch = "release/2026.04-hotfix"
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	prURL := "https://github.com/acme/repo/pull/77"
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: fetchMainBranchCommand(repoDir)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "\n"}},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "abc123\trefs/heads/" + cfg.BaseBranch + "\n"}},
+		{cmd: prLookupByHeadCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: prURL + "\n"}},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if !res.NoChanges {
+		t.Fatal("NoChanges = false, want true")
+	}
+	if got, want := res.PRURL, prURL; got != want {
+		t.Fatalf("PRURL = %q, want %q", got, want)
+	}
+	if len(res.RepoResults) != 1 {
+		t.Fatalf("RepoResults length = %d, want 1", len(res.RepoResults))
+	}
+	if got, want := res.RepoResults[0].PRURL, prURL; got != want {
+		t.Fatalf("RepoResults[0].PRURL = %q, want %q", got, want)
 	}
 	if len(fake.exps) != 0 {
 		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
@@ -1153,6 +1267,7 @@ func TestRunNonMainBranchReusesExistingPR(t *testing.T) {
 		{cmd: addCommand(repoDir)},
 		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
 		{cmd: pushCommand(repoDir, cfg.BaseBranch)},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "abc123\trefs/heads/" + cfg.BaseBranch + "\n"}},
 		{cmd: prLookupByHeadCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "[{\"url\":\"" + prURL + "\"}]\n"}},
 		{cmd: prChecksCommand(repoDir, prURL)},
 	}}
@@ -1206,6 +1321,7 @@ func TestRunNonMainBranchCreatesPRWithoutExplicitBaseWhenNoOpenPR(t *testing.T) 
 		{cmd: addCommand(repoDir)},
 		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
 		{cmd: pushCommand(repoDir, cfg.BaseBranch)},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "abc123\trefs/heads/" + cfg.BaseBranch + "\n"}},
 		{cmd: prLookupByHeadCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "[]\n"}},
 		{cmd: prCreateWithoutBaseCommand(repoDir, cfg, cfg.BaseBranch), res: execx.Result{Stdout: prURL + "\n"}},
 		{cmd: prChecksCommand(repoDir, prURL)},
@@ -1526,6 +1642,12 @@ func TestCommandBuilders(t *testing.T) {
 		t.Fatalf("pr lookup command unexpected: %+v", prLookup)
 	}
 
+	remoteHead := remoteBranchExistsOnOriginCommand(repoDir, branch)
+	wantRemoteHead := []string{"ls-remote", "--heads", "origin", branch}
+	if remoteHead.Name != "git" || remoteHead.Dir != repoDir || !reflect.DeepEqual(remoteHead.Args, wantRemoteHead) {
+		t.Fatalf("remote head command unexpected: %+v", remoteHead)
+	}
+
 	if !shouldCreateWorkBranch("main") {
 		t.Fatal("shouldCreateWorkBranch(main) = false, want true")
 	}
@@ -1671,6 +1793,7 @@ func TestRunUsesConfiguredRuntimeCommand(t *testing.T) {
 		{cmd: branchCommand(repoDir, branch)},
 		{cmd: runtimeCmd},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: ""}},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch)},
 	}}
 
 	h := New(fake)

@@ -315,6 +315,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		}
 	}
 	if changedCount == 0 {
+		h.populateNoChangePRURLs(ctx, repos)
 		h.logf("stage=git status=no_changes")
 		res := buildResult(runDir, repos, true)
 		res.ExitCode = ExitSuccess
@@ -379,11 +380,11 @@ func (h Harness) processChangedRepo(
 	h.logf("stage=pr status=start repo=%s repo_dir=%s", repo.URL, repo.RelDir)
 	createWorkBranch := shouldCreateWorkBranch(cfg.BaseBranch)
 	if !createWorkBranch {
-		prLookupRes, err := h.runCommand(ctx, "pr", prLookupByHeadCommand(repo.Dir, repo.Branch))
+		prURL, err := h.lookupOpenPRURLByHead(ctx, *repo)
 		if err != nil {
 			return ExitPR, "pr", err
 		}
-		repo.PRURL = extractFirstURL(prLookupRes.Stdout)
+		repo.PRURL = prURL
 	}
 
 	if repo.PRURL == "" {
@@ -415,6 +416,13 @@ func (h Harness) processChangedRepo(
 		}
 		if repo.PRURL == "" {
 			repo.PRURL = extractFirstURL(prRes.Stderr)
+		}
+		if repo.PRURL == "" {
+			prURL, verifyErr := h.lookupOpenPRURLByHead(ctx, *repo)
+			if verifyErr != nil {
+				return ExitPR, "pr", fmt.Errorf("verify open pull request for repo %s: %w", repo.URL, verifyErr)
+			}
+			repo.PRURL = prURL
 		}
 		if repo.PRURL == "" {
 			return ExitPR, "pr", fmt.Errorf("gh pr create did not return a PR URL for repo %s", repo.URL)
@@ -620,6 +628,57 @@ func (h Harness) pushWithSync(ctx context.Context, repo repoWorkspace, remediati
 		}
 	}
 	return fmt.Errorf("push retries exhausted for branch %q", repo.Branch)
+}
+
+func (h Harness) populateNoChangePRURLs(ctx context.Context, repos []repoWorkspace) {
+	for i := range repos {
+		prURL, err := h.lookupOpenPRURLByHead(ctx, repos[i])
+		if err != nil {
+			h.logf(
+				"stage=pr status=warn action=lookup_existing reason=failed repo=%s repo_dir=%s branch=%s err=%q",
+				repos[i].URL,
+				repos[i].RelDir,
+				repos[i].Branch,
+				err,
+			)
+			continue
+		}
+		if prURL == "" {
+			continue
+		}
+		repos[i].PRURL = prURL
+		h.logf(
+			"stage=pr status=ok action=lookup_existing repo=%s repo_dir=%s branch=%s pr_url=%s",
+			repos[i].URL,
+			repos[i].RelDir,
+			repos[i].Branch,
+			repos[i].PRURL,
+		)
+	}
+}
+
+func (h Harness) lookupOpenPRURLByHead(ctx context.Context, repo repoWorkspace) (string, error) {
+	branch := normalizeBranchRef(repo.Branch)
+	if branch == "" {
+		return "", nil
+	}
+
+	remoteRes, remoteErr := h.runCommand(ctx, "git", remoteBranchExistsOnOriginCommand(repo.Dir, branch))
+	if remoteErr != nil {
+		return "", fmt.Errorf("verify remote branch %q for repo %s: %w", branch, repo.URL, remoteErr)
+	}
+	if !hasRemoteBranch(remoteRes) {
+		return "", nil
+	}
+
+	lookupRes, err := h.runCommand(ctx, "pr", prLookupByHeadCommand(repo.Dir, branch))
+	if err != nil {
+		return "", err
+	}
+	if prURL := parsePRURLFromLookupOutput(lookupRes.Stdout); prURL != "" {
+		return prURL, nil
+	}
+	return parsePRURLFromLookupOutput(lookupRes.Stderr), nil
 }
 
 func (h Harness) runCloneWithRetry(
@@ -1548,6 +1607,37 @@ func extractFirstURL(text string) string {
 	return strings.TrimSpace(m)
 }
 
+type ghPRLookupEntry struct {
+	URL string `json:"url"`
+}
+
+func parsePRURLFromLookupOutput(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+
+	var list []ghPRLookupEntry
+	if err := json.Unmarshal([]byte(raw), &list); err == nil {
+		for _, entry := range list {
+			if url := strings.TrimSpace(entry.URL); url != "" {
+				return url
+			}
+		}
+		return ""
+	}
+
+	var single ghPRLookupEntry
+	if err := json.Unmarshal([]byte(raw), &single); err == nil {
+		return strings.TrimSpace(single.URL)
+	}
+	return extractFirstURL(raw)
+}
+
+func hasRemoteBranch(res execx.Result) bool {
+	return strings.TrimSpace(res.Stdout) != ""
+}
+
 func preflightCommands() []execx.Command {
 	return preflightCommandsWithRuntime(agentruntime.Default())
 }
@@ -1821,6 +1911,14 @@ func prCreateWithoutBaseCommand(repoDir string, cfg config.Config, branch string
 		args = append(args, "--reviewer", reviewer)
 	}
 	return execx.Command{Dir: repoDir, Name: "gh", Args: args}
+}
+
+func remoteBranchExistsOnOriginCommand(repoDir, branch string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "git",
+		Args: []string{"ls-remote", "--heads", "origin", normalizeBranchRef(branch)},
+	}
 }
 
 func prLookupByHeadCommand(repoDir, branch string) execx.Command {

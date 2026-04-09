@@ -318,6 +318,9 @@ func TestJoinPRURLsAndCountChangedRepos(t *testing.T) {
 	if got, want := joinPRURLs(results), "https://github.com/acme/repo-a/pull/1,https://github.com/acme/repo-c/pull/3"; got != want {
 		t.Fatalf("joinPRURLs() = %q, want %q", got, want)
 	}
+	if got, want := joinAllPRURLs(results), "https://github.com/acme/repo-a/pull/1,https://github.com/acme/repo-b/pull/2,https://github.com/acme/repo-c/pull/3"; got != want {
+		t.Fatalf("joinAllPRURLs() = %q, want %q", got, want)
+	}
 	if got, want := countChangedRepos(results), 3; got != want {
 		t.Fatalf("countChangedRepos() = %d, want %d", got, want)
 	}

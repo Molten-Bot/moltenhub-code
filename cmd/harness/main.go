@@ -113,7 +113,15 @@ func runSingle(args []string) int {
 	}
 
 	if result.NoChanges {
-		writeStdoutLine(logger, fmt.Sprintf("status=no_changes workspace=%s branch=%s", result.WorkspaceDir, result.Branch))
+		var line strings.Builder
+		line.WriteString(fmt.Sprintf("status=no_changes workspace=%s branch=%s", result.WorkspaceDir, result.Branch))
+		if result.PRURL != "" {
+			line.WriteString(fmt.Sprintf(" pr_url=%s", result.PRURL))
+		}
+		if prURLs := joinAllPRURLs(result.RepoResults); prURLs != "" {
+			line.WriteString(fmt.Sprintf(" pr_urls=%s", prURLs))
+		}
+		writeStdoutLine(logger, line.String())
 		return harness.ExitSuccess
 	}
 	var line strings.Builder
@@ -742,7 +750,14 @@ func runLocalDispatch(
 		return localDispatchOutcome{State: "error", Result: res}
 	}
 	if res.NoChanges {
-		logf("dispatch status=no_changes request_id=%s workspace=%s branch=%s", requestID, res.WorkspaceDir, res.Branch)
+		logf(
+			"dispatch status=no_changes request_id=%s workspace=%s branch=%s pr_url=%s pr_urls=%s",
+			requestID,
+			res.WorkspaceDir,
+			res.Branch,
+			res.PRURL,
+			joinAllPRURLs(res.RepoResults),
+		)
 		return localDispatchOutcome{State: "no_changes", Result: res}
 	}
 	logf(
@@ -995,6 +1010,20 @@ func joinPRURLs(results []harness.RepoResult) string {
 	urls := make([]string, 0, len(results))
 	for _, result := range results {
 		if !result.Changed || strings.TrimSpace(result.PRURL) == "" {
+			continue
+		}
+		urls = append(urls, strings.TrimSpace(result.PRURL))
+	}
+	return strings.Join(urls, ",")
+}
+
+func joinAllPRURLs(results []harness.RepoResult) string {
+	if len(results) == 0 {
+		return ""
+	}
+	urls := make([]string, 0, len(results))
+	for _, result := range results {
+		if strings.TrimSpace(result.PRURL) == "" {
 			continue
 		}
 		urls = append(urls, strings.TrimSpace(result.PRURL))

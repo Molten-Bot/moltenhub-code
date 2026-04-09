@@ -619,7 +619,14 @@ func (d Daemon) handleDispatch(
 	}
 	d.recordGitHubTaskCompleteActivity(ctx, api, dispatch.RequestID)
 	if res.NoChanges {
-		d.logf("dispatch status=no_changes request_id=%s workspace=%s branch=%s", dispatch.RequestID, res.WorkspaceDir, res.Branch)
+		d.logf(
+			"dispatch status=no_changes request_id=%s workspace=%s branch=%s pr_url=%s pr_urls=%s",
+			dispatch.RequestID,
+			res.WorkspaceDir,
+			res.Branch,
+			res.PRURL,
+			joinAllRepoPRURLs(res.RepoResults),
+		)
 		return
 	}
 	d.logf(
@@ -650,12 +657,17 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 		status = "no_changes"
 	}
 
+	prURLs := joinRepoPRURLs(res.RepoResults)
+	if res.NoChanges {
+		prURLs = joinAllRepoPRURLs(res.RepoResults)
+	}
+
 	result := map[string]any{
 		"exitCode":     res.ExitCode,
 		"workspaceDir": res.WorkspaceDir,
 		"branch":       res.Branch,
 		"prUrl":        res.PRURL,
-		"prUrls":       splitNonEmptyCSV(joinRepoPRURLs(res.RepoResults)),
+		"prUrls":       splitNonEmptyCSV(prURLs),
 		"changedRepos": countChangedRepoResults(res.RepoResults),
 		"repoResults":  repoResultPayloads(res.RepoResults),
 		"noChanges":    res.NoChanges,
@@ -868,6 +880,21 @@ func joinRepoPRURLs(results []harness.RepoResult) string {
 		if !result.Changed {
 			continue
 		}
+		url := strings.TrimSpace(result.PRURL)
+		if url == "" {
+			continue
+		}
+		urls = append(urls, url)
+	}
+	return strings.Join(urls, ",")
+}
+
+func joinAllRepoPRURLs(results []harness.RepoResult) string {
+	if len(results) == 0 {
+		return ""
+	}
+	urls := make([]string, 0, len(results))
+	for _, result := range results {
 		url := strings.TrimSpace(result.PRURL)
 		if url == "" {
 			continue
