@@ -1,0 +1,10 @@
+{
+  "delete-prompt-images": {
+    "displayName": "Delete Prompt Images",
+    "description": "Remove prompt image artifacts from the repository and delete the directory.",
+    "targetSubdir": ".",
+    "prompt": "Delete all tracked and untracked files under ./prompt-images/ from this repository, then remove the ./prompt-images directory itself. If the directory is already absent, verify that with concrete evidence and return a clear no-op result. Keep the change limited to this cleanup, validate with git status that no prompt-images artifacts remain, and only finish when the repository is clean of this directory and the required checks are green.",
+    "commitMessage": "chore: delete prompt-images artifacts",
+    "prTitle": "moltenhub-delete-prompt-images"
+  }
+}

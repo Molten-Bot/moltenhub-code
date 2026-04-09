@@ -278,7 +278,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	if len(repos) > 1 {
 		codexDir = runDir
 	}
-	imagePaths, err := materializePromptImages(codexDir, cfg.Images)
+	imagePaths, err := materializePromptImages(runDir, cfg.Images)
 	if err != nil {
 		return h.fail(ExitConfig, "config", err, runDir)
 	}
@@ -1835,6 +1835,11 @@ func codexImageArgs(targetDir string, imagePaths []string) ([]string, error) {
 func materializePromptImages(baseDir string, images []config.PromptImage) ([]string, error) {
 	if len(images) == 0 {
 		return nil, nil
+	}
+
+	baseDir = strings.TrimSpace(baseDir)
+	if baseDir == "" {
+		return nil, fmt.Errorf("prompt image base dir is required")
 	}
 
 	dir := filepath.Join(baseDir, "prompt-images")

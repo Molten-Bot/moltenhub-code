@@ -531,7 +531,7 @@ func TestFailureFollowUpPromptIncludesWorkspaceAndTargetPath(t *testing.T) {
 	if !strings.Contains(prompt, "- repos=git@github.com:acme/repo.git") {
 		t.Fatalf("prompt missing repo context: %q", prompt)
 	}
-	if !strings.Contains(prompt, "When failures occur, send a response back to the calling agent that clearly states failure and includes the error details.") {
+	if !strings.Contains(prompt, `When failures occur, send a response back to the calling agent that begins with "Failure:" and clearly includes the error details.`) {
 		t.Fatalf("prompt missing response contract: %q", prompt)
 	}
 }

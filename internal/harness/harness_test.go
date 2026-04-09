@@ -370,7 +370,7 @@ func TestRunWithGitHubTokenRunsAuthSetupGitBeforeCodex(t *testing.T) {
 	}
 }
 
-func TestRunWithPromptImagesUsesCodexDirPaths(t *testing.T) {
+func TestRunWithPromptImagesKeepsArtifactsOutOfRepo(t *testing.T) {
 	t.Parallel()
 
 	cfg := sampleConfig()
@@ -384,8 +384,8 @@ func TestRunWithPromptImagesUsesCodexDirPaths(t *testing.T) {
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
 	branch := "moltenhub-build-api"
-	imagePath := filepath.Join(targetDir, "prompt-images", "01-clipboard-shot.png")
-	imageArg := filepath.ToSlash(filepath.Join("prompt-images", "01-clipboard-shot.png"))
+	imagePath := filepath.Join(runDir, "prompt-images", "01-clipboard-shot.png")
+	imageArg := imagePath
 
 	fake := &fakeRunner{t: t, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
@@ -427,6 +427,9 @@ func TestRunWithPromptImagesUsesCodexDirPaths(t *testing.T) {
 	}
 	if got, want := string(data), "hello"; got != want {
 		t.Fatalf("image content = %q, want %q", got, want)
+	}
+	if _, err := os.Stat(filepath.Join(targetDir, "prompt-images")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("target repo prompt-images dir should be absent, stat err = %v", err)
 	}
 }
 
@@ -1964,6 +1967,16 @@ func TestMaterializePromptImages(t *testing.T) {
 	}
 }
 
+func TestMaterializePromptImagesRequiresBaseDir(t *testing.T) {
+	t.Parallel()
+
+	if _, err := materializePromptImages(" \t ", []config.PromptImage{
+		{Name: "Clipboard Shot.PNG", MediaType: "image/png", DataBase64: "aGVsbG8="},
+	}); err == nil {
+		t.Fatal("materializePromptImages(blank baseDir) error = nil, want non-nil")
+	}
+}
+
 func TestCodexImageArgsPrefersRelativePaths(t *testing.T) {
 	t.Parallel()
 
@@ -2263,7 +2276,7 @@ func TestWithCompletionGatePromptIncludesFailureQueueContract(t *testing.T) {
 	got := withCompletionGatePrompt("Build API")
 	wantSnippets := []string{
 		"Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
-		"When failures occur, send a response back to the calling agent that clearly states failure and includes the error details.",
+		`When failures occur, send a response back to the calling agent that begins with "Failure:" and clearly includes the error details.`,
 		"When a task fails:",
 		"Queue a follow-up task dedicated to reviewing the logs and fixing all underlying issues in this codebase.",
 		"Pass the relevant failing file/folder log path(s) into that follow-up task context.",

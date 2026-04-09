@@ -9,7 +9,7 @@ const RequiredPrompt = "Review the failing log paths first, identify every root 
 
 const ExecutionContract = `Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.
 
-When failures occur, send a response back to the calling agent that clearly states failure and includes the error details.
+When failures occur, send a response back to the calling agent that begins with "Failure:" and clearly includes the error details.
 
 When a task fails:
 - Queue a follow-up task dedicated to reviewing the logs and fixing all underlying issues in this codebase.
