@@ -10,6 +10,8 @@ import (
 	"github.com/jef/moltenhub-code/internal/hubui"
 )
 
+const githubTokenPasteConfigureMessage = "GitHub token is required. Paste a GitHub token below, then click Done."
+
 func readyAgentAuthState() hubui.AgentAuthState {
 	return hubui.AgentAuthState{
 		Required: false,
@@ -64,6 +66,41 @@ func setGitHubTokenEnvironment(token string) error {
 		return err
 	}
 	return nil
+}
+
+func githubTokenRequirementState(harness, runtimeConfigPath string, initCfg hub.InitConfig) (bool, hubui.AgentAuthState) {
+	githubToken, _ := firstConfiguredGitHubToken(runtimeConfigPath, initCfg)
+	if strings.TrimSpace(githubToken) == "" {
+		return true, githubTokenNeedsConfigureState(harness, "")
+	}
+	if err := setGitHubTokenEnvironment(githubToken); err != nil {
+		return true, githubTokenNeedsConfigureState(harness, fmt.Sprintf("set github token env: %v", err))
+	}
+	return false, hubui.AgentAuthState{}
+}
+
+func configureGitHubToken(
+	harness, runtimeConfigPath string,
+	initCfg hub.InitConfig,
+	rawInput, requiredMessage string,
+) (string, hubui.AgentAuthState, error) {
+	token := strings.TrimSpace(rawInput)
+	requiredMessage = firstNonEmptyString(requiredMessage, githubTokenPasteConfigureMessage)
+	if token == "" {
+		state := githubTokenNeedsConfigureState(harness, requiredMessage)
+		return "", state, fmt.Errorf("github token is required")
+	}
+
+	if err := hub.SaveRuntimeConfigGitHubToken(runtimeConfigPath, initCfg, token); err != nil {
+		state := githubTokenNeedsConfigureState(harness, fmt.Sprintf("save github token: %v", err))
+		return "", state, err
+	}
+	if err := setGitHubTokenEnvironment(token); err != nil {
+		state := githubTokenNeedsConfigureState(harness, fmt.Sprintf("set github token env: %v", err))
+		return "", state, err
+	}
+
+	return token, hubui.AgentAuthState{}, nil
 }
 
 func firstNonEmptyString(values ...string) string {
