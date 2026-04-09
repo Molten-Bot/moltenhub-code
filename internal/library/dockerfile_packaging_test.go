@@ -56,3 +56,44 @@ func TestRuntimeDockerfileInstallsRipgrep(t *testing.T) {
 		t.Fatalf("%s does not install ripgrep in the runtime image", dockerfilePath)
 	}
 }
+
+func TestRuntimeDockerfileUsesAlpineBaseImages(t *testing.T) {
+	t.Parallel()
+
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller(0) failed")
+	}
+
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	dockerfilePath := filepath.Join(repoRoot, "Dockerfile")
+
+	data, err := os.ReadFile(dockerfilePath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", dockerfilePath, err)
+	}
+
+	content := string(data)
+	for _, want := range []string{
+		"FROM golang:1.26.1-alpine3.23 AS build",
+		"FROM node:25.8.1-alpine3.23 AS runtime",
+		"apk add --no-cache",
+		"github-cli",
+		"openssh-client-default",
+		"RUN adduser -D -s /bin/sh app",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("%s missing Alpine runtime requirement %q", dockerfilePath, want)
+		}
+	}
+
+	for _, forbidden := range []string{
+		"bookworm",
+		"apt-get",
+		"useradd --create-home",
+	} {
+		if strings.Contains(content, forbidden) {
+			t.Fatalf("%s still contains Debian-specific token %q", dockerfilePath, forbidden)
+		}
+	}
+}

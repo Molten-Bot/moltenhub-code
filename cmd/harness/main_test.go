@@ -533,6 +533,7 @@ func TestRunHubBootDiagnosticsWithRuntimeLoader(t *testing.T) {
 	assertLogContains(t, logs, "boot.diagnosis status=ok requirement=gh_cli")
 	assertLogContains(t, logs, "boot.diagnosis status=ok requirement=codex_cli")
 	assertLogContains(t, logs, "boot.diagnosis status=warn requirement=gh_auth")
+	assertLogContains(t, logs, gitHubCLIAuthRecommendation)
 	assertLogContains(t, logs, "boot.diagnosis status=ok requirement=moltenhub_ping")
 	assertLogContains(t, logs, "boot.diagnosis status=recommendation requirement=moltenhub_hub")
 	assertLogContains(t, logs, "boot.diagnosis status=complete required_checks=ok")

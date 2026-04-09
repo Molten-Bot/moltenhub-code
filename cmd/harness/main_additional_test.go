@@ -607,6 +607,41 @@ func TestRunHubBootDiagnosticsUsesConfiguredAgentRuntime(t *testing.T) {
 	assertLogContains(t, logs, "boot.diagnosis status=ok requirement=claude_cli")
 }
 
+func TestRunHubBootDiagnosticsMentionsGitHubCLIPackageWhenPreflightFails(t *testing.T) {
+	t.Parallel()
+
+	pingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/ping" {
+			http.NotFound(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer pingServer.Close()
+
+	runner := &stubExecRunner{
+		results: map[string]stubExecResult{
+			stubCommandKey(execx.Command{Name: "git", Args: []string{"--version"}}):       {result: execx.Result{Stdout: "git version"}},
+			stubCommandKey(execx.Command{Name: "codex", Args: []string{"--help"}}):       {result: execx.Result{Stdout: "codex help"}},
+			stubCommandKey(execx.Command{Name: "gh", Args: []string{"auth", "status"}}): {result: execx.Result{Stdout: "Logged in to github.com as test\n"}},
+		},
+	}
+
+	var logs []string
+	ok := runHubBootDiagnostics(
+		context.Background(),
+		runner,
+		func(format string, args ...any) { logs = append(logs, fmt.Sprintf(format, args...)) },
+		hub.InitConfig{BaseURL: pingServer.URL + "/v1"},
+	)
+	if !ok {
+		t.Fatal("runHubBootDiagnostics() = false, want true")
+	}
+	assertLogContains(t, logs, "boot.diagnosis status=warn required_checks=failed")
+	assertLogContains(t, logs, gitHubCLIPackageLabel)
+}
+
 func TestApplyDefaultAgentRuntimeConfig(t *testing.T) {
 	t.Parallel()
 

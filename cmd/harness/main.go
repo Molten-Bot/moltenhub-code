@@ -35,6 +35,8 @@ const hubBootRecommendation = "Recommended: connect this runtime to Molten Hub a
 const hubPingLocalOnlyDetail = "Hub endpoint ping precheck failed; continuing in local-only mode. Use the local UI/API to submit tasks."
 const hubPingRemoteContinueDetail = "Hub endpoint ping precheck failed; continuing remote startup because Hub credentials are configured and UI is disabled."
 const hubPingHeadlessNoopDetail = "Hub endpoint ping precheck failed with UI disabled and no Hub credentials configured; startup completed without remote transport."
+const gitHubCLIPackageLabel = "github-cli (gh)"
+const gitHubCLIAuthRecommendation = "Run `gh auth login` (the GitHub CLI binary from the `github-cli` package) or set GH_TOKEN before dispatching tasks."
 
 const hubBootDiagnosticTimeout = 10 * time.Second
 const hubPingDiagnosticTimeout = 5 * time.Second
@@ -1138,7 +1140,7 @@ func runHubBootDiagnosticsWithRuntimeLoaderDetailed(
 		logf(
 			"boot.diagnosis status=warn requirement=gh_auth detail=%q recommendation=%q",
 			diagnosticDetailForResult(authRes),
-			"Run `gh auth login` (or set GH_TOKEN) before dispatching tasks.",
+			gitHubCLIAuthRecommendation,
 		)
 	} else {
 		logf("boot.diagnosis status=ok requirement=gh_auth detail=%q", diagnosticDetailForResult(authRes))
@@ -1189,7 +1191,8 @@ func runHubBootDiagnosticsWithRuntimeLoaderDetailed(
 		"boot.diagnosis status=warn required_checks=failed count=%d recommendation=%q",
 		failedRequiredChecks,
 		fmt.Sprintf(
-			"Install missing tools before running tasks: git, gh, %s.",
+			"Install missing tools before running tasks: git, %s, %s.",
+			gitHubCLIPackageLabel,
 			strings.TrimSpace(runtime.Command),
 		),
 	)
