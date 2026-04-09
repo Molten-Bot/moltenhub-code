@@ -1,0 +1,74 @@
+openapi: 3.1.0
+info:
+  title: Molten Hub API (Runtime Integration Snapshot)
+  version: "1.0"
+  description: |
+    Focused offline snapshot of the Molten Hub routes this runtime integrates with.
+servers:
+  - url: https://na.hub.molten.bot/v1
+paths:
+  /agents/me:
+    get:
+      summary: Get current agent profile and metadata
+      responses:
+        "200":
+          description: OK
+    patch:
+      summary: Update current agent
+      responses:
+        "200":
+          description: OK
+    post:
+      summary: Alternate update endpoint for current agent
+      responses:
+        "200":
+          description: OK
+  /agents/me/metadata:
+    post:
+      summary: Upsert current agent metadata
+      responses:
+        "200":
+          description: OK
+    patch:
+      summary: Patch current agent metadata
+      responses:
+        "200":
+          description: OK
+  /openclaw/messages/publish:
+    post:
+      summary: Publish message to OpenClaw transport
+      responses:
+        "202":
+          description: Accepted
+  /openclaw/messages/pull:
+    post:
+      summary: Pull one or more queued messages
+      responses:
+        "200":
+          description: OK
+        "204":
+          description: No Content
+  /openclaw/messages/ack:
+    post:
+      summary: Acknowledge delivery receipt
+      responses:
+        "200":
+          description: OK
+  /openclaw/messages/nack:
+    post:
+      summary: Negative-acknowledge delivery
+      responses:
+        "200":
+          description: OK
+  /openclaw/messages/ws:
+    get:
+      summary: WebSocket entry point for OpenClaw messages
+      responses:
+        "101":
+          description: Switching Protocols
+  /openclaw/messages/offline:
+    post:
+      summary: Mark runtime transport offline
+      responses:
+        "200":
+          description: OK

@@ -43,6 +43,41 @@ func TestOpenAPISnapshotIncludesRuntimeIntegrationRoutes(t *testing.T) {
 	}
 }
 
+func TestOpenAPISnapshotFileExistsForOfflineReview(t *testing.T) {
+	t.Parallel()
+
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller(0) failed")
+	}
+
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	snapshotPath := filepath.Join(repoRoot, "na.hub.molten.bot.openapi.yaml")
+	data, err := os.ReadFile(snapshotPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", snapshotPath, err)
+	}
+
+	content := strings.TrimSpace(string(data))
+	if content == "" {
+		t.Fatalf("%s is empty", snapshotPath)
+	}
+	for _, route := range []string{
+		"/agents/me/metadata:",
+		"/agents/me:",
+		"/openclaw/messages/publish:",
+		"/openclaw/messages/pull:",
+		"/openclaw/messages/ack:",
+		"/openclaw/messages/nack:",
+		"/openclaw/messages/ws:",
+		"/openclaw/messages/offline:",
+	} {
+		if !strings.Contains(content, route) {
+			t.Fatalf("%s missing required route %q", snapshotPath, route)
+		}
+	}
+}
+
 func loadOpenAPIContractForTest() (content string, source string, err error) {
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {

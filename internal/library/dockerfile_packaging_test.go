@@ -28,6 +28,9 @@ func TestRuntimeDockerfileCopiesFullLibraryCatalog(t *testing.T) {
 	if !strings.Contains(content, "COPY library /opt/moltenhub/library") {
 		t.Fatalf("%s does not copy the full library directory into the runtime image", dockerfilePath)
 	}
+	if !strings.Contains(content, "COPY library /workspace/library") {
+		t.Fatalf("%s does not copy the full library directory into /workspace/library for hub runtime loading", dockerfilePath)
+	}
 	if strings.Contains(content, "COPY library/AGENTS.md /opt/moltenhub/library/AGENTS.md") {
 		t.Fatalf("%s still only copies library/AGENTS.md into the runtime image", dockerfilePath)
 	}
