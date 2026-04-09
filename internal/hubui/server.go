@@ -641,6 +641,9 @@ func (s Server) handlePromptSubmit(
 			})
 			return
 		}
+		if s.Broker != nil {
+			s.Broker.RecordRejectedPromptSubmission(body, "invalid", err)
+		}
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":    false,
 			"error": err.Error(),

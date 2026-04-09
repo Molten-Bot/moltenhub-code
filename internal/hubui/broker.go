@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"sort"
 	"strconv"
@@ -108,6 +109,7 @@ type Broker struct {
 	tasks       map[string]*taskState
 	closedTasks map[string]time.Time
 	runConfigs  map[string][]byte
+	rejectedSeq uint64
 	subs        map[chan struct{}]struct{}
 
 	hubConnected bool
@@ -296,6 +298,59 @@ func (b *Broker) RecordTaskRunConfig(requestID string, runConfigJSON []byte) {
 	if changed {
 		b.notifySubscribersLocked()
 	}
+}
+
+// RecordRejectedPromptSubmission stores a failed prompt submission so it remains visible in the task list.
+func (b *Broker) RecordRejectedPromptSubmission(runConfigJSON []byte, status string, err error) string {
+	if b == nil {
+		return ""
+	}
+
+	runConfigJSON = bytes.TrimSpace(runConfigJSON)
+	status = strings.TrimSpace(status)
+	if status == "" {
+		status = "invalid"
+	}
+
+	now := b.now().UTC()
+	repos := reposFromRunConfigJSON(runConfigJSON)
+	baseBranch := branchFromRunConfigJSON(runConfigJSON)
+	prompt := promptFromRunConfigJSON(runConfigJSON)
+	errText := strings.TrimSpace(errorText(err))
+	if errText == "" {
+		errText = "prompt submission failed"
+	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.pruneExpiredTasksLocked(now)
+	b.rejectedSeq++
+	requestID := fmt.Sprintf("local-rejected-%d-%06d", now.Unix(), b.rejectedSeq)
+	t := &taskState{
+		RequestID:   requestID,
+		Prompt:      prompt,
+		Repo:        firstRepo(repos),
+		Repos:       append([]string(nil), repos...),
+		BaseBranch:  baseBranch,
+		Status:      status,
+		Branch:      baseBranch,
+		Error:       errText,
+		StartedAt:   now,
+		UpdatedAt:   now,
+		Stage:       "submit",
+		StageStatus: status,
+		Logs: []TaskLog{
+			{
+				Time:   now.Format(time.RFC3339Nano),
+				Stream: "meta",
+				Text:   "prompt submission failed: " + errText,
+			},
+		},
+	}
+	b.tasks[requestID] = t
+	b.notifySubscribersLocked()
+	return requestID
 }
 
 func (b *Broker) taskBaseBranchLocked(requestID string) string {
@@ -892,6 +947,21 @@ func promptFromRunConfigJSON(runConfigJSON []byte) string {
 	return strings.TrimSpace(raw.Prompt)
 }
 
+func reposFromRunConfigJSON(runConfigJSON []byte) []string {
+	if len(runConfigJSON) == 0 {
+		return nil
+	}
+	var raw struct {
+		Repo    string   `json:"repo"`
+		RepoURL string   `json:"repoUrl"`
+		Repos   []string `json:"repos"`
+	}
+	if err := json.Unmarshal(runConfigJSON, &raw); err != nil {
+		return nil
+	}
+	return appendNonEmptyUnique(nil, append([]string{raw.Repo, raw.RepoURL}, raw.Repos...)...)
+}
+
 func branchFromRunConfigJSON(runConfigJSON []byte) string {
 	if len(runConfigJSON) == 0 {
 		return ""
@@ -904,6 +974,23 @@ func branchFromRunConfigJSON(runConfigJSON []byte) string {
 		return ""
 	}
 	return firstNonEmpty(raw.BaseBranch, raw.Branch)
+}
+
+func firstRepo(repos []string) string {
+	for _, repo := range repos {
+		repo = strings.TrimSpace(repo)
+		if repo != "" {
+			return repo
+		}
+	}
+	return ""
+}
+
+func errorText(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 func isCompletedTaskStatus(status string) bool {

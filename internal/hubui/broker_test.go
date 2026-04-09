@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -623,6 +624,55 @@ func TestBrokerAppliesPromptWhenConfigRecordedAfterTaskStart(t *testing.T) {
 	}
 	if snap.Tasks[0].Branch != "release/2026.04" {
 		t.Fatalf("task.Branch = %q, want %q", snap.Tasks[0].Branch, "release/2026.04")
+	}
+}
+
+func TestBrokerRecordsRejectedPromptSubmission(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := b.RecordRejectedPromptSubmission(
+		[]byte(`{"repo":"git@github.com:acme/repo.git","baseBranch":"main","prompt":"fix broken prompt"}`),
+		"invalid",
+		errors.New("invalid run config: prompt failed checks"),
+	)
+
+	if requestID == "" {
+		t.Fatal("RecordRejectedPromptSubmission() requestID = empty, want value")
+	}
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("len(tasks) = %d, want 1", len(snap.Tasks))
+	}
+
+	task := snap.Tasks[0]
+	if task.RequestID != requestID {
+		t.Fatalf("task.RequestID = %q, want %q", task.RequestID, requestID)
+	}
+	if task.Status != "invalid" {
+		t.Fatalf("task.Status = %q, want invalid", task.Status)
+	}
+	if task.Prompt != "fix broken prompt" {
+		t.Fatalf("task.Prompt = %q, want %q", task.Prompt, "fix broken prompt")
+	}
+	if task.Repo != "git@github.com:acme/repo.git" {
+		t.Fatalf("task.Repo = %q, want %q", task.Repo, "git@github.com:acme/repo.git")
+	}
+	if task.BaseBranch != "main" {
+		t.Fatalf("task.BaseBranch = %q, want main", task.BaseBranch)
+	}
+	if task.Branch != "main" {
+		t.Fatalf("task.Branch = %q, want main", task.Branch)
+	}
+	if task.CanRerun {
+		t.Fatal("task.CanRerun = true, want false")
+	}
+	if task.Error != "invalid run config: prompt failed checks" {
+		t.Fatalf("task.Error = %q, want detailed failure", task.Error)
+	}
+	if len(task.Logs) != 1 || !strings.Contains(task.Logs[0].Text, "prompt submission failed: invalid run config: prompt failed checks") {
+		t.Fatalf("task.Logs = %#v, want failure log entry", task.Logs)
 	}
 }
 

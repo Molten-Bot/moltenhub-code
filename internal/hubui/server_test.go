@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -1438,6 +1439,49 @@ func TestHandlerLocalPromptSubmitDuplicate(t *testing.T) {
 	}
 	if gotState, _ := body["state"].(string); gotState != "in_flight" {
 		t.Fatalf("state = %q, want %q", gotState, "in_flight")
+	}
+}
+
+func TestHandlerLocalPromptSubmitFailureCreatesVisibleRejectedTask(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	srv := NewServer("", b)
+	srv.SubmitLocalPrompt = func(_ context.Context, _ []byte) (string, error) {
+		return "", errors.New("invalid run config: prompt failed checks")
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	payload := `{"repo":"git@github.com:acme/repo.git","baseBranch":"main","targetSubdir":".","prompt":"show this failed prompt"}`
+	resp, err := http.Post(ts.URL+"/api/local-prompt", "application/json", bytes.NewBufferString(payload))
+	if err != nil {
+		t.Fatalf("POST /api/local-prompt error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("len(tasks) = %d, want 1", len(snap.Tasks))
+	}
+
+	task := snap.Tasks[0]
+	if task.Status != "invalid" {
+		t.Fatalf("task.Status = %q, want invalid", task.Status)
+	}
+	if task.Prompt != "show this failed prompt" {
+		t.Fatalf("task.Prompt = %q, want %q", task.Prompt, "show this failed prompt")
+	}
+	if task.Error != "invalid run config: prompt failed checks" {
+		t.Fatalf("task.Error = %q, want detailed failure", task.Error)
+	}
+	if task.CanRerun {
+		t.Fatal("task.CanRerun = true, want false")
 	}
 }
 
