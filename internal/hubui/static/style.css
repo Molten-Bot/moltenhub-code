@@ -772,7 +772,7 @@ body .right-col.prompt-collapsed.task-list-hidden {
 
 #moltenbot-hub-link:hover img,
 #moltenbot-hub-link:focus-visible img {
-  filter: none;
+  filter: var(--agent-logo-filter);
   transform: translateY(-1px);
 }
 

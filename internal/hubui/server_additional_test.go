@@ -165,8 +165,8 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `#moltenbot-hub-link:focus-visible img {`) {
 		t.Fatalf("expected stylesheet to give molten bot hub icon a keyboard-focus treatment")
 	}
-	if !strings.Contains(stylesheet, `filter: none;`) {
-		t.Fatalf("expected molten bot hub icon hover treatment to restore native logo colors")
+	if !strings.Contains(stylesheet, `filter: var(--agent-logo-filter);`) {
+		t.Fatalf("expected molten bot hub icon hover treatment to keep the shared themed logo filter")
 	}
 }
 
