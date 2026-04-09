@@ -884,22 +884,6 @@ func unexpectedNoChangesFollowUpRunConfig(
 	}
 }
 
-var failureFollowUpNonRemediableMarkers = []string{
-	"quota exceeded",
-	"insufficient_quota",
-	"billing",
-	"401 unauthorized",
-	"missing bearer or basic authentication",
-	"invalid api key",
-	"invalid_authentication",
-	"authentication error",
-	"no delta from",
-	"no commits between",
-	"head sha can't be blank",
-	"base sha can't be blank",
-	"head ref must be a branch",
-}
-
 func shouldQueueFailureFollowUp(failedResult harness.Result) (bool, string) {
 	if failedResult.Err == nil {
 		return false, "failed task did not include an error"
@@ -909,13 +893,7 @@ func shouldQueueFailureFollowUp(failedResult harness.Result) (bool, string) {
 	if errText == "" {
 		return false, "failed task error was empty"
 	}
-
-	for _, marker := range failureFollowUpNonRemediableMarkers {
-		if strings.Contains(errText, marker) {
-			return false, marker
-		}
-	}
-	if reason := failurefollowup.NonRemediableRepoAccessReason(failedResult.Err); reason != "" {
+	if reason := failurefollowup.NonRemediableFailureReason(failedResult.Err); reason != "" {
 		return false, reason
 	}
 	return true, ""

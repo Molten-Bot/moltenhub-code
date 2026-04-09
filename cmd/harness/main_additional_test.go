@@ -476,7 +476,7 @@ func TestUnexpectedNoChangesFollowUpRunConfigPreservesTaskTargetingAndAddsContex
 	}
 }
 
-func TestShouldQueueFailureFollowUpSkipsNoDeltaFailures(t *testing.T) {
+func TestShouldQueueFailureFollowUpQueuesNoDeltaFailures(t *testing.T) {
 	t.Parallel()
 
 	result := harness.Result{
@@ -484,11 +484,8 @@ func TestShouldQueueFailureFollowUpSkipsNoDeltaFailures(t *testing.T) {
 	}
 
 	ok, reason := shouldQueueFailureFollowUp(result)
-	if ok {
-		t.Fatal("shouldQueueFailureFollowUp() = true, want false for no-delta failures")
-	}
-	if reason != "no delta from" {
-		t.Fatalf("reason = %q, want %q", reason, "no delta from")
+	if !ok {
+		t.Fatalf("shouldQueueFailureFollowUp() = false, want true for no-delta failures (reason=%q)", reason)
 	}
 }
 

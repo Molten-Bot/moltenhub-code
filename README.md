@@ -18,6 +18,7 @@ For each run:
 8. Watches required CI checks and performs remediation retries when checks fail.
 
 If a task fails, no PR is created for that run; the runtime returns an explicit failure payload and queues a follow-up remediation task that targets the same repository.
+The Studio default repository (`git@github.com:Molten-Bot/moltenhub-code.git`) is only a manual submission convenience and is not used as an automatic fallback for failure follow-up runs.
 
 ## Run
 
