@@ -606,6 +606,9 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 	if configPath != "" {
 		runtimeCfg, err := hub.LoadRuntimeConfig(configPath)
 		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return defaultHubBootConfig(configPath)
+			}
 			return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("runtime config error: %w", err)
 		}
 		cfg := runtimeCfg.Init()
@@ -616,6 +619,19 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 	if initPath != "" {
 		cfg, err := hub.LoadInit(initPath)
 		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				runtimePath := hub.ResolveRuntimeConfigPath(initPath)
+				runtimeCfg, runtimeErr := hub.LoadRuntimeConfig(runtimePath)
+				if runtimeErr == nil {
+					cfg := runtimeCfg.Init()
+					cfg.RuntimeConfigPath = runtimeCfg.RuntimeConfigPath
+					return cfg, harness.ExitSuccess, nil
+				}
+				if errors.Is(runtimeErr, os.ErrNotExist) {
+					return defaultHubBootConfig(runtimePath)
+				}
+				return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("runtime config error: %w", runtimeErr)
+			}
 			return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("init config error: %w", err)
 		}
 		cfg.RuntimeConfigPath = hub.ResolveRuntimeConfigPath(initPath)
@@ -625,20 +641,24 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 	runtimeCfg, err := hub.LoadRuntimeConfig("")
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			cfg := hub.InitConfig{
-				RuntimeConfigPath: hub.ResolveRuntimeConfigPath(""),
-			}
-			cfg.ApplyDefaults()
-			if err := cfg.Validate(); err != nil {
-				return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("init config error: %w", err)
-			}
-			return cfg, harness.ExitSuccess, nil
+			return defaultHubBootConfig(hub.ResolveRuntimeConfigPath(""))
 		}
 		return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("runtime config error: %w", err)
 	}
 
 	cfg := runtimeCfg.Init()
 	cfg.RuntimeConfigPath = runtimeCfg.RuntimeConfigPath
+	return cfg, harness.ExitSuccess, nil
+}
+
+func defaultHubBootConfig(runtimeConfigPath string) (hub.InitConfig, int, error) {
+	cfg := hub.InitConfig{
+		RuntimeConfigPath: strings.TrimSpace(runtimeConfigPath),
+	}
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err != nil {
+		return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("init config error: %w", err)
+	}
 	return cfg, harness.ExitSuccess, nil
 }
 

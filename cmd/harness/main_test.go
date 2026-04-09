@@ -101,6 +101,81 @@ func TestLoadHubBootConfigWithoutFlagsUsesDefaultsWhenRuntimeConfigMissing(t *te
 	}
 }
 
+func TestLoadHubBootConfigWithMissingInitFlagFallsBackToRuntimeDefaults(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	initPath := filepath.Join(tempDir, "init.json")
+
+	cfg, exitCode, err := loadHubBootConfig(initPath, "")
+	if err != nil {
+		t.Fatalf("loadHubBootConfig() error = %v", err)
+	}
+	if exitCode != harness.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	}
+	if got, want := cfg.BaseURL, "https://na.hub.molten.bot/v1"; got != want {
+		t.Fatalf("BaseURL = %q, want %q", got, want)
+	}
+	if got, want := cfg.RuntimeConfigPath, filepath.Join(tempDir, "config.json"); got != want {
+		t.Fatalf("RuntimeConfigPath = %q, want %q", got, want)
+	}
+}
+
+func TestLoadHubBootConfigWithMissingInitFlagUsesSiblingRuntimeConfigWhenAvailable(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	initPath := filepath.Join(tempDir, "init.json")
+	runtimeConfigPath := filepath.Join(tempDir, "config.json")
+	runtimeJSON := `{
+  "version": "v1",
+  "base_url": "https://na.hub.molten.bot/v1",
+  "agent_token": "agent_123",
+  "agent_harness": "codex",
+  "session_key": "main",
+  "timeout_ms": 20000
+}`
+	if err := os.WriteFile(runtimeConfigPath, []byte(runtimeJSON), 0o600); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+
+	cfg, exitCode, err := loadHubBootConfig(initPath, "")
+	if err != nil {
+		t.Fatalf("loadHubBootConfig() error = %v", err)
+	}
+	if exitCode != harness.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	}
+	if got, want := cfg.RuntimeConfigPath, runtimeConfigPath; got != want {
+		t.Fatalf("RuntimeConfigPath = %q, want %q", got, want)
+	}
+	if got, want := cfg.AgentToken, "agent_123"; got != want {
+		t.Fatalf("AgentToken = %q, want %q", got, want)
+	}
+}
+
+func TestLoadHubBootConfigWithMissingConfigFlagFallsBackToRuntimeDefaults(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	runtimeConfigPath := filepath.Join(tempDir, "config.json")
+
+	cfg, exitCode, err := loadHubBootConfig("", runtimeConfigPath)
+	if err != nil {
+		t.Fatalf("loadHubBootConfig() error = %v", err)
+	}
+	if exitCode != harness.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	}
+	if got, want := cfg.BaseURL, "https://na.hub.molten.bot/v1"; got != want {
+		t.Fatalf("BaseURL = %q, want %q", got, want)
+	}
+	if got, want := cfg.RuntimeConfigPath, runtimeConfigPath; got != want {
+		t.Fatalf("RuntimeConfigPath = %q, want %q", got, want)
+	}
+}
+
 func TestLoadHubBootConfigUsesDefaultRuntimeConfigWhenFlagsOmitted(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {
