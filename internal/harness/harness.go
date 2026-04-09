@@ -310,7 +310,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		if err != nil {
 			return h.fail(ExitGit, "git", err, runDir)
 		}
-		repos[i].Branch = firstNonEmpty(localBranchFromStatus(statusRes.Stdout), repos[i].Branch)
+		repos[i].Branch = pickFirstNonEmpty(localBranchFromStatus(statusRes.Stdout), repos[i].Branch)
 		repos[i].Changed = hasTrackedWorktreeChanges(statusRes.Stdout)
 		h.logf("stage=git status=scan repo=%s repo_dir=%s changed=%t", repos[i].URL, repos[i].RelDir, repos[i].Changed)
 	}
