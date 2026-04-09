@@ -17,6 +17,7 @@ const (
 	defaultMaxEvents             = 600
 	defaultMaxTaskLogs           = 2000
 	defaultOKTaskRetentionWindow = 5 * time.Minute
+	defaultClosedTaskRetention   = 24 * time.Hour
 )
 
 var (
@@ -105,6 +106,7 @@ type Broker struct {
 	nextEventID int64
 	events      []Event
 	tasks       map[string]*taskState
+	closedTasks map[string]time.Time
 	runConfigs  map[string][]byte
 	subs        map[chan struct{}]struct{}
 
@@ -138,13 +140,14 @@ type taskState struct {
 // NewBroker returns a monitor state broker with safe defaults.
 func NewBroker() *Broker {
 	return &Broker{
-		now:        time.Now,
-		maxEvents:  defaultMaxEvents,
-		maxTaskLog: defaultMaxTaskLogs,
-		okTaskTTL:  defaultOKTaskRetentionWindow,
-		tasks:      map[string]*taskState{},
-		runConfigs: map[string][]byte{},
-		subs:       map[chan struct{}]struct{}{},
+		now:         time.Now,
+		maxEvents:   defaultMaxEvents,
+		maxTaskLog:  defaultMaxTaskLogs,
+		okTaskTTL:   defaultOKTaskRetentionWindow,
+		tasks:       map[string]*taskState{},
+		closedTasks: map[string]time.Time{},
+		runConfigs:  map[string][]byte{},
+		subs:        map[chan struct{}]struct{}{},
 	}
 }
 
@@ -176,7 +179,7 @@ func (b *Broker) IngestLog(line string) {
 		Line:      line,
 	})
 
-	if requestID != "" {
+	if requestID != "" && !b.isClosedTaskLocked(requestID, now) {
 		t := b.ensureTaskLocked(requestID, now)
 		b.updateTaskFromLineLocked(t, line, fields, now)
 	}
@@ -360,21 +363,39 @@ func (b *Broker) CloseTask(requestID string) error {
 
 	delete(b.tasks, requestID)
 	delete(b.runConfigs, requestID)
+	b.closedTasks[requestID] = b.now().UTC()
 	b.notifySubscribersLocked()
 	return nil
 }
 
 func (b *Broker) pruneExpiredTasksLocked(now time.Time) {
-	if b.okTaskTTL <= 0 {
-		return
+	if b.okTaskTTL > 0 {
+		for requestID, task := range b.tasks {
+			if !b.shouldHideTaskLocked(task, now) {
+				continue
+			}
+			delete(b.tasks, requestID)
+			delete(b.runConfigs, requestID)
+		}
 	}
-	for requestID, task := range b.tasks {
-		if !b.shouldHideTaskLocked(task, now) {
+	for requestID, closedAt := range b.closedTasks {
+		if now.Sub(closedAt) < defaultClosedTaskRetention {
 			continue
 		}
-		delete(b.tasks, requestID)
-		delete(b.runConfigs, requestID)
+		delete(b.closedTasks, requestID)
 	}
+}
+
+func (b *Broker) isClosedTaskLocked(requestID string, now time.Time) bool {
+	closedAt, ok := b.closedTasks[requestID]
+	if !ok {
+		return false
+	}
+	if now.Sub(closedAt) >= defaultClosedTaskRetention {
+		delete(b.closedTasks, requestID)
+		return false
+	}
+	return true
 }
 
 func (b *Broker) shouldHideTaskLocked(task *taskState, now time.Time) bool {
