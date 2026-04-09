@@ -164,6 +164,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `href="/static/style.css"`) {
 		t.Fatalf("expected index html to include external stylesheet link")
 	}
+	if !strings.Contains(markup, `src="https://www.googletagmanager.com/gtag/js?id=G-BY33RFG2WB"`) {
+		t.Fatalf("expected index html to load the google analytics tag script")
+	}
+	if !strings.Contains(markup, `window.gtag("config", "G-BY33RFG2WB");`) {
+		t.Fatalf("expected index html to configure google analytics with the moltenhub measurement id")
+	}
 	if !strings.Contains(markup, `<title>Molten Hub Code</title>`) {
 		t.Fatalf("expected index html to set app title to Molten Hub Code")
 	}
@@ -886,8 +892,17 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function clearSubmittedPromptDraft(") {
 		t.Fatalf("expected index html to include submitted prompt clearing helper")
 	}
+	if !strings.Contains(markup, "function resetPromptInputSize(input)") ||
+		!strings.Contains(markup, "input.style.removeProperty(\"height\");") ||
+		!strings.Contains(markup, "input.style.removeProperty(\"width\");") {
+		t.Fatalf("expected index html to include prompt textarea resize reset behavior")
+	}
 	if !strings.Contains(markup, "builderPromptInput.value = \"\";") || !strings.Contains(markup, "localPromptInput.value = \"\";") {
 		t.Fatalf("expected index html to clear builder and raw prompt inputs after submit")
+	}
+	if !strings.Contains(markup, "resetPromptInputSize(builderPromptInput);") ||
+		!strings.Contains(markup, "resetPromptInputSize(localPromptInput);") {
+		t.Fatalf("expected index html to reset prompt textarea size after clearing submitted prompt state")
 	}
 	if !strings.Contains(markup, "function clearSubmittedPromptState(") {
 		t.Fatalf("expected index html to include queued-submit cleanup helper")
@@ -909,6 +924,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `const DEFAULT_THEME_MODE = "dark";`) {
 		t.Fatalf("expected index html to define dark as the default theme mode")
+	}
+	if !strings.Contains(markup, `const GOOGLE_ANALYTICS_MEASUREMENT_ID = "G-BY33RFG2WB";`) {
+		t.Fatalf("expected index html to expose the google analytics measurement id constant to the usage tracker")
+	}
+	if !strings.Contains(markup, `function trackAnalyticsEvent(name, params = {})`) {
+		t.Fatalf("expected index html to include the analytics event helper")
+	}
+	if !strings.Contains(markup, `trackAnalyticsEvent("prompt_submit_succeeded", { prompt_mode: state.promptMode, request_id: requestID });`) {
+		t.Fatalf("expected index html to track successful prompt submissions")
 	}
 	if !strings.Contains(markup, `return THEME_MODES.includes(raw) ? raw : DEFAULT_THEME_MODE;`) {
 		t.Fatalf("expected index html theme loading to fall back to the default dark theme")

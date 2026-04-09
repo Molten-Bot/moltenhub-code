@@ -7,6 +7,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap">
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-BY33RFG2WB"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { window.dataLayer.push(arguments); }
+    window.gtag = window.gtag || gtag;
+    window.gtag("js", new Date());
+    window.gtag("config", "G-BY33RFG2WB");
+  </script>
   <script>
     window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"codex","configuredAgentLabel":"Codex"};
   </script>
@@ -461,6 +469,7 @@
     const MAX_TERMINAL_LINES = 500;
     const HUB_LOGIN_URL = "https://app.molten.bot/signin?target=hub";
     const HUB_DASHBOARD_URL = "https://app.molten.bot/hub";
+    const GOOGLE_ANALYTICS_MEASUREMENT_ID = "G-BY33RFG2WB";
     const COMPLETED_STATUSES = new Set(["ok", "no_changes", "error", "invalid", "duplicate", "stopped"]);
     const TASK_PROGRESS_STEPS = [
       { id: "received", label: "Task Received", detail: "Dispatch accepted by hub.", icon: "moltenhub" },
@@ -492,6 +501,41 @@
         configuredHarness: String(config.configuredHarness || "").trim() || "codex",
         configuredAgentLabel: String(config.configuredAgentLabel || "").trim() || "Codex",
       };
+    }
+
+    function trackAnalyticsEvent(name, params = {}) {
+      if (typeof window.gtag !== "function") {
+        return;
+      }
+
+      const eventName = String(name || "").trim();
+      if (!eventName) {
+        return;
+      }
+
+      const payload = { measurement_id: GOOGLE_ANALYTICS_MEASUREMENT_ID };
+      for (const [key, value] of Object.entries(params || {})) {
+        if (typeof value === "string") {
+          const trimmed = value.trim();
+          if (trimmed) {
+            payload[key] = trimmed;
+          }
+          continue;
+        }
+        if (typeof value === "number" && Number.isFinite(value)) {
+          payload[key] = value;
+          continue;
+        }
+        if (typeof value === "boolean") {
+          payload[key] = value;
+        }
+      }
+
+      try {
+        window.gtag("event", eventName, payload);
+      } catch (_err) {
+        // Keep UI interactions working even if analytics dispatch fails.
+      }
     }
 
     function configuredAgentLabel() {
@@ -1270,11 +1314,13 @@
       }
       const payload = currentHubSetupPayload();
       if (!payload.token) {
-        setHubSetupStatus("error", "Token is required.");
+        trackAnalyticsEvent("hub_setup_validation_failed", { agent_mode: payload.agent_mode });
+        setHubSetupStatus("error", `${payload.agent_mode === "new" ? "Bind" : "Agent"} token is required.`);
         return;
       }
       const tokenValidationMessage = syncHubTokenValidation();
       if (tokenValidationMessage) {
+        trackAnalyticsEvent("hub_setup_validation_failed", { agent_mode: payload.agent_mode });
         setHubSetupStatus("error", tokenValidationMessage);
         if (hubSetupToken && typeof hubSetupToken.reportValidity === "function") {
           hubSetupToken.reportValidity();
@@ -1283,6 +1329,7 @@
       }
 
       setHubSetupBusy(true);
+      trackAnalyticsEvent("hub_setup_started", { agent_mode: payload.agent_mode, token_type: payload.token_type });
       setHubSetupStatus("warn", "Saving Molten Hub setup...");
       try {
         const response = await fetch("/api/hub-setup", {
@@ -1300,11 +1347,13 @@
           throw new Error(body?.error || `hub setup http ${response.status}`);
         }
         applyHubSetupState(body?.hub);
+        trackAnalyticsEvent("hub_setup_succeeded", { agent_mode: payload.agent_mode, token_type: payload.token_type });
         setHubSetupStatus("ok", state.hubSetup.message || "Molten Hub setup saved.");
         if (hubSetupToken) {
           hubSetupToken.value = "";
         }
       } catch (err) {
+        trackAnalyticsEvent("hub_setup_failed", { agent_mode: payload.agent_mode, token_type: payload.token_type });
         setHubSetupStatus("error", err && err.message ? err.message : "Hub setup failed.");
       } finally {
         setHubSetupBusy(false);
@@ -2528,9 +2577,19 @@
       builderImagesClear.disabled = !hasBuilderDraftToClear();
     }
 
+    function resetPromptInputSize(input) {
+      if (!input) {
+        return;
+      }
+      input.style.removeProperty("height");
+      input.style.removeProperty("width");
+    }
+
     function clearSubmittedPromptDraft() {
       builderPromptInput.value = "";
       localPromptInput.value = "";
+      resetPromptInputSize(builderPromptInput);
+      resetPromptInputSize(localPromptInput);
       syncBuilderDraftClearState();
     }
 
@@ -2941,6 +3000,7 @@
       if (mode !== "builder" && mode !== "library" && mode !== "json") {
         mode = "builder";
       }
+      const previousMode = state.promptMode;
       state.promptMode = mode;
       persistPromptMode();
 
@@ -2962,6 +3022,9 @@
         state.promptVisible = true;
         persistPromptVisibility();
         applyPromptVisibility();
+      }
+      if (previousMode !== mode) {
+        trackAnalyticsEvent("prompt_mode_changed", { prompt_mode: mode });
       }
     }
 
@@ -3331,6 +3394,7 @@
 
     async function dismissTask(requestID) {
       if (!requestID || state.closeInFlight.has(requestID)) return;
+      trackAnalyticsEvent("task_close_started", { request_id: requestID });
       state.closeInFlight.add(requestID);
       render(state.snapshot);
 
@@ -3355,8 +3419,10 @@
           completeTaskDismissal(requestID);
         }, CLOSE_TASK_FADE_MS);
         state.closingTaskTimers.set(requestID, closeTimer);
+        trackAnalyticsEvent("task_close_succeeded", { request_id: requestID });
         render(state.snapshot);
       } catch (err) {
+        trackAnalyticsEvent("task_close_failed", { request_id: requestID });
         setLocalPromptStatus("error", `Close failed: ${err.message}`);
       } finally {
         state.closeInFlight.delete(requestID);
@@ -3378,6 +3444,7 @@
       if (!requestID || state.rerunInFlight.has(requestID)) {
         return;
       }
+      trackAnalyticsEvent("task_rerun_started", { request_id: requestID, forced: force });
       state.rerunInFlight.add(requestID);
       render(state.snapshot);
       setLocalPromptStatus("warn", force ? `Force re-running ${requestID}...` : `Re-running ${requestID}...`);
@@ -3405,6 +3472,7 @@
                 return rerunTask(requestID, true);
               }
             }
+            trackAnalyticsEvent("task_rerun_duplicate", { request_id: requestID, forced: force });
             setLocalPromptStatus("warn", duplicateNotice(body));
             return;
           }
@@ -3412,8 +3480,10 @@
         }
 
         const newRequestID = body?.request_id || "(unknown)";
+        trackAnalyticsEvent("task_rerun_succeeded", { request_id: requestID, forced: force, rerun_request_id: newRequestID });
         setLocalPromptStatus("ok", force ? `Queued forced request ${newRequestID} (re-run of ${requestID})` : `Queued request ${newRequestID} (re-run of ${requestID})`);
       } catch (err) {
+        trackAnalyticsEvent("task_rerun_failed", { request_id: requestID, forced: force });
         setLocalPromptStatus("error", force ? `Forced re-run failed: ${err.message}` : `Re-run failed: ${err.message}`);
       } finally {
         state.rerunInFlight.delete(requestID);
@@ -3451,6 +3521,7 @@
       render(state.snapshot);
 
       const actionLabel = action === "run" ? "Run" : action === "pause" ? "Pause" : "Stop";
+      trackAnalyticsEvent("task_control_started", { request_id: requestID, action });
       setLocalPromptStatus("warn", `${actionLabel} ${requestID}...`);
 
       try {
@@ -3466,8 +3537,10 @@
         if (!response.ok) {
           throw new Error(body?.error || `${action} http ${response.status}`);
         }
+        trackAnalyticsEvent("task_control_succeeded", { request_id: requestID, action });
         setLocalPromptStatus("ok", `${actionLabel} applied to ${requestID}`);
       } catch (err) {
+        trackAnalyticsEvent("task_control_failed", { request_id: requestID, action });
         setLocalPromptStatus("error", `${actionLabel} failed: ${err.message}`);
       } finally {
         state.taskControlInFlight.delete(flightKey);
@@ -4136,6 +4209,7 @@
     async function submitLocalPrompt(event) {
       event.preventDefault();
       if (state.agentAuth.required && !state.agentAuth.ready) {
+        trackAnalyticsEvent("prompt_submit_blocked_auth", { prompt_mode: state.promptMode });
         setLocalPromptStatus("error", `${currentAgentLabel()} auth is required. Complete the authorization screen first.`);
         return;
       }
@@ -4143,12 +4217,17 @@
       try {
         normalized = currentPromptPayload();
       } catch (err) {
+        trackAnalyticsEvent("prompt_submit_invalid", { prompt_mode: state.promptMode });
         setLocalPromptStatus("error", `Invalid input: ${err.message}`);
         return;
       }
       localPromptInput.value = normalized.pretty;
 
       localPromptSubmit.disabled = true;
+      trackAnalyticsEvent("prompt_submit_started", {
+        prompt_mode: state.promptMode,
+        image_count: state.promptImages.length,
+      });
       setLocalPromptStatus("warn", "Submitting...");
 
       try {
@@ -4168,6 +4247,7 @@
 
         if (!response.ok) {
           if (response.status === 409 && body?.duplicate) {
+            trackAnalyticsEvent("prompt_submit_duplicate", { prompt_mode: state.promptMode });
             setLocalPromptStatus("warn", duplicateNotice(body));
             return;
           }
@@ -4182,8 +4262,10 @@
           // Ignore repo history extraction failures.
         }
         clearSubmittedPromptState();
+        trackAnalyticsEvent("prompt_submit_succeeded", { prompt_mode: state.promptMode, request_id: requestID });
         setLocalPromptStatus("ok", `Queued request ${requestID}`);
       } catch (err) {
+        trackAnalyticsEvent("prompt_submit_failed", { prompt_mode: state.promptMode });
         setLocalPromptStatus("error", `Submit failed: ${err.message}`);
       } finally {
         localPromptSubmit.disabled = false;
