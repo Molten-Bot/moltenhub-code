@@ -361,11 +361,10 @@
     </div>
   </div>
 
-  <div id="appearance-controls" class="theme-controls" role="group" aria-label="Appearance controls">
-    <button id="theme-cycle" class="theme-cycle-button" type="button" aria-live="polite">
-      <span id="theme-cycle-current" class="theme-cycle-current">Dark</span>
-    </button>
-  </div>
+  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch theme. Currently: Dark">
+    <span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true"></span>
+    <span id="theme-toggle-label">Dark</span>
+  </button>
 
   <script>
     const DISMISSED_TASKS_KEY = "hubui.dismissedTaskIds";
@@ -693,8 +692,9 @@
     const agentAuthConfigureInput = document.getElementById("agent-auth-configure-input");
     const agentAuthConfigureError = document.getElementById("agent-auth-configure-error");
     const agentAuthVerify = document.getElementById("agent-auth-verify");
-    const themeCycleButton = document.getElementById("theme-cycle");
-    const themeCycleCurrent = document.getElementById("theme-cycle-current");
+    const themeToggleButton = document.getElementById("theme-toggle");
+    const themeToggleLabel = document.getElementById("theme-toggle-label");
+    const themeToggleIcon = document.getElementById("theme-toggle-icon");
     const hoverSelect = document.getElementById("hover-select");
     let brandLogoRotationTimer = null;
     let brandLogoRotationPhase = 0;
@@ -750,17 +750,21 @@
       return THEME_MODES[(safeIndex + 1) % THEME_MODES.length];
     }
 
-    function syncThemeCycleButton(theme) {
-      if (!themeCycleButton || !themeCycleCurrent) {
+    const THEME_ICONS = {
+      light: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>',
+      dark: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a8 8 0 1 0 9 9 6 6 0 0 1-9-9z"/></svg>',
+      night: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 3 2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z"/></svg>',
+    };
+
+    function syncThemeToggle(theme) {
+      if (!themeToggleButton || !themeToggleLabel || !themeToggleIcon) {
         return;
       }
       const currentTheme = THEME_MODES.includes(theme) ? theme : DEFAULT_THEME_MODE;
-      const nextTheme = nextThemeMode(currentTheme);
       const currentLabel = themeLabel(currentTheme);
-      const nextLabel = themeLabel(nextTheme);
-      themeCycleCurrent.textContent = currentLabel;
-      themeCycleButton.setAttribute("aria-label", `Current theme ${currentLabel}. Switch to ${nextLabel}.`);
-      themeCycleButton.setAttribute("title", `Switch theme to ${nextLabel}`);
+      themeToggleLabel.textContent = currentLabel;
+      themeToggleIcon.innerHTML = THEME_ICONS[currentTheme] || "";
+      themeToggleButton.setAttribute("aria-label", `Switch theme. Currently: ${currentLabel}`);
     }
 
     function applyThemeMode(theme, persist) {
@@ -769,7 +773,7 @@
       root.classList.remove("light", "dark", "night");
       root.classList.add(normalized);
       root.setAttribute("data-theme", normalized);
-      syncThemeCycleButton(normalized);
+      syncThemeToggle(normalized);
       if (persist) {
         try {
           localStorage.setItem(THEME_KEY, normalized);
@@ -799,8 +803,8 @@
       applyThemeMode(loadThemeMode(), false);
       applyHoverMode(loadHoverMode(), false);
 
-      if (themeCycleButton) {
-        themeCycleButton.addEventListener("click", () => {
+      if (themeToggleButton) {
+        themeToggleButton.addEventListener("click", () => {
           applyThemeMode(nextThemeMode(currentThemeMode()), true);
         });
       }
