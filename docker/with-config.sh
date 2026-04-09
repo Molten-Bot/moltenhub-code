@@ -6,6 +6,11 @@ run_config_path="${HARNESS_RUN_CONFIG_PATH:-${config_dir}/config.json}"
 init_config_path="${HARNESS_INIT_CONFIG_PATH:-${config_dir}/init.json}"
 generated_init_path="${HARNESS_GENERATED_INIT_PATH:-/tmp/harness-init-from-env.json}"
 template_dir="${HARNESS_TEMPLATE_DIR:-/workspace/templates}"
+hub_ui_listen="${HARNESS_HUB_UI_LISTEN-:7777}"
+
+exec_hub() {
+    exec harness hub "$@" --ui-listen "${hub_ui_listen}"
+}
 
 json_escape() {
     printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
@@ -105,18 +110,18 @@ try_run_hub_from_env() {
         printf '}\n'
     } > "${generated_init_path}"
 
-    exec harness hub --init "${generated_init_path}"
+    exec_hub --init "${generated_init_path}"
 }
 
 if [ -f "${run_config_path}" ]; then
     if is_hub_config_json "${run_config_path}"; then
-        exec harness hub --config "${run_config_path}"
+        exec_hub --config "${run_config_path}"
     fi
     exec harness run --config "${run_config_path}"
 fi
 
 if [ -f "${init_config_path}" ]; then
-    exec harness hub --init "${init_config_path}"
+    exec_hub --init "${init_config_path}"
 fi
 
 if try_run_hub_from_env; then
@@ -132,4 +137,4 @@ echo "optional run config path: ${run_config_path}" >&2
 echo "optional init config path: ${init_config_path}" >&2
 echo "or set MOLTEN_HUB_TOKEN (and optionally MOLTEN_HUB_URL) for remote-hub bootstrap." >&2
 
-exec harness hub
+exec_hub

@@ -45,7 +45,7 @@ func TestWithConfigScriptUsesHubConfigWhenConfigJSONMatchesHubSchema(t *testing.
 	}
 
 	args := readFileTrimmed(t, env.argsPath)
-	if got, want := args, "hub --config "+configPath; got != want {
+	if got, want := args, "hub --config "+configPath+" --ui-listen :7777"; got != want {
 		t.Fatalf("harness args = %q, want %q", got, want)
 	}
 }
@@ -65,7 +65,7 @@ func TestWithConfigScriptFallsBackToInitConfig(t *testing.T) {
 	}
 
 	args := readFileTrimmed(t, env.argsPath)
-	if got, want := args, "hub --init "+initPath; got != want {
+	if got, want := args, "hub --init "+initPath+" --ui-listen :7777"; got != want {
 		t.Fatalf("harness args = %q, want %q", got, want)
 	}
 }
@@ -86,7 +86,7 @@ func TestWithConfigScriptBuildsInitFromEnvToken(t *testing.T) {
 	}
 
 	args := readFileTrimmed(t, env.argsPath)
-	if got, want := args, "hub --init "+generatedInitPath; got != want {
+	if got, want := args, "hub --init "+generatedInitPath+" --ui-listen :7777"; got != want {
 		t.Fatalf("harness args = %q, want %q", got, want)
 	}
 
@@ -116,7 +116,7 @@ func TestWithConfigScriptMissingConfigStartsHubOnboardingMode(t *testing.T) {
 	}
 
 	args := readFileTrimmed(t, env.argsPath)
-	if got, want := args, "hub"; got != want {
+	if got, want := args, "hub --ui-listen :7777"; got != want {
 		t.Fatalf("harness args = %q, want %q", got, want)
 	}
 
@@ -129,6 +129,23 @@ func TestWithConfigScriptMissingConfigStartsHubOnboardingMode(t *testing.T) {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q\noutput: %s", want, output)
 		}
+	}
+}
+
+func TestWithConfigScriptAllowsHubUIListenOverride(t *testing.T) {
+	t.Parallel()
+
+	env := newWithConfigTestEnv(t)
+	output, err := runWithConfigScript(t, env, map[string]string{
+		"HARNESS_HUB_UI_LISTEN": ":8088",
+	})
+	if err != nil {
+		t.Fatalf("with-config error: %v\noutput: %s", err, output)
+	}
+
+	args := readFileTrimmed(t, env.argsPath)
+	if got, want := args, "hub --ui-listen :8088"; got != want {
+		t.Fatalf("harness args = %q, want %q", got, want)
 	}
 }
 

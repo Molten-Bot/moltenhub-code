@@ -136,7 +136,21 @@ GitHub Actions publish flow:
   - `vnext-claude`, `vnext-auggie` promote to `latest-claude`, `latest-auggie`
 - required repository secret: `DOCKERHUB_TOKEN`
 
-Equivalent direct `docker run`:
+Simplest container startup (no mounted config required):
+
+```bash
+docker run --rm \
+  -p 7777:7777 \
+  moltenai/moltenhub-code:latest-codex
+```
+
+Notes:
+
+- Put Docker runtime flags (like `-p`) before the image name.
+- If `/workspace/config` is not mounted, startup creates runtime config state in the container volume and enters onboarding mode.
+- Container hub mode now binds UI to `:7777` by default.
+
+Equivalent direct `docker run` with explicit env and persistent config mount:
 
 ```bash
 docker run --rm -it \
