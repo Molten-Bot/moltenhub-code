@@ -32,3 +32,14 @@ func TestNonRemediableRepoAccessReasonFallsBackToEmpty(t *testing.T) {
 		t.Fatalf("NonRemediableRepoAccessReason(unrelated) = %q, want empty", got)
 	}
 }
+
+func TestNonRemediableFailureReasonRecognizesQuotaAndAllowsNoDelta(t *testing.T) {
+	t.Parallel()
+
+	if got := NonRemediableFailureReason(errors.New("codex: ERROR: Quota exceeded. Check your plan and billing details.")); got != "quota exceeded" {
+		t.Fatalf("NonRemediableFailureReason(quota) = %q, want %q", got, "quota exceeded")
+	}
+	if got := NonRemediableFailureReason(errors.New("task failed because this branch has no delta from `main`; No commits between main and moltenhub-fix")); got != "" {
+		t.Fatalf("NonRemediableFailureReason(no delta) = %q, want empty", got)
+	}
+}

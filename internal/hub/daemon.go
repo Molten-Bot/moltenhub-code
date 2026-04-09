@@ -721,7 +721,7 @@ func shouldQueueFailureFollowUp(dispatch SkillDispatch, res harness.Result) (boo
 	if isFailureFollowUpRequestID(dispatch.RequestID) {
 		return false, "follow-up request failed; skipping nested follow-up queue"
 	}
-	if reason := failurefollowup.NonRemediableRepoAccessReason(res.Err); reason != "" {
+	if reason := failurefollowup.NonRemediableFailureReason(res.Err); reason != "" {
 		return false, reason
 	}
 	return true, ""

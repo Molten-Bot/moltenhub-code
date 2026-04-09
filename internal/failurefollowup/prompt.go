@@ -39,6 +39,17 @@ var nonRemediableRepoAccessMarkers = []string{
 	"could not read username for 'https://github.com'",
 }
 
+var nonRemediableFailureMarkers = []string{
+	"quota exceeded",
+	"insufficient_quota",
+	"billing",
+	"401 unauthorized",
+	"missing bearer or basic authentication",
+	"invalid api key",
+	"invalid_authentication",
+	"authentication error",
+}
+
 func WithExecutionContract(base string) string {
 	base = strings.TrimSpace(base)
 	if base == "" {
@@ -187,4 +198,20 @@ func NonRemediableRepoAccessReason(err error) string {
 		}
 	}
 	return ""
+}
+
+func NonRemediableFailureReason(err error) string {
+	if err == nil {
+		return ""
+	}
+	text := strings.ToLower(strings.TrimSpace(err.Error()))
+	if text == "" {
+		return ""
+	}
+	for _, marker := range nonRemediableFailureMarkers {
+		if strings.Contains(text, marker) {
+			return marker
+		}
+	}
+	return NonRemediableRepoAccessReason(err)
 }
