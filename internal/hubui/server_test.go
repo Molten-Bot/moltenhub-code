@@ -564,6 +564,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `class="page-bottom-dock"`) || !strings.Contains(markup, `class="prompt-mode-tabs prompt-mode-tabs-dock"`) {
 		t.Fatalf("expected index html to render the mode toggles in the bottom dock")
 	}
+	if !strings.Contains(markup, `id="github-profile-link"`) ||
+		!strings.Contains(markup, `href="https://github.com/settings/profile"`) ||
+		!strings.Contains(markup, `target="_blank"`) {
+		t.Fatalf("expected index html to render a bottom-dock GitHub profile link that opens in a new window")
+	}
+	if !strings.Contains(markup, `src="/static/logos/github.svg"`) || !strings.Contains(markup, `>GitHub</span>`) {
+		t.Fatalf("expected index html to render the GitHub dock link with the GitHub logo and label")
+	}
 	if strings.Index(markup, `id="task-panel"`) > strings.Index(markup, `class="panel prompt-wrap`) {
 		t.Fatalf("expected index html to render Task View before Studio in the page layout")
 	}
@@ -1028,6 +1036,16 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".task-pr-link img {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: contain;\n  filter: var(--agent-logo-filter);") {
 		t.Fatalf("expected stylesheet to apply theme-aware monochrome treatment to task PR logos")
+	}
+	if !strings.Contains(css, ".page-bottom-dock {\n  position: fixed;\n  left: 50%;\n  bottom: max(16px, env(safe-area-inset-bottom));\n  z-index: 61;\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  justify-content: center;") {
+		t.Fatalf("expected stylesheet to align the bottom dock tabs and GitHub profile link on a shared row")
+	}
+	if !strings.Contains(css, ".page-bottom-dock-link {\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;") ||
+		!strings.Contains(css, "text-transform: uppercase;") {
+		t.Fatalf("expected stylesheet to include dedicated bottom-dock GitHub profile link styles")
+	}
+	if !strings.Contains(css, ".page-bottom-dock-link img {\n  display: block;\n  width: 15px;\n  height: 15px;") {
+		t.Fatalf("expected stylesheet to size the bottom-dock GitHub logo as a compact icon")
 	}
 	if !strings.Contains(css, ".task-fullscreen {\n  position: fixed;\n  inset: 0;\n  z-index: 80;\n  padding: 0;") {
 		t.Fatalf("expected stylesheet to make full screen task layout use full viewport padding")

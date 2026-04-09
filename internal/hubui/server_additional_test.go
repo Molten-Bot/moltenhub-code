@@ -587,11 +587,14 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".prompt-titlebar {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  justify-content: space-between;\n  min-height: 52px;\n}") {
 		t.Fatalf("expected Studio title bar to keep a compact header while exposing both the section label and minimize control")
 	}
-	if !strings.Contains(css, ".page-bottom-dock {\n  position: fixed;\n  left: 50%;\n  bottom: max(16px, env(safe-area-inset-bottom));\n  z-index: 61;\n  display: flex;\n  justify-content: center;\n  width: min-content;\n  max-width: calc(100vw - 28px);\n  transform: translateX(-50%);\n}") {
+	if !strings.Contains(css, ".page-bottom-dock {\n  position: fixed;\n  left: 50%;\n  bottom: max(16px, env(safe-area-inset-bottom));\n  z-index: 61;\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  justify-content: center;\n  width: min-content;\n  max-width: calc(100vw - 28px);\n  transform: translateX(-50%);\n}") {
 		t.Fatalf("expected Studio mode tabs to dock at the absolute bottom center of the page")
 	}
 	if !strings.Contains(css, ".prompt-mode-tabs-dock {\n  width: max-content;\n  max-width: calc(100vw - 28px);\n  overflow-x: auto;\n}") {
 		t.Fatalf("expected Studio mode tabs to remain scrollable within the bottom dock on narrow viewports")
+	}
+	if !strings.Contains(css, ".page-bottom-dock-link {\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n  padding: 11px 14px;") {
+		t.Fatalf("expected bottom dock to include a dedicated GitHub profile pill beside the Studio mode tabs")
 	}
 	if !strings.Contains(css, ".prompt-wrap.panel {\n  display: flex;\n  flex-direction: column;\n  position: relative;") {
 		t.Fatalf("expected studio panel to participate in the page flow instead of docking itself to the viewport")
