@@ -19,6 +19,7 @@ import (
 )
 
 const codexAuthProbeTimeout = 12 * time.Second
+const codexAuthAutoStartRetryInterval = 3 * time.Second
 
 var (
 	ansiEscapePattern     = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
@@ -50,6 +51,8 @@ type codexAuthGate struct {
 
 	procRunning bool
 	procCancel  context.CancelFunc
+
+	lastAutoStartAttempt time.Time
 }
 
 func newCodexAuthGate(
@@ -137,7 +140,9 @@ func newCodexAuthGateWithConfig(
 
 	if autoStartDeviceAuth {
 		if _, err := g.StartDeviceAuth(context.Background()); err != nil {
-			g.logf("hub.auth status=warn action=start_codex_device_auth err=%q", err)
+			if g.logf != nil {
+				g.logf("hub.auth status=warn action=start_codex_device_auth err=%q", err)
+			}
 		}
 	}
 
@@ -182,6 +187,27 @@ func (g *codexAuthGate) Status(_ context.Context) (hubui.AgentAuthState, error) 
 		g.mu.Unlock()
 	}
 
+	autoStartDeviceAuth := false
+	g.mu.Lock()
+	if strings.TrimSpace(g.command) != "" &&
+		!g.ready && !g.procRunning && strings.TrimSpace(g.state) == "needs_device_auth" &&
+		strings.TrimSpace(g.authURL) == "" && strings.TrimSpace(g.deviceCode) == "" {
+		now := time.Now().UTC()
+		if g.lastAutoStartAttempt.IsZero() || now.Sub(g.lastAutoStartAttempt) >= codexAuthAutoStartRetryInterval {
+			g.lastAutoStartAttempt = now
+			autoStartDeviceAuth = true
+		}
+	}
+	g.mu.Unlock()
+
+	if autoStartDeviceAuth {
+		if _, err := g.StartDeviceAuth(context.Background()); err != nil {
+			if g.logf != nil {
+				g.logf("hub.auth status=warn action=start_codex_device_auth err=%q", err)
+			}
+		}
+	}
+
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return g.snapshotLocked(), nil
@@ -224,7 +250,11 @@ func (g *codexAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthState
 		return snap, fmt.Errorf("create codex device auth temp dir: %w", err)
 	}
 
-	procCtx, cancel := context.WithCancel(g.baseCtx)
+	baseCtx := g.baseCtx
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	procCtx, cancel := context.WithCancel(baseCtx)
 	cmd := exec.CommandContext(procCtx, g.command, "login", "--device-auth")
 	cmd.Dir = tmpDir
 

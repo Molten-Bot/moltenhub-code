@@ -608,6 +608,66 @@ func TestCodexAuthGateSnapshotAndIngestEdgeCases(t *testing.T) {
 	}
 }
 
+func TestCodexAuthGateStatusAutoStartsDeviceAuthWhenChallengeMissing(t *testing.T) {
+	t.Parallel()
+
+	g := &codexAuthGate{
+		baseCtx:   context.Background(),
+		command:   "true",
+		required:  true,
+		state:     "needs_device_auth",
+		message:   "Codex is not logged in. Device authorization is required.",
+		updatedAt: time.Now().UTC(),
+		initCfg:   codexGitHubReadyInitCfg(),
+	}
+
+	status, err := g.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if got := status.State; got == "needs_device_auth" {
+		t.Fatalf("Status() did not auto-start device auth: %+v", status)
+	}
+
+	waitForCondition(t, 2*time.Second, func() bool {
+		s, _ := g.Status(context.Background())
+		return s.Ready && s.State == "ready"
+	})
+}
+
+func TestCodexAuthGateStatusDebouncesAutoStartAttempts(t *testing.T) {
+	badTempRoot := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(badTempRoot, []byte("x"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	t.Setenv("TMPDIR", badTempRoot)
+
+	g := &codexAuthGate{
+		baseCtx:   context.Background(),
+		command:   "true",
+		required:  true,
+		state:     "needs_device_auth",
+		message:   "Codex is not logged in. Device authorization is required.",
+		updatedAt: time.Now().UTC(),
+		initCfg:   codexGitHubReadyInitCfg(),
+	}
+
+	if _, err := g.Status(context.Background()); err != nil {
+		t.Fatalf("first Status() error = %v", err)
+	}
+	firstAttempt := g.lastAutoStartAttempt
+	if firstAttempt.IsZero() {
+		t.Fatal("first Status() did not record auto-start attempt")
+	}
+
+	if _, err := g.Status(context.Background()); err != nil {
+		t.Fatalf("second Status() error = %v", err)
+	}
+	if !g.lastAutoStartAttempt.Equal(firstAttempt) {
+		t.Fatalf("second Status() should not re-attempt immediately: first=%s second=%s", firstAttempt, g.lastAutoStartAttempt)
+	}
+}
+
 func TestNewCodexAuthGateAutoStartsWhenNotLoggedIn(t *testing.T) {
 	t.Parallel()
 
