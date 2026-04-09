@@ -256,6 +256,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function formatTaskBranch(") {
 		t.Fatalf("expected index html to include branch formatter for task metadata")
 	}
+	if !strings.Contains(markup, "function taskCloneCommand(") || !strings.Contains(markup, "function copyTaskCloneCommand(") {
+		t.Fatalf("expected index html to include task clone command helpers for completed branches")
+	}
+	if !strings.Contains(markup, "const TERMINAL_LOGO_URL = \"https://molten.bot/logos/terminal.svg\";") {
+		t.Fatalf("expected index html to include the terminal logo asset for task clone controls")
+	}
 	if !strings.Contains(markup, "function openTaskOutput(") {
 		t.Fatalf("expected index html to include focused task output opener")
 	}
@@ -439,16 +445,25 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "const showTaskPRLink = isCompletedTask(task) && prURL !== \"\";") {
 		t.Fatalf("expected index html to gate task PR links to completed tasks with a pull request URL")
 	}
+	if !strings.Contains(markup, "const showTaskCloneAction = canCopyTaskCloneCommand(task);") ||
+		!strings.Contains(markup, "const showTaskSideActions = showTaskPRLink || showTaskCloneAction;") {
+		t.Fatalf("expected index html to gate the terminal clone action alongside the PR link rail")
+	}
 	if !strings.Contains(markup, "const TASK_PR_LINK_SIZE_PX = \"34px\";") {
 		t.Fatalf("expected index html to define a stable runtime width for task PR links")
 	}
-	if !strings.Contains(markup, "node.classList.toggle(\"task-has-pr-link\", showTaskPRLink);") {
-		t.Fatalf("expected index html to mark task cards with right-side PR links")
+	if !strings.Contains(markup, "node.classList.toggle(\"task-has-side-actions\", showTaskSideActions);") {
+		t.Fatalf("expected index html to mark task cards with right-side side-action rails")
 	}
 	if !strings.Contains(markup, "prLink.style.width = TASK_PR_LINK_SIZE_PX;") ||
 		!strings.Contains(markup, "prLink.style.height = TASK_PR_LINK_SIZE_PX;") ||
 		!strings.Contains(markup, "prLink.style.alignSelf = \"center\";") {
 		t.Fatalf("expected index html to size task PR links inline to avoid task-height expansion when css is stale")
+	}
+	if !strings.Contains(markup, "cloneButton.className = \"task-copy-link\";") ||
+		!strings.Contains(markup, "cloneLogo.src = TERMINAL_LOGO_URL;") ||
+		!strings.Contains(markup, "void copyTaskCloneCommand(task, cloneButton);") {
+		t.Fatalf("expected index html to render a terminal icon button that copies the branch clone command")
 	}
 	if !strings.Contains(markup, "prLogo.width = TASK_PR_LOGO_SIZE;") || !strings.Contains(markup, "prLogo.height = TASK_PR_LOGO_SIZE;") {
 		t.Fatalf("expected index html to define deterministic task PR logo dimensions")
@@ -458,6 +473,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if strings.Contains(markup, "topActions.appendChild(prLink);") {
 		t.Fatalf("expected index html to place task PR links in the right-side rail instead of top actions")
+	}
+	if !strings.Contains(markup, "async function copyTextToClipboard(value, buttonNode, options = {}) {") ||
+		!strings.Contains(markup, "const preserveContents = Boolean(options && options.preserveContents);") ||
+		!strings.Contains(markup, "buttonNode.classList.add(\"is-copied\");") {
+		t.Fatalf("expected index html to preserve icon-only copy buttons while showing copied feedback")
 	}
 	if !strings.Contains(markup, `id="local-conn-text"`) {
 		t.Fatalf("expected index html to include local connection indicator")
@@ -583,6 +603,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `href="https://github.com/settings/profile"`) ||
 		!strings.Contains(markup, `target="_blank"`) {
 		t.Fatalf("expected index html to render an integrated GitHub dock link that opens in a new window")
+	}
+	if !strings.Contains(markup, `fetch("/api/github/profile", { cache: "no-store" })`) {
+		t.Fatalf("expected index html to resolve the authenticated GitHub public profile through the hub ui api")
 	}
 	if !strings.Contains(markup, `class="prompt-mode-link prompt-mode-link-github"`) ||
 		!strings.Contains(markup, `src="/static/logos/github.svg"`) {
@@ -1038,10 +1061,16 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 		!strings.Contains(css, "align-self: center;") {
 		t.Fatalf("expected stylesheet to render task PR links as fixed-size controls that do not affect task card height")
 	}
+	if !strings.Contains(css, ".task-side-actions {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;") {
+		t.Fatalf("expected stylesheet to group terminal and GitHub task actions in a compact side rail")
+	}
+	if !strings.Contains(css, ".task-copy-link,\n.task-pr-link {") {
+		t.Fatalf("expected stylesheet to share icon-button sizing between task clone and PR actions")
+	}
 	if strings.Contains(css, "align-self: stretch;") {
 		t.Fatalf("expected stylesheet to avoid stretching task PR links to task card height")
 	}
-	if strings.Contains(css, ".task.task-has-pr-link {\n  padding-right: 0;\n  gap: 0;") {
+	if strings.Contains(css, ".task.task-has-side-actions {\n  padding-right: 0;\n  gap: 0;") {
 		t.Fatalf("expected stylesheet to remove the dedicated right-side PR rail layout")
 	}
 	if strings.Contains(css, ".task.task-has-pr-link .task-pr-link {\n  margin-top: -10px;\n  margin-bottom: -10px;") {
@@ -1055,6 +1084,12 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".task-pr-link img {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: contain;\n  filter: var(--agent-logo-filter);") {
 		t.Fatalf("expected stylesheet to apply theme-aware monochrome treatment to task PR logos")
+	}
+	if !strings.Contains(css, ".task-copy-link img,\n.task-pr-link img {") {
+		t.Fatalf("expected stylesheet to apply the same image sizing treatment to terminal clone icons")
+	}
+	if !strings.Contains(css, ".task-copy-link.is-copied {") {
+		t.Fatalf("expected stylesheet to include copied-state feedback for the terminal clone action")
 	}
 	if !strings.Contains(css, ".page-bottom-dock {\n  position: fixed;\n  left: 50%;\n  bottom: max(16px, env(safe-area-inset-bottom));\n  z-index: 61;\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  justify-content: center;") {
 		t.Fatalf("expected stylesheet to align the bottom dock tabs and GitHub profile link on a shared row")
@@ -1461,12 +1496,19 @@ func TestHandlerTaskRerunAccepted(t *testing.T) {
 	requestID := "req-100"
 	payload := `{"repo":"git@github.com:acme/repo.git","baseBranch":"main","targetSubdir":".","prompt":"rerun this"}`
 	b.RecordTaskRunConfig(requestID, []byte(payload))
+	b.IngestLog("dispatch status=start request_id=req-100")
+	b.IngestLog("dispatch status=ok request_id=req-100 workspace=/tmp/run branch=moltenhub-rerun")
 
 	var gotBody string
+	var closeCalls []string
 	srv := NewServer("", b)
 	srv.SubmitLocalPrompt = func(_ context.Context, body []byte) (string, error) {
 		gotBody = string(body)
 		return "local-456", nil
+	}
+	srv.CloseTask = func(_ context.Context, requestID string) error {
+		closeCalls = append(closeCalls, requestID)
+		return nil
 	}
 
 	ts := httptest.NewServer(srv.Handler())
@@ -1500,6 +1542,15 @@ func TestHandlerTaskRerunAccepted(t *testing.T) {
 	}
 	if gotRerunOf, _ := body["rerun_of"].(string); gotRerunOf != requestID {
 		t.Fatalf("rerun_of = %q, want %q", gotRerunOf, requestID)
+	}
+	if len(closeCalls) != 1 || closeCalls[0] != requestID {
+		t.Fatalf("close calls = %v, want [%s]", closeCalls, requestID)
+	}
+	if _, ok := b.TaskRunConfig(requestID); ok {
+		t.Fatalf("TaskRunConfig(%q) found after rerun, want closed", requestID)
+	}
+	if got := len(b.Snapshot().Tasks); got != 0 {
+		t.Fatalf("len(tasks) after rerun = %d, want 0", got)
 	}
 }
 
@@ -1548,6 +1599,51 @@ func TestHandlerTaskRerunUsesDedicatedSubmitterWhenConfigured(t *testing.T) {
 	}
 	if gotForce {
 		t.Fatal("force = true, want false")
+	}
+}
+
+func TestHandlerTaskRerunLeavesIncompleteSourceTaskVisible(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-rerun-running"
+	payload := `{"repo":"git@github.com:acme/repo.git","baseBranch":"main","targetSubdir":".","prompt":"rerun this"}`
+	b.RecordTaskRunConfig(requestID, []byte(payload))
+	b.IngestLog("dispatch status=start request_id=req-rerun-running")
+
+	var cleanupCalls int
+	srv := NewServer("", b)
+	srv.SubmitLocalPrompt = func(_ context.Context, body []byte) (string, error) {
+		if string(body) != payload {
+			t.Fatalf("submitted body = %q, want %q", string(body), payload)
+		}
+		return "local-457", nil
+	}
+	srv.CloseTask = func(_ context.Context, requestID string) error {
+		cleanupCalls++
+		return nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/"+requestID+"/rerun", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/%s/rerun error = %v", requestID, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusAccepted)
+	}
+	if cleanupCalls != 0 {
+		t.Fatalf("cleanup calls = %d, want 0", cleanupCalls)
+	}
+	if _, ok := b.TaskRunConfig(requestID); !ok {
+		t.Fatalf("TaskRunConfig(%q) missing after rerun of incomplete task", requestID)
+	}
+	if got := len(b.Snapshot().Tasks); got != 1 {
+		t.Fatalf("len(tasks) after rerun of incomplete task = %d, want 1", got)
 	}
 }
 

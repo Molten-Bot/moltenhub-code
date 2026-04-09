@@ -2,7 +2,7 @@ ARG AGENT_HARNESS=codex
 ARG AGENT_NPM_PACKAGE
 ARG AGENT_COMMAND
 
-FROM golang:1.26.1-bookworm AS build
+FROM golang:1.26.1-alpine3.23 AS build
 WORKDIR /src
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
@@ -17,22 +17,20 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -o /out/harness ./cmd/harness
 
-FROM node:25-bookworm-slim AS runtime
+FROM node:25.8.1-alpine3.23 AS runtime
 ARG AGENT_HARNESS
 ARG AGENT_NPM_PACKAGE
 ARG AGENT_COMMAND
-ENV DEBIAN_FRONTEND=noninteractive
 ENV GIT_TERMINAL_PROMPT=0
 ENV HARNESS_AGENT_HARNESS=${AGENT_HARNESS}
 ENV HARNESS_AGENT_COMMAND=${AGENT_COMMAND}
 ENV HARNESS_AGENTS_SEED_PATH=/opt/moltenhub/library/AGENTS.md
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+RUN apk add --no-cache \
         ca-certificates \
         git \
-        gh \
-        openssh-client \
+        github-cli \
+        openssh-client-default \
         ripgrep \
     && agent_harness="$(printf '%s' "${AGENT_HARNESS}" | tr '[:upper:]' '[:lower:]')" \
     && agent_pkg="${AGENT_NPM_PACKAGE}" \
@@ -45,11 +43,9 @@ RUN apt-get update \
         esac; \
       fi \
     && npm install --global "${agent_pkg}" \
-    && npm cache clean --force \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && npm cache clean --force
 
-RUN useradd --create-home --shell /bin/sh app \
+RUN adduser -D -s /bin/sh app \
     && mkdir -p /workspace/config \
     && chown -R app:app /workspace
 WORKDIR /workspace

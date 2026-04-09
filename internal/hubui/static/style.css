@@ -1370,6 +1370,15 @@ select.prompt-control {
   transition: border-color 0.12s ease, color 0.12s ease, transform 0.12s ease, opacity 0.12s ease, box-shadow 0.12s ease;
 }
 
+.task-side-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+.task-copy-link,
 .task-pr-link {
   display: inline-flex;
   align-items: center;
@@ -1383,9 +1392,10 @@ select.prompt-control {
   border: 1px solid rgba(17, 34, 68, 0.12);
   background: var(--surface-task-button-bg);
   padding: 7px;
-  transition: border-color 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
+  transition: border-color 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
 }
 
+.task-copy-link img,
 .task-pr-link img {
   display: block;
   width: 100%;
@@ -1394,16 +1404,24 @@ select.prompt-control {
   filter: var(--agent-logo-filter);
 }
 
+.task-copy-link:hover,
 .task-pr-link:hover {
   transform: translateY(-1px);
   border-color: rgba(10, 132, 255, 0.45);
   box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.12);
 }
 
+.task-copy-link:focus-visible,
 .task-pr-link:focus-visible {
   outline: none;
   border-color: rgba(10, 132, 255, 0.52);
   box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.15);
+}
+
+.task-copy-link.is-copied {
+  border-color: rgba(34, 197, 94, 0.4);
+  background: rgba(34, 197, 94, 0.08);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.12);
 }
 
 .badge {

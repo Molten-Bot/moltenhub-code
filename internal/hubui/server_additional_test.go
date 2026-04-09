@@ -526,6 +526,64 @@ func TestAgentAuthConfigureEndpointAcceptsClaudeAuthCodePayload(t *testing.T) {
 	}
 }
 
+func TestGitHubProfileEndpointReturnsResolvedPublicProfile(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	srv.ResolveGitHubProfileURL = func(context.Context) (string, error) {
+		return "https://github.com/jefking", nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/github/profile")
+	if err != nil {
+		t.Fatalf("GET /api/github/profile error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /api/github/profile status = %d, want 200", resp.StatusCode)
+	}
+
+	var body struct {
+		OK         bool   `json:"ok"`
+		ProfileURL string `json:"profileUrl"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode /api/github/profile: %v", err)
+	}
+	if !body.OK {
+		t.Fatalf("profile response ok = false, want true")
+	}
+	if got, want := body.ProfileURL, "https://github.com/jefking"; got != want {
+		t.Fatalf("profileUrl = %q, want %q", got, want)
+	}
+}
+
+func TestGitHubProfileEndpointReturnsOkFalseWhenUnavailable(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	srv.ResolveGitHubProfileURL = func(context.Context) (string, error) {
+		return "", errors.New("github token is not configured")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/github/profile", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("GET /api/github/profile status = %d, want 200", resp.Code)
+	}
+	if !strings.Contains(resp.Body.String(), `"ok":false`) {
+		t.Fatalf("response = %q, want ok=false", resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `github token is not configured`) {
+		t.Fatalf("response = %q, want missing-token detail", resp.Body.String())
+	}
+}
+
 func TestTaskPanelStylesConstrainHorizontalOverflow(t *testing.T) {
 	t.Parallel()
 

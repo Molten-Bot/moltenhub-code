@@ -390,6 +390,7 @@
     });
     const MOLTENHUB_LOGO_URL = "/static/logo.svg";
     const GITHUB_LOGO_URL = "/static/logos/github.svg";
+    const TERMINAL_LOGO_URL = "https://molten.bot/logos/terminal.svg";
     const TASK_PR_LINK_SIZE_PX = "34px";
     const TASK_PR_LOGO_SIZE = 20;
     const CLAUDE_AUTH_LOGO_URL = "/static/logos/claude-code.svg";
@@ -630,6 +631,7 @@
     const promptModeBuilder = document.getElementById("prompt-mode-builder");
     const promptModeLibrary = document.getElementById("prompt-mode-library");
     const promptModeJSON = document.getElementById("prompt-mode-json");
+    const githubProfileLink = document.getElementById("github-profile-link");
     const promptBuilderPanel = document.getElementById("prompt-builder-panel");
     const promptLibraryPanel = document.getElementById("prompt-library-panel");
     const promptRawPanel = document.getElementById("prompt-raw-panel");
@@ -685,6 +687,41 @@
     const hoverSelect = document.getElementById("hover-select");
     let brandLogoRotationTimer = null;
     let brandLogoRotationPhase = 0;
+
+    function applyGitHubProfileLink(profileURL) {
+      if (!githubProfileLink) {
+        return;
+      }
+      const normalized = String(profileURL || "").trim();
+      if (!normalized) {
+        return;
+      }
+      githubProfileLink.href = normalized;
+    }
+
+    async function loadGitHubProfileLink() {
+      if (!githubProfileLink) {
+        return;
+      }
+      try {
+        const response = await fetch("/api/github/profile", { cache: "no-store" });
+        let body = null;
+        try {
+          body = await response.json();
+        } catch (_err) {
+          body = null;
+        }
+        if (!response.ok) {
+          throw new Error(body?.error || `github profile http ${response.status}`);
+        }
+        if (!body || body.ok === false) {
+          throw new Error(body?.error || "github profile request failed");
+        }
+        applyGitHubProfileLink(body.profileUrl || body.profile_url);
+      } catch (_err) {
+        // Keep the static fallback when the authenticated public profile cannot be resolved.
+      }
+    }
 
     function themeLabel(theme) {
       const normalized = THEME_MODES.includes(theme) ? theme : DEFAULT_THEME_MODE;
@@ -1475,16 +1512,41 @@
       await copyTextToClipboard(command, agentAuthBrowserCommandSecondaryCopy);
     }
 
-    async function copyTextToClipboard(value, buttonNode) {
+    async function copyTextToClipboard(value, buttonNode, options = {}) {
       value = String(value || "").trim();
       if (!value || !buttonNode) return;
 
+      const preserveContents = Boolean(options && options.preserveContents);
+      const copiedLabel = String(options?.copiedLabel || "Copied").trim() || "Copied";
+
       const setCopiedLabel = () => {
         const original = buttonNode.textContent;
-        buttonNode.textContent = "Copied";
+        const originalTitle = buttonNode.getAttribute("title");
+        const originalAriaLabel = buttonNode.getAttribute("aria-label");
+        if (preserveContents) {
+          buttonNode.classList.add("is-copied");
+          buttonNode.setAttribute("title", copiedLabel);
+          buttonNode.setAttribute("aria-label", copiedLabel);
+        } else {
+          buttonNode.textContent = copiedLabel;
+        }
         window.setTimeout(() => {
           if (buttonNode) {
-            buttonNode.textContent = original || "Copy";
+            if (preserveContents) {
+              buttonNode.classList.remove("is-copied");
+              if (originalTitle === null) {
+                buttonNode.removeAttribute("title");
+              } else {
+                buttonNode.setAttribute("title", originalTitle);
+              }
+              if (originalAriaLabel === null) {
+                buttonNode.removeAttribute("aria-label");
+              } else {
+                buttonNode.setAttribute("aria-label", originalAriaLabel);
+              }
+            } else {
+              buttonNode.textContent = original || "Copy";
+            }
           }
         }, 1200);
       };
@@ -1741,6 +1803,7 @@
           }
         }
         applyAgentAuthGate(auth);
+        await loadGitHubProfileLink();
         if (auth.ready) {
           setAuggieConfigureError("");
           if (agentAuthConfigureInput) {
@@ -2644,6 +2707,29 @@
       return repo;
     }
 
+    function normalizeCloneRepoURL(value) {
+      const repo = String(value || "").trim();
+      if (!repo) return "";
+
+      const githubSSHMatch = repo.match(/^git@github\.com:(.+)$/i);
+      if (githubSSHMatch) {
+        return `https://github.com/${githubSSHMatch[1]}`;
+      }
+
+      const githubSSHURLMatch = repo.match(/^ssh:\/\/git@github\.com\/(.+)$/i);
+      if (githubSSHURLMatch) {
+        return `https://github.com/${githubSSHURLMatch[1]}`;
+      }
+
+      return repo;
+    }
+
+    function shellQuote(value) {
+      const text = String(value || "");
+      if (!text) return "''";
+      return `'${text.replace(/'/g, `'\"'\"'`)}'`;
+    }
+
     function normalizedTaskRepos(task) {
       const raw = [];
       if (Array.isArray(task?.repos)) {
@@ -2698,6 +2784,28 @@
       const branch = String(task?.branch || "").trim();
       if (!branch) return "-";
       return branch;
+    }
+
+    function taskCloneCommand(task) {
+      const repos = taskRepoValues(task);
+      const repo = normalizeCloneRepoURL(repos[0] || "");
+      const branch = String(task?.branch || "").trim();
+      if (!repo || !branch) return "";
+      return `git clone --branch ${shellQuote(branch)} --single-branch ${shellQuote(repo)}`;
+    }
+
+    function canCopyTaskCloneCommand(task) {
+      if (!isCompletedTask(task)) return false;
+      if (!String(task?.pr_url || "").trim()) return false;
+      return taskCloneCommand(task) !== "";
+    }
+
+    async function copyTaskCloneCommand(task, buttonNode) {
+      const command = taskCloneCommand(task);
+      await copyTextToClipboard(command, buttonNode, {
+        preserveContents: true,
+        copiedLabel: "Copied git clone command",
+      });
     }
 
     function taskPromptText(task) {
@@ -3397,35 +3505,71 @@
         }
 
         const showTaskPRLink = isCompletedTask(task) && prURL !== "";
-        node.classList.toggle("task-has-pr-link", showTaskPRLink);
+        const showTaskCloneAction = canCopyTaskCloneCommand(task);
+        const showTaskSideActions = showTaskPRLink || showTaskCloneAction;
+        node.classList.toggle("task-has-side-actions", showTaskSideActions);
         node.appendChild(body);
-        if (showTaskPRLink) {
-          const prLink = document.createElement("a");
-          prLink.className = "task-pr-link";
-          // Keep PR affordance size stable even if stale CSS is cached.
-          prLink.style.width = TASK_PR_LINK_SIZE_PX;
-          prLink.style.minWidth = TASK_PR_LINK_SIZE_PX;
-          prLink.style.height = TASK_PR_LINK_SIZE_PX;
-          prLink.style.flex = `0 0 ${TASK_PR_LINK_SIZE_PX}`;
-          prLink.style.alignSelf = "center";
-          prLink.href = prURL;
-          prLink.target = "_blank";
-          prLink.rel = "noopener noreferrer";
-          prLink.title = "Open pull request";
-          prLink.setAttribute("aria-label", "Open pull request");
+        if (showTaskSideActions) {
+          const sideActions = document.createElement("div");
+          sideActions.className = "task-side-actions";
 
-          const prLogo = document.createElement("img");
-          prLogo.src = GITHUB_LOGO_URL;
-          prLogo.alt = "GitHub";
-          prLogo.loading = "lazy";
-          prLogo.width = TASK_PR_LOGO_SIZE;
-          prLogo.height = TASK_PR_LOGO_SIZE;
-          prLink.appendChild(prLogo);
+          if (showTaskCloneAction) {
+            const cloneButton = document.createElement("button");
+            cloneButton.type = "button";
+            cloneButton.className = "task-copy-link";
+            cloneButton.style.width = TASK_PR_LINK_SIZE_PX;
+            cloneButton.style.minWidth = TASK_PR_LINK_SIZE_PX;
+            cloneButton.style.height = TASK_PR_LINK_SIZE_PX;
+            cloneButton.style.flex = `0 0 ${TASK_PR_LINK_SIZE_PX}`;
+            cloneButton.style.alignSelf = "center";
+            cloneButton.title = "Copy git clone command";
+            cloneButton.setAttribute("aria-label", "Copy git clone command");
 
-          prLink.addEventListener("click", (event) => {
-            event.stopPropagation();
-          });
-          node.appendChild(prLink);
+            const cloneLogo = document.createElement("img");
+            cloneLogo.src = TERMINAL_LOGO_URL;
+            cloneLogo.alt = "";
+            cloneLogo.loading = "lazy";
+            cloneLogo.width = TASK_PR_LOGO_SIZE;
+            cloneLogo.height = TASK_PR_LOGO_SIZE;
+            cloneButton.appendChild(cloneLogo);
+
+            cloneButton.addEventListener("click", (event) => {
+              event.stopPropagation();
+              void copyTaskCloneCommand(task, cloneButton);
+            });
+            sideActions.appendChild(cloneButton);
+          }
+
+          if (showTaskPRLink) {
+            const prLink = document.createElement("a");
+            prLink.className = "task-pr-link";
+            // Keep PR affordance size stable even if stale CSS is cached.
+            prLink.style.width = TASK_PR_LINK_SIZE_PX;
+            prLink.style.minWidth = TASK_PR_LINK_SIZE_PX;
+            prLink.style.height = TASK_PR_LINK_SIZE_PX;
+            prLink.style.flex = `0 0 ${TASK_PR_LINK_SIZE_PX}`;
+            prLink.style.alignSelf = "center";
+            prLink.href = prURL;
+            prLink.target = "_blank";
+            prLink.rel = "noopener noreferrer";
+            prLink.title = "Open pull request";
+            prLink.setAttribute("aria-label", "Open pull request");
+
+            const prLogo = document.createElement("img");
+            prLogo.src = GITHUB_LOGO_URL;
+            prLogo.alt = "GitHub";
+            prLogo.loading = "lazy";
+            prLogo.width = TASK_PR_LOGO_SIZE;
+            prLogo.height = TASK_PR_LOGO_SIZE;
+            prLink.appendChild(prLogo);
+
+            prLink.addEventListener("click", (event) => {
+              event.stopPropagation();
+            });
+            sideActions.appendChild(prLink);
+          }
+
+          node.appendChild(sideActions);
         }
         listNode.appendChild(node);
       }
@@ -3584,6 +3728,7 @@
     async function loadInitial() {
       try {
         await loadAgentAuthStatus();
+        await loadGitHubProfileLink();
         await loadLibraryTasks();
         const response = await fetch("/api/state", { cache: "no-store" });
         if (!response.ok) {

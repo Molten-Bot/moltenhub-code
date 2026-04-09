@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -45,6 +46,7 @@ type Server struct {
 	StartAgentAuth     func(context.Context) (AgentAuthState, error)
 	VerifyAgentAuth    func(context.Context) (AgentAuthState, error)
 	ConfigureAgentAuth func(context.Context, string) (AgentAuthState, error)
+	ResolveGitHubProfileURL func(context.Context) (string, error)
 }
 
 // AgentAuthState describes current runtime agent-auth readiness and device flow hints.
@@ -128,6 +130,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/api/library/run", s.handleLibraryRun)
 	mux.HandleFunc("/api/stream", s.handleStream)
 	mux.HandleFunc("/api/local-prompt", s.handleLocalPrompt)
+	mux.HandleFunc("/api/github/profile", s.handleGitHubProfile)
 	mux.HandleFunc("/api/agent-auth", s.handleAgentAuthStatus)
 	mux.HandleFunc("/api/agent-auth/start-device", s.handleAgentAuthStart)
 	mux.HandleFunc("/api/agent-auth/verify", s.handleAgentAuthVerify)
@@ -144,6 +147,29 @@ func defaultAgentAuthState() AgentAuthState {
 		State:    "ready",
 		Message:  "Agent auth is ready.",
 	}
+}
+
+func (s Server) handleGitHubProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	profileURL, err := s.resolveGitHubProfileURL(r.Context())
+	if err != nil {
+		s.logf("hub.ui status=warn endpoint=github_profile err=%q", err)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":    false,
+			"error": err.Error(),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":         true,
+		"profileUrl": profileURL,
+	})
 }
 
 func (s Server) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -508,6 +534,64 @@ func (s Server) currentAgentAuthState(ctx context.Context) (AgentAuthState, erro
 	return state, err
 }
 
+func (s Server) resolveGitHubProfileURL(ctx context.Context) (string, error) {
+	if s.ResolveGitHubProfileURL != nil {
+		return s.ResolveGitHubProfileURL(ctx)
+	}
+	return resolveAuthenticatedGitHubProfileURL(ctx, http.DefaultClient)
+}
+
+func resolveAuthenticatedGitHubProfileURL(ctx context.Context, client *http.Client) (string, error) {
+	token := strings.TrimSpace(os.Getenv("GH_TOKEN"))
+	if token == "" {
+		token = strings.TrimSpace(os.Getenv("GITHUB_TOKEN"))
+	}
+	if token == "" {
+		return "", fmt.Errorf("github token is not configured")
+	}
+	if client == nil {
+		client = http.DefaultClient
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/user", nil)
+	if err != nil {
+		return "", fmt.Errorf("build github profile request: %w", err)
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("User-Agent", "moltenhub-code")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("load github profile: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var body struct {
+		Login   string `json:"login"`
+		HTMLURL string `json:"html_url"`
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+		return "", fmt.Errorf("decode github profile: %w", err)
+	}
+	if resp.StatusCode/100 != 2 {
+		message := strings.TrimSpace(body.Message)
+		if message == "" {
+			message = fmt.Sprintf("github api status=%d", resp.StatusCode)
+		}
+		return "", fmt.Errorf("github profile lookup failed: %s", message)
+	}
+	if profileURL := strings.TrimSpace(body.HTMLURL); profileURL != "" {
+		return profileURL, nil
+	}
+	if login := strings.TrimSpace(body.Login); login != "" {
+		return "https://github.com/" + login, nil
+	}
+	return "", fmt.Errorf("github profile lookup failed: missing profile url")
+}
+
 func (s Server) handleLocalPrompt(w http.ResponseWriter, r *http.Request) {
 	s.handlePromptSubmit(w, r, s.SubmitLocalPrompt, "studio submit is unavailable")
 }
@@ -729,12 +813,30 @@ func (s Server) handleTaskRerun(w http.ResponseWriter, r *http.Request, requestI
 		return
 	}
 
+	s.closeTaskAfterRerun(r.Context(), requestID)
+
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"ok":         true,
 		"forced":     force,
 		"request_id": newRequestID,
 		"rerun_of":   requestID,
 	})
+}
+
+func (s Server) closeTaskAfterRerun(ctx context.Context, requestID string) {
+	if s.Broker == nil {
+		return
+	}
+	if err := s.Broker.CloseTask(requestID); err != nil {
+		s.logf("hub.ui status=warn event=task_rerun_close request_id=%s err=%q", requestID, err)
+		return
+	}
+	if s.CloseTask == nil {
+		return
+	}
+	if err := s.CloseTask(ctx, requestID); err != nil {
+		s.logf("hub.ui status=warn event=task_rerun_cleanup request_id=%s err=%q", requestID, err)
+	}
 }
 
 func (s Server) handleTaskClose(w http.ResponseWriter, r *http.Request, requestID string) {

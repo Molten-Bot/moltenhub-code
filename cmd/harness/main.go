@@ -35,6 +35,8 @@ const hubBootRecommendation = "Recommended: connect this runtime to Molten Hub a
 const hubPingLocalOnlyDetail = "Hub endpoint ping precheck failed; continuing in local-only mode. Use the local UI/API to submit tasks."
 const hubPingRemoteContinueDetail = "Hub endpoint ping precheck failed; continuing remote startup because Hub credentials are configured and UI is disabled."
 const hubPingHeadlessNoopDetail = "Hub endpoint ping precheck failed with UI disabled and no Hub credentials configured; startup completed without remote transport."
+const gitHubCLIPackageLabel = "github-cli (gh)"
+const gitHubCLIAuthRecommendation = "Run `gh auth login` (the GitHub CLI binary from the `github-cli` package) or set GH_TOKEN before dispatching tasks."
 
 const hubBootDiagnosticTimeout = 10 * time.Second
 const hubPingDiagnosticTimeout = 5 * time.Second
@@ -486,6 +488,17 @@ func runHub(args []string) int {
 		uiServer.AutomaticMode = *uiAutomatic
 		uiServer.ConfiguredHarness = cfg.AgentHarness
 		uiServer.Logf = logger.Printf
+		cleanupTaskLogs := func(_ context.Context, requestID string) error {
+			logDir, ok := localTaskLogDir(logRoot, requestID)
+			if !ok {
+				return nil
+			}
+			if err := os.RemoveAll(logDir); err != nil {
+				return fmt.Errorf("remove task log dir %s: %w", logDir, err)
+			}
+			daemonLogger("dispatch status=ok action=task_close_cleanup request_id=%s log_dir=%s", requestID, logDir)
+			return nil
+		}
 		if authGate != nil {
 			uiServer.AgentAuthStatus = authGate.Status
 			uiServer.StartAgentAuth = authGate.StartDeviceAuth
@@ -508,17 +521,7 @@ func runHub(args []string) int {
 			}
 			return enqueueLocalRun(reqCtx, runCfg, true, "rerun", force)
 		}
-		uiServer.CloseTask = func(_ context.Context, requestID string) error {
-			logDir, ok := localTaskLogDir(logRoot, requestID)
-			if !ok {
-				return nil
-			}
-			if err := os.RemoveAll(logDir); err != nil {
-				return fmt.Errorf("remove task log dir %s: %w", logDir, err)
-			}
-			daemonLogger("dispatch status=ok action=task_close_cleanup request_id=%s log_dir=%s", requestID, logDir)
-			return nil
-		}
+		uiServer.CloseTask = cleanupTaskLogs
 		uiServer.PauseTask = func(_ context.Context, requestID string) error {
 			if err := localTaskController.Pause(requestID); err != nil {
 				return err
@@ -541,6 +544,17 @@ func runHub(args []string) int {
 			return nil
 		}
 		logger.Printf("hub.ui status=ready url=%s", monitorURL(*uiListen))
+		prMonitor := &hubui.PRMergeMonitor{
+			Runner:      runner,
+			Broker:      monitorBroker,
+			Logf:        logger.Printf,
+			CleanupTask: cleanupTaskLogs,
+		}
+		go func() {
+			if err := prMonitor.Run(ctx); err != nil {
+				logger.Printf("hub.ui status=warn event=pr_monitor err=%q", err)
+			}
+		}()
 		go func() {
 			if err := uiServer.Run(ctx); err != nil {
 				logger.Printf("hub.ui status=error err=%q", err)
@@ -1141,7 +1155,7 @@ func runHubBootDiagnosticsWithRuntimeLoaderDetailed(
 		logf(
 			"boot.diagnosis status=warn requirement=gh_auth detail=%q recommendation=%q",
 			diagnosticDetailForResult(authRes),
-			"Run `gh auth login` (or set GH_TOKEN) before dispatching tasks.",
+			gitHubCLIAuthRecommendation,
 		)
 	} else {
 		logf("boot.diagnosis status=ok requirement=gh_auth detail=%q", diagnosticDetailForResult(authRes))
@@ -1192,7 +1206,8 @@ func runHubBootDiagnosticsWithRuntimeLoaderDetailed(
 		"boot.diagnosis status=warn required_checks=failed count=%d recommendation=%q",
 		failedRequiredChecks,
 		fmt.Sprintf(
-			"Install missing tools before running tasks: git, gh, %s.",
+			"Install missing tools before running tasks: git, %s, %s.",
+			gitHubCLIPackageLabel,
 			strings.TrimSpace(runtime.Command),
 		),
 	)
