@@ -821,6 +821,7 @@ func TestConfigureHubSetupExistingAgentUsesAgentTokenFlow(t *testing.T) {
 	const agentToken = "a9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
 
 	var getCalls int
+	var offlineCalls int
 	var liveCfg hub.InitConfig
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -830,6 +831,19 @@ func TestConfigureHubSetupExistingAgentUsesAgentTokenFlow(t *testing.T) {
 				t.Fatalf("GET /agents/me token = %q, want %q", got, agentToken)
 			}
 			_, _ = w.Write([]byte(`{"handle":"existing-agent","profile":{"display_name":"Existing Agent","emoji":"🤖","bio":"Owns automation"}}`))
+			return
+		}
+		if r.Method == http.MethodPost && r.URL.Path == "/v1/openclaw/messages/offline" {
+			offlineCalls++
+			bodyBytes, _ := io.ReadAll(r.Body)
+			body := string(bodyBytes)
+			if !strings.Contains(body, `"session_key":"main"`) || !strings.Contains(body, `"sessionKey":"main"`) {
+				t.Fatalf("offline body = %s, want main session key fields", body)
+			}
+			if !strings.Contains(body, fmt.Sprintf(`"reason":%q`, hubSetupValidationOfflineReason)) {
+				t.Fatalf("offline body = %s, want validation reason", body)
+			}
+			_, _ = w.Write([]byte(`{"ok":true}`))
 			return
 		}
 		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
@@ -860,6 +874,9 @@ func TestConfigureHubSetupExistingAgentUsesAgentTokenFlow(t *testing.T) {
 	}
 	if getCalls < 2 {
 		t.Fatalf("GET /agents/me calls = %d, want at least 2", getCalls)
+	}
+	if offlineCalls != 1 {
+		t.Fatalf("POST /openclaw/messages/offline calls = %d, want 1", offlineCalls)
 	}
 	if got, want := state.AgentMode, "existing"; got != want {
 		t.Fatalf("AgentMode = %q, want %q", got, want)
@@ -927,7 +944,9 @@ func TestHubSetupBaseURLUsesSelectedRegionForDefaultHubEndpoints(t *testing.T) {
 func TestConfigureHubSetupRejectsShortToken(t *testing.T) {
 	t.Parallel()
 
-	state, err := configureHubSetup(context.Background(), hub.InitConfig{}, hubui.HubSetupRequest{
+	state, err := configureHubSetup(context.Background(), hub.InitConfig{
+		RuntimeConfigPath: filepath.Join(t.TempDir(), ".moltenhub", "config.json"),
+	}, hubui.HubSetupRequest{
 		AgentMode: "existing",
 		Token:     "too-short",
 	}, nil)
@@ -936,6 +955,45 @@ func TestConfigureHubSetupRejectsShortToken(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "too short") {
 		t.Fatalf("configureHubSetup() err = %q, want token length failure", err)
+	}
+	if state.Configured {
+		t.Fatal("Configured = true, want false")
+	}
+}
+
+func TestConfigureHubSetupExistingAgentReturnsLoginVerificationFailure(t *testing.T) {
+	t.Parallel()
+
+	const agentToken = "c9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
+			_, _ = w.Write([]byte(`{"handle":"existing-agent"}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/openclaw/messages/offline":
+			http.Error(w, `{"error":"offline not allowed"}`, http.StatusUnauthorized)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	state, err := configureHubSetup(context.Background(), hub.InitConfig{
+		BaseURL:           server.URL + "/v1",
+		RuntimeConfigPath: filepath.Join(t.TempDir(), ".moltenhub", "config.json"),
+	}, hubui.HubSetupRequest{
+		AgentMode: "existing",
+		Token:     agentToken,
+	}, nil)
+	if err == nil {
+		t.Fatal("configureHubSetup() error = nil, want non-nil")
+	}
+	if !strings.Contains(err.Error(), "verify hub login") {
+		t.Fatalf("configureHubSetup() err = %q, want login verification context", err)
+	}
+	if !strings.Contains(err.Error(), "status=401") {
+		t.Fatalf("configureHubSetup() err = %q, want HTTP status details", err)
 	}
 	if state.Configured {
 		t.Fatal("Configured = true, want false")
@@ -951,6 +1009,10 @@ func TestConfigureHubSetupReturnsSavedStateWhenLiveApplyFails(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me" {
 			_, _ = w.Write([]byte(`{"handle":"existing-agent","profile":{"display_name":"Existing Agent","emoji":"🤖","bio":"Owns automation"}}`))
+			return
+		}
+		if r.Method == http.MethodPost && r.URL.Path == "/v1/openclaw/messages/offline" {
+			_, _ = w.Write([]byte(`{"ok":true}`))
 			return
 		}
 		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)

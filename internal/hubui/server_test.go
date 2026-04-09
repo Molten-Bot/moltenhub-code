@@ -249,7 +249,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `function normalizeHubSetup(raw)`) {
 		t.Fatalf("expected index html to include hub setup state normalization")
 	}
-	if !strings.Contains(markup, `async function submitHubSetup(event)`) {
+	if !strings.Contains(markup, `async function submitHubSetup(event, options = {})`) {
 		t.Fatalf("expected index html to include hub setup submit handler")
 	}
 	if !strings.Contains(markup, `async function loadHubSetupStatus()`) {

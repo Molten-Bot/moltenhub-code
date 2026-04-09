@@ -37,6 +37,7 @@ const hubPingRemoteContinueDetail = "Hub endpoint ping precheck failed; continui
 const hubPingHeadlessNoopDetail = "Hub endpoint ping precheck failed with UI disabled and no Hub credentials configured; startup completed without remote transport."
 const gitHubCLIPackageLabel = "github-cli (gh)"
 const gitHubCLIAuthRecommendation = "Run `gh auth login` (the GitHub CLI binary from the `github-cli` package) or set GH_TOKEN before dispatching tasks."
+const hubSetupValidationOfflineReason = "hub_setup_validation"
 
 const hubBootDiagnosticTimeout = 10 * time.Second
 const hubPingDiagnosticTimeout = 5 * time.Second
@@ -1576,6 +1577,9 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 			return state, fmt.Errorf("sync hub profile: %w", err)
 		}
 	} else {
+		if err := client.MarkOpenClawOffline(ctx, resolvedToken, finalCfg.SessionKey, hubSetupValidationOfflineReason); err != nil {
+			return state, fmt.Errorf("verify hub login: %w", err)
+		}
 		profile, err := client.AgentProfile(ctx, resolvedToken)
 		if err != nil {
 			return state, fmt.Errorf("load hub profile: %w", err)
