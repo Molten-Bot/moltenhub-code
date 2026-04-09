@@ -1,9 +1,6 @@
 # MoltenHub Code
 
-Turn a prompt into review-ready pull requests.
-
-MoltenHub Code is a small Go harness that runs an agent CLI (Codex, Claude, or Auggie) against one or more repositories, opens PRs, and waits for required checks.
-It supports single runs, parallel local runs, and a persistent MoltenHub listener with a local monitoring UI.
+MoltenHub Code is a Go harness that turns agent prompts into repository changes across one or more GitHub repositories. It runs Codex, Claude, or Auggie inside isolated workspaces, stages branch and pull request creation, and waits for required CI checks. It supports direct local runs, parallel multiplexed runs, and a persistent MoltenHub listener with a local monitoring UI for submitted tasks. When tasks fail, it returns explicit failure details and can queue focused follow-up remediation runs against the same repository.
 
 ## What It Does
 
