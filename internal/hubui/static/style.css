@@ -402,6 +402,15 @@ textarea {
 }
 
 .status-item-action {
+  box-shadow: 0 14px 34px rgba(15, 27, 51, 0.12);
+}
+
+.status-item-action-online {
+  border-color: rgba(43, 182, 115, 0.26);
+  box-shadow: 0 14px 34px rgba(43, 182, 115, 0.14);
+}
+
+.status-item-action-offline {
   border-color: rgba(239, 68, 68, 0.22);
   box-shadow: 0 14px 34px rgba(239, 68, 68, 0.14);
 }
