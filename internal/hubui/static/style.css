@@ -761,6 +761,16 @@ body .right-col.prompt-collapsed.task-list-hidden {
   margin-left: 1px;
 }
 
+#moltenbot-hub-link img {
+  transition: filter 180ms ease, transform 180ms ease;
+}
+
+#moltenbot-hub-link:hover img,
+#moltenbot-hub-link:focus-visible img {
+  filter: none;
+  transform: translateY(-1px);
+}
+
 .prompt-titlebar .prompt-visibility-toggle {
   margin-left: 0;
 }
