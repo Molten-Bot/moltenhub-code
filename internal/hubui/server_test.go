@@ -256,6 +256,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function formatTaskBranch(") {
 		t.Fatalf("expected index html to include branch formatter for task metadata")
 	}
+	if !strings.Contains(markup, "const baseBranch = String(task?.base_branch || \"\").trim();") {
+		t.Fatalf("expected index html to consider task base_branch when formatting branch metadata")
+	}
+	if !strings.Contains(markup, "return `from:${baseBranch} to:${branch}`;") {
+		t.Fatalf("expected index html to render base-to-head branch transitions")
+	}
 	if !strings.Contains(markup, "function taskCloneCommand(") || !strings.Contains(markup, "function copyTaskCloneCommand(") {
 		t.Fatalf("expected index html to include task clone command helpers for completed branches")
 	}

@@ -173,7 +173,7 @@ func TestRunHappyPathCreatesPR(t *testing.T) {
 		{cmd: branchCommand(repoDir, branch)},
 		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
-		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## moltenhub-build-api\n M file.go\n"}},
 		{cmd: addCommand(repoDir)},
 		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
 		{cmd: pushCommand(repoDir, branch)},
@@ -195,6 +195,9 @@ func TestRunHappyPathCreatesPR(t *testing.T) {
 	}
 	if res.PRURL != "https://github.com/acme/repo/pull/42" {
 		t.Fatalf("PRURL = %q", res.PRURL)
+	}
+	if got, want := res.Branch, branch; got != want {
+		t.Fatalf("Branch = %q, want %q", got, want)
 	}
 	if res.NoChanges {
 		t.Fatal("NoChanges = true, want false")
@@ -449,7 +452,7 @@ func TestRunNonMainBranchReusesExistingBranchAndPR(t *testing.T) {
 		{cmd: fetchMainBranchCommand(repoDir)},
 		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
-		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## release/2026.04-hotfix...origin/release/2026.04-hotfix\n M file.go\n"}},
 		{cmd: addCommand(repoDir)},
 		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
 		{cmd: pushCommand(repoDir, cfg.BaseBranch)},
@@ -478,6 +481,53 @@ func TestRunNonMainBranchReusesExistingBranchAndPR(t *testing.T) {
 	}
 	if len(fake.exps) != 0 {
 		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunTracksCurrentBranchFromLocalGitStatus(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	createdBranch := "moltenhub-build-api"
+	activeBranch := "moltenhub-build-api-refined"
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, createdBranch)},
+		{cmd: pushDryRunCommand(repoDir, createdBranch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## moltenhub-build-api-refined...origin/moltenhub-build-api-refined\n M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, activeBranch)},
+		{cmd: prCreateCommand(repoDir, cfg, activeBranch), res: execx.Result{Stdout: "https://github.com/acme/repo/pull/42\n"}},
+		{cmd: prChecksCommand(repoDir, "https://github.com/acme/repo/pull/42")},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if got, want := res.Branch, activeBranch; got != want {
+		t.Fatalf("Branch = %q, want %q", got, want)
+	}
+	if got, want := res.RepoResults[0].Branch, activeBranch; got != want {
+		t.Fatalf("RepoResults[0].Branch = %q, want %q", got, want)
 	}
 }
 
@@ -2264,6 +2314,56 @@ func TestShouldCreateWorkBranch(t *testing.T) {
 	}
 	if shouldCreateWorkBranch("release/hotfix") {
 		t.Fatal("shouldCreateWorkBranch(non-main) = true, want false")
+	}
+}
+
+func TestLocalBranchFromStatus(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		stdout string
+		want   string
+	}{
+		{
+			name:   "branch only",
+			stdout: "## moltenhub-branch\n",
+			want:   "moltenhub-branch",
+		},
+		{
+			name:   "branch with upstream",
+			stdout: "## release/2026.04...origin/release/2026.04 [ahead 1]\n M file.go\n",
+			want:   "release/2026.04",
+		},
+		{
+			name:   "missing header",
+			stdout: " M file.go\n",
+			want:   "",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := localBranchFromStatus(tt.stdout); got != tt.want {
+				t.Fatalf("localBranchFromStatus() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHasTrackedWorktreeChanges(t *testing.T) {
+	t.Parallel()
+
+	if hasTrackedWorktreeChanges("## moltenhub-branch\n") {
+		t.Fatal("hasTrackedWorktreeChanges(branch-only) = true, want false")
+	}
+	if !hasTrackedWorktreeChanges("## moltenhub-branch\n M file.go\n") {
+		t.Fatal("hasTrackedWorktreeChanges(with diff) = false, want true")
+	}
+	if hasTrackedWorktreeChanges("\n") {
+		t.Fatal("hasTrackedWorktreeChanges(empty) = true, want false")
 	}
 }
 

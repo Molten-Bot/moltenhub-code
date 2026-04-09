@@ -2782,8 +2782,11 @@
 
     function formatTaskBranch(task) {
       const branch = String(task?.branch || "").trim();
-      if (!branch) return "-";
-      return branch;
+      const baseBranch = String(task?.base_branch || "").trim();
+      if (baseBranch && branch && baseBranch !== branch) {
+        return `from:${baseBranch} to:${branch}`;
+      }
+      return branch || baseBranch || "-";
     }
 
     function taskCloneCommand(task) {

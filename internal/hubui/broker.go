@@ -53,6 +53,7 @@ type Task struct {
 	Skill        string    `json:"skill,omitempty"`
 	Repo         string    `json:"repo,omitempty"`
 	Repos        []string  `json:"repos,omitempty"`
+	BaseBranch   string    `json:"base_branch,omitempty"`
 	Status       string    `json:"status"`
 	Stage        string    `json:"stage,omitempty"`
 	StageStatus  string    `json:"stage_status,omitempty"`
@@ -120,6 +121,7 @@ type taskState struct {
 	Skill        string
 	Repo         string
 	Repos        []string
+	BaseBranch   string
 	Status       string
 	Stage        string
 	StageStatus  string
@@ -229,6 +231,7 @@ func (b *Broker) Snapshot() Snapshot {
 			Skill:        t.Skill,
 			Repo:         t.Repo,
 			Repos:        append([]string(nil), t.Repos...),
+			BaseBranch:   t.BaseBranch,
 			Status:       t.Status,
 			Stage:        t.Stage,
 			StageStatus:  t.StageStatus,
@@ -259,7 +262,7 @@ func (b *Broker) RecordTaskRunConfig(requestID string, runConfigJSON []byte) {
 	}
 	cfgCopy := append([]byte(nil), runConfigJSON...)
 	prompt := promptFromRunConfigJSON(cfgCopy)
-	branch := branchFromRunConfigJSON(cfgCopy)
+	baseBranch := branchFromRunConfigJSON(cfgCopy)
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -275,15 +278,43 @@ func (b *Broker) RecordTaskRunConfig(requestID string, runConfigJSON []byte) {
 			changed = true
 		}
 	}
-	if branch != "" {
-		if t, ok := b.tasks[requestID]; ok && t.Branch != branch {
-			t.Branch = branch
-			changed = true
+	if baseBranch != "" {
+		if t, ok := b.tasks[requestID]; ok {
+			if t.BaseBranch != baseBranch {
+				t.BaseBranch = baseBranch
+				changed = true
+			}
+			if t.Branch == "" {
+				t.Branch = baseBranch
+				changed = true
+			}
 		}
 	}
 	if changed {
 		b.notifySubscribersLocked()
 	}
+}
+
+func (b *Broker) taskBaseBranchLocked(requestID string) string {
+	if b == nil {
+		return ""
+	}
+	return branchFromRunConfigJSON(b.runConfigs[requestID])
+}
+
+func (b *Broker) taskInitialBranchLocked(requestID string) string {
+	baseBranch := b.taskBaseBranchLocked(requestID)
+	if baseBranch != "" {
+		return baseBranch
+	}
+	return ""
+}
+
+func (b *Broker) taskPromptLocked(requestID string) string {
+	if b == nil {
+		return ""
+	}
+	return promptFromRunConfigJSON(b.runConfigs[requestID])
 }
 
 // TaskRunConfig returns a copy of the stored run config payload for requestID.
@@ -381,22 +412,26 @@ func (b *Broker) Subscribe() (<-chan struct{}, func()) {
 func (b *Broker) ensureTaskLocked(requestID string, now time.Time) *taskState {
 	if existing, ok := b.tasks[requestID]; ok {
 		if existing.Prompt == "" {
-			existing.Prompt = promptFromRunConfigJSON(b.runConfigs[requestID])
+			existing.Prompt = b.taskPromptLocked(requestID)
+		}
+		if existing.BaseBranch == "" {
+			existing.BaseBranch = b.taskBaseBranchLocked(requestID)
 		}
 		if existing.Branch == "" {
-			existing.Branch = branchFromRunConfigJSON(b.runConfigs[requestID])
+			existing.Branch = b.taskInitialBranchLocked(requestID)
 		}
 		existing.UpdatedAt = now
 		return existing
 	}
 
 	t := &taskState{
-		RequestID: requestID,
-		Prompt:    promptFromRunConfigJSON(b.runConfigs[requestID]),
-		Branch:    branchFromRunConfigJSON(b.runConfigs[requestID]),
-		Status:    "pending",
-		StartedAt: now,
-		UpdatedAt: now,
+		RequestID:  requestID,
+		Prompt:     b.taskPromptLocked(requestID),
+		BaseBranch: b.taskBaseBranchLocked(requestID),
+		Branch:     b.taskInitialBranchLocked(requestID),
+		Status:     "pending",
+		StartedAt:  now,
+		UpdatedAt:  now,
 	}
 	b.tasks[requestID] = t
 	return t
@@ -506,6 +541,7 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 				t.Status = "error"
 			}
 		}
+		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
 		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
 		t.Error = firstNonEmpty(parseFieldValue(line, "err"), parseFieldValue(line, "error"), t.Error)
 	}

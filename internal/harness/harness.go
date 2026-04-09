@@ -310,7 +310,8 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		if err != nil {
 			return h.fail(ExitGit, "git", err, runDir)
 		}
-		repos[i].Changed = strings.TrimSpace(statusRes.Stdout) != ""
+		repos[i].Branch = firstNonEmpty(localBranchFromStatus(statusRes.Stdout), repos[i].Branch)
+		repos[i].Changed = hasTrackedWorktreeChanges(statusRes.Stdout)
 		h.logf("stage=git status=scan repo=%s repo_dir=%s changed=%t", repos[i].URL, repos[i].RelDir, repos[i].Changed)
 	}
 
@@ -1904,7 +1905,42 @@ func promptImageExtension(mediaType string) string {
 }
 
 func statusCommand(repoDir string) execx.Command {
-	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"status", "--porcelain"}}
+	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"status", "--porcelain", "--branch"}}
+}
+
+func localBranchFromStatus(stdout string) string {
+	for _, line := range strings.Split(stdout, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "## ") {
+			continue
+		}
+		branch := strings.TrimSpace(strings.TrimPrefix(line, "## "))
+		if branch == "" {
+			return ""
+		}
+		if idx := strings.Index(branch, "..."); idx >= 0 {
+			branch = branch[:idx]
+		}
+		if idx := strings.Index(branch, " "); idx >= 0 {
+			branch = branch[:idx]
+		}
+		branch = strings.TrimPrefix(branch, "HEAD (no branch)")
+		return strings.TrimSpace(branch)
+	}
+	return ""
+}
+
+func hasTrackedWorktreeChanges(stdout string) bool {
+	for _, line := range strings.Split(stdout, "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if strings.HasPrefix(strings.TrimSpace(line), "## ") {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 func addCommand(repoDir string) execx.Command {

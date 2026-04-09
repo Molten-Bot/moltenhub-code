@@ -337,6 +337,9 @@ func TestBrokerTaskRunConfigSupportsRerunMetadata(t *testing.T) {
 	if snap.Tasks[0].Prompt != "rerun me" {
 		t.Fatalf("task.Prompt = %q, want %q", snap.Tasks[0].Prompt, "rerun me")
 	}
+	if snap.Tasks[0].BaseBranch != "main" {
+		t.Fatalf("task.BaseBranch = %q, want %q", snap.Tasks[0].BaseBranch, "main")
+	}
 	if snap.Tasks[0].Branch != "main" {
 		t.Fatalf("task.Branch = %q, want %q", snap.Tasks[0].Branch, "main")
 	}
@@ -374,6 +377,30 @@ func TestBrokerTaskRunConfigSupportsBranchAlias(t *testing.T) {
 		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
 	}
 	if got, want := snap.Tasks[0].Branch, "release/2026.04"; got != want {
+		t.Fatalf("task.Branch = %q, want %q", got, want)
+	}
+	if got, want := snap.Tasks[0].BaseBranch, "release/2026.04"; got != want {
+		t.Fatalf("task.BaseBranch = %q, want %q", got, want)
+	}
+}
+
+func TestBrokerUpdatesTaskBranchFromStageLogsWhileRetainingBaseBranch(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-branch-transition"
+	b.RecordTaskRunConfig(requestID, []byte(`{"repo":"git@github.com:acme/repo.git","baseBranch":"main","prompt":"rerun me"}`))
+	b.IngestLog("dispatch status=start request_id=req-branch-transition skill=moltenhub_code_run repo=git@github.com:acme/repo.git")
+	b.IngestLog("dispatch request_id=req-branch-transition stage=git status=ok action=branch branch=moltenhub-branch-transition")
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	if got, want := snap.Tasks[0].BaseBranch, "main"; got != want {
+		t.Fatalf("task.BaseBranch = %q, want %q", got, want)
+	}
+	if got, want := snap.Tasks[0].Branch, "moltenhub-branch-transition"; got != want {
 		t.Fatalf("task.Branch = %q, want %q", got, want)
 	}
 }
@@ -539,6 +566,9 @@ func TestBrokerAppliesPromptWhenConfigRecordedAfterTaskStart(t *testing.T) {
 	}
 	if snap.Tasks[0].Prompt != "late prompt value" {
 		t.Fatalf("task.Prompt = %q, want %q", snap.Tasks[0].Prompt, "late prompt value")
+	}
+	if snap.Tasks[0].BaseBranch != "release/2026.04" {
+		t.Fatalf("task.BaseBranch = %q, want %q", snap.Tasks[0].BaseBranch, "release/2026.04")
 	}
 	if snap.Tasks[0].Branch != "release/2026.04" {
 		t.Fatalf("task.Branch = %q, want %q", snap.Tasks[0].Branch, "release/2026.04")
