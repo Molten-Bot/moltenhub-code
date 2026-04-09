@@ -576,6 +576,18 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `setIndicator(hubConnItem, hubConnDot, hubConnText, "Molten Hub", online, text);`) {
 		t.Fatalf("expected index html to render hub indicator label as Molten Hub")
 	}
+	if !strings.Contains(markup, `const online = connected;`) {
+		t.Fatalf("expected index html to style transport-pending connected hub states as online")
+	}
+	if !strings.Contains(markup, `const actionTone = connected ? "online" : (mode === "disconnected" ? "offline" : "");`) {
+		t.Fatalf("expected index html to derive hub action styling from connection state")
+	}
+	if !strings.Contains(markup, `hubConnItem.classList.toggle("status-item-action-online", actionable && tone === "online");`) {
+		t.Fatalf("expected index html to apply online action styling for connected hub states")
+	}
+	if !strings.Contains(markup, `hubConnItem.classList.toggle("status-item-action-offline", actionable && tone === "offline");`) {
+		t.Fatalf("expected index html to preserve offline action styling for disconnected hub states")
+	}
 	if !strings.Contains(markup, "function applyHubDotMode(") {
 		t.Fatalf("expected index html to include hub transport dot mode handler")
 	}

@@ -1246,9 +1246,11 @@
       setIndicator(localConnItem, localConnDot, localConnText, "Local", online, text);
     }
 
-    function setHubConnectionActionable(actionable, href = "") {
+    function setHubConnectionActionable(actionable, href = "", tone = "") {
       if (!hubConnItem) return;
       hubConnItem.classList.toggle("status-item-action", actionable);
+      hubConnItem.classList.toggle("status-item-action-online", actionable && tone === "online");
+      hubConnItem.classList.toggle("status-item-action-offline", actionable && tone === "offline");
       hubConnItem.setAttribute("data-actionable", actionable ? "true" : "false");
       hubConnItem.setAttribute("data-href", href);
     }
@@ -2380,8 +2382,9 @@
 
     function setHubConnection(mode, text) {
       const connected = mode === "ws" || mode === "http_long_poll" || mode === "connected";
-      const online = mode === "ws" || mode === "http_long_poll";
+      const online = connected;
       const actionable = connected || mode === "disconnected";
+      const actionTone = connected ? "online" : (mode === "disconnected" ? "offline" : "");
       const targetURL = connected || state.hubSetup.configured
         ? state.hubSetup.dashboardURL
         : state.hubSetup.connectURL;
@@ -2392,7 +2395,7 @@
       }
       setIndicator(hubConnItem, hubConnDot, hubConnText, "Molten Hub", online, text);
       applyHubDotMode(mode);
-      setHubConnectionActionable(actionable, targetURL);
+      setHubConnectionActionable(actionable, targetURL, actionTone);
     }
 
     function renderHubConnection(snapshot) {
