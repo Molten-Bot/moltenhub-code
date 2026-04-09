@@ -648,6 +648,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="prompt-mode-builder"`) {
 		t.Fatalf("expected index html to include builder mode toggle")
 	}
+	if !strings.Contains(markup, `id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true">Prompt</a>`) {
+		t.Fatalf("expected index html to render Prompt as the primary dock label")
+	}
 	if !strings.Contains(markup, `id="prompt-mode-library"`) {
 		t.Fatalf("expected index html to include library mode toggle")
 	}

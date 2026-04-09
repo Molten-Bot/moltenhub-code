@@ -19,12 +19,12 @@ func TestWithExecutionContractAppendsSharedContract(t *testing.T) {
 	}
 }
 
-func TestWithExecutionContractIncludesFailurePrefixInstruction(t *testing.T) {
+func TestWithExecutionContractIncludesFailureResponseInstruction(t *testing.T) {
 	t.Parallel()
 
 	got := WithExecutionContract("Base prompt")
-	if !strings.Contains(got, `When failures occur, send a response back to the calling agent that begins with "Failure:" and clearly includes the error details.`) {
-		t.Fatalf("WithExecutionContract() missing Failure prefix instruction: %q", got)
+	if !strings.Contains(got, `When failures occur, send a response back to the calling agent that clearly states failure and includes the error details.`) {
+		t.Fatalf("WithExecutionContract() missing failure response instruction: %q", got)
 	}
 }
 
