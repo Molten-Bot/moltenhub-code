@@ -2193,55 +2193,36 @@ select.prompt-control {
   white-space: nowrap;
 }
 
-.theme-controls {
+.theme-toggle {
   position: fixed;
   right: 16px;
   bottom: 16px;
   z-index: 60;
   display: inline-flex;
   align-items: center;
-  border-radius: 18px;
-  border: 1px solid var(--theme-dock-border);
-  background: var(--theme-dock-bg);
-  box-shadow: var(--theme-dock-shadow);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
-  padding: 4px;
+  gap: 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  box-shadow: var(--elevation-sm);
+  backdrop-filter: blur(40px) saturate(150%);
+  -webkit-backdrop-filter: blur(40px) saturate(150%);
+  color: var(--muted-foreground);
+  font-family: var(--font-family);
+  font-size: var(--text-label);
+  font-weight: var(--font-weight-medium);
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: .2s ease;
 }
 
-.theme-cycle-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 96px;
-  border: 0;
-  border-radius: 14px;
-  background: transparent;
-  box-shadow: none;
-  color: var(--theme-button-text);
-  padding: 8px 14px;
-  text-align: center;
-  line-height: 1.1;
-  transition: color 0.14s ease, transform 0.14s ease, background 0.14s ease;
-}
+.theme-toggle:hover { transform: scale(1.04); }
+.theme-toggle:active { transform: scale(.96); }
+.theme-toggle-icon { display: inline-flex; align-items: center; justify-content: center; }
 
-.theme-cycle-current {
-  font-size: 0.9rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--theme-button-text);
-}
-
-.theme-cycle-button:hover,
-.theme-cycle-button:focus-visible {
-  transform: translateY(-1px);
-  color: var(--theme-button-text);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.theme-cycle-button:focus-visible {
-  box-shadow: var(--theme-button-focus);
+.theme-toggle:focus-visible {
   outline: none;
+  box-shadow: var(--theme-button-focus);
 }
 
 html.dark,
@@ -2492,13 +2473,6 @@ html.night {
   --shadow-lg: 0 28px 72px rgba(0, 0, 0, 0.7);
 }
 
-html.dark .theme-controls,
-html.night .theme-controls {
-  border-color: var(--theme-dock-border);
-  background: var(--theme-dock-bg);
-  box-shadow: var(--theme-dock-shadow);
-}
-
 html[data-hover-mode="on"] .prompt-action-button:not(:disabled),
 html[data-hover-mode="on"] .task-rerun:not(:disabled),
 html[data-hover-mode="on"] .task-output-toggle:not(:disabled),
@@ -2571,15 +2545,10 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
     max-width: calc(100vw - 24px);
   }
 
-  .theme-controls {
+  .theme-toggle {
     right: 12px;
-    bottom: 76px;
+    bottom: 12px;
     left: auto;
-    max-width: calc(100vw - 24px);
-  }
-
-  .theme-cycle-button {
-    min-width: 88px;
   }
 
   :root {
@@ -2618,7 +2587,7 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
   .panel,
   .task,
   .event,
-  .theme-controls,
+  .theme-toggle,
   .task-fullscreen {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
@@ -2638,7 +2607,7 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
   .panel,
   .task,
   .event,
-  .theme-controls,
+  .theme-toggle,
   .task-fullscreen {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;

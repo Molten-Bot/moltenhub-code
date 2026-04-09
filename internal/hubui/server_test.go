@@ -865,8 +865,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"","configuredAgentLabel":"Codex"};`) {
 		t.Fatalf("expected index html to include default UI config")
 	}
-	if !strings.Contains(markup, `id="theme-cycle"`) || !strings.Contains(markup, `function nextThemeMode(theme)`) {
-		t.Fatalf("expected index html to include docked theme cycle control")
+	if !strings.Contains(markup, `id="theme-toggle"`) || !strings.Contains(markup, `function nextThemeMode(theme)`) {
+		t.Fatalf("expected index html to include theme toggle control")
 	}
 	if !strings.Contains(markup, `const DEFAULT_THEME_MODE = "dark";`) {
 		t.Fatalf("expected index html to define dark as the default theme mode")
@@ -874,11 +874,23 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `return THEME_MODES.includes(raw) ? raw : DEFAULT_THEME_MODE;`) {
 		t.Fatalf("expected index html theme loading to fall back to the default dark theme")
 	}
-	if !strings.Contains(markup, `<span id="theme-cycle-current" class="theme-cycle-current">Dark</span>`) {
-		t.Fatalf("expected index html to render dark as the initial theme cycle label")
+	if !strings.Contains(markup, `<span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true"></span>`) {
+		t.Fatalf("expected index html to render a dedicated theme toggle icon slot")
 	}
-	if strings.Contains(markup, `theme-cycle-next`) || strings.Contains(markup, `>Theme<`) || strings.Contains(markup, `Next: Dark`) {
-		t.Fatalf("expected index html to render the theme dock as a single cycling label")
+	if !strings.Contains(markup, `<span id="theme-toggle-label">Dark</span>`) {
+		t.Fatalf("expected index html to render dark as the initial theme toggle label")
+	}
+	if !strings.Contains(markup, `function syncThemeToggle(theme)`) || !strings.Contains(markup, `themeToggleIcon.innerHTML = THEME_ICONS[currentTheme] || "";`) {
+		t.Fatalf("expected index html to keep the theme toggle icon and label in sync")
+	}
+	if !strings.Contains(markup, `const THEME_ICONS = {`) {
+		t.Fatalf("expected index html to define theme toggle icons")
+	}
+	if !strings.Contains(markup, "themeToggleButton.setAttribute(\"aria-label\", `Switch theme. Currently: ${currentLabel}`);") {
+		t.Fatalf("expected index html to expose the current theme through the toggle aria-label")
+	}
+	if strings.Contains(markup, `theme-cycle-next`) || strings.Contains(markup, `theme-cycle-current`) || strings.Contains(markup, `Next: Dark`) {
+		t.Fatalf("expected index html to remove the legacy theme cycle markup")
 	}
 	if !strings.Contains(markup, `rgb(var(--hub-panel-rgb) / <alpha-value>)`) || !strings.Contains(markup, `rgb(var(--hub-text-rgb) / <alpha-value>)`) {
 		t.Fatalf("expected index html to drive tailwind hub colors from CSS theme variables")
@@ -986,11 +998,11 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".panel-header,\n.task-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 8px;\n  padding: 13px 16px;\n  border-bottom: 1px solid var(--surface-header-border);\n  background: var(--surface-header);\n  color: var(--surface-label);") {
 		t.Fatalf("expected stylesheet to style task and output headers with theme-aware surface tokens")
 	}
-	if !strings.Contains(css, ".theme-controls") || !strings.Contains(css, ".theme-cycle-button") {
-		t.Fatalf("expected stylesheet to include docked theme cycle styles")
+	if !strings.Contains(css, ".theme-toggle") || !strings.Contains(css, ".theme-toggle-icon") {
+		t.Fatalf("expected stylesheet to include theme toggle styles")
 	}
-	if strings.Contains(css, ".theme-cycle-button::after") || strings.Contains(css, ".theme-control-label") || strings.Contains(css, ".theme-cycle-next") {
-		t.Fatalf("expected stylesheet to remove the extra theme dock label, next-state text, and chevron")
+	if strings.Contains(css, ".theme-cycle-button") || strings.Contains(css, ".theme-control-label") || strings.Contains(css, ".theme-cycle-next") {
+		t.Fatalf("expected stylesheet to remove the legacy theme cycle selectors")
 	}
 	if !strings.Contains(css, "--theme-button-bg:") || !strings.Contains(css, "--surface-control-bg:") {
 		t.Fatalf("expected stylesheet to define reusable theme tokens for controls")
@@ -1001,8 +1013,11 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if strings.Count(css, "--agent-logo-filter: brightness(0) saturate(100%) invert(1);") < 2 {
 		t.Fatalf("expected stylesheet to define dark and night monochrome logo filter tokens")
 	}
-	if !strings.Contains(css, "html.dark .theme-controls") || !strings.Contains(css, "html.night .theme-controls") {
-		t.Fatalf("expected stylesheet to include dark and night docked theme control treatments")
+	if !strings.Contains(css, ".theme-toggle {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;") {
+		t.Fatalf("expected stylesheet to dock the theme toggle in the bottom-right corner")
+	}
+	if !strings.Contains(css, ".theme-toggle:hover { transform: scale(1.04); }") || !strings.Contains(css, ".theme-toggle:active { transform: scale(.96); }") {
+		t.Fatalf("expected stylesheet to include the theme toggle hover and active treatments")
 	}
 	if !strings.Contains(css, "--hub-panel-rgb: 255 255 255;") || !strings.Contains(css, "--hub-panel-rgb: 15 22 38;") {
 		t.Fatalf("expected stylesheet to define theme-aware rgb tokens for hub panels")
@@ -1205,8 +1220,11 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".dot.disconnected") {
 		t.Fatalf("expected stylesheet to include disconnected dot styles")
 	}
-	if strings.Contains(css, "cursor:") {
-		t.Fatalf("expected stylesheet to avoid custom cursor styles")
+	if !strings.Contains(css, ".theme-toggle {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;") || !strings.Contains(css, "  cursor: pointer;\n") {
+		t.Fatalf("expected stylesheet to use a pointer cursor for the interactive theme toggle")
+	}
+	if strings.Count(css, "cursor:") != 1 {
+		t.Fatalf("expected stylesheet to avoid additional custom cursor styles")
 	}
 	if strings.Contains(css, "cursor-not-allowed") {
 		t.Fatalf("expected stylesheet to avoid cursor utility classes")
