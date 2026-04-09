@@ -1,5 +1,5 @@
 {
-  "repo": "git@github.com:acme/target-repo.git",
+  "repo": "git@github.com:Molten-Bot/moltenhub-code.git",
   "baseBranch": "main",
   "targetSubdir": ".",
   "agentHarness": "codex",

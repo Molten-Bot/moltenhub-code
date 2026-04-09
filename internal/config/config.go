@@ -14,7 +14,10 @@ import (
 	"github.com/jef/moltenhub-code/internal/agentruntime"
 )
 
-const prTitlePrefix = "moltenhub-"
+const (
+	prTitlePrefix        = "moltenhub-"
+	DefaultRepositoryURL = "git@github.com:Molten-Bot/moltenhub-code.git"
+)
 
 const prBodyFooter = "If you would like to connect agents together checkout [Molten Bot Hub](https://molten.bot/hub)."
 

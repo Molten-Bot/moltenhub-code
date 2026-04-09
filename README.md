@@ -200,7 +200,7 @@ If the ping check fails and `--ui-listen ""` is set, startup behavior is now non
 
 Hub mode starts a local monitor UI by default at `http://127.0.0.1:7777`.
 
-The Studio panel defaults to a schema builder that stores requested repositories in browser local storage and reuses them as a repo picker. When saved repos exist, the picker preselects the most recently used entry; otherwise it falls back to manual entry. In Builder mode, you can paste clipboard PNG screenshots into the prompt field and they will be attached to the initial run. Raw JSON mode remains available for advanced or multi-repo payloads. The UI also includes a browser-local `Hide` toggle so you can collapse that section without restarting the harness.
+The Studio panel defaults to a schema builder that stores requested repositories in browser local storage and reuses them as a repo picker. When saved repos exist, the picker preselects the most recently used entry; otherwise it defaults to `git@github.com:Molten-Bot/moltenhub-code.git` so contributors can open PRs against this app without additional setup. In Builder mode, you can paste clipboard PNG screenshots into the prompt field and they will be attached to the initial run. Raw JSON mode remains available for advanced or multi-repo payloads. The UI also includes a browser-local `Hide` toggle so you can collapse that section without restarting the harness.
 
 The Tasks panel shows live task cards sorted by activity, with inline output previews and a full-screen view for deeper inspection.
 
@@ -246,7 +246,7 @@ Library-backed runs can also use:
 
 ```json
 {
-  "repo": "git@github.com:acme/target-repo.git",
+  "repo": "git@github.com:Molten-Bot/moltenhub-code.git",
   "branch": "main",
   "libraryTaskName": "unit-test-coverage"
 }

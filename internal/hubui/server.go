@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/jef/moltenhub-code/internal/agentruntime"
+	"github.com/jef/moltenhub-code/internal/config"
 	"github.com/jef/moltenhub-code/internal/library"
 )
 
@@ -244,11 +245,13 @@ func (s Server) injectIndexConfig(data []byte) []byte {
 		AutomaticMode        bool   `json:"automaticMode"`
 		ConfiguredHarness    string `json:"configuredHarness"`
 		ConfiguredAgentLabel string `json:"configuredAgentLabel"`
+		DefaultRepository    string `json:"defaultRepository"`
 	}
 	cfg, err := json.Marshal(indexConfig{
 		AutomaticMode:        s.AutomaticMode,
 		ConfiguredHarness:    strings.TrimSpace(s.ConfiguredHarness),
 		ConfiguredAgentLabel: agentruntime.DisplayName(s.ConfiguredHarness),
+		DefaultRepository:    config.DefaultRepositoryURL,
 	})
 	if err != nil {
 		s.logf("hub.ui status=warn event=marshal_index_config err=%q", err)
@@ -257,7 +260,7 @@ func (s Server) injectIndexConfig(data []byte) []byte {
 
 	return bytes.Replace(
 		data,
-		[]byte(`window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"codex","configuredAgentLabel":"Codex"};`),
+		[]byte(`window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"codex","configuredAgentLabel":"Codex","defaultRepository":"git@github.com:Molten-Bot/moltenhub-code.git"};`),
 		[]byte("window.__HUB_UI_CONFIG__ = "+string(cfg)+";"),
 		1,
 	)

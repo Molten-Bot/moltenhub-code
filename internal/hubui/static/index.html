@@ -16,7 +16,7 @@
     window.gtag("config", "G-BY33RFG2WB");
   </script>
   <script>
-    window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"codex","configuredAgentLabel":"Codex"};
+    window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"codex","configuredAgentLabel":"Codex","defaultRepository":"git@github.com:Molten-Bot/moltenhub-code.git"};
   </script>
   <script>
     (function configureTailwindRuntime() {
@@ -500,6 +500,7 @@
         automaticMode: Boolean(config.automaticMode),
         configuredHarness: String(config.configuredHarness || "").trim() || "codex",
         configuredAgentLabel: String(config.configuredAgentLabel || "").trim() || "Codex",
+        defaultRepository: normalizeRepoValue(config.defaultRepository || "") || "git@github.com:Molten-Bot/moltenhub-code.git",
       };
     }
 
@@ -544,6 +545,10 @@
 
     function configuredHarnessName() {
       return String(state.ui.configuredHarness || "").trim().toLowerCase();
+    }
+
+    function defaultRepository() {
+      return normalizeRepoValue(state.ui.defaultRepository || "") || "git@github.com:Molten-Bot/moltenhub-code.git";
     }
 
     function configuredAgentLogoURL() {
@@ -2843,7 +2848,7 @@
     }
 
     function builderPayload() {
-      const repo = normalizeRepoValue(builderRepoInput.value);
+      const repo = normalizeRepoValue(builderRepoInput.value) || defaultRepository();
       if (!repo) {
         throw new Error("Repository is required.");
       }
@@ -2863,7 +2868,7 @@
     }
 
     function libraryPayload() {
-      const repo = normalizeRepoValue(libraryRepoInput.value);
+      const repo = normalizeRepoValue(libraryRepoInput.value) || defaultRepository();
       if (!repo) {
         throw new Error("Repository is required.");
       }
@@ -2950,7 +2955,7 @@
       if (state.repoHistory.length > 0 && unique.length > 0) {
         return unique[0];
       }
-      return "";
+      return defaultRepository();
     }
 
     function renderRepoHistorySelect(historyField, select, input) {
