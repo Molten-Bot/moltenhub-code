@@ -1058,7 +1058,7 @@ func taskLogDir(logRoot, requestID string) (string, bool) {
 }
 
 func localTaskLogDir(logRoot, requestID string) (string, bool) {
-	subdir, ok := identifierSubdir(requestID)
+	subdir, ok := failurefollowup.IdentifierSubdir(requestID)
 	if !ok {
 		return "", false
 	}

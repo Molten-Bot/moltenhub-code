@@ -38,7 +38,7 @@ func TestTaskLogSubdirForLine(t *testing.T) {
 		{
 			name: "sanitize_identifier_parts",
 			line: "dispatch request_id=local-17/abc-00*01 status=start",
-			want: filepath.Join("local", "17_abc", "00_01"),
+			want: filepath.Join("local", "17-abc", "00-01"),
 		},
 	}
 

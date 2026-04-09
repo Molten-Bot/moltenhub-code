@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/jef/moltenhub-code/internal/failurefollowup"
 )
 
 func TestResetLogRootRejectsUnsafeDirectories(t *testing.T) {
@@ -61,14 +63,14 @@ func TestTaskLogFilePathUsesFallbackSubdirForBlankInput(t *testing.T) {
 func TestIdentifierSubdirAndSanitizeFallbacks(t *testing.T) {
 	t.Parallel()
 
-	if got, ok := identifierSubdir(""); ok || got != "" {
-		t.Fatalf("identifierSubdir(empty) = (%q, %v), want (\"\", false)", got, ok)
+	if got, ok := failurefollowup.IdentifierSubdir(""); ok || got != "" {
+		t.Fatalf("IdentifierSubdir(empty) = (%q, %v), want (\"\", false)", got, ok)
 	}
-	if got, ok := identifierSubdir("###"); !ok || got != fallbackLogSubdir {
-		t.Fatalf("identifierSubdir(###) = (%q, %v), want (%q, true)", got, ok, fallbackLogSubdir)
+	if got, ok := failurefollowup.IdentifierSubdir("###"); !ok || got != fallbackLogSubdir {
+		t.Fatalf("IdentifierSubdir(###) = (%q, %v), want (%q, true)", got, ok, fallbackLogSubdir)
 	}
-	if got := sanitizeLogPathPart("a__b--c/***d"); got != "a_b_c_d" {
-		t.Fatalf("sanitizeLogPathPart() = %q, want %q", got, "a_b_c_d")
+	if got := failurefollowup.SanitizeLogPathPart("a__b--c/***d"); got != "a__b--c-d" {
+		t.Fatalf("SanitizeLogPathPart() = %q, want %q", got, "a__b--c-d")
 	}
 }
 

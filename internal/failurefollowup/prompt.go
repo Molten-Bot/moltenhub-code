@@ -27,9 +27,9 @@ Completion requirements:
 - Optimize for the highest-quality PR you can produce with focused, production-ready changes.`
 
 const (
-	logFileName           = "terminal.log"
-	legacyTaskLogFileName = "term"
-	fallbackLogSubdir     = "main"
+	LogFileName           = "terminal.log"
+	LegacyTaskLogFileName = "term"
+	FallbackLogSubdir     = "main"
 )
 
 var nonRemediableRepoAccessMarkers = []string{
@@ -90,8 +90,8 @@ func TaskLogPaths(logRoot, requestID string) []string {
 	}
 	return []string{
 		logDir,
-		filepath.Join(logDir, legacyTaskLogFileName),
-		filepath.Join(logDir, logFileName),
+		filepath.Join(logDir, LegacyTaskLogFileName),
+		filepath.Join(logDir, LogFileName),
 	}
 }
 
@@ -102,7 +102,7 @@ func TaskLogDir(logRoot, requestID string) (string, bool) {
 		return "", false
 	}
 
-	subdir, ok := identifierSubdir(requestID)
+	subdir, ok := IdentifierSubdir(requestID)
 	if !ok {
 		return "", false
 	}
@@ -116,7 +116,7 @@ func TaskLogDir(logRoot, requestID string) (string, bool) {
 	return filepath.Join(logRoot, subdir), true
 }
 
-func identifierSubdir(id string) (string, bool) {
+func IdentifierSubdir(id string) (string, bool) {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return "", false
@@ -125,19 +125,19 @@ func identifierSubdir(id string) (string, bool) {
 	rawParts := strings.Split(id, "-")
 	parts := make([]string, 0, len(rawParts))
 	for _, rawPart := range rawParts {
-		part := sanitizeLogPathPart(rawPart)
+		part := SanitizeLogPathPart(rawPart)
 		if part == "" {
 			continue
 		}
 		parts = append(parts, part)
 	}
 	if len(parts) == 0 {
-		return fallbackLogSubdir, true
+		return FallbackLogSubdir, true
 	}
 	return filepath.Join(parts...), true
 }
 
-func sanitizeLogPathPart(part string) string {
+func SanitizeLogPathPart(part string) string {
 	part = strings.TrimSpace(part)
 	if part == "" {
 		return ""

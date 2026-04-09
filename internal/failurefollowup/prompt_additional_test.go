@@ -86,27 +86,27 @@ func TestTaskLogDirRejectsBlankInputs(t *testing.T) {
 func TestIdentifierSubdirFallbackAndSanitization(t *testing.T) {
 	t.Parallel()
 
-	if got, ok := identifierSubdir(" -__- "); !ok || got != fallbackLogSubdir {
-		t.Fatalf("identifierSubdir(fallback) = (%q, %v), want (%q, true)", got, ok, fallbackLogSubdir)
+	if got, ok := IdentifierSubdir(" -__- "); !ok || got != FallbackLogSubdir {
+		t.Fatalf("IdentifierSubdir(fallback) = (%q, %v), want (%q, true)", got, ok, FallbackLogSubdir)
 	}
 
-	got, ok := identifierSubdir(" req#1 - part@@2 ")
+	got, ok := IdentifierSubdir(" req#1 - part@@2 ")
 	if !ok {
-		t.Fatal("identifierSubdir() ok = false, want true")
+		t.Fatal("IdentifierSubdir() ok = false, want true")
 	}
 	want := filepath.Join("req-1", "part-2")
 	if got != want {
-		t.Fatalf("identifierSubdir() = %q, want %q", got, want)
+		t.Fatalf("IdentifierSubdir() = %q, want %q", got, want)
 	}
 }
 
 func TestSanitizeLogPathPartCoversPunctuationCollapsing(t *testing.T) {
 	t.Parallel()
 
-	if got := sanitizeLogPathPart("___...---"); got != "" {
-		t.Fatalf("sanitizeLogPathPart(trimmed empty) = %q, want empty", got)
+	if got := SanitizeLogPathPart("___...---"); got != "" {
+		t.Fatalf("SanitizeLogPathPart(trimmed empty) = %q, want empty", got)
 	}
-	if got, want := sanitizeLogPathPart("  A@B@@C__D..E--F  "), "A-B-C__D..E--F"; got != want {
-		t.Fatalf("sanitizeLogPathPart() = %q, want %q", got, want)
+	if got, want := SanitizeLogPathPart("  A@B@@C__D..E--F  "), "A-B-C__D..E--F"; got != want {
+		t.Fatalf("SanitizeLogPathPart() = %q, want %q", got, want)
 	}
 }

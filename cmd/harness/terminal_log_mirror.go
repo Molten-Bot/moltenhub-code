@@ -1,21 +1,26 @@
 package main
 
 import (
-	"hash/fnv"
 	"fmt"
+	"hash/fnv"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/jef/moltenhub-code/internal/failurefollowup"
 )
 
 const (
-	logDirectoryName      = ".log"
-	logFileName           = "terminal.log"
-	legacyTaskLogFileName = "term"
-	fallbackLogSubdir     = "main"
-	maxLogFileOpenMode    = 0o644
-	maxOpenTaskLogFiles   = 128
+	logDirectoryName    = ".log"
+	maxLogFileOpenMode  = 0o644
+	maxOpenTaskLogFiles = 128
+)
+
+const (
+	logFileName           = failurefollowup.LogFileName
+	legacyTaskLogFileName = failurefollowup.LegacyTaskLogFileName
+	fallbackLogSubdir     = failurefollowup.FallbackLogSubdir
 )
 
 type terminalLogSink interface {
@@ -217,68 +222,11 @@ func (m *taskLogMirror) taskLogFilePathLocked(subdir, fileName string) (string, 
 func taskLogSubdirForLine(line string) string {
 	fields := parseSimpleKVFields(line)
 
-	if subdir, ok := identifierSubdir(fields["request_id"]); ok {
+	if subdir, ok := failurefollowup.IdentifierSubdir(fields["request_id"]); ok {
 		return subdir
 	}
-	if subdir, ok := identifierSubdir(fields["session"]); ok {
+	if subdir, ok := failurefollowup.IdentifierSubdir(fields["session"]); ok {
 		return subdir
 	}
 	return fallbackLogSubdir
-}
-
-func identifierSubdir(id string) (string, bool) {
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return "", false
-	}
-
-	rawParts := strings.Split(id, "-")
-	parts := make([]string, 0, len(rawParts))
-	for _, rawPart := range rawParts {
-		part := sanitizeLogPathPart(rawPart)
-		if part == "" {
-			continue
-		}
-		parts = append(parts, part)
-	}
-	if len(parts) == 0 {
-		return fallbackLogSubdir, true
-	}
-	return filepath.Join(parts...), true
-}
-
-func sanitizeLogPathPart(part string) string {
-	part = strings.TrimSpace(part)
-	if part == "" {
-		return ""
-	}
-
-	var b strings.Builder
-	lastSeparator := false
-	for i := 0; i < len(part); i++ {
-		ch := part[i]
-		switch {
-		case ch >= 'a' && ch <= 'z':
-			b.WriteByte(ch)
-			lastSeparator = false
-		case ch >= 'A' && ch <= 'Z':
-			b.WriteByte(ch)
-			lastSeparator = false
-		case ch >= '0' && ch <= '9':
-			b.WriteByte(ch)
-			lastSeparator = false
-		case ch == '-' || ch == '_':
-			if b.Len() > 0 && !lastSeparator {
-				b.WriteByte('_')
-				lastSeparator = true
-			}
-		default:
-			if b.Len() > 0 && !lastSeparator {
-				b.WriteByte('_')
-				lastSeparator = true
-			}
-		}
-	}
-
-	return strings.Trim(b.String(), "_")
 }
