@@ -766,6 +766,24 @@ body .right-col.prompt-collapsed.task-list-hidden {
   margin-left: 1px;
 }
 
+.hub-dock-plus {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #0a84ff, #0057d8);
+  box-shadow: 0 8px 18px rgba(10, 132, 255, 0.3);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 #moltenbot-hub-link img {
   transition: filter 180ms ease, transform 180ms ease;
 }
@@ -2205,6 +2223,72 @@ select.prompt-control {
   background: var(--surface-auth-verify-hover-bg);
 }
 
+.hub-setup-shell {
+  gap: 0;
+}
+
+.hub-setup-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.hub-setup-toggle-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hub-setup-toggle {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--surface-control-border);
+  border-radius: 999px;
+  background: var(--surface-control-bg);
+  box-shadow: var(--surface-control-shadow);
+  color: var(--surface-tab-text);
+  transition: transform 180ms ease, box-shadow 180ms ease, color 180ms ease;
+}
+
+.hub-setup-toggle:hover,
+.hub-setup-toggle:focus-visible {
+  color: var(--surface-tab-hover-text);
+  transform: translateY(-1px);
+}
+
+.hub-setup-toggle.active {
+  color: var(--surface-tab-active-text);
+  background: var(--surface-tab-active-bg);
+  box-shadow: var(--surface-tab-active-shadow);
+}
+
+.hub-setup-profile-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.hub-setup-profile-bio {
+  grid-column: 1 / -1;
+}
+
+.hub-setup-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.hub-setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
 .agent-auth-configure-input-github {
   width: min(100%, 46ch);
   min-height: 46px;
@@ -2237,6 +2321,21 @@ select.prompt-control {
   padding: 8px 12px;
   cursor: pointer;
   transition: .2s ease;
+}
+
+@media (max-width: 820px) {
+  .hub-setup-profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hub-setup-footer {
+    align-items: stretch;
+  }
+
+  .hub-setup-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
 }
 
 .theme-toggle:hover { transform: scale(1.04); }

@@ -18,6 +18,87 @@ import (
 	"github.com/jef/moltenhub-code/internal/library"
 )
 
+func TestHandleHubSetupStatusAndConfigure(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	srv.HubSetupStatus = func(context.Context) (HubSetupState, error) {
+		state := defaultHubSetupState()
+		state.Configured = true
+		state.Handle = "molten-agent"
+		state.Profile.DisplayName = "Molten Agent"
+		return state, nil
+	}
+	srv.ConfigureHubSetup = func(_ context.Context, req HubSetupRequest) (HubSetupState, error) {
+		if req.Token != "bind-token" {
+			return defaultHubSetupState(), fmt.Errorf("unexpected token")
+		}
+		state := defaultHubSetupState()
+		state.Configured = true
+		state.AgentMode = req.AgentMode
+		state.TokenType = req.TokenType
+		state.Handle = "saved-agent"
+		state.Profile.DisplayName = "Saved Agent"
+		state.NeedsRestart = true
+		return state, nil
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/hub-setup", nil)
+	getResp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(getResp, getReq)
+	if getResp.Code != http.StatusOK {
+		t.Fatalf("GET /api/hub-setup status = %d, want 200", getResp.Code)
+	}
+
+	var getBody struct {
+		OK  bool          `json:"ok"`
+		Hub HubSetupState `json:"hub"`
+	}
+	if err := json.NewDecoder(getResp.Body).Decode(&getBody); err != nil {
+		t.Fatalf("decode GET body: %v", err)
+	}
+	if !getBody.OK || !getBody.Hub.Configured {
+		t.Fatalf("GET hub setup body = %#v, want configured ok response", getBody)
+	}
+
+	postReq := httptest.NewRequest(http.MethodPost, "/api/hub-setup", strings.NewReader(`{"agent_mode":"existing","token_type":"bind","token":"bind-token"}`))
+	postReq.Header.Set("Content-Type", "application/json")
+	postResp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(postResp, postReq)
+	if postResp.Code != http.StatusOK {
+		t.Fatalf("POST /api/hub-setup status = %d, want 200", postResp.Code)
+	}
+
+	var postBody struct {
+		OK  bool          `json:"ok"`
+		Hub HubSetupState `json:"hub"`
+	}
+	if err := json.NewDecoder(postResp.Body).Decode(&postBody); err != nil {
+		t.Fatalf("decode POST body: %v", err)
+	}
+	if !postBody.OK || postBody.Hub.Handle != "saved-agent" || !postBody.Hub.NeedsRestart {
+		t.Fatalf("POST hub setup body = %#v, want saved state", postBody)
+	}
+}
+
+func TestHandleHubSetupConfigureRejectsBadPayload(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	srv.ConfigureHubSetup = func(context.Context, HubSetupRequest) (HubSetupState, error) {
+		t.Fatal("ConfigureHubSetup should not be called for malformed JSON")
+		return HubSetupState{}, nil
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/hub-setup", strings.NewReader("{"))
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("POST /api/hub-setup malformed status = %d, want 400", resp.Code)
+	}
+}
+
 func TestNewServerDefaultsAndLogfHelper(t *testing.T) {
 	t.Parallel()
 
@@ -167,6 +248,15 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	}
 	if !strings.Contains(stylesheet, `filter: none;`) {
 		t.Fatalf("expected molten bot hub icon hover treatment to restore the native molten hub logo colors")
+	}
+	if !strings.Contains(stylesheet, `.hub-dock-plus {`) {
+		t.Fatalf("expected stylesheet to include molten hub plus badge styles")
+	}
+	if !strings.Contains(stylesheet, `.hub-setup-toggle {`) {
+		t.Fatalf("expected stylesheet to include hub setup toggle styles")
+	}
+	if !strings.Contains(stylesheet, `.hub-setup-profile-grid {`) {
+		t.Fatalf("expected stylesheet to include hub setup profile grid styles")
 	}
 }
 

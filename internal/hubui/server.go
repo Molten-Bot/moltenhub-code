@@ -25,6 +25,7 @@ var staticFiles embed.FS
 
 const maxLocalPromptBodyBytes = 16 << 20
 const maxAgentAuthConfigureBodyBytes = 1 << 20
+const maxHubSetupConfigureBodyBytes = 1 << 20
 const streamSnapshotInterval = 120 * time.Millisecond
 const maxStreamTaskLogs = 500
 
@@ -46,6 +47,8 @@ type Server struct {
 	StartAgentAuth     func(context.Context) (AgentAuthState, error)
 	VerifyAgentAuth    func(context.Context) (AgentAuthState, error)
 	ConfigureAgentAuth func(context.Context, string) (AgentAuthState, error)
+	HubSetupStatus     func(context.Context) (HubSetupState, error)
+	ConfigureHubSetup  func(context.Context, HubSetupRequest) (HubSetupState, error)
 	ResolveGitHubProfileURL func(context.Context) (string, error)
 }
 
@@ -62,6 +65,37 @@ type AgentAuthState struct {
 	ConfigureCommand     string `json:"configure_command,omitempty"`
 	ConfigurePlaceholder string `json:"configure_placeholder,omitempty"`
 	UpdatedAt            string `json:"updated_at,omitempty"`
+}
+
+// HubSetupState describes whether Molten Hub is configured locally and what
+// profile details should be reflected in config.json.
+type HubSetupState struct {
+	Configured bool   `json:"configured"`
+	AgentMode  string `json:"agent_mode,omitempty"`
+	TokenType  string `json:"token_type,omitempty"`
+	Handle     string `json:"handle,omitempty"`
+	Profile    struct {
+		Bio         string `json:"bio"`
+		DisplayName string `json:"display_name"`
+		Emoji       string `json:"emoji"`
+	} `json:"profile"`
+	ConnectURL  string `json:"connect_url,omitempty"`
+	DashboardURL string `json:"dashboard_url,omitempty"`
+	Message     string `json:"message,omitempty"`
+	NeedsRestart bool  `json:"needs_restart,omitempty"`
+}
+
+// HubSetupRequest captures the late-stage Hub connect modal payload.
+type HubSetupRequest struct {
+	AgentMode string `json:"agent_mode"`
+	TokenType string `json:"token_type"`
+	Token     string `json:"token"`
+	Handle    string `json:"handle"`
+	Profile   struct {
+		Bio         string `json:"bio"`
+		DisplayName string `json:"display_name"`
+		Emoji       string `json:"emoji"`
+	} `json:"profile"`
 }
 
 // NewServer returns a monitor HTTP server.
@@ -131,6 +165,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/api/stream", s.handleStream)
 	mux.HandleFunc("/api/local-prompt", s.handleLocalPrompt)
 	mux.HandleFunc("/api/github/profile", s.handleGitHubProfile)
+	mux.HandleFunc("/api/hub-setup", s.handleHubSetup)
 	mux.HandleFunc("/api/agent-auth", s.handleAgentAuthStatus)
 	mux.HandleFunc("/api/agent-auth/start-device", s.handleAgentAuthStart)
 	mux.HandleFunc("/api/agent-auth/verify", s.handleAgentAuthVerify)
@@ -147,6 +182,20 @@ func defaultAgentAuthState() AgentAuthState {
 		State:    "ready",
 		Message:  "Agent auth is ready.",
 	}
+}
+
+func defaultHubSetupState() HubSetupState {
+	state := HubSetupState{
+		Configured:   false,
+		AgentMode:    "existing",
+		TokenType:    "bind",
+		ConnectURL:   "https://app.molten.bot/signin?target=hub",
+		DashboardURL: "https://app.molten.bot/hub",
+	}
+	state.Profile.Bio = ""
+	state.Profile.DisplayName = ""
+	state.Profile.Emoji = ""
+	return state
 }
 
 func (s Server) handleGitHubProfile(w http.ResponseWriter, r *http.Request) {
@@ -350,6 +399,93 @@ func (s Server) handleStream(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s Server) currentHubSetupState(ctx context.Context) (HubSetupState, error) {
+	state := defaultHubSetupState()
+	if s.HubSetupStatus == nil {
+		return state, nil
+	}
+	next, err := s.HubSetupStatus(ctx)
+	if strings.TrimSpace(next.ConnectURL) == "" {
+		next.ConnectURL = state.ConnectURL
+	}
+	if strings.TrimSpace(next.DashboardURL) == "" {
+		next.DashboardURL = state.DashboardURL
+	}
+	if strings.TrimSpace(next.AgentMode) == "" {
+		next.AgentMode = state.AgentMode
+	}
+	if strings.TrimSpace(next.TokenType) == "" {
+		next.TokenType = state.TokenType
+	}
+	return next, err
+}
+
+func (s Server) handleHubSetup(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		state, err := s.currentHubSetupState(r.Context())
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{
+				"ok":    false,
+				"error": fmt.Sprintf("load hub setup state: %v", err),
+				"hub":   state,
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":  true,
+			"hub": state,
+		})
+	case http.MethodPost:
+		if s.ConfigureHubSetup == nil {
+			writeJSON(w, http.StatusNotImplemented, map[string]any{
+				"ok":    false,
+				"error": "hub setup is unavailable",
+				"hub":   defaultHubSetupState(),
+			})
+			return
+		}
+
+		body, err := io.ReadAll(io.LimitReader(r.Body, maxHubSetupConfigureBodyBytes))
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"ok":    false,
+				"error": fmt.Sprintf("read request body: %v", err),
+				"hub":   defaultHubSetupState(),
+			})
+			return
+		}
+
+		var req HubSetupRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"ok":    false,
+				"error": fmt.Sprintf("decode request body: %v", err),
+				"hub":   defaultHubSetupState(),
+			})
+			return
+		}
+
+		state, err := s.ConfigureHubSetup(r.Context(), req)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"ok":    false,
+				"error": err.Error(),
+				"hub":   state,
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":  true,
+			"hub": state,
+		})
+	default:
+		w.Header().Set("Allow", strings.Join([]string{http.MethodGet, http.MethodPost}, ", "))
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 func (s Server) handleAgentAuthStatus(w http.ResponseWriter, r *http.Request) {

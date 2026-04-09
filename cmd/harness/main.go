@@ -548,6 +548,12 @@ func runHub(args []string) int {
 				uiServer.ConfigureAgentAuth = authGate.Configure
 			}
 		}
+		uiServer.HubSetupStatus = func(_ context.Context) (hubui.HubSetupState, error) {
+			return currentHubSetupState(cfg), nil
+		}
+		uiServer.ConfigureHubSetup = func(reqCtx context.Context, req hubui.HubSetupRequest) (hubui.HubSetupState, error) {
+			return configureHubSetup(reqCtx, cfg, req)
+		}
 		uiServer.SubmitLocalPrompt = func(reqCtx context.Context, body []byte) (string, error) {
 			runCfg, err := hub.ParseRunConfigJSON(body)
 			if err != nil {
@@ -1459,6 +1465,145 @@ func hubCredentialsConfigured(cfg hub.InitConfig, loadRuntimeConfig runtimeConfi
 		return false
 	}
 	return strings.TrimSpace(stored.AgentToken) != "" || strings.TrimSpace(stored.BindToken) != ""
+}
+
+func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
+	state := hubui.HubSetupState{
+		ConnectURL:   "https://app.molten.bot/signin?target=hub",
+		DashboardURL: "https://app.molten.bot/hub",
+		AgentMode:    "existing",
+		TokenType:    "bind",
+	}
+
+	activeCfg := cfg
+	runtimeCfg, err := hub.LoadRuntimeConfig(cfg.RuntimeConfigPath)
+	if err == nil {
+		activeCfg = runtimeCfg.Init()
+	} else if !errors.Is(err, os.ErrNotExist) {
+		state.Message = fmt.Sprintf("Runtime config load failed: %v", err)
+	}
+
+	state.Configured = strings.TrimSpace(activeCfg.BindToken) != "" || strings.TrimSpace(activeCfg.AgentToken) != ""
+	state.Handle = strings.TrimSpace(activeCfg.Handle)
+	state.Profile.Bio = strings.TrimSpace(activeCfg.Profile.Bio)
+	state.Profile.DisplayName = strings.TrimSpace(activeCfg.Profile.DisplayName)
+	state.Profile.Emoji = strings.TrimSpace(activeCfg.Profile.Emoji)
+	if state.Configured {
+		state.TokenType = "agent"
+		if strings.TrimSpace(activeCfg.BindToken) != "" {
+			state.TokenType = "bind"
+		}
+		state.Message = "Molten Hub credentials are saved locally."
+	}
+	return state
+}
+
+func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSetupRequest) (hubui.HubSetupState, error) {
+	state := currentHubSetupState(cfg)
+	state.AgentMode = normalizeHubSetupMode(req.AgentMode)
+	state.TokenType = normalizeHubSetupTokenType(req.TokenType)
+	state.Handle = strings.TrimSpace(req.Handle)
+	state.Profile.Bio = strings.TrimSpace(req.Profile.Bio)
+	state.Profile.DisplayName = strings.TrimSpace(req.Profile.DisplayName)
+	state.Profile.Emoji = strings.TrimSpace(req.Profile.Emoji)
+
+	token := strings.TrimSpace(req.Token)
+	if token == "" {
+		return state, fmt.Errorf("%s token is required", state.TokenType)
+	}
+
+	activeCfg := cfg
+	if runtimeCfg, err := hub.LoadRuntimeConfig(cfg.RuntimeConfigPath); err == nil {
+		activeCfg = runtimeCfg.Init()
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return state, fmt.Errorf("load runtime config: %w", err)
+	}
+	activeCfg.ApplyDefaults()
+
+	activeCfg.BindToken = ""
+	activeCfg.AgentToken = ""
+	if state.TokenType == "bind" {
+		activeCfg.BindToken = token
+	} else {
+		activeCfg.AgentToken = token
+	}
+
+	client := hub.NewAPIClient(activeCfg.BaseURL)
+	resolvedToken, err := client.ResolveAgentToken(ctx, activeCfg)
+	if err != nil {
+		return state, fmt.Errorf("resolve hub token: %w", err)
+	}
+
+	finalCfg := activeCfg
+	if state.AgentMode == "new" {
+		finalCfg.Handle = state.Handle
+		finalCfg.Profile.Bio = state.Profile.Bio
+		finalCfg.Profile.DisplayName = state.Profile.DisplayName
+		finalCfg.Profile.Emoji = state.Profile.Emoji
+		if err := client.SyncProfile(ctx, resolvedToken, finalCfg); err != nil {
+			return state, fmt.Errorf("sync hub profile: %w", err)
+		}
+	} else {
+		profile, err := client.AgentProfile(ctx, resolvedToken)
+		if err != nil {
+			return state, fmt.Errorf("load hub profile: %w", err)
+		}
+		finalCfg.Handle = strings.TrimSpace(profile.Handle)
+		finalCfg.Profile = profile.Profile
+	}
+
+	if state.AgentMode == "new" {
+		if profile, err := client.AgentProfile(ctx, resolvedToken); err == nil {
+			if strings.TrimSpace(finalCfg.Handle) == "" {
+				finalCfg.Handle = strings.TrimSpace(profile.Handle)
+			}
+			finalCfg.Profile = mergeProfileConfig(finalCfg.Profile, profile.Profile)
+		}
+	}
+
+	if err := hub.SaveRuntimeConfigHubSettings(cfg.RuntimeConfigPath, finalCfg, resolvedToken); err != nil {
+		return state, fmt.Errorf("save runtime config: %w", err)
+	}
+
+	state.Configured = true
+	state.Handle = strings.TrimSpace(finalCfg.Handle)
+	state.Profile.Bio = strings.TrimSpace(finalCfg.Profile.Bio)
+	state.Profile.DisplayName = strings.TrimSpace(finalCfg.Profile.DisplayName)
+	state.Profile.Emoji = strings.TrimSpace(finalCfg.Profile.Emoji)
+	state.Message = "Molten Hub setup saved. Restart the runtime to connect the remote transport."
+	state.NeedsRestart = true
+	return state, nil
+}
+
+func normalizeHubSetupMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "new":
+		return "new"
+	default:
+		return "existing"
+	}
+}
+
+func normalizeHubSetupTokenType(tokenType string) string {
+	switch strings.ToLower(strings.TrimSpace(tokenType)) {
+	case "agent":
+		return "agent"
+	default:
+		return "bind"
+	}
+}
+
+func mergeProfileConfig(primary, secondary hub.ProfileConfig) hub.ProfileConfig {
+	if strings.TrimSpace(primary.DisplayName) == "" {
+		primary.DisplayName = strings.TrimSpace(secondary.DisplayName)
+	}
+	if strings.TrimSpace(primary.Emoji) == "" {
+		primary.Emoji = strings.TrimSpace(secondary.Emoji)
+	}
+	if strings.TrimSpace(primary.Bio) == "" {
+		primary.Bio = strings.TrimSpace(secondary.Bio)
+	}
+	return primary
 }
 
 func collectConfigPaths(inputs []string) ([]string, error) {

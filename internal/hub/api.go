@@ -40,6 +40,12 @@ type PulledOpenClawMessage struct {
 	Message    map[string]any
 }
 
+// AgentProfile captures the profile fields this runtime needs to persist locally.
+type AgentProfile struct {
+	Handle  string
+	Profile ProfileConfig
+}
+
 // APIClient wraps hub HTTP interactions.
 type APIClient struct {
 	BaseURL    string
@@ -292,6 +298,23 @@ func (c APIClient) AgentMetadata(ctx context.Context, token string) (map[string]
 	}
 
 	return extractMetadataFromJSON(body), nil
+}
+
+// AgentProfile loads the current agent handle/profile for config persistence.
+func (c APIClient) AgentProfile(ctx context.Context, token string) (AgentProfile, error) {
+	if strings.TrimSpace(token) == "" {
+		return AgentProfile{}, fmt.Errorf("agent profile requires token")
+	}
+
+	status, body, err := c.doJSON(ctx, http.MethodGet, "/agents/me", token, nil)
+	if err != nil {
+		return AgentProfile{}, err
+	}
+	if status/100 != 2 {
+		return AgentProfile{}, fmt.Errorf("status=%d body=%s", status, truncateBody(body))
+	}
+
+	return extractAgentProfileFromJSON(body), nil
 }
 
 // RegisterRuntime sends plugin/runtime metadata to hub.
@@ -786,6 +809,17 @@ func extractMetadataFromJSON(body []byte) map[string]any {
 	return extractMetadataFromAny(parsed)
 }
 
+func extractAgentProfileFromJSON(body []byte) AgentProfile {
+	if len(bytes.TrimSpace(body)) == 0 {
+		return AgentProfile{}
+	}
+	var parsed any
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return AgentProfile{}
+	}
+	return extractAgentProfileFromAny(parsed)
+}
+
 func extractAPIBaseFromAny(v any) string {
 	switch typed := v.(type) {
 	case map[string]any:
@@ -836,6 +870,94 @@ func extractMetadataFromAny(v any) map[string]any {
 		}
 	}
 	return map[string]any{}
+}
+
+func extractAgentProfileFromAny(v any) AgentProfile {
+	switch typed := v.(type) {
+	case map[string]any:
+		profile := AgentProfile{
+			Handle: firstNonEmpty(
+				stringAt(typed, "handle"),
+				stringAt(typed, "agent_handle"),
+				stringAt(typed, "username"),
+			),
+		}
+
+		if nested := toMap(typed["profile"]); len(nested) > 0 {
+			profile.Profile = extractProfileConfig(nested)
+		}
+		if profileConfigEmpty(profile.Profile) {
+			profile.Profile = extractProfileConfig(extractMetadataFromAny(typed))
+		}
+		if nested, ok := typed["result"]; ok {
+			merged := mergeAgentProfiles(profile, extractAgentProfileFromAny(nested))
+			if !agentProfileEmpty(merged) {
+				return merged
+			}
+		}
+		for _, key := range []string{"agent", "data", "payload"} {
+			if nested, ok := typed[key]; ok {
+				merged := mergeAgentProfiles(profile, extractAgentProfileFromAny(nested))
+				if !agentProfileEmpty(merged) {
+					return merged
+				}
+			}
+		}
+		return profile
+	case []any:
+		for _, entry := range typed {
+			if profile := extractAgentProfileFromAny(entry); !agentProfileEmpty(profile) {
+				return profile
+			}
+		}
+	}
+	return AgentProfile{}
+}
+
+func mergeAgentProfiles(primary, secondary AgentProfile) AgentProfile {
+	merged := primary
+	if strings.TrimSpace(merged.Handle) == "" {
+		merged.Handle = strings.TrimSpace(secondary.Handle)
+	}
+	if strings.TrimSpace(merged.Profile.DisplayName) == "" {
+		merged.Profile.DisplayName = strings.TrimSpace(secondary.Profile.DisplayName)
+	}
+	if strings.TrimSpace(merged.Profile.Emoji) == "" {
+		merged.Profile.Emoji = strings.TrimSpace(secondary.Profile.Emoji)
+	}
+	if strings.TrimSpace(merged.Profile.Bio) == "" {
+		merged.Profile.Bio = strings.TrimSpace(secondary.Profile.Bio)
+	}
+	return merged
+}
+
+func extractProfileConfig(raw map[string]any) ProfileConfig {
+	return ProfileConfig{
+		DisplayName: firstNonEmpty(
+			stringAt(raw, "display_name"),
+			stringAt(raw, "displayName"),
+			stringAt(raw, "name"),
+		),
+		Emoji: firstNonEmpty(
+			stringAt(raw, "emoji"),
+			stringAt(raw, "icon"),
+		),
+		Bio: firstNonEmpty(
+			stringAt(raw, "bio"),
+			stringAt(raw, "description"),
+			stringAt(raw, "summary"),
+		),
+	}
+}
+
+func agentProfileEmpty(profile AgentProfile) bool {
+	return strings.TrimSpace(profile.Handle) == "" && profileConfigEmpty(profile.Profile)
+}
+
+func profileConfigEmpty(profile ProfileConfig) bool {
+	return strings.TrimSpace(profile.DisplayName) == "" &&
+		strings.TrimSpace(profile.Emoji) == "" &&
+		strings.TrimSpace(profile.Bio) == ""
 }
 
 func truncateBody(body []byte) string {

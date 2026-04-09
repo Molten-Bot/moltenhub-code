@@ -260,6 +260,97 @@ func TestSaveRuntimeConfigGitHubTokenMergesIntoExistingConfig(t *testing.T) {
 	}
 }
 
+func TestSaveRuntimeConfigHubSettingsMergesHubFieldsWithoutDroppingExtras(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(path, []byte(`{"base_url":"https://na.hub.molten.bot/v1","custom":"preserved","github_token":"ghp_saved"}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	err := SaveRuntimeConfigHubSettings(path, InitConfig{
+		BaseURL:   "https://na.hub.molten.bot/v1",
+		BindToken: "bind_saved",
+		Handle:    "molten-builder",
+		Profile: ProfileConfig{
+			Bio:         "Builds things",
+			DisplayName: "Molten Builder",
+			Emoji:       "🔥",
+		},
+	}, "agent_saved")
+	if err != nil {
+		t.Fatalf("SaveRuntimeConfigHubSettings() error = %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if got["bind_token"] != "bind_saved" {
+		t.Fatalf("bind_token = %#v, want %q", got["bind_token"], "bind_saved")
+	}
+	if got["agent_token"] != "agent_saved" {
+		t.Fatalf("agent_token = %#v, want %q", got["agent_token"], "agent_saved")
+	}
+	if got["handle"] != "molten-builder" {
+		t.Fatalf("handle = %#v, want %q", got["handle"], "molten-builder")
+	}
+	profile, _ := got["profile"].(map[string]any)
+	if profile["display_name"] != "Molten Builder" {
+		t.Fatalf("profile.display_name = %#v, want %q", profile["display_name"], "Molten Builder")
+	}
+	if got["custom"] != "preserved" {
+		t.Fatalf("custom = %#v, want %q", got["custom"], "preserved")
+	}
+	if got["github_token"] != "ghp_saved" {
+		t.Fatalf("github_token = %#v, want %q", got["github_token"], "ghp_saved")
+	}
+}
+
+func TestSaveRuntimeConfigHubSettingsClearsStaleBindTokenForAgentTokenFlow(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(path, []byte(`{"base_url":"https://na.hub.molten.bot/v1","bind_token":"old_bind"}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	err := SaveRuntimeConfigHubSettings(path, InitConfig{
+		BaseURL:    "https://na.hub.molten.bot/v1",
+		AgentToken: "agent_direct",
+	}, "agent_direct")
+	if err != nil {
+		t.Fatalf("SaveRuntimeConfigHubSettings() error = %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if _, ok := got["bind_token"]; ok {
+		t.Fatalf("bind_token present = %#v, want removed", got["bind_token"])
+	}
+	if got["agent_token"] != "agent_direct" {
+		t.Fatalf("agent_token = %#v, want %q", got["agent_token"], "agent_direct")
+	}
+}
+
 func TestReadRuntimeConfigString(t *testing.T) {
 	t.Parallel()
 

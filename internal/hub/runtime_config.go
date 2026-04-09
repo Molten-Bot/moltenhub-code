@@ -142,6 +142,61 @@ func SaveRuntimeConfig(path string, initCfg InitConfig, token string) error {
 	return writeRuntimeConfigFile(path, data)
 }
 
+// SaveRuntimeConfigHubSettings persists hub credentials plus handle/profile
+// fields while preserving unrelated runtime config keys already on disk.
+func SaveRuntimeConfigHubSettings(path string, initCfg InitConfig, resolvedAgentToken string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		path = defaultRuntimeConfigPath()
+	}
+
+	initCfg.ApplyDefaults()
+	resolvedAgentToken = strings.TrimSpace(resolvedAgentToken)
+	if resolvedAgentToken == "" && strings.TrimSpace(initCfg.BindToken) == "" {
+		return fmt.Errorf("runtime config requires agent_token or bind_token")
+	}
+
+	doc, err := loadRuntimeConfigDoc(path, initCfg)
+	if err != nil {
+		return err
+	}
+
+	doc["version"] = initCfg.Version
+	doc["base_url"] = initCfg.BaseURL
+	doc["session_key"] = initCfg.SessionKey
+	doc["handle"] = initCfg.Handle
+	doc["profile"] = map[string]any{
+		"bio":          initCfg.Profile.Bio,
+		"display_name": initCfg.Profile.DisplayName,
+		"emoji":        initCfg.Profile.Emoji,
+	}
+	doc["agent_token"] = resolvedAgentToken
+	if strings.TrimSpace(initCfg.BindToken) != "" {
+		doc["bind_token"] = initCfg.BindToken
+	} else {
+		delete(doc, "bind_token")
+	}
+	if strings.TrimSpace(initCfg.AgentHarness) != "" {
+		doc["agent_harness"] = initCfg.AgentHarness
+	}
+	if strings.TrimSpace(initCfg.AgentCommand) != "" {
+		doc["agent_command"] = initCfg.AgentCommand
+	}
+	if _, ok := doc["timeout_ms"]; !ok {
+		doc["timeout_ms"] = runtimeTimeoutMs
+	}
+	if dispatcherDoc, ok := runtimeConfigDispatcherDoc(initCfg); ok {
+		doc["dispatcher"] = dispatcherDoc
+	}
+
+	encoded, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode runtime config: %w", err)
+	}
+	encoded = append(encoded, '\n')
+	return writeRuntimeConfigFile(path, encoded)
+}
+
 // SaveRuntimeConfigAuggieAuth persists augment_session_auth to the runtime
 // config JSON while preserving other configuration fields.
 func SaveRuntimeConfigAuggieAuth(path string, initCfg InitConfig, augmentSessionAuth string) error {
@@ -315,6 +370,15 @@ func runtimeConfigBaseDoc(initCfg InitConfig) (map[string]any, error) {
 		return nil, fmt.Errorf("decode runtime config base: %w", err)
 	}
 	return doc, nil
+}
+
+func runtimeConfigDispatcherDoc(initCfg InitConfig) (map[string]any, bool) {
+	baseDoc, err := runtimeConfigBaseDoc(initCfg)
+	if err != nil {
+		return nil, false
+	}
+	dispatcherDoc, ok := baseDoc["dispatcher"].(map[string]any)
+	return dispatcherDoc, ok
 }
 
 func writeRuntimeConfigFile(path string, data []byte) error {

@@ -331,6 +331,74 @@
     </div>
   </div>
 
+  <div id="hub-setup-gate" class="agent-auth-gate fixed inset-0 z-[94] hidden items-center justify-center p-4 backdrop-blur-sm" aria-live="polite" aria-hidden="true">
+    <div class="agent-auth-shell hub-setup-shell flex min-h-[220px] w-full max-w-2xl flex-col">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h2 class="text-[2rem] font-semibold leading-tight text-hub-text">Connect Molten Hub</h2>
+          <p id="hub-setup-message" class="mt-3 max-w-xl text-base leading-7 text-hub-text/85">Save either a bind token or an agent token, then restart this runtime to enable remote Hub transport.</p>
+        </div>
+        <button id="hub-setup-close" class="task-fullscreen-close !relative !top-0 !right-0 !flex" type="button" aria-label="Close Molten Hub setup" title="Close Molten Hub setup">
+          <span class="task-fullscreen-close-icon" aria-hidden="true">&times;</span>
+          <span class="sr-only">Close Molten Hub setup</span>
+        </button>
+      </div>
+
+      <form id="hub-setup-form" class="mt-6 grid gap-4">
+        <div class="hub-setup-toggle-row">
+          <div class="hub-setup-toggle-group" role="tablist" aria-label="Agent mode">
+            <button id="hub-setup-existing-toggle" class="hub-setup-toggle active" type="button" data-agent-mode="existing" aria-pressed="true">Existing agent</button>
+            <button id="hub-setup-new-toggle" class="hub-setup-toggle" type="button" data-agent-mode="new" aria-pressed="false">New agent</button>
+          </div>
+          <div class="hub-setup-toggle-group" role="tablist" aria-label="Token type">
+            <button id="hub-setup-bind-toggle" class="hub-setup-toggle active" type="button" data-token-type="bind" aria-pressed="true">Bind token</button>
+            <button id="hub-setup-agent-toggle" class="hub-setup-toggle" type="button" data-token-type="agent" aria-pressed="false">Agent token</button>
+          </div>
+        </div>
+
+        <label class="prompt-field">
+          <span class="prompt-label">Token</span>
+          <textarea id="hub-setup-token" class="prompt-text prompt-control min-h-[96px] w-full rounded-lg border border-hub-border p-2.5 font-mono text-[0.84rem] leading-[1.4]" rows="4" spellcheck="false" placeholder="Paste bind token or agent token"></textarea>
+        </label>
+
+        <div id="hub-setup-new-agent-fields" class="hub-setup-profile-grid hidden">
+          <label class="prompt-field">
+            <span class="prompt-label">Handle</span>
+            <input id="hub-setup-handle" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="my-agent-handle">
+          </label>
+          <label class="prompt-field">
+            <span class="prompt-label">Display name</span>
+            <input id="hub-setup-display-name" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="Molten Builder">
+          </label>
+          <label class="prompt-field">
+            <span class="prompt-label">Emoji</span>
+            <input id="hub-setup-emoji" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="🔥" list="hub-setup-emoji-options">
+            <datalist id="hub-setup-emoji-options">
+              <option value="🔥"></option>
+              <option value="🤖"></option>
+              <option value="🛠️"></option>
+              <option value="⚡"></option>
+              <option value="🧠"></option>
+              <option value="🚀"></option>
+            </datalist>
+          </label>
+          <label class="prompt-field hub-setup-profile-bio">
+            <span class="prompt-label">Bio</span>
+            <textarea id="hub-setup-bio" class="prompt-text prompt-control min-h-[96px] w-full rounded-lg border border-hub-border p-2.5 text-[0.84rem] leading-[1.4]" rows="4" spellcheck="false" placeholder="What this runtime is for"></textarea>
+          </label>
+        </div>
+
+        <div class="hub-setup-footer">
+          <a id="hub-setup-signin-link" class="agent-auth-url" href="https://app.molten.bot/signin?target=hub" target="_blank" rel="noopener noreferrer">Open Molten Hub sign-in</a>
+          <div class="hub-setup-actions">
+            <span id="hub-setup-status" class="submit-status submit-status-inline min-h-[1.3em] text-[0.74rem] leading-[1.3] text-hub-muted"></span>
+            <button id="hub-setup-submit" class="agent-auth-verify !block" type="submit">Save Hub setup</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="page-bottom-dock" aria-hidden="false">
     <div class="prompt-mode-tabs prompt-mode-tabs-dock" aria-label="Main menu">
       <a id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true">Builder</a>
@@ -350,12 +418,13 @@
       <a
         id="moltenbot-hub-link"
         class="prompt-mode-link prompt-mode-link-logo"
-        href="https://app.molten.bot/hub"
+        href="https://app.molten.bot/signin?target=hub"
         target="_blank"
         rel="noreferrer noopener"
         aria-label="Open Molten Bot Hub in a new window"
         title="Open Molten Bot Hub in a new window">
         <span class="sr-only">Molten Bot Hub</span>
+        <span id="moltenbot-hub-plus" class="hub-dock-plus hidden" aria-hidden="true">+</span>
         <img src="https://app.molten.bot/logo.svg" alt="" aria-hidden="true">
       </a>
     </div>
@@ -381,8 +450,8 @@
     const LOGO_ROTATION_INTERVAL_MS = 8_000;
     const STREAM_RENDER_INTERVAL_MS = 120;
     const MAX_TERMINAL_LINES = 500;
-    const HUB_LOGIN_URL = "https://molten.bot/login/?target=hub";
-    const HUB_DASHBOARD_URL = "https://molten.bot/hub";
+    const HUB_LOGIN_URL = "https://app.molten.bot/signin?target=hub";
+    const HUB_DASHBOARD_URL = "https://app.molten.bot/hub";
     const COMPLETED_STATUSES = new Set(["ok", "no_changes", "error", "invalid", "duplicate", "stopped"]);
     const TASK_PROGRESS_STEPS = [
       { id: "received", label: "Task Received", detail: "Dispatch accepted by hub.", icon: "moltenhub" },
@@ -498,6 +567,26 @@
       };
     }
 
+    function normalizeHubSetup(raw) {
+      const hub = raw && typeof raw === "object" ? raw : {};
+      const profile = hub.profile && typeof hub.profile === "object" ? hub.profile : {};
+      return {
+        configured: Boolean(hub.configured),
+        agentMode: String(hub.agent_mode || hub.agentMode || "").trim() || "existing",
+        tokenType: String(hub.token_type || hub.tokenType || "").trim() || "bind",
+        handle: String(hub.handle || "").trim(),
+        profile: {
+          bio: String(profile.bio || "").trim(),
+          displayName: String(profile.display_name || profile.displayName || "").trim(),
+          emoji: String(profile.emoji || "").trim(),
+        },
+        connectURL: String(hub.connect_url || hub.connectURL || HUB_LOGIN_URL).trim() || HUB_LOGIN_URL,
+        dashboardURL: String(hub.dashboard_url || hub.dashboardURL || HUB_DASHBOARD_URL).trim() || HUB_DASHBOARD_URL,
+        message: String(hub.message || "").trim(),
+        needsRestart: Boolean(hub.needs_restart || hub.needsRestart),
+      };
+    }
+
     function agentAuthLabel(harness) {
       const normalized = String(harness || "").trim().toLowerCase();
       if (normalized === "codex") return "Codex";
@@ -574,6 +663,7 @@
     const state = {
       ui: normalizeUIConfig(window.__HUB_UI_CONFIG__),
       agentAuth: normalizeAgentAuth({ required: false, ready: true, state: "ready" }),
+      hubSetup: normalizeHubSetup({ configured: false }),
       snapshot: null,
       selectedTaskId: "",
       dismissedTaskIDs: loadDismissedTaskIDs(),
@@ -599,6 +689,8 @@
       agentAuthBrowserCode: "",
       agentAuthLastAutoSubmittedCode: "",
       agentAuthURLLogoBroken: false,
+      hubSetupBusy: false,
+      hubSetupOpen: false,
     };
     let agentAuthRefreshTimer = null;
     let agentAuthAutoSubmitTimer = null;
@@ -642,6 +734,8 @@
     const promptModeLibrary = document.getElementById("prompt-mode-library");
     const promptModeJSON = document.getElementById("prompt-mode-json");
     const githubProfileLink = document.getElementById("github-profile-link");
+    const moltenBotHubLink = document.getElementById("moltenbot-hub-link");
+    const moltenBotHubPlus = document.getElementById("moltenbot-hub-plus");
     const promptBuilderPanel = document.getElementById("prompt-builder-panel");
     const promptLibraryPanel = document.getElementById("prompt-library-panel");
     const promptRawPanel = document.getElementById("prompt-raw-panel");
@@ -666,6 +760,23 @@
     const promptWrap = document.querySelector(".prompt-wrap");
     const promptVisibilityToggle = document.getElementById("prompt-visibility-toggle");
     const agentAuthGate = document.getElementById("agent-auth-gate");
+    const hubSetupGate = document.getElementById("hub-setup-gate");
+    const hubSetupForm = document.getElementById("hub-setup-form");
+    const hubSetupMessage = document.getElementById("hub-setup-message");
+    const hubSetupClose = document.getElementById("hub-setup-close");
+    const hubSetupExistingToggle = document.getElementById("hub-setup-existing-toggle");
+    const hubSetupNewToggle = document.getElementById("hub-setup-new-toggle");
+    const hubSetupBindToggle = document.getElementById("hub-setup-bind-toggle");
+    const hubSetupAgentToggle = document.getElementById("hub-setup-agent-toggle");
+    const hubSetupToken = document.getElementById("hub-setup-token");
+    const hubSetupNewAgentFields = document.getElementById("hub-setup-new-agent-fields");
+    const hubSetupHandle = document.getElementById("hub-setup-handle");
+    const hubSetupDisplayName = document.getElementById("hub-setup-display-name");
+    const hubSetupEmoji = document.getElementById("hub-setup-emoji");
+    const hubSetupBio = document.getElementById("hub-setup-bio");
+    const hubSetupSigninLink = document.getElementById("hub-setup-signin-link");
+    const hubSetupStatus = document.getElementById("hub-setup-status");
+    const hubSetupSubmit = document.getElementById("hub-setup-submit");
     const moltenHubLogo = document.getElementById("moltenhub-logo");
     const configuredAgentLogo = document.getElementById("configured-agent-logo");
     const configuredAgentGorillaSubtitle = document.getElementById("configured-agent-gorilla-subtitle");
@@ -989,10 +1100,188 @@
       hubConnItem.setAttribute("data-href", href);
     }
 
+    function setHubSetupStatus(kind, text) {
+      if (!hubSetupStatus) return;
+      hubSetupStatus.className = kind ? `submit-status submit-status-inline ${kind}` : "submit-status submit-status-inline";
+      hubSetupStatus.textContent = String(text || "").trim();
+    }
+
+    function setHubSetupBusy(busy) {
+      state.hubSetupBusy = Boolean(busy);
+      if (hubSetupToken) hubSetupToken.disabled = state.hubSetupBusy;
+      if (hubSetupHandle) hubSetupHandle.disabled = state.hubSetupBusy;
+      if (hubSetupDisplayName) hubSetupDisplayName.disabled = state.hubSetupBusy;
+      if (hubSetupEmoji) hubSetupEmoji.disabled = state.hubSetupBusy;
+      if (hubSetupBio) hubSetupBio.disabled = state.hubSetupBusy;
+      if (hubSetupSubmit) hubSetupSubmit.disabled = state.hubSetupBusy;
+    }
+
+    function applyHubDockState() {
+      if (moltenBotHubPlus) {
+        moltenBotHubPlus.classList.toggle("hidden", state.hubSetup.configured);
+      }
+      if (moltenBotHubLink) {
+        const targetURL = state.hubSetup.configured ? state.hubSetup.dashboardURL : state.hubSetup.connectURL;
+        moltenBotHubLink.href = targetURL || HUB_LOGIN_URL;
+        const title = state.hubSetup.configured ? "Open Molten Bot Hub in a new window" : "Configure Molten Hub";
+        moltenBotHubLink.title = title;
+        moltenBotHubLink.setAttribute("aria-label", title);
+      }
+    }
+
+    function applyHubSetupState(nextState) {
+      state.hubSetup = normalizeHubSetup(nextState);
+      if (hubSetupSigninLink) {
+        hubSetupSigninLink.href = state.hubSetup.connectURL;
+      }
+      if (hubSetupMessage) {
+        hubSetupMessage.textContent = state.hubSetup.message || "Save either a bind token or an agent token, then restart this runtime to enable remote Hub transport.";
+      }
+      if (hubSetupHandle) {
+        hubSetupHandle.value = state.hubSetup.handle || "";
+      }
+      if (hubSetupDisplayName) {
+        hubSetupDisplayName.value = state.hubSetup.profile.displayName || "";
+      }
+      if (hubSetupEmoji) {
+        hubSetupEmoji.value = state.hubSetup.profile.emoji || "";
+      }
+      if (hubSetupBio) {
+        hubSetupBio.value = state.hubSetup.profile.bio || "";
+      }
+
+      const isNew = state.hubSetup.agentMode === "new";
+      const isBind = state.hubSetup.tokenType !== "agent";
+      if (hubSetupExistingToggle) {
+        hubSetupExistingToggle.classList.toggle("active", !isNew);
+        hubSetupExistingToggle.setAttribute("aria-pressed", String(!isNew));
+      }
+      if (hubSetupNewToggle) {
+        hubSetupNewToggle.classList.toggle("active", isNew);
+        hubSetupNewToggle.setAttribute("aria-pressed", String(isNew));
+      }
+      if (hubSetupBindToggle) {
+        hubSetupBindToggle.classList.toggle("active", isBind);
+        hubSetupBindToggle.setAttribute("aria-pressed", String(isBind));
+      }
+      if (hubSetupAgentToggle) {
+        hubSetupAgentToggle.classList.toggle("active", !isBind);
+        hubSetupAgentToggle.setAttribute("aria-pressed", String(!isBind));
+      }
+      if (hubSetupNewAgentFields) {
+        hubSetupNewAgentFields.classList.toggle("hidden", !isNew);
+      }
+      if (hubSetupToken) {
+        hubSetupToken.placeholder = isBind ? "Paste bind token" : "Paste agent token";
+      }
+      applyHubDockState();
+      renderHubConnection(state.snapshot);
+    }
+
+    function setHubSetupOpen(open) {
+      state.hubSetupOpen = Boolean(open);
+      if (hubSetupGate) {
+        hubSetupGate.classList.toggle("hidden", !state.hubSetupOpen);
+        hubSetupGate.classList.toggle("flex", state.hubSetupOpen);
+        hubSetupGate.setAttribute("aria-hidden", state.hubSetupOpen ? "false" : "true");
+      }
+      if (!state.hubSetupOpen) {
+        setHubSetupStatus("", "");
+      }
+    }
+
+    async function loadHubSetupStatus() {
+      try {
+        const response = await fetch("/api/hub-setup", { cache: "no-store" });
+        let body = null;
+        try {
+          body = await response.json();
+        } catch (_err) {
+          body = null;
+        }
+        if (!response.ok) {
+          throw new Error(body?.error || `hub setup http ${response.status}`);
+        }
+        applyHubSetupState(body?.hub);
+      } catch (err) {
+        applyHubSetupState({
+          configured: false,
+          message: err && err.message ? `Hub setup status failed: ${err.message}` : "Hub setup status failed.",
+        });
+      }
+    }
+
+    function currentHubSetupPayload() {
+      return {
+        agent_mode: state.hubSetup.agentMode === "new" ? "new" : "existing",
+        token_type: state.hubSetup.tokenType === "agent" ? "agent" : "bind",
+        token: String(hubSetupToken?.value || "").trim(),
+        handle: String(hubSetupHandle?.value || "").trim(),
+        profile: {
+          bio: String(hubSetupBio?.value || "").trim(),
+          display_name: String(hubSetupDisplayName?.value || "").trim(),
+          emoji: String(hubSetupEmoji?.value || "").trim(),
+        },
+      };
+    }
+
+    function currentHubSetupDraft(overrides = {}) {
+      const payload = currentHubSetupPayload();
+      return {
+        ...state.hubSetup,
+        agentMode: payload.agent_mode,
+        tokenType: payload.token_type,
+        handle: payload.handle,
+        profile: {
+          bio: payload.profile.bio,
+          displayName: payload.profile.display_name,
+          emoji: payload.profile.emoji,
+        },
+        ...overrides,
+      };
+    }
+
+    async function submitHubSetup(event) {
+      if (event && typeof event.preventDefault === "function") {
+        event.preventDefault();
+      }
+      const payload = currentHubSetupPayload();
+      if (!payload.token) {
+        setHubSetupStatus("error", `${payload.token_type === "agent" ? "Agent" : "Bind"} token is required.`);
+        return;
+      }
+
+      setHubSetupBusy(true);
+      setHubSetupStatus("warn", "Saving Molten Hub setup...");
+      try {
+        const response = await fetch("/api/hub-setup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        let body = null;
+        try {
+          body = await response.json();
+        } catch (_err) {
+          body = null;
+        }
+        if (!response.ok) {
+          throw new Error(body?.error || `hub setup http ${response.status}`);
+        }
+        applyHubSetupState(body?.hub);
+        setHubSetupStatus("ok", state.hubSetup.message || "Molten Hub setup saved.");
+        if (hubSetupToken) {
+          hubSetupToken.value = "";
+        }
+      } catch (err) {
+        setHubSetupStatus("error", err && err.message ? err.message : "Hub setup failed.");
+      } finally {
+        setHubSetupBusy(false);
+      }
+    }
+
     function openHubConnectPage() {
-      const hubURL = hubConnItem && typeof hubConnItem.getAttribute === "function"
-        ? (hubConnItem.getAttribute("data-href") || HUB_LOGIN_URL)
-        : HUB_LOGIN_URL;
+      const hubURL = state.hubSetup.configured ? state.hubSetup.dashboardURL : state.hubSetup.connectURL;
       if (typeof window.open === "function") {
         window.open(hubURL, "_blank", "noopener,noreferrer");
         return;
@@ -1006,6 +1295,10 @@
       }
       if (event) {
         event.preventDefault();
+      }
+      if (!state.hubSetup.configured) {
+        setHubSetupOpen(true);
+        return;
       }
       openHubConnectPage();
     }
@@ -1904,8 +2197,14 @@
       const connected = mode === "ws" || mode === "http_long_poll" || mode === "connected";
       const online = mode === "ws" || mode === "http_long_poll";
       const actionable = connected || mode === "disconnected";
-      const targetURL = connected ? HUB_DASHBOARD_URL : (mode === "disconnected" ? HUB_LOGIN_URL : "");
-      text = mode === "disconnected" ? "Connect to Molten Hub" : text;
+      const targetURL = connected || state.hubSetup.configured
+        ? state.hubSetup.dashboardURL
+        : state.hubSetup.connectURL;
+      if (mode === "disconnected" && !text) {
+        text = state.hubSetup.configured
+          ? "Configured locally. Restart runtime to connect."
+          : "Connect to Molten Hub";
+      }
       setIndicator(hubConnItem, hubConnDot, hubConnText, "Molten Hub", online, text);
       applyHubDotMode(mode);
       setHubConnectionActionable(actionable, targetURL);
@@ -1943,7 +2242,11 @@
         return;
       }
 
-      setHubConnection("disconnected", "Connecting...");
+      if (state.hubSetup.configured) {
+        setHubConnection("disconnected", "Configured locally. Restart runtime to connect.");
+        return;
+      }
+      setHubConnection("disconnected", "Connect to Molten Hub");
     }
 
     function formatMetricValue(label, value, suffix) {
@@ -3745,6 +4048,7 @@
 
     async function loadInitial() {
       try {
+        await loadHubSetupStatus();
         await loadAgentAuthStatus();
         await loadGitHubProfileLink();
         await loadLibraryTasks();
@@ -3986,6 +4290,43 @@
         }
       });
     }
+    if (moltenBotHubLink) {
+      moltenBotHubLink.addEventListener("click", (event) => {
+        if (state.hubSetup.configured) {
+          return;
+        }
+        event.preventDefault();
+        setHubSetupOpen(true);
+      });
+    }
+    if (hubSetupExistingToggle) {
+      hubSetupExistingToggle.addEventListener("click", () => {
+        applyHubSetupState(currentHubSetupDraft({ agentMode: "existing" }));
+      });
+    }
+    if (hubSetupNewToggle) {
+      hubSetupNewToggle.addEventListener("click", () => {
+        applyHubSetupState(currentHubSetupDraft({ agentMode: "new" }));
+      });
+    }
+    if (hubSetupBindToggle) {
+      hubSetupBindToggle.addEventListener("click", () => {
+        applyHubSetupState(currentHubSetupDraft({ tokenType: "bind" }));
+      });
+    }
+    if (hubSetupAgentToggle) {
+      hubSetupAgentToggle.addEventListener("click", () => {
+        applyHubSetupState(currentHubSetupDraft({ tokenType: "agent" }));
+      });
+    }
+    if (hubSetupClose) {
+      hubSetupClose.addEventListener("click", () => {
+        setHubSetupOpen(false);
+      });
+    }
+    if (hubSetupForm) {
+      hubSetupForm.addEventListener("submit", submitHubSetup);
+    }
     window.__hubAuthVerifyClick = (event) => {
       if (event && typeof event.preventDefault === "function") {
         event.preventDefault();
@@ -4008,6 +4349,11 @@
       if (event.key === "Escape" && state.taskFullscreenOpen) {
         event.preventDefault();
         setTaskFullscreen(false);
+        return;
+      }
+      if (event.key === "Escape" && state.hubSetupOpen) {
+        event.preventDefault();
+        setHubSetupOpen(false);
       }
     });
 
@@ -4067,6 +4413,7 @@
     applyPromptVisibility();
     renderConfiguredAgent();
     applyAgentAuthGate(state.agentAuth);
+    applyHubSetupState(state.hubSetup);
     loadInitial();
     startStream();
   </script>
