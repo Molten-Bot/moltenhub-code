@@ -112,6 +112,7 @@
   --surface-auth-link: #8dc6ff;
   --surface-auth-verify-bg: #173d2b;
   --surface-auth-verify-hover-bg: #1f533a;
+  --surface-auth-verify-text: #ffffff;
   --radius: 6px;
   --glass-bg: rgba(255, 255, 255, 0.45);
   --glass-border: rgba(255, 255, 255, 0.5);
@@ -2215,7 +2216,7 @@ select.prompt-control {
 .agent-auth-verify {
   border-color: var(--border);
   background: var(--surface-auth-verify-bg);
-  color: var(--text);
+  color: var(--surface-auth-verify-text);
 }
 
 .agent-auth-verify:hover,
