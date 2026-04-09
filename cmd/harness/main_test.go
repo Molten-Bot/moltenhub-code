@@ -1022,6 +1022,8 @@ func TestConfigureHubSetupExistingAgentReturnsLoginVerificationFailure(t *testin
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
+		case r.Method == http.MethodPost && (r.URL.Path == "/v1/agents/bind-tokens" || r.URL.Path == "/v1/agents/bind"):
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		default:
