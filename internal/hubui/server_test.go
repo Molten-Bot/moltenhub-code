@@ -1493,12 +1493,19 @@ func TestHandlerTaskRerunAccepted(t *testing.T) {
 	requestID := "req-100"
 	payload := `{"repo":"git@github.com:acme/repo.git","baseBranch":"main","targetSubdir":".","prompt":"rerun this"}`
 	b.RecordTaskRunConfig(requestID, []byte(payload))
+	b.IngestLog("dispatch status=start request_id=req-100")
+	b.IngestLog("dispatch status=ok request_id=req-100 workspace=/tmp/run branch=moltenhub-rerun")
 
 	var gotBody string
+	var closeCalls []string
 	srv := NewServer("", b)
 	srv.SubmitLocalPrompt = func(_ context.Context, body []byte) (string, error) {
 		gotBody = string(body)
 		return "local-456", nil
+	}
+	srv.CloseTask = func(_ context.Context, requestID string) error {
+		closeCalls = append(closeCalls, requestID)
+		return nil
 	}
 
 	ts := httptest.NewServer(srv.Handler())
@@ -1532,6 +1539,15 @@ func TestHandlerTaskRerunAccepted(t *testing.T) {
 	}
 	if gotRerunOf, _ := body["rerun_of"].(string); gotRerunOf != requestID {
 		t.Fatalf("rerun_of = %q, want %q", gotRerunOf, requestID)
+	}
+	if len(closeCalls) != 1 || closeCalls[0] != requestID {
+		t.Fatalf("close calls = %v, want [%s]", closeCalls, requestID)
+	}
+	if _, ok := b.TaskRunConfig(requestID); ok {
+		t.Fatalf("TaskRunConfig(%q) found after rerun, want closed", requestID)
+	}
+	if got := len(b.Snapshot().Tasks); got != 0 {
+		t.Fatalf("len(tasks) after rerun = %d, want 0", got)
 	}
 }
 
@@ -1580,6 +1596,51 @@ func TestHandlerTaskRerunUsesDedicatedSubmitterWhenConfigured(t *testing.T) {
 	}
 	if gotForce {
 		t.Fatal("force = true, want false")
+	}
+}
+
+func TestHandlerTaskRerunLeavesIncompleteSourceTaskVisible(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-rerun-running"
+	payload := `{"repo":"git@github.com:acme/repo.git","baseBranch":"main","targetSubdir":".","prompt":"rerun this"}`
+	b.RecordTaskRunConfig(requestID, []byte(payload))
+	b.IngestLog("dispatch status=start request_id=req-rerun-running")
+
+	var cleanupCalls int
+	srv := NewServer("", b)
+	srv.SubmitLocalPrompt = func(_ context.Context, body []byte) (string, error) {
+		if string(body) != payload {
+			t.Fatalf("submitted body = %q, want %q", string(body), payload)
+		}
+		return "local-457", nil
+	}
+	srv.CloseTask = func(_ context.Context, requestID string) error {
+		cleanupCalls++
+		return nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/"+requestID+"/rerun", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/%s/rerun error = %v", requestID, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusAccepted)
+	}
+	if cleanupCalls != 0 {
+		t.Fatalf("cleanup calls = %d, want 0", cleanupCalls)
+	}
+	if _, ok := b.TaskRunConfig(requestID); !ok {
+		t.Fatalf("TaskRunConfig(%q) missing after rerun of incomplete task", requestID)
+	}
+	if got := len(b.Snapshot().Tasks); got != 1 {
+		t.Fatalf("len(tasks) after rerun of incomplete task = %d, want 1", got)
 	}
 }
 

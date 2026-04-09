@@ -729,12 +729,30 @@ func (s Server) handleTaskRerun(w http.ResponseWriter, r *http.Request, requestI
 		return
 	}
 
+	s.closeTaskAfterRerun(r.Context(), requestID)
+
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"ok":         true,
 		"forced":     force,
 		"request_id": newRequestID,
 		"rerun_of":   requestID,
 	})
+}
+
+func (s Server) closeTaskAfterRerun(ctx context.Context, requestID string) {
+	if s.Broker == nil {
+		return
+	}
+	if err := s.Broker.CloseTask(requestID); err != nil {
+		s.logf("hub.ui status=warn event=task_rerun_close request_id=%s err=%q", requestID, err)
+		return
+	}
+	if s.CloseTask == nil {
+		return
+	}
+	if err := s.CloseTask(ctx, requestID); err != nil {
+		s.logf("hub.ui status=warn event=task_rerun_cleanup request_id=%s err=%q", requestID, err)
+	}
 }
 
 func (s Server) handleTaskClose(w http.ResponseWriter, r *http.Request, requestID string) {
