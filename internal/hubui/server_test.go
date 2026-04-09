@@ -557,14 +557,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "Connected via HTTP long polling") {
 		t.Fatalf("expected index html to include HTTP long-polling connection copy")
 	}
-	if !strings.Contains(markup, `const HUB_LOGIN_URL = "https://molten.bot/login/?target=hub";`) {
+	if !strings.Contains(markup, `const HUB_LOGIN_URL = "https://app.molten.bot/signin?target=hub";`) {
 		t.Fatalf("expected index html to define the molten hub login url for disconnected runtimes")
 	}
-	if !strings.Contains(markup, `const HUB_DASHBOARD_URL = "https://molten.bot/hub";`) {
+	if !strings.Contains(markup, `const HUB_DASHBOARD_URL = "https://app.molten.bot/hub";`) {
 		t.Fatalf("expected index html to define the molten hub dashboard url for connected runtimes")
 	}
-	if !strings.Contains(markup, `text = mode === "disconnected" ? "Connect to Molten Hub" : text;`) {
-		t.Fatalf("expected index html to render connect CTA copy when hub is disconnected")
+	if !strings.Contains(markup, `text = state.hubSetup.configured`) {
+		t.Fatalf("expected index html to tailor disconnected hub copy based on saved setup state")
 	}
 	if !strings.Contains(markup, `hubConnItem.addEventListener("click", maybeOpenHubConnectPage);`) {
 		t.Fatalf("expected index html to open the molten hub app when the disconnected indicator is clicked")
@@ -572,7 +572,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `window.open(hubURL, "_blank", "noopener,noreferrer");`) {
 		t.Fatalf("expected index html to open the current molten hub target in a new page")
 	}
-	if !strings.Contains(markup, `const targetURL = connected ? HUB_DASHBOARD_URL : (mode === "disconnected" ? HUB_LOGIN_URL : "");`) {
+	if !strings.Contains(markup, `const targetURL = connected || state.hubSetup.configured`) {
 		t.Fatalf("expected index html to switch hub indicator targets based on connection state")
 	}
 	if !strings.Contains(markup, `hubConnItem.setAttribute("data-href", href);`) {
