@@ -1599,7 +1599,7 @@ func TestHandlerLibraryRunSubmitAccepted(t *testing.T) {
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
-	payload := `{"repo":"git@github.com:acme/repo.git","branch":"main","libraryTaskName":"unit-test-coverage"}`
+	payload := `{"repos":["git@github.com:acme/repo.git","git@github.com:acme/repo-two.git"],"branch":"main","libraryTaskName":"unit-test-coverage"}`
 	resp, err := http.Post(ts.URL+"/api/library/run", "application/json", bytes.NewBufferString(payload))
 	if err != nil {
 		t.Fatalf("POST /api/library/run error = %v", err)

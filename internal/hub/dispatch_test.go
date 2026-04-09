@@ -409,6 +409,35 @@ func TestParseRunConfigJSONExpandsLibraryTaskPayload(t *testing.T) {
 	}
 }
 
+func TestParseRunConfigJSONExpandsLibraryTaskPayloadWithReposArray(t *testing.T) {
+	// This test resolves the on-disk library catalog and must not race tests that
+	// temporarily change process working directory.
+
+	cfg, err := ParseRunConfigJSON([]byte(`{
+		"repos": [
+			"git@github.com:acme/repo-one.git",
+			"git@github.com:acme/repo-two.git"
+		],
+		"branch": "release",
+		"libraryTaskName": "unit-test-coverage"
+	}`))
+	if err != nil {
+		t.Fatalf("ParseRunConfigJSON() error = %v", err)
+	}
+	if got, want := len(cfg.Repos), 2; got != want {
+		t.Fatalf("len(Repos) = %d, want %d", got, want)
+	}
+	if got, want := cfg.RepoURL, "git@github.com:acme/repo-one.git"; got != want {
+		t.Fatalf("RepoURL = %q, want %q", got, want)
+	}
+	if got, want := cfg.BaseBranch, "release"; got != want {
+		t.Fatalf("BaseBranch = %q, want %q", got, want)
+	}
+	if got := cfg.Prompt; !strings.Contains(got, "100% unit-test coverage") {
+		t.Fatalf("Prompt = %q", got)
+	}
+}
+
 func TestParseRunConfigJSONExpandsLibraryTaskPayloadAndPreservesReviewConfig(t *testing.T) {
 	cfg, err := ParseRunConfigJSON([]byte(`{
 		"repo": "git@github.com:acme/repo.git",

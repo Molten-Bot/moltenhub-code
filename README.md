@@ -246,7 +246,10 @@ Library-backed runs can also use:
 
 ```json
 {
-  "repo": "git@github.com:Molten-Bot/moltenhub-code.git",
+  "repos": [
+    "git@github.com:Molten-Bot/moltenhub.git",
+    "git@github.com:Molten-Bot/moltenhub-code.git"
+  ],
   "branch": "main",
   "libraryTaskName": "unit-test-coverage"
 }

@@ -448,12 +448,11 @@ func normalizeRunConfigAliases(m map[string]any) error {
 
 func expandLibraryTaskRunConfig(m map[string]any, taskName string) (map[string]any, error) {
 	repo := firstNonEmpty(stringAtAny(m, "repo", "repoUrl"))
+	repos := nonEmptyStringArray(m["repos"])
 	if repo == "" {
-		repos := nonEmptyStringArray(m["repos"])
-		if len(repos) > 1 {
-			return nil, fmt.Errorf("library task payload supports exactly one repository")
-		}
 		if len(repos) == 1 {
+			repo = repos[0]
+		} else if len(repos) > 1 {
 			repo = repos[0]
 		}
 	}
@@ -478,6 +477,9 @@ func expandLibraryTaskRunConfig(m map[string]any, taskName string) (map[string]a
 			continue
 		}
 		expanded[key] = value
+	}
+	if len(repos) > 0 {
+		expanded["repos"] = repos
 	}
 	return expanded, nil
 }

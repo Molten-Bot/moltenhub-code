@@ -10,7 +10,11 @@
   "githubHandle": "octocat",
   "prompt": "Add your prompt here."
   // library task example:
-  // "libraryTaskName": "code-review",
+  // "repos": [
+  //   "git@github.com:Molten-Bot/moltenhub.git",
+  //   "git@github.com:Molten-Bot/moltenhub-code.git"
+  // ],
+  // "libraryTaskName": "unit-test-coverage",
   // "review": {
   //   "prNumber": 123
   // }
