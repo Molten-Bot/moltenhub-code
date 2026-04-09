@@ -1220,8 +1220,11 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".dot.disconnected") {
 		t.Fatalf("expected stylesheet to include disconnected dot styles")
 	}
-	if strings.Contains(css, "cursor:") {
-		t.Fatalf("expected stylesheet to avoid custom cursor styles")
+	if !strings.Contains(css, ".theme-toggle {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;") || !strings.Contains(css, "  cursor: pointer;\n") {
+		t.Fatalf("expected stylesheet to use a pointer cursor for the interactive theme toggle")
+	}
+	if strings.Count(css, "cursor:") != 1 {
+		t.Fatalf("expected stylesheet to avoid additional custom cursor styles")
 	}
 	if strings.Contains(css, "cursor-not-allowed") {
 		t.Fatalf("expected stylesheet to avoid cursor utility classes")
