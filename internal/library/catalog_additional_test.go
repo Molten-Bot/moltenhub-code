@@ -88,3 +88,56 @@ func TestResolveCatalogDirKeepsExistingRelativeCatalogPath(t *testing.T) {
 		t.Fatalf("resolveCatalogDir(existing relative) = %q, want %q", got, rel)
 	}
 }
+
+func TestResolveCatalogDirUsesConfiguredLibraryDirEnv(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd() error = %v", err)
+	}
+	tmp := t.TempDir()
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatalf("Chdir(%q) error = %v", tmp, err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(wd) })
+
+	catalogDir := filepath.Join(t.TempDir(), "container-library")
+	if err := os.MkdirAll(catalogDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(catalogDir) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(catalogDir, "task.json"), []byte(`{"name":"x","prompt":"p"}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(task) error = %v", err)
+	}
+	t.Setenv(catalogDirEnv, catalogDir)
+
+	if got := resolveCatalogDir(DefaultDir); got != catalogDir {
+		t.Fatalf("resolveCatalogDir(DefaultDir) = %q, want %q", got, catalogDir)
+	}
+}
+
+func TestResolveCatalogDirUsesAgentsSeedEnvFallback(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd() error = %v", err)
+	}
+	tmp := t.TempDir()
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatalf("Chdir(%q) error = %v", tmp, err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(wd) })
+
+	catalogDir := filepath.Join(t.TempDir(), "seeded-library")
+	if err := os.MkdirAll(catalogDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(catalogDir) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(catalogDir, "AGENTS.md"), []byte("# seed"), 0o644); err != nil {
+		t.Fatalf("WriteFile(AGENTS.md) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(catalogDir, "task.json"), []byte(`{"name":"x","prompt":"p"}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(task) error = %v", err)
+	}
+	t.Setenv(agentsSeedEnv, filepath.Join(catalogDir, "AGENTS.md"))
+
+	if got := resolveCatalogDir(DefaultDir); got != catalogDir {
+		t.Fatalf("resolveCatalogDir(DefaultDir) = %q, want %q", got, catalogDir)
+	}
+}

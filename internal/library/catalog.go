@@ -15,6 +15,11 @@ import (
 
 const DefaultDir = "library"
 
+const (
+	catalogDirEnv = "HARNESS_LIBRARY_DIR"
+	agentsSeedEnv = "HARNESS_AGENTS_SEED_PATH"
+)
+
 // TaskDefinition is one callable library entry loaded from ./library/*.json.
 type TaskDefinition struct {
 	Name          string   `json:"name"`
@@ -286,6 +291,9 @@ func resolveCatalogDir(dir string) string {
 	if isCatalogDir(dir) {
 		return dir
 	}
+	if path := catalogDirFromEnv(); path != "" {
+		return path
+	}
 	if wd, err := os.Getwd(); err == nil {
 		if path, ok := findDirUpward(wd, dir); ok {
 			return path
@@ -307,6 +315,50 @@ func resolveCatalogDir(dir string) string {
 		}
 	}
 	return dir
+}
+
+func catalogDirFromEnv() string {
+	if configured := strings.TrimSpace(os.Getenv(catalogDirEnv)); configured != "" {
+		if path := catalogDirFromHint(configured); path != "" {
+			return path
+		}
+	}
+	if seedPath := strings.TrimSpace(os.Getenv(agentsSeedEnv)); seedPath != "" {
+		if path := catalogDirFromHint(seedPath); path != "" {
+			return path
+		}
+	}
+	return ""
+}
+
+func catalogDirFromHint(rawPath string) string {
+	rawPath = strings.TrimSpace(rawPath)
+	if rawPath == "" {
+		return ""
+	}
+
+	if st, err := os.Stat(rawPath); err == nil {
+		if st.IsDir() {
+			if isCatalogDir(rawPath) {
+				return rawPath
+			}
+			return ""
+		}
+		parent := filepath.Dir(rawPath)
+		if isCatalogDir(parent) {
+			return parent
+		}
+		return ""
+	}
+
+	candidate := rawPath
+	if filepath.Ext(rawPath) != "" {
+		candidate = filepath.Dir(rawPath)
+	}
+	if isCatalogDir(candidate) {
+		return candidate
+	}
+	return ""
 }
 
 func findDirUpward(startDir, relPath string) (string, bool) {

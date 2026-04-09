@@ -273,6 +273,7 @@ Local-only behavior:
 - If Hub ping precheck fails with `--ui-listen ""` and Hub credentials are configured, `harness hub` continues remote startup (the ping probe can be transient).
 - If Hub ping precheck fails with `--ui-listen ""` and Hub credentials are not configured, startup exits successfully with a headless no-op local-only status.
 - In local-only mode, the monitor UI and `/api/local-prompt` remain available for local runs, and remote Hub transport is skipped.
+- Library mode in the monitor UI loads task definitions from `/api/library` and submits selected catalog tasks via `/api/library/run`.
 
 Runtime-owned fields:
 

@@ -557,6 +557,7 @@
       selectedTaskId: "",
       dismissedTaskIDs: loadDismissedTaskIDs(),
       libraryTasks: [],
+      libraryLoadError: "",
       repoHistory: loadRepoHistory(),
       promptMode: loadPromptMode(),
       selectedLibraryTask: "",
@@ -2219,7 +2220,7 @@
       if (!entries.length) {
         const empty = document.createElement("div");
         empty.className = "library-task-empty";
-        empty.textContent = "No library tasks are available.";
+        empty.textContent = state.libraryLoadError || "No library tasks are available.";
         libraryTaskList.appendChild(empty);
         return;
       }
@@ -3497,15 +3498,25 @@
     }
 
     async function loadLibraryTasks() {
+      state.libraryLoadError = "";
       try {
         const response = await fetch("/api/library", { cache: "no-store" });
-        if (!response.ok) {
-          throw new Error(`library http ${response.status}`);
+        let body = null;
+        try {
+          body = await response.json();
+        } catch (_err) {
+          body = null;
         }
-        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(body?.error || `library http ${response.status}`);
+        }
+        if (body && body.ok === false) {
+          throw new Error(body.error || "library request failed");
+        }
         state.libraryTasks = Array.isArray(body?.tasks) ? body.tasks : [];
-      } catch (_err) {
+      } catch (err) {
         state.libraryTasks = [];
+        state.libraryLoadError = err && err.message ? err.message : "Unable to load library tasks.";
       }
       renderLibraryTaskOptions();
     }
@@ -3583,7 +3594,8 @@
       setLocalPromptStatus("warn", "Submitting...");
 
       try {
-        const response = await fetch("/api/local-prompt", {
+        const submitEndpoint = state.promptMode === "library" ? "/api/library/run" : "/api/local-prompt";
+        const response = await fetch(submitEndpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: normalized.compact,
