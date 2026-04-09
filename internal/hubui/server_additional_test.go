@@ -268,6 +268,9 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `.hub-setup-signin-logo {`) {
 		t.Fatalf("expected stylesheet to include the hub setup sign-in logo styles")
 	}
+	if !strings.Contains(stylesheet, `.hub-setup-status {`) {
+		t.Fatalf("expected stylesheet to include centered hub setup status styles")
+	}
 }
 
 func TestStreamEndpointCompactsEventsPayload(t *testing.T) {

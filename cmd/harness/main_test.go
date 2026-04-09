@@ -821,7 +821,7 @@ func TestConfigureHubSetupExistingAgentUsesAgentTokenFlow(t *testing.T) {
 	const agentToken = "a9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
 
 	var getCalls int
-	var offlineCalls int
+	var onlineCalls int
 	var liveCfg hub.InitConfig
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -833,15 +833,12 @@ func TestConfigureHubSetupExistingAgentUsesAgentTokenFlow(t *testing.T) {
 			_, _ = w.Write([]byte(`{"handle":"existing-agent","profile":{"display_name":"Existing Agent","emoji":"🤖","bio":"Owns automation"}}`))
 			return
 		}
-		if r.Method == http.MethodPost && r.URL.Path == "/v1/openclaw/messages/offline" {
-			offlineCalls++
+		if r.Method == http.MethodPatch && r.URL.Path == "/v1/agents/me/status" {
+			onlineCalls++
 			bodyBytes, _ := io.ReadAll(r.Body)
 			body := string(bodyBytes)
-			if !strings.Contains(body, `"session_key":"main"`) || !strings.Contains(body, `"sessionKey":"main"`) {
-				t.Fatalf("offline body = %s, want main session key fields", body)
-			}
-			if !strings.Contains(body, fmt.Sprintf(`"reason":%q`, hubSetupValidationOfflineReason)) {
-				t.Fatalf("offline body = %s, want validation reason", body)
+			if !strings.Contains(body, `"status":"online"`) {
+				t.Fatalf("status body = %s, want online status", body)
 			}
 			_, _ = w.Write([]byte(`{"ok":true}`))
 			return
@@ -875,8 +872,8 @@ func TestConfigureHubSetupExistingAgentUsesAgentTokenFlow(t *testing.T) {
 	if getCalls < 2 {
 		t.Fatalf("GET /agents/me calls = %d, want at least 2", getCalls)
 	}
-	if offlineCalls != 1 {
-		t.Fatalf("POST /openclaw/messages/offline calls = %d, want 1", offlineCalls)
+	if onlineCalls != 1 {
+		t.Fatalf("PATCH /agents/me/status calls = %d, want 1", onlineCalls)
 	}
 	if got, want := state.AgentMode, "existing"; got != want {
 		t.Fatalf("AgentMode = %q, want %q", got, want)
@@ -971,8 +968,8 @@ func TestConfigureHubSetupExistingAgentReturnsLoginVerificationFailure(t *testin
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
 			_, _ = w.Write([]byte(`{"handle":"existing-agent"}`))
-		case r.Method == http.MethodPost && r.URL.Path == "/v1/openclaw/messages/offline":
-			http.Error(w, `{"error":"offline not allowed"}`, http.StatusUnauthorized)
+		case r.Method == http.MethodPatch && r.URL.Path == "/v1/agents/me/status":
+			http.Error(w, `{"error":"status update not allowed"}`, http.StatusUnauthorized)
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
@@ -1011,7 +1008,7 @@ func TestConfigureHubSetupReturnsSavedStateWhenLiveApplyFails(t *testing.T) {
 			_, _ = w.Write([]byte(`{"handle":"existing-agent","profile":{"display_name":"Existing Agent","emoji":"🤖","bio":"Owns automation"}}`))
 			return
 		}
-		if r.Method == http.MethodPost && r.URL.Path == "/v1/openclaw/messages/offline" {
+		if r.Method == http.MethodPatch && r.URL.Path == "/v1/agents/me/status" {
 			_, _ = w.Write([]byte(`{"ok":true}`))
 			return
 		}

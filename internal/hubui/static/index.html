@@ -368,21 +368,21 @@
       <form id="hub-setup-form" class="mt-6 grid gap-4">
         <div class="hub-setup-toggle-row">
           <div class="hub-setup-toggle-heading">
-            <span class="prompt-label">Agent</span>
-          </div>
-          <div class="hub-setup-toggle-group" role="tablist" aria-label="Agent">
-            <button id="hub-setup-existing-toggle" class="hub-setup-toggle active" type="button" data-agent-mode="existing" aria-pressed="true">Existing</button>
-            <button id="hub-setup-new-toggle" class="hub-setup-toggle" type="button" data-agent-mode="new" aria-pressed="false">New</button>
-          </div>
-        </div>
-
-        <div class="hub-setup-toggle-row">
-          <div class="hub-setup-toggle-heading">
             <span class="prompt-label">Region</span>
           </div>
           <div class="hub-setup-toggle-group" role="tablist" aria-label="Region">
             <button id="hub-setup-region-na-toggle" class="hub-setup-toggle active" type="button" data-hub-region="na" aria-pressed="true">NA</button>
             <button id="hub-setup-region-eu-toggle" class="hub-setup-toggle" type="button" data-hub-region="eu" aria-pressed="false">EU</button>
+          </div>
+        </div>
+
+        <div class="hub-setup-toggle-row">
+          <div class="hub-setup-toggle-heading">
+            <span class="prompt-label">Agent</span>
+          </div>
+          <div class="hub-setup-toggle-group" role="tablist" aria-label="Agent">
+            <button id="hub-setup-existing-toggle" class="hub-setup-toggle active" type="button" data-agent-mode="existing" aria-pressed="true">Existing</button>
+            <button id="hub-setup-new-toggle" class="hub-setup-toggle" type="button" data-agent-mode="new" aria-pressed="false">New</button>
           </div>
         </div>
 
@@ -431,7 +431,7 @@
             <span class="sr-only">Open Molten Hub sign-in</span>
           </a>
           <div class="hub-setup-actions">
-            <span id="hub-setup-status" class="submit-status submit-status-inline min-h-[1.3em] text-[0.74rem] leading-[1.3] text-hub-muted"></span>
+            <span id="hub-setup-status" class="hub-setup-status submit-status submit-status-inline min-h-[1.3em] text-[0.74rem] leading-[1.3] text-hub-muted"></span>
             <button id="hub-setup-submit" class="agent-auth-verify !block" type="submit">Done</button>
           </div>
         </div>

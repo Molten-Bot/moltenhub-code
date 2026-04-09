@@ -2373,11 +2373,20 @@ select.prompt-control {
 }
 
 .hub-setup-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
+  column-gap: 14px;
+  row-gap: 10px;
+  width: min(100%, 560px);
+}
+
+.hub-setup-status {
+  grid-column: 1 / -1;
+  justify-self: center;
+  width: min(100%, 52ch);
+  min-height: 2.8em;
+  text-align: center;
 }
 
 .agent-auth-configure-input-github {

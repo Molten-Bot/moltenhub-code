@@ -234,6 +234,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="hub-setup-region-na-toggle"`) || !strings.Contains(markup, `id="hub-setup-region-eu-toggle"`) {
 		t.Fatalf("expected index html to include hub setup region toggles")
 	}
+	if strings.Index(markup, `<span class="prompt-label">Region</span>`) > strings.Index(markup, `<span class="prompt-label">Agent</span>`) {
+		t.Fatalf("expected index html to render the Region row before the Agent row")
+	}
 	if strings.Contains(markup, `id="hub-setup-bind-toggle"`) || strings.Contains(markup, `id="hub-setup-agent-toggle"`) {
 		t.Fatalf("expected index html to remove the separate hub setup token type toggles")
 	}
