@@ -886,7 +886,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `const THEME_ICONS = {`) {
 		t.Fatalf("expected index html to define theme toggle icons")
 	}
-	if !strings.Contains(markup, `themeToggleButton.setAttribute("aria-label", \`Switch theme. Currently: ${currentLabel}\`);`) {
+	if !strings.Contains(markup, "themeToggleButton.setAttribute(\"aria-label\", `Switch theme. Currently: ${currentLabel}`);") {
 		t.Fatalf("expected index html to expose the current theme through the toggle aria-label")
 	}
 	if strings.Contains(markup, `theme-cycle-next`) || strings.Contains(markup, `theme-cycle-current`) || strings.Contains(markup, `Next: Dark`) {
