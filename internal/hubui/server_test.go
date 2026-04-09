@@ -1074,8 +1074,17 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".brand-logo") {
 		t.Fatalf("expected stylesheet to include brand logo styles")
 	}
-	if !strings.Contains(css, ".configured-agent-logo {\n  width: 42px;\n  height: 42px;\n  padding: 7px;\n  border: 0;\n  border-radius: 14px;\n  background: transparent;\n  box-shadow: none;\n  filter: var(--agent-logo-filter);") {
-		t.Fatalf("expected stylesheet to tint rotating configured-agent logos based on active theme")
+	if !strings.Contains(css, ".brand-logo-group {\n  position: relative;\n  width: 56px;\n  height: 56px;\n  flex-shrink: 0;\n}") {
+		t.Fatalf("expected stylesheet to size the rotating header logos to match the title and subtitle stack")
+	}
+	if !strings.Contains(css, ".brand-logo {\n  display: block;\n  padding: 0;\n  border: 0;\n  border-radius: 0;\n  background: transparent;\n  box-shadow: none;\n}") {
+		t.Fatalf("expected stylesheet to keep the moltenhub logo transparent instead of rendering it inside a tile")
+	}
+	if !strings.Contains(css, ".rotating-brand-logo {\n  position: absolute;\n  inset: 0;\n  display: block;\n  width: 100%;\n  height: 100%;") {
+		t.Fatalf("expected stylesheet to make rotating header logos fill the shared logo frame")
+	}
+	if !strings.Contains(css, ".configured-agent-logo {\n  padding: 0;\n  border: 0;\n  border-radius: 0;\n  background: transparent;\n  box-shadow: none;\n  filter: var(--agent-logo-filter);") {
+		t.Fatalf("expected stylesheet to keep rotating configured-agent logos transparent and theme-tinted")
 	}
 	if !strings.Contains(css, ".agent-auth-url-logo {\n  display: block;\n  width: 58px;\n  height: 58px;\n  padding: 9px;\n  border: 0;\n  border-radius: 16px;\n  background: transparent;\n  box-shadow: none;\n  filter: var(--agent-logo-filter);") {
 		t.Fatalf("expected stylesheet to tint auth-gate agent logos based on active theme")
@@ -1116,6 +1125,30 @@ func TestHandlerServesStaticLogoAsset(t *testing.T) {
 	}
 	if body := resp.Body.String(); !strings.Contains(body, "<svg") {
 		t.Fatalf("expected svg payload, got %q", body)
+	}
+}
+
+func TestHandlerServesTransparentMoltenHubLogoAsset(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodGet, "/static/logo.svg", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+	if ct := resp.Header().Get("Content-Type"); !strings.Contains(ct, "image/svg+xml") {
+		t.Fatalf("content-type = %q", ct)
+	}
+
+	body := resp.Body.String()
+	if !strings.Contains(body, "<svg") {
+		t.Fatalf("expected svg payload, got %q", body)
+	}
+	if strings.Contains(body, "<rect") {
+		t.Fatalf("expected moltenhub logo svg to avoid embedded background boxes, got %q", body)
 	}
 }
 

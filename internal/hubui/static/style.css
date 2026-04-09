@@ -239,32 +239,33 @@ textarea {
 
 .brand-logo-group {
   position: relative;
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   flex-shrink: 0;
 }
 
 .brand-logo {
   display: block;
-  width: 48px;
-  height: 48px;
-  flex-shrink: 0;
-  padding: 6px;
-  border: 1px solid rgba(10, 132, 255, 0.18);
-  border-radius: 16px;
-  background: var(--surface-glass-strong);
-  box-shadow: 0 14px 30px rgba(10, 44, 102, 0.12);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .rotating-brand-logo {
   position: absolute;
   inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
   margin: auto;
   opacity: 0;
   visibility: hidden;
   transform: scale(0.96);
   transition: opacity 0.65s ease, transform 0.65s ease, visibility 0.65s ease;
   will-change: opacity, transform;
+  object-fit: contain;
 }
 
 .rotating-brand-logo.brand-logo-visible {
@@ -274,16 +275,12 @@ textarea {
 }
 
 .configured-agent-logo {
-  width: 42px;
-  height: 42px;
-  padding: 7px;
+  padding: 0;
   border: 0;
-  border-radius: 14px;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
   filter: var(--agent-logo-filter);
-  display: block;
-  object-fit: contain;
 }
 
 .title {
@@ -1972,18 +1969,13 @@ select.prompt-control {
   }
 
   .brand-logo {
-    width: 42px;
-    height: 42px;
+    width: 46px;
+    height: 46px;
   }
 
   .brand-logo-group {
-    width: 42px;
-    height: 42px;
-  }
-
-  .configured-agent-logo {
-    width: 38px;
-    height: 38px;
+    width: 46px;
+    height: 46px;
   }
 
   .status-item-compact .status-tooltip {
