@@ -428,6 +428,57 @@ func TestBrokerCloseTaskRemovesCompletedTaskAndRunConfig(t *testing.T) {
 	}
 }
 
+func TestBrokerCloseTaskIgnoresLateCleanupLogs(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-close-cleanup"
+	b.RecordTaskRunConfig(requestID, []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"close me"}`))
+	b.IngestLog("dispatch status=start request_id=req-close-cleanup")
+	b.IngestLog("dispatch status=ok request_id=req-close-cleanup workspace=/tmp/run branch=moltenhub-close-cleanup")
+
+	if err := b.CloseTask(requestID); err != nil {
+		t.Fatalf("CloseTask() error = %v", err)
+	}
+
+	b.IngestLog("dispatch status=ok action=task_close_cleanup request_id=req-close-cleanup log_dir=/tmp/.log/req/close/cleanup")
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 0 {
+		t.Fatalf("len(tasks) after cleanup log = %d, want 0", len(snap.Tasks))
+	}
+}
+
+func TestBrokerClosedTaskTombstoneExpires(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 4, 9, 12, 0, 0, 0, time.UTC)
+	b := NewBroker()
+	b.now = func() time.Time { return now }
+
+	requestID := "req-reuse-after-close"
+	b.IngestLog("dispatch status=stopped request_id=req-reuse-after-close err=\"task stopped by operator\"")
+	if err := b.CloseTask(requestID); err != nil {
+		t.Fatalf("CloseTask() error = %v", err)
+	}
+
+	b.IngestLog("dispatch status=start request_id=req-reuse-after-close")
+	if got := len(b.Snapshot().Tasks); got != 0 {
+		t.Fatalf("len(tasks) before tombstone expiry = %d, want 0", got)
+	}
+
+	now = now.Add(defaultClosedTaskRetention + time.Second)
+	b.IngestLog("dispatch status=start request_id=req-reuse-after-close")
+
+	snap := b.Snapshot()
+	if got := len(snap.Tasks); got != 1 {
+		t.Fatalf("len(tasks) after tombstone expiry = %d, want 1", got)
+	}
+	if got := snap.Tasks[0].RequestID; got != requestID {
+		t.Fatalf("task.RequestID = %q, want %q", got, requestID)
+	}
+}
+
 func TestBrokerCloseTaskRejectsIncompleteTask(t *testing.T) {
 	t.Parallel()
 
