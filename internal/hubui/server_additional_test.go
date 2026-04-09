@@ -1012,3 +1012,24 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 		t.Fatalf("expected Done handler to submit Claude browser code only when a code is provided")
 	}
 }
+
+func TestAuthGateVerifyButtonUsesReadableContrastToken(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodGet, "/static/style.css", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.Code)
+	}
+
+	css := resp.Body.String()
+	if !strings.Contains(css, "--surface-auth-verify-text: #ffffff;") {
+		t.Fatalf("expected auth verify button to define a dedicated readable foreground token")
+	}
+	if !strings.Contains(css, ".agent-auth-verify {\n  border-color: var(--border);\n  background: var(--surface-auth-verify-bg);\n  color: var(--surface-auth-verify-text);\n}") {
+		t.Fatalf("expected auth verify button to use the readable foreground token")
+	}
+}
