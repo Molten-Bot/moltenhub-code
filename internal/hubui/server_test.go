@@ -184,6 +184,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="moltenhub-logo"`) {
 		t.Fatalf("expected index html to include moltenhub logo rotation anchor id")
 	}
+	if !strings.Contains(markup, `id="configured-agent-logo"`) {
+		t.Fatalf("expected index html to include configured agent logo element")
+	}
+	if !strings.Contains(markup, `class="configured-agent-logo rotating-brand-logo"`) {
+		t.Fatalf("expected configured agent logo to use transparent-only logo classes")
+	}
+	if strings.Contains(markup, `class="brand-logo configured-agent-logo`) {
+		t.Fatalf("expected configured agent logo to avoid inheriting the frosted brand tile styles")
+	}
 	if !strings.Contains(markup, `const LOGO_ROTATION_INTERVAL_MS = 8_000;`) {
 		t.Fatalf("expected index html to rotate brand logos every 8 seconds")
 	}

@@ -282,6 +282,8 @@ textarea {
   background: transparent;
   box-shadow: none;
   filter: var(--agent-logo-filter);
+  display: block;
+  object-fit: contain;
 }
 
 .title {
