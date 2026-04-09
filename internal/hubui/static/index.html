@@ -1556,6 +1556,13 @@
       return token;
     }
 
+    function shouldAutoStartClaudeSetupAfterGitHubConfigure(auth) {
+      const current = auth && typeof auth === "object" ? auth : state.agentAuth;
+      const harness = authHarness(current);
+      const gateState = String(current?.state || "").trim().toLowerCase();
+      return harness === "claude" && !current?.ready && gateState === "needs_browser_login";
+    }
+
     async function requestAgentAuth(path, method, requestBody) {
       const init = { method, cache: "no-store" };
       if (requestBody !== undefined) {
@@ -1699,9 +1706,19 @@
       setAgentAuthVerifyPending(true);
       setAgentAuthBusy(true);
       try {
-        const auth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
+        const configuredAuth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
           github_token: token,
         });
+        let auth = configuredAuth;
+        if (shouldAutoStartClaudeSetupAfterGitHubConfigure(configuredAuth)) {
+          try {
+            auth = await requestAgentAuth("/api/agent-auth/start-device", "POST");
+          } catch (startErr) {
+            applyAgentAuthGate(configuredAuth);
+            const detail = startErr && startErr.message ? startErr.message : "Claude setup start failed.";
+            throw new Error(`GitHub token saved, but failed to start Claude setup: ${detail}`);
+          }
+        }
         applyAgentAuthGate(auth);
         if (auth.ready) {
           setAuggieConfigureError("");
