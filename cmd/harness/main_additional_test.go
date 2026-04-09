@@ -480,6 +480,16 @@ func TestShouldQueueFailureFollowUpSkipsNonRemediableErrors(t *testing.T) {
 	if !ok {
 		t.Fatalf("shouldQueueFailureFollowUp(clone failure) = false, want true (reason=%q)", reason)
 	}
+
+	ok, reason = shouldQueueFailureFollowUp(harness.Result{
+		Err: errors.New("git: verify remote write access for repo https://github.com/acme/repo.git branch \"moltenhub-fix\": exit status 128: remote: Write access to repository not granted. fatal: unable to access 'https://github.com/acme/repo.git/': The requested URL returned error: 403"),
+	})
+	if ok {
+		t.Fatalf("shouldQueueFailureFollowUp(repo write access failure) = true, want false")
+	}
+	if !strings.Contains(reason, "write access to repository not granted") {
+		t.Fatalf("reason = %q, want marker containing write access to repository not granted", reason)
+	}
 }
 
 func TestHubPingURLValidationAndCheckHubPingFailures(t *testing.T) {

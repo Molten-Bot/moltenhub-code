@@ -32,22 +32,22 @@ func TestCloneErrorWithDetails(t *testing.T) {
 func TestSummarizeCloneErrorDetail(t *testing.T) {
 	t.Parallel()
 
-	if got := summarizeCloneErrorDetail(execx.Result{}); got != "" {
-		t.Fatalf("summarizeCloneErrorDetail(empty) = %q, want empty", got)
+	if got := summarizeCommandErrorDetail(execx.Result{}, maxCloneErrorDetailChars); got != "" {
+		t.Fatalf("summarizeCommandErrorDetail(empty) = %q, want empty", got)
 	}
 
-	normalized := summarizeCloneErrorDetail(execx.Result{
+	normalized := summarizeCommandErrorDetail(execx.Result{
 		Stderr: "fatal:\r\n  repository\r not   found",
 		Stdout: "\n warning:   check URL ",
-	})
+	}, maxCloneErrorDetailChars)
 	if got, want := normalized, "fatal: repository not found warning: check URL"; got != want {
-		t.Fatalf("summarizeCloneErrorDetail(normalized) = %q, want %q", got, want)
+		t.Fatalf("summarizeCommandErrorDetail(normalized) = %q, want %q", got, want)
 	}
 
 	longInput := strings.Repeat("x", maxCloneErrorDetailChars+40)
-	truncated := summarizeCloneErrorDetail(execx.Result{Stderr: longInput})
+	truncated := summarizeCommandErrorDetail(execx.Result{Stderr: longInput}, maxCloneErrorDetailChars)
 	if !strings.HasSuffix(truncated, "...(truncated)") {
-		t.Fatalf("summarizeCloneErrorDetail(truncated) missing suffix: %q", truncated)
+		t.Fatalf("summarizeCommandErrorDetail(truncated) missing suffix: %q", truncated)
 	}
 	if got, want := len(truncated), maxCloneErrorDetailChars+len("...(truncated)"); got != want {
 		t.Fatalf("len(truncated) = %d, want %d", got, want)

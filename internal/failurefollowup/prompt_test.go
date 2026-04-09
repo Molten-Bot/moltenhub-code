@@ -1,6 +1,7 @@
 package failurefollowup
 
 import (
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -65,5 +66,14 @@ func TestTaskLogPathsBuildsExpectedLegacyAndCurrentFiles(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("TaskLogPaths()[%d] = %q, want %q", i, got[i], want[i])
 		}
+	}
+}
+
+func TestNonRemediableRepoAccessReasonDetectsGitHub403(t *testing.T) {
+	t.Parallel()
+
+	err := errors.New("git: remote: Write access to repository not granted.\nfatal: unable to access 'https://github.com/acme/repo.git/': The requested URL returned error: 403")
+	if got := NonRemediableRepoAccessReason(err); got != "write access to repository not granted" {
+		t.Fatalf("NonRemediableRepoAccessReason() = %q", got)
 	}
 }

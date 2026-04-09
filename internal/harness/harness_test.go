@@ -171,6 +171,7 @@ func TestRunHappyPathCreatesPR(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
@@ -229,6 +230,7 @@ func TestRunPRCreateAlreadyExistsReusesExistingPR(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
@@ -284,6 +286,7 @@ func TestRunBuildsReviewContextBeforeInvokingCodex(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: prReviewMetadataCommand(repoDir, "42"), res: execx.Result{Stdout: metadataJSON}},
 		{cmd: fetchRemoteBranchCommand(repoDir, "main")},
 		{cmd: fetchPullRequestHeadCommand(repoDir, 42)},
@@ -337,6 +340,7 @@ func TestRunWithGitHubTokenRunsAuthSetupGitBeforeCodex(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "setup-git"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
@@ -387,6 +391,7 @@ func TestRunWithPromptImagesUsesCodexDirPaths(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: codexCommandWithOptions(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath), codexRunOptions{
 			ImagePaths: []string{imageArg},
 		})},
@@ -442,6 +447,7 @@ func TestRunNonMainBranchReusesExistingBranchAndPR(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: fetchMainBranchCommand(repoDir)},
+		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
@@ -499,6 +505,7 @@ func TestRunNonMainBranchPushNonFastForwardRetriesWithRebase(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: fetchMainBranchCommand(repoDir)},
+		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch), res: pushRejected, err: errors.New("push rejected")},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
@@ -553,6 +560,7 @@ func TestRunCodexFailureStopsBeforeCommitAndPR(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath)), err: errors.New("codex failed")},
 	}}
 
@@ -570,6 +578,53 @@ func TestRunCodexFailureStopsBeforeCommitAndPR(t *testing.T) {
 	}
 	if !strings.Contains(res.Err.Error(), "codex") {
 		t.Fatalf("error = %v", res.Err)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunRemoteWriteAccessFailureStopsBeforeCodex(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+	push403 := execx.Result{
+		Stderr: "remote: Write access to repository not granted.\nfatal: unable to access 'https://github.com/acme/repo.git/': The requested URL returned error: 403\n",
+	}
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch), res: push403, err: errors.New("exit status 128")},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if res.ExitCode != ExitGit {
+		t.Fatalf("ExitCode = %d, want %d", res.ExitCode, ExitGit)
+	}
+	if !strings.Contains(res.Err.Error(), "verify remote write access") {
+		t.Fatalf("error = %v, want write-access context", res.Err)
+	}
+	if !strings.Contains(res.Err.Error(), "Write access to repository not granted") {
+		t.Fatalf("error = %v, want remote error detail", res.Err)
 	}
 	if len(fake.exps) != 0 {
 		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
@@ -595,6 +650,7 @@ func TestRunNoChangesSkipsPR(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "\n"}},
 		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch)},
@@ -643,6 +699,7 @@ func TestRunNoChangesOnMainReportsExistingPR(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "\n"}},
 		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch), res: execx.Result{Stdout: "abc123\trefs/heads/" + branch + "\n"}},
@@ -698,6 +755,7 @@ func TestRunNonMainBranchNoChangesReportsExistingPR(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: fetchMainBranchCommand(repoDir)},
+		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "\n"}},
 		{cmd: remoteBranchExistsOnOriginCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "abc123\trefs/heads/" + cfg.BaseBranch + "\n"}},
@@ -754,6 +812,7 @@ func TestRunFailedChecksTriggersCodexRemediation(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
@@ -818,6 +877,7 @@ func TestRunFailedChecksWithStaleFailureSnapshotPasses(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
@@ -869,6 +929,7 @@ func TestRunFailedChecksWithNoRemediationChangesFails(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
@@ -921,6 +982,7 @@ func TestRunNoChecksReportedRetriesBeforePassing(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
@@ -982,6 +1044,7 @@ func TestRunNoChecksReportedAfterRetryWindowTriggersRemediation(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
@@ -1058,6 +1121,7 @@ func TestRunNoRequiredChecksFallsBackToAllChecks(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
@@ -1130,6 +1194,8 @@ func TestRunMultiRepoCreatesPRsForEachChangedRepo(t *testing.T) {
 		{cmd: cloneRepoCommand(cfg.Repos[1], cfg.BaseBranch, repoDirB)},
 		{cmd: branchCommand(repoDirA, branch)},
 		{cmd: branchCommand(repoDirB, branch)},
+		{cmd: pushDryRunCommand(repoDirA, branch)},
+		{cmd: pushDryRunCommand(repoDirB, branch)},
 		{cmd: codexCommandWithOptions(runDir, codexPrompt, codexRunOptions{SkipGitRepoCheck: true})},
 		{cmd: statusCommand(repoDirA), res: execx.Result{Stdout: " M file-a.go\n"}},
 		{cmd: statusCommand(repoDirB), res: execx.Result{Stdout: " M file-b.go\n"}},
@@ -1208,6 +1274,8 @@ func TestRunMultiRepoRemediationUsesWorkspaceCodexOptions(t *testing.T) {
 		{cmd: cloneRepoCommand(cfg.Repos[1], cfg.BaseBranch, repoDirB)},
 		{cmd: branchCommand(repoDirA, branch)},
 		{cmd: branchCommand(repoDirB, branch)},
+		{cmd: pushDryRunCommand(repoDirA, branch)},
+		{cmd: pushDryRunCommand(repoDirB, branch)},
 		{cmd: codexCommandWithOptions(runDir, codexPrompt, codexRunOptions{SkipGitRepoCheck: true})},
 		{cmd: statusCommand(repoDirA), res: execx.Result{Stdout: " M file-a.go\n"}},
 		{cmd: statusCommand(repoDirB), res: execx.Result{Stdout: "\n"}},
@@ -1262,6 +1330,7 @@ func TestRunNonMainBranchReusesExistingPR(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: fetchMainBranchCommand(repoDir)},
+		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
@@ -1316,6 +1385,7 @@ func TestRunNonMainBranchCreatesPRWithoutExplicitBaseWhenNoOpenPR(t *testing.T) 
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: fetchMainBranchCommand(repoDir)},
+		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
@@ -1377,6 +1447,7 @@ func TestRunMissingMoltenhubBaseBranchFallsBackToDefaultAndCreatesNewBranch(t *t
 		{cmd: cloneRepoCommand(cfg.RepoURL, cfg.BaseBranch, repoDir), res: cloneMissingBranch, err: errors.New("clone failed")},
 		{cmd: cloneRepoDefaultBranchCommand(cfg.RepoURL, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
@@ -1434,6 +1505,7 @@ func TestRunCloneRetriesTransientFailureThenSucceeds(t *testing.T) {
 		{cmd: cloneRepoCommand(cfg.RepoURL, cfg.BaseBranch, repoDir), res: cloneTransientFailure, err: errors.New("clone failed")},
 		{cmd: cloneRepoCommand(cfg.RepoURL, cfg.BaseBranch, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
@@ -1699,6 +1771,12 @@ func TestCommandBuilders(t *testing.T) {
 	if pullRebase.Name != "git" || pullRebase.Dir != repoDir || !reflect.DeepEqual(pullRebase.Args, wantPullRebase) {
 		t.Fatalf("pull rebase command unexpected: %+v", pullRebase)
 	}
+
+	pushDryRun := pushDryRunCommand(repoDir, branch)
+	wantPushDryRun := []string{"push", "--dry-run", "origin", "HEAD:refs/heads/" + branch}
+	if pushDryRun.Name != "git" || pushDryRun.Dir != repoDir || !reflect.DeepEqual(pushDryRun.Args, wantPushDryRun) {
+		t.Fatalf("push dry-run command unexpected: %+v", pushDryRun)
+	}
 }
 
 func TestPreflightCommandsWithRuntimeUsesConfiguredCLI(t *testing.T) {
@@ -1791,6 +1869,7 @@ func TestRunUsesConfiguredRuntimeCommand(t *testing.T) {
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: runtimeCmd},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: ""}},
 		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch)},

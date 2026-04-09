@@ -818,6 +818,9 @@ func shouldQueueFailureFollowUp(failedResult harness.Result) (bool, string) {
 			return false, marker
 		}
 	}
+	if reason := failurefollowup.NonRemediableRepoAccessReason(failedResult.Err); reason != "" {
+		return false, reason
+	}
 	return true, ""
 }
 

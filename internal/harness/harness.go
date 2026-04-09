@@ -44,6 +44,7 @@ const (
 	maxCloneAttempts           = 3
 	cloneRetryDelay            = 2 * time.Second
 	maxCloneErrorDetailChars   = 500
+	maxGitErrorDetailChars     = 500
 	maxReviewMetadataChars     = 12000
 	maxReviewCommentsChars     = 16000
 	maxReviewDiffStatChars     = 12000
@@ -266,6 +267,11 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 			return h.fail(ExitGit, "git", err, runDir)
 		}
 		h.logf("stage=git status=ok action=branch branch=%s repo=%s repo_dir=%s", branch, repos[i].URL, repos[i].RelDir)
+	}
+	for i := range repos {
+		if err := h.verifyRemoteWriteAccess(ctx, repos[i]); err != nil {
+			return h.fail(ExitGit, "git", err, runDir)
+		}
 	}
 
 	codexDir := targetDir
@@ -630,6 +636,40 @@ func (h Harness) pushWithSync(ctx context.Context, repo repoWorkspace, remediati
 	return fmt.Errorf("push retries exhausted for branch %q", repo.Branch)
 }
 
+func (h Harness) verifyRemoteWriteAccess(ctx context.Context, repo repoWorkspace) error {
+	h.logf(
+		"stage=git status=start action=probe_write_access repo=%s repo_dir=%s branch=%s",
+		repo.URL,
+		repo.RelDir,
+		repo.Branch,
+	)
+	res, err := h.runCommand(ctx, "git", pushDryRunCommand(repo.Dir, repo.Branch))
+	if err != nil {
+		if isNonFastForwardPush(res, err) {
+			h.logf(
+				"stage=git status=ok action=probe_write_access reason=non_fast_forward repo=%s repo_dir=%s branch=%s",
+				repo.URL,
+				repo.RelDir,
+				repo.Branch,
+			)
+			return nil
+		}
+		return commandErrorWithDetails(
+			fmt.Sprintf("verify remote write access for repo %s branch %q", repo.URL, repo.Branch),
+			err,
+			res,
+			maxGitErrorDetailChars,
+		)
+	}
+	h.logf(
+		"stage=git status=ok action=probe_write_access repo=%s repo_dir=%s branch=%s",
+		repo.URL,
+		repo.RelDir,
+		repo.Branch,
+	)
+	return nil
+}
+
 func (h Harness) populateNoChangePRURLs(ctx context.Context, repos []repoWorkspace) {
 	for i := range repos {
 		prURL, err := h.lookupOpenPRURLByHead(ctx, repos[i])
@@ -725,14 +765,14 @@ func cloneErrorWithDetails(err error, res execx.Result) error {
 	if err == nil {
 		return nil
 	}
-	detail := summarizeCloneErrorDetail(res)
+	detail := summarizeCommandErrorDetail(res, maxCloneErrorDetailChars)
 	if detail == "" {
 		return err
 	}
 	return fmt.Errorf("%w: %s", err, detail)
 }
 
-func summarizeCloneErrorDetail(res execx.Result) string {
+func summarizeCommandErrorDetail(res execx.Result, maxChars int) string {
 	detail := strings.TrimSpace(strings.Join([]string{res.Stderr, res.Stdout}, "\n"))
 	if detail == "" {
 		return ""
@@ -740,10 +780,25 @@ func summarizeCloneErrorDetail(res execx.Result) string {
 	detail = strings.ReplaceAll(detail, "\r\n", "\n")
 	detail = strings.ReplaceAll(detail, "\r", "\n")
 	detail = strings.Join(strings.Fields(detail), " ")
-	if len(detail) <= maxCloneErrorDetailChars {
+	if maxChars <= 0 || len(detail) <= maxChars {
 		return detail
 	}
-	return strings.TrimSpace(detail[:maxCloneErrorDetailChars]) + "...(truncated)"
+	return strings.TrimSpace(detail[:maxChars]) + "...(truncated)"
+}
+
+func commandErrorWithDetails(prefix string, err error, res execx.Result, maxChars int) error {
+	if err == nil {
+		return nil
+	}
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" {
+		prefix = "command failed"
+	}
+	detail := summarizeCommandErrorDetail(res, maxChars)
+	if detail == "" {
+		return fmt.Errorf("%s: %w", prefix, err)
+	}
+	return fmt.Errorf("%s: %w: %s", prefix, err, detail)
 }
 
 func buildResult(runDir string, repos []repoWorkspace, noChanges bool) Result {
@@ -1862,6 +1917,14 @@ func commitCommand(repoDir, msg string) execx.Command {
 
 func pushCommand(repoDir, branch string) execx.Command {
 	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"push", "-u", "origin", branch}}
+}
+
+func pushDryRunCommand(repoDir, branch string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "git",
+		Args: []string{"push", "--dry-run", "origin", fmt.Sprintf("HEAD:refs/heads/%s", normalizeBranchRef(branch))},
+	}
 }
 
 func pullRebaseCommand(repoDir, branch string) execx.Command {

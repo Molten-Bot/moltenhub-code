@@ -32,6 +32,13 @@ const (
 	fallbackLogSubdir     = "main"
 )
 
+var nonRemediableRepoAccessMarkers = []string{
+	"write access to repository not granted",
+	"requested url returned error: 403",
+	"authentication failed",
+	"could not read username for 'https://github.com'",
+}
+
 func WithExecutionContract(base string) string {
 	base = strings.TrimSpace(base)
 	if base == "" {
@@ -161,4 +168,20 @@ func sanitizeLogPathPart(part string) string {
 		return ""
 	}
 	return trimmed
+}
+
+func NonRemediableRepoAccessReason(err error) string {
+	if err == nil {
+		return ""
+	}
+	text := strings.ToLower(strings.TrimSpace(err.Error()))
+	if text == "" {
+		return ""
+	}
+	for _, marker := range nonRemediableRepoAccessMarkers {
+		if strings.Contains(text, marker) {
+			return marker
+		}
+	}
+	return ""
 }
