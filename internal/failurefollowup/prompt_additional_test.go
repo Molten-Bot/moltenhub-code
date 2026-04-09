@@ -14,6 +14,15 @@ func TestWithExecutionContractUsesContractWhenBaseEmpty(t *testing.T) {
 	}
 }
 
+func TestWithExecutionContractDoesNotDuplicateExistingContract(t *testing.T) {
+	t.Parallel()
+
+	base := "do the work\n\n" + ExecutionContract
+	if got := WithExecutionContract(base); got != base {
+		t.Fatalf("WithExecutionContract(existing contract) = %q, want unchanged", got)
+	}
+}
+
 func TestComposePromptUsesExplicitNoPathGuidance(t *testing.T) {
 	t.Parallel()
 

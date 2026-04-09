@@ -281,6 +281,7 @@ func runHub(args []string) int {
 	}
 
 	var queueFailureFollowUp func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config)
+	var queueUnexpectedNoChangesFollowUp func(requestID string, result harness.Result, runCfg config.Config)
 	var enqueueLocalRun func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string, force bool) (string, error)
 	enqueueLocalRun = func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string, force bool) (string, error) {
 		if authGate != nil {
@@ -357,6 +358,7 @@ func runHub(args []string) int {
 			requestID string,
 			runCfg config.Config,
 			dedupeKey string,
+			source string,
 			allowFailureFollowUp bool,
 			runCtx context.Context,
 			cancelRun context.CancelCauseFunc,
@@ -436,15 +438,19 @@ func runHub(args []string) int {
 				release()
 
 				finalState = outcome.State
-				if !allowFailureFollowUp || outcome.State != "error" {
-					return
-				}
-				if queueFailureFollowUp != nil {
-					queueFailureFollowUp(requestID, outcome.Result, runCfg)
+				switch outcome.State {
+				case "error":
+					if allowFailureFollowUp && queueFailureFollowUp != nil {
+						queueFailureFollowUp(requestID, outcome.Result, runCfg)
+					}
+				case "no_changes":
+					if source != "no_changes_followup" && queueUnexpectedNoChangesFollowUp != nil {
+						queueUnexpectedNoChangesFollowUp(requestID, outcome.Result, runCfg)
+					}
 				}
 				return
 			}
-		}(requestID, runCfg, dedupeKey, allowFailureFollowUp, runCtx, cancelRun, taskHandle)
+		}(requestID, runCfg, dedupeKey, source, allowFailureFollowUp, runCtx, cancelRun, taskHandle)
 
 		return requestID, nil
 	}
@@ -479,6 +485,41 @@ func runHub(args []string) int {
 		daemonLogger(
 			"dispatch status=ok action=queue_failure_followup request_id=%s follow_up_request_id=%s",
 			failedRequestID,
+			followUpRequestID,
+		)
+	}
+	queueUnexpectedNoChangesFollowUp = func(requestID string, result harness.Result, runCfg config.Config) {
+		if ok, reason := shouldQueueUnexpectedNoChangesFollowUp(result); !ok {
+			daemonLogger(
+				"dispatch status=warn action=skip_no_changes_followup request_id=%s err=%q",
+				requestID,
+				reason,
+			)
+			return
+		}
+
+		followUpCfg := unexpectedNoChangesFollowUpRunConfig(requestID, result, runCfg, logRoot)
+		if len(followUpCfg.RepoList()) == 0 {
+			daemonLogger(
+				"dispatch status=warn action=queue_no_changes_followup request_id=%s err=%q",
+				requestID,
+				"no task repo found for no-changes follow-up",
+			)
+			return
+		}
+
+		followUpRequestID, followUpErr := enqueueLocalRun(ctx, followUpCfg, true, "no_changes_followup", false)
+		if followUpErr != nil {
+			daemonLogger(
+				"dispatch status=warn action=queue_no_changes_followup request_id=%s err=%q",
+				requestID,
+				followUpErr,
+			)
+			return
+		}
+		daemonLogger(
+			"dispatch status=ok action=queue_no_changes_followup request_id=%s follow_up_request_id=%s",
+			requestID,
 			followUpRequestID,
 		)
 	}
@@ -801,6 +842,22 @@ func failureFollowUpRunConfig(
 	}
 }
 
+func unexpectedNoChangesFollowUpRunConfig(
+	requestID string,
+	result harness.Result,
+	runCfg config.Config,
+	logRoot string,
+) config.Config {
+	runCfg.ApplyDefaults()
+	logPaths := failurefollowup.TaskLogPaths(logRoot, requestID)
+	return config.Config{
+		Repos:        failureFollowUpRepos(result, runCfg),
+		BaseBranch:   runCfg.BaseBranch,
+		TargetSubdir: runCfg.TargetSubdir,
+		Prompt:       unexpectedNoChangesFollowUpPrompt(logPaths, requestID, result, runCfg),
+	}
+}
+
 var failureFollowUpNonRemediableMarkers = []string{
 	"quota exceeded",
 	"insufficient_quota",
@@ -831,6 +888,16 @@ func shouldQueueFailureFollowUp(failedResult harness.Result) (bool, string) {
 		if strings.Contains(errText, marker) {
 			return false, marker
 		}
+	}
+	return true, ""
+}
+
+func shouldQueueUnexpectedNoChangesFollowUp(result harness.Result) (bool, string) {
+	if !result.NoChanges {
+		return false, "task did not complete with no changes"
+	}
+	if strings.TrimSpace(joinAllPRURLs(result.RepoResults)) != "" || strings.TrimSpace(result.PRURL) != "" {
+		return false, "task already has a pull request"
 	}
 	return true, ""
 }
@@ -872,6 +939,48 @@ func singleRepoFromResults(results []harness.RepoResult) string {
 		}
 	}
 	return repo
+}
+
+func unexpectedNoChangesFollowUpPrompt(logPaths []string, requestID string, result harness.Result, runCfg config.Config) string {
+	const requiredPrompt = "Review the previous local task logs first. The prior run completed with no file changes and no pull request, which is unexpected for this task. Identify why the task produced no repository changes, fix the underlying issue, complete the requested work, validate locally where possible, and summarize the verified results. If the request is already satisfied, return a clear no-op result with concrete evidence."
+
+	var contextLines []string
+	if requestID = strings.TrimSpace(requestID); requestID != "" {
+		contextLines = append(contextLines, fmt.Sprintf("- request_id=%s", requestID))
+	}
+	if workspaceDir := strings.TrimSpace(result.WorkspaceDir); workspaceDir != "" {
+		contextLines = append(contextLines, fmt.Sprintf("- workspace_dir=%s", workspaceDir))
+	}
+	if branch := strings.TrimSpace(result.Branch); branch != "" {
+		contextLines = append(contextLines, fmt.Sprintf("- branch=%s", branch))
+	}
+	if repo := strings.Join(runCfg.RepoList(), ","); strings.TrimSpace(repo) != "" {
+		contextLines = append(contextLines, fmt.Sprintf("- repos=%s", repo))
+	}
+	if targetSubdir := strings.TrimSpace(runCfg.TargetSubdir); targetSubdir != "" {
+		contextLines = append(contextLines, fmt.Sprintf("- target_subdir=%s", targetSubdir))
+	}
+
+	var contextBlock strings.Builder
+	if len(contextLines) > 0 {
+		contextBlock.WriteString("Observed no-change context:\n")
+		contextBlock.WriteString(strings.Join(contextLines, "\n"))
+	}
+	if prompt := strings.TrimSpace(runCfg.Prompt); prompt != "" {
+		if contextBlock.Len() > 0 {
+			contextBlock.WriteString("\n\n")
+		}
+		contextBlock.WriteString("Original task prompt:\n")
+		contextBlock.WriteString(prompt)
+	}
+
+	return failurefollowup.ComposePrompt(
+		requiredPrompt,
+		logPaths,
+		nil,
+		"No local task log path was captured before the task completed without changes. Review the task history and runtime logs first.",
+		contextBlock.String(),
+	)
 }
 
 func failureFollowUpPrompt(logPaths []string, failedResult harness.Result, failedRunCfg config.Config) string {

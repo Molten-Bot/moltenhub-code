@@ -37,6 +37,9 @@ func WithExecutionContract(base string) string {
 	if base == "" {
 		return ExecutionContract
 	}
+	if strings.Contains(base, ExecutionContract) {
+		return base
+	}
 	return base + "\n\n" + ExecutionContract
 }
 

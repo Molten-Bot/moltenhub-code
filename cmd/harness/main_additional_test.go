@@ -411,6 +411,71 @@ func TestFailureFollowUpPromptIncludesFailureContext(t *testing.T) {
 	}
 }
 
+func TestShouldQueueUnexpectedNoChangesFollowUpRequiresMissingPR(t *testing.T) {
+	t.Parallel()
+
+	ok, reason := shouldQueueUnexpectedNoChangesFollowUp(harness.Result{NoChanges: true})
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueUnexpectedNoChangesFollowUp(no PR) = (%v, %q), want (true, \"\")", ok, reason)
+	}
+
+	ok, reason = shouldQueueUnexpectedNoChangesFollowUp(harness.Result{
+		NoChanges: true,
+		PRURL:     "https://github.com/acme/repo/pull/1",
+	})
+	if ok {
+		t.Fatal("shouldQueueUnexpectedNoChangesFollowUp(existing PR) = true, want false")
+	}
+	if reason != "task already has a pull request" {
+		t.Fatalf("reason = %q, want %q", reason, "task already has a pull request")
+	}
+}
+
+func TestUnexpectedNoChangesFollowUpRunConfigPreservesTaskTargetingAndAddsContext(t *testing.T) {
+	t.Parallel()
+
+	logRoot := filepath.Join(t.TempDir(), ".log")
+	runCfg := config.Config{
+		Repos:       []string{"git@github.com:acme/repo.git"},
+		BaseBranch:  "release/2026.04-hotfix",
+		TargetSubdir: "cmd/harness",
+		Prompt:      "fix the broken local no changes task handling",
+	}
+	result := harness.Result{
+		NoChanges:    true,
+		WorkspaceDir: "/tmp/run-123",
+		Branch:       "release/2026.04-hotfix",
+	}
+
+	cfg := unexpectedNoChangesFollowUpRunConfig("local-1712345678-000001", result, runCfg, logRoot)
+	if got, want := cfg.BaseBranch, "release/2026.04-hotfix"; got != want {
+		t.Fatalf("BaseBranch = %q, want %q", got, want)
+	}
+	if got, want := cfg.TargetSubdir, "cmd/harness"; got != want {
+		t.Fatalf("TargetSubdir = %q, want %q", got, want)
+	}
+	if got, want := cfg.Repos, []string{"git@github.com:acme/repo.git"}; len(got) != len(want) || got[0] != want[0] {
+		t.Fatalf("Repos = %v, want %v", got, want)
+	}
+
+	for _, want := range []string{
+		"Review the previous local task logs first.",
+		filepath.Join(logRoot, "local", "1712345678", "000001"),
+		"Observed no-change context:",
+		"- request_id=local-1712345678-000001",
+		"- workspace_dir=/tmp/run-123",
+		"- branch=release/2026.04-hotfix",
+		"- target_subdir=cmd/harness",
+		"Original task prompt:",
+		"fix the broken local no changes task handling",
+		"Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
+	} {
+		if !strings.Contains(cfg.Prompt, want) {
+			t.Fatalf("Prompt missing %q: %q", want, cfg.Prompt)
+		}
+	}
+}
+
 func TestShouldQueueFailureFollowUpSkipsNoDeltaFailures(t *testing.T) {
 	t.Parallel()
 
