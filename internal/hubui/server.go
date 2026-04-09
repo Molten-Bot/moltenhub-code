@@ -188,7 +188,7 @@ func defaultHubSetupState() HubSetupState {
 	state := HubSetupState{
 		Configured:   false,
 		AgentMode:    "existing",
-		TokenType:    "bind",
+		TokenType:    "agent",
 		ConnectURL:   "https://app.molten.bot/signin?target=hub",
 		DashboardURL: "https://app.molten.bot/hub",
 	}

@@ -21,6 +21,8 @@ import (
 func TestHandleHubSetupStatusAndConfigure(t *testing.T) {
 	t.Parallel()
 
+	const token = "f9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+
 	srv := NewServer("", NewBroker())
 	srv.HubSetupStatus = func(context.Context) (HubSetupState, error) {
 		state := defaultHubSetupState()
@@ -30,7 +32,7 @@ func TestHandleHubSetupStatusAndConfigure(t *testing.T) {
 		return state, nil
 	}
 	srv.ConfigureHubSetup = func(_ context.Context, req HubSetupRequest) (HubSetupState, error) {
-		if req.Token != "bind-token" {
+		if req.Token != token {
 			return defaultHubSetupState(), fmt.Errorf("unexpected token")
 		}
 		state := defaultHubSetupState()
@@ -39,7 +41,7 @@ func TestHandleHubSetupStatusAndConfigure(t *testing.T) {
 		state.TokenType = req.TokenType
 		state.Handle = "saved-agent"
 		state.Profile.DisplayName = "Saved Agent"
-		state.NeedsRestart = true
+		state.NeedsRestart = false
 		return state, nil
 	}
 
@@ -61,7 +63,7 @@ func TestHandleHubSetupStatusAndConfigure(t *testing.T) {
 		t.Fatalf("GET hub setup body = %#v, want configured ok response", getBody)
 	}
 
-	postReq := httptest.NewRequest(http.MethodPost, "/api/hub-setup", strings.NewReader(`{"agent_mode":"new","token_type":"bind","token":"bind-token"}`))
+	postReq := httptest.NewRequest(http.MethodPost, "/api/hub-setup", strings.NewReader(fmt.Sprintf(`{"agent_mode":"new","token_type":"bind","token":%q}`, token)))
 	postReq.Header.Set("Content-Type", "application/json")
 	postResp := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(postResp, postReq)
@@ -76,7 +78,7 @@ func TestHandleHubSetupStatusAndConfigure(t *testing.T) {
 	if err := json.NewDecoder(postResp.Body).Decode(&postBody); err != nil {
 		t.Fatalf("decode POST body: %v", err)
 	}
-	if !postBody.OK || postBody.Hub.Handle != "saved-agent" || !postBody.Hub.NeedsRestart || postBody.Hub.AgentMode != "new" || postBody.Hub.TokenType != "bind" {
+	if !postBody.OK || postBody.Hub.Handle != "saved-agent" || postBody.Hub.NeedsRestart || postBody.Hub.AgentMode != "new" || postBody.Hub.TokenType != "bind" {
 		t.Fatalf("POST hub setup body = %#v, want saved state", postBody)
 	}
 }
