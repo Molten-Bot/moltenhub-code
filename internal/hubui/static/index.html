@@ -344,7 +344,7 @@
       <div class="flex items-start justify-between gap-4">
         <div>
           <h2 class="text-[2rem] font-semibold leading-tight text-hub-text">Connect Molten Hub</h2>
-          <p id="hub-setup-message" class="mt-3 max-w-xl text-base leading-7 text-hub-text/85">Save your Molten Hub token, then restart this runtime to enable remote Hub transport.</p>
+          <p id="hub-setup-message" class="mt-3 max-w-xl text-base leading-7 text-hub-text/85">Save your Molten Hub token, to enable your team.</p>
         </div>
         <button id="hub-setup-close" class="task-fullscreen-close !relative !top-0 !right-0 !flex" type="button" aria-label="Close Molten Hub setup" title="Close Molten Hub setup">
           <span class="task-fullscreen-close-icon" aria-hidden="true">&times;</span>
@@ -364,8 +364,8 @@
         </div>
 
         <label class="prompt-field">
-          <span id="hub-setup-token-label" class="prompt-label">Agent Token</span>
-          <textarea id="hub-setup-token" class="prompt-text prompt-control min-h-[96px] w-full rounded-lg border border-hub-border p-2.5 font-mono text-[0.84rem] leading-[1.4]" rows="4" spellcheck="false" placeholder="Paste agent token"></textarea>
+          <span id="hub-setup-token-label" class="prompt-label">Token</span>
+          <input id="hub-setup-token" class="prompt-control prompt-input w-full font-mono text-[0.84rem]" type="text" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Paste token">
         </label>
 
         <div id="hub-setup-new-agent-fields" class="hub-setup-profile-grid hidden">
@@ -639,6 +639,24 @@
         message: String(hub.message || "").trim(),
         needsRestart: Boolean(hub.needs_restart || hub.needsRestart),
       };
+    }
+
+    function hubTokenValidationMessage(token) {
+      const trimmed = String(token || "").trim();
+      if (!trimmed) return "";
+      if (trimmed.length < 40) return "Token looks too short. Use the full Molten Hub token.";
+      if (trimmed.length > 128) return "Token looks too long. Check that you pasted only the token.";
+      if (!/^[A-Za-z0-9_-]+$/.test(trimmed)) return "Token contains unsupported characters.";
+      return "";
+    }
+
+    function syncHubTokenValidation() {
+      if (!hubSetupToken) return "";
+      const message = hubTokenValidationMessage(hubSetupToken.value);
+      if (typeof hubSetupToken.setCustomValidity === "function") {
+        hubSetupToken.setCustomValidity(message);
+      }
+      return message;
     }
 
     function agentAuthLabel(harness) {
@@ -1188,7 +1206,7 @@
         hubSetupSigninLink.href = state.hubSetup.connectURL;
       }
       if (hubSetupMessage) {
-        hubSetupMessage.textContent = state.hubSetup.message || "Save your Molten Hub token, then restart this runtime to enable remote Hub transport.";
+        hubSetupMessage.textContent = state.hubSetup.message || "Save your Molten Hub token, to enable your team.";
       }
       if (hubSetupHandle) {
         hubSetupHandle.value = state.hubSetup.handle || "";
@@ -1216,10 +1234,11 @@
         hubSetupNewAgentFields.classList.toggle("hidden", !isNew);
       }
       if (hubSetupTokenLabel) {
-        hubSetupTokenLabel.textContent = isNew ? "Bind Token" : "Agent Token";
+        hubSetupTokenLabel.textContent = "Token";
       }
       if (hubSetupToken) {
-        hubSetupToken.placeholder = isNew ? "Paste bind token" : "Paste agent token";
+        hubSetupToken.placeholder = "Paste token";
+        syncHubTokenValidation();
       }
       applyHubDockState();
       renderHubConnection(state.snapshot);
@@ -1297,6 +1316,15 @@
       if (!payload.token) {
         trackAnalyticsEvent("hub_setup_validation_failed", { agent_mode: payload.agent_mode });
         setHubSetupStatus("error", `${payload.agent_mode === "new" ? "Bind" : "Agent"} token is required.`);
+        return;
+      }
+      const tokenValidationMessage = syncHubTokenValidation();
+      if (tokenValidationMessage) {
+        trackAnalyticsEvent("hub_setup_validation_failed", { agent_mode: payload.agent_mode });
+        setHubSetupStatus("error", tokenValidationMessage);
+        if (hubSetupToken && typeof hubSetupToken.reportValidity === "function") {
+          hubSetupToken.reportValidity();
+        }
         return;
       }
 
@@ -4401,6 +4429,14 @@
     }
     if (hubSetupForm) {
       hubSetupForm.addEventListener("submit", submitHubSetup);
+    }
+    if (hubSetupToken) {
+      hubSetupToken.addEventListener("input", () => {
+        syncHubTokenValidation();
+        if (hubSetupStatus && hubSetupStatus.classList.contains("error")) {
+          setHubSetupStatus("", "");
+        }
+      });
     }
     window.__hubAuthVerifyClick = (event) => {
       if (event && typeof event.preventDefault === "function") {

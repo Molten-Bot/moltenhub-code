@@ -524,6 +524,43 @@ func runHub(args []string) int {
 		)
 	}
 
+	hubController := newHubDaemonController(ctx, runner)
+	hubController.logf = daemonLogger
+	hubController.dispatchController = dispatchController
+	hubController.taskLogRoot = logRoot
+	hubController.onDispatchQueued = func(requestID string, runCfg config.Config) {
+		if runConfigJSON, ok := marshalRunConfigJSON(runCfg); ok {
+			monitorBroker.RecordTaskRunConfig(requestID, runConfigJSON)
+		}
+	}
+	hubController.onDispatchFailed = func(requestID string, runCfg config.Config, result harness.Result) {
+		if queueFailureFollowUp != nil {
+			queueFailureFollowUp(requestID, result, runCfg)
+		}
+	}
+
+	waitForHubRuntime := func() int {
+		for {
+			select {
+			case <-ctx.Done():
+				return harness.ExitSuccess
+			case err := <-hubController.Errors():
+				if err == nil {
+					continue
+				}
+				if shouldFallbackToLocalOnlyMode(*uiListen, err) {
+					daemonLogger(
+						"hub.auth status=local_only detail=%q",
+						"Remote hub auth failed; continuing in local-only mode. Use the local UI/API to submit tasks.",
+					)
+					continue
+				}
+				writeStderrLine(logger, fmt.Sprintf("error: %v", err))
+				return hubExitCode(err)
+			}
+		}
+	}
+
 	if strings.TrimSpace(*uiListen) != "" {
 		uiServer := hubui.NewServer(*uiListen, monitorBroker)
 		uiServer.AutomaticMode = *uiAutomatic
@@ -552,7 +589,7 @@ func runHub(args []string) int {
 			return currentHubSetupState(cfg), nil
 		}
 		uiServer.ConfigureHubSetup = func(reqCtx context.Context, req hubui.HubSetupRequest) (hubui.HubSetupState, error) {
-			return configureHubSetup(reqCtx, cfg, req)
+			return configureHubSetup(reqCtx, cfg, req, hubController.Update)
 		}
 		uiServer.SubmitLocalPrompt = func(reqCtx context.Context, body []byte) (string, error) {
 			runCfg, err := hub.ParseRunConfigJSON(body)
@@ -614,8 +651,7 @@ func runHub(args []string) int {
 			daemonLogger("hub.auth status=local_only detail=%q", hubPingFailureDetail(hubPingHeadlessNoopDetail, bootDiag.PingErr))
 			return harness.ExitSuccess
 		}
-		<-ctx.Done()
-		return harness.ExitSuccess
+		return waitForHubRuntime()
 	}
 
 	if !hubConfigured {
@@ -630,38 +666,21 @@ func runHub(args []string) int {
 			)
 			return harness.ExitAuth
 		}
-		<-ctx.Done()
-		return harness.ExitSuccess
+		return waitForHubRuntime()
 	}
 
-	daemon := hub.NewDaemon(runner)
-	daemon.Logf = daemonLogger
-	daemon.DispatchController = dispatchController
-	daemon.TaskLogRoot = logRoot
-	daemon.OnDispatchQueued = func(requestID string, runCfg config.Config) {
-		if runConfigJSON, ok := marshalRunConfigJSON(runCfg); ok {
-			monitorBroker.RecordTaskRunConfig(requestID, runConfigJSON)
-		}
-	}
-	daemon.OnDispatchFailed = func(requestID string, runCfg config.Config, result harness.Result) {
-		if queueFailureFollowUp != nil {
-			queueFailureFollowUp(requestID, result, runCfg)
-		}
-	}
-
-	if err := daemon.Run(ctx, cfg); err != nil {
+	if err := hubController.Update(ctx, cfg); err != nil {
 		if shouldFallbackToLocalOnlyMode(*uiListen, err) {
 			daemonLogger(
 				"hub.auth status=local_only detail=%q",
 				"Remote hub auth failed; continuing in local-only mode. Use the local UI/API to submit tasks.",
 			)
-			<-ctx.Done()
-			return harness.ExitSuccess
+			return waitForHubRuntime()
 		}
 		writeStderrLine(logger, fmt.Sprintf("error: %v", err))
 		return hubExitCode(err)
 	}
-	return harness.ExitSuccess
+	return waitForHubRuntime()
 }
 
 func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error) {
@@ -1500,7 +1519,7 @@ func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 	return state
 }
 
-func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSetupRequest) (hubui.HubSetupState, error) {
+func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSetupRequest, applyLive func(context.Context, hub.InitConfig) error) (hubui.HubSetupState, error) {
 	state := currentHubSetupState(cfg)
 	state.AgentMode = normalizeHubSetupMode(req.AgentMode)
 	state.TokenType = hubSetupTokenTypeForMode(state.AgentMode)
@@ -1512,6 +1531,9 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 	token := strings.TrimSpace(req.Token)
 	if token == "" {
 		return state, fmt.Errorf("%s token is required", state.TokenType)
+	}
+	if err := validateHubSetupToken(token); err != nil {
+		return state, err
 	}
 
 	activeCfg := cfg
@@ -1537,6 +1559,10 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 	}
 
 	finalCfg := activeCfg
+	if baseURL := strings.TrimRight(strings.TrimSpace(client.BaseURL), "/"); baseURL != "" {
+		finalCfg.BaseURL = baseURL
+	}
+	finalCfg.AgentToken = resolvedToken
 	if state.AgentMode == "new" {
 		finalCfg.Handle = state.Handle
 		finalCfg.Profile.Bio = state.Profile.Bio
@@ -1572,9 +1598,33 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 	state.Profile.Bio = strings.TrimSpace(finalCfg.Profile.Bio)
 	state.Profile.DisplayName = strings.TrimSpace(finalCfg.Profile.DisplayName)
 	state.Profile.Emoji = strings.TrimSpace(finalCfg.Profile.Emoji)
-	state.Message = "Molten Hub setup saved. Restart the runtime to connect the remote transport."
-	state.NeedsRestart = true
+	state.Message = "Molten Hub setup saved and applied live."
+	state.NeedsRestart = false
+	if applyLive != nil {
+		if err := applyLive(ctx, finalCfg); err != nil {
+			state.Message = fmt.Sprintf("Molten Hub setup was saved, but live apply failed: %v", err)
+			return state, fmt.Errorf("apply live hub setup: %w", err)
+		}
+	}
 	return state, nil
+}
+
+func validateHubSetupToken(token string) error {
+	token = strings.TrimSpace(token)
+	switch {
+	case len(token) < 40:
+		return fmt.Errorf("token looks too short; expected roughly 40 or more characters")
+	case len(token) > 128:
+		return fmt.Errorf("token looks too long; expected roughly 128 or fewer characters")
+	}
+
+	for _, ch := range token {
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_' {
+			continue
+		}
+		return fmt.Errorf("token contains unsupported characters; use letters, numbers, '-' or '_'")
+	}
+	return nil
 }
 
 func normalizeHubSetupMode(mode string) string {

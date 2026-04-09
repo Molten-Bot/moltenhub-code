@@ -714,16 +714,19 @@ func TestCurrentHubSetupStateUsesStoredBindTokenAsNewAgentMode(t *testing.T) {
 func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 	t.Parallel()
 
+	const bindToken = "f9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+
 	var bindCalled bool
 	var syncedHandle string
 	var syncedMetadata bool
+	var liveCfg hub.InitConfig
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/bind-tokens":
 			bodyBytes, _ := io.ReadAll(r.Body)
-			if !strings.Contains(string(bodyBytes), `"bind_token":"bind-new"`) {
+			if !strings.Contains(string(bodyBytes), fmt.Sprintf(`"bind_token":%q`, bindToken)) && !strings.Contains(string(bodyBytes), fmt.Sprintf(`"bind_token":"%s"`, bindToken)) {
 				t.Fatalf("bind body = %s", string(bodyBytes))
 			}
 			bindCalled = true
@@ -759,7 +762,7 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 		RuntimeConfigPath: configPath,
 	}, hubui.HubSetupRequest{
 		AgentMode: "new",
-		Token:     "bind-new",
+		Token:     bindToken,
 		Handle:    "new-builder",
 		Profile: struct {
 			Bio         string `json:"bio"`
@@ -770,6 +773,9 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 			DisplayName: "Molten Builder",
 			Emoji:       "🔥",
 		},
+	}, func(_ context.Context, cfg hub.InitConfig) error {
+		liveCfg = cfg
+		return nil
 	})
 	if err != nil {
 		t.Fatalf("configureHubSetup() error = %v", err)
@@ -786,13 +792,22 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 	if got, want := state.TokenType, "bind"; got != want {
 		t.Fatalf("TokenType = %q, want %q", got, want)
 	}
+	if state.NeedsRestart {
+		t.Fatal("NeedsRestart = true, want false")
+	}
+	if got, want := strings.TrimSpace(state.Message), "Molten Hub setup saved and applied live."; got != want {
+		t.Fatalf("Message = %q, want %q", got, want)
+	}
+	if got, want := strings.TrimSpace(liveCfg.AgentToken), "agent-resolved"; got != want {
+		t.Fatalf("live config agent token = %q, want %q", got, want)
+	}
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
 	contents := string(data)
-	if !strings.Contains(contents, `"bind_token": "bind-new"`) {
+	if !strings.Contains(contents, fmt.Sprintf(`"bind_token": %q`, bindToken)) {
 		t.Fatalf("saved config missing bind_token: %s", contents)
 	}
 	if !strings.Contains(contents, `"agent_token": "agent-resolved"`) {
@@ -803,13 +818,16 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 func TestConfigureHubSetupExistingAgentUsesAgentTokenFlow(t *testing.T) {
 	t.Parallel()
 
+	const agentToken = "a9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+
 	var getCalls int
+	var liveCfg hub.InitConfig
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me" {
 			getCalls++
-			if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != "agent-existing" {
-				t.Fatalf("GET /agents/me token = %q, want %q", got, "agent-existing")
+			if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != agentToken {
+				t.Fatalf("GET /agents/me token = %q, want %q", got, agentToken)
 			}
 			_, _ = w.Write([]byte(`{"handle":"existing-agent","profile":{"display_name":"Existing Agent","emoji":"🤖","bio":"Owns automation"}}`))
 			return
@@ -832,7 +850,10 @@ func TestConfigureHubSetupExistingAgentUsesAgentTokenFlow(t *testing.T) {
 		RuntimeConfigPath: configPath,
 	}, hubui.HubSetupRequest{
 		AgentMode: "existing",
-		Token:     "agent-existing",
+		Token:     agentToken,
+	}, func(_ context.Context, cfg hub.InitConfig) error {
+		liveCfg = cfg
+		return nil
 	})
 	if err != nil {
 		t.Fatalf("configureHubSetup() error = %v", err)
@@ -846,6 +867,12 @@ func TestConfigureHubSetupExistingAgentUsesAgentTokenFlow(t *testing.T) {
 	if got, want := state.TokenType, "agent"; got != want {
 		t.Fatalf("TokenType = %q, want %q", got, want)
 	}
+	if state.NeedsRestart {
+		t.Fatal("NeedsRestart = true, want false")
+	}
+	if got, want := strings.TrimSpace(liveCfg.AgentToken), agentToken; got != want {
+		t.Fatalf("live config agent token = %q, want %q", got, want)
+	}
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -855,7 +882,65 @@ func TestConfigureHubSetupExistingAgentUsesAgentTokenFlow(t *testing.T) {
 	if strings.Contains(contents, `"bind_token"`) {
 		t.Fatalf("saved config should remove stale bind_token: %s", contents)
 	}
-	if !strings.Contains(contents, `"agent_token": "agent-existing"`) {
+	if !strings.Contains(contents, fmt.Sprintf(`"agent_token": %q`, agentToken)) {
 		t.Fatalf("saved config missing agent token: %s", contents)
+	}
+}
+
+func TestConfigureHubSetupRejectsShortToken(t *testing.T) {
+	t.Parallel()
+
+	state, err := configureHubSetup(context.Background(), hub.InitConfig{}, hubui.HubSetupRequest{
+		AgentMode: "existing",
+		Token:     "too-short",
+	}, nil)
+	if err == nil {
+		t.Fatal("configureHubSetup() error = nil, want non-nil")
+	}
+	if !strings.Contains(err.Error(), "too short") {
+		t.Fatalf("configureHubSetup() err = %q, want token length failure", err)
+	}
+	if state.Configured {
+		t.Fatal("Configured = true, want false")
+	}
+}
+
+func TestConfigureHubSetupReturnsSavedStateWhenLiveApplyFails(t *testing.T) {
+	t.Parallel()
+
+	const agentToken = "b9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me" {
+			_, _ = w.Write([]byte(`{"handle":"existing-agent","profile":{"display_name":"Existing Agent","emoji":"🤖","bio":"Owns automation"}}`))
+			return
+		}
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	state, err := configureHubSetup(context.Background(), hub.InitConfig{
+		BaseURL:           server.URL + "/v1",
+		AgentHarness:      "codex",
+		RuntimeConfigPath: configPath,
+	}, hubui.HubSetupRequest{
+		AgentMode: "existing",
+		Token:     agentToken,
+	}, func(context.Context, hub.InitConfig) error {
+		return errors.New("hub daemon start failed")
+	})
+	if err == nil {
+		t.Fatal("configureHubSetup() error = nil, want non-nil")
+	}
+	if !strings.Contains(err.Error(), "apply live hub setup") {
+		t.Fatalf("configureHubSetup() err = %q, want live apply failure", err)
+	}
+	if !state.Configured {
+		t.Fatal("Configured = false, want true because save completed")
+	}
+	if !strings.Contains(state.Message, "live apply failed") {
+		t.Fatalf("Message = %q, want live apply failure detail", state.Message)
 	}
 }
