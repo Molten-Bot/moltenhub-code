@@ -822,7 +822,7 @@ func TestConfigureHubSetupExistingAgentUsesAgentTokenFlow(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
-	if err := os.WriteFile(configPath, []byte(`{"base_url":"https://na.hub.molten.bot/v1","bind_token":"stale_bind"}`), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf(`{"base_url":%q,"bind_token":"stale_bind"}`, server.URL+"/v1")), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
