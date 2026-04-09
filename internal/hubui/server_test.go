@@ -206,10 +206,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to use the remote molten bot logo asset")
 	}
 	if !strings.Contains(markup, `class="prompt-mode-link prompt-mode-link-logo prompt-mode-link-logo-divider"`) {
-		t.Fatalf("expected molten bot hub dock link to use shared icon-link styling with divider")
+		t.Fatalf("expected first dock logo link to use shared icon-link styling with divider")
 	}
 	if !strings.Contains(markup, `class="prompt-mode-link prompt-mode-link-logo"`) {
-		t.Fatalf("expected github dock link to use shared icon-link styling")
+		t.Fatalf("expected dock logo links to use shared icon-link styling")
+	}
+	githubIndex := strings.Index(markup, `id="github-profile-link"`)
+	moltenbotIndex := strings.Index(markup, `id="moltenbot-hub-link"`)
+	if githubIndex == -1 || moltenbotIndex == -1 || githubIndex > moltenbotIndex {
+		t.Fatalf("expected molten bot hub logo to render to the right of the github dock logo")
 	}
 	if !strings.Contains(markup, "function syncBrandLogoRotation()") {
 		t.Fatalf("expected index html to include brand logo rotation controller")
