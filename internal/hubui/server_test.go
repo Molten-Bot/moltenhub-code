@@ -1308,6 +1308,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".hub-emoji-picker-panel") || !strings.Contains(css, ".hub-emoji-picker-grid") {
 		t.Fatalf("expected stylesheet to include emoji picker styles")
 	}
+	if !strings.Contains(css, ".hub-emoji-picker-selected") || !strings.Contains(css, ".hub-emoji-picker-search-icon") {
+		t.Fatalf("expected stylesheet to include the refreshed emoji picker layout styles")
+	}
 	if !strings.Contains(css, ".panel-header,\n.task-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 8px;\n  padding: 13px 16px;\n  border-bottom: 1px solid var(--surface-header-border);\n  background: var(--surface-header);\n  color: var(--surface-label);") {
 		t.Fatalf("expected stylesheet to style task and output headers with theme-aware surface tokens")
 	}
@@ -1583,6 +1586,9 @@ func TestHandlerServesStaticEmojiPickerScript(t *testing.T) {
 	}
 	if !strings.Contains(body, `clearButton.addEventListener("click", () => {`) || !strings.Contains(body, `setValue("");`) {
 		t.Fatalf("expected emoji picker script to support clearing the selected emoji")
+	}
+	if !strings.Contains(body, `hub-emoji-picker-selected-text`) || !strings.Contains(body, `Frequently used`) {
+		t.Fatalf("expected emoji picker script to render the refreshed selected state and recent section labels")
 	}
 	if !strings.Contains(body, `document.addEventListener("click", (event) => {`) || !strings.Contains(body, `if (!root.contains(event.target)) {`) {
 		t.Fatalf("expected emoji picker script to close on outside click")

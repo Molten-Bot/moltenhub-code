@@ -57,12 +57,25 @@
       icon: "😀",
       emojis: [
         { emoji: "😀", name: "grinning face", keywords: ["happy", "smile"] },
+        { emoji: "😃", name: "grinning face with big eyes", keywords: ["happy", "smile"] },
         { emoji: "😄", name: "grinning face with smiling eyes", keywords: ["happy", "smile"] },
+        { emoji: "😁", name: "beaming face with smiling eyes", keywords: ["happy", "smile"] },
+        { emoji: "😂", name: "face with tears of joy", keywords: ["laugh", "funny"] },
+        { emoji: "🤣", name: "rolling on the floor laughing", keywords: ["laugh", "funny"] },
         { emoji: "😊", name: "smiling face with smiling eyes", keywords: ["warm", "smile"] },
+        { emoji: "🙂", name: "slightly smiling face", keywords: ["smile"] },
+        { emoji: "🙃", name: "upside-down face", keywords: ["playful"] },
         { emoji: "😉", name: "winking face", keywords: ["playful", "wink"] },
+        { emoji: "😍", name: "smiling face with heart-eyes", keywords: ["love", "heart"] },
+        { emoji: "🥳", name: "partying face", keywords: ["party", "celebration"] },
+        { emoji: "😎", name: "smiling face with sunglasses", keywords: ["cool"] },
+        { emoji: "🤩", name: "star-struck", keywords: ["excited", "stars"] },
         { emoji: "🤖", name: "robot", keywords: ["bot", "agent", "automation"] },
         { emoji: "🧠", name: "brain", keywords: ["smart", "thinking", "mind"] },
         { emoji: "👋", name: "waving hand", keywords: ["hello", "wave"] },
+        { emoji: "👍", name: "thumbs up", keywords: ["approve", "yes"] },
+        { emoji: "👏", name: "clapping hands", keywords: ["applause"] },
+        { emoji: "🙏", name: "folded hands", keywords: ["thanks", "please"] },
         { emoji: "💡", name: "light bulb", keywords: ["idea", "insight"] },
       ],
     },
@@ -73,11 +86,19 @@
       emojis: [
         { emoji: "🔥", name: "fire", keywords: ["hot", "energy", "burn"] },
         { emoji: "⚡", name: "high voltage", keywords: ["energy", "fast", "power"] },
+        { emoji: "🌤️", name: "sun behind small cloud", keywords: ["weather", "sun"] },
         { emoji: "🌊", name: "water wave", keywords: ["ocean", "flow"] },
         { emoji: "🌿", name: "herb", keywords: ["leaf", "green", "nature"] },
+        { emoji: "🍀", name: "four leaf clover", keywords: ["luck", "nature"] },
         { emoji: "🌙", name: "crescent moon", keywords: ["night", "moon"] },
         { emoji: "☀️", name: "sun", keywords: ["bright", "day"] },
         { emoji: "🪴", name: "potted plant", keywords: ["plant", "growth"] },
+        { emoji: "🌵", name: "cactus", keywords: ["plant", "desert"] },
+        { emoji: "🌸", name: "cherry blossom", keywords: ["flower", "pink"] },
+        { emoji: "🦋", name: "butterfly", keywords: ["nature", "insect"] },
+        { emoji: "🐸", name: "frog", keywords: ["animal"] },
+        { emoji: "🐙", name: "octopus", keywords: ["animal", "ocean"] },
+        { emoji: "🦊", name: "fox", keywords: ["animal"] },
         { emoji: "🦍", name: "gorilla", keywords: ["gorilla", "strength"] },
       ],
     },
@@ -87,11 +108,19 @@
       icon: "☕",
       emojis: [
         { emoji: "☕", name: "hot beverage", keywords: ["coffee", "tea"] },
+        { emoji: "🍎", name: "red apple", keywords: ["fruit"] },
+        { emoji: "🍇", name: "grapes", keywords: ["fruit"] },
         { emoji: "🍕", name: "pizza", keywords: ["food"] },
+        { emoji: "🍔", name: "hamburger", keywords: ["food"] },
         { emoji: "🌮", name: "taco", keywords: ["food"] },
+        { emoji: "🍣", name: "sushi", keywords: ["food"] },
         { emoji: "🍜", name: "steaming bowl", keywords: ["ramen", "noodles"] },
         { emoji: "🍪", name: "cookie", keywords: ["snack"] },
+        { emoji: "🍩", name: "doughnut", keywords: ["dessert"] },
+        { emoji: "🍿", name: "popcorn", keywords: ["snack"] },
+        { emoji: "🥐", name: "croissant", keywords: ["breakfast"] },
         { emoji: "🍺", name: "beer mug", keywords: ["drink"] },
+        { emoji: "🥤", name: "cup with straw", keywords: ["drink"] },
       ],
     },
     {
@@ -101,10 +130,35 @@
       emojis: [
         { emoji: "🎯", name: "direct hit", keywords: ["goal", "target"] },
         { emoji: "🎮", name: "video game", keywords: ["game", "controller"] },
+        { emoji: "🕹️", name: "joystick", keywords: ["game"] },
+        { emoji: "🎲", name: "game die", keywords: ["game", "dice"] },
+        { emoji: "🎨", name: "artist palette", keywords: ["art", "creative"] },
+        { emoji: "🎧", name: "headphone", keywords: ["music", "audio"] },
+        { emoji: "🎸", name: "guitar", keywords: ["music"] },
         { emoji: "🏁", name: "chequered flag", keywords: ["finish", "race"] },
         { emoji: "🚀", name: "rocket", keywords: ["launch", "ship", "fast"] },
         { emoji: "🛠️", name: "hammer and wrench", keywords: ["build", "tool", "fix"] },
         { emoji: "🏆", name: "trophy", keywords: ["win", "award"] },
+        { emoji: "🏅", name: "sports medal", keywords: ["award", "win"] },
+        { emoji: "⚽", name: "soccer ball", keywords: ["sport"] },
+        { emoji: "🏀", name: "basketball", keywords: ["sport"] },
+      ],
+    },
+    {
+      id: "travel",
+      label: "Travel & Places",
+      icon: "🚗",
+      emojis: [
+        { emoji: "🚗", name: "automobile", keywords: ["car", "travel"] },
+        { emoji: "🚕", name: "taxi", keywords: ["car", "travel"] },
+        { emoji: "🚌", name: "bus", keywords: ["travel", "vehicle"] },
+        { emoji: "🚲", name: "bicycle", keywords: ["travel", "bike"] },
+        { emoji: "✈️", name: "airplane", keywords: ["flight", "travel"] },
+        { emoji: "🚢", name: "ship", keywords: ["travel", "boat"] },
+        { emoji: "🏠", name: "house", keywords: ["home"] },
+        { emoji: "🏢", name: "office building", keywords: ["work", "building"] },
+        { emoji: "🌉", name: "bridge at night", keywords: ["city", "bridge"] },
+        { emoji: "🗽", name: "statue of liberty", keywords: ["landmark"] },
       ],
     },
     {
@@ -116,8 +170,15 @@
         { emoji: "⚙️", name: "gear", keywords: ["settings", "system"] },
         { emoji: "🧰", name: "toolbox", keywords: ["tools", "build"] },
         { emoji: "📦", name: "package", keywords: ["ship", "box"] },
+        { emoji: "📌", name: "pushpin", keywords: ["pin"] },
+        { emoji: "📍", name: "round pushpin", keywords: ["pin", "location"] },
+        { emoji: "📎", name: "paperclip", keywords: ["attach"] },
+        { emoji: "📝", name: "memo", keywords: ["note", "write"] },
+        { emoji: "📚", name: "books", keywords: ["library", "read"] },
         { emoji: "🛰️", name: "satellite", keywords: ["space", "signal"] },
         { emoji: "💻", name: "laptop", keywords: ["computer", "code"] },
+        { emoji: "⌨️", name: "keyboard", keywords: ["computer", "type"] },
+        { emoji: "🖥️", name: "desktop computer", keywords: ["computer"] },
         { emoji: "📡", name: "satellite antenna", keywords: ["signal", "network"] },
         { emoji: "🔒", name: "lock", keywords: ["secure", "security"] },
       ],
@@ -128,14 +189,41 @@
       icon: "✨",
       emojis: [
         { emoji: "✨", name: "sparkles", keywords: ["shine", "magic"] },
+        { emoji: "❤️", name: "red heart", keywords: ["love", "heart"] },
+        { emoji: "💯", name: "hundred points", keywords: ["score", "perfect"] },
         { emoji: "✅", name: "check mark button", keywords: ["done", "complete"] },
         { emoji: "❌", name: "cross mark", keywords: ["error", "stop"] },
         { emoji: "❓", name: "question mark", keywords: ["question", "help"] },
+        { emoji: "❗", name: "exclamation mark", keywords: ["attention"] },
+        { emoji: "➕", name: "plus", keywords: ["add"] },
+        { emoji: "➖", name: "minus", keywords: ["subtract"] },
+        { emoji: "♻️", name: "recycling symbol", keywords: ["recycle"] },
         { emoji: "📣", name: "megaphone", keywords: ["announce", "alert"] },
         { emoji: "🌀", name: "cyclone", keywords: ["spin", "flow"] },
       ],
     },
+    {
+      id: "flags",
+      label: "Flags",
+      icon: "🏳️",
+      emojis: [
+        { emoji: "🏁", name: "chequered flag", keywords: ["flag", "race"] },
+        { emoji: "🚩", name: "triangular flag", keywords: ["flag"] },
+        { emoji: "🏳️", name: "white flag", keywords: ["flag"] },
+        { emoji: "🏴", name: "black flag", keywords: ["flag"] },
+        { emoji: "🏳️‍🌈", name: "rainbow flag", keywords: ["flag", "pride"] },
+        { emoji: "🏳️‍⚧️", name: "transgender flag", keywords: ["flag", "pride"] },
+      ],
+    },
   ];
+
+  function categoryLabel(categoryID) {
+    if (categoryID === RECENT_CATEGORY_ID) {
+      return "Frequently used";
+    }
+    const category = CATEGORIES.find((item) => item.id === categoryID);
+    return category ? category.label : "Emoji";
+  }
 
   function safeReadRecent() {
     try {
@@ -217,11 +305,18 @@
     let open = false;
 
     panel.innerHTML = [
-      '<div class="hub-emoji-picker-toolbar">',
-      '  <div class="hub-emoji-picker-categories" role="tablist" aria-label="Emoji categories"></div>',
+      '<div class="hub-emoji-picker-selected">',
+      '  <div class="hub-emoji-picker-selected-chip" aria-live="polite">',
+      `    <span class="hub-emoji-picker-selected-emoji" aria-hidden="true">${DEFAULT_PREVIEW}</span>`,
+      '    <span class="hub-emoji-picker-selected-text">Selected: none</span>',
+      "  </div>",
       '  <button class="hub-emoji-picker-clear" type="button">Clear</button>',
       "</div>",
+      '<div class="hub-emoji-picker-toolbar">',
+      '  <div class="hub-emoji-picker-categories" role="tablist" aria-label="Emoji categories"></div>',
+      "</div>",
       '<label class="hub-emoji-picker-search-wrap">',
+      '  <span class="hub-emoji-picker-search-icon" aria-hidden="true">⌕</span>',
       '  <span class="sr-only">Search emoji</span>',
       '  <input class="hub-emoji-picker-search" type="text" autocomplete="off" spellcheck="false" placeholder="Search emoji">',
       "</label>",
@@ -232,6 +327,8 @@
     const clearButton = panel.querySelector(".hub-emoji-picker-clear");
     const searchInput = panel.querySelector(".hub-emoji-picker-search");
     const resultsNode = panel.querySelector(".hub-emoji-picker-results");
+    const selectedEmojiNode = panel.querySelector(".hub-emoji-picker-selected-emoji");
+    const selectedTextNode = panel.querySelector(".hub-emoji-picker-selected-text");
 
     function setOpen(nextOpen) {
       open = Boolean(nextOpen) && !toggle.disabled;
@@ -270,6 +367,15 @@
       const previewNode = root.querySelector(".hub-emoji-picker-toggle-preview");
       if (previewNode) {
         previewNode.textContent = preview;
+      }
+      if (selectedEmojiNode) {
+        selectedEmojiNode.textContent = preview;
+      }
+      if (selectedTextNode) {
+        selectedTextNode.textContent = current ? `Selected: ${current}` : "Selected: none";
+      }
+      if (clearButton) {
+        clearButton.disabled = !current;
       }
       toggle.title = current ? `Selected emoji: ${current}` : "Choose emoji";
       if (open) {
@@ -313,14 +419,17 @@
         CATEGORIES.forEach((category) => {
           const matches = categoryEntries(category.id).filter((entry) => matchesSearch(entry, query));
           if (matches.length > 0) {
-            groups.push({ label: category.label, entries: matches });
+            groups.push({ label: categoryLabel(category.id), entries: matches });
           }
         });
       } else {
-        const entries = categoryEntries(activeCategory);
-        const active = CATEGORIES.find((category) => category.id === activeCategory);
-        if (entries.length > 0) {
-          groups.push({ label: active ? active.label : "Emoji", entries: entries });
+        const recentEntries = categoryEntries(RECENT_CATEGORY_ID);
+        if (activeCategory !== RECENT_CATEGORY_ID && recentEntries.length > 0) {
+          groups.push({ label: categoryLabel(RECENT_CATEGORY_ID), entries: recentEntries });
+        }
+        const activeEntries = categoryEntries(activeCategory);
+        if (activeEntries.length > 0) {
+          groups.push({ label: categoryLabel(activeCategory), entries: activeEntries });
         }
       }
 
