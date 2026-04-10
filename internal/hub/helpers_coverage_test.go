@@ -72,7 +72,7 @@ func TestFailureFollowUpHelperBranches(t *testing.T) {
 }
 
 func TestRuntimeConfigHelperBranches(t *testing.T) {
-	t.Parallel()
+	t.Setenv(runtimeConfigPathEnv, "")
 
 	if got := docStringValue(" value "); got != "value" {
 		t.Fatalf("docStringValue() = %q, want value", got)

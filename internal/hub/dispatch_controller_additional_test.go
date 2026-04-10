@@ -50,7 +50,7 @@ func TestIncludeLinuxDiskDeviceAdditionalCases(t *testing.T) {
 func TestSampleWindowsParsesTypeperfOutput(t *testing.T) {
 	tmp := t.TempDir()
 	scriptPath := filepath.Join(tmp, "typeperf")
-	script := `#!/usr/bin/env bash
+	script := `#!/bin/sh
 echo '"(PDH-CSV 4.0)","\\Processor(_Total)\\% Processor Time","\\Memory\\% Committed Bytes In Use","\\PhysicalDisk(_Total)\\Disk Bytes/sec"'
 echo '"04/07/2026 09:10:00.000","12,5","40.0","1048576"'
 `
@@ -80,7 +80,7 @@ echo '"04/07/2026 09:10:00.000","12,5","40.0","1048576"'
 func TestSampleWindowsErrorsOnMissingData(t *testing.T) {
 	tmp := t.TempDir()
 	scriptPath := filepath.Join(tmp, "typeperf")
-	script := `#!/usr/bin/env bash
+	script := `#!/bin/sh
 echo '"(PDH-CSV 4.0)","\\Processor(_Total)\\% Processor Time"'
 `
 	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {

@@ -142,6 +142,8 @@ func TestLoadStoredRuntimeConfigReadsPrimaryPath(t *testing.T) {
 }
 
 func TestDaemonRunUsesStoredRuntimeConfigBaseURLWhenInitBaseURLOmitted(t *testing.T) {
+	t.Setenv(runtimeConfigPathEnv, "")
+
 	root := t.TempDir()
 	origWD, err := os.Getwd()
 	if err != nil {
@@ -276,6 +278,8 @@ func TestDaemonRunUsesStoredRuntimeConfigBaseURLWhenInitBaseURLOmitted(t *testin
 }
 
 func TestDaemonRunUsesStoredRuntimeConfigPullTimeout(t *testing.T) {
+	t.Setenv(runtimeConfigPathEnv, "")
+
 	root := t.TempDir()
 	origWD, err := os.Getwd()
 	if err != nil {

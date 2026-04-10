@@ -74,6 +74,8 @@ func TestRunMultiplexUsageMissingConfigFlag(t *testing.T) {
 }
 
 func TestLoadHubBootConfigWithoutFlagsUsesDefaultsWhenRuntimeConfigMissing(t *testing.T) {
+	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
+
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -104,7 +106,7 @@ func TestLoadHubBootConfigWithoutFlagsUsesDefaultsWhenRuntimeConfigMissing(t *te
 }
 
 func TestLoadHubBootConfigWithMissingInitFlagFallsBackToRuntimeDefaults(t *testing.T) {
-	t.Parallel()
+	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
 
 	tempDir := t.TempDir()
 	initPath := filepath.Join(tempDir, "init.json")
@@ -125,7 +127,7 @@ func TestLoadHubBootConfigWithMissingInitFlagFallsBackToRuntimeDefaults(t *testi
 }
 
 func TestLoadHubBootConfigWithMissingInitFlagUsesSiblingRuntimeConfigWhenAvailable(t *testing.T) {
-	t.Parallel()
+	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
 
 	tempDir := t.TempDir()
 	initPath := filepath.Join(tempDir, "init.json")
@@ -158,7 +160,7 @@ func TestLoadHubBootConfigWithMissingInitFlagUsesSiblingRuntimeConfigWhenAvailab
 }
 
 func TestLoadHubBootConfigWithMissingConfigFlagFallsBackToRuntimeDefaults(t *testing.T) {
-	t.Parallel()
+	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
 
 	tempDir := t.TempDir()
 	runtimeConfigPath := filepath.Join(tempDir, "config.json")
@@ -179,6 +181,8 @@ func TestLoadHubBootConfigWithMissingConfigFlagFallsBackToRuntimeDefaults(t *tes
 }
 
 func TestLoadHubBootConfigUsesDefaultRuntimeConfigWhenFlagsOmitted(t *testing.T) {
+	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
+
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -228,6 +232,8 @@ func TestLoadHubBootConfigUsesDefaultRuntimeConfigWhenFlagsOmitted(t *testing.T)
 }
 
 func TestLoadHubBootConfigWithoutFlagsAllowsDefaultRuntimeConfigWithoutCredentials(t *testing.T) {
+	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
+
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
