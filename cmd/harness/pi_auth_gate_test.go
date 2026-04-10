@@ -123,6 +123,9 @@ func TestPiAuthGateConfigureReturnsLaunchFailureDetails(t *testing.T) {
 	if err == nil {
 		t.Fatal("Configure() error = nil, want non-nil")
 	}
+	if !strings.Contains(err.Error(), "PI provider validation failed. Error details:") {
+		t.Fatalf("Configure() error = %q, want explicit failure prefix", err)
+	}
 	if !strings.Contains(err.Error(), "pi login failed") {
 		t.Fatalf("Configure() error = %q, want launch failure detail", err)
 	}
@@ -146,5 +149,110 @@ func TestPiAuthGateConfigureReturnsLaunchFailureDetails(t *testing.T) {
 	}
 	if got := doc["pi_provider_auth"]; got == nil || got == "" {
 		t.Fatalf("pi_provider_auth = %#v, want persisted value", got)
+	}
+}
+
+func TestPiAuthGateConfigureOpenRouterPATFailureIncludesActionableGuidance(t *testing.T) {
+	t.Setenv("OPENROUTER_API_KEY", "")
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	runner := &authGateRunnerStub{
+		run: func(context.Context, execx.Command) (execx.Result, error) {
+			return execx.Result{}, errors.New("run pi [--print --mode text --no-session Reply with OK.]: exit status 1 (400 checking third-party user token: bad request: Personal Access Tokens are not supported for this endpoint)")
+		},
+	}
+	g := newPiAuthGateWithRuntime(runner, "pi", path, hub.InitConfig{}, nil)
+
+	status, err := g.Configure(context.Background(), `{"env_var":"OPENROUTER_API_KEY","value":"sk-or-v1-demo"}`)
+	if err == nil {
+		t.Fatal("Configure() error = nil, want non-nil")
+	}
+	if !strings.Contains(err.Error(), "PI provider validation failed. Error details:") {
+		t.Fatalf("Configure() error = %q, want explicit failure prefix", err)
+	}
+	if !strings.Contains(err.Error(), "Personal Access Tokens are not supported for this endpoint") {
+		t.Fatalf("Configure() error = %q, want OpenRouter PAT detail", err)
+	}
+	if !strings.Contains(err.Error(), "Use an OpenRouter API key for OPENROUTER_API_KEY") {
+		t.Fatalf("Configure() error = %q, want actionable OpenRouter guidance", err)
+	}
+	if !strings.Contains(err.Error(), openRouterProviderSetupDocURL) {
+		t.Fatalf("Configure() error = %q, want setup documentation link", err)
+	}
+	if status.Ready || status.State != "needs_configure" {
+		t.Fatalf("status = %+v", status)
+	}
+	if !strings.Contains(status.Message, "launch pi with OPENROUTER_API_KEY") {
+		t.Fatalf("status.Message = %q, want OpenRouter launch detail", status.Message)
+	}
+	if !strings.Contains(status.Message, "Use an OpenRouter API key for OPENROUTER_API_KEY") {
+		t.Fatalf("status.Message = %q, want OpenRouter remediation detail", status.Message)
+	}
+}
+
+func TestPiAuthGateConfigureRejectsOpenRouterPersonalAccessTokenBeforeProbe(t *testing.T) {
+	t.Setenv("OPENROUTER_API_KEY", "")
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	runner := &authGateRunnerStub{
+		run: func(context.Context, execx.Command) (execx.Result, error) {
+			t.Fatal("probe should not run when OPENROUTER_API_KEY format is invalid")
+			return execx.Result{}, nil
+		},
+	}
+	g := newPiAuthGateWithRuntime(runner, "pi", path, hub.InitConfig{}, nil)
+
+	status, err := g.Configure(context.Background(), `{"env_var":"OPENROUTER_API_KEY","value":"pat_demo_token"}`)
+	if err == nil {
+		t.Fatal("Configure() error = nil, want non-nil")
+	}
+	if !strings.Contains(err.Error(), "OPENROUTER_API_KEY must be an OpenRouter API key") {
+		t.Fatalf("Configure() error = %q, want OpenRouter API key guidance", err)
+	}
+	if !strings.Contains(err.Error(), "Personal Access Token") {
+		t.Fatalf("Configure() error = %q, want PAT guidance", err)
+	}
+	if !strings.Contains(err.Error(), openRouterProviderSetupDocURL) {
+		t.Fatalf("Configure() error = %q, want setup documentation link", err)
+	}
+	if status.Ready || status.State != "needs_configure" {
+		t.Fatalf("status = %+v", status)
+	}
+	if !strings.Contains(status.Message, "PI provider auth is invalid") {
+		t.Fatalf("status.Message = %q, want invalid auth detail", status.Message)
+	}
+	if got := len(runner.calls); got != 0 {
+		t.Fatalf("probe calls = %d, want 0", got)
+	}
+	if got := strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY")); got != "" {
+		t.Fatalf("OPENROUTER_API_KEY = %q, want empty", got)
+	}
+	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+		t.Fatalf("runtime config path should not be written for invalid OpenRouter token, stat err = %v", statErr)
+	}
+}
+
+func TestIsLikelyOpenRouterAPIKey(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		value string
+		want  bool
+	}{
+		{name: "v1 key", value: "sk-or-v1-demo", want: true},
+		{name: "v10 key", value: "sk-or-v10-demo", want: true},
+		{name: "trimmed whitespace", value: "  sk-or-v1-demo  ", want: true},
+		{name: "missing prefix", value: "sk-demo", want: false},
+		{name: "missing version digits", value: "sk-or-v-demo", want: false},
+		{name: "missing separator after version", value: "sk-or-v1demo", want: false},
+		{name: "missing key body", value: "sk-or-v1-", want: false},
+		{name: "personal token marker", value: "pat_demo_token", want: false},
+	}
+
+	for _, tt := range tests {
+		if got := isLikelyOpenRouterAPIKey(tt.value); got != tt.want {
+			t.Fatalf("%s: isLikelyOpenRouterAPIKey(%q) = %v, want %v", tt.name, tt.value, got, tt.want)
+		}
 	}
 }
