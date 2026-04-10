@@ -2661,6 +2661,71 @@ select.prompt-control {
   grid-column: 1 / -1;
 }
 
+.hub-setup-onboarding {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--surface-control-border) 85%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface-control-bg) 88%, transparent);
+}
+
+.hub-setup-onboarding-heading {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--surface-label);
+}
+
+.hub-setup-onboarding-steps {
+  display: grid;
+  gap: 10px;
+}
+
+.hub-setup-onboarding-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px 12px;
+  align-items: start;
+}
+
+.hub-setup-onboarding-dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 0.38rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hub-muted) 70%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--surface-control-border) 85%, transparent);
+}
+
+.hub-setup-onboarding-step.current .hub-setup-onboarding-dot {
+  background: var(--running);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--running) 18%, transparent);
+}
+
+.hub-setup-onboarding-step.completed .hub-setup-onboarding-dot {
+  background: var(--surface-success);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--surface-success) 14%, transparent);
+}
+
+.hub-setup-onboarding-step.error .hub-setup-onboarding-dot {
+  background: var(--surface-danger);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--surface-danger) 16%, transparent);
+}
+
+.hub-setup-onboarding-label {
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: var(--hub-text);
+}
+
+.hub-setup-onboarding-detail {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--hub-muted);
+}
+
 .hub-setup-profile-input {
   height: auto;
   min-height: calc(2 * 1.45em + 24px);

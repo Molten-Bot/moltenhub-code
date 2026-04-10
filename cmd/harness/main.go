@@ -1503,11 +1503,13 @@ func hubCredentialsConfigured(cfg hub.InitConfig, loadRuntimeConfig runtimeConfi
 
 func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 	state := hubui.HubSetupState{
-		ConnectURL:   "https://app.molten.bot/signin?target=hub",
-		DashboardURL: "https://app.molten.bot/hub",
-		AgentMode:    "existing",
-		TokenType:    "agent",
-		Region:       "na",
+		ConnectURL:      "https://app.molten.bot/signin?target=hub",
+		DashboardURL:    "https://app.molten.bot/hub",
+		AgentMode:       "existing",
+		TokenType:       "agent",
+		Region:          "na",
+		Onboarding:      hubui.DefaultHubSetupOnboarding("existing"),
+		OnboardingStage: "bind",
 	}
 
 	activeCfg, err := effectiveHubSetupConfig(cfg)
@@ -1529,6 +1531,8 @@ func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 			state.TokenType = "agent"
 		}
 	}
+	state.Onboarding = hubui.DefaultHubSetupOnboarding(state.AgentMode)
+	state.ActivationReady = state.Configured
 	return state
 }
 
@@ -1579,6 +1583,8 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 	state.Profile.ProfileText = strings.TrimSpace(req.Profile.ProfileText)
 	state.Profile.DisplayName = strings.TrimSpace(req.Profile.DisplayName)
 	state.Profile.Emoji = strings.TrimSpace(req.Profile.Emoji)
+	state.Onboarding = hubui.DefaultHubSetupOnboarding(state.AgentMode)
+	hubSetupMarkStep(&state, "bind", "current", "")
 
 	token := strings.TrimSpace(req.Token)
 
@@ -1611,8 +1617,11 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 	client := hub.NewAPIClient(activeCfg.BaseURL)
 	resolvedToken, err := client.ResolveAgentToken(ctx, activeCfg)
 	if err != nil {
+		hubSetupMarkStep(&state, "bind", "error", err.Error())
 		return state, fmt.Errorf("resolve hub token: %w", err)
 	}
+	hubSetupMarkStep(&state, "bind", "completed", "")
+	hubSetupMarkStep(&state, "work_bind", "current", "")
 
 	finalCfg := activeCfg
 	if baseURL := strings.TrimRight(strings.TrimSpace(client.BaseURL), "/"); baseURL != "" {
@@ -1631,16 +1640,23 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 		finalCfg.Profile.DisplayName = state.Profile.DisplayName
 		finalCfg.Profile.Emoji = state.Profile.Emoji
 		if err := client.SyncProfile(ctx, resolvedToken, finalCfg); err != nil {
+			hubSetupMarkStep(&state, "profile_set", "error", err.Error())
 			return state, fmt.Errorf("sync hub profile: %w", err)
 		}
+		hubSetupMarkStep(&state, "work_bind", "completed", "")
+		hubSetupMarkStep(&state, "profile_set", "completed", "Molten Hub profile saved.")
 	} else {
 		_ = client.UpdateAgentStatus(ctx, resolvedToken, "online")
+		hubSetupMarkStep(&state, "work_bind", "completed", "")
+		hubSetupMarkStep(&state, "profile_set", "completed", "Existing Molten Hub profile confirmed.")
 	}
+	hubSetupMarkStep(&state, "work_activate", "current", "")
 
 	// Always read back profile after token resolution so config initialization
 	// stays accurate for first-time binds and re-binds.
 	profile, err := client.AgentProfile(ctx, resolvedToken)
 	if err != nil {
+		hubSetupMarkStep(&state, "work_activate", "error", err.Error())
 		return state, fmt.Errorf("load hub profile: %w", err)
 	}
 	if normalizeHubSetupMode(state.AgentMode) == "existing" {
@@ -1657,6 +1673,7 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 	finalCfg.ApplyDefaults()
 
 	if err := hub.SaveRuntimeConfigHubSettings(cfg.RuntimeConfigPath, finalCfg, resolvedToken); err != nil {
+		hubSetupMarkStep(&state, "work_activate", "error", err.Error())
 		return state, fmt.Errorf("save runtime config: %w", err)
 	}
 
@@ -1668,12 +1685,16 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 	state.Profile.Emoji = strings.TrimSpace(finalCfg.Profile.Emoji)
 	state.Message = "Molten Hub setup saved and applied live."
 	state.NeedsRestart = false
+	state.ActivationReady = true
 	if applyLive != nil {
 		if err := applyLive(ctx, finalCfg); err != nil {
 			state.Message = fmt.Sprintf("Molten Hub setup was saved, but live apply failed: %v", err)
+			hubSetupMarkStep(&state, "work_activate", "error", err.Error())
 			return state, fmt.Errorf("apply live hub setup: %w", err)
 		}
 	}
+	hubSetupMarkStep(&state, "work_activate", "completed", "Molten Hub activation confirmed.")
+	state.OnboardingActive = false
 	return state, nil
 }
 
@@ -1700,6 +1721,7 @@ func connectHubSetup(ctx context.Context, cfg hub.InitConfig, applyLive func(con
 
 	state.Message = "Molten Hub connected."
 	state.NeedsRestart = false
+	state.ActivationReady = true
 	return state, nil
 }
 
@@ -1718,7 +1740,31 @@ func disconnectHubSetup(ctx context.Context, cfg hub.InitConfig, stopLive func(c
 
 	state.Message = "Molten Hub disconnected."
 	state.NeedsRestart = false
+	state.ActivationReady = false
 	return state, nil
+}
+
+func hubSetupMarkStep(state *hubui.HubSetupState, stepID, status, detail string) {
+	if state == nil {
+		return
+	}
+	stepID = strings.TrimSpace(stepID)
+	status = strings.TrimSpace(status)
+	if stepID == "" || status == "" {
+		return
+	}
+	state.OnboardingActive = status == "current"
+	state.OnboardingStage = stepID
+	for i := range state.Onboarding {
+		if state.Onboarding[i].ID != stepID {
+			continue
+		}
+		state.Onboarding[i].Status = status
+		if strings.TrimSpace(detail) != "" {
+			state.Onboarding[i].Detail = strings.TrimSpace(detail)
+		}
+		return
+	}
 }
 
 func validateHubSetupToken(token string) error {
