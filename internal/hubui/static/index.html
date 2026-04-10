@@ -430,6 +430,7 @@
           </a>
           <div class="hub-setup-actions">
             <span id="hub-setup-status" class="hub-setup-status submit-status submit-status-inline min-h-[1.3em] text-[0.74rem] leading-[1.3] text-hub-muted"></span>
+            <button id="hub-setup-connection-toggle" class="hub-setup-connection-toggle hidden" type="button">Disconnect</button>
             <button id="hub-setup-submit" class="prompt-action-button prompt-submit" type="submit">Done</button>
           </div>
         </div>
@@ -960,6 +961,7 @@
     const hubSetupProfile = document.getElementById("hub-setup-profile");
     const hubSetupSigninLink = document.getElementById("hub-setup-signin-link");
     const hubSetupStatus = document.getElementById("hub-setup-status");
+    const hubSetupConnectionToggle = document.getElementById("hub-setup-connection-toggle");
     const hubSetupSubmit = document.getElementById("hub-setup-submit");
     const moltenHubLogo = document.getElementById("moltenhub-logo");
     const configuredAgentLogo = document.getElementById("configured-agent-logo");
@@ -1302,8 +1304,33 @@
       if (hubSetupHandle) hubSetupHandle.disabled = state.hubSetupBusy;
       if (hubSetupDisplayName) hubSetupDisplayName.disabled = state.hubSetupBusy;
       if (hubSetupEmoji) hubSetupEmoji.disabled = state.hubSetupBusy;
+      if (hubSetupConnectionToggle) hubSetupConnectionToggle.disabled = state.hubSetupBusy;
       if (hubSetupProfile) hubSetupProfile.disabled = state.hubSetupBusy;
       if (hubSetupSubmit) hubSetupSubmit.disabled = state.hubSetupBusy;
+    }
+
+    function hubConnectionIsLive(snapshot = state.snapshot) {
+      if (!snapshot || typeof snapshot.connection !== "object" || snapshot.connection === null) {
+        return false;
+      }
+      const conn = snapshot.connection;
+      const transport = typeof conn.hub_transport === "string" ? conn.hub_transport.trim() : "";
+      return Boolean(conn.hub_connected) || transport === "ws" || transport === "http_long_poll" || transport === "connected";
+    }
+
+    function renderHubSetupConnectionToggle() {
+      if (!hubSetupConnectionToggle) {
+        return;
+      }
+      const show = isHubProfileDialogMode() && state.hubSetup.configured;
+      hubSetupConnectionToggle.classList.toggle("hidden", !show);
+      if (!show) {
+        return;
+      }
+      const connected = hubConnectionIsLive();
+      hubSetupConnectionToggle.textContent = connected ? "Disconnect" : "Connect";
+      hubSetupConnectionToggle.setAttribute("data-action", connected ? "disconnect" : "connect");
+      hubSetupConnectionToggle.classList.toggle("hub-setup-connection-toggle-offline", connected);
     }
 
     function applyHubDockState() {
@@ -1334,7 +1361,7 @@
         hubSetupSigninLink.classList.toggle("hidden", profileEditor);
       }
       if (hubSetupTitle) {
-        hubSetupTitle.textContent = profileEditor ? "Edit Agent Profile" : "Connect Molten Hub";
+        hubSetupTitle.textContent = profileEditor ? "Agent Profile" : "Connect Molten Hub";
       }
       if (hubSetupMessage) {
         hubSetupMessage.textContent = state.hubSetup.message || (profileEditor
@@ -1398,6 +1425,7 @@
         hubSetupSubmit.textContent = profileEditor ? "Save" : "Done";
       }
       applyHubDockState();
+      renderHubSetupConnectionToggle();
       renderHubConnection(state.snapshot);
     }
 
@@ -1522,6 +1550,47 @@
         trackAnalyticsEvent("hub_setup_failed", { agent_mode: payload.agent_mode, token_type: payload.token_type });
         state.hubSetupLastAutoSubmitKey = "";
         setHubSetupStatus("error", err && err.message ? err.message : "Hub setup failed.");
+      } finally {
+        setHubSetupBusy(false);
+      }
+    }
+
+    async function submitHubConnectionToggle() {
+      if (!hubSetupConnectionToggle || state.hubSetupBusy) {
+        return;
+      }
+      const action = hubSetupConnectionToggle.getAttribute("data-action") === "connect" ? "connect" : "disconnect";
+      const endpoint = action === "connect" ? "/api/hub-setup/connect" : "/api/hub-setup/disconnect";
+      setHubSetupBusy(true);
+      setHubSetupStatus("warn", action === "connect" ? "Connecting to Molten Hub..." : "Disconnecting from Molten Hub...");
+      try {
+        const response = await fetch(endpoint, { method: "POST" });
+        let body = null;
+        try {
+          body = await response.json();
+        } catch (_err) {
+          body = null;
+        }
+        if (!response.ok) {
+          throw new Error(body?.error || `hub ${action} http ${response.status}`);
+        }
+        const priorConnection = state.snapshot && typeof state.snapshot === "object" && state.snapshot !== null &&
+          typeof state.snapshot.connection === "object" && state.snapshot.connection !== null
+          ? state.snapshot.connection
+          : {};
+        state.snapshot = {
+          ...(state.snapshot && typeof state.snapshot === "object" && state.snapshot !== null ? state.snapshot : {}),
+          connection: {
+            ...priorConnection,
+            hub_connected: action === "connect",
+            hub_transport: action === "connect" ? "connected" : "disconnected",
+          },
+        };
+        applyHubSetupState(body?.hub);
+        await loadHubSetupStatus();
+        setHubSetupStatus("ok", body?.hub?.message || (action === "connect" ? "Molten Hub connected." : "Molten Hub disconnected."));
+      } catch (err) {
+        setHubSetupStatus("error", err && err.message ? err.message : `Hub ${action} failed.`);
       } finally {
         setHubSetupBusy(false);
       }
@@ -2461,6 +2530,7 @@
     function renderHubConnection(snapshot) {
       if (!snapshot || typeof snapshot.connection !== "object" || snapshot.connection === null) {
         setHubConnection("disconnected", "Hub status unavailable");
+        renderHubSetupConnectionToggle();
         return;
       }
 
@@ -2472,29 +2542,35 @@
 
       if (transport === "ws") {
         setHubConnection("ws", `Connected via WebSocket to ${target}`);
+        renderHubSetupConnectionToggle();
         return;
       }
 
       if (transport === "http_long_poll") {
         setHubConnection("http_long_poll", `Connected via HTTP long polling to ${target}`);
+        renderHubSetupConnectionToggle();
         return;
       }
 
       if (conn.hub_connected) {
         setHubConnection("connected", `Connected to ${target} (transport pending)`);
+        renderHubSetupConnectionToggle();
         return;
       }
 
       if (domain || baseURL) {
         setHubConnection("disconnected", `Disconnected from ${target}`);
+        renderHubSetupConnectionToggle();
         return;
       }
 
       if (state.hubSetup.configured) {
         setHubConnection("disconnected", "Configured locally. Restart runtime to connect.");
+        renderHubSetupConnectionToggle();
         return;
       }
       setHubConnection("disconnected", "Connect to Molten Hub");
+      renderHubSetupConnectionToggle();
     }
 
     function formatCompactMetricNumber(value, suffix = "") {
@@ -4613,6 +4689,9 @@
           maybeOpenHubConnectPage(event);
         }
       });
+    }
+    if (hubSetupConnectionToggle) {
+      hubSetupConnectionToggle.addEventListener("click", submitHubConnectionToggle);
     }
     if (moltenBotHubLink) {
       moltenBotHubLink.addEventListener("click", (event) => {

@@ -2496,6 +2496,28 @@ select.prompt-control {
   text-align: center;
 }
 
+.hub-setup-connection-toggle {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--surface-control-border);
+  border-radius: 999px;
+  background: var(--surface-control-bg);
+  box-shadow: var(--surface-control-shadow);
+  color: var(--surface-tab-text);
+  transition: transform 180ms ease, box-shadow 180ms ease, color 180ms ease, border-color 180ms ease;
+}
+
+.hub-setup-connection-toggle:hover,
+.hub-setup-connection-toggle:focus-visible {
+  color: var(--surface-tab-hover-text);
+  transform: translateY(-1px);
+}
+
+.hub-setup-connection-toggle-offline {
+  color: var(--surface-danger);
+  border-color: color-mix(in srgb, var(--surface-danger) 26%, var(--surface-control-border));
+}
+
 .agent-auth-configure-input-github {
   width: min(100%, 46ch);
   min-height: 46px;

@@ -114,6 +114,33 @@ func (c *hubDaemonController) Update(ctx context.Context, cfg hub.InitConfig) er
 	}
 }
 
+func (c *hubDaemonController) Stop(ctx context.Context) error {
+	if c == nil {
+		return fmt.Errorf("hub daemon controller is required")
+	}
+
+	c.updateMu.Lock()
+	defer c.updateMu.Unlock()
+
+	prevCancel, prevDone := c.activeRun()
+	if prevCancel == nil {
+		return nil
+	}
+
+	prevCancel()
+	if prevDone == nil {
+		return nil
+	}
+
+	select {
+	case err := <-prevDone:
+		c.clearActiveRun(prevDone)
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 func (c *hubDaemonController) run(runCtx context.Context, cfg hub.InitConfig, done chan error) {
 	daemon := hub.NewDaemon(c.runner)
 	daemon.Logf = c.logf

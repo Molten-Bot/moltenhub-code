@@ -742,6 +742,9 @@ func TestCurrentHubSetupStateUsesStoredBindTokenAsNewAgentMode(t *testing.T) {
 	if got, want := state.Handle, "builder"; got != want {
 		t.Fatalf("Handle = %q, want %q", got, want)
 	}
+	if got := state.Message; got != "" {
+		t.Fatalf("Message = %q, want empty", got)
+	}
 }
 
 func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
@@ -1219,5 +1222,85 @@ func TestConfigureHubSetupReturnsSavedStateWhenLiveApplyFails(t *testing.T) {
 	}
 	if !strings.Contains(state.Message, "live apply failed") {
 		t.Fatalf("Message = %q, want live apply failure detail", state.Message)
+	}
+}
+
+func TestConnectHubSetupUsesSavedRuntimeConfig(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{
+  "version": "v1",
+  "base_url": "https://eu.hub.molten.bot/v1",
+  "agent_token": "agent_saved",
+  "handle": "builder",
+  "profile": {
+    "display_name": "Builder",
+    "emoji": "🔥",
+    "bio": "Ships UI work"
+  },
+  "timeout_ms": 20000
+}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	var liveCfg hub.InitConfig
+	state, err := connectHubSetup(context.Background(), hub.InitConfig{
+		RuntimeConfigPath: configPath,
+	}, func(_ context.Context, cfg hub.InitConfig) error {
+		liveCfg = cfg
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("connectHubSetup() error = %v", err)
+	}
+	if got, want := liveCfg.AgentToken, "agent_saved"; got != want {
+		t.Fatalf("liveCfg.AgentToken = %q, want %q", got, want)
+	}
+	if got, want := liveCfg.BaseURL, "https://eu.hub.molten.bot/v1"; got != want {
+		t.Fatalf("liveCfg.BaseURL = %q, want %q", got, want)
+	}
+	if got, want := state.Message, "Molten Hub connected."; got != want {
+		t.Fatalf("Message = %q, want %q", got, want)
+	}
+}
+
+func TestDisconnectHubSetupStopsLiveRuntime(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{
+  "version": "v1",
+  "base_url": "https://na.hub.molten.bot/v1",
+  "agent_token": "agent_saved",
+  "timeout_ms": 20000
+}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	stopCalls := 0
+	state, err := disconnectHubSetup(context.Background(), hub.InitConfig{
+		RuntimeConfigPath: configPath,
+	}, func(context.Context) error {
+		stopCalls++
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("disconnectHubSetup() error = %v", err)
+	}
+	if stopCalls != 1 {
+		t.Fatalf("stopCalls = %d, want 1", stopCalls)
+	}
+	if !state.Configured {
+		t.Fatal("Configured = false, want true")
+	}
+	if got, want := state.Message, "Molten Hub disconnected."; got != want {
+		t.Fatalf("Message = %q, want %q", got, want)
 	}
 }

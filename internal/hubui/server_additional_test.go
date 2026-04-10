@@ -107,6 +107,60 @@ func TestHandleHubSetupConfigureRejectsBadPayload(t *testing.T) {
 	}
 }
 
+func TestHandleHubSetupConnectAndDisconnect(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	srv.ConnectHubSetup = func(context.Context) (HubSetupState, error) {
+		state := defaultHubSetupState()
+		state.Configured = true
+		state.Message = "Molten Hub connected."
+		return state, nil
+	}
+	srv.DisconnectHubSetup = func(context.Context) (HubSetupState, error) {
+		state := defaultHubSetupState()
+		state.Configured = true
+		state.Message = "Molten Hub disconnected."
+		return state, nil
+	}
+
+	connectReq := httptest.NewRequest(http.MethodPost, "/api/hub-setup/connect", nil)
+	connectResp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(connectResp, connectReq)
+	if connectResp.Code != http.StatusOK {
+		t.Fatalf("POST /api/hub-setup/connect status = %d, want 200", connectResp.Code)
+	}
+
+	var connectBody struct {
+		OK  bool          `json:"ok"`
+		Hub HubSetupState `json:"hub"`
+	}
+	if err := json.NewDecoder(connectResp.Body).Decode(&connectBody); err != nil {
+		t.Fatalf("decode connect body: %v", err)
+	}
+	if !connectBody.OK || connectBody.Hub.Message != "Molten Hub connected." {
+		t.Fatalf("connect body = %#v", connectBody)
+	}
+
+	disconnectReq := httptest.NewRequest(http.MethodPost, "/api/hub-setup/disconnect", nil)
+	disconnectResp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(disconnectResp, disconnectReq)
+	if disconnectResp.Code != http.StatusOK {
+		t.Fatalf("POST /api/hub-setup/disconnect status = %d, want 200", disconnectResp.Code)
+	}
+
+	var disconnectBody struct {
+		OK  bool          `json:"ok"`
+		Hub HubSetupState `json:"hub"`
+	}
+	if err := json.NewDecoder(disconnectResp.Body).Decode(&disconnectBody); err != nil {
+		t.Fatalf("decode disconnect body: %v", err)
+	}
+	if !disconnectBody.OK || disconnectBody.Hub.Message != "Molten Hub disconnected." {
+		t.Fatalf("disconnect body = %#v", disconnectBody)
+	}
+}
+
 func TestNewServerDefaultsAndLogfHelper(t *testing.T) {
 	t.Parallel()
 

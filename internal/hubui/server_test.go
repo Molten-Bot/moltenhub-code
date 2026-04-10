@@ -279,8 +279,23 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if profileButtonIndex == -1 || profileButtonIndex < moltenbotIndex {
 		t.Fatalf("expected hub profile button to render to the right of the hub dock icon")
 	}
-	if !strings.Contains(markup, `Edit Agent Profile`) {
+	if !strings.Contains(markup, `Agent Profile`) {
 		t.Fatalf("expected index html to include connected profile editor copy")
+	}
+	if strings.Contains(markup, `Edit Agent Profile`) {
+		t.Fatalf("expected index html to remove the old profile editor heading")
+	}
+	if !strings.Contains(markup, `id="hub-setup-connection-toggle"`) {
+		t.Fatalf("expected index html to include the hub connection toggle button")
+	}
+	if !strings.Contains(markup, `async function submitHubConnectionToggle()`) {
+		t.Fatalf("expected index html to include hub connection toggle handler")
+	}
+	if !strings.Contains(markup, `function renderHubSetupConnectionToggle()`) {
+		t.Fatalf("expected index html to include hub connection toggle renderer")
+	}
+	if !strings.Contains(markup, `hubSetupConnectionToggle.addEventListener("click", submitHubConnectionToggle);`) {
+		t.Fatalf("expected index html to wire the hub connection toggle button")
 	}
 	if !strings.Contains(markup, `<span class="prompt-label">Profile</span>`) {
 		t.Fatalf("expected index html to relabel the agent summary field as Profile")

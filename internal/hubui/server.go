@@ -50,6 +50,8 @@ type Server struct {
 	ConfigureAgentAuth func(context.Context, string) (AgentAuthState, error)
 	HubSetupStatus     func(context.Context) (HubSetupState, error)
 	ConfigureHubSetup  func(context.Context, HubSetupRequest) (HubSetupState, error)
+	ConnectHubSetup    func(context.Context) (HubSetupState, error)
+	DisconnectHubSetup func(context.Context) (HubSetupState, error)
 	ResolveGitHubProfileURL func(context.Context) (string, error)
 }
 
@@ -169,6 +171,8 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/api/local-prompt", s.handleLocalPrompt)
 	mux.HandleFunc("/api/github/profile", s.handleGitHubProfile)
 	mux.HandleFunc("/api/hub-setup", s.handleHubSetup)
+	mux.HandleFunc("/api/hub-setup/connect", s.handleHubSetupConnect)
+	mux.HandleFunc("/api/hub-setup/disconnect", s.handleHubSetupDisconnect)
 	mux.HandleFunc("/api/agent-auth", s.handleAgentAuthStatus)
 	mux.HandleFunc("/api/agent-auth/start-device", s.handleAgentAuthStart)
 	mux.HandleFunc("/api/agent-auth/verify", s.handleAgentAuthVerify)
@@ -492,6 +496,68 @@ func (s Server) handleHubSetup(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Allow", strings.Join([]string{http.MethodGet, http.MethodPost}, ", "))
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (s Server) handleHubSetupConnect(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.ConnectHubSetup == nil {
+		writeJSON(w, http.StatusNotImplemented, map[string]any{
+			"ok":    false,
+			"error": "hub connect is unavailable",
+			"hub":   defaultHubSetupState(),
+		})
+		return
+	}
+
+	state, err := s.ConnectHubSetup(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": err.Error(),
+			"hub":   state,
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":  true,
+		"hub": state,
+	})
+}
+
+func (s Server) handleHubSetupDisconnect(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.DisconnectHubSetup == nil {
+		writeJSON(w, http.StatusNotImplemented, map[string]any{
+			"ok":    false,
+			"error": "hub disconnect is unavailable",
+			"hub":   defaultHubSetupState(),
+		})
+		return
+	}
+
+	state, err := s.DisconnectHubSetup(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": err.Error(),
+			"hub":   state,
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":  true,
+		"hub": state,
+	})
 }
 
 func (s Server) handleAgentAuthStatus(w http.ResponseWriter, r *http.Request) {

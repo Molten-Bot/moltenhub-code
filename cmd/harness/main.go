@@ -600,6 +600,12 @@ func runHub(args []string) int {
 		uiServer.ConfigureHubSetup = func(reqCtx context.Context, req hubui.HubSetupRequest) (hubui.HubSetupState, error) {
 			return configureHubSetup(reqCtx, cfg, req, hubController.Update)
 		}
+		uiServer.ConnectHubSetup = func(reqCtx context.Context) (hubui.HubSetupState, error) {
+			return connectHubSetup(reqCtx, cfg, hubController.Update)
+		}
+		uiServer.DisconnectHubSetup = func(reqCtx context.Context) (hubui.HubSetupState, error) {
+			return disconnectHubSetup(reqCtx, cfg, hubController.Stop)
+		}
 		recordLibraryUsage := func(runCfg config.Config) {
 			if strings.TrimSpace(runCfg.LibraryTaskName) == "" {
 				return
@@ -1525,7 +1531,6 @@ func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 		} else {
 			state.TokenType = "agent"
 		}
-		state.Message = "Molten Hub credentials are saved locally."
 	}
 	return state
 }
@@ -1637,6 +1642,53 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 			return state, fmt.Errorf("apply live hub setup: %w", err)
 		}
 	}
+	return state, nil
+}
+
+func connectHubSetup(ctx context.Context, cfg hub.InitConfig, applyLive func(context.Context, hub.InitConfig) error) (hubui.HubSetupState, error) {
+	state := currentHubSetupState(cfg)
+	if !state.Configured {
+		return state, fmt.Errorf("molten hub is not configured")
+	}
+	if applyLive == nil {
+		return state, fmt.Errorf("live hub connect is unavailable")
+	}
+
+	activeCfg := cfg
+	if runtimeCfg, err := hub.LoadRuntimeConfig(cfg.RuntimeConfigPath); err == nil {
+		activeCfg = runtimeCfg.Init()
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return state, fmt.Errorf("load runtime config: %w", err)
+	}
+	activeCfg.ApplyDefaults()
+	if strings.TrimSpace(activeCfg.AgentToken) == "" && strings.TrimSpace(activeCfg.BindToken) == "" {
+		return state, fmt.Errorf("saved Molten Hub credentials are unavailable")
+	}
+	if err := applyLive(ctx, activeCfg); err != nil {
+		state.Message = fmt.Sprintf("Molten Hub connect failed: %v", err)
+		return state, fmt.Errorf("apply live hub setup: %w", err)
+	}
+
+	state.Message = "Molten Hub connected."
+	state.NeedsRestart = false
+	return state, nil
+}
+
+func disconnectHubSetup(ctx context.Context, cfg hub.InitConfig, stopLive func(context.Context) error) (hubui.HubSetupState, error) {
+	state := currentHubSetupState(cfg)
+	if !state.Configured {
+		return state, fmt.Errorf("molten hub is not configured")
+	}
+	if stopLive == nil {
+		return state, fmt.Errorf("live hub disconnect is unavailable")
+	}
+	if err := stopLive(ctx); err != nil {
+		state.Message = fmt.Sprintf("Molten Hub disconnect failed: %v", err)
+		return state, fmt.Errorf("disconnect live hub: %w", err)
+	}
+
+	state.Message = "Molten Hub disconnected."
+	state.NeedsRestart = false
 	return state, nil
 }
 
