@@ -432,6 +432,9 @@ func TestHandleDispatchQueuesFailureFollowUpWithTaskLogPaths(t *testing.T) {
 		expectedLogDir,
 		filepath.Join(expectedLogDir, "term"),
 		filepath.Join(expectedLogDir, "terminal.log"),
+		filepath.Join(logRoot, "terminal.log"),
+		filepath.Join(logRoot, "main", "term"),
+		filepath.Join(logRoot, "main", "terminal.log"),
 	} {
 		if !strings.Contains(prompt, path) {
 			t.Fatalf("follow-up prompt missing task log path %q: %q", path, prompt)

@@ -17,8 +17,11 @@ func TestTaskLogDirAndIdentifierValidationBranches(t *testing.T) {
 	}
 
 	paths := TaskLogPaths("/tmp/logs", "one---two")
-	if len(paths) != 3 || paths[0] != filepath.Join("/tmp/logs", "one", "two") {
+	if len(paths) != 6 || paths[0] != filepath.Join("/tmp/logs", "one", "two") {
 		t.Fatalf("TaskLogPaths(collapsed separators) = %#v", paths)
+	}
+	if paths[3] != filepath.Join("/tmp/logs", LogFileName) {
+		t.Fatalf("TaskLogPaths(aggregate) = %#v, want aggregate log path", paths)
 	}
 }
 

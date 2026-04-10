@@ -67,6 +67,9 @@ func TestTaskLogPathsBuildsExpectedLegacyAndCurrentFiles(t *testing.T) {
 		filepath.Join(root, "1775613327", "000024"),
 		filepath.Join(root, "1775613327", "000024", "term"),
 		filepath.Join(root, "1775613327", "000024", "terminal.log"),
+		filepath.Join(root, "terminal.log"),
+		filepath.Join(root, FallbackLogSubdir, "term"),
+		filepath.Join(root, FallbackLogSubdir, "terminal.log"),
 	}
 	if len(got) != len(want) {
 		t.Fatalf("len(TaskLogPaths()) = %d, want %d (%v)", len(got), len(want), got)

@@ -109,15 +109,34 @@ func FollowUpTargeting(baseBranch, targetSubdir, currentBranch string) (string, 
 }
 
 func TaskLogPaths(logRoot, requestID string) []string {
+	logRoot = strings.TrimSpace(logRoot)
 	logDir, ok := TaskLogDir(logRoot, requestID)
 	if !ok {
 		return nil
 	}
-	return []string{
-		logDir,
-		filepath.Join(logDir, LegacyTaskLogFileName),
-		filepath.Join(logDir, LogFileName),
+
+	paths := make([]string, 0, 6)
+	seen := make(map[string]struct{}, 6)
+	appendPath := func(path string) {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			return
+		}
+		if _, exists := seen[path]; exists {
+			return
+		}
+		seen[path] = struct{}{}
+		paths = append(paths, path)
 	}
+
+	appendPath(logDir)
+	appendPath(filepath.Join(logDir, LegacyTaskLogFileName))
+	appendPath(filepath.Join(logDir, LogFileName))
+	appendPath(filepath.Join(logRoot, LogFileName))
+	appendPath(filepath.Join(logRoot, FallbackLogSubdir, LegacyTaskLogFileName))
+	appendPath(filepath.Join(logRoot, FallbackLogSubdir, LogFileName))
+
+	return paths
 }
 
 func TaskLogDir(logRoot, requestID string) (string, bool) {
