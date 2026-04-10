@@ -2816,6 +2816,12 @@ select.prompt-control {
   min-height: 46px;
   height: 46px;
   max-height: 46px;
+}
+
+.agent-auth-configure-input-single-line {
+  min-height: 46px;
+  height: 46px;
+  max-height: 46px;
   resize: none;
   overflow-x: auto;
   overflow-y: hidden;

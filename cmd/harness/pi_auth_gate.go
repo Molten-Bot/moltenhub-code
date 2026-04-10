@@ -36,7 +36,7 @@ var piProviderOptions = []piProviderOption{
 	{EnvVar: "CEREBRAS_API_KEY", Label: "Cerebras API key", Description: "Use Cerebras with an API key."},
 	{EnvVar: "XAI_API_KEY", Label: "xAI Grok API key", Description: "Use xAI Grok with an API key."},
 	{EnvVar: "OPENROUTER_API_KEY", Label: "OpenRouter API key", Description: "Use OpenRouter with an API key."},
-	{EnvVar: "AI_GATEWAY_API_KEY", Label: "Vercel AI Gateway API key", Description: "Use Vercel AI Gateway with an API key."},
+	{EnvVar: "AI_GATEWAY_API_KEY", Label: "Vercel AI Gateway API key", Description: ""},
 	{EnvVar: "ZAI_API_KEY", Label: "ZAI API key", Description: "Use ZAI with an API key."},
 	{EnvVar: "MISTRAL_API_KEY", Label: "Mistral API key", Description: "Use Mistral with an API key."},
 	{EnvVar: "MINIMAX_API_KEY", Label: "MiniMax API key", Description: "Use MiniMax with an API key."},
@@ -88,7 +88,7 @@ func newPiAuthGate(runtimeConfigPath string, initCfg hub.InitConfig) *piAuthGate
 		initCfg:           initCfg,
 		required:          true,
 		state:             "needs_configure",
-		message:           "Select a PI provider variable and paste its value.",
+		message:           "Select a PI provider, and supply the token.",
 		configureOptions:  piAgentAuthOptions(),
 		updatedAt:         time.Now().UTC(),
 	}
@@ -178,7 +178,7 @@ func (g *piAuthGate) refreshLocked() {
 	g.required = true
 	g.ready = false
 	g.state = "needs_configure"
-	g.message = "Select a PI provider variable and paste its value."
+	g.message = "Select a PI provider, and supply the token."
 	g.configureOptions = piAgentAuthOptions()
 	g.updatedAt = time.Now().UTC()
 
@@ -212,7 +212,7 @@ func (g *piAuthGate) snapshotLocked() hubui.AgentAuthState {
 		Ready:                g.ready,
 		State:                strings.TrimSpace(g.state),
 		Message:              strings.TrimSpace(g.message),
-		ConfigurePlaceholder: "Paste the selected PI provider value",
+		ConfigurePlaceholder: "Paste the selected providers token in here...",
 		ConfigureOptions:     append([]hubui.AgentAuthOption(nil), g.configureOptions...),
 		UpdatedAt:            g.updatedAt.UTC().Format(time.RFC3339Nano),
 	}

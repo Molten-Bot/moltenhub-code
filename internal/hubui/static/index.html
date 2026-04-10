@@ -373,8 +373,8 @@
           <button id="agent-auth-configure-copy" class="agent-auth-copy rounded-md px-2.5 py-1.5 text-xs font-medium" type="button">Copy</button>
         </div>
         <div id="agent-auth-configure-option-row" class="hidden space-y-2">
-          <label id="agent-auth-configure-option-label" class="text-sm font-medium text-hub-text/85" for="agent-auth-configure-option">PI provider variable</label>
-          <select id="agent-auth-configure-option" class="prompt-text text-[0.95rem]" aria-label="PI provider variable"></select>
+          <label id="agent-auth-configure-option-label" class="text-sm font-medium text-hub-text/85" for="agent-auth-configure-option">PI provider</label>
+          <select id="agent-auth-configure-option" class="prompt-control text-[0.95rem]" aria-label="PI provider"></select>
           <p id="agent-auth-configure-option-description" class="text-sm text-hub-text/70"></p>
         </div>
         <label id="agent-auth-configure-label" class="text-sm font-medium text-hub-text/85" for="agent-auth-configure-input">Paste configuration value</label>
@@ -2396,7 +2396,7 @@
         if (needsClaudeGitHubConfigure) {
           agentAuthConfigureLabel.textContent = "Paste GitHub token";
         } else if (needsPiConfigure) {
-          agentAuthConfigureLabel.textContent = "Paste selected value";
+          agentAuthConfigureLabel.textContent = "Select a PI provider, and supply the token";
         } else {
           agentAuthConfigureLabel.textContent = "Paste configuration value";
         }
@@ -2406,12 +2406,13 @@
         const fallbackPlaceholder = needsAuggieConfigure
           ? '{"accessToken":"XXX","tenantURL":"https://YYY/","scopes":["email"]}'
           : needsPiConfigure
-            ? "Paste the selected PI provider value"
+            ? "Paste the selected providers token in here..."
             : "ghp_xxx";
         const placeholder = state.agentAuth.configurePlaceholder || fallbackPlaceholder;
         agentAuthConfigureInput.placeholder = placeholder;
         agentAuthConfigureInput.classList.toggle("agent-auth-configure-input-github", needsClaudeGitHubConfigure);
-        agentAuthConfigureInput.rows = needsClaudeGitHubConfigure ? 1 : (needsPiConfigure ? 3 : 5);
+        agentAuthConfigureInput.classList.toggle("agent-auth-configure-input-single-line", needsClaudeGitHubConfigure || needsPiConfigure);
+        agentAuthConfigureInput.rows = needsClaudeGitHubConfigure || needsPiConfigure ? 1 : 5;
       }
       if (agentAuthConfigureOption) {
         const options = Array.isArray(state.agentAuth.configureOptions) ? state.agentAuth.configureOptions : [];
