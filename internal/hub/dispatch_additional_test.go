@@ -67,9 +67,25 @@ func TestNormalizeRunConfigMapAppliesCodeReviewSkillDefaults(t *testing.T) {
 	if got, want := stringAt(normalized, "libraryTaskName"), codeReviewLibraryTaskName; got != want {
 		t.Fatalf("libraryTaskName = %q, want %q", got, want)
 	}
+	review, _ := normalized["review"].(map[string]any)
+	if got, want := stringAt(review, "headBranch"), "review-branch"; got != want {
+		t.Fatalf("review.headBranch = %q, want %q", got, want)
+	}
+
+	normalized, err = normalizeRunConfigMap(`{"repo":"git@github.com:acme/repo.git","prNumber":123}`, "code_review")
+	if err != nil {
+		t.Fatalf("normalizeRunConfigMap(code_review prNumber) error = %v", err)
+	}
+	review, _ = normalized["review"].(map[string]any)
+	if got, ok := positiveIntValue(review["prNumber"]); !ok || got != 123 {
+		t.Fatalf("review.prNumber = %#v, want 123", review["prNumber"])
+	}
 
 	if _, err := normalizeRunConfigMap(`{"repo":"git@github.com:acme/repo.git","prompt":"x"}`, "code_review"); err == nil || !strings.Contains(err.Error(), "does not accept prompt") {
 		t.Fatalf("normalizeRunConfigMap(code_review prompt) error = %v", err)
+	}
+	if _, err := normalizeRunConfigMap(`{"repo":"git@github.com:acme/repo.git"}`, "code_review"); err == nil || !strings.Contains(err.Error(), "requires branch, prNumber, or review.prUrl") {
+		t.Fatalf("normalizeRunConfigMap(code_review missing selector) error = %v", err)
 	}
 	if _, err := normalizeRunConfigMap(`{"repo":"git@github.com:acme/repo.git"}`, "library_task"); err == nil || !strings.Contains(err.Error(), "requires libraryTaskName") {
 		t.Fatalf("normalizeRunConfigMap(library_task missing handle) error = %v", err)

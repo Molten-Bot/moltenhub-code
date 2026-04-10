@@ -318,8 +318,8 @@ func validateReviewConfig(review *ReviewConfig, repos []string) error {
 	if review.PRNumber < 0 {
 		return fmt.Errorf("review.prNumber must be greater than zero")
 	}
-	if review.PRNumber <= 0 && review.PRURL == "" {
-		return fmt.Errorf("review.prNumber or review.prUrl is required")
+	if review.PRNumber <= 0 && review.PRURL == "" && review.HeadBranch == "" {
+		return fmt.Errorf("review.prNumber, review.prUrl, or review.headBranch is required")
 	}
 	if review.PRURL != "" {
 		parsed, err := url.Parse(review.PRURL)

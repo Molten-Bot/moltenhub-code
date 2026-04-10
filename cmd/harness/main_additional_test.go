@@ -368,7 +368,7 @@ func TestFailureFollowUpPromptDefaultWhenNoPaths(t *testing.T) {
 	if !strings.Contains(got, `When failures occur, send a response back to the calling agent that clearly states failure and includes the error details.`) {
 		t.Fatalf("prompt missing failure response instruction: %q", got)
 	}
-	if !strings.Contains(got, `"baseBranch":"main","targetSubdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."`) {
+	if !strings.Contains(got, `"branch":"main","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."`) {
 		t.Fatalf("prompt missing follow-up payload shape: %q", got)
 	}
 	if !strings.Contains(got, "If no file changes are required, return a clear no-op result with concrete evidence instead of forcing an empty PR.") {
@@ -409,6 +409,127 @@ func TestFailureFollowUpPromptIncludesFailureContext(t *testing.T) {
 			t.Fatalf("prompt missing %q: %q", want, got)
 		}
 	}
+}
+
+func TestConfigureHubSetupTracksCompletedOnboardingSteps(t *testing.T) {
+	t.Parallel()
+
+	const bindToken = "f9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/bind-tokens":
+			_, _ = w.Write([]byte(`{"agent_token":"agent_bound"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
+			_, _ = w.Write([]byte(`{"handle":"saved-agent","profile":{"display_name":"Saved Agent","emoji":"🔥","profile":"Ships onboarding"}}`))
+		case (r.Method == http.MethodPatch || r.Method == http.MethodPost) &&
+			(r.URL.Path == "/v1/agents/me" || r.URL.Path == "/v1/agents/me/metadata"):
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	state, err := configureHubSetup(context.Background(), hub.InitConfig{
+		BaseURL:           server.URL + "/v1",
+		RuntimeConfigPath: filepath.Join(t.TempDir(), ".moltenhub", "config.json"),
+	}, hubui.HubSetupRequest{
+		AgentMode: "new",
+		Token:     bindToken,
+		Handle:    "saved-agent",
+		Profile: struct {
+			ProfileText string `json:"profile"`
+			DisplayName string `json:"display_name"`
+			Emoji       string `json:"emoji"`
+		}{
+			ProfileText: "Ships onboarding",
+			DisplayName: "Saved Agent",
+			Emoji:       "🔥",
+		},
+	}, func(context.Context, hub.InitConfig) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("configureHubSetup() error = %v", err)
+	}
+	if !state.ActivationReady {
+		t.Fatal("ActivationReady = false, want true")
+	}
+	if state.OnboardingActive {
+		t.Fatal("OnboardingActive = true, want false")
+	}
+	if got, want := state.OnboardingStage, "work_activate"; got != want {
+		t.Fatalf("OnboardingStage = %q, want %q", got, want)
+	}
+	wantStatuses := map[string]string{
+		"bind":          "completed",
+		"work_bind":     "completed",
+		"profile_set":   "completed",
+		"work_activate": "completed",
+	}
+	for _, step := range state.Onboarding {
+		if want, ok := wantStatuses[step.ID]; ok && step.Status != want {
+			t.Fatalf("step %q status = %q, want %q", step.ID, step.Status, want)
+		}
+	}
+}
+
+func TestConfigureHubSetupMarksFailingOnboardingStep(t *testing.T) {
+	t.Parallel()
+
+	const bindToken = "f9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+	var agentProfileReads int
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/bind-tokens":
+			_, _ = w.Write([]byte(`{"agent_token":"agent_bound"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
+			agentProfileReads++
+			if agentProfileReads <= 2 {
+				_, _ = w.Write([]byte(`{"metadata":{"visibility":"public"}}`))
+				return
+			}
+			http.Error(w, `{"error":"profile unavailable"}`, http.StatusBadGateway)
+		case (r.Method == http.MethodPatch || r.Method == http.MethodPost) &&
+			(r.URL.Path == "/v1/agents/me" || r.URL.Path == "/v1/agents/me/metadata"):
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	state, err := configureHubSetup(context.Background(), hub.InitConfig{
+		BaseURL:           server.URL + "/v1",
+		RuntimeConfigPath: filepath.Join(t.TempDir(), ".moltenhub", "config.json"),
+	}, hubui.HubSetupRequest{
+		AgentMode: "new",
+		Token:     bindToken,
+	}, func(context.Context, hub.InitConfig) error {
+		return nil
+	})
+	if err == nil {
+		t.Fatal("configureHubSetup() error = nil, want non-nil")
+	}
+	if got, want := state.OnboardingStage, "work_activate"; got != want {
+		t.Fatalf("OnboardingStage = %q, want %q", got, want)
+	}
+	for _, step := range state.Onboarding {
+		if step.ID == "work_activate" {
+			if step.Status != "error" {
+				t.Fatalf("work_activate status = %q, want error", step.Status)
+			}
+			if !strings.Contains(step.Detail, "status=502") {
+				t.Fatalf("work_activate detail = %q, want status details", step.Detail)
+			}
+			return
+		}
+	}
+	t.Fatal("work_activate step missing")
 }
 
 func TestShouldQueueUnexpectedNoChangesFollowUpRequiresMissingPR(t *testing.T) {

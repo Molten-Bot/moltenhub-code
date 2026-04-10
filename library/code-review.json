@@ -2,7 +2,6 @@
   "code-review": {
     "displayName": "Pull Request Code Review",
     "description": "Review a GitHub pull request, including existing discussion and the git diff, and produce a documented findings PR.",
-    "targetSubdir": ".",
     "prompt": "You are performing a pull-request code review. Use the prepared PR context that the harness collected before you started, then verify the important details yourself with git and GitHub as needed. Read the existing PR discussion before finalizing conclusions. Produce a review artifact under docs/reviews/ that summarizes the PR, lists findings ordered by severity with concrete file references, captures open questions, and explicitly states when no material issues were found.",
     "commitMessage": "docs: add PR review report",
     "prTitle": "moltenhub-code-review-report"

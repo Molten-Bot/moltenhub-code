@@ -422,6 +422,11 @@
           </label>
         </div>
 
+        <div id="hub-setup-onboarding" class="hub-setup-onboarding hidden" aria-live="polite">
+          <div class="hub-setup-onboarding-heading">Onboarding</div>
+          <div id="hub-setup-onboarding-steps" class="hub-setup-onboarding-steps"></div>
+        </div>
+
         <div class="hub-setup-footer">
           <a
             id="hub-setup-signin-link"
@@ -713,11 +718,21 @@
       return normalizeProfileEmoji(value) || HUB_PROFILE_DEFAULT_EMOJI;
     }
 
+    function escapeHTML(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
     function normalizeHubSetup(raw) {
       const hub = raw && typeof raw === "object" ? raw : {};
       const profile = hub.profile && typeof hub.profile === "object" ? hub.profile : {};
       const agentMode = String(hub.agent_mode || hub.agentMode || "").trim() || "existing";
       const region = String(hub.region || "").trim().toLowerCase() === "eu" ? "eu" : "na";
+      const onboarding = Array.isArray(hub.onboarding) ? hub.onboarding : [];
       return {
         configured: Boolean(hub.configured),
         agentMode,
@@ -733,7 +748,76 @@
         dashboardURL: String(hub.dashboard_url || hub.dashboardURL || HUB_DASHBOARD_URL).trim() || HUB_DASHBOARD_URL,
         message: String(hub.message || "").trim(),
         needsRestart: Boolean(hub.needs_restart || hub.needsRestart),
+        onboarding: onboarding.map((step) => ({
+          id: String(step && (step.id || "") || "").trim(),
+          label: String(step && (step.label || "") || "").trim(),
+          status: String(step && (step.status || "") || "").trim() || "pending",
+          detail: String(step && (step.detail || "") || "").trim(),
+        })),
+        onboardingActive: Boolean(hub.onboarding_active || hub.onboardingActive),
+        onboardingStage: String(hub.onboarding_stage || hub.onboardingStage || "").trim(),
+        activationReady: Boolean(hub.activation_ready || hub.activationReady),
       };
+    }
+
+    function defaultHubSetupOnboarding(agentMode) {
+      const isNew = String(agentMode || "").trim() === "new";
+      return [
+        {
+          id: "bind",
+          label: "Bind",
+          status: "pending",
+          detail: isNew ? "Exchange the bind token for an agent credential." : "Verify the existing Molten Hub agent credential.",
+        },
+        {
+          id: "work_bind",
+          label: "Work",
+          status: "pending",
+          detail: "Resolve and verify Molten Hub credentials.",
+        },
+        {
+          id: "profile_set",
+          label: "Profile Set",
+          status: "pending",
+          detail: "Persist the agent profile in Molten Hub.",
+        },
+        {
+          id: "work_activate",
+          label: "Work",
+          status: "pending",
+          detail: "Apply the runtime transport and confirm activation.",
+        },
+      ];
+    }
+
+    function hubSetupWithOnboarding(overrides = {}) {
+      const next = normalizeHubSetup({ ...state.hubSetup, ...overrides });
+      if (!Array.isArray(next.onboarding) || next.onboarding.length === 0) {
+        next.onboarding = defaultHubSetupOnboarding(next.agentMode);
+      }
+      return next;
+    }
+
+    function updateHubSetupOnboarding(stepID, status, detail = "") {
+      const next = hubSetupWithOnboarding();
+      let found = false;
+      next.onboarding = next.onboarding.map((step) => {
+        if (step.id !== stepID) {
+          return step;
+        }
+        found = true;
+        return {
+          ...step,
+          status,
+          detail: String(detail || "").trim() || step.detail,
+        };
+      });
+      if (!found) {
+        return;
+      }
+      next.onboardingActive = status === "current";
+      next.onboardingStage = stepID;
+      applyHubSetupState(next);
     }
 
     function hubTokenValidationMessage(token) {
@@ -1011,6 +1095,8 @@
     const hubSetupEmojiPickerRoot = document.getElementById("hub-setup-emoji-picker");
     const hubSetupEmoji = document.getElementById("hub-setup-emoji");
     const hubSetupProfile = document.getElementById("hub-setup-profile");
+    const hubSetupOnboarding = document.getElementById("hub-setup-onboarding");
+    const hubSetupOnboardingSteps = document.getElementById("hub-setup-onboarding-steps");
     const hubSetupSigninLink = document.getElementById("hub-setup-signin-link");
     const hubSetupStatus = document.getElementById("hub-setup-status");
     const hubSetupConnectionToggle = document.getElementById("hub-setup-connection-toggle");
@@ -1360,6 +1446,28 @@
       hubSetupStatus.textContent = String(text || "").trim();
     }
 
+    function renderHubSetupOnboarding() {
+      if (!hubSetupOnboarding || !hubSetupOnboardingSteps) {
+        return;
+      }
+      const steps = Array.isArray(state.hubSetup.onboarding) ? state.hubSetup.onboarding.filter(Boolean) : [];
+      const show = steps.length > 0 && (state.hubSetupBusy || steps.some((step) => step.status && step.status !== "pending"));
+      hubSetupOnboarding.classList.toggle("hidden", !show);
+      if (!show) {
+        hubSetupOnboardingSteps.innerHTML = "";
+        return;
+      }
+      hubSetupOnboardingSteps.innerHTML = steps.map((step) => `
+        <div class="hub-setup-onboarding-step ${String(step.status || "pending").trim()}">
+          <span class="hub-setup-onboarding-dot" aria-hidden="true"></span>
+          <div>
+            <div class="hub-setup-onboarding-label">${escapeHTML(step.label || step.id || "Step")}</div>
+            <div class="hub-setup-onboarding-detail">${escapeHTML(step.detail || "")}</div>
+          </div>
+        </div>
+      `).join("");
+    }
+
     function setHubSetupBusy(busy) {
       state.hubSetupBusy = Boolean(busy);
       if (hubSetupForm) hubSetupForm.setAttribute("aria-busy", state.hubSetupBusy ? "true" : "false");
@@ -1367,17 +1475,33 @@
       if (hubSetupNewToggle) hubSetupNewToggle.disabled = state.hubSetupBusy;
       if (hubSetupRegionNAToggle) hubSetupRegionNAToggle.disabled = state.hubSetupBusy;
       if (hubSetupRegionEUToggle) hubSetupRegionEUToggle.disabled = state.hubSetupBusy;
-      if (hubSetupToken) hubSetupToken.disabled = state.hubSetupBusy;
-      if (hubSetupHandle) hubSetupHandle.disabled = state.hubSetupBusy;
-      if (hubSetupDisplayName) hubSetupDisplayName.disabled = state.hubSetupBusy;
-      if (hubSetupEmoji) hubSetupEmoji.disabled = state.hubSetupBusy;
+      if (hubSetupClose) hubSetupClose.disabled = state.hubSetupBusy;
+      if (hubSetupToken) {
+        hubSetupToken.readOnly = state.hubSetupBusy;
+        hubSetupToken.setAttribute("aria-readonly", state.hubSetupBusy ? "true" : "false");
+      }
+      if (hubSetupHandle) {
+        hubSetupHandle.readOnly = state.hubSetupBusy || isHubProfileDialogMode();
+        hubSetupHandle.setAttribute("aria-readonly", hubSetupHandle.readOnly ? "true" : "false");
+      }
+      if (hubSetupDisplayName) {
+        hubSetupDisplayName.readOnly = state.hubSetupBusy;
+        hubSetupDisplayName.setAttribute("aria-readonly", state.hubSetupBusy ? "true" : "false");
+      }
+      if (hubSetupEmoji) {
+        hubSetupEmoji.readOnly = state.hubSetupBusy;
+        hubSetupEmoji.setAttribute("aria-readonly", state.hubSetupBusy ? "true" : "false");
+      }
       if (hubSetupEmojiPicker && typeof hubSetupEmojiPicker.setDisabled === "function") {
         hubSetupEmojiPicker.setDisabled(state.hubSetupBusy);
       }
       if (hubSetupConnectionToggle) hubSetupConnectionToggle.disabled = state.hubSetupBusy;
-      if (hubSetupProfile) hubSetupProfile.disabled = state.hubSetupBusy;
+      if (hubSetupProfile) {
+        hubSetupProfile.readOnly = state.hubSetupBusy;
+        hubSetupProfile.setAttribute("aria-readonly", state.hubSetupBusy ? "true" : "false");
+      }
       if (hubSetupSubmit) hubSetupSubmit.disabled = state.hubSetupBusy;
-      if (hubSetupClose) hubSetupClose.disabled = state.hubSetupBusy;
+      renderHubSetupOnboarding();
     }
 
     function hubConnectionIsLive(snapshot = state.snapshot) {
@@ -1426,6 +1550,9 @@
 
     function applyHubSetupState(nextState) {
       state.hubSetup = normalizeHubSetup(nextState);
+      if (!Array.isArray(state.hubSetup.onboarding) || state.hubSetup.onboarding.length === 0) {
+        state.hubSetup.onboarding = defaultHubSetupOnboarding(state.hubSetup.agentMode);
+      }
       const profileEditor = isHubProfileDialogMode();
       if (hubSetupSigninLink) {
         hubSetupSigninLink.href = state.hubSetup.connectURL;
@@ -1441,8 +1568,8 @@
       }
       if (hubSetupHandle) {
         hubSetupHandle.value = state.hubSetup.handle || "";
-        hubSetupHandle.readOnly = profileEditor;
-        hubSetupHandle.setAttribute("aria-readonly", profileEditor ? "true" : "false");
+        hubSetupHandle.readOnly = profileEditor || state.hubSetupBusy;
+        hubSetupHandle.setAttribute("aria-readonly", hubSetupHandle.readOnly ? "true" : "false");
       }
       if (hubSetupDisplayName) {
         hubSetupDisplayName.value = state.hubSetup.profile.displayName || "";
@@ -1503,6 +1630,7 @@
       if (hubSetupSubmit) {
         hubSetupSubmit.textContent = profileEditor ? "Save" : "Done";
       }
+      renderHubSetupOnboarding();
       applyHubDockState();
       renderHubSetupConnectionToggle();
       renderHubConnection(state.snapshot);
@@ -1570,6 +1698,9 @@
           displayName: payload.profile.display_name,
           emoji: payload.profile.emoji,
         },
+        onboarding: defaultHubSetupOnboarding(payload.agent_mode),
+        onboardingActive: false,
+        onboardingStage: "bind",
         ...overrides,
       };
     }
@@ -1597,15 +1728,21 @@
       }
 
       setHubSetupBusy(true);
+      applyHubSetupState(hubSetupWithOnboarding({
+        onboarding: defaultHubSetupOnboarding(payload.agent_mode),
+        onboardingActive: true,
+        onboardingStage: "bind",
+      }));
+      updateHubSetupOnboarding("bind", "current");
       trackAnalyticsEvent("hub_setup_started", { agent_mode: payload.agent_mode, token_type: payload.token_type });
       setHubSetupStatus("warn", "Saving Molten Hub setup...");
+      let body = null;
       try {
         const response = await fetch("/api/hub-setup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-        let body = null;
         try {
           body = await response.json();
         } catch (_err) {
@@ -1626,10 +1763,20 @@
         if (autoSubmit || isHubProfileDialogMode()) {
           await new Promise((resolve) => window.setTimeout(resolve, 700));
           setHubSetupOpen(false);
+        } else {
+          window.setTimeout(() => {
+            state.hubSetupDialogMode = "connect";
+            setHubSetupOpen(false);
+          }, 420);
         }
       } catch (err) {
         trackAnalyticsEvent("hub_setup_failed", { agent_mode: payload.agent_mode, token_type: payload.token_type });
         state.hubSetupLastAutoSubmitKey = "";
+        if (body && body.hub) {
+          applyHubSetupState(body.hub);
+        } else {
+          updateHubSetupOnboarding(state.hubSetup.onboardingStage || "bind", "error", err && err.message ? err.message : "Hub setup failed.");
+        }
         setHubSetupStatus("error", err && err.message ? err.message : "Hub setup failed.");
       } finally {
         setHubSetupBusy(false);
@@ -4793,6 +4940,8 @@
         event.preventDefault();
         state.hubSetupDialogMode = "connect";
         setHubSetupOpen(true);
+        applyHubSetupState(currentHubSetupDraft());
+        setHubSetupStatus("", "");
       });
     }
     if (moltenBotHubProfileButton) {

@@ -329,6 +329,9 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `.hub-setup-profile-text {`) {
 		t.Fatalf("expected stylesheet to keep the profile textarea spanning the full profile grid width")
 	}
+	if !strings.Contains(stylesheet, `.hub-setup-onboarding {`) || !strings.Contains(stylesheet, `.hub-setup-onboarding-step {`) {
+		t.Fatalf("expected stylesheet to include hub setup onboarding progress styles")
+	}
 	if !strings.Contains(stylesheet, `.hub-setup-profile-input {`) || !strings.Contains(stylesheet, `min-height: calc(2 * 1.45em + 24px);`) {
 		t.Fatalf("expected stylesheet to size the hub profile textarea to two lines by default while keeping it resizable")
 	}

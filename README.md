@@ -228,7 +228,7 @@ Required:
 Common optional fields:
 
 - `baseBranch` (default `main`)
-- `branch` (alias for `baseBranch`, mainly for library-backed skill calls)
+- `branch` (alias for `baseBranch`, recommended for Hub-agent skill payloads)
 - `targetSubdir` (default `.`)
 - `agentHarness` (optional: `codex`, `claude`, `auggie`; defaults to `codex` or `HARNESS_AGENT_HARNESS`)
 - `agentCommand` (optional CLI executable override)
@@ -298,6 +298,7 @@ Runtime-owned fields:
 - checked-in activation presets live in [`skills/index.json`](skills/index.json)
 - the active Hub skill handles are `code_for_me`, `code_review`, and `library_task`
 - library tasks remain library metadata and are selected through `library_task` + `libraryTaskName` instead of being registered as separate skills
+- `code_review` accepts either `branch` or `prNumber`; the checked-in activation preset shows `branch` as the default example, and the runtime normalizes `prNumber` into structured review context and can also resolve a review from the supplied head branch
 
 Example: [`init.example.json`](init.example.json)
 

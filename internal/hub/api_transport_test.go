@@ -390,6 +390,24 @@ func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
 	if !ok || second["handle"] != "code_review" {
 		t.Fatalf("skill_catalog[1] = %#v, want handle code_review", skillCatalog[1])
 	}
+	secondActivation, ok := second["activation"].(map[string]any)
+	if !ok {
+		t.Fatalf("skill_catalog[1].activation = %#v, want map[string]any", second["activation"])
+	}
+	secondInput, ok := secondActivation["input"].(map[string]any)
+	if !ok {
+		t.Fatalf("skill_catalog[1].activation.input = %#v, want map[string]any", secondActivation["input"])
+	}
+	secondConfig, ok := secondInput["config"].(map[string]any)
+	if !ok {
+		t.Fatalf("skill_catalog[1].activation.input.config = %#v, want map[string]any", secondInput["config"])
+	}
+	if got := secondConfig["branch"]; got != "main" {
+		t.Fatalf("skill_catalog[1].activation.input.config.branch = %#v, want main", got)
+	}
+	if _, exists := secondConfig["prNumber"]; exists {
+		t.Fatalf("skill_catalog[1].activation.input.config.prNumber unexpectedly present: %#v", secondConfig["prNumber"])
+	}
 	third, ok := skillCatalog[2].(map[string]any)
 	if !ok || third["handle"] != "library_task" {
 		t.Fatalf("skill_catalog[2] = %#v, want handle library_task", skillCatalog[2])

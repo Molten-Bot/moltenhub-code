@@ -204,7 +204,10 @@ func applySkillSpecificRunConfigDefaults(parsed map[string]any, skillName string
 	switch normalizeNamedSkill(skillName) {
 	case codeReviewSkillName:
 		if firstNonEmpty(stringAt(parsed, "prompt")) != "" {
-			return fmt.Errorf("%s skill does not accept prompt; send repo + branch only", codeReviewSkillName)
+			return fmt.Errorf("%s skill does not accept prompt; send repo + branch or prNumber", codeReviewSkillName)
+		}
+		if !ensureReviewSelector(parsed) {
+			return fmt.Errorf("%s skill requires branch, prNumber, or review.prUrl", codeReviewSkillName)
 		}
 		if firstNonEmpty(stringAt(parsed, "libraryTaskName")) == "" {
 			parsed["libraryTaskName"] = codeReviewLibraryTaskName
@@ -312,6 +315,10 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 				},
 				"baseBranch":   propertyNonEmptyString(),
 				"branch":       propertyNonEmptyString(),
+				"prNumber": map[string]any{
+					"type":    "integer",
+					"minimum": 1,
+				},
 				"targetSubdir": propertyNonEmptyString(),
 				"agentHarness": propertyStringEnum("codex", "claude", "auggie"),
 				"agentCommand": propertyNonEmptyString(),
@@ -358,6 +365,7 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 					"anyOf": []map[string]any{
 						{"required": []string{"prNumber"}},
 						{"required": []string{"prUrl"}},
+						{"required": []string{"headBranch"}},
 					},
 				},
 			},
@@ -466,7 +474,65 @@ func normalizeRunConfigAliases(m map[string]any) error {
 	if firstNonEmpty(stringAt(m, "prompt")) != "" && firstNonEmpty(stringAt(m, "libraryTaskName")) != "" {
 		return fmt.Errorf("run config payload cannot include both prompt and libraryTaskName")
 	}
+	if prNumber, ok := positiveIntValue(m["prNumber"]); ok {
+		review := ensureReviewMap(m)
+		if _, exists := review["prNumber"]; !exists {
+			review["prNumber"] = prNumber
+		}
+	}
 	return nil
+}
+
+func ensureReviewSelector(m map[string]any) bool {
+	if m == nil {
+		return false
+	}
+	review := ensureReviewMap(m)
+	if _, ok := positiveIntValue(review["prNumber"]); ok {
+		return true
+	}
+	if firstNonEmpty(stringAt(review, "prUrl"), stringAt(review, "headBranch")) != "" {
+		return true
+	}
+	if branch := firstNonEmpty(stringAt(m, "branch"), stringAt(m, "baseBranch")); branch != "" {
+		review["headBranch"] = branch
+		return true
+	}
+	return false
+}
+
+func ensureReviewMap(m map[string]any) map[string]any {
+	if existing, ok := m["review"].(map[string]any); ok {
+		return existing
+	}
+	review := map[string]any{}
+	m["review"] = review
+	return review
+}
+
+func positiveIntValue(v any) (int, bool) {
+	switch typed := v.(type) {
+	case int:
+		return typed, typed > 0
+	case int32:
+		value := int(typed)
+		return value, value > 0
+	case int64:
+		value := int(typed)
+		return value, value > 0
+	case float64:
+		value := int(typed)
+		return value, typed == float64(value) && value > 0
+	case json.Number:
+		value, err := typed.Int64()
+		if err != nil {
+			return 0, false
+		}
+		intValue := int(value)
+		return intValue, intValue > 0
+	default:
+		return 0, false
+	}
 }
 
 func expandLibraryTaskRunConfig(m map[string]any, taskName string) (map[string]any, error) {

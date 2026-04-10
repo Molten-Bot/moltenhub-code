@@ -62,7 +62,7 @@ func TestLoadAndValidateErrorPaths(t *testing.T) {
 	}
 
 	cfg.Review = &ReviewConfig{}
-	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "review.prNumber or review.prUrl is required") {
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "review.prNumber, review.prUrl, or review.headBranch is required") {
 		t.Fatalf("Validate(empty review) error = %v", err)
 	}
 
@@ -96,6 +96,9 @@ func TestNormalizationAndValidationHelpers(t *testing.T) {
 	}
 	if err := validateReviewConfig(&ReviewConfig{PRURL: "https://github.com/acme/repo/pull/1"}, []string{"a"}); err != nil {
 		t.Fatalf("validateReviewConfig(valid) error = %v", err)
+	}
+	if err := validateReviewConfig(&ReviewConfig{HeadBranch: "feature/review-me"}, []string{"a"}); err != nil {
+		t.Fatalf("validateReviewConfig(headBranch) error = %v", err)
 	}
 	if err := validateSubdir("../escape"); err == nil {
 		t.Fatal("validateSubdir(escape) error = nil, want non-nil")

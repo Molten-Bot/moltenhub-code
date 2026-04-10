@@ -1020,7 +1020,10 @@ func reviewSelector(reviewCfg config.ReviewConfig) string {
 	if reviewCfg.PRNumber > 0 {
 		return fmt.Sprintf("%d", reviewCfg.PRNumber)
 	}
-	return strings.TrimSpace(reviewCfg.PRURL)
+	if prURL := strings.TrimSpace(reviewCfg.PRURL); prURL != "" {
+		return prURL
+	}
+	return strings.TrimSpace(reviewCfg.HeadBranch)
 }
 
 func prReviewMetadataCommand(repoDir, selector string) execx.Command {

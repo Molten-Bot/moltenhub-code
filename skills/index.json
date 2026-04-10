@@ -12,8 +12,7 @@
           "repos": [
             "<git@github.com:owner/repo.git>"
           ],
-          "baseBranch": "main",
-          "targetSubdir": ".",
+          "branch": "main",
           "prompt": "<describe the requested change>",
           "images": []
         }
@@ -25,7 +24,7 @@
     "handle": "code_review",
     "mode": "review",
     "displayName": "Pull Request Code Review",
-    "description": "Runs the code-review workflow using repo + branch context.",
+    "description": "Runs the code-review workflow using repo + either branch or prNumber context.",
     "activation": {
       "type": "skill_request",
       "skill": "code_review",
@@ -34,8 +33,7 @@
           "repos": [
             "<git@github.com:owner/repo.git>"
           ],
-          "baseBranch": "main",
-          "targetSubdir": "."
+          "branch": "main"
         }
       }
     }
@@ -54,8 +52,7 @@
           "repos": [
             "<git@github.com:owner/repo.git>"
           ],
-          "baseBranch": "main",
-          "targetSubdir": ".",
+          "branch": "main",
           "libraryTaskName": "<library-handle>"
         }
       }

@@ -83,10 +83,21 @@ type HubSetupState struct {
 		DisplayName string `json:"display_name"`
 		Emoji       string `json:"emoji"`
 	} `json:"profile"`
-	ConnectURL  string `json:"connect_url,omitempty"`
-	DashboardURL string `json:"dashboard_url,omitempty"`
-	Message     string `json:"message,omitempty"`
-	NeedsRestart bool  `json:"needs_restart,omitempty"`
+	ConnectURL        string         `json:"connect_url,omitempty"`
+	DashboardURL      string         `json:"dashboard_url,omitempty"`
+	Message           string         `json:"message,omitempty"`
+	NeedsRestart      bool           `json:"needs_restart,omitempty"`
+	Onboarding        []HubSetupStep `json:"onboarding,omitempty"`
+	OnboardingActive  bool           `json:"onboarding_active,omitempty"`
+	OnboardingStage   string         `json:"onboarding_stage,omitempty"`
+	ActivationReady   bool           `json:"activation_ready,omitempty"`
+}
+
+type HubSetupStep struct {
+	ID     string `json:"id,omitempty"`
+	Label  string `json:"label,omitempty"`
+	Status string `json:"status,omitempty"`
+	Detail string `json:"detail,omitempty"`
 }
 
 // HubSetupRequest captures the late-stage Hub connect modal payload.
@@ -193,17 +204,34 @@ func defaultAgentAuthState() AgentAuthState {
 
 func defaultHubSetupState() HubSetupState {
 	state := HubSetupState{
-		Configured:   false,
-		AgentMode:    "existing",
-		TokenType:    "agent",
-		Region:       "na",
-		ConnectURL:   "https://app.molten.bot/signin?target=hub",
-		DashboardURL: "https://app.molten.bot/hub",
+		Configured:      false,
+		AgentMode:       "existing",
+		TokenType:       "agent",
+		Region:          "na",
+		ConnectURL:      "https://app.molten.bot/signin?target=hub",
+		DashboardURL:    "https://app.molten.bot/hub",
+		Onboarding:      DefaultHubSetupOnboarding("existing"),
+		OnboardingStage: "bind",
 	}
 	state.Profile.ProfileText = ""
 	state.Profile.DisplayName = ""
 	state.Profile.Emoji = ""
 	return state
+}
+
+func DefaultHubSetupOnboarding(agentMode string) []HubSetupStep {
+	steps := []HubSetupStep{
+		{ID: "bind", Label: "Bind", Status: "pending"},
+		{ID: "work_bind", Label: "Work", Status: "pending", Detail: "Resolve and verify Molten Hub credentials."},
+		{ID: "profile_set", Label: "Profile Set", Status: "pending", Detail: "Persist the agent profile in Molten Hub."},
+		{ID: "work_activate", Label: "Work", Status: "pending", Detail: "Apply the runtime transport and confirm activation."},
+	}
+	if strings.EqualFold(strings.TrimSpace(agentMode), "existing") {
+		steps[0].Detail = "Verify the existing Molten Hub agent credential."
+	} else {
+		steps[0].Detail = "Exchange the bind token for an agent credential."
+	}
+	return steps
 }
 
 func (s Server) handleGitHubProfile(w http.ResponseWriter, r *http.Request) {

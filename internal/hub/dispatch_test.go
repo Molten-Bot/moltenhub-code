@@ -262,8 +262,8 @@ func TestParseSkillDispatchMatchesLegacyCurrentAndRenamedSkillAliases(t *testing
 		"type":  "skill_request",
 		"skill": "code_review",
 		"config": map[string]any{
-			"repo":       "git@github.com:acme/repo.git",
-			"baseBranch": "review-branch",
+			"repo":   "git@github.com:acme/repo.git",
+			"branch": "review-branch",
 		},
 	}
 
@@ -276,6 +276,9 @@ func TestParseSkillDispatchMatchesLegacyCurrentAndRenamedSkillAliases(t *testing
 	}
 	if got, want := dispatch.Config.LibraryTaskName, codeReviewLibraryTaskName; got != want {
 		t.Fatalf("LibraryTaskName = %q, want %q", got, want)
+	}
+	if dispatch.Config.Review == nil || dispatch.Config.Review.HeadBranch != "review-branch" {
+		t.Fatalf("Review = %#v, want headBranch review-branch", dispatch.Config.Review)
 	}
 }
 

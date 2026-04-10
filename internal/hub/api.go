@@ -1178,11 +1178,10 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 		"mode":        "prompt",
 		"description": "Prompt-driven repository task run.",
 		"activation": buildActivation(skillCfg.Name, map[string]any{
-			"repos":        []string{"<git@github.com:owner/repo.git>"},
-			"baseBranch":   "main",
-			"targetSubdir": ".",
-			"prompt":       "<describe the requested change>",
-			"images":       []any{},
+			"repos":  []string{"<git@github.com:owner/repo.git>"},
+			"branch": "main",
+			"prompt": "<describe the requested change>",
+			"images": []any{},
 		}),
 	})
 
@@ -1191,11 +1190,10 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 		"handle":      normalizeSkillName(codeReviewSkillName),
 		"mode":        "review",
 		"displayName": "Pull Request Code Review",
-		"description": fmt.Sprintf("Runs the %s workflow using repo + branch context.", codeReviewLibraryTaskName),
+		"description": fmt.Sprintf("Runs the %s workflow using repo + either branch or prNumber context.", codeReviewLibraryTaskName),
 		"activation": buildActivation(codeReviewSkillName, map[string]any{
-			"repos":        []string{"<git@github.com:owner/repo.git>"},
-			"baseBranch":   "main",
-			"targetSubdir": ".",
+			"repos":  []string{"<git@github.com:owner/repo.git>"},
+			"branch": "main",
 		}),
 	})
 
@@ -1221,8 +1219,7 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 		"description": libraryTaskDescription,
 		"activation": buildActivation(libraryTaskSkillName, map[string]any{
 			"repos":           []string{"<git@github.com:owner/repo.git>"},
-			"baseBranch":      "main",
-			"targetSubdir":    ".",
+			"branch":          "main",
 			"libraryTaskName": "<library-handle>",
 		}),
 	})

@@ -762,17 +762,16 @@ func queueFailureFollowUp(ctx context.Context, api MoltenHubAPI, cfg InitConfig,
 	if len(repos) == 0 {
 		return fmt.Errorf("failed dispatch is missing repository context")
 	}
-	baseBranch, targetSubdir := failurefollowup.FollowUpTargeting(
+	baseBranch, _ := failurefollowup.FollowUpTargeting(
 		dispatch.Config.BaseBranch,
 		dispatch.Config.TargetSubdir,
 		res.Branch,
 	)
 
 	runConfig := map[string]any{
-		"repos":        repos,
-		"baseBranch":   baseBranch,
-		"targetSubdir": targetSubdir,
-		"prompt":       failureFollowUpPrompt(taskLogRoot, dispatch, res),
+		"repos":  repos,
+		"branch": baseBranch,
+		"prompt": failureFollowUpPrompt(taskLogRoot, dispatch, res),
 	}
 
 	payload := map[string]any{
