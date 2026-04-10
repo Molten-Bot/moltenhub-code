@@ -1110,8 +1110,68 @@ func mergeRuntimeRegistrationMetadata(metadata map[string]any, cfg InitConfig, l
 	metadata["library_task_names"] = libraryNames
 	metadata["library_task_count"] = len(libraryNames)
 	metadata["library_tasks"] = libraryTasks
+	metadata["skill_catalog"] = buildRuntimeSkillCatalog(cfg.Skill, libraryTasks)
 	metadata["run_config_modes"] = []string{"prompt", "library_task"}
 	metadata["supports_branch_key"] = true
+}
+
+func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskSummary) []map[string]any {
+	skillName := normalizeSkillName(skillCfg.Name)
+	dispatchType := strings.TrimSpace(skillCfg.DispatchType)
+	if dispatchType == "" {
+		dispatchType = defaultRuntimeDispatchType
+	}
+
+	buildActivation := func(runConfig map[string]any) map[string]any {
+		return map[string]any{
+			"type":  dispatchType,
+			"skill": skillName,
+			"input": map[string]any{
+				"config": runConfig,
+			},
+		}
+	}
+
+	out := make([]map[string]any, 0, len(libraryTasks)+1)
+	out = append(out, map[string]any{
+		"name":        skillName,
+		"handle":      skillName,
+		"mode":        "prompt",
+		"description": "Prompt-driven repository task run.",
+		"activation": buildActivation(map[string]any{
+			"version":      "v1",
+			"repos":        []string{"<git@github.com:owner/repo.git>"},
+			"baseBranch":   "main",
+			"targetSubdir": ".",
+			"prompt":       "<describe the requested change>",
+		}),
+	})
+
+	for _, task := range libraryTasks {
+		taskName := strings.TrimSpace(task.Name)
+		if taskName == "" {
+			continue
+		}
+		entry := map[string]any{
+			"name":        taskName,
+			"handle":      skillName,
+			"mode":        "library_task",
+			"description": firstNonEmpty(task.Description, fmt.Sprintf("Activates the %s library task.", taskName)),
+			"activation": buildActivation(map[string]any{
+				"version":         "v1",
+				"repos":           []string{"<git@github.com:owner/repo.git>"},
+				"baseBranch":      "main",
+				"targetSubdir":    ".",
+				"libraryTaskName": taskName,
+			}),
+		}
+		if displayName := strings.TrimSpace(task.DisplayName); displayName != "" {
+			entry["displayName"] = displayName
+		}
+		out = append(out, entry)
+	}
+
+	return out
 }
 
 func cloneMetadataMap(src map[string]any) map[string]any {

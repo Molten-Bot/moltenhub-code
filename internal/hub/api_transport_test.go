@@ -365,6 +365,27 @@ func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
 	if got := meta["library_task_count"]; got != float64(2) {
 		t.Fatalf("library_task_count = %#v, want 2", got)
 	}
+	skillCatalog, ok := meta["skill_catalog"].([]any)
+	if !ok {
+		t.Fatalf("skill_catalog = %#v, want []any", meta["skill_catalog"])
+	}
+	if got, want := len(skillCatalog), 3; got != want {
+		t.Fatalf("len(skill_catalog) = %d, want %d", got, want)
+	}
+	first, ok := skillCatalog[0].(map[string]any)
+	if !ok {
+		t.Fatalf("skill_catalog[0] = %#v, want map[string]any", skillCatalog[0])
+	}
+	if got := first["handle"]; got != "code_for_me" {
+		t.Fatalf("skill_catalog[0].handle = %#v, want code_for_me", got)
+	}
+	activation, ok := first["activation"].(map[string]any)
+	if !ok {
+		t.Fatalf("skill_catalog[0].activation = %#v, want map[string]any", first["activation"])
+	}
+	if got := activation["type"]; got != "skill_request" {
+		t.Fatalf("skill_catalog[0].activation.type = %#v, want skill_request", got)
+	}
 }
 
 func TestRecordGitHubTaskCompleteActivityMergesExistingMetadata(t *testing.T) {

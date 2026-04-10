@@ -294,6 +294,8 @@ Runtime-owned fields:
 
 - skill contract is fixed to `code_for_me` / `skill_request` / `skill_result`
 - profile visibility metadata is managed by runtime and forced public
+- checked-in activation presets live in [`skills/index.json`](skills/index.json)
+- each preset uses the same top-level Hub skill handle, `code_for_me`; library-backed presets switch behavior through `libraryTaskName`
 
 Example: [`init.example.json`](init.example.json)
 

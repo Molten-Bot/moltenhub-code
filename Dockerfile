@@ -53,6 +53,8 @@ WORKDIR /workspace
 COPY --from=build /out/harness /usr/local/bin/harness
 COPY library /opt/moltenhub/library
 COPY library /workspace/library
+COPY skills /opt/moltenhub/skills
+COPY skills /workspace/skills
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint
 COPY docker/with-config.sh /usr/local/bin/with-config
 RUN chmod +x /usr/local/bin/harness /usr/local/bin/entrypoint /usr/local/bin/with-config
