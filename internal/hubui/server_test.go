@@ -692,8 +692,16 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "void copyTaskCloneCommand(task, cloneButton);") {
 		t.Fatalf("expected index html to render a terminal icon button that copies the branch clone command")
 	}
+	if !strings.Contains(markup, `cloneButton.title = "Clone locally to test and review changes.";`) ||
+		!strings.Contains(markup, `cloneButton.setAttribute("aria-label", "Clone locally to test and review changes.");`) {
+		t.Fatalf("expected index html to render the requested terminal icon hover copy")
+	}
 	if !strings.Contains(markup, "prLogo.width = TASK_PR_LOGO_SIZE;") || !strings.Contains(markup, "prLogo.height = TASK_PR_LOGO_SIZE;") {
 		t.Fatalf("expected index html to define deterministic task PR logo dimensions")
+	}
+	if !strings.Contains(markup, `prLink.title = "Open Pull Request.";`) ||
+		!strings.Contains(markup, `prLink.setAttribute("aria-label", "Open Pull Request.");`) {
+		t.Fatalf("expected index html to render the requested github icon hover copy")
 	}
 	if !strings.Contains(markup, "body.className = \"task-body\";") {
 		t.Fatalf("expected index html to render a task body container alongside the PR link rail")
