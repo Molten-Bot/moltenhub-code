@@ -541,6 +541,7 @@
     const LOCAL_PROMPT_STATUS_FADE_MS = 240;
     const LOGO_ROTATION_INTERVAL_MS = 8_000;
     const STREAM_RENDER_INTERVAL_MS = 120;
+    const TASK_TIMING_REFRESH_INTERVAL_MS = 30_000;
     const MAX_TERMINAL_LINES = 500;
     const HUB_LOGIN_URL = "https://app.molten.bot/signin?target=hub";
     const HUB_DASHBOARD_URL = "https://app.molten.bot/hub";
@@ -1053,6 +1054,7 @@
     let claudePostSubmitVerifyAttempts = 0;
     let pendingStreamSnapshotText = "";
     let streamRenderTimer = null;
+    let taskTimingRefreshTimer = null;
 
     const localConnItem = document.getElementById("local-conn-item");
     const localConnDot = document.getElementById("local-conn-dot");
@@ -3775,6 +3777,45 @@
       return "-";
     }
 
+    function taskTimingSignature(task) {
+      return JSON.stringify({
+        updatedAt: String(task?.updated_at || task?.updatedAt || "").trim(),
+        startedAt: String(task?.started_at || task?.startedAt || "").trim(),
+      });
+    }
+
+    function applyTaskTimingSummary(node, task) {
+      if (!node) {
+        return;
+      }
+      node.dataset.updatedAt = String(task?.updated_at || task?.updatedAt || "").trim();
+      node.dataset.startedAt = String(task?.started_at || task?.startedAt || "").trim();
+      node.textContent = taskTimingSummary(task);
+    }
+
+    function refreshVisibleTaskTimingSummaries() {
+      const timingNodes = document.querySelectorAll(".task-timing-summary");
+      for (const node of timingNodes) {
+        applyTaskTimingSummary(node, {
+          updated_at: node.dataset.updatedAt,
+          started_at: node.dataset.startedAt,
+        });
+      }
+    }
+
+    function refreshTaskTimingSummariesTick() {
+      taskTimingRefreshTimer = null;
+      refreshVisibleTaskTimingSummaries();
+      scheduleTaskTimingRefresh();
+    }
+
+    function scheduleTaskTimingRefresh() {
+      if (taskTimingRefreshTimer !== null) {
+        return;
+      }
+      taskTimingRefreshTimer = window.setTimeout(refreshTaskTimingSummariesTick, TASK_TIMING_REFRESH_INTERVAL_MS);
+    }
+
     function cleanRepoName(value) {
       let repo = String(value || "").trim();
       if (!repo) return "";
@@ -4482,7 +4523,7 @@
             repos: formatTaskRepos(task),
             branch: formatTaskBranch(task),
             skill: String(task?.skill || ""),
-            timing: taskTimingSummary(task),
+            timing: taskTimingSignature(task),
             prURL: String(task?.pr_url || "").trim(),
             canRerun: canRerunTask(task),
             canCopyClone: canCopyTaskCloneCommand(task),
@@ -4677,7 +4718,8 @@
           const skill = document.createElement("div");
           skill.textContent = `skill: ${task.skill || "-"}`;
           const update = document.createElement("div");
-          update.textContent = taskTimingSummary(task);
+          update.className = "task-timing-summary";
+          applyTaskTimingSummary(update, task);
           meta.append(repos, branch, skill, update);
 
           footer.append(meta, topActions);
@@ -5407,6 +5449,7 @@
     libraryBaseBranch.value = builderBaseBranch.value;
     libraryTargetSubdir.value = builderTargetSubdir.value;
     libraryReviewerInput.value = builderReviewerInput.value;
+    scheduleTaskTimingRefresh();
     renderRepoHistoryOptions();
     renderReviewerHistoryOptions();
     renderLibraryTaskOptions();
