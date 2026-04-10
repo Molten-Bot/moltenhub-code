@@ -158,7 +158,7 @@
 
         <section class="panel prompt-wrap min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
           <div class="panel-header prompt-titlebar flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
-            <span class="panel-section-title">Studio</span>
+            <span id="prompt-panel-title" class="panel-section-title">Prompt</span>
             <button id="prompt-visibility-toggle" class="prompt-visibility-toggle" type="button" aria-pressed="true" aria-label="Minimize Studio panel" title="Minimize Studio panel">▾</button>
           </div>
           <form id="local-prompt-form" class="prompt-form grid gap-2.5 p-3">
@@ -908,6 +908,7 @@
     const promptModeBuilder = document.getElementById("prompt-mode-builder");
     const promptModeLibrary = document.getElementById("prompt-mode-library");
     const promptModeJSON = document.getElementById("prompt-mode-json");
+    const promptPanelTitle = document.getElementById("prompt-panel-title");
     const githubProfileLink = document.getElementById("github-profile-link");
     const moltenBotHubDockGroup = document.getElementById("moltenbot-hub-dock-group");
     const moltenBotHubLink = document.getElementById("moltenbot-hub-link");
@@ -3162,6 +3163,17 @@
       renderRepoHistorySelect(libraryRepoHistoryField, libraryRepoSelect, libraryRepoInput);
     }
 
+    function promptModeTitle(mode) {
+      switch (mode) {
+        case "library":
+          return "Library";
+        case "json":
+          return "JSON";
+        default:
+          return "Prompt";
+      }
+    }
+
     function setPromptMode(mode) {
       if (mode !== "builder" && mode !== "library" && mode !== "json") {
         mode = "builder";
@@ -3179,6 +3191,9 @@
       promptModeBuilder.setAttribute("aria-selected", String(isBuilder));
       promptModeLibrary.setAttribute("aria-selected", String(isLibrary));
       promptModeJSON.setAttribute("aria-selected", String(isJSON));
+      if (promptPanelTitle) {
+        promptPanelTitle.textContent = promptModeTitle(state.promptMode);
+      }
       promptBuilderPanel.classList.toggle("hidden", !isBuilder);
       promptLibraryPanel.classList.toggle("hidden", !isLibrary);
       promptRawPanel.classList.toggle("hidden", !isJSON);
