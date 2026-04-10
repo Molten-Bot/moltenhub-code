@@ -869,7 +869,7 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".prompt-action-button {\n  width: auto;\n  display: inline-flex;") {
 		t.Fatalf("expected action buttons to avoid full-width auto-column overflow")
 	}
-	if !strings.Contains(css, ".submit-status-inline {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  flex: 1 1 0;\n  min-width: 0;\n  text-align: center;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}") {
+	if !strings.Contains(css, ".submit-status-inline {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  flex: 1 1 0;\n  min-width: 0;\n  text-align: center;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  opacity: 0;\n  transition: opacity 220ms ease;\n}") {
 		t.Fatalf("expected inline status to stay centered in the whitespace between screenshots and the action buttons")
 	}
 	if !strings.Contains(css, ".prompt-action-paste[data-empty=\"false\"] {\n  color: var(--text);\n}") {
