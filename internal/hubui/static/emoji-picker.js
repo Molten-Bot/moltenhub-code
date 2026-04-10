@@ -3,6 +3,10 @@
   const RECENT_CATEGORY_ID = "recent";
   const DEFAULT_PREVIEW = "😀";
   const MAX_RECENT = 18;
+  const PANEL_VIEWPORT_GUTTER = 8;
+  const PANEL_OFFSET = 8;
+  const PANEL_MAX_WIDTH = 392;
+  const PANEL_ESTIMATED_HEIGHT = 430;
 
   function splitGraphemes(value) {
     const text = String(value || "");
@@ -330,6 +334,59 @@
     const selectedEmojiNode = panel.querySelector(".hub-emoji-picker-selected-emoji");
     const selectedTextNode = panel.querySelector(".hub-emoji-picker-selected-text");
 
+    function viewportSize() {
+      const doc = global.document && global.document.documentElement ? global.document.documentElement : null;
+      const width = Number(global.innerWidth) || Number(doc && doc.clientWidth) || 0;
+      const height = Number(global.innerHeight) || Number(doc && doc.clientHeight) || 0;
+      return { width, height };
+    }
+
+    function panelWidthForViewport(width) {
+      const maxPanelWidth = Math.max(240, width - PANEL_VIEWPORT_GUTTER * 2);
+      return Math.min(PANEL_MAX_WIDTH, maxPanelWidth);
+    }
+
+    function updatePanelPosition() {
+      if (!open) {
+        return;
+      }
+      const { width: viewportWidth, height: viewportHeight } = viewportSize();
+      if (viewportWidth <= 0 || viewportHeight <= 0) {
+        return;
+      }
+
+      const rect = root.getBoundingClientRect();
+      const panelWidth = panelWidthForViewport(viewportWidth);
+      const maxLeft = Math.max(PANEL_VIEWPORT_GUTTER, viewportWidth - panelWidth - PANEL_VIEWPORT_GUTTER);
+      const left = Math.min(Math.max(rect.left, PANEL_VIEWPORT_GUTTER), maxLeft);
+      const spaceBelow = viewportHeight - rect.bottom - PANEL_VIEWPORT_GUTTER;
+      const spaceAbove = rect.top - PANEL_VIEWPORT_GUTTER;
+      const placeBelow = spaceBelow >= PANEL_ESTIMATED_HEIGHT || spaceBelow >= spaceAbove;
+
+      panel.style.left = `${Math.round(left)}px`;
+      panel.style.width = `min(${PANEL_MAX_WIDTH}px, calc(100vw - ${PANEL_VIEWPORT_GUTTER * 2}px))`;
+      panel.style.maxHeight = `calc(100vh - ${PANEL_VIEWPORT_GUTTER * 2}px)`;
+      if (placeBelow) {
+        panel.style.top = `${Math.round(rect.bottom + PANEL_OFFSET)}px`;
+        panel.style.bottom = "auto";
+        panel.setAttribute("data-placement", "bottom");
+      } else {
+        panel.style.top = "auto";
+        panel.style.bottom = `${Math.round(viewportHeight - rect.top + PANEL_OFFSET)}px`;
+        panel.setAttribute("data-placement", "top");
+      }
+    }
+
+    function attachPositionWatchers() {
+      global.addEventListener("resize", updatePanelPosition);
+      global.addEventListener("scroll", updatePanelPosition, true);
+    }
+
+    function detachPositionWatchers() {
+      global.removeEventListener("resize", updatePanelPosition);
+      global.removeEventListener("scroll", updatePanelPosition, true);
+    }
+
     function setOpen(nextOpen) {
       open = Boolean(nextOpen) && !toggle.disabled;
       panel.hidden = !open;
@@ -337,6 +394,8 @@
       root.classList.toggle("hub-emoji-picker-open", open);
       toggle.setAttribute("aria-expanded", open ? "true" : "false");
       if (open) {
+        attachPositionWatchers();
+        updatePanelPosition();
         if (searchInput) {
           searchInput.value = searchValue;
           global.requestAnimationFrame(() => {
@@ -345,6 +404,14 @@
           });
         }
         renderResults();
+      } else {
+        detachPositionWatchers();
+        panel.style.top = "";
+        panel.style.bottom = "";
+        panel.style.left = "";
+        panel.style.width = "";
+        panel.style.maxHeight = "";
+        panel.removeAttribute("data-placement");
       }
     }
 
@@ -380,6 +447,7 @@
       toggle.title = current ? `Selected emoji: ${current}` : "Choose emoji";
       if (open) {
         renderResults();
+        updatePanelPosition();
       }
     }
 
@@ -509,11 +577,19 @@
       }
     });
 
+    function handleOutsidePointer(event) {
+      if (!root.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+
     document.addEventListener("click", (event) => {
       if (!root.contains(event.target)) {
         setOpen(false);
       }
     });
+    document.addEventListener("mousedown", handleOutsidePointer);
+    document.addEventListener("touchstart", handleOutsidePointer);
 
     return {
       sync,
