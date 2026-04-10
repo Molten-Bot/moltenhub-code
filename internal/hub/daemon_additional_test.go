@@ -337,10 +337,10 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 		t.Fatalf("follow-up config missing: %#v", followUpPayload)
 	}
 	if got := runConfig["baseBranch"]; got != "main" {
-		t.Fatalf("follow-up baseBranch = %#v", got)
+		t.Fatalf("follow-up baseBranch = %#v, want main", got)
 	}
 	if got := runConfig["targetSubdir"]; got != "." {
-		t.Fatalf("follow-up targetSubdir = %#v", got)
+		t.Fatalf("follow-up targetSubdir = %#v, want .", got)
 	}
 	repos, _ := runConfig["repos"].([]string)
 	if len(repos) != 1 || repos[0] != "git@github.com:acme/repo.git" {
@@ -442,7 +442,7 @@ func TestHandleDispatchQueuesFailureFollowUpWithTaskLogPaths(t *testing.T) {
 	}
 }
 
-func TestQueueFailureFollowUpUsesSingleRepoPayloadForMultiRepoFailures(t *testing.T) {
+func TestQueueFailureFollowUpUsesFailedTaskRepository(t *testing.T) {
 	t.Parallel()
 
 	api := &stubMoltenHubAPI{token: "t"}
@@ -537,16 +537,13 @@ func TestHandleDispatchQueuesFailureFollowUpForNoDeltaFailures(t *testing.T) {
 	}
 }
 
-func TestShouldQueueFailureFollowUpSkipsNestedFailureReviewRequests(t *testing.T) {
+func TestShouldQueueFailureFollowUpAllowsNestedFailureReviewRequests(t *testing.T) {
 	t.Parallel()
 
 	dispatch := SkillDispatch{RequestID: "req-123-failure-review"}
 	ok, reason := shouldQueueFailureFollowUp(dispatch, harness.Result{Err: errors.New("still failing")})
-	if ok {
-		t.Fatal("shouldQueueFailureFollowUp() = true, want false")
-	}
-	if !strings.Contains(reason, "nested follow-up queue") {
-		t.Fatalf("reason = %q, want nested follow-up suppression reason", reason)
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureFollowUp() = (%v, %q), want (true, \"\")", ok, reason)
 	}
 }
 

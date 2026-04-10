@@ -21,8 +21,8 @@ func TestFailureFollowUpHelperBranches(t *testing.T) {
 	if ok, reason := shouldQueueFailureFollowUp(dispatch, harness.Result{}); ok || !strings.Contains(reason, "did not include an error") {
 		t.Fatalf("shouldQueueFailureFollowUp(no error) = (%v, %q)", ok, reason)
 	}
-	if ok, reason := shouldQueueFailureFollowUp(SkillDispatch{RequestID: "req-1-failure-review"}, harness.Result{Err: errors.New("boom")}); ok || !strings.Contains(reason, "nested follow-up") {
-		t.Fatalf("shouldQueueFailureFollowUp(nested) = (%v, %q)", ok, reason)
+	if ok, reason := shouldQueueFailureFollowUp(SkillDispatch{RequestID: "req-1-failure-review"}, harness.Result{Err: errors.New("boom")}); !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureFollowUp(nested) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
 	res := harness.Result{

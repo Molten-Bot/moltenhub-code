@@ -369,7 +369,7 @@ func TestFailureFollowUpPromptDefaultWhenNoPaths(t *testing.T) {
 	if !strings.Contains(got, `When failures occur, send a response back to the calling agent that clearly states failure and includes the error details.`) {
 		t.Fatalf("prompt missing failure response instruction: %q", got)
 	}
-	if !strings.Contains(got, `"repos":["<same_repo_as_failed_task>"],"baseBranch":"main","targetSubdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."`) {
+	if !strings.Contains(got, `"repos":["git@github.com:Molten-Bot/moltenhub-code.git"],"baseBranch":"main","targetSubdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."`) {
 		t.Fatalf("prompt missing follow-up payload shape: %q", got)
 	}
 	if !strings.Contains(got, "If no file changes are required, return a clear no-op result with concrete evidence instead of forcing an empty PR.") {
@@ -604,7 +604,7 @@ func TestUnexpectedNoChangesFollowUpRunConfigPreservesTaskTargetingAndAddsContex
 	if got, want := cfg.TargetSubdir, "cmd/harness"; got != want {
 		t.Fatalf("TargetSubdir = %q, want %q", got, want)
 	}
-	if got, want := cfg.Repos, []string{"git@github.com:acme/repo.git"}; len(got) != len(want) || got[0] != want[0] {
+	if got, want := cfg.Repos, []string{config.DefaultRepositoryURL}; len(got) != len(want) || got[0] != want[0] {
 		t.Fatalf("Repos = %v, want %v", got, want)
 	}
 

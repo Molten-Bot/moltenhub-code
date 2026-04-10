@@ -90,24 +90,27 @@ func TestFollowUpTargetingDefaultsToMainAndRoot(t *testing.T) {
 	}
 }
 
-func TestFollowUpTargetingPreservesExistingNonMainBranchContext(t *testing.T) {
+func TestFollowUpTargetingForcesMainAndRootForNonMainInputs(t *testing.T) {
 	t.Parallel()
 
 	baseBranch, targetSubdir := FollowUpTargeting("release/2026.04-hotfix", "internal/hub", "release/2026.04-hotfix")
-	if baseBranch != "release/2026.04-hotfix" {
-		t.Fatalf("baseBranch = %q, want %q", baseBranch, "release/2026.04-hotfix")
+	if baseBranch != "main" {
+		t.Fatalf("baseBranch = %q, want %q", baseBranch, "main")
 	}
-	if targetSubdir != "internal/hub" {
-		t.Fatalf("targetSubdir = %q, want %q", targetSubdir, "internal/hub")
+	if targetSubdir != "." {
+		t.Fatalf("targetSubdir = %q, want %q", targetSubdir, ".")
 	}
 }
 
-func TestFollowUpTargetingIgnoresEphemeralCurrentBranchWhenBaseIsMain(t *testing.T) {
+func TestFollowUpTargetingKeepsMainAndRootWhenBaseIsMain(t *testing.T) {
 	t.Parallel()
 
-	baseBranch, _ := FollowUpTargeting("main", ".", "moltenhub-fix-issue")
+	baseBranch, targetSubdir := FollowUpTargeting("main", ".", "moltenhub-fix-issue")
 	if baseBranch != "main" {
 		t.Fatalf("baseBranch = %q, want %q", baseBranch, "main")
+	}
+	if targetSubdir != "." {
+		t.Fatalf("targetSubdir = %q, want %q", targetSubdir, ".")
 	}
 }
 

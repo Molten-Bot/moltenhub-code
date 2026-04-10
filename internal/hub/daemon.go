@@ -742,18 +742,7 @@ func shouldQueueFailureFollowUp(dispatch SkillDispatch, res harness.Result) (boo
 	if res.Err == nil {
 		return false, "failed task did not include an error"
 	}
-	if isFailureFollowUpRequestID(dispatch.RequestID) {
-		return false, "follow-up request failed; skipping nested follow-up queue"
-	}
 	return true, ""
-}
-
-func isFailureFollowUpRequestID(requestID string) bool {
-	requestID = strings.ToLower(strings.TrimSpace(requestID))
-	if requestID == "" {
-		return false
-	}
-	return requestID == "failure-review" || strings.HasSuffix(requestID, "-failure-review")
 }
 
 func queueFailureFollowUp(ctx context.Context, api MoltenHubAPI, cfg InitConfig, dispatch SkillDispatch, res harness.Result, taskLogRoot string) error {
