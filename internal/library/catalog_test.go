@@ -202,11 +202,40 @@ func TestExpandRunConfigUsesRepoAndBranchInputs(t *testing.T) {
 	if got, want := cfg.RepoURL, "git@github.com:acme/repo.git"; got != want {
 		t.Fatalf("RepoURL = %q, want %q", got, want)
 	}
+	if got, want := cfg.LibraryTaskName, "unit-test-coverage"; got != want {
+		t.Fatalf("LibraryTaskName = %q, want %q", got, want)
+	}
 	if got, want := cfg.BaseBranch, "release"; got != want {
 		t.Fatalf("BaseBranch = %q, want %q", got, want)
 	}
 	if got, want := cfg.Prompt, "Raise coverage."; got != want {
 		t.Fatalf("Prompt = %q, want %q", got, want)
+	}
+}
+
+func TestOrderSummariesByUsageSortsDescendingAndPreservesTies(t *testing.T) {
+	t.Parallel()
+
+	summaries := []TaskSummary{
+		{Name: "alpha", DisplayName: "Alpha"},
+		{Name: "beta", DisplayName: "Beta"},
+		{Name: "gamma", DisplayName: "Gamma"},
+		{Name: "delta", DisplayName: "Delta"},
+	}
+
+	got := OrderSummariesByUsage(summaries, map[string]int{
+		"gamma": 4,
+		"alpha": 2,
+		"beta":  2,
+	})
+
+	want := []string{"gamma", "alpha", "beta", "delta"}
+	gotNames := make([]string, 0, len(got))
+	for _, summary := range got {
+		gotNames = append(gotNames, summary.Name)
+	}
+	if !reflect.DeepEqual(gotNames, want) {
+		t.Fatalf("OrderSummariesByUsage() = %v, want %v", gotNames, want)
 	}
 }
 

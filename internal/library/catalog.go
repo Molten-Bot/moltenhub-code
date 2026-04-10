@@ -172,22 +172,43 @@ func (c Catalog) ExpandRunConfig(taskName, repo, branch string) (config.Config, 
 	}
 
 	cfg := config.Config{
-		RepoURL:       repo,
-		BaseBranch:    strings.TrimSpace(branch),
-		TargetSubdir:  task.TargetSubdir,
-		Prompt:        task.Prompt,
-		CommitMessage: task.CommitMessage,
-		PRTitle:       task.PRTitle,
-		PRBody:        task.PRBody,
-		Labels:        append([]string(nil), task.Labels...),
-		GitHubHandle:  task.GitHubHandle,
-		Reviewers:     append([]string(nil), task.Reviewers...),
+		RepoURL:         repo,
+		LibraryTaskName: task.Name,
+		BaseBranch:      strings.TrimSpace(branch),
+		TargetSubdir:    task.TargetSubdir,
+		Prompt:          task.Prompt,
+		CommitMessage:   task.CommitMessage,
+		PRTitle:         task.PRTitle,
+		PRBody:          task.PRBody,
+		Labels:          append([]string(nil), task.Labels...),
+		GitHubHandle:    task.GitHubHandle,
+		Reviewers:       append([]string(nil), task.Reviewers...),
 	}
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return config.Config{}, fmt.Errorf("library task %q: %w", taskName, err)
 	}
 	return cfg, nil
+}
+
+// OrderSummariesByUsage reorders library tasks by descending local usage count.
+// Ties preserve the incoming order.
+func OrderSummariesByUsage(summaries []TaskSummary, usage map[string]int) []TaskSummary {
+	if len(summaries) == 0 {
+		return nil
+	}
+
+	ordered := append([]TaskSummary(nil), summaries...)
+	if len(usage) == 0 {
+		return ordered
+	}
+
+	sort.SliceStable(ordered, func(i, j int) bool {
+		left := usage[strings.TrimSpace(ordered[i].Name)]
+		right := usage[strings.TrimSpace(ordered[j].Name)]
+		return left > right
+	})
+	return ordered
 }
 
 func loadTaskDefinitions(path string) ([]TaskDefinition, error) {

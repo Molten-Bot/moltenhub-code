@@ -23,23 +23,24 @@ const prBodyFooter = "If you would like to connect agents together checkout [Mol
 
 // Config is the v1 public contract for a harness run.
 type Config struct {
-	Version       string        `json:"version"`
-	RepoURL       string        `json:"repoUrl"`
-	Repo          string        `json:"repo"`
-	Repos         []string      `json:"repos"`
-	AgentHarness  string        `json:"agentHarness,omitempty"`
-	AgentCommand  string        `json:"agentCommand,omitempty"`
-	BaseBranch    string        `json:"baseBranch"`
-	TargetSubdir  string        `json:"targetSubdir"`
-	Prompt        string        `json:"prompt"`
-	Images        []PromptImage `json:"images,omitempty"`
-	CommitMessage string        `json:"commitMessage"`
-	PRTitle       string        `json:"prTitle"`
-	PRBody        string        `json:"prBody"`
-	Labels        []string      `json:"labels"`
-	GitHubHandle  string        `json:"githubHandle"`
-	Reviewers     []string      `json:"reviewers"`
-	Review        *ReviewConfig `json:"review,omitempty"`
+	Version         string        `json:"version"`
+	RepoURL         string        `json:"repoUrl"`
+	Repo            string        `json:"repo"`
+	Repos           []string      `json:"repos"`
+	LibraryTaskName string        `json:"libraryTaskName,omitempty"`
+	AgentHarness    string        `json:"agentHarness,omitempty"`
+	AgentCommand    string        `json:"agentCommand,omitempty"`
+	BaseBranch      string        `json:"baseBranch"`
+	TargetSubdir    string        `json:"targetSubdir"`
+	Prompt          string        `json:"prompt"`
+	Images          []PromptImage `json:"images,omitempty"`
+	CommitMessage   string        `json:"commitMessage"`
+	PRTitle         string        `json:"prTitle"`
+	PRBody          string        `json:"prBody"`
+	Labels          []string      `json:"labels"`
+	GitHubHandle    string        `json:"githubHandle"`
+	Reviewers       []string      `json:"reviewers"`
+	Review          *ReviewConfig `json:"review,omitempty"`
 }
 
 // PromptImage captures one prompt image attachment.
@@ -161,6 +162,7 @@ func (c *Config) ApplyDefaults() {
 		c.RepoURL = repos[0]
 		c.Repo = repos[0]
 	}
+	c.LibraryTaskName = strings.TrimSpace(c.LibraryTaskName)
 
 	c.BaseBranch = strings.TrimSpace(c.BaseBranch)
 	if c.BaseBranch == "" {

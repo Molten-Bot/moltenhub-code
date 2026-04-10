@@ -252,6 +252,64 @@ func TestLoadRuntimeConfigAllowsMissingToken(t *testing.T) {
 	}
 }
 
+func TestIncrementRuntimeConfigLibraryTaskUsagePersistsAndMergesCounts(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := IncrementRuntimeConfigLibraryTaskUsage(path, InitConfig{
+		BaseURL:    "https://na.hub.molten.bot/v1",
+		SessionKey: "main",
+	}, "unit-test-coverage"); err != nil {
+		t.Fatalf("IncrementRuntimeConfigLibraryTaskUsage(first) error = %v", err)
+	}
+	if err := IncrementRuntimeConfigLibraryTaskUsage(path, InitConfig{}, "unit-test-coverage"); err != nil {
+		t.Fatalf("IncrementRuntimeConfigLibraryTaskUsage(second) error = %v", err)
+	}
+	if err := IncrementRuntimeConfigLibraryTaskUsage(path, InitConfig{}, "security-review"); err != nil {
+		t.Fatalf("IncrementRuntimeConfigLibraryTaskUsage(third) error = %v", err)
+	}
+
+	got := ReadRuntimeConfigLibraryTaskUsage(path)
+	want := map[string]int{
+		"unit-test-coverage": 2,
+		"security-review":    1,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ReadRuntimeConfigLibraryTaskUsage() = %#v, want %#v", got, want)
+	}
+}
+
+func TestSaveRuntimeConfigPreservesLibraryTaskUsage(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(`{
+  "base_url": "https://na.hub.molten.bot/v1",
+  "session_key": "main",
+  "library_task_usage": {
+    "unit-test-coverage": 3
+  }
+}`), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	if err := SaveRuntimeConfig(path, InitConfig{
+		BaseURL:    "https://na.hub.molten.bot/v1",
+		SessionKey: "main",
+	}, "agent_123"); err != nil {
+		t.Fatalf("SaveRuntimeConfig() error = %v", err)
+	}
+
+	got := ReadRuntimeConfigLibraryTaskUsage(path)
+	want := map[string]int{"unit-test-coverage": 3}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ReadRuntimeConfigLibraryTaskUsage() after SaveRuntimeConfig = %#v, want %#v", got, want)
+	}
+}
+
 func TestLoadRuntimeConfigSupportsInitStyleWholeConfig(t *testing.T) {
 	t.Parallel()
 

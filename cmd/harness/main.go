@@ -25,6 +25,7 @@ import (
 	"github.com/jef/moltenhub-code/internal/harness"
 	"github.com/jef/moltenhub-code/internal/hub"
 	"github.com/jef/moltenhub-code/internal/hubui"
+	"github.com/jef/moltenhub-code/internal/library"
 	"github.com/jef/moltenhub-code/internal/multiplex"
 	"github.com/jef/moltenhub-code/internal/workspace"
 )
@@ -566,6 +567,14 @@ func runHub(args []string) int {
 		uiServer.AutomaticMode = *uiAutomatic
 		uiServer.ConfiguredHarness = cfg.AgentHarness
 		uiServer.Logf = logger.Printf
+		uiServer.LoadLibraryTasks = func() ([]library.TaskSummary, error) {
+			catalog, err := library.LoadCatalog(library.DefaultDir)
+			if err != nil {
+				return nil, err
+			}
+			usage := hub.ReadRuntimeConfigLibraryTaskUsage(cfg.RuntimeConfigPath)
+			return library.OrderSummariesByUsage(catalog.Summaries(), usage), nil
+		}
 		cleanupTaskLogs := func(_ context.Context, requestID string) error {
 			logDir, ok := localTaskLogDir(logRoot, requestID)
 			if !ok {
@@ -591,11 +600,20 @@ func runHub(args []string) int {
 		uiServer.ConfigureHubSetup = func(reqCtx context.Context, req hubui.HubSetupRequest) (hubui.HubSetupState, error) {
 			return configureHubSetup(reqCtx, cfg, req, hubController.Update)
 		}
+		recordLibraryUsage := func(runCfg config.Config) {
+			if strings.TrimSpace(runCfg.LibraryTaskName) == "" {
+				return
+			}
+			if err := hub.IncrementRuntimeConfigLibraryTaskUsage(cfg.RuntimeConfigPath, cfg, runCfg.LibraryTaskName); err != nil {
+				daemonLogger("library.usage status=warn task=%s err=%q", runCfg.LibraryTaskName, err)
+			}
+		}
 		uiServer.SubmitLocalPrompt = func(reqCtx context.Context, body []byte) (string, error) {
 			runCfg, err := hub.ParseRunConfigJSON(body)
 			if err != nil {
 				return "", fmt.Errorf("invalid run config: %w", err)
 			}
+			recordLibraryUsage(runCfg)
 			return enqueueLocalRun(reqCtx, runCfg, true, "local_submit", false)
 		}
 		uiServer.SubmitTaskRerun = func(reqCtx context.Context, _ string, body []byte, force bool) (string, error) {
@@ -603,6 +621,7 @@ func runHub(args []string) int {
 			if err != nil {
 				return "", fmt.Errorf("invalid run config: %w", err)
 			}
+			recordLibraryUsage(runCfg)
 			return enqueueLocalRun(reqCtx, runCfg, true, "rerun", force)
 		}
 		uiServer.CloseTask = cleanupTaskLogs

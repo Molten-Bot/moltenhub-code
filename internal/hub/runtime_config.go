@@ -22,7 +22,8 @@ const (
 // start directly from config.json without requiring init.json again.
 type RuntimeConfig struct {
 	InitConfig
-	TimeoutMs int `json:"timeout_ms,omitempty"`
+	TimeoutMs        int            `json:"timeout_ms,omitempty"`
+	LibraryTaskUsage map[string]int `json:"library_task_usage,omitempty"`
 }
 
 // UnmarshalJSON accepts the current init-style snake_case config and the legacy
@@ -126,6 +127,7 @@ func SaveRuntimeConfig(path string, initCfg InitConfig, token string) error {
 	}
 	cfg.RuntimeConfigPath = path
 	cfg.AgentToken = token
+	cfg.LibraryTaskUsage = ReadRuntimeConfigLibraryTaskUsage(path)
 	cfg.ApplyDefaults()
 	if strings.TrimSpace(cfg.AgentToken) == "" && strings.TrimSpace(cfg.BindToken) == "" {
 		return fmt.Errorf("runtime config requires agent_token or bind_token")
@@ -252,6 +254,56 @@ func ReadRuntimeConfigString(path string, keys ...string) string {
 	return ""
 }
 
+// ReadRuntimeConfigLibraryTaskUsage returns normalized per-task usage counts
+// from the persisted runtime config. Invalid or non-positive entries are
+// ignored.
+func ReadRuntimeConfigLibraryTaskUsage(path string) map[string]int {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil
+	}
+
+	doc, err := readRuntimeConfigDoc(path)
+	if err != nil {
+		return nil
+	}
+	return runtimeConfigLibraryTaskUsage(doc["library_task_usage"])
+}
+
+// IncrementRuntimeConfigLibraryTaskUsage records one successful local selection
+// of a library task in config.json while preserving unrelated runtime config
+// settings already stored on disk.
+func IncrementRuntimeConfigLibraryTaskUsage(path string, initCfg InitConfig, taskName string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		path = defaultRuntimeConfigPath()
+	}
+
+	taskName = strings.TrimSpace(taskName)
+	if taskName == "" {
+		return fmt.Errorf("library task name is required")
+	}
+
+	doc, err := loadRuntimeConfigDoc(path, initCfg)
+	if err != nil {
+		return err
+	}
+
+	usage := runtimeConfigLibraryTaskUsage(doc["library_task_usage"])
+	if usage == nil {
+		usage = map[string]int{}
+	}
+	usage[taskName]++
+	doc["library_task_usage"] = usage
+
+	encoded, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode runtime config: %w", err)
+	}
+	encoded = append(encoded, '\n')
+	return writeRuntimeConfigFile(path, encoded)
+}
+
 func saveRuntimeConfigStringField(
 	path string,
 	initCfg InitConfig,
@@ -319,6 +371,52 @@ func readRuntimeConfigDoc(path string) (map[string]any, error) {
 func docStringValue(v any) string {
 	s, _ := v.(string)
 	return strings.TrimSpace(s)
+}
+
+func runtimeConfigLibraryTaskUsage(v any) map[string]int {
+	doc, ok := v.(map[string]any)
+	if !ok || len(doc) == 0 {
+		return nil
+	}
+
+	usage := make(map[string]int, len(doc))
+	for rawName, rawCount := range doc {
+		name := strings.TrimSpace(rawName)
+		if name == "" {
+			continue
+		}
+		count, ok := runtimeConfigLibraryTaskUsageCount(rawCount)
+		if !ok || count <= 0 {
+			continue
+		}
+		usage[name] = count
+	}
+	if len(usage) == 0 {
+		return nil
+	}
+	return usage
+}
+
+func runtimeConfigLibraryTaskUsageCount(v any) (int, bool) {
+	switch typed := v.(type) {
+	case int:
+		return typed, true
+	case int8:
+		return int(typed), true
+	case int16:
+		return int(typed), true
+	case int32:
+		return int(typed), true
+	case int64:
+		return int(typed), true
+	case float64:
+		if typed != float64(int(typed)) {
+			return 0, false
+		}
+		return int(typed), true
+	default:
+		return 0, false
+	}
 }
 
 // SaveRuntimeConfigClaudeOAuthToken persists claude_code_oauth_token to the

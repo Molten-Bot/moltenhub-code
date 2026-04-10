@@ -108,9 +108,14 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	d.logf("hub.runtime_config status=saved path=%s", runtimeCfgPath)
 
 	libraryCatalog, libraryErr := library.LoadCatalog(library.DefaultDir)
+	orderedLibrarySummaries := []library.TaskSummary{}
 	if libraryErr != nil {
 		d.logf("hub.library status=warn err=%q", libraryErr)
 	} else {
+		orderedLibrarySummaries = library.OrderSummariesByUsage(
+			libraryCatalog.Summaries(),
+			ReadRuntimeConfigLibraryTaskUsage(runtimeCfgPath),
+		)
 		d.logf("hub.library status=loaded tasks=%d", len(libraryCatalog.Tasks))
 	}
 	if err := api.SyncProfile(ctx, cfg); err != nil {
@@ -119,7 +124,7 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 		d.logf("hub.profile status=ok")
 	}
 
-	if err := api.RegisterRuntime(ctx, cfg, libraryCatalog.Summaries()); err != nil {
+	if err := api.RegisterRuntime(ctx, cfg, orderedLibrarySummaries); err != nil {
 		d.logf("hub.runtime status=warn action=register err=%q", err)
 	} else {
 		d.logf("hub.runtime status=registered skills=1 library_tasks=%d", len(libraryCatalog.Tasks))
@@ -575,6 +580,11 @@ func (d Daemon) handleDispatch(
 		dispatch.Config.RepoURL,
 		strings.Join(dispatch.Config.RepoList(), ","),
 	)
+	if taskName := strings.TrimSpace(dispatch.Config.LibraryTaskName); taskName != "" {
+		if err := IncrementRuntimeConfigLibraryTaskUsage(cfg.RuntimeConfigPath, cfg, taskName); err != nil {
+			d.logf("library.usage status=warn task=%s request_id=%s err=%q", taskName, dispatch.RequestID, err)
+		}
+	}
 
 	h := harness.New(d.Runner)
 	h.Logf = func(format string, args ...any) {

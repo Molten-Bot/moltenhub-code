@@ -275,6 +275,7 @@ Key fields:
 - `augment_session_auth` (optional Auggie session JSON for container bootstrap)
 
 After first successful activation, runtime auth is persisted to a sibling `config.json` next to the init file used for startup. With the default repo-root layout, that remains `./.moltenhub/config.json`. The runtime also reads the legacy `config/config.json` path next to that file for compatibility with existing mounts.
+The runtime also persists `library_task_usage` in `config.json` so library tasks can be ordered by each user's most-used selections in the local monitor UI and runtime registration metadata.
 
 The live Hub OpenAPI spec is published at `https://na.hub.molten.bot/openapi.yaml`.
 A focused local runtime snapshot is checked in at [`na.hub.molten.bot.openapi.yaml`](na.hub.molten.bot.openapi.yaml) for offline review of the routes this harness depends on.
