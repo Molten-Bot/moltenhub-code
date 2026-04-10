@@ -878,10 +878,15 @@ func failureFollowUpRunConfig(
 	logRoot string,
 ) config.Config {
 	logPaths := failurefollowup.TaskLogPaths(logRoot, failedRequestID)
+	baseBranch, targetSubdir := failurefollowup.FollowUpTargeting(
+		failedRunCfg.BaseBranch,
+		failedRunCfg.TargetSubdir,
+		failedResult.Branch,
+	)
 	return config.Config{
 		Repos:        failureFollowUpRepos(failedResult, failedRunCfg),
-		BaseBranch:   "main",
-		TargetSubdir: ".",
+		BaseBranch:   baseBranch,
+		TargetSubdir: targetSubdir,
 		Prompt:       failureFollowUpPrompt(logPaths, failedResult, failedRunCfg),
 	}
 }
@@ -1041,6 +1046,13 @@ func failureFollowUpFailureContext(failedResult harness.Result, failedRunCfg con
 	}
 	if repos := failureFollowUpContextRepos(failedResult, failedRunCfg); len(repos) > 0 {
 		lines = append(lines, fmt.Sprintf("- repos=%s", strings.Join(repos, ",")))
+	}
+	if targetSubdir := strings.TrimSpace(failedRunCfg.TargetSubdir); targetSubdir != "" {
+		lines = append(lines, fmt.Sprintf("- target_subdir=%s", targetSubdir))
+	}
+	if prompt := strings.TrimSpace(failedRunCfg.Prompt); prompt != "" {
+		lines = append(lines, "Original task prompt:")
+		lines = append(lines, prompt)
 	}
 	if len(lines) == 1 {
 		return ""

@@ -78,6 +78,39 @@ func TestTaskLogPathsBuildsExpectedLegacyAndCurrentFiles(t *testing.T) {
 	}
 }
 
+func TestFollowUpTargetingDefaultsToMainAndRoot(t *testing.T) {
+	t.Parallel()
+
+	baseBranch, targetSubdir := FollowUpTargeting("", "", "")
+	if baseBranch != "main" {
+		t.Fatalf("baseBranch = %q, want %q", baseBranch, "main")
+	}
+	if targetSubdir != "." {
+		t.Fatalf("targetSubdir = %q, want %q", targetSubdir, ".")
+	}
+}
+
+func TestFollowUpTargetingPreservesExistingNonMainBranchContext(t *testing.T) {
+	t.Parallel()
+
+	baseBranch, targetSubdir := FollowUpTargeting("release/2026.04-hotfix", "internal/hub", "release/2026.04-hotfix")
+	if baseBranch != "release/2026.04-hotfix" {
+		t.Fatalf("baseBranch = %q, want %q", baseBranch, "release/2026.04-hotfix")
+	}
+	if targetSubdir != "internal/hub" {
+		t.Fatalf("targetSubdir = %q, want %q", targetSubdir, "internal/hub")
+	}
+}
+
+func TestFollowUpTargetingIgnoresEphemeralCurrentBranchWhenBaseIsMain(t *testing.T) {
+	t.Parallel()
+
+	baseBranch, _ := FollowUpTargeting("main", ".", "moltenhub-fix-issue")
+	if baseBranch != "main" {
+		t.Fatalf("baseBranch = %q, want %q", baseBranch, "main")
+	}
+}
+
 func TestNonRemediableRepoAccessReasonDetectsGitHub403(t *testing.T) {
 	t.Parallel()
 

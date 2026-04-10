@@ -270,10 +270,10 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 	if runConfig == nil {
 		t.Fatalf("follow-up config missing: %#v", followUpPayload)
 	}
-	if got := runConfig["baseBranch"]; got != "main" {
+	if got := runConfig["baseBranch"]; got != "release" {
 		t.Fatalf("follow-up baseBranch = %#v", got)
 	}
-	if got := runConfig["targetSubdir"]; got != "." {
+	if got := runConfig["targetSubdir"]; got != "internal/hub" {
 		t.Fatalf("follow-up targetSubdir = %#v", got)
 	}
 	repos, _ := runConfig["repos"].([]string)
@@ -298,6 +298,12 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 	}
 	if !strings.Contains(prompt, `- request_id=req-follow-up`) {
 		t.Fatalf("follow-up prompt missing request id: %q", prompt)
+	}
+	if !strings.Contains(prompt, `- target_subdir=internal/hub`) {
+		t.Fatalf("follow-up prompt missing target subdir: %q", prompt)
+	}
+	if !strings.Contains(prompt, "Original task prompt:\nfix failing checks") {
+		t.Fatalf("follow-up prompt missing original prompt: %q", prompt)
 	}
 	if !strings.Contains(prompt, `Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.`) {
 		t.Fatalf("follow-up prompt missing execution contract: %q", prompt)

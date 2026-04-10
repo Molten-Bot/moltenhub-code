@@ -402,6 +402,39 @@ func TestFailureFollowUpRunConfigUsesRequiredPayloadShapeAndLogContext(t *testin
 	}
 }
 
+func TestFailureFollowUpRunConfigPreservesExistingNonMainBranchAndTarget(t *testing.T) {
+	t.Parallel()
+
+	logRoot := filepath.Join(t.TempDir(), ".log")
+	failedResult := harness.Result{
+		Err:    fmt.Errorf("git: nothing to commit, working tree clean"),
+		Branch: "moltenhub-add-slight-padding-between-prompt-and-lo",
+	}
+	failedRunCfg := config.Config{
+		Repos:        []string{"git@github.com:acme/repo.git"},
+		BaseBranch:   "moltenhub-add-slight-padding-between-prompt-and-lo",
+		TargetSubdir: "internal/hubui",
+		Prompt:       "add slight padding between prompt and lower items",
+	}
+
+	cfg := failureFollowUpRunConfig("local-1712345678-000001", failedResult, failedRunCfg, logRoot)
+	if cfg.BaseBranch != "moltenhub-add-slight-padding-between-prompt-and-lo" {
+		t.Fatalf("BaseBranch = %q, want preserved branch", cfg.BaseBranch)
+	}
+	if cfg.TargetSubdir != "internal/hubui" {
+		t.Fatalf("TargetSubdir = %q, want %q", cfg.TargetSubdir, "internal/hubui")
+	}
+	for _, want := range []string{
+		"- target_subdir=internal/hubui",
+		"Original task prompt:",
+		"add slight padding between prompt and lower items",
+	} {
+		if !strings.Contains(cfg.Prompt, want) {
+			t.Fatalf("Prompt missing %q: %q", want, cfg.Prompt)
+		}
+	}
+}
+
 func TestFailureFollowUpReposUsesFailedResultRepoWhenItIdentifiesASingleRepo(t *testing.T) {
 	t.Parallel()
 

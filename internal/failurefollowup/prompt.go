@@ -96,6 +96,23 @@ func ComposePrompt(requiredPrompt string, logPaths, fallbackLogPaths []string, n
 	return WithExecutionContract(b.String())
 }
 
+func FollowUpTargeting(baseBranch, targetSubdir, currentBranch string) (string, string) {
+	baseBranch = strings.TrimSpace(baseBranch)
+	targetSubdir = strings.TrimSpace(targetSubdir)
+	currentBranch = strings.TrimSpace(currentBranch)
+
+	if targetSubdir == "" {
+		targetSubdir = "."
+	}
+	if baseBranch == "" {
+		baseBranch = "main"
+	}
+	if normalizeBranchRef(baseBranch) != "main" && currentBranch != "" {
+		baseBranch = currentBranch
+	}
+	return baseBranch, targetSubdir
+}
+
 func TaskLogPaths(logRoot, requestID string) []string {
 	logDir, ok := TaskLogDir(logRoot, requestID)
 	if !ok {
@@ -184,6 +201,13 @@ func SanitizeLogPathPart(part string) string {
 		return ""
 	}
 	return trimmed
+}
+
+func normalizeBranchRef(branch string) string {
+	branch = strings.TrimSpace(branch)
+	branch = strings.TrimPrefix(branch, "refs/heads/")
+	branch = strings.TrimPrefix(branch, "origin/")
+	return branch
 }
 
 func NonRemediableRepoAccessReason(err error) string {
