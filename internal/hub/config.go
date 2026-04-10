@@ -276,12 +276,17 @@ func (c InitConfig) Validate() error {
 }
 
 func defaultDispatcherMaxParallel() int {
-	cores := runtime.NumCPU()
+	return defaultDispatcherMaxParallelForCores(runtime.NumCPU())
+}
+
+func defaultDispatcherMaxParallelForCores(cores int) int {
+	// A single reported CPU often still has enough headroom for at least two
+	// concurrent harness jobs because work is frequently I/O-bound.
 	switch {
 	case cores <= 1:
-		return 1
-	case cores == 2:
 		return 2
+	case cores == 2:
+		return 3
 	default:
 		return cores
 	}

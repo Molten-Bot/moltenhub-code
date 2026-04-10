@@ -65,6 +65,31 @@ func TestLoadInitDefaults(t *testing.T) {
 	}
 }
 
+func TestDefaultDispatcherMaxParallelForCores(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name  string
+		cores int
+		want  int
+	}{
+		{name: "non-positive falls back to adaptive minimum", cores: 0, want: 2},
+		{name: "single core allows light overlap", cores: 1, want: 2},
+		{name: "dual core allows one extra slot", cores: 2, want: 3},
+		{name: "multi core tracks core count", cores: 8, want: 8},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := defaultDispatcherMaxParallelForCores(tc.cores); got != tc.want {
+				t.Fatalf("defaultDispatcherMaxParallelForCores(%d) = %d, want %d", tc.cores, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestLoadInitAllowsMissingTokensForRuntimeConfigFallback(t *testing.T) {
 	t.Parallel()
 
