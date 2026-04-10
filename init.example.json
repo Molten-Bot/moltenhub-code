@@ -7,7 +7,8 @@
   // Optional for Auggie harness: full session JSON from `auggie token print`.
   // "augment_session_auth": "{\"accessToken\":\"XXX\",\"tenantURL\":\"https://YYY/\",\"scopes\":[\"email\"]}",
   // Optional for Pi harness: install with `npm install -g @mariozechner/pi-coding-agent`
-  // and configure Pi auth/providers separately (for example via `/login` or provider API keys).
+  // and configure Pi auth/providers separately. Example persisted runtime value:
+  // "pi_provider_auth": "{\"env_var\":\"OPENAI_API_KEY\",\"value\":\"sk-proj_replace_with_your_key\"}",
   "agent_token": "agent_replace_with_your_token",
   "agent_harness": "codex",
   // optional override when executable name differs from harness default

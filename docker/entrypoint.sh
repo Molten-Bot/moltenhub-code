@@ -37,6 +37,26 @@ detect_config_path_from_args() {
     done
 }
 
+read_pi_provider_auth_field() {
+    raw_json="$1"
+    field_name="$2"
+    if [ "${raw_json}" = "" ]; then
+        return 0
+    fi
+
+    node -e '
+const [, rawJSON, fieldName] = process.argv;
+try {
+  const parsed = JSON.parse(String(rawJSON || ""));
+  const value = parsed && typeof parsed === "object" ? parsed[fieldName] : "";
+  if (typeof value === "string" && value.trim() !== "") {
+    process.stdout.write(value.trim());
+  }
+} catch (_) {
+}
+' "${raw_json}" "${field_name}"
+}
+
 read_json_key() {
     json_path="$1"
     keys_csv="$2"
@@ -164,6 +184,24 @@ if [ "${AUGMENT_SESSION_AUTH:-}" = "" ]; then
         if [ "${augment_session_auth_from_config}" != "" ]; then
             export AUGMENT_SESSION_AUTH="${augment_session_auth_from_config}"
         fi
+    fi
+fi
+
+pi_provider_auth=""
+if [ "${PI_PROVIDER_AUTH:-}" != "" ]; then
+    pi_provider_auth="${PI_PROVIDER_AUTH}"
+else
+    pi_provider_auth="$(read_json_key "${init_path}" "pi_provider_auth,piProviderAuth,PI_PROVIDER_AUTH")"
+    if [ "${pi_provider_auth}" = "" ]; then
+        pi_provider_auth="$(read_json_key "${config_path}" "pi_provider_auth,piProviderAuth,PI_PROVIDER_AUTH")"
+    fi
+fi
+if [ "${pi_provider_auth}" != "" ]; then
+    pi_provider_env_var="$(read_pi_provider_auth_field "${pi_provider_auth}" "env_var")"
+    pi_provider_value="$(read_pi_provider_auth_field "${pi_provider_auth}" "value")"
+    if [ "${pi_provider_env_var}" != "" ] && [ "${pi_provider_value}" != "" ]; then
+        export "${pi_provider_env_var}=${pi_provider_value}"
+        export PI_PROVIDER_AUTH="${pi_provider_auth}"
     fi
 fi
 

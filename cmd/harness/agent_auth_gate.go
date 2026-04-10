@@ -38,6 +38,8 @@ func newAgentAuthGate(
 		return newClaudeAuthGateWithContextAndConfig(ctx, runtime.Command, initCfg.RuntimeConfigPath, initCfg, logf)
 	case agentruntime.HarnessAuggie:
 		return newAuggieAuthGate(initCfg.RuntimeConfigPath, initCfg)
+	case agentruntime.HarnessPi:
+		return newPiAuthGate(initCfg.RuntimeConfigPath, initCfg)
 	default:
 		return nil
 	}

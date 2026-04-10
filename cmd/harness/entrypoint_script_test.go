@@ -68,6 +68,7 @@ type entrypointTestEnv struct {
 	root        string
 	configDir   string
 	augmentPath string
+	piPath      string
 }
 
 func newEntrypointTestEnv(t *testing.T) entrypointTestEnv {
@@ -85,12 +86,13 @@ func newEntrypointTestEnv(t *testing.T) entrypointTestEnv {
 
 	writeEntrypointStub(t, filepath.Join(binDir, "git"), "#!/bin/sh\nexit 0\n")
 	writeEntrypointStub(t, filepath.Join(binDir, "gh"), "#!/bin/sh\nexit 0\n")
-	writeEntrypointStub(t, filepath.Join(binDir, "envdump"), "#!/bin/sh\nset -eu\nprintf '%s' \"${AUGMENT_SESSION_AUTH:-}\" > \"${HARNESS_STUB_AUGMENT_FILE}\"\n")
+	writeEntrypointStub(t, filepath.Join(binDir, "envdump"), "#!/bin/sh\nset -eu\nprintf '%s' \"${AUGMENT_SESSION_AUTH:-}\" > \"${HARNESS_STUB_AUGMENT_FILE}\"\nprintf '%s' \"${OPENAI_API_KEY:-}\" > \"${HARNESS_STUB_PI_FILE}\"\n")
 
 	return entrypointTestEnv{
 		root:        root,
 		configDir:   configDir,
 		augmentPath: filepath.Join(root, "augment-session-auth.txt"),
+		piPath:      filepath.Join(root, "pi-provider-auth.txt"),
 	}
 }
 
@@ -110,6 +112,7 @@ func runEntrypointScript(t *testing.T, env entrypointTestEnv, extra map[string]s
 		"PATH=" + pathValue,
 		"HARNESS_CONFIG_DIR=" + env.configDir,
 		"HARNESS_STUB_AUGMENT_FILE=" + env.augmentPath,
+		"HARNESS_STUB_PI_FILE=" + env.piPath,
 		"GITHUB_TOKEN=ghp_test",
 	}
 	for key, value := range extra {
@@ -129,4 +132,31 @@ func entrypointScriptPath(t *testing.T) string {
 	}
 	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
 	return filepath.Join(root, "docker", "entrypoint.sh")
+}
+
+func TestEntrypointScriptExportsPiProviderAuthFromRunConfig(t *testing.T) {
+	t.Parallel()
+
+	env := newEntrypointTestEnv(t)
+	configPath := filepath.Join(env.configDir, "config.json")
+	if err := os.WriteFile(configPath, []byte(`{
+  "repo": "git@github.com:acme/repo.git",
+  "prompt": "test prompt",
+  "pi_provider_auth": "{\"env_var\":\"OPENAI_API_KEY\",\"value\":\"sk-pi-from-run\"}"
+}`), 0o644); err != nil {
+		t.Fatalf("write run config: %v", err)
+	}
+
+	output, err := runEntrypointScript(t, env, nil)
+	if err != nil {
+		t.Fatalf("entrypoint error: %v\noutput: %s", err, output)
+	}
+
+	got, err := os.ReadFile(env.piPath)
+	if err != nil {
+		t.Fatalf("read pi env file: %v", err)
+	}
+	if want := "sk-pi-from-run"; string(got) != want {
+		t.Fatalf("OPENAI_API_KEY = %q, want %q", string(got), want)
+	}
 }

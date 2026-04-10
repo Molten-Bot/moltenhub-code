@@ -368,9 +368,14 @@
       </div>
 
       <div id="agent-auth-configure" class="mt-5 hidden space-y-3">
-        <div class="flex flex-wrap items-center gap-2.5">
+        <div id="agent-auth-configure-command-row" class="flex flex-wrap items-center gap-2.5">
           <div id="agent-auth-configure-command" class="font-mono text-[1rem] tracking-[0.04em] text-hub-text">auggie token print</div>
           <button id="agent-auth-configure-copy" class="agent-auth-copy rounded-md px-2.5 py-1.5 text-xs font-medium" type="button">Copy</button>
+        </div>
+        <div id="agent-auth-configure-option-row" class="hidden space-y-2">
+          <label id="agent-auth-configure-option-label" class="text-sm font-medium text-hub-text/85" for="agent-auth-configure-option">PI provider variable</label>
+          <select id="agent-auth-configure-option" class="prompt-text text-[0.95rem]" aria-label="PI provider variable"></select>
+          <p id="agent-auth-configure-option-description" class="text-sm text-hub-text/70"></p>
         </div>
         <label id="agent-auth-configure-label" class="text-sm font-medium text-hub-text/85" for="agent-auth-configure-input">Paste configuration value</label>
         <textarea id="agent-auth-configure-input" class="prompt-text font-mono text-[0.9rem]" placeholder='{"accessToken":"XXX","tenantURL":"https://YYY/","scopes":["email"]}' spellcheck="false" rows="5" wrap="off"></textarea>
@@ -697,6 +702,13 @@
         acceptsBrowserCode: Boolean(auth.accepts_browser_code || auth.acceptsBrowserCode),
         configureCommand: String(auth.configure_command || auth.configureCommand || "").trim(),
         configurePlaceholder: String(auth.configure_placeholder || auth.configurePlaceholder || "").trim(),
+        configureOptions: Array.isArray(auth.configure_options || auth.configureOptions)
+          ? (auth.configure_options || auth.configureOptions).map((option) => ({
+            value: String(option?.value || "").trim(),
+            label: String(option?.label || "").trim(),
+            description: String(option?.description || "").trim(),
+          })).filter((option) => option.value !== "" && option.label !== "")
+          : [],
         updatedAt: String(auth.updated_at || auth.updatedAt || "").trim(),
       };
     }
@@ -1167,8 +1179,13 @@
     const agentAuthBrowserCodeInput = document.getElementById("agent-auth-browser-code-input");
     const agentAuthBrowserCodeError = document.getElementById("agent-auth-browser-code-error");
     const agentAuthConfigure = document.getElementById("agent-auth-configure");
+    const agentAuthConfigureCommandRow = document.getElementById("agent-auth-configure-command-row");
     const agentAuthConfigureCommandLabel = document.getElementById("agent-auth-configure-command-label");
     const agentAuthConfigureCommand = document.getElementById("agent-auth-configure-command");
+    const agentAuthConfigureOptionRow = document.getElementById("agent-auth-configure-option-row");
+    const agentAuthConfigureOptionLabel = document.getElementById("agent-auth-configure-option-label");
+    const agentAuthConfigureOption = document.getElementById("agent-auth-configure-option");
+    const agentAuthConfigureOptionDescription = document.getElementById("agent-auth-configure-option-description");
     const agentAuthConfigureLabel = document.getElementById("agent-auth-configure-label");
     const agentAuthConfigureCopy = document.getElementById("agent-auth-configure-copy");
     const agentAuthConfigureInput = document.getElementById("agent-auth-configure-input");
@@ -2048,6 +2065,11 @@
       return harness === "auggie" && isManualConfigureState(current) && !isGitHubTokenConfigureState(current);
     }
 
+    function isPiConfigureState(auth) {
+      const current = auth && typeof auth === "object" ? auth : state.agentAuth;
+      return authHarness(current) === "pi" && isManualConfigureState(current);
+    }
+
     function isClaudeGitHubConfigureState(auth) {
       const current = auth && typeof auth === "object" ? auth : state.agentAuth;
       const harness = authHarness(current);
@@ -2116,6 +2138,16 @@
 
     function isClaudeBrowserCodeAwaitingSubmission(auth) {
       return isClaudeBrowserCodeState(auth) && !hasClaudeBrowserCodeBeenAccepted(auth);
+    }
+
+    function syncPiConfigureOptionDescription() {
+      if (!agentAuthConfigureOptionDescription) {
+        return;
+      }
+      const selectedValue = agentAuthConfigureOption ? String(agentAuthConfigureOption.value || "").trim() : "";
+      const selected = (Array.isArray(state.agentAuth.configureOptions) ? state.agentAuth.configureOptions : []).find((option) => option.value === selectedValue);
+      agentAuthConfigureOptionDescription.textContent = selected && selected.description ? selected.description : "";
+      agentAuthConfigureOptionDescription.classList.toggle("hidden", !isPiConfigureState(state.agentAuth) || !(selected && selected.description));
     }
 
     function normalizeClaudeBrowserCode(raw) {
@@ -2278,6 +2310,8 @@
       if (agentAuthTitle) {
         if (needsAuggieConfigure) {
           agentAuthTitle.textContent = "Setup Auggie";
+        } else if (isPiConfigureState(state.agentAuth)) {
+          agentAuthTitle.textContent = "Setup Pi";
         } else if (needsClaudeGitHubConfigure) {
           agentAuthTitle.textContent = "Setup GitHub";
         } else if (requiresManualConfigure) {
@@ -2338,16 +2372,28 @@
       if (agentAuthConfigure) {
         agentAuthConfigure.classList.toggle("hidden", !requiresManualConfigure);
       }
+      const needsPiConfigure = isPiConfigureState(state.agentAuth);
+      if (agentAuthConfigureCommandRow) {
+        agentAuthConfigureCommandRow.classList.toggle("hidden", needsPiConfigure);
+      }
       if (agentAuthConfigureCommand) {
         const fallbackCommand = needsAuggieConfigure ? "auggie token print" : "gh auth token";
         agentAuthConfigureCommand.textContent = state.agentAuth.configureCommand || fallbackCommand;
       }
       if (agentAuthConfigureCommandLabel) {
-        agentAuthConfigureCommandLabel.classList.toggle("hidden", needsClaudeGitHubConfigure);
+        agentAuthConfigureCommandLabel.classList.toggle("hidden", needsClaudeGitHubConfigure || needsPiConfigure);
+      }
+      if (agentAuthConfigureOptionRow) {
+        agentAuthConfigureOptionRow.classList.toggle("hidden", !needsPiConfigure);
+      }
+      if (agentAuthConfigureOptionLabel) {
+        agentAuthConfigureOptionLabel.classList.toggle("hidden", !needsPiConfigure);
       }
       if (agentAuthConfigureLabel) {
         if (needsClaudeGitHubConfigure) {
           agentAuthConfigureLabel.textContent = "Paste GitHub token";
+        } else if (needsPiConfigure) {
+          agentAuthConfigureLabel.textContent = "Paste selected value";
         } else {
           agentAuthConfigureLabel.textContent = "Paste configuration value";
         }
@@ -2356,12 +2402,32 @@
       if (agentAuthConfigureInput) {
         const fallbackPlaceholder = needsAuggieConfigure
           ? '{"accessToken":"XXX","tenantURL":"https://YYY/","scopes":["email"]}'
-          : "ghp_xxx";
+          : needsPiConfigure
+            ? "Paste the selected PI provider value"
+            : "ghp_xxx";
         const placeholder = state.agentAuth.configurePlaceholder || fallbackPlaceholder;
         agentAuthConfigureInput.placeholder = placeholder;
         agentAuthConfigureInput.classList.toggle("agent-auth-configure-input-github", needsClaudeGitHubConfigure);
-        agentAuthConfigureInput.rows = needsClaudeGitHubConfigure ? 1 : 5;
+        agentAuthConfigureInput.rows = needsClaudeGitHubConfigure ? 1 : (needsPiConfigure ? 3 : 5);
       }
+      if (agentAuthConfigureOption) {
+        const options = Array.isArray(state.agentAuth.configureOptions) ? state.agentAuth.configureOptions : [];
+        const currentValue = String(agentAuthConfigureOption.value || "").trim();
+        const optionMarkup = options.map((option) => {
+          const label = option.description ? `${option.label} (${option.value})` : option.label;
+          return `<option value="${escapeHTML(option.value)}">${escapeHTML(label)}</option>`;
+        }).join("");
+        if (agentAuthConfigureOption.innerHTML !== optionMarkup) {
+          agentAuthConfigureOption.innerHTML = optionMarkup;
+        }
+        const nextValue = options.some((option) => option.value === currentValue)
+          ? currentValue
+          : (options[0] ? options[0].value : "");
+        if (agentAuthConfigureOption.value !== nextValue) {
+          agentAuthConfigureOption.value = nextValue;
+        }
+      }
+      syncPiConfigureOptionDescription();
       if (!requiresManualConfigure) {
         setAuggieConfigureError("");
       }
@@ -2531,6 +2597,21 @@
         throw new Error("GitHub token appears too short.");
       }
       return token;
+    }
+
+    function normalizePiProviderAuthPayload(envVar, raw) {
+      const normalizedEnvVar = String(envVar || "").trim();
+      if (!normalizedEnvVar) {
+        throw new Error("Select a PI provider variable first.");
+      }
+      const value = String(raw || "").trim();
+      if (!value) {
+        throw new Error("PI provider value is required.");
+      }
+      return JSON.stringify({
+        env_var: normalizedEnvVar,
+        value,
+      });
     }
 
     function shouldAutoStartClaudeSetupAfterGitHubConfigure(auth) {
@@ -2717,6 +2798,44 @@
       }
     }
 
+    async function configurePiAuth() {
+      setAuggieConfigureError("");
+      let providerAuth = "";
+      try {
+        const envVar = agentAuthConfigureOption ? agentAuthConfigureOption.value : "";
+        providerAuth = normalizePiProviderAuthPayload(envVar, agentAuthConfigureInput ? agentAuthConfigureInput.value : "");
+      } catch (err) {
+        const message = err && err.message ? err.message : "Invalid PI provider value.";
+        setAuggieConfigureError(message);
+        return;
+      }
+
+      setAgentAuthVerifyPending(true);
+      setAgentAuthBusy(true);
+      try {
+        const auth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
+          pi_provider_auth: providerAuth,
+        });
+        applyAgentAuthGate(auth);
+        if (auth.ready) {
+          setAuggieConfigureError("");
+          if (agentAuthConfigureInput) {
+            agentAuthConfigureInput.value = "";
+          }
+          setLocalPromptStatus("ok", `${currentAgentLabel()} auth is ready.`);
+        } else {
+          setAgentAuthVerifyPending(false);
+        }
+      } catch (err) {
+        const message = err && err.message ? err.message : "PI auth configure failed.";
+        setAgentAuthVerifyPending(false);
+        setAuggieConfigureError(message);
+        setLocalPromptStatus("error", `${currentAgentLabel()} configure failed: ${message}`);
+      } finally {
+        setAgentAuthBusy(false);
+      }
+    }
+
     async function verifyAgentDeviceAuth() {
       if (state.agentAuthBusy || (state.agentAuthVerifyPending && !isClaudePendingBrowserLoginState())) {
         return;
@@ -2725,6 +2844,10 @@
         markAgentAuthInteraction();
         if (isAuggieConfigureState()) {
           await configureAuggieAuth();
+          return;
+        }
+        if (isPiConfigureState()) {
+          await configurePiAuth();
           return;
         }
         if (isClaudeGitHubConfigureState()) {
@@ -5275,6 +5398,12 @@
     if (agentAuthConfigureInput) {
       agentAuthConfigureInput.addEventListener("input", () => {
         setAuggieConfigureError("");
+      });
+    }
+    if (agentAuthConfigureOption) {
+      agentAuthConfigureOption.addEventListener("change", () => {
+        setAuggieConfigureError("");
+        syncPiConfigureOptionDescription();
       });
     }
     if (agentAuthBrowserCodeInput) {

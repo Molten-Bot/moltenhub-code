@@ -873,4 +873,7 @@ func TestAgentAuthGateFactorySelectsSupportedHarnesses(t *testing.T) {
 	if gate := newAgentAuthGate(context.Background(), nil, agentruntime.Runtime{Harness: agentruntime.HarnessAuggie, Command: "auggie"}, hub.InitConfig{}, nil); gate == nil {
 		t.Fatal("newAgentAuthGate(auggie) = nil")
 	}
+	if gate := newAgentAuthGate(context.Background(), nil, agentruntime.Runtime{Harness: agentruntime.HarnessPi, Command: "pi"}, hub.InitConfig{}, nil); gate == nil {
+		t.Fatal("newAgentAuthGate(pi) = nil")
+	}
 }
