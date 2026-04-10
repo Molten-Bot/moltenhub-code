@@ -264,6 +264,18 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `function normalizeHubSetup(raw)`) {
 		t.Fatalf("expected index html to include hub setup state normalization")
 	}
+	if !strings.Contains(markup, `function limitGraphemes(value, maxGraphemes)`) || !strings.Contains(markup, `Intl.Segmenter`) {
+		t.Fatalf("expected index html to include grapheme clamp utility with Intl.Segmenter support")
+	}
+	if !strings.Contains(markup, `function normalizeProfileEmoji(value)`) {
+		t.Fatalf("expected index html to include profile emoji normalization helper")
+	}
+	if !strings.Contains(markup, `emoji: normalizeProfileEmoji(profile.emoji),`) {
+		t.Fatalf("expected index html to clamp profile emoji when loading hub setup state")
+	}
+	if !strings.Contains(markup, `emoji: normalizeProfileEmoji(syncHubSetupEmojiValue()),`) {
+		t.Fatalf("expected index html to clamp profile emoji before submitting hub setup payloads")
+	}
 	if !strings.Contains(markup, `function defaultHubSetupOnboarding(agentMode)`) {
 		t.Fatalf("expected index html to include default hub setup onboarding steps")
 	}
@@ -1508,6 +1520,24 @@ func TestHandlerServesStaticEmojiPickerScript(t *testing.T) {
 	}
 	if !strings.Contains(body, `toggle.addEventListener("mousedown", (event) => {`) || !strings.Contains(body, `event.preventDefault();`) {
 		t.Fatalf("expected emoji picker script to preserve toggle activation while preventing input focus conflicts")
+	}
+	if !strings.Contains(body, `function limitGraphemes(value, maxGraphemes)`) || !strings.Contains(body, `Intl.Segmenter`) {
+		t.Fatalf("expected emoji picker script to clamp emoji values by grapheme cluster")
+	}
+	if !strings.Contains(body, `clearButton.addEventListener("click", () => {`) || !strings.Contains(body, `setValue("");`) {
+		t.Fatalf("expected emoji picker script to support clearing the selected emoji")
+	}
+	if !strings.Contains(body, `document.addEventListener("click", (event) => {`) || !strings.Contains(body, `if (!root.contains(event.target)) {`) {
+		t.Fatalf("expected emoji picker script to close on outside click")
+	}
+	if !strings.Contains(body, `if (event.key === "Escape" && open) {`) || !strings.Contains(body, `setOpen(false);`) {
+		t.Fatalf("expected emoji picker script to close on Escape")
+	}
+	if !strings.Contains(body, `if (nextDisabled) {`) || !strings.Contains(body, `setOpen(false);`) {
+		t.Fatalf("expected emoji picker script to close when disabled")
+	}
+	if !strings.Contains(body, `if (!emoji) {`) || !strings.Contains(body, `setValue(emoji);`) {
+		t.Fatalf("expected emoji picker script to ignore invalid selections and apply valid emoji selections")
 	}
 }
 

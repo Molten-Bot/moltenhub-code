@@ -4,6 +4,46 @@
   const DEFAULT_PREVIEW = "😀";
   const MAX_RECENT = 18;
 
+  function splitGraphemes(value) {
+    const text = String(value || "");
+    if (!text) {
+      return [];
+    }
+    if (typeof Intl === "object" && Intl && typeof Intl.Segmenter === "function") {
+      try {
+        const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+        const out = [];
+        for (const part of segmenter.segment(text)) {
+          if (part && typeof part.segment === "string" && part.segment !== "") {
+            out.push(part.segment);
+          }
+        }
+        if (out.length > 0) {
+          return out;
+        }
+      } catch (_err) {
+        // Fall back to code point splitting when Segmenter is unavailable.
+      }
+    }
+    return Array.from(text);
+  }
+
+  function limitGraphemes(value, maxGraphemes) {
+    const max = Number.isFinite(maxGraphemes) && maxGraphemes > 0 ? Math.floor(maxGraphemes) : 0;
+    if (max <= 0) {
+      return "";
+    }
+    const graphemes = splitGraphemes(value);
+    if (graphemes.length <= max) {
+      return graphemes.join("");
+    }
+    return graphemes.slice(0, max).join("");
+  }
+
+  function normalizeEmojiValue(value) {
+    return limitGraphemes(String(value || "").trim(), 1);
+  }
+
   const CATEGORIES = [
     {
       id: "recent",
@@ -104,7 +144,9 @@
       if (!Array.isArray(parsed)) {
         return [];
       }
-      return parsed.filter((value) => typeof value === "string" && value.trim() !== "");
+      return parsed
+        .map((value) => normalizeEmojiValue(value))
+        .filter((value) => value !== "");
     } catch (_err) {
       return [];
     }
@@ -119,7 +161,11 @@
   }
 
   function rememberEmoji(emoji) {
-    const next = [emoji].concat(safeReadRecent().filter((value) => value !== emoji));
+    const normalized = normalizeEmojiValue(emoji);
+    if (!normalized) {
+      return;
+    }
+    const next = [normalized].concat(safeReadRecent().filter((value) => value !== normalized));
     writeRecent(next);
   }
 
@@ -206,16 +252,20 @@
     }
 
     function setValue(nextValue) {
-      input.value = String(nextValue || "").trim();
+      const normalized = normalizeEmojiValue(nextValue);
+      input.value = normalized;
       sync();
-      if (input.value) {
-        rememberEmoji(input.value);
+      if (normalized) {
+        rememberEmoji(normalized);
       }
       dispatchInputEvents(input);
     }
 
     function sync() {
-      const current = String(input.value || "").trim();
+      const current = normalizeEmojiValue(input.value);
+      if (input.value !== current) {
+        input.value = current;
+      }
       const preview = current || DEFAULT_PREVIEW;
       const previewNode = root.querySelector(".hub-emoji-picker-toggle-preview");
       if (previewNode) {
@@ -281,7 +331,7 @@
 
       resultsNode.innerHTML = groups.map((group) => {
         const buttons = group.entries.map((entry) => {
-          const selected = String(input.value || "").trim() === entry.emoji;
+          const selected = normalizeEmojiValue(input.value) === entry.emoji;
           return `<button class="hub-emoji-picker-option${selected ? " active" : ""}" type="button" data-emoji="${entry.emoji}" title="${entry.name}" aria-label="${entry.name}">${entry.emoji}</button>`;
         }).join("");
         return `<section class="hub-emoji-picker-group"><div class="hub-emoji-picker-group-label">${group.label}</div><div class="hub-emoji-picker-grid">${buttons}</div></section>`;
@@ -318,7 +368,10 @@
       if (!button) {
         return;
       }
-      const emoji = button.getAttribute("data-emoji") || "";
+      const emoji = normalizeEmojiValue(button.getAttribute("data-emoji") || "");
+      if (!emoji) {
+        return;
+      }
       setValue(emoji);
       renderCategories();
       setOpen(false);
@@ -367,5 +420,6 @@
 
   global.MoltenEmojiPicker = {
     attach: attach,
+    limitGraphemes: limitGraphemes,
   };
 })(window);

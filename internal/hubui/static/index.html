@@ -542,6 +542,7 @@
     const CLAUDE_POST_SUBMIT_VERIFY_INTERVAL_MS = 1200;
     const CLAUDE_POST_SUBMIT_VERIFY_MAX_ATTEMPTS = 25;
     const HUB_SETUP_DIALOG_MODES = ["connect", "profile"];
+    const HUB_PROFILE_DEFAULT_EMOJI = "😀";
 
     function normalizeUIConfig(raw) {
       const config = raw && typeof raw === "object" ? raw : {};
@@ -674,6 +675,49 @@
       };
     }
 
+    function limitGraphemes(value, maxGraphemes) {
+      const clamp = window.MoltenEmojiPicker && typeof window.MoltenEmojiPicker.limitGraphemes === "function"
+        ? window.MoltenEmojiPicker.limitGraphemes
+        : null;
+      if (clamp) {
+        return clamp(value, maxGraphemes);
+      }
+
+      const max = Number.isFinite(maxGraphemes) && maxGraphemes > 0 ? Math.floor(maxGraphemes) : 0;
+      if (max <= 0) {
+        return "";
+      }
+      const input = String(value || "");
+      if (!input) {
+        return "";
+      }
+      if (typeof Intl === "object" && Intl && typeof Intl.Segmenter === "function") {
+        try {
+          const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+          const graphemes = [];
+          for (const part of segmenter.segment(input)) {
+            if (part && typeof part.segment === "string" && part.segment !== "") {
+              graphemes.push(part.segment);
+            }
+          }
+          if (graphemes.length > 0) {
+            return graphemes.slice(0, max).join("");
+          }
+        } catch (_err) {
+          // Fall back to code point splitting when Segmenter is unavailable.
+        }
+      }
+      return Array.from(input).slice(0, max).join("");
+    }
+
+    function normalizeProfileEmoji(value) {
+      return limitGraphemes(String(value || "").trim(), 1);
+    }
+
+    function profileEmojiOrFallback(value) {
+      return normalizeProfileEmoji(value) || HUB_PROFILE_DEFAULT_EMOJI;
+    }
+
     function escapeHTML(value) {
       return String(value || "")
         .replace(/&/g, "&amp;")
@@ -698,7 +742,7 @@
         profile: {
           profileText: String(profile.profile || profile.bio || "").trim(),
           displayName: String(profile.display_name || profile.displayName || "").trim(),
-          emoji: String(profile.emoji || "").trim(),
+          emoji: normalizeProfileEmoji(profile.emoji),
         },
         connectURL: String(hub.connect_url || hub.connectURL || HUB_LOGIN_URL).trim() || HUB_LOGIN_URL,
         dashboardURL: String(hub.dashboard_url || hub.dashboardURL || HUB_DASHBOARD_URL).trim() || HUB_DASHBOARD_URL,
@@ -1092,6 +1136,17 @@
     const hubSetupEmojiPicker = window.MoltenEmojiPicker && hubSetupEmojiPickerRoot
       ? window.MoltenEmojiPicker.attach(hubSetupEmojiPickerRoot)
       : null;
+
+    function syncHubSetupEmojiValue() {
+      if (!hubSetupEmoji) {
+        return "";
+      }
+      const normalized = normalizeProfileEmoji(hubSetupEmoji.value);
+      if (hubSetupEmoji.value !== normalized) {
+        hubSetupEmoji.value = normalized;
+      }
+      return normalized;
+    }
 
     function applyGitHubProfileLink(profileURL) {
       if (!githubProfileLink) {
@@ -1520,9 +1575,14 @@
         hubSetupDisplayName.value = state.hubSetup.profile.displayName || "";
       }
       if (hubSetupEmoji) {
-        hubSetupEmoji.value = state.hubSetup.profile.emoji || "";
+        hubSetupEmoji.value = normalizeProfileEmoji(state.hubSetup.profile.emoji);
         if (hubSetupEmojiPicker && typeof hubSetupEmojiPicker.sync === "function") {
           hubSetupEmojiPicker.sync();
+        } else {
+          const previewNode = hubSetupEmojiPickerRoot ? hubSetupEmojiPickerRoot.querySelector(".hub-emoji-picker-toggle-preview") : null;
+          if (previewNode) {
+            previewNode.textContent = profileEmojiOrFallback(hubSetupEmoji.value);
+          }
         }
       }
       if (hubSetupProfile) {
@@ -1621,7 +1681,7 @@
         profile: {
           profile: String(hubSetupProfile?.value || "").trim(),
           display_name: String(hubSetupDisplayName?.value || "").trim(),
-          emoji: String(hubSetupEmoji?.value || "").trim(),
+          emoji: normalizeProfileEmoji(syncHubSetupEmojiValue()),
         },
       };
     }
@@ -4948,6 +5008,23 @@
           syncHubTokenValidation();
           scheduleHubSetupAutoSubmit();
         }, 0);
+      });
+    }
+    if (hubSetupEmoji) {
+      const syncEmojiField = () => {
+        syncHubSetupEmojiValue();
+        if (hubSetupEmojiPicker && typeof hubSetupEmojiPicker.sync === "function") {
+          hubSetupEmojiPicker.sync();
+        } else {
+          const previewNode = hubSetupEmojiPickerRoot ? hubSetupEmojiPickerRoot.querySelector(".hub-emoji-picker-toggle-preview") : null;
+          if (previewNode) {
+            previewNode.textContent = profileEmojiOrFallback(hubSetupEmoji.value);
+          }
+        }
+      };
+      hubSetupEmoji.addEventListener("input", syncEmojiField);
+      hubSetupEmoji.addEventListener("paste", () => {
+        window.setTimeout(syncEmojiField, 0);
       });
     }
     window.__hubAuthVerifyClick = (event) => {
