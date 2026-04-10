@@ -259,6 +259,12 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `.hub-dock-plus {`) {
 		t.Fatalf("expected stylesheet to include molten hub plus badge styles")
 	}
+	if !strings.Contains(stylesheet, `.hub-dock-group[data-configured="true"]:hover .hub-profile-button`) {
+		t.Fatalf("expected stylesheet to reveal the hub profile button beside the hub icon on hover")
+	}
+	if !strings.Contains(stylesheet, `.hub-profile-button svg {`) {
+		t.Fatalf("expected stylesheet to define hub profile button icon sizing")
+	}
 	if !strings.Contains(stylesheet, `.hub-setup-toggle {`) {
 		t.Fatalf("expected stylesheet to include hub setup toggle styles")
 	}

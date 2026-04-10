@@ -207,6 +207,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="moltenbot-hub-link"`) {
 		t.Fatalf("expected index html to include molten bot hub dock link")
 	}
+	if !strings.Contains(markup, `id="moltenbot-hub-profile-button"`) {
+		t.Fatalf("expected index html to include molten bot hub profile gear button")
+	}
 	if !strings.Contains(markup, `href="https://app.molten.bot/signin?target=hub"`) {
 		t.Fatalf("expected index html to link unconfigured dock icon to molten hub sign-in")
 	}
@@ -252,6 +255,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `function normalizeHubSetup(raw)`) {
 		t.Fatalf("expected index html to include hub setup state normalization")
 	}
+	if !strings.Contains(markup, `function normalizeHubSetupDialogMode(mode)`) {
+		t.Fatalf("expected index html to include hub setup dialog mode normalization")
+	}
 	if !strings.Contains(markup, `async function submitHubSetup(event, options = {})`) {
 		t.Fatalf("expected index html to include hub setup submit handler")
 	}
@@ -268,6 +274,13 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	moltenbotIndex := strings.Index(markup, `id="moltenbot-hub-link"`)
 	if githubIndex == -1 || moltenbotIndex == -1 || githubIndex > moltenbotIndex {
 		t.Fatalf("expected molten bot hub logo to render to the right of the github dock logo")
+	}
+	profileButtonIndex := strings.Index(markup, `id="moltenbot-hub-profile-button"`)
+	if profileButtonIndex == -1 || profileButtonIndex < moltenbotIndex {
+		t.Fatalf("expected hub profile button to render to the right of the hub dock icon")
+	}
+	if !strings.Contains(markup, `Edit Agent Profile`) {
+		t.Fatalf("expected index html to include connected profile editor copy")
 	}
 	if !strings.Contains(markup, "function syncBrandLogoRotation()") {
 		t.Fatalf("expected index html to include brand logo rotation controller")

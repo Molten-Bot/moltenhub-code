@@ -860,6 +860,45 @@ body .right-col.prompt-collapsed.task-list-hidden {
   line-height: 1;
 }
 
+.hub-dock-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hub-profile-button {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-8px) scale(0.96);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease,
+    color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.hub-profile-button svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+  fill: currentColor;
+}
+
+.hub-dock-group[data-configured="true"]:hover .hub-profile-button,
+.hub-dock-group[data-configured="true"]:focus-within .hub-profile-button {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0) scale(1);
+}
+
+.hub-profile-button:hover,
+.hub-profile-button:focus-visible {
+  color: var(--surface-tab-active-text);
+  background: var(--surface-tab-active-bg);
+  box-shadow: var(--surface-tab-active-shadow);
+}
+
 #moltenbot-hub-link img {
   transition: filter 180ms ease, transform 180ms ease;
 }
@@ -2486,6 +2525,12 @@ select.prompt-control {
 @media (max-width: 820px) {
   .hub-setup-profile-grid {
     grid-template-columns: 1fr;
+  }
+
+  .hub-dock-group[data-configured="true"] .hub-profile-button {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(0) scale(1);
   }
 
   .hub-setup-footer {
