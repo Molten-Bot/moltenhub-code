@@ -763,6 +763,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `function promptImageSummary(images)`) {
 		t.Fatalf("expected index html to summarize screenshot names inline in the prompt action row")
 	}
+	if !strings.Contains(markup, `class="prompt-compose-stack"`) {
+		t.Fatalf("expected index html to wrap prompt panels and actions in a shared compose stack")
+	}
 	if !strings.Contains(markup, `return names.join(" | ");`) {
 		t.Fatalf("expected index html to join attached screenshot names with a pipe separator")
 	}

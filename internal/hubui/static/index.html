@@ -162,77 +162,78 @@
             <button id="prompt-visibility-toggle" class="prompt-visibility-toggle" type="button" aria-pressed="true" aria-label="Minimize Studio panel" title="Minimize Studio panel">▾</button>
           </div>
           <form id="local-prompt-form" class="prompt-form grid gap-2.5 p-3">
-            <div id="prompt-builder-panel" class="prompt-panel grid gap-2.5">
-              <div class="prompt-grid">
-                <label id="builder-repo-history-field" class="prompt-field prompt-field-repo-history">
-                  <span class="prompt-label">Repository</span>
-                  <select id="builder-repo-select" class="prompt-control">
-                    <option value="">Enter repo manually</option>
-                  </select>
-                </label>
-                <label id="builder-repo-field" class="prompt-field prompt-field-repository">
-                  <input id="builder-repo-input" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="git@github.com:org/repo.git" aria-label="Repository">
-                </label>
-                <label class="prompt-field prompt-field-base-branch">
-                  <span class="prompt-label">Branch</span>
-                  <span class="prompt-input-action-wrap" data-has-action="false">
-                    <input id="builder-base-branch" class="prompt-control prompt-input" type="text" value="main" spellcheck="false" placeholder="main">
-                    <button
-                      id="builder-base-branch-clear"
-                      class="prompt-input-action"
-                      type="button"
-                      aria-label="Reset branch to main"
-                      aria-hidden="true"
-                      title="Already on main"
-                      hidden
-                      disabled><span class="prompt-input-action-icon" aria-hidden="true">&times;</span></button>
-                  </span>
-                </label>
-                <label class="prompt-field prompt-field-target-subdir">
-                  <span class="prompt-label">Directory</span>
-                  <input id="builder-target-subdir" class="prompt-control prompt-input" type="text" value="." spellcheck="false" placeholder=".">
+            <div class="prompt-compose-stack">
+              <div id="prompt-builder-panel" class="prompt-panel grid gap-2.5">
+                <div class="prompt-grid">
+                  <label id="builder-repo-history-field" class="prompt-field prompt-field-repo-history">
+                    <span class="prompt-label">Repository</span>
+                    <select id="builder-repo-select" class="prompt-control">
+                      <option value="">Enter repo manually</option>
+                    </select>
+                  </label>
+                  <label id="builder-repo-field" class="prompt-field prompt-field-repository">
+                    <input id="builder-repo-input" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="git@github.com:org/repo.git" aria-label="Repository">
+                  </label>
+                  <label class="prompt-field prompt-field-base-branch">
+                    <span class="prompt-label">Branch</span>
+                    <span class="prompt-input-action-wrap" data-has-action="false">
+                      <input id="builder-base-branch" class="prompt-control prompt-input" type="text" value="main" spellcheck="false" placeholder="main">
+                      <button
+                        id="builder-base-branch-clear"
+                        class="prompt-input-action"
+                        type="button"
+                        aria-label="Reset branch to main"
+                        aria-hidden="true"
+                        title="Already on main"
+                        hidden
+                        disabled><span class="prompt-input-action-icon" aria-hidden="true">&times;</span></button>
+                    </span>
+                  </label>
+                  <label class="prompt-field prompt-field-target-subdir">
+                    <span class="prompt-label">Directory</span>
+                    <input id="builder-target-subdir" class="prompt-control prompt-input" type="text" value="." spellcheck="false" placeholder=".">
+                  </label>
+                </div>
+                <label id="builder-prompt-field" class="prompt-field">
+                  <span class="prompt-label">Prompt</span>
+                  <textarea
+                    id="builder-prompt-input"
+                    class="prompt-text prompt-control h-[calc(6*1.4em+18px)] min-h-[calc(6*1.4em+18px)] w-full resize-y rounded-lg border border-hub-border p-2.5 font-mono text-[0.79rem] leading-[1.4]"
+                    rows="6"
+                    spellcheck="false"
+                    placeholder="Describe the change you want"></textarea>
                 </label>
               </div>
-              <label id="builder-prompt-field" class="prompt-field">
-                <span class="prompt-label">Prompt</span>
+
+              <div id="prompt-library-panel" class="prompt-panel hidden grid gap-2.5">
+                <div class="prompt-grid">
+                  <label id="library-repo-history-field" class="prompt-field prompt-field-repo-history">
+                    <span class="prompt-label">Repository</span>
+                    <select id="library-repo-select" class="prompt-control">
+                      <option value="">Enter repo manually</option>
+                    </select>
+                  </label>
+                  <label id="library-repo-field" class="prompt-field prompt-field-repository">
+                    <input id="library-repo-input" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="git@github.com:org/repo.git" aria-label="Repository">
+                  </label>
+                  <label class="prompt-field prompt-field-base-branch">
+                    <span class="prompt-label">Branch</span>
+                    <input id="library-base-branch" class="prompt-control prompt-input" type="text" value="main" spellcheck="false" placeholder="main">
+                  </label>
+                </div>
+                <div class="prompt-field">
+                  <span class="prompt-label">Task Library</span>
+                  <div id="library-task-list" class="library-task-list"></div>
+                </div>
+              </div>
+
+              <div id="prompt-raw-panel" class="prompt-panel hidden">
                 <textarea
-                  id="builder-prompt-input"
-                  class="prompt-text prompt-control h-[calc(6*1.4em+18px)] min-h-[calc(6*1.4em+18px)] w-full resize-y rounded-lg border border-hub-border p-2.5 font-mono text-[0.79rem] leading-[1.4]"
-                  rows="6"
+                  id="local-prompt-input"
+                  class="prompt-text prompt-control h-[calc(7*1.4em+20px)] min-h-[calc(7*1.4em+20px)] w-full resize-y rounded-lg border border-hub-border p-2.5 font-mono text-[0.79rem] leading-[1.4]"
+                  rows="7"
                   spellcheck="false"
-                  placeholder="Describe the change you want"></textarea>
-              </label>
-            </div>
-
-            <div id="prompt-library-panel" class="prompt-panel hidden grid gap-2.5">
-              <div class="prompt-grid">
-                <label id="library-repo-history-field" class="prompt-field prompt-field-repo-history">
-                  <span class="prompt-label">Repository</span>
-                  <select id="library-repo-select" class="prompt-control">
-                    <option value="">Enter repo manually</option>
-                  </select>
-                </label>
-                <label id="library-repo-field" class="prompt-field prompt-field-repository">
-                  <input id="library-repo-input" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="git@github.com:org/repo.git" aria-label="Repository">
-                </label>
-                <label class="prompt-field prompt-field-base-branch">
-                  <span class="prompt-label">Branch</span>
-                  <input id="library-base-branch" class="prompt-control prompt-input" type="text" value="main" spellcheck="false" placeholder="main">
-                </label>
-              </div>
-              <div class="prompt-field">
-                <span class="prompt-label">Task Library</span>
-                <div id="library-task-list" class="library-task-list"></div>
-              </div>
-            </div>
-
-            <div id="prompt-raw-panel" class="prompt-panel hidden">
-              <textarea
-                id="local-prompt-input"
-                class="prompt-text prompt-control h-[calc(7*1.4em+20px)] min-h-[calc(7*1.4em+20px)] w-full resize-y rounded-lg border border-hub-border p-2.5 font-mono text-[0.79rem] leading-[1.4]"
-                rows="7"
-                spellcheck="false"
-                placeholder='{
+                  placeholder='{
   "repos": [
     "git@github.com:org/repo.git",
     "git@github.com:org/repo-two.git"
@@ -240,23 +241,24 @@
   "branch": "main",
   "libraryTaskName": "unit-test-coverage"
 }'></textarea>
-            </div>
-            <div class="prompt-actions">
-              <div class="prompt-actions-start">
-                <div
-                  id="builder-image-paste-target"
-                  class="prompt-control prompt-action-paste"
-                  role="button"
-                  tabindex="0">Paste screenshots.</div>
               </div>
-              <span id="local-prompt-status" class="submit-status submit-status-inline min-h-[1.3em] text-[0.74rem] leading-[1.3] text-hub-muted"></span>
-              <div class="prompt-actions-end">
-                <button
-                  id="builder-images-clear"
-                  class="prompt-action-button prompt-action-clear"
-                  type="button"
-                  disabled>Clear</button>
-                <button id="local-prompt-submit" class="prompt-action-button prompt-submit" type="submit">Run</button>
+              <div class="prompt-actions">
+                <div class="prompt-actions-start">
+                  <div
+                    id="builder-image-paste-target"
+                    class="prompt-control prompt-action-paste"
+                    role="button"
+                    tabindex="0">Paste screenshots.</div>
+                </div>
+                <span id="local-prompt-status" class="submit-status submit-status-inline min-h-[1.3em] text-[0.74rem] leading-[1.3] text-hub-muted"></span>
+                <div class="prompt-actions-end">
+                  <button
+                    id="builder-images-clear"
+                    class="prompt-action-button prompt-action-clear"
+                    type="button"
+                    disabled>Clear</button>
+                  <button id="local-prompt-submit" class="prompt-action-button prompt-submit" type="submit">Run</button>
+                </div>
               </div>
             </div>
           </form>
