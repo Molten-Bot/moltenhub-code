@@ -1267,6 +1267,28 @@ func TestHandlerIndexInjectsConfiguredHarness(t *testing.T) {
 	}
 }
 
+func TestHandlerIndexInjectsPiHarness(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	srv.ConfiguredHarness = "pi"
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+
+	markup := resp.Body.String()
+	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"pi","configuredAgentLabel":"Pi","defaultRepository":"`+config.DefaultRepositoryURL+`"};`) {
+		t.Fatalf("expected pi harness UI config, got %q", markup)
+	}
+	if !strings.Contains(markup, `pi: "/static/logos/pi.svg"`) {
+		t.Fatalf("expected index html to include pi logo mapping")
+	}
+}
+
 func TestHandlerIndexIncludesClaudeBrowserCodeFlow(t *testing.T) {
 	t.Parallel()
 
@@ -1628,6 +1650,25 @@ func TestHandlerServesStaticLogoAsset(t *testing.T) {
 
 	srv := NewServer("", NewBroker())
 	req := httptest.NewRequest(http.MethodGet, "/static/logos/codex-cli.svg", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+	if ct := resp.Header().Get("Content-Type"); !strings.Contains(ct, "image/svg+xml") {
+		t.Fatalf("content-type = %q", ct)
+	}
+	if body := resp.Body.String(); !strings.Contains(body, "<svg") {
+		t.Fatalf("expected svg payload, got %q", body)
+	}
+}
+
+func TestHandlerServesStaticPiLogoAsset(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodGet, "/static/logos/pi.svg", nil)
 	resp := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(resp, req)
 

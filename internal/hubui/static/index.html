@@ -558,6 +558,7 @@
       claude: "/static/logos/claude-code.svg",
       auggie: "/static/logos/augment.svg",
       augment: "/static/logos/augment.svg",
+      pi: "/static/logos/pi.svg",
     });
     const MOLTENHUB_LOGO_URL = "/static/logo.svg";
     const GITHUB_LOGO_URL = "/static/logos/github.svg";
@@ -636,6 +637,7 @@
       const label = configuredAgentLabel().toLowerCase();
       if (label.includes("claude")) return AGENT_LOGO_URLS.claude;
       if (label.includes("auggie") || label.includes("augment")) return AGENT_LOGO_URLS.auggie;
+      if (/\bpi\b/.test(label)) return AGENT_LOGO_URLS.pi;
       if (label.includes("codex")) return AGENT_LOGO_URLS.codex;
       return "";
     }
@@ -647,6 +649,7 @@
       }
       if (label.includes("claude")) return AGENT_LOGO_URLS.claude;
       if (label.includes("auggie") || label.includes("augment")) return AGENT_LOGO_URLS.auggie;
+      if (/\bpi\b/.test(label)) return AGENT_LOGO_URLS.pi;
       if (label.includes("codex")) return AGENT_LOGO_URLS.codex;
       return "";
     }

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" height="100px" width="100px" transform="rotate(0) scale(1, 1)">
+  <!-- P shape: outer boundary clockwise, inner hole counter-clockwise -->
+  <path fill="#000000" fill-rule="evenodd" d="&#xA;    M165.29 165.29&#xA;    H517.36&#xA;    V400&#xA;    H400&#xA;    V517.36&#xA;    H282.65&#xA;    V634.72&#xA;    H165.29&#xA;    Z&#xA;    M282.65 282.65&#xA;    V400&#xA;    H400&#xA;    V282.65&#xA;    Z&#xA;  "/>
+  <!-- i dot -->
+  <path fill="#000000" d="M517.36 400 H634.72 V634.72 H517.36 Z"/>
+</svg>
