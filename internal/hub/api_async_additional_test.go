@@ -137,7 +137,6 @@ func TestAsyncAPIClientTokenBoundMethods(t *testing.T) {
 	wantContains := []string{
 		"GET /v1/agents/me",
 		"GET /v1/openclaw/messages/pull",
-		"PATCH /v1/agents/me",
 		"PATCH /v1/agents/me/status",
 		"POST /v1/openclaw/messages/ack",
 		"POST /v1/openclaw/messages/nack",
@@ -154,6 +153,16 @@ func TestAsyncAPIClientTokenBoundMethods(t *testing.T) {
 		}
 		if !found {
 			t.Fatalf("request log missing %q; got=%v", want, seen)
+		}
+	}
+	for _, disallowed := range []string{
+		"POST /v1/agents/me",
+		"POST /v1/agents/me/metadata",
+	} {
+		for _, got := range seen {
+			if got == disallowed {
+				t.Fatalf("request log unexpectedly included deprecated write route %q; got=%v", disallowed, seen)
+			}
 		}
 	}
 }
