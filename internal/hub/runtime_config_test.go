@@ -392,7 +392,7 @@ func TestSaveRuntimeConfigClaudeOAuthTokenPersistsValue(t *testing.T) {
 }
 
 func TestDefaultRuntimeConfigPath(t *testing.T) {
-	t.Parallel()
+	t.Setenv(runtimeConfigPathEnv, "")
 
 	if got := defaultRuntimeConfigPath(); got != runtimeConfigPath {
 		t.Fatalf("defaultRuntimeConfigPath() = %q, want %q", got, runtimeConfigPath)
@@ -415,7 +415,7 @@ func TestRuntimeConfigCandidatePathsDefaultIncludesLegacyLocation(t *testing.T) 
 }
 
 func TestResolveRuntimeConfigPathUsesInitSiblingDirectory(t *testing.T) {
-	t.Parallel()
+	t.Setenv(runtimeConfigPathEnv, "")
 
 	got := ResolveRuntimeConfigPath("/workspace/init.json")
 	want := "/workspace/config.json"

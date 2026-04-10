@@ -36,7 +36,7 @@ func TestDefaultRuntimeConfigPathUsesEnvOverride(t *testing.T) {
 }
 
 func TestResolveRuntimeConfigPathEmptyInitUsesDefault(t *testing.T) {
-	t.Parallel()
+	t.Setenv(runtimeConfigPathEnv, "")
 
 	if got, want := ResolveRuntimeConfigPath(""), runtimeConfigPath; got != want {
 		t.Fatalf("ResolveRuntimeConfigPath(\"\") = %q, want %q", got, want)
