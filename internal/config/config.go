@@ -470,6 +470,7 @@ func ensurePRBodyFooter(body string) string {
 func ensurePRBodyPromptAndFooter(body, prompt string) string {
 	body = strings.TrimSpace(body)
 	prompt = strings.TrimSpace(prompt)
+	body = strings.TrimSpace(strings.ReplaceAll(body, prBodyFooter, ""))
 	body = strings.TrimSpace(generatedPRPromptBlockRE.ReplaceAllString(body, ""))
 	if prompt != "" {
 		if body != "" {
