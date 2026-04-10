@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -260,37 +261,99 @@ func suppressCodexCommandOutput(fields map[string]string, text string) bool {
 }
 
 func isImportantCodexCommandText(text string) bool {
-	lower := strings.ToLower(strings.TrimSpace(text))
+	trimmed := strings.TrimSpace(text)
+	lower := strings.ToLower(trimmed)
 	if lower == "" {
 		return false
 	}
 
-	keywords := []string{
-		"error",
-		"failed",
-		"panic",
-		"fatal",
-		"exception",
+	if strings.HasPrefix(lower, "/bin/bash -lc") || strings.HasPrefix(lower, "bash -lc") {
+		return false
+	}
+
+	if looksLikeSourceSearchResultLine(trimmed) {
+		return containsCompilerStyleFailureSignal(lower)
+	}
+
+	markers := []string{
+		"error:",
+		"fatal:",
+		"panic:",
 		"traceback",
+		"exception",
 		"timed out",
 		"timeout",
 		"permission denied",
-		"denied",
-		"not found",
+		"no such file or directory",
 		"no such file",
-		"unable",
-		"cannot",
-		"can't",
-		"invalid",
-		"refused",
+		"not found",
 		"segmentation fault",
+		"failed to ",
+		"task failed",
+		"unable to ",
+		"cannot ",
+		"can't ",
 	}
-	for _, keyword := range keywords {
-		if strings.Contains(lower, keyword) {
+	for _, marker := range markers {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	if strings.HasPrefix(lower, "failure:") || strings.HasPrefix(lower, "error ") {
+		return true
+	}
+	return false
+}
+
+func looksLikeSourceSearchResultLine(text string) bool {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return false
+	}
+	first := strings.IndexByte(text, ':')
+	if first <= 0 {
+		return false
+	}
+	secondRel := strings.IndexByte(text[first+1:], ':')
+	if secondRel < 0 {
+		return false
+	}
+	second := first + 1 + secondRel
+	if !simpleKVDigitsOnly(text[first+1 : second]) {
+		return false
+	}
+	path := text[:first]
+	return strings.ContainsAny(path, `/\.`)
+}
+
+func containsCompilerStyleFailureSignal(lower string) bool {
+	signals := []string{
+		" error:",
+		" undefined:",
+		" imported and not used",
+		" syntax error",
+		" mismatched types",
+		" no required module provides package",
+		" build failed",
+	}
+	for _, signal := range signals {
+		if strings.Contains(lower, signal) {
 			return true
 		}
 	}
 	return false
+}
+
+func simpleKVDigitsOnly(text string) bool {
+	if text == "" {
+		return false
+	}
+	for i := 0; i < len(text); i++ {
+		if text[i] < '0' || text[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func parseSimpleKVFields(line string) map[string]string {
@@ -298,17 +361,108 @@ func parseSimpleKVFields(line string) map[string]string {
 		return nil
 	}
 	out := make(map[string]string, 8)
-	for _, field := range strings.Fields(line) {
-		key, val, found := strings.Cut(field, "=")
-		if !found {
-			continue
-		}
-		out[key] = strings.Trim(val, "\"")
+	for _, token := range parseSimpleKVTokens(line) {
+		out[token.key] = token.value
 	}
 	if len(out) == 0 {
 		return nil
 	}
 	return out
+}
+
+type simpleKVToken struct {
+	key   string
+	value string
+}
+
+func parseSimpleKVTokens(line string) []simpleKVToken {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return nil
+	}
+
+	tokens := make([]simpleKVToken, 0, 8)
+	for idx := 0; idx < len(line); {
+		for idx < len(line) && isSimpleKVSpace(line[idx]) {
+			idx++
+		}
+		if idx >= len(line) {
+			break
+		}
+
+		keyStart := idx
+		for idx < len(line) && !isSimpleKVSpace(line[idx]) && line[idx] != '=' {
+			idx++
+		}
+		if idx >= len(line) || line[idx] != '=' {
+			for idx < len(line) && !isSimpleKVSpace(line[idx]) {
+				idx++
+			}
+			continue
+		}
+
+		key := strings.TrimSpace(line[keyStart:idx])
+		idx++
+		if key == "" {
+			continue
+		}
+
+		value, next := parseSimpleKVValue(line, idx)
+		tokens = append(tokens, simpleKVToken{key: key, value: value})
+		idx = next
+	}
+
+	return tokens
+}
+
+func parseSimpleKVValue(line string, idx int) (string, int) {
+	if idx >= len(line) {
+		return "", idx
+	}
+
+	if line[idx] == '"' {
+		quoted, next, ok := scanSimpleKVQuotedValue(line, idx)
+		if ok {
+			if decoded, err := strconv.Unquote(quoted); err == nil {
+				return strings.TrimSpace(decoded), next
+			}
+			return strings.TrimSpace(strings.Trim(quoted, `"`)), next
+		}
+	}
+
+	start := idx
+	for idx < len(line) && !isSimpleKVSpace(line[idx]) {
+		idx++
+	}
+	return strings.TrimSpace(line[start:idx]), idx
+}
+
+func scanSimpleKVQuotedValue(line string, start int) (string, int, bool) {
+	if start >= len(line) || line[start] != '"' {
+		return "", start, false
+	}
+	for idx := start + 1; idx < len(line); idx++ {
+		if line[idx] != '"' {
+			continue
+		}
+		if isSimpleKVEscaped(line, idx) {
+			continue
+		}
+		return line[start : idx+1], idx + 1, true
+	}
+	return "", start, false
+}
+
+func isSimpleKVEscaped(text string, idx int) bool {
+	backslashes := 0
+	for pos := idx - 1; pos >= 0 && text[pos] == '\\'; pos-- {
+		backslashes++
+	}
+	return backslashes%2 == 1
+}
+
+func isSimpleKVSpace(ch byte) bool {
+	return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
 }
 
 func stripSimpleKVField(line, key string) string {

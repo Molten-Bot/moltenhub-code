@@ -64,6 +64,32 @@ func TestFormatTerminalLogLineKeepsImportantCodexOutput(t *testing.T) {
 	}
 }
 
+func TestFormatTerminalLogLineDropsCodexSearchResultNoise(t *testing.T) {
+	t.Parallel()
+
+	line := "cmd phase=codex name=codex stream=stderr b64=" + base64.StdEncoding.EncodeToString([]byte(`internal/hub/daemon_test.go:621: if got := result["message"]; got != "Failure: task failed. Error details: codex: process exited with status 1" {`))
+	got, mode := formatTerminalLogLine(line)
+	if mode != terminalLogModeDrop {
+		t.Fatalf("mode = %v, want drop", mode)
+	}
+	if got != "" {
+		t.Fatalf("got %q, want empty", got)
+	}
+}
+
+func TestFormatTerminalLogLineKeepsCodexCompilerStyleFailure(t *testing.T) {
+	t.Parallel()
+
+	line := "cmd phase=codex name=codex stream=stderr b64=" + base64.StdEncoding.EncodeToString([]byte(`cmd/harness/main.go:10:2: undefined: notARealSymbol`))
+	got, mode := formatTerminalLogLine(line)
+	if mode != terminalLogModeNormal {
+		t.Fatalf("mode = %v, want normal", mode)
+	}
+	if !strings.Contains(got, `undefined: notARealSymbol`) {
+		t.Fatalf("expected compiler-style failure to be kept: %q", got)
+	}
+}
+
 func TestFormatTerminalLogLineCompactsSingleRunAgentHeartbeat(t *testing.T) {
 	t.Parallel()
 

@@ -257,6 +257,30 @@ func TestBrokerParsesStageErrorTextWithEscapedQuotes(t *testing.T) {
 	}
 }
 
+func TestBrokerIgnoresNestedRequestMetadataInsideQuotedCommandText(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "local-1712345678-000001"
+	b.IngestLog("dispatch status=start request_id=" + requestID)
+	b.IngestLog(`dispatch request_id=local-1712345678-000001 cmd phase=codex name=codex stream=stderr text="dispatch status=error request_id=req-err-ws err=\"clone failed\""`)
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("len(tasks) = %d, want 1", len(snap.Tasks))
+	}
+	task := snap.Tasks[0]
+	if task.RequestID != requestID {
+		t.Fatalf("task.RequestID = %q, want %q", task.RequestID, requestID)
+	}
+	if task.Status != "running" {
+		t.Fatalf("task.Status = %q, want running", task.Status)
+	}
+	if task.Error != "" {
+		t.Fatalf("task.Error = %q, want empty", task.Error)
+	}
+}
+
 func TestBrokerCapturesWorkspaceAndBranchFromErrorStatus(t *testing.T) {
 	t.Parallel()
 

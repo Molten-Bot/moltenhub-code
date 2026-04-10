@@ -97,3 +97,19 @@ func TestWriteSinkLockedWithNilSinkAndNilLogger(t *testing.T) {
 	l := newTerminalLogger(io.Discard, false)
 	l.writeSinkLocked("line")
 }
+
+func TestParseSimpleKVFieldsIgnoresNestedKeyValuesInsideQuotedText(t *testing.T) {
+	t.Parallel()
+
+	line := `dispatch request_id=local-1712345678-000123 cmd phase=codex name=codex stream=stderr text="dispatch status=error request_id=req-err-ws err=\"clone failed\""`
+	fields := parseSimpleKVFields(line)
+	if got, want := fields["request_id"], "local-1712345678-000123"; got != want {
+		t.Fatalf("request_id = %q, want %q", got, want)
+	}
+	if got := fields["status"]; got != "" {
+		t.Fatalf("status = %q, want empty (nested value should not be parsed)", got)
+	}
+	if got := fields["text"]; !strings.Contains(got, `request_id=req-err-ws`) {
+		t.Fatalf("text = %q, want nested request_id preserved as text content", got)
+	}
+}

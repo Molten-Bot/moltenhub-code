@@ -562,7 +562,7 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 		t.WorkspaceDir = firstNonEmpty(fields["workspace"], fields["workspace_dir"], t.WorkspaceDir)
 		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
 		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
-		t.Error = firstNonEmpty(parseFieldValue(line, "err"), parseFieldValue(line, "error"), t.Error)
+		t.Error = firstNonEmpty(fields["err"], fields["error"], t.Error)
 		if strings.TrimSpace(t.Error) == "" {
 			t.Error = "task stopped by operator"
 		}
@@ -576,12 +576,12 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 		t.WorkspaceDir = firstNonEmpty(fields["workspace"], fields["workspace_dir"], t.WorkspaceDir)
 		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
 		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
-		t.Error = firstNonEmpty(parseFieldValue(line, "err"), parseFieldValue(line, "error"), t.Error)
+		t.Error = firstNonEmpty(fields["err"], fields["error"], t.Error)
 	}
 
 	if strings.HasPrefix(line, "dispatch status=invalid") {
 		t.Status = "invalid"
-		t.Error = firstNonEmpty(parseFieldValue(line, "err"), parseFieldValue(line, "error"), t.Error)
+		t.Error = firstNonEmpty(fields["err"], fields["error"], t.Error)
 	}
 
 	if strings.HasPrefix(line, "dispatch status=duplicate") {
@@ -589,7 +589,7 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 			t.Status = "duplicate"
 			t.Stage = firstNonEmpty(t.Stage, "dispatch")
 			t.StageStatus = firstNonEmpty(fields["state"], t.StageStatus)
-			t.Error = firstNonEmpty(parseFieldValue(line, "err"), parseFieldValue(line, "error"), t.Error)
+			t.Error = firstNonEmpty(fields["err"], fields["error"], t.Error)
 			if t.Error == "" {
 				var details []string
 				if state := strings.TrimSpace(fields["state"]); state != "" {
@@ -619,7 +619,7 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 		}
 		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
 		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
-		t.Error = firstNonEmpty(parseFieldValue(line, "err"), parseFieldValue(line, "error"), t.Error)
+		t.Error = firstNonEmpty(fields["err"], fields["error"], t.Error)
 	}
 
 	if strings.Contains(line, " cmd ") && fields["b64"] != "" {
@@ -746,17 +746,64 @@ func parseKVFields(line string) map[string]string {
 		return nil
 	}
 	out := make(map[string]string, 8)
-	for _, field := range strings.Fields(line) {
-		k, v, ok := strings.Cut(field, "=")
-		if !ok {
+	for idx := 0; idx < len(line); {
+		for idx < len(line) && isKVSpace(line[idx]) {
+			idx++
+		}
+		if idx >= len(line) {
+			break
+		}
+
+		keyStart := idx
+		for idx < len(line) && !isKVSpace(line[idx]) && line[idx] != '=' {
+			idx++
+		}
+		if idx >= len(line) || line[idx] != '=' {
+			for idx < len(line) && !isKVSpace(line[idx]) {
+				idx++
+			}
 			continue
 		}
-		out[k] = strings.Trim(v, "\"")
+
+		key := strings.TrimSpace(line[keyStart:idx])
+		idx++
+		if key == "" {
+			continue
+		}
+
+		value, next := parseKVValue(line, idx)
+		out[key] = value
+		idx = next
 	}
 	if len(out) == 0 {
 		return nil
 	}
 	return out
+}
+
+func parseKVValue(line string, idx int) (string, int) {
+	if idx >= len(line) {
+		return "", idx
+	}
+
+	if line[idx] == '"' {
+		if token, ok := parseQuotedToken(line[idx:]); ok {
+			if decoded, err := strconv.Unquote(token); err == nil {
+				return strings.TrimSpace(decoded), idx + len(token)
+			}
+			return strings.TrimSpace(strings.Trim(token, `"`)), idx + len(token)
+		}
+	}
+
+	start := idx
+	for idx < len(line) && !isKVSpace(line[idx]) {
+		idx++
+	}
+	return strings.TrimSpace(line[start:idx]), idx
+}
+
+func isKVSpace(ch byte) bool {
+	return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
 }
 
 func appendCappedEvent(events []Event, max int, entry Event) []Event {
@@ -784,33 +831,15 @@ func appendCappedTaskLog(logs []TaskLog, max int, entry TaskLog) []TaskLog {
 }
 
 func parseFieldValue(line, key string) string {
-	needle := key + "="
-	idx := strings.Index(line, needle)
-	if idx < 0 {
+	key = strings.TrimSpace(key)
+	if key == "" {
 		return ""
 	}
-
-	rest := line[idx+len(needle):]
-	if rest == "" {
+	fields := parseKVFields(line)
+	if len(fields) == 0 {
 		return ""
 	}
-
-	if strings.HasPrefix(rest, "\"") {
-		if token, ok := parseQuotedToken(rest); ok {
-			decoded, err := strconv.Unquote(token)
-			if err == nil {
-				return strings.TrimSpace(decoded)
-			}
-			return strings.TrimSpace(strings.Trim(token, "\""))
-		}
-		return strings.TrimSpace(strings.Trim(rest, "\""))
-	}
-
-	end := strings.IndexAny(rest, " \t")
-	if end < 0 {
-		return strings.TrimSpace(rest)
-	}
-	return strings.TrimSpace(rest[:end])
+	return strings.TrimSpace(fields[key])
 }
 
 func parseQuotedToken(text string) (string, bool) {
