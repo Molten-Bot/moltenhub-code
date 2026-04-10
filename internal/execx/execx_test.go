@@ -13,7 +13,7 @@ func TestOSRunnerRunSuccess(t *testing.T) {
 
 	r := OSRunner{}
 	res, err := r.Run(context.Background(), Command{
-		Name: "bash",
+		Name: "sh",
 		Args: []string{"-lc", "printf hello"},
 	})
 	if err != nil {
@@ -29,7 +29,7 @@ func TestOSRunnerRunPipesStdin(t *testing.T) {
 
 	r := OSRunner{}
 	res, err := r.Run(context.Background(), Command{
-		Name:  "bash",
+		Name:  "sh",
 		Args:  []string{"-lc", "cat"},
 		Stdin: "hello-from-stdin",
 	})
@@ -46,7 +46,7 @@ func TestOSRunnerRunFailure(t *testing.T) {
 
 	r := OSRunner{}
 	res, err := r.Run(context.Background(), Command{
-		Name: "bash",
+		Name: "sh",
 		Args: []string{"-lc", "echo boom 1>&2; exit 7"},
 	})
 	if err == nil {
@@ -68,7 +68,7 @@ func TestOSRunnerRunStreamEmitsLines(t *testing.T) {
 	var got []string
 
 	res, err := r.RunStream(context.Background(), Command{
-		Name: "bash",
+		Name: "sh",
 		Args: []string{"-lc", "echo out-one; echo err-one 1>&2; printf out-two"},
 	}, func(stream, line string) {
 		mu.Lock()

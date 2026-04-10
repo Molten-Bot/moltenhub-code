@@ -15,7 +15,7 @@ func TestOSRunnerRunUsesDirAndErrorWithoutOutputDetail(t *testing.T) {
 
 	res, err := r.Run(context.Background(), Command{
 		Dir:  workingDir,
-		Name: "bash",
+		Name: "sh",
 		Args: []string{"-lc", "pwd"},
 	})
 	if err != nil {
@@ -27,7 +27,7 @@ func TestOSRunnerRunUsesDirAndErrorWithoutOutputDetail(t *testing.T) {
 	}
 
 	_, err = r.Run(context.Background(), Command{
-		Name: "bash",
+		Name: "sh",
 		Args: []string{"-lc", "exit 5"},
 	})
 	if err == nil {

@@ -221,6 +221,10 @@
                     <span class="prompt-label">Branch</span>
                     <input id="library-base-branch" class="prompt-control prompt-input" type="text" value="main" spellcheck="false" placeholder="main">
                   </label>
+                  <label class="prompt-field prompt-field-target-subdir">
+                    <span class="prompt-label">Directory</span>
+                    <input id="library-target-subdir" class="prompt-control prompt-input" type="text" value="." spellcheck="false" placeholder=".">
+                  </label>
                 </div>
                 <div class="prompt-field">
                   <span class="prompt-label">Task Library</span>
@@ -414,7 +418,7 @@
           </label>
           <label class="prompt-field hub-setup-profile-text">
             <span class="prompt-label">Profile</span>
-            <textarea id="hub-setup-profile" class="prompt-text prompt-control min-h-[96px] w-full rounded-lg border border-hub-border p-2.5 text-[0.84rem] leading-[1.4]" rows="4" spellcheck="false" placeholder="What this runtime is for"></textarea>
+            <textarea id="hub-setup-profile" class="prompt-text prompt-control hub-setup-profile-input min-h-[96px] w-full rounded-lg border border-hub-border p-2.5 text-[0.84rem] leading-[1.4]" rows="2" spellcheck="false" placeholder="What this runtime is for"></textarea>
           </label>
         </div>
 
@@ -1021,6 +1025,7 @@
     const libraryRepositoryField = document.getElementById("library-repo-field");
     const libraryRepoInput = document.getElementById("library-repo-input");
     const libraryBaseBranch = document.getElementById("library-base-branch");
+    const libraryTargetSubdir = document.getElementById("library-target-subdir");
     const libraryTaskList = document.getElementById("library-task-list");
     const rightCol = document.querySelector(".right-col");
     const promptWrap = document.querySelector(".prompt-wrap");
@@ -1382,7 +1387,7 @@
 
     function setHubSetupStatus(kind, text) {
       if (!hubSetupStatus) return;
-      hubSetupStatus.className = kind ? `submit-status submit-status-inline ${kind}` : "submit-status submit-status-inline";
+      hubSetupStatus.className = kind ? `hub-setup-status submit-status submit-status-inline ${kind}` : "hub-setup-status submit-status submit-status-inline";
       hubSetupStatus.textContent = String(text || "").trim();
     }
 
@@ -1410,6 +1415,7 @@
 
     function setHubSetupBusy(busy) {
       state.hubSetupBusy = Boolean(busy);
+      if (hubSetupForm) hubSetupForm.setAttribute("aria-busy", state.hubSetupBusy ? "true" : "false");
       if (hubSetupExistingToggle) hubSetupExistingToggle.disabled = state.hubSetupBusy;
       if (hubSetupNewToggle) hubSetupNewToggle.disabled = state.hubSetupBusy;
       if (hubSetupRegionNAToggle) hubSetupRegionNAToggle.disabled = state.hubSetupBusy;
@@ -1689,17 +1695,19 @@
         applyHubSetupState(body?.hub);
         await loadAgentAuthStatus();
         trackAnalyticsEvent("hub_setup_succeeded", { agent_mode: payload.agent_mode, token_type: payload.token_type });
-        setHubSetupStatus("ok", state.hubSetup.message || "Molten Hub setup saved.");
+        const successMessage = state.hubSetup.message || "Molten Hub setup saved.";
+        setHubSetupStatus("ok", successMessage);
         if (hubSetupToken) {
           hubSetupToken.value = "";
         }
-        if (!autoSubmit) {
+        if (autoSubmit || isHubProfileDialogMode()) {
+          await new Promise((resolve) => window.setTimeout(resolve, 700));
+          setHubSetupOpen(false);
+        } else {
           window.setTimeout(() => {
             state.hubSetupDialogMode = "connect";
             setHubSetupOpen(false);
           }, 420);
-        } else {
-          setHubSetupOpen(false);
         }
       } catch (err) {
         trackAnalyticsEvent("hub_setup_failed", { agent_mode: payload.agent_mode, token_type: payload.token_type });
@@ -3290,6 +3298,7 @@
       return {
         repo,
         branch,
+        targetSubdir: String(libraryTargetSubdir.value || "").trim() || ".",
         libraryTaskName: libraryTaskName,
       };
     }
@@ -3318,7 +3327,9 @@
       libraryRepoInput.value = repo;
       libraryBaseBranch.value = branch;
       syncBaseBranchClearState();
-      builderTargetSubdir.value = String(payload.targetSubdir || ".").trim() || ".";
+      const targetSubdir = String(payload.targetSubdir || ".").trim() || ".";
+      builderTargetSubdir.value = targetSubdir;
+      libraryTargetSubdir.value = targetSubdir;
       builderPromptInput.value = String(payload.prompt || "").trim();
       setPromptImages(payload.images);
       syncBuilderDraftClearState();
@@ -3341,6 +3352,7 @@
 
     function resetBuilderTargetSubdir() {
       builderTargetSubdir.value = ".";
+      libraryTargetSubdir.value = ".";
       syncBuilderDraftClearState();
     }
 
@@ -4783,7 +4795,14 @@
 
     builderPromptInput.addEventListener("input", syncBuilderDraftClearState);
     builderPromptInput.addEventListener("keydown", submitBuilderPromptOnEnter);
-    builderTargetSubdir.addEventListener("input", syncBuilderDraftClearState);
+    builderTargetSubdir.addEventListener("input", () => {
+      libraryTargetSubdir.value = builderTargetSubdir.value;
+      syncBuilderDraftClearState();
+    });
+    libraryTargetSubdir.addEventListener("input", () => {
+      builderTargetSubdir.value = libraryTargetSubdir.value;
+      syncBuilderDraftClearState();
+    });
     builderPromptInput.addEventListener("paste", handlePromptImagePaste);
     builderImagePasteTarget.addEventListener("paste", handlePromptImagePaste);
     builderImagesClear.addEventListener("click", clearBuilderPromptDraft);
@@ -5002,6 +5021,7 @@
     localPromptForm.addEventListener("submit", submitLocalPrompt);
     libraryRepoInput.value = builderRepoInput.value;
     libraryBaseBranch.value = builderBaseBranch.value;
+    libraryTargetSubdir.value = builderTargetSubdir.value;
     renderRepoHistoryOptions();
     renderLibraryTaskOptions();
     renderPromptImages();

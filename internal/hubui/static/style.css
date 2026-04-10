@@ -2451,6 +2451,8 @@ select.prompt-control {
 }
 
 .hub-emoji-picker-input {
+  position: relative;
+  z-index: 1;
   padding-right: 56px;
 }
 
@@ -2458,6 +2460,7 @@ select.prompt-control {
   position: absolute;
   top: 50%;
   right: 7px;
+  z-index: 2;
   transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
@@ -2672,7 +2675,7 @@ select.prompt-control {
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--surface-label-text);
+  color: var(--surface-label);
 }
 
 .hub-setup-onboarding-steps {
@@ -2702,13 +2705,13 @@ select.prompt-control {
 }
 
 .hub-setup-onboarding-step.completed .hub-setup-onboarding-dot {
-  background: var(--success);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 14%, transparent);
+  background: var(--surface-success);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--surface-success) 14%, transparent);
 }
 
 .hub-setup-onboarding-step.error .hub-setup-onboarding-dot {
-  background: var(--danger);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 16%, transparent);
+  background: var(--surface-danger);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--surface-danger) 16%, transparent);
 }
 
 .hub-setup-onboarding-label {
@@ -2721,6 +2724,12 @@ select.prompt-control {
   font-size: 0.78rem;
   line-height: 1.45;
   color: var(--hub-muted);
+}
+
+.hub-setup-profile-input {
+  height: auto;
+  min-height: calc(2 * 1.45em + 24px);
+  resize: vertical;
 }
 
 .hub-setup-footer {
@@ -2767,6 +2776,7 @@ select.prompt-control {
   column-gap: 14px;
   row-gap: 10px;
   width: min(100%, 560px);
+  margin-left: auto;
 }
 
 .hub-setup-status {
