@@ -1510,11 +1510,8 @@ func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 		Region:       "na",
 	}
 
-	activeCfg := cfg
-	runtimeCfg, err := hub.LoadRuntimeConfig(cfg.RuntimeConfigPath)
-	if err == nil {
-		activeCfg = runtimeCfg.Init()
-	} else if !errors.Is(err, os.ErrNotExist) {
+	activeCfg, err := effectiveHubSetupConfig(cfg)
+	if err != nil {
 		state.Message = fmt.Sprintf("Runtime config load failed: %v", err)
 	}
 
@@ -1535,6 +1532,44 @@ func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 	return state
 }
 
+func effectiveHubSetupConfig(cfg hub.InitConfig) (hub.InitConfig, error) {
+	activeCfg := cfg
+	activeCfg.ApplyDefaults()
+
+	runtimeCfg, err := hub.LoadRuntimeConfig(cfg.RuntimeConfigPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return activeCfg, nil
+		}
+		return activeCfg, err
+	}
+
+	storedCfg := runtimeCfg.Init()
+	if strings.TrimSpace(storedCfg.BindToken) == "" {
+		storedCfg.BindToken = strings.TrimSpace(activeCfg.BindToken)
+	}
+	if strings.TrimSpace(storedCfg.AgentToken) == "" {
+		storedCfg.AgentToken = strings.TrimSpace(activeCfg.AgentToken)
+	}
+	if strings.TrimSpace(storedCfg.Handle) == "" {
+		storedCfg.Handle = strings.TrimSpace(activeCfg.Handle)
+	}
+	storedCfg.Profile = mergeProfileConfig(storedCfg.Profile, activeCfg.Profile)
+	if strings.TrimSpace(storedCfg.AgentHarness) == "" {
+		storedCfg.AgentHarness = strings.TrimSpace(activeCfg.AgentHarness)
+	}
+	if strings.TrimSpace(storedCfg.AgentCommand) == "" {
+		storedCfg.AgentCommand = strings.TrimSpace(activeCfg.AgentCommand)
+	}
+	if strings.TrimSpace(runtimeCfg.BindToken) == "" &&
+		strings.TrimSpace(runtimeCfg.AgentToken) == "" &&
+		strings.TrimSpace(activeCfg.BaseURL) != "" {
+		storedCfg.BaseURL = strings.TrimSpace(activeCfg.BaseURL)
+	}
+	storedCfg.ApplyDefaults()
+	return storedCfg, nil
+}
+
 func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSetupRequest, applyLive func(context.Context, hub.InitConfig) error) (hubui.HubSetupState, error) {
 	state := currentHubSetupState(cfg)
 	state.AgentMode = normalizeHubSetupMode(req.AgentMode)
@@ -1547,13 +1582,10 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 
 	token := strings.TrimSpace(req.Token)
 
-	activeCfg := cfg
-	if runtimeCfg, err := hub.LoadRuntimeConfig(cfg.RuntimeConfigPath); err == nil {
-		activeCfg = runtimeCfg.Init()
-	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+	activeCfg, err := effectiveHubSetupConfig(cfg)
+	if err != nil {
 		return state, fmt.Errorf("load runtime config: %w", err)
 	}
-	activeCfg.ApplyDefaults()
 	activeCfg.BaseURL = hubSetupBaseURL(activeCfg.BaseURL, state.Region)
 
 	useSavedCredentials := token == ""
@@ -1654,13 +1686,10 @@ func connectHubSetup(ctx context.Context, cfg hub.InitConfig, applyLive func(con
 		return state, fmt.Errorf("live hub connect is unavailable")
 	}
 
-	activeCfg := cfg
-	if runtimeCfg, err := hub.LoadRuntimeConfig(cfg.RuntimeConfigPath); err == nil {
-		activeCfg = runtimeCfg.Init()
-	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+	activeCfg, err := effectiveHubSetupConfig(cfg)
+	if err != nil {
 		return state, fmt.Errorf("load runtime config: %w", err)
 	}
-	activeCfg.ApplyDefaults()
 	if strings.TrimSpace(activeCfg.AgentToken) == "" && strings.TrimSpace(activeCfg.BindToken) == "" {
 		return state, fmt.Errorf("saved Molten Hub credentials are unavailable")
 	}
