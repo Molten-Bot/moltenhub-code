@@ -24,6 +24,24 @@ func TestExpandRunConfigErrorsForUnknownTaskAndMissingRepo(t *testing.T) {
 	}
 }
 
+func TestExpandRunConfigDefaultsMissingTargetSubdir(t *testing.T) {
+	t.Parallel()
+
+	catalog := Catalog{
+		byName: map[string]TaskDefinition{
+			"code-review": {Name: "code-review", Prompt: "review the pull request"},
+		},
+	}
+
+	cfg, err := catalog.ExpandRunConfig("code-review", "git@github.com:acme/repo.git", "main")
+	if err != nil {
+		t.Fatalf("ExpandRunConfig() error = %v", err)
+	}
+	if got, want := cfg.TargetSubdir, "."; got != want {
+		t.Fatalf("TargetSubdir = %q, want %q", got, want)
+	}
+}
+
 func TestLoadTaskDefinitionsRejectsEmptyFileObject(t *testing.T) {
 	t.Parallel()
 

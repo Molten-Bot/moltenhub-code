@@ -1173,9 +1173,8 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 		"displayName": "Pull Request Code Review",
 		"description": fmt.Sprintf("Runs the %s workflow using repo + branch or prNumber context.", codeReviewLibraryTaskName),
 		"activation": buildActivation(codeReviewSkillName, map[string]any{
-			"repos":    []string{"<git@github.com:owner/repo.git>"},
-			"branch":   "main",
-			"prNumber": 123,
+			"repos":  []string{"<git@github.com:owner/repo.git>"},
+			"branch": "main",
 		}),
 	})
 
