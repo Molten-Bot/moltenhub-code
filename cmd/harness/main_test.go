@@ -1187,6 +1187,59 @@ func TestConfigureHubSetupExistingAgentProfileEditUsesSavedCredentials(t *testin
 	}
 }
 
+func TestConfigureHubSetupExistingAgentLoadsProfileTextFromProfileMarkdown(t *testing.T) {
+	t.Parallel()
+
+	const savedToken = "f9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != savedToken {
+			t.Fatalf("%s %s token = %q, want %q", r.Method, r.URL.Path, got, savedToken)
+		}
+		switch {
+		case (r.Method == http.MethodPatch || r.Method == http.MethodPost) &&
+			(r.URL.Path == "/v1/agents/me/metadata" || r.URL.Path == "/v1/agents/me"):
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
+			_, _ = w.Write([]byte(`{"result":{"agent":{"handle":"existing-agent","metadata":{"display_name":"Molten Bot","emoji":"💯","profile_markdown":"# 💯 Molten Bot\n\nOwns markdown profile text"}}}}`))
+		case r.Method == http.MethodPatch && r.URL.Path == "/v1/agents/me/status":
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf(`{"base_url":%q,"agent_token":%q}`, server.URL+"/v1", savedToken)), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	state, err := configureHubSetup(context.Background(), hub.InitConfig{
+		BaseURL:           server.URL + "/v1",
+		AgentHarness:      "codex",
+		RuntimeConfigPath: configPath,
+	}, hubui.HubSetupRequest{
+		AgentMode: "existing",
+	}, nil)
+	if err != nil {
+		t.Fatalf("configureHubSetup() error = %v", err)
+	}
+	if got, want := state.Profile.DisplayName, "Molten Bot"; got != want {
+		t.Fatalf("DisplayName = %q, want %q", got, want)
+	}
+	if got, want := state.Profile.Emoji, "💯"; got != want {
+		t.Fatalf("Emoji = %q, want %q", got, want)
+	}
+	if got, want := state.Profile.ProfileText, "Owns markdown profile text"; got != want {
+		t.Fatalf("ProfileText = %q, want %q", got, want)
+	}
+}
+
 func TestConfigureHubSetupReturnsSavedStateWhenLiveApplyFails(t *testing.T) {
 	t.Parallel()
 

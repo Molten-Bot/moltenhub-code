@@ -91,3 +91,53 @@ func TestExtractAgentProfileFromJSONUsesExplicitProfileObject(t *testing.T) {
 		t.Fatalf("Skills = %#v, want preserved explicit [code_for_me]", profile.Profile.Skills)
 	}
 }
+
+func TestExtractAgentProfileFromJSONUsesProfileMarkdownBodyWhenProfileMissing(t *testing.T) {
+	t.Parallel()
+
+	profile := extractAgentProfileFromJSON([]byte(`{
+		"result": {
+			"agent": {
+				"handle": "markdown-agent",
+				"metadata": {
+					"display_name": "Markdown Agent",
+					"emoji": "💯",
+					"profile_markdown": "# 💯 Markdown Agent\n\nOwns remediation tasks."
+				}
+			}
+		}
+	}`))
+
+	if got, want := profile.Handle, "markdown-agent"; got != want {
+		t.Fatalf("Handle = %q, want %q", got, want)
+	}
+	if got, want := profile.Profile.DisplayName, "Markdown Agent"; got != want {
+		t.Fatalf("DisplayName = %q, want %q", got, want)
+	}
+	if got, want := profile.Profile.Emoji, "💯"; got != want {
+		t.Fatalf("Emoji = %q, want %q", got, want)
+	}
+	if got, want := profile.Profile.ProfileText, "Owns remediation tasks."; got != want {
+		t.Fatalf("ProfileText = %q, want %q", got, want)
+	}
+}
+
+func TestExtractAgentProfileFromJSONIgnoresHeaderOnlyProfileMarkdown(t *testing.T) {
+	t.Parallel()
+
+	profile := extractAgentProfileFromJSON([]byte(`{
+		"result": {
+			"agent": {
+				"metadata": {
+					"display_name": "Header Only",
+					"emoji": "😀",
+					"profile_markdown": "# 😀 Header Only"
+				}
+			}
+		}
+	}`))
+
+	if got := profile.Profile.ProfileText; got != "" {
+		t.Fatalf("ProfileText = %q, want empty for header-only markdown", got)
+	}
+}

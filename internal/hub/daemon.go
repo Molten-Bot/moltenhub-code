@@ -34,6 +34,8 @@ const dispatchDedupTTL = 2 * time.Hour
 const agentStatusUpdateTimeout = 5 * time.Second
 const failureFollowUpPromptBase = failurefollowup.RequiredPrompt
 const failureFollowUpNoPathGuidance = "No workspace or log path was captured before the failure. Investigate the task history and runtime error details first."
+const failureFollowUpBaseBranch = "main"
+const failureFollowUpTargetSubdir = "."
 
 // NewDaemon returns a hub daemon with defaults.
 func NewDaemon(runner execx.Runner) Daemon {
@@ -762,16 +764,11 @@ func queueFailureFollowUp(ctx context.Context, api MoltenHubAPI, cfg InitConfig,
 	if len(repos) == 0 {
 		return fmt.Errorf("failed dispatch is missing repository context")
 	}
-	baseBranch, targetSubdir := failurefollowup.FollowUpTargeting(
-		dispatch.Config.BaseBranch,
-		dispatch.Config.TargetSubdir,
-		res.Branch,
-	)
 
 	runConfig := map[string]any{
 		"repos":        repos,
-		"baseBranch":   baseBranch,
-		"targetSubdir": targetSubdir,
+		"baseBranch":   failureFollowUpBaseBranch,
+		"targetSubdir": failureFollowUpTargetSubdir,
 		"prompt":       failureFollowUpPrompt(taskLogRoot, dispatch, res),
 	}
 
@@ -801,9 +798,6 @@ func failureFollowUpRepos(res harness.Result, runCfg config.Config) []string {
 		if repo == "" {
 			continue
 		}
-		return []string{repo}
-	}
-	if repo := strings.TrimSpace(config.DefaultRepositoryURL); repo != "" {
 		return []string{repo}
 	}
 	return nil
