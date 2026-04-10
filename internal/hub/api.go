@@ -221,9 +221,7 @@ func (c APIClient) syncProfileMetadata(ctx context.Context, token string, cfg In
 	}
 
 	metadata = cloneMetadataMap(metadata)
-	for key, value := range buildAgentMetadata(cfg) {
-		metadata[key] = value
-	}
+	mergeProfileMetadata(metadata, cfg)
 
 	ok, trace := c.tryAny(ctx, token, []apiAttempt{
 		{Method: http.MethodPatch, Path: "/agents/me/metadata", Body: map[string]any{"metadata": metadata}},
@@ -235,6 +233,29 @@ func (c APIClient) syncProfileMetadata(ctx context.Context, token string, cfg In
 		return fmt.Errorf("sync profile metadata failed: %s", trace)
 	}
 	return nil
+}
+
+func mergeProfileMetadata(metadata map[string]any, cfg InitConfig) {
+	if metadata == nil {
+		return
+	}
+
+	for key, value := range buildAgentMetadata(cfg) {
+		metadata[key] = value
+	}
+
+	if strings.TrimSpace(cfg.Profile.DisplayName) == "" {
+		delete(metadata, "display_name")
+	}
+	if strings.TrimSpace(cfg.Profile.Emoji) == "" {
+		delete(metadata, "emoji")
+	}
+	if strings.TrimSpace(cfg.Profile.ProfileText) == "" {
+		delete(metadata, "profile")
+	}
+	if strings.TrimSpace(buildProfileMarkdown(cfg.Profile.DisplayName, cfg.Profile.Emoji, cfg.Profile.ProfileText)) == "" {
+		delete(metadata, "profile_markdown")
+	}
 }
 
 // UpdateAgentStatus updates the hub-visible lifecycle status for this agent.
@@ -1115,9 +1136,7 @@ func mergeRuntimeRegistrationMetadata(metadata map[string]any, cfg InitConfig, l
 		return
 	}
 
-	for key, value := range buildAgentMetadata(cfg) {
-		metadata[key] = value
-	}
+	mergeProfileMetadata(metadata, cfg)
 
 	libraryNames := make([]string, 0, len(libraryTasks))
 	for _, task := range libraryTasks {

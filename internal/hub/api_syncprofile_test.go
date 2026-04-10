@@ -130,6 +130,63 @@ func TestSyncProfileUsesAgentProfilePayload(t *testing.T) {
 	}
 }
 
+func TestSyncProfileClearsMetadataEmojiWhenProfileEmojiEmpty(t *testing.T) {
+	t.Parallel()
+
+	var metadataPatch map[string]any
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		data, _ := io.ReadAll(r.Body)
+		body := map[string]any{}
+		_ = json.Unmarshal(data, &body)
+
+		switch {
+		case (r.Method == http.MethodPatch || r.Method == http.MethodPost) && r.URL.Path == "/v1/agents/me":
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
+			_, _ = w.Write([]byte(`{"ok":true,"result":{"agent":{"metadata":{"existing":"keep","emoji":"🔥","display_name":"Old","profile":"Old bio","profile_markdown":"# Old"}}}}`))
+		case (r.Method == http.MethodPatch || r.Method == http.MethodPost) && r.URL.Path == "/v1/agents/me/metadata":
+			metadataPatch = body
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"ok":false}`))
+		}
+	}))
+	defer ts.Close()
+
+	client := NewAPIClient(ts.URL + "/v1")
+	cfg := InitConfig{
+		AgentHarness: "codex",
+		Profile: ProfileConfig{
+			Emoji: "",
+		},
+	}
+	cfg.ApplyDefaults()
+
+	if err := client.SyncProfile(context.Background(), "token", cfg); err != nil {
+		t.Fatalf("SyncProfile() error = %v", err)
+	}
+	if metadataPatch == nil {
+		t.Fatal("metadata patch was not captured")
+	}
+
+	metadataRaw, ok := metadataPatch["metadata"]
+	if !ok {
+		t.Fatalf("metadata missing from patch body: %#v", metadataPatch)
+	}
+	metadata, ok := metadataRaw.(map[string]any)
+	if !ok {
+		t.Fatalf("metadata type = %T, want map[string]any", metadataRaw)
+	}
+	if _, hasEmoji := metadata["emoji"]; hasEmoji {
+		t.Fatalf("metadata.emoji should be unset when profile emoji is empty: %#v", metadata["emoji"])
+	}
+	if got := metadata["existing"]; got != "keep" {
+		t.Fatalf("metadata.existing = %#v, want preserved \"keep\"", got)
+	}
+}
+
 func TestSyncProfileRetriesWithoutHandleWhenHandleUpdateFails(t *testing.T) {
 	t.Parallel()
 
