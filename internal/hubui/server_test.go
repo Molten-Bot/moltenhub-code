@@ -288,6 +288,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="hub-setup-connection-toggle"`) {
 		t.Fatalf("expected index html to include the hub connection toggle button")
 	}
+	if !strings.Contains(markup, `id="hub-setup-connection-toggle" class="hub-setup-connection-toggle prompt-action-button hidden"`) {
+		t.Fatalf("expected index html to render the disconnect action with the shared button sizing classes")
+	}
+	if !strings.Contains(markup, `id="hub-setup-submit" class="prompt-action-button prompt-submit"`) {
+		t.Fatalf("expected index html to render the profile save action with the shared submit button classes")
+	}
 	if !strings.Contains(markup, `async function submitHubConnectionToggle()`) {
 		t.Fatalf("expected index html to include hub connection toggle handler")
 	}
@@ -305,6 +311,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `hubSetupSubmit.textContent = profileEditor ? "Save" : "Done";`) {
 		t.Fatalf("expected index html to relabel the profile editor submit button to Save")
+	}
+	hubSetupDisconnectIndex := strings.Index(markup, `id="hub-setup-connection-toggle"`)
+	hubSetupStatusIndex := strings.Index(markup, `id="hub-setup-status"`)
+	hubSetupSaveIndex := strings.Index(markup, `id="hub-setup-submit"`)
+	if hubSetupDisconnectIndex == -1 || hubSetupStatusIndex == -1 || hubSetupSaveIndex == -1 || hubSetupDisconnectIndex > hubSetupStatusIndex || hubSetupStatusIndex > hubSetupSaveIndex {
+		t.Fatalf("expected hub setup actions to render in left-to-right order Disconnect/status/Save")
 	}
 	if !strings.Contains(markup, "function syncBrandLogoRotation()") {
 		t.Fatalf("expected index html to include brand logo rotation controller")
