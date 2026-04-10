@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,8 @@ const piProviderAuthField = "pi_provider_auth"
 const piAuthProbeTimeout = 20 * time.Second
 const piAuthProbePrompt = "Reply with OK."
 const openRouterProviderSetupDocURL = "https://raw.githubusercontent.com/Dicklesworthstone/pi_agent_rust/refs/heads/main/docs/provider-openrouter-setup.json"
+const piOfflineProviderEnvVar = "PI_OFFLINE"
+const piOfflineProviderDefaultValue = "1"
 
 type piProviderOption struct {
 	EnvVar      string
@@ -195,15 +198,17 @@ func (g *piAuthGate) Configure(ctx context.Context, rawInput string) (hubui.Agen
 		g.mu.Unlock()
 		return snap, err
 	}
-	if err := annotatePiProviderProbeError(g.probe(ctx), auth.EnvVar); err != nil {
-		g.mu.Lock()
-		g.ready = false
-		g.state = "needs_configure"
-		g.message = fmt.Sprintf("launch pi with %s: %v", auth.EnvVar, err)
-		g.updatedAt = time.Now().UTC()
-		snap := g.snapshotLocked()
-		g.mu.Unlock()
-		return snap, err
+	if !shouldSkipPiProviderProbe(auth.EnvVar) {
+		if err := annotatePiProviderProbeError(g.probe(ctx), auth.EnvVar); err != nil {
+			g.mu.Lock()
+			g.ready = false
+			g.state = "needs_configure"
+			g.message = fmt.Sprintf("launch pi with %s: %v", auth.EnvVar, err)
+			g.updatedAt = time.Now().UTC()
+			snap := g.snapshotLocked()
+			g.mu.Unlock()
+			return snap, err
+		}
 	}
 
 	g.mu.Lock()
@@ -228,13 +233,23 @@ func (g *piAuthGate) refreshAndSnapshot(ctx context.Context) (hubui.AgentAuthSta
 		return snap, nil
 	}
 	canonical := strings.TrimSpace(g.initCfg.PiProviderAuth)
+	envVar := canonicalPiProviderEnvVar(canonical)
 	g.mu.Unlock()
 
-	if err := annotatePiProviderProbeError(g.probe(ctx), canonicalPiProviderEnvVar(canonical)); err != nil {
+	if shouldSkipPiProviderProbe(envVar) {
+		g.mu.Lock()
+		g.validatedAuth = canonical
+		g.refreshLocked()
+		snap := g.snapshotLocked()
+		g.mu.Unlock()
+		return snap, nil
+	}
+
+	if err := annotatePiProviderProbeError(g.probe(ctx), envVar); err != nil {
 		g.mu.Lock()
 		g.ready = false
 		g.state = "needs_configure"
-		g.message = fmt.Sprintf("launch pi: %v", err)
+		g.message = piProviderValidationStatusMessage(envVar)
 		g.updatedAt = time.Now().UTC()
 		snap := g.snapshotLocked()
 		g.mu.Unlock()
@@ -309,6 +324,16 @@ func piAgentAuthOptions() []hubui.AgentAuthOption {
 			Description: option.Description,
 		})
 	}
+	sort.SliceStable(options, func(i, j int) bool {
+		leftLabel := strings.ToLower(strings.TrimSpace(options[i].Label))
+		rightLabel := strings.ToLower(strings.TrimSpace(options[j].Label))
+		if leftLabel == rightLabel {
+			leftValue := strings.ToLower(strings.TrimSpace(options[i].Value))
+			rightValue := strings.ToLower(strings.TrimSpace(options[j].Value))
+			return leftValue < rightValue
+		}
+		return leftLabel < rightLabel
+	})
 	return options
 }
 
@@ -377,7 +402,7 @@ func decodePiProviderAuth(rawInput string) (piProviderAuth, error) {
 	if !ok || option.EnvVar == "" {
 		return piProviderAuth{}, fmt.Errorf("env_var %q is not supported", auth.EnvVar)
 	}
-	auth.Value = strings.TrimSpace(auth.Value)
+	auth.Value = normalizePiProviderAuthValue(auth.EnvVar, auth.Value)
 	if auth.Value == "" {
 		return piProviderAuth{}, fmt.Errorf("value is required")
 	}
@@ -385,6 +410,26 @@ func decodePiProviderAuth(rawInput string) (piProviderAuth, error) {
 		return piProviderAuth{}, err
 	}
 	return auth, nil
+}
+
+func normalizePiProviderAuthValue(envVar, value string) string {
+	value = strings.TrimSpace(value)
+	if strings.EqualFold(strings.TrimSpace(envVar), piOfflineProviderEnvVar) && value == "" {
+		return piOfflineProviderDefaultValue
+	}
+	return value
+}
+
+func shouldSkipPiProviderProbe(envVar string) bool {
+	return strings.EqualFold(strings.TrimSpace(envVar), piOfflineProviderEnvVar)
+}
+
+func piProviderValidationStatusMessage(envVar string) string {
+	envVar = strings.TrimSpace(envVar)
+	if envVar == "" {
+		return "PI provider validation failed. Update the provider configuration and try again."
+	}
+	return fmt.Sprintf("PI provider validation failed for %s. Update the provider configuration and try again.", envVar)
 }
 
 func validatePiProviderAuthValue(envVar, value string) error {

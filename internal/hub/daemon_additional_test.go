@@ -343,7 +343,7 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 		t.Fatalf("follow-up targetSubdir = %#v, want .", got)
 	}
 	repos, _ := runConfig["repos"].([]string)
-	if len(repos) != 1 || repos[0] != "git@github.com:acme/repo.git" {
+	if len(repos) != 1 || repos[0] != config.DefaultRepositoryURL {
 		t.Fatalf("follow-up repos = %#v", runConfig["repos"])
 	}
 	prompt, _ := runConfig["prompt"].(string)
@@ -442,7 +442,7 @@ func TestHandleDispatchQueuesFailureFollowUpWithTaskLogPaths(t *testing.T) {
 	}
 }
 
-func TestQueueFailureFollowUpUsesFailedTaskRepository(t *testing.T) {
+func TestQueueFailureFollowUpUsesDefaultRepository(t *testing.T) {
 	t.Parallel()
 
 	api := &stubMoltenHubAPI{token: "t"}
@@ -486,7 +486,7 @@ func TestQueueFailureFollowUpUsesFailedTaskRepository(t *testing.T) {
 		t.Fatalf("follow-up config missing: %#v", api.published[0])
 	}
 	repos, _ := runConfig["repos"].([]string)
-	if len(repos) != 1 || repos[0] != "git@github.com:acme/repo-b.git" {
+	if len(repos) != 1 || repos[0] != config.DefaultRepositoryURL {
 		t.Fatalf("follow-up repos = %#v", runConfig["repos"])
 	}
 }

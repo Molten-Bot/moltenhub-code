@@ -2596,6 +2596,12 @@
         throw new Error("Select a provider first.");
       }
       const value = String(raw || "").trim();
+      if (normalizedEnvVar === "PI_OFFLINE") {
+        return JSON.stringify({
+          env_var: normalizedEnvVar,
+          value: value || "1",
+        });
+      }
       if (!value) {
         throw new Error("Provider token is required.");
       }

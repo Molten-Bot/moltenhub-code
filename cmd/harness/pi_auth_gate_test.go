@@ -108,6 +108,81 @@ func TestPiAuthGateConfigureRejectsUnsupportedEnvVar(t *testing.T) {
 	}
 }
 
+func TestPiAuthGateConfigureOfflineModeAllowsEmptyTokenWithoutProbe(t *testing.T) {
+	t.Setenv("PI_OFFLINE", "")
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	runner := &authGateRunnerStub{
+		run: func(context.Context, execx.Command) (execx.Result, error) {
+			t.Fatal("probe should not run for PI_OFFLINE provider configuration")
+			return execx.Result{}, nil
+		},
+	}
+	g := newPiAuthGateWithRuntime(runner, "pi", path, hub.InitConfig{}, nil)
+
+	input := `{"env_var":"PI_OFFLINE","value":""}`
+	expected, err := normalizePiProviderAuth(input)
+	if err != nil {
+		t.Fatalf("normalizePiProviderAuth() error = %v", err)
+	}
+
+	status, err := g.Configure(context.Background(), input)
+	if err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	if !status.Ready || status.State != "ready" {
+		t.Fatalf("status = %+v", status)
+	}
+	if got := strings.TrimSpace(os.Getenv("PI_OFFLINE")); got != "1" {
+		t.Fatalf("PI_OFFLINE = %q, want %q", got, "1")
+	}
+	if got := len(runner.calls); got != 0 {
+		t.Fatalf("probe calls = %d, want 0", got)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if got, want := doc["pi_provider_auth"], expected; got != want {
+		t.Fatalf("pi_provider_auth = %#v, want %q", got, want)
+	}
+}
+
+func TestPiAuthGateStatusMasksProbeLaunchDetails(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	runner := &authGateRunnerStub{
+		run: func(context.Context, execx.Command) (execx.Result, error) {
+			return execx.Result{}, errors.New(`run pi [--print --mode text --no-session Reply with OK.]: exit status 1 (401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}})`)
+		},
+	}
+	canonical, err := normalizePiProviderAuth(`{"env_var":"OPENAI_API_KEY","value":"sk-invalid"}`)
+	if err != nil {
+		t.Fatalf("normalizePiProviderAuth() error = %v", err)
+	}
+	g := newPiAuthGateWithRuntime(runner, "pi", path, hub.InitConfig{PiProviderAuth: canonical}, nil)
+
+	status, err := g.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if status.Ready || status.State != "needs_configure" {
+		t.Fatalf("status = %+v", status)
+	}
+	if got := status.Message; strings.Contains(got, "run pi [--print --mode text --no-session") {
+		t.Fatalf("status.Message = %q, want sanitized provider validation failure message", got)
+	}
+	if got := status.Message; !strings.Contains(got, "PI provider validation failed for OPENAI_API_KEY.") {
+		t.Fatalf("status.Message = %q, want provider-specific validation guidance", got)
+	}
+}
+
 func TestPiAuthGateConfigureReturnsLaunchFailureDetails(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 
@@ -149,6 +224,20 @@ func TestPiAuthGateConfigureReturnsLaunchFailureDetails(t *testing.T) {
 	}
 	if got := doc["pi_provider_auth"]; got == nil || got == "" {
 		t.Fatalf("pi_provider_auth = %#v, want persisted value", got)
+	}
+}
+
+func TestPiAgentAuthOptionsAreSortedAlphabeticallyByLabel(t *testing.T) {
+	options := piAgentAuthOptions()
+	if len(options) == 0 {
+		t.Fatal("piAgentAuthOptions() returned no options")
+	}
+	for i := 1; i < len(options); i++ {
+		prev := strings.ToLower(strings.TrimSpace(options[i-1].Label))
+		curr := strings.ToLower(strings.TrimSpace(options[i].Label))
+		if prev > curr {
+			t.Fatalf("piAgentAuthOptions() not sorted at index %d: %q > %q", i, options[i-1].Label, options[i].Label)
+		}
 	}
 }
 
