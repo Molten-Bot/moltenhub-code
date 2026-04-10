@@ -759,6 +759,12 @@ body .right-col.prompt-collapsed.task-list-hidden {
   flex: 1 1 auto;
 }
 
+.prompt-compose-stack {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
 .prompt-mode-row {
   margin-bottom: 2px;
 }

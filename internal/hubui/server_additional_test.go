@@ -820,6 +820,9 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".prompt-form {\n  display: grid;\n  gap: 10px;\n  padding: 14px;\n  min-width: 0;\n  min-height: 0;\n  overflow-y: auto;\n}") {
 		t.Fatalf("expected studio form content to use the full panel now that the mode dock lives outside it")
 	}
+	if !strings.Contains(css, ".prompt-compose-stack {\n  display: grid;\n  gap: 4px;\n  min-width: 0;\n}") {
+		t.Fatalf("expected prompt panels and actions to share a tighter compose stack gap")
+	}
 	if !strings.Contains(css, ".prompt-field-repository {\n  flex: 1 1 320px;\n  min-width: 280px;\n}") {
 		t.Fatalf("expected repository input to retain enough width beside the history selector")
 	}
