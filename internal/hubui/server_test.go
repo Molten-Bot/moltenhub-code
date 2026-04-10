@@ -962,7 +962,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html Clear button to reset the full builder draft")
 	}
 	if !strings.Contains(markup, "builderPromptInput.addEventListener(\"input\", syncBuilderDraftClearState);") ||
-		!strings.Contains(markup, "builderTargetSubdir.addEventListener(\"input\", syncBuilderDraftClearState);") ||
+		!strings.Contains(markup, "builderTargetSubdir.addEventListener(\"input\", () => {") ||
+		!strings.Contains(markup, "libraryTargetSubdir.addEventListener(\"input\", () => {") ||
 		!strings.Contains(markup, "localPromptInput.addEventListener(\"input\", syncBuilderDraftClearState);") {
 		t.Fatalf("expected index html to update shared Clear availability as prompt fields change")
 	}
@@ -1560,6 +1561,23 @@ func TestIndexLibraryModeUsesDedicatedRunEndpointAndShowsLoadErrors(t *testing.T
 	if !strings.Contains(markup, `state.libraryLoadError || "No library tasks are available."`) {
 		t.Fatalf("expected index html to surface library load errors in the task list")
 	}
+	if !strings.Contains(markup, `id="library-target-subdir"`) {
+		t.Fatalf("expected index html to render a directory input in library mode")
+	}
+	if !strings.Contains(markup, `targetSubdir: String(libraryTargetSubdir.value || "").trim() || ".",`) {
+		t.Fatalf("expected index html to include targetSubdir in the library payload")
+	}
+	if !strings.Contains(markup, `libraryTargetSubdir.value = targetSubdir;`) {
+		t.Fatalf("expected index html to restore the library directory when syncing from JSON payloads")
+	}
+	if !strings.Contains(markup, `builderTargetSubdir.addEventListener("input", () => {`) ||
+		!strings.Contains(markup, `libraryTargetSubdir.value = builderTargetSubdir.value;`) {
+		t.Fatalf("expected index html to mirror prompt directory changes into library mode")
+	}
+	if !strings.Contains(markup, `libraryTargetSubdir.addEventListener("input", () => {`) ||
+		!strings.Contains(markup, `builderTargetSubdir.value = libraryTargetSubdir.value;`) {
+		t.Fatalf("expected index html to mirror library directory changes back into prompt mode")
+	}
 }
 
 func TestHandlerLocalPromptSubmitAccepted(t *testing.T) {
@@ -1771,7 +1789,7 @@ func TestHandlerLibraryRunSubmitAccepted(t *testing.T) {
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
-	payload := `{"repos":["git@github.com:acme/repo.git","git@github.com:acme/repo-two.git"],"branch":"main","libraryTaskName":"unit-test-coverage"}`
+	payload := `{"repos":["git@github.com:acme/repo.git","git@github.com:acme/repo-two.git"],"branch":"main","targetSubdir":"internal/hub","libraryTaskName":"unit-test-coverage"}`
 	resp, err := http.Post(ts.URL+"/api/library/run", "application/json", bytes.NewBufferString(payload))
 	if err != nil {
 		t.Fatalf("POST /api/library/run error = %v", err)

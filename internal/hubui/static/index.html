@@ -221,6 +221,10 @@
                     <span class="prompt-label">Branch</span>
                     <input id="library-base-branch" class="prompt-control prompt-input" type="text" value="main" spellcheck="false" placeholder="main">
                   </label>
+                  <label class="prompt-field prompt-field-target-subdir">
+                    <span class="prompt-label">Directory</span>
+                    <input id="library-target-subdir" class="prompt-control prompt-input" type="text" value="." spellcheck="false" placeholder=".">
+                  </label>
                 </div>
                 <div class="prompt-field">
                   <span class="prompt-label">Task Library</span>
@@ -937,6 +941,7 @@
     const libraryRepositoryField = document.getElementById("library-repo-field");
     const libraryRepoInput = document.getElementById("library-repo-input");
     const libraryBaseBranch = document.getElementById("library-base-branch");
+    const libraryTargetSubdir = document.getElementById("library-target-subdir");
     const libraryTaskList = document.getElementById("library-task-list");
     const rightCol = document.querySelector(".right-col");
     const promptWrap = document.querySelector(".prompt-wrap");
@@ -3146,6 +3151,7 @@
       return {
         repo,
         branch,
+        targetSubdir: String(libraryTargetSubdir.value || "").trim() || ".",
         libraryTaskName: libraryTaskName,
       };
     }
@@ -3174,7 +3180,9 @@
       libraryRepoInput.value = repo;
       libraryBaseBranch.value = branch;
       syncBaseBranchClearState();
-      builderTargetSubdir.value = String(payload.targetSubdir || ".").trim() || ".";
+      const targetSubdir = String(payload.targetSubdir || ".").trim() || ".";
+      builderTargetSubdir.value = targetSubdir;
+      libraryTargetSubdir.value = targetSubdir;
       builderPromptInput.value = String(payload.prompt || "").trim();
       setPromptImages(payload.images);
       syncBuilderDraftClearState();
@@ -3197,6 +3205,7 @@
 
     function resetBuilderTargetSubdir() {
       builderTargetSubdir.value = ".";
+      libraryTargetSubdir.value = ".";
       syncBuilderDraftClearState();
     }
 
@@ -4639,7 +4648,14 @@
 
     builderPromptInput.addEventListener("input", syncBuilderDraftClearState);
     builderPromptInput.addEventListener("keydown", submitBuilderPromptOnEnter);
-    builderTargetSubdir.addEventListener("input", syncBuilderDraftClearState);
+    builderTargetSubdir.addEventListener("input", () => {
+      libraryTargetSubdir.value = builderTargetSubdir.value;
+      syncBuilderDraftClearState();
+    });
+    libraryTargetSubdir.addEventListener("input", () => {
+      builderTargetSubdir.value = libraryTargetSubdir.value;
+      syncBuilderDraftClearState();
+    });
     builderPromptInput.addEventListener("paste", handlePromptImagePaste);
     builderImagePasteTarget.addEventListener("paste", handlePromptImagePaste);
     builderImagesClear.addEventListener("click", clearBuilderPromptDraft);
@@ -4856,6 +4872,7 @@
     localPromptForm.addEventListener("submit", submitLocalPrompt);
     libraryRepoInput.value = builderRepoInput.value;
     libraryBaseBranch.value = builderBaseBranch.value;
+    libraryTargetSubdir.value = builderTargetSubdir.value;
     renderRepoHistoryOptions();
     renderLibraryTaskOptions();
     renderPromptImages();
