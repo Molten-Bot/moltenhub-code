@@ -127,7 +127,7 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	if err := api.RegisterRuntime(ctx, cfg, orderedLibrarySummaries); err != nil {
 		d.logf("hub.runtime status=warn action=register err=%q", err)
 	} else {
-		d.logf("hub.runtime status=registered skills=1 library_tasks=%d", len(libraryCatalog.Tasks))
+		d.logf("hub.runtime status=registered skills=%d library_tasks=%d", len(supportedProfileSkills()), len(libraryCatalog.Tasks))
 	}
 
 	if err := api.UpdateAgentStatus(ctx, "online"); err != nil {

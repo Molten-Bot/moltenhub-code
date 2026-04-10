@@ -316,8 +316,8 @@ func TestSaveRuntimeConfigHubSettingsMergesHubFieldsWithoutDroppingExtras(t *tes
 		t.Fatalf("profile.harness = %#v, want %q", profile["harness"], runtimeIdentifier)
 	}
 	skills, _ := profile["skills"].([]any)
-	if len(skills) != 1 || skills[0] != "code_for_me" {
-		t.Fatalf("profile.skills = %#v, want [code_for_me]", profile["skills"])
+	if len(skills) != 3 || skills[0] != "code_for_me" || skills[1] != "code_review" || skills[2] != "library_task" {
+		t.Fatalf("profile.skills = %#v, want [code_for_me code_review library_task]", profile["skills"])
 	}
 	if got["custom"] != "preserved" {
 		t.Fatalf("custom = %#v, want %q", got["custom"], "preserved")

@@ -88,6 +88,6 @@ func TestExtractAgentProfileFromJSONUsesExplicitProfileObject(t *testing.T) {
 		t.Fatalf("Harness = %q, want %q", got, want)
 	}
 	if len(profile.Profile.Skills) != 1 || profile.Profile.Skills[0] != "code_for_me" {
-		t.Fatalf("Skills = %#v, want [code_for_me]", profile.Profile.Skills)
+		t.Fatalf("Skills = %#v, want preserved explicit [code_for_me]", profile.Profile.Skills)
 	}
 }

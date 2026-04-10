@@ -120,7 +120,7 @@ func ParseSkillDispatch(msg map[string]any, expectedType, expectedSkill string) 
 		return dispatch, true, fmt.Errorf("missing run config payload")
 	}
 
-	cfg, err := parseRunConfigValue(configValue)
+	cfg, err := parseRunConfigValue(configValue, dispatch.Skill)
 	if err != nil {
 		return dispatch, true, err
 	}
@@ -139,11 +139,11 @@ func ParseRunConfigJSON(payload []byte) (config.Config, error) {
 	if err := json.Unmarshal(payload, &decoded); err != nil {
 		return config.Config{}, fmt.Errorf("decode run config payload: %w", err)
 	}
-	return parseRunConfigValue(decoded)
+	return parseRunConfigValue(decoded, "")
 }
 
-func parseRunConfigValue(v any) (config.Config, error) {
-	m, err := normalizeRunConfigMap(v)
+func parseRunConfigValue(v any, skillName string) (config.Config, error) {
+	m, err := normalizeRunConfigMap(v, skillName)
 	if err != nil {
 		return config.Config{}, err
 	}
@@ -165,7 +165,7 @@ func parseRunConfigValue(v any) (config.Config, error) {
 	return cfg, nil
 }
 
-func normalizeRunConfigMap(v any) (map[string]any, error) {
+func normalizeRunConfigMap(v any, skillName string) (map[string]any, error) {
 	var parsed map[string]any
 	switch typed := v.(type) {
 	case map[string]any:
@@ -191,10 +191,33 @@ func normalizeRunConfigMap(v any) (map[string]any, error) {
 	if err := normalizeRunConfigAliases(parsed); err != nil {
 		return nil, err
 	}
+	if err := applySkillSpecificRunConfigDefaults(parsed, skillName); err != nil {
+		return nil, err
+	}
 	if taskName := firstNonEmpty(stringAt(parsed, "libraryTaskName")); taskName != "" {
 		return expandLibraryTaskRunConfig(parsed, taskName)
 	}
 	return parsed, nil
+}
+
+func applySkillSpecificRunConfigDefaults(parsed map[string]any, skillName string) error {
+	switch normalizeNamedSkill(skillName) {
+	case codeReviewSkillName:
+		if firstNonEmpty(stringAt(parsed, "prompt")) != "" {
+			return fmt.Errorf("%s skill does not accept prompt; send repo + branch only", codeReviewSkillName)
+		}
+		if firstNonEmpty(stringAt(parsed, "libraryTaskName")) == "" {
+			parsed["libraryTaskName"] = codeReviewLibraryTaskName
+		}
+	case libraryTaskSkillName:
+		if firstNonEmpty(stringAt(parsed, "prompt")) != "" {
+			return fmt.Errorf("%s skill does not accept prompt; send repo + branch + libraryTaskName", libraryTaskSkillName)
+		}
+		if firstNonEmpty(stringAt(parsed, "libraryTaskName")) == "" {
+			return fmt.Errorf("%s skill requires libraryTaskName", libraryTaskSkillName)
+		}
+	}
+	return nil
 }
 
 func extractConfigValue(msg map[string]any) (any, bool) {
@@ -551,11 +574,25 @@ func skillNamesEqual(a, b string) bool {
 }
 
 func normalizeSkillMatcherName(value string) string {
+	normalized := normalizeNamedSkill(value)
+	switch normalized {
+	case defaultRuntimeSkillName, codeReviewSkillName, libraryTaskSkillName:
+		return defaultRuntimeSkillName
+	default:
+		return normalized
+	}
+}
+
+func normalizeNamedSkill(value string) string {
 	normalized := strings.ToLower(strings.TrimSpace(value))
 	normalized = strings.ReplaceAll(normalized, "-", "_")
 	switch normalized {
 	case "moltenhub_code_run", "code_for_me":
 		return "code_for_me"
+	case "code_review":
+		return codeReviewSkillName
+	case "library_task":
+		return libraryTaskSkillName
 	default:
 		return normalized
 	}

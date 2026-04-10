@@ -33,7 +33,7 @@ func TestRunConfigArrayAndAliasHelpers(t *testing.T) {
 func TestNormalizeRunConfigMapAndAliasesValidation(t *testing.T) {
 	t.Parallel()
 
-	normalized, err := normalizeRunConfigMap(`{"repo":"git@github.com:acme/repo.git","branch":"release","prompt":"do work"}`)
+	normalized, err := normalizeRunConfigMap(`{"repo":"git@github.com:acme/repo.git","branch":"release","prompt":"do work"}`, "")
 	if err != nil {
 		t.Fatalf("normalizeRunConfigMap(string) error = %v", err)
 	}
@@ -41,10 +41,10 @@ func TestNormalizeRunConfigMapAndAliasesValidation(t *testing.T) {
 		t.Fatalf("baseBranch alias = %q, want %q", got, want)
 	}
 
-	if _, err := normalizeRunConfigMap(`["not","an","object"]`); err == nil {
+	if _, err := normalizeRunConfigMap(`["not","an","object"]`, ""); err == nil {
 		t.Fatal("normalizeRunConfigMap(array JSON) error = nil, want non-nil")
 	}
-	if _, err := normalizeRunConfigMap(42); err == nil {
+	if _, err := normalizeRunConfigMap(42, ""); err == nil {
 		t.Fatal("normalizeRunConfigMap(non-map) error = nil, want non-nil")
 	}
 
@@ -54,6 +54,25 @@ func TestNormalizeRunConfigMapAndAliasesValidation(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "cannot include both prompt and libraryTaskName") {
 		t.Fatalf("normalizeRunConfigAliases(conflict) error = %v", err)
+	}
+}
+
+func TestNormalizeRunConfigMapAppliesCodeReviewSkillDefaults(t *testing.T) {
+	t.Parallel()
+
+	normalized, err := normalizeRunConfigMap(`{"repo":"git@github.com:acme/repo.git","branch":"review-branch"}`, "code_review")
+	if err != nil {
+		t.Fatalf("normalizeRunConfigMap(code_review) error = %v", err)
+	}
+	if got, want := stringAt(normalized, "libraryTaskName"), codeReviewLibraryTaskName; got != want {
+		t.Fatalf("libraryTaskName = %q, want %q", got, want)
+	}
+
+	if _, err := normalizeRunConfigMap(`{"repo":"git@github.com:acme/repo.git","prompt":"x"}`, "code_review"); err == nil || !strings.Contains(err.Error(), "does not accept prompt") {
+		t.Fatalf("normalizeRunConfigMap(code_review prompt) error = %v", err)
+	}
+	if _, err := normalizeRunConfigMap(`{"repo":"git@github.com:acme/repo.git"}`, "library_task"); err == nil || !strings.Contains(err.Error(), "requires libraryTaskName") {
+		t.Fatalf("normalizeRunConfigMap(library_task missing handle) error = %v", err)
 	}
 }
 

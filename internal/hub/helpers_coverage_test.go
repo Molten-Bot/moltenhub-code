@@ -97,7 +97,7 @@ func TestDispatchAndProfileHelperBranches(t *testing.T) {
 	if got := looksLikeRunConfigMap(map[string]any{"prompt": "x", "repo": "git@github.com:acme/repo.git"}); !got {
 		t.Fatal("looksLikeRunConfigMap(prompt+repo) = false, want true")
 	}
-	if _, err := normalizeRunConfigMap(" "); err == nil {
+	if _, err := normalizeRunConfigMap(" ", ""); err == nil {
 		t.Fatal("normalizeRunConfigMap(blank string) error = nil, want non-nil")
 	}
 
@@ -126,6 +126,9 @@ func TestDispatchAndProfileHelperBranches(t *testing.T) {
 	}
 	if got := normalizeDescription(strings.Repeat("x", 260), "fallback"); len(got) > 240 {
 		t.Fatalf("normalizeDescription() len = %d, want <= 240", len(got))
+	}
+	if got := buildSupportedSkillsMetadata(); len(got) != 3 {
+		t.Fatalf("buildSupportedSkillsMetadata() len = %d, want 3", len(got))
 	}
 }
 

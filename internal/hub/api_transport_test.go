@@ -386,6 +386,14 @@ func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
 	if got := activation["type"]; got != "skill_request" {
 		t.Fatalf("skill_catalog[0].activation.type = %#v, want skill_request", got)
 	}
+	second, ok := skillCatalog[1].(map[string]any)
+	if !ok || second["handle"] != "code_review" {
+		t.Fatalf("skill_catalog[1] = %#v, want handle code_review", skillCatalog[1])
+	}
+	third, ok := skillCatalog[2].(map[string]any)
+	if !ok || third["handle"] != "library_task" {
+		t.Fatalf("skill_catalog[2] = %#v, want handle library_task", skillCatalog[2])
+	}
 }
 
 func TestRecordGitHubTaskCompleteActivityMergesExistingMetadata(t *testing.T) {

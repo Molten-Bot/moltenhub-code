@@ -293,10 +293,11 @@ Local-only behavior:
 
 Runtime-owned fields:
 
-- skill contract is fixed to `code_for_me` / `skill_request` / `skill_result`
+- runtime dispatch/result types are fixed to `skill_request` / `skill_result`
 - profile visibility metadata is managed by runtime and forced public
 - checked-in activation presets live in [`skills/index.json`](skills/index.json)
-- each preset uses the same top-level Hub skill handle, `code_for_me`; library-backed presets switch behavior through `libraryTaskName`
+- the active Hub skill handles are `code_for_me`, `code_review`, and `library_task`
+- library tasks remain library metadata and are selected through `library_task` + `libraryTaskName` instead of being registered as separate skills
 
 Example: [`init.example.json`](init.example.json)
 

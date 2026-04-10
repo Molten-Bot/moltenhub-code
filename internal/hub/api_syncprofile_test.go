@@ -96,11 +96,17 @@ func TestSyncProfileUsesAgentProfilePayload(t *testing.T) {
 		t.Fatalf("profile.harness = %#v", got)
 	}
 	skills, ok := profile["skills"].([]any)
-	if !ok || len(skills) != 1 {
+	if !ok || len(skills) != 3 {
 		t.Fatalf("profile.skills = %#v", profile["skills"])
 	}
 	if got := strings.TrimSpace(skills[0].(string)); got != "code_for_me" {
 		t.Fatalf("profile.skills[0] = %q, want code_for_me", got)
+	}
+	if got := strings.TrimSpace(skills[1].(string)); got != "code_review" {
+		t.Fatalf("profile.skills[1] = %q, want code_review", got)
+	}
+	if got := strings.TrimSpace(skills[2].(string)); got != "library_task" {
+		t.Fatalf("profile.skills[2] = %q, want library_task", got)
 	}
 	if _, ok := calls[0].Body["metadata"]; ok {
 		t.Fatalf("metadata should not be sent in profile sync payload: %#v", calls[0].Body["metadata"])

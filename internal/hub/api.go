@@ -1105,10 +1105,7 @@ func buildAgentMetadata(cfg InitConfig) map[string]any {
 	metadata["is_public"] = true
 	metadata[agentVisibilityKey] = agentVisibilityValue
 
-	runtimeSkill := runtimeSkillConfig()
-	fallbackName := normalizeSkillName(runtimeSkill.Name)
-	fallbackDescription := skillDescription(runtimeSkill)
-	metadata["skills"] = normalizeSkillsMetadata(nil, fallbackName, fallbackDescription)
+	metadata["skills"] = buildSupportedSkillsMetadata()
 
 	return metadata
 }
@@ -1135,67 +1132,101 @@ func mergeRuntimeRegistrationMetadata(metadata map[string]any, cfg InitConfig, l
 	metadata["library_task_count"] = len(libraryNames)
 	metadata["library_tasks"] = libraryTasks
 	metadata["skill_catalog"] = buildRuntimeSkillCatalog(cfg.Skill, libraryTasks)
-	metadata["run_config_modes"] = []string{"prompt", "library_task"}
+	metadata["run_config_modes"] = []string{"prompt", "review", "library_task"}
 	metadata["supports_branch_key"] = true
 }
 
 func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskSummary) []map[string]any {
-	skillName := normalizeSkillName(skillCfg.Name)
 	dispatchType := strings.TrimSpace(skillCfg.DispatchType)
 	if dispatchType == "" {
 		dispatchType = defaultRuntimeDispatchType
 	}
 
-	buildActivation := func(runConfig map[string]any) map[string]any {
+	buildActivation := func(skillName string, runConfig map[string]any) map[string]any {
 		return map[string]any{
 			"type":  dispatchType,
-			"skill": skillName,
+			"skill": normalizeSkillName(skillName),
 			"input": map[string]any{
 				"config": runConfig,
 			},
 		}
 	}
 
-	out := make([]map[string]any, 0, len(libraryTasks)+1)
+	out := make([]map[string]any, 0, 3)
 	out = append(out, map[string]any{
-		"name":        skillName,
-		"handle":      skillName,
+		"name":        normalizeSkillName(skillCfg.Name),
+		"handle":      normalizeSkillName(skillCfg.Name),
 		"mode":        "prompt",
 		"description": "Prompt-driven repository task run.",
-		"activation": buildActivation(map[string]any{
-			"version":      "v1",
+		"activation": buildActivation(skillCfg.Name, map[string]any{
 			"repos":        []string{"<git@github.com:owner/repo.git>"},
 			"baseBranch":   "main",
 			"targetSubdir": ".",
 			"prompt":       "<describe the requested change>",
+			"images":       []any{},
 		}),
 	})
 
-	for _, task := range libraryTasks {
-		taskName := strings.TrimSpace(task.Name)
-		if taskName == "" {
-			continue
+	out = append(out, map[string]any{
+		"name":        normalizeSkillName(codeReviewSkillName),
+		"handle":      normalizeSkillName(codeReviewSkillName),
+		"mode":        "review",
+		"displayName": "Pull Request Code Review",
+		"description": fmt.Sprintf("Runs the %s workflow using repo + branch context.", codeReviewLibraryTaskName),
+		"activation": buildActivation(codeReviewSkillName, map[string]any{
+			"repos":        []string{"<git@github.com:owner/repo.git>"},
+			"baseBranch":   "main",
+			"targetSubdir": ".",
+		}),
+	})
+
+	libraryTaskDescription := "Runs a checked-in library task by handle."
+	if len(libraryTasks) > 0 {
+		names := make([]string, 0, len(libraryTasks))
+		for _, task := range libraryTasks {
+			name := strings.TrimSpace(task.Name)
+			if name == "" {
+				continue
+			}
+			names = append(names, name)
 		}
-		entry := map[string]any{
-			"name":        taskName,
-			"handle":      skillName,
-			"mode":        "library_task",
-			"description": firstNonEmpty(task.Description, fmt.Sprintf("Activates the %s library task.", taskName)),
-			"activation": buildActivation(map[string]any{
-				"version":         "v1",
-				"repos":           []string{"<git@github.com:owner/repo.git>"},
-				"baseBranch":      "main",
-				"targetSubdir":    ".",
-				"libraryTaskName": taskName,
-			}),
+		if len(names) > 0 {
+			libraryTaskDescription = fmt.Sprintf("Runs a checked-in library task by handle. Available handles: %s.", strings.Join(names, ", "))
 		}
-		if displayName := strings.TrimSpace(task.DisplayName); displayName != "" {
-			entry["displayName"] = displayName
-		}
-		out = append(out, entry)
 	}
+	out = append(out, map[string]any{
+		"name":        normalizeSkillName(libraryTaskSkillName),
+		"handle":      normalizeSkillName(libraryTaskSkillName),
+		"mode":        "library_task",
+		"displayName": "Library Task",
+		"description": libraryTaskDescription,
+		"activation": buildActivation(libraryTaskSkillName, map[string]any{
+			"repos":           []string{"<git@github.com:owner/repo.git>"},
+			"baseBranch":      "main",
+			"targetSubdir":    ".",
+			"libraryTaskName": "<library-handle>",
+		}),
+	})
 
 	return out
+}
+
+func buildSupportedSkillsMetadata() []map[string]any {
+	runtimeSkill := runtimeSkillConfig()
+	return []map[string]any{
+		{
+			"name":        normalizeSkillName(runtimeSkill.Name),
+			"description": "Prompt-driven repository task run.",
+		},
+		{
+			"name":        normalizeSkillName(codeReviewSkillName),
+			"description": "Repository code review run that targets the checked-in review workflow.",
+		},
+		{
+			"name":        normalizeSkillName(libraryTaskSkillName),
+			"description": "Generic library task entrypoint that requires a library task handle.",
+		},
+	}
 }
 
 func cloneMetadataMap(src map[string]any) map[string]any {

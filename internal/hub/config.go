@@ -14,6 +14,9 @@ import (
 
 const (
 	defaultRuntimeSkillName       = "code_for_me"
+	codeReviewSkillName           = "code_review"
+	libraryTaskSkillName          = "library_task"
+	codeReviewLibraryTaskName     = "code-review"
 	defaultRuntimeDispatchType    = "skill_request"
 	defaultRuntimeSkillResultType = "skill_result"
 	defaultInitVersion            = "v1"
@@ -200,11 +203,11 @@ func normalizeProfileConfig(profile *ProfileConfig, agentHarness, agentCommand s
 }
 
 func supportedProfileSkills() []string {
-	name := normalizeSkillName(runtimeSkillConfig().Name)
-	if name == "" {
-		name = defaultRuntimeSkillName
+	return []string{
+		normalizeSkillName(defaultRuntimeSkillName),
+		normalizeSkillName(codeReviewSkillName),
+		normalizeSkillName(libraryTaskSkillName),
 	}
-	return []string{name}
 }
 
 func runtimeSkillConfig() SkillConfig {

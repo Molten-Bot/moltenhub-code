@@ -257,6 +257,26 @@ func TestParseSkillDispatchMatchesLegacyCurrentAndRenamedSkillAliases(t *testing
 	} else if !matched {
 		t.Fatal("matched = false for renamed->current alias")
 	}
+
+	msgCodeReview := map[string]any{
+		"type":  "skill_request",
+		"skill": "code_review",
+		"config": map[string]any{
+			"repo":       "git@github.com:acme/repo.git",
+			"baseBranch": "review-branch",
+		},
+	}
+
+	dispatch, matched, err := ParseSkillDispatch(msgCodeReview, "skill_request", "code_for_me")
+	if err != nil {
+		t.Fatalf("ParseSkillDispatch() code_review alias error = %v", err)
+	}
+	if !matched {
+		t.Fatal("matched = false for code_review alias")
+	}
+	if got, want := dispatch.Config.LibraryTaskName, codeReviewLibraryTaskName; got != want {
+		t.Fatalf("LibraryTaskName = %q, want %q", got, want)
+	}
 }
 
 func TestParseSkillDispatchIgnoresUnknownConfigFields(t *testing.T) {
