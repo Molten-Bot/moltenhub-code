@@ -459,6 +459,15 @@ func runHub(args []string) int {
 					if source != "no_changes_followup" && queueUnexpectedNoChangesFollowUp != nil {
 						queueUnexpectedNoChangesFollowUp(requestID, outcome.Result, runCfg)
 					}
+					if allowFailureFollowUp && queueFailureFollowUp != nil {
+						if ok, _ := shouldEscalateNoChangesFollowUp(source, outcome.Result); ok {
+							escalationResult := outcome.Result
+							if escalationResult.Err == nil {
+								escalationResult.Err = fmt.Errorf("no-changes follow-up completed without file changes or a pull request")
+							}
+							queueFailureFollowUp(requestID, escalationResult, runCfg)
+						}
+					}
 				}
 				return
 			}
@@ -953,6 +962,13 @@ func shouldQueueUnexpectedNoChangesFollowUp(result harness.Result) (bool, string
 		return false, "task already has a pull request"
 	}
 	return true, ""
+}
+
+func shouldEscalateNoChangesFollowUp(source string, result harness.Result) (bool, string) {
+	if strings.TrimSpace(source) != "no_changes_followup" {
+		return false, "run is not a no-changes follow-up"
+	}
+	return shouldQueueUnexpectedNoChangesFollowUp(result)
 }
 
 func failureFollowUpRepos(failedResult harness.Result, failedRunCfg config.Config) []string {

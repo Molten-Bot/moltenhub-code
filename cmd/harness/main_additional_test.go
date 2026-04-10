@@ -553,6 +553,34 @@ func TestShouldQueueUnexpectedNoChangesFollowUpRequiresMissingPR(t *testing.T) {
 	}
 }
 
+func TestShouldEscalateNoChangesFollowUpRequiresFollowUpSourceAndMissingPR(t *testing.T) {
+	t.Parallel()
+
+	ok, reason := shouldEscalateNoChangesFollowUp("local_submit", harness.Result{NoChanges: true})
+	if ok {
+		t.Fatal("shouldEscalateNoChangesFollowUp(local_submit) = true, want false")
+	}
+	if reason != "run is not a no-changes follow-up" {
+		t.Fatalf("reason = %q, want %q", reason, "run is not a no-changes follow-up")
+	}
+
+	ok, reason = shouldEscalateNoChangesFollowUp("no_changes_followup", harness.Result{NoChanges: true})
+	if !ok || reason != "" {
+		t.Fatalf("shouldEscalateNoChangesFollowUp(no_changes_followup,no PR) = (%v, %q), want (true, \"\")", ok, reason)
+	}
+
+	ok, reason = shouldEscalateNoChangesFollowUp("no_changes_followup", harness.Result{
+		NoChanges: true,
+		PRURL:     "https://github.com/acme/repo/pull/1",
+	})
+	if ok {
+		t.Fatal("shouldEscalateNoChangesFollowUp(existing PR) = true, want false")
+	}
+	if reason != "task already has a pull request" {
+		t.Fatalf("reason = %q, want %q", reason, "task already has a pull request")
+	}
+}
+
 func TestUnexpectedNoChangesFollowUpRunConfigPreservesTaskTargetingAndAddsContext(t *testing.T) {
 	t.Parallel()
 
