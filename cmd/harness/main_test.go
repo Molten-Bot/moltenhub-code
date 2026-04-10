@@ -760,7 +760,7 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 
 	var bindCalled bool
 	var syncedHandle string
-	var syncedProfile bool
+	var syncedMetadata bool
 	var liveCfg hub.InitConfig
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -788,11 +788,8 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 			if strings.Contains(body, `"handle":"new-builder"`) {
 				syncedHandle = "new-builder"
 			}
-			if strings.Contains(body, `"profile"`) {
-				syncedProfile = true
-			}
-			if r.URL.Path == "/v1/agents/me" && strings.Contains(body, `"metadata"`) {
-				t.Fatalf("profile sync should not send metadata payload: %s", body)
+			if strings.Contains(body, `"metadata"`) {
+				syncedMetadata = true
 			}
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		default:
@@ -829,8 +826,8 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 	if !bindCalled {
 		t.Fatal("expected bind token flow to be used for new agent setup")
 	}
-	if syncedHandle == "" || !syncedProfile {
-		t.Fatalf("expected profile sync requests, got handle=%q profile=%v", syncedHandle, syncedProfile)
+	if syncedHandle == "" || !syncedMetadata {
+		t.Fatalf("expected profile sync requests, got handle=%q metadata=%v", syncedHandle, syncedMetadata)
 	}
 	if got, want := state.AgentMode, "new"; got != want {
 		t.Fatalf("AgentMode = %q, want %q", got, want)
@@ -1121,6 +1118,9 @@ func TestConfigureHubSetupExistingAgentProfileEditUsesSavedCredentials(t *testin
 			(r.URL.Path == "/v1/agents/me/metadata" || r.URL.Path == "/v1/agents/me"):
 			bodyBytes, _ := io.ReadAll(r.Body)
 			body := string(bodyBytes)
+			if !strings.Contains(body, `"metadata"`) {
+				t.Fatalf("profile sync missing metadata wrapper: %s", body)
+			}
 			if !strings.Contains(body, `"display_name":"Molten Bot"`) {
 				t.Fatalf("profile sync missing display_name: %s", body)
 			}

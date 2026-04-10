@@ -180,36 +180,43 @@ func (c APIClient) SyncProfile(ctx context.Context, token string, cfg InitConfig
 	}
 
 	cfg.ApplyDefaults()
-	profileBody := map[string]any{
-		"profile": buildAgentProfilePayload(cfg),
+	metadata, err := c.AgentMetadata(ctx, token)
+	if err != nil {
+		return fmt.Errorf("load agent metadata: %w", err)
 	}
-	updateProfile := func(body map[string]any) (bool, string) {
+
+	metadata = cloneMetadataMap(metadata)
+	mergeProfileMetadata(metadata, cfg)
+
+	handle := strings.TrimSpace(cfg.Handle)
+	updateProfile := func(includeHandle bool) (bool, string) {
+		body := map[string]any{
+			"metadata": metadata,
+		}
+		if includeHandle && handle != "" {
+			body["handle"] = handle
+		}
 		return c.tryAny(ctx, token, []apiAttempt{
+			{Method: http.MethodPatch, Path: "/agents/me/metadata", Body: body},
 			{Method: http.MethodPatch, Path: "/agents/me", Body: body},
-			{Method: http.MethodPost, Path: "/agents/me", Body: body},
 		})
 	}
 
-	handle := strings.TrimSpace(cfg.Handle)
 	if handle == "" {
-		ok, trace := updateProfile(profileBody)
+		ok, trace := updateProfile(false)
 		if !ok {
 			return fmt.Errorf("set profile failed: %s", trace)
 		}
-		return c.syncProfileMetadata(ctx, token, cfg)
+		return nil
 	}
 
-	bodyWithHandle := map[string]any{
-		"handle":  handle,
-		"profile": profileBody["profile"],
-	}
-	ok, trace := updateProfile(bodyWithHandle)
+	ok, trace := updateProfile(true)
 	if ok {
-		return c.syncProfileMetadata(ctx, token, cfg)
+		return nil
 	}
-	ok, retryTrace := updateProfile(profileBody)
+	ok, retryTrace := updateProfile(false)
 	if ok {
-		return c.syncProfileMetadata(ctx, token, cfg)
+		return nil
 	}
 	return fmt.Errorf("set profile failed: %s; retry_without_handle: %s", trace, retryTrace)
 }
@@ -226,8 +233,6 @@ func (c APIClient) syncProfileMetadata(ctx context.Context, token string, cfg In
 	ok, trace := c.tryAny(ctx, token, []apiAttempt{
 		{Method: http.MethodPatch, Path: "/agents/me/metadata", Body: map[string]any{"metadata": metadata}},
 		{Method: http.MethodPatch, Path: "/agents/me", Body: map[string]any{"metadata": metadata}},
-		{Method: http.MethodPost, Path: "/agents/me/metadata", Body: map[string]any{"metadata": metadata}},
-		{Method: http.MethodPost, Path: "/agents/me", Body: map[string]any{"metadata": metadata}},
 	})
 	if !ok {
 		return fmt.Errorf("sync profile metadata failed: %s", trace)
@@ -385,8 +390,6 @@ func (c APIClient) RegisterRuntime(ctx context.Context, token string, cfg InitCo
 	ok, trace := c.tryAny(ctx, token, []apiAttempt{
 		{Method: http.MethodPatch, Path: "/agents/me/metadata", Body: map[string]any{"metadata": metadata}},
 		{Method: http.MethodPatch, Path: "/agents/me", Body: map[string]any{"metadata": metadata}},
-		{Method: http.MethodPost, Path: "/agents/me/metadata", Body: map[string]any{"metadata": metadata}},
-		{Method: http.MethodPost, Path: "/agents/me", Body: map[string]any{"metadata": metadata}},
 	})
 	if !ok {
 		return fmt.Errorf("register runtime failed: %s", trace)
@@ -1033,17 +1036,6 @@ func profileConfigEmpty(profile ProfileConfig) bool {
 		strings.TrimSpace(profile.LLM) == "" &&
 		strings.TrimSpace(profile.Harness) == "" &&
 		len(profile.Skills) == 0
-}
-
-func buildAgentProfilePayload(cfg InitConfig) map[string]any {
-	return map[string]any{
-		"profile":      strings.TrimSpace(cfg.Profile.ProfileText),
-		"display_name": strings.TrimSpace(cfg.Profile.DisplayName),
-		"emoji":        strings.TrimSpace(cfg.Profile.Emoji),
-		"llm":          strings.TrimSpace(cfg.Profile.LLM),
-		"harness":      runtimeIdentifier,
-		"skills":       append([]string(nil), cfg.Profile.Skills...),
-	}
 }
 
 func parseProfileSkills(raw any) []string {

@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func TestSyncProfileUsesAgentProfilePayload(t *testing.T) {
+func TestSyncProfileUsesAgentMetadataPayload(t *testing.T) {
 	t.Parallel()
 
 	type captured struct {
@@ -59,74 +59,72 @@ func TestSyncProfileUsesAgentProfilePayload(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if len(calls) != 3 {
-		t.Fatalf("calls = %d, want 3", len(calls))
+	if len(calls) != 2 {
+		t.Fatalf("calls = %d, want 2", len(calls))
 	}
-	if calls[0].Method != http.MethodPatch {
-		t.Fatalf("method = %q, want PATCH", calls[0].Method)
+	if calls[0].Method != http.MethodGet {
+		t.Fatalf("first method = %q, want GET", calls[0].Method)
 	}
 	if calls[0].Path != "/v1/agents/me" {
-		t.Fatalf("path = %q, want /v1/agents/me", calls[0].Path)
+		t.Fatalf("first path = %q, want /v1/agents/me", calls[0].Path)
 	}
-	if got := calls[0].Body["handle"]; got != "moltenhub-code" {
+	if calls[1].Method != http.MethodPatch {
+		t.Fatalf("second method = %q, want PATCH", calls[1].Method)
+	}
+	if calls[1].Path != "/v1/agents/me/metadata" {
+		t.Fatalf("second path = %q, want /v1/agents/me/metadata", calls[1].Path)
+	}
+	if got := calls[1].Body["handle"]; got != "moltenhub-code" {
 		t.Fatalf("handle = %#v", got)
 	}
 
-	profileRaw, ok := calls[0].Body["profile"]
+	metadataRaw, ok := calls[1].Body["metadata"]
 	if !ok {
-		t.Fatalf("profile missing from payload: %#v", calls[0].Body)
-	}
-	profile, ok := profileRaw.(map[string]any)
-	if !ok {
-		t.Fatalf("profile has wrong type: %#v", profileRaw)
-	}
-	if got := profile["display_name"]; got != "MoltenHub Code" {
-		t.Fatalf("profile.display_name = %#v", got)
-	}
-	if got := profile["emoji"]; got != "🎮" {
-		t.Fatalf("profile.emoji = %#v", got)
-	}
-	if got := profile["profile"]; got != "Automation worker" {
-		t.Fatalf("profile.profile = %#v", got)
-	}
-	if got := profile["llm"]; got != "codex" {
-		t.Fatalf("profile.llm = %#v", got)
-	}
-	if got := profile["harness"]; got != runtimeIdentifier {
-		t.Fatalf("profile.harness = %#v", got)
-	}
-	skills, ok := profile["skills"].([]any)
-	if !ok || len(skills) != 3 {
-		t.Fatalf("profile.skills = %#v", profile["skills"])
-	}
-	if got := strings.TrimSpace(skills[0].(string)); got != "code_for_me" {
-		t.Fatalf("profile.skills[0] = %q, want code_for_me", got)
-	}
-	if got := strings.TrimSpace(skills[1].(string)); got != "code_review" {
-		t.Fatalf("profile.skills[1] = %q, want code_review", got)
-	}
-	if got := strings.TrimSpace(skills[2].(string)); got != "library_task" {
-		t.Fatalf("profile.skills[2] = %q, want library_task", got)
-	}
-	if _, ok := calls[0].Body["metadata"]; ok {
-		t.Fatalf("metadata should not be sent in profile sync payload: %#v", calls[0].Body["metadata"])
-	}
-	if calls[1].Method != http.MethodGet || calls[1].Path != "/v1/agents/me" {
-		t.Fatalf("second call = %s %s, want GET /v1/agents/me", calls[1].Method, calls[1].Path)
-	}
-	if calls[2].Method != http.MethodPatch || calls[2].Path != "/v1/agents/me/metadata" {
-		t.Fatalf("third call = %s %s, want PATCH /v1/agents/me/metadata", calls[2].Method, calls[2].Path)
-	}
-	metadataRaw, ok := calls[2].Body["metadata"]
-	if !ok {
-		t.Fatalf("metadata missing from metadata sync payload: %#v", calls[2].Body)
+		t.Fatalf("metadata missing from payload: %#v", calls[1].Body)
 	}
 	metadata, ok := metadataRaw.(map[string]any)
 	if !ok {
 		t.Fatalf("metadata has wrong type: %#v", metadataRaw)
 	}
+	if got := metadata["display_name"]; got != "MoltenHub Code" {
+		t.Fatalf("metadata.display_name = %#v", got)
+	}
+	if got := metadata["emoji"]; got != "🎮" {
+		t.Fatalf("metadata.emoji = %#v", got)
+	}
 	if got := metadata["profile"]; got != "Automation worker" {
 		t.Fatalf("metadata.profile = %#v", got)
+	}
+	if got := metadata["agent_harness"]; got != "codex" {
+		t.Fatalf("metadata.agent_harness = %#v", got)
+	}
+	if got := metadata["harness"]; got != runtimeIdentifier+"@v1" {
+		t.Fatalf("metadata.harness = %#v", got)
+	}
+	skills, ok := metadata["skills"].([]any)
+	if !ok || len(skills) != 3 {
+		t.Fatalf("metadata.skills = %#v", metadata["skills"])
+	}
+	firstSkill, ok := skills[0].(map[string]any)
+	if !ok {
+		t.Fatalf("metadata.skills[0] = %#v, want map[string]any", skills[0])
+	}
+	if got := strings.TrimSpace(firstSkill["name"].(string)); got != "code_for_me" {
+		t.Fatalf("metadata.skills[0].name = %q, want code_for_me", got)
+	}
+	secondSkill, ok := skills[1].(map[string]any)
+	if !ok {
+		t.Fatalf("metadata.skills[1] = %#v, want map[string]any", skills[1])
+	}
+	if got := strings.TrimSpace(secondSkill["name"].(string)); got != "code_review" {
+		t.Fatalf("metadata.skills[1].name = %q, want code_review", got)
+	}
+	thirdSkill, ok := skills[2].(map[string]any)
+	if !ok {
+		t.Fatalf("metadata.skills[2] = %#v, want map[string]any", skills[2])
+	}
+	if got := strings.TrimSpace(thirdSkill["name"].(string)); got != "library_task" {
+		t.Fatalf("metadata.skills[2].name = %q, want library_task", got)
 	}
 }
 
@@ -141,16 +139,17 @@ func TestSyncProfileClearsMetadataEmojiWhenProfileEmojiEmpty(t *testing.T) {
 		_ = json.Unmarshal(data, &body)
 
 		switch {
-		case (r.Method == http.MethodPatch || r.Method == http.MethodPost) && r.URL.Path == "/v1/agents/me":
+		case r.Method == http.MethodPatch && (r.URL.Path == "/v1/agents/me" || r.URL.Path == "/v1/agents/me/metadata"):
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
 			_, _ = w.Write([]byte(`{"ok":true,"result":{"agent":{"metadata":{"existing":"keep","emoji":"🔥","display_name":"Old","profile":"Old bio","profile_markdown":"# Old"}}}}`))
-		case (r.Method == http.MethodPatch || r.Method == http.MethodPost) && r.URL.Path == "/v1/agents/me/metadata":
-			metadataPatch = body
-			_, _ = w.Write([]byte(`{"ok":true}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"ok":false}`))
+		}
+
+		if r.Method == http.MethodPatch && r.URL.Path == "/v1/agents/me/metadata" {
+			metadataPatch = body
 		}
 	}))
 	defer ts.Close()
@@ -190,9 +189,14 @@ func TestSyncProfileClearsMetadataEmojiWhenProfileEmojiEmpty(t *testing.T) {
 func TestSyncProfileRetriesWithoutHandleWhenHandleUpdateFails(t *testing.T) {
 	t.Parallel()
 
+	type captured struct {
+		Method string
+		Path   string
+		Body   map[string]any
+	}
 	var (
 		mu    sync.Mutex
-		calls []map[string]any
+		calls []captured
 	)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
@@ -200,7 +204,7 @@ func TestSyncProfileRetriesWithoutHandleWhenHandleUpdateFails(t *testing.T) {
 		body := map[string]any{}
 		_ = json.Unmarshal(data, &body)
 		mu.Lock()
-		calls = append(calls, body)
+		calls = append(calls, captured{Method: r.Method, Path: r.URL.Path, Body: body})
 		mu.Unlock()
 
 		if _, hasHandle := body["handle"]; hasHandle {
@@ -230,16 +234,16 @@ func TestSyncProfileRetriesWithoutHandleWhenHandleUpdateFails(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	if len(calls) != 5 {
-		t.Fatalf("calls = %d, want 5", len(calls))
+	if len(calls) != 3 {
+		t.Fatalf("calls = %d, want 3", len(calls))
 	}
-	if _, hasHandle := calls[0]["handle"]; !hasHandle {
-		t.Fatalf("first request should include handle: %#v", calls[0])
+	if calls[0].Method != http.MethodGet || calls[0].Path != "/v1/agents/me" {
+		t.Fatalf("first call = %s %s, want GET /v1/agents/me", calls[0].Method, calls[0].Path)
 	}
-	if _, hasHandle := calls[1]["handle"]; !hasHandle {
-		t.Fatalf("second request should include handle: %#v", calls[1])
+	if _, hasHandle := calls[1].Body["handle"]; !hasHandle {
+		t.Fatalf("second request should include handle: %#v", calls[1].Body)
 	}
-	if _, hasHandle := calls[2]["handle"]; hasHandle {
-		t.Fatalf("retry request should omit handle: %#v", calls[2])
+	if _, hasHandle := calls[2].Body["handle"]; hasHandle {
+		t.Fatalf("retry request should omit handle: %#v", calls[2].Body)
 	}
 }
