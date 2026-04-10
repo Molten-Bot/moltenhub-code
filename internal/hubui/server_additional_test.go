@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -524,6 +525,30 @@ func TestAgentAuthEndpointsDefaultAndMethodHandling(t *testing.T) {
 	}
 }
 
+func TestEmbeddedPromptActionStylesCoverPasteWidthAndStatusFade(t *testing.T) {
+	t.Parallel()
+
+	data, err := fs.ReadFile(staticFiles, "static/style.css")
+	if err != nil {
+		t.Fatalf("read embedded style.css: %v", err)
+	}
+	css := string(data)
+
+	for _, want := range []string{
+		"flex: 0 1 var(--prompt-paste-width, 25%);",
+		"width: min(100%, var(--prompt-paste-width, 25%));",
+		"max-width: 50%;",
+		"flex: 1 1 0;",
+		"transition: opacity 220ms ease;",
+		".submit-status-inline.is-visible {",
+		".submit-status-inline.is-fading {",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("embedded style.css missing %q", want)
+		}
+	}
+}
+
 func TestAgentAuthEndpointsWithCallbacks(t *testing.T) {
 	t.Parallel()
 
@@ -823,8 +848,8 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".prompt-form {\n  display: grid;\n  gap: 10px;\n  padding: 14px;\n  min-width: 0;\n  min-height: 0;\n  overflow-y: auto;\n}") {
 		t.Fatalf("expected studio form content to use the full panel now that the mode dock lives outside it")
 	}
-	if !strings.Contains(css, ".prompt-compose-stack {\n  display: grid;\n  gap: 4px;\n  min-width: 0;\n}") {
-		t.Fatalf("expected prompt panels and actions to share a tighter compose stack gap")
+	if !strings.Contains(css, ".prompt-compose-stack {\n  display: grid;\n  gap: 8px;\n  min-width: 0;\n}") {
+		t.Fatalf("expected prompt panels and actions to keep a slight visual break below the prompt editor")
 	}
 	if !strings.Contains(css, ".prompt-field-repository {\n  flex: 1 1 320px;\n  min-width: 280px;\n}") {
 		t.Fatalf("expected repository input to retain enough width beside the history selector")
@@ -835,8 +860,8 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".prompt-actions {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  min-width: 0;\n}") {
 		t.Fatalf("expected prompt actions to keep the status between screenshots and the right-aligned buttons")
 	}
-	if !strings.Contains(css, ".prompt-actions-start {\n  display: flex;\n  flex: 1 1 30%;\n  min-width: 0;\n}") {
-		t.Fatalf("expected prompt actions to reserve the left side for screenshots")
+	if !strings.Contains(css, ".prompt-actions-start {\n  display: flex;\n  flex: 0 1 var(--prompt-paste-width, 25%);\n  width: min(100%, var(--prompt-paste-width, 25%));\n  max-width: 50%;\n  min-width: 0;\n}") {
+		t.Fatalf("expected prompt actions to keep the screenshot lane between 25%% and 50%% of the row")
 	}
 	if !strings.Contains(css, ".prompt-actions-end {\n  display: flex;\n  align-items: center;\n  justify-content: flex-end;\n  gap: 10px;\n  margin-left: auto;\n  flex: 0 0 auto;\n}") {
 		t.Fatalf("expected prompt actions to right-align Clear and Run")
@@ -847,8 +872,8 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".prompt-action-button {\n  width: auto;\n  display: inline-flex;") {
 		t.Fatalf("expected action buttons to avoid full-width auto-column overflow")
 	}
-	if !strings.Contains(css, ".submit-status-inline {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  flex: 0 1 280px;\n  min-width: 140px;\n  text-align: center;\n}") {
-		t.Fatalf("expected inline status to sit between the screenshot area and the action buttons")
+	if !strings.Contains(css, ".submit-status-inline {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  flex: 1 1 0;\n  min-width: 0;\n  text-align: center;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  opacity: 0;\n  transition: opacity 220ms ease;\n}") {
+		t.Fatalf("expected inline status to stay centered in the whitespace between screenshots and the action buttons")
 	}
 	if !strings.Contains(css, ".prompt-action-paste[data-empty=\"false\"] {\n  color: var(--text);\n}") {
 		t.Fatalf("expected attached screenshot summaries to switch the paste target to active text styling")
