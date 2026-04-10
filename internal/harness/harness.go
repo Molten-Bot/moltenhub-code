@@ -350,6 +350,20 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		}
 	}
 
+	changedCount = 0
+	for _, repo := range repos {
+		if repo.Changed {
+			changedCount++
+		}
+	}
+	if changedCount == 0 {
+		h.populateNoChangePRURLs(ctx, repos)
+		h.logf("stage=git status=no_changes")
+		res := buildResult(runDir, repos, true)
+		res.ExitCode = ExitSuccess
+		return res
+	}
+
 	res := buildResult(runDir, repos, false)
 	res.ExitCode = ExitSuccess
 	return res
@@ -376,8 +390,17 @@ func (h Harness) processChangedRepo(
 	if _, err := h.runCommand(ctx, "git", addCommand(repo.Dir)); err != nil {
 		return ExitGit, "git", err
 	}
-	if _, err := h.runCommand(ctx, "git", commitCommand(repo.Dir, cfg.CommitMessage)); err != nil {
-		return ExitGit, "git", err
+	commitRes, commitErr := h.runCommand(ctx, "git", commitCommand(repo.Dir, cfg.CommitMessage))
+	if commitErr != nil {
+		noChanges, statusErr := h.refreshRepoChangeStateAfterNoOpCommit(ctx, repo, commitRes, commitErr)
+		if statusErr != nil {
+			return ExitGit, "git", statusErr
+		}
+		if noChanges {
+			h.logf("stage=git status=ok action=commit repo=%s repo_dir=%s reason=no_changes_after_add", repo.URL, repo.RelDir)
+			return ExitSuccess, "git", nil
+		}
+		return ExitGit, "git", commitErr
 	}
 	if err := h.pushWithSync(ctx, *repo, 0); err != nil {
 		return ExitGit, "git", err
@@ -591,8 +614,22 @@ func (h Harness) processChangedRepo(
 		if _, err := h.runCommand(ctx, "git", addCommand(repo.Dir)); err != nil {
 			return ExitGit, "git", err
 		}
-		if _, err := h.runCommand(ctx, "git", commitCommand(repo.Dir, remediationCommitMessage(cfg.CommitMessage, attempt+1))); err != nil {
-			return ExitGit, "git", err
+		commitRes, commitErr := h.runCommand(ctx, "git", commitCommand(repo.Dir, remediationCommitMessage(cfg.CommitMessage, attempt+1)))
+		if commitErr != nil {
+			noChanges, statusErr := h.refreshRepoChangeStateAfterNoOpCommit(ctx, repo, commitRes, commitErr)
+			if statusErr != nil {
+				return ExitGit, "git", statusErr
+			}
+			if noChanges {
+				h.logf(
+					"stage=git status=ok action=repair_commit attempt=%d repo=%s repo_dir=%s reason=no_changes_after_add",
+					attempt+1,
+					repo.URL,
+					repo.RelDir,
+				)
+				continue
+			}
+			return ExitGit, "git", commitErr
 		}
 		if err := h.pushWithSync(ctx, *repo, attempt+1); err != nil {
 			return ExitGit, "git", err
@@ -800,6 +837,34 @@ func commandErrorWithDetails(prefix string, err error, res execx.Result, maxChar
 		return fmt.Errorf("%s: %w", prefix, err)
 	}
 	return fmt.Errorf("%s: %w: %s", prefix, err, detail)
+}
+
+func (h Harness) refreshRepoChangeStateAfterNoOpCommit(ctx context.Context, repo *repoWorkspace, commitRes execx.Result, commitErr error) (bool, error) {
+	if repo == nil || !isNothingToCommitResult(commitRes, commitErr) {
+		return false, nil
+	}
+
+	statusRes, err := h.runCommand(ctx, "git", statusCommand(repo.Dir))
+	if err != nil {
+		return false, err
+	}
+	repo.Branch = pickFirstNonEmpty(localBranchFromStatus(statusRes.Stdout), repo.Branch)
+	repo.Changed = hasTrackedWorktreeChanges(statusRes.Stdout)
+	return !repo.Changed, nil
+}
+
+func isNothingToCommitResult(res execx.Result, err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(strings.TrimSpace(strings.Join([]string{
+		err.Error(),
+		res.Stdout,
+		res.Stderr,
+	}, "\n")))
+	return strings.Contains(text, "nothing to commit") ||
+		strings.Contains(text, "working tree clean") ||
+		strings.Contains(text, "nothing added to commit")
 }
 
 func buildResult(runDir string, repos []repoWorkspace, noChanges bool) Result {

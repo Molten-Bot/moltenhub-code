@@ -964,6 +964,9 @@ func shouldQueueUnexpectedNoChangesFollowUp(result harness.Result) (bool, string
 }
 
 func failureFollowUpRepos(failedResult harness.Result, failedRunCfg config.Config) []string {
+	if repo := strings.TrimSpace(config.DefaultRepositoryURL); repo != "" {
+		return []string{repo}
+	}
 	if repo := singleRepoFromResults(failedResult.RepoResults); repo != "" {
 		return []string{repo}
 	}

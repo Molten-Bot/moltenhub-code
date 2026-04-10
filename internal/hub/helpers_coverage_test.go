@@ -39,7 +39,7 @@ func TestFailureFollowUpHelperBranches(t *testing.T) {
 	runCfg := config.Config{RepoURL: "git@github.com:acme/repo.git", TargetSubdir: "internal/hub"}
 	runCfg.ApplyDefaults()
 
-	if got := failureFollowUpRepos(res, config.Config{}); len(got) != 1 || got[0] != "git@github.com:acme/repo.git" {
+	if got := failureFollowUpRepos(res, config.Config{}); len(got) != 1 || got[0] != config.DefaultRepositoryURL {
 		t.Fatalf("failureFollowUpRepos() = %#v", got)
 	}
 	if got := singleRepoFromResults([]harness.RepoResult{{RepoURL: "a"}, {RepoURL: "b"}}); got != "" {

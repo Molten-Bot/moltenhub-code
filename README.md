@@ -52,13 +52,13 @@ Branch/PR rules:
 
 When a task fails, the runtime:
 - Returns a failure response to the calling agent that clearly marks failure and includes error details.
-- Queues a focused follow-up remediation task for the same repository (when the failure is remediable).
+- Queues a focused follow-up remediation task in the MoltenHub code repository (when the failure is remediable).
 - Passes relevant failing log path context into that follow-up prompt.
 
 Failure follow-up run config shape:
 
 ```json
-{"repos":["<same_repo_as_failed_task>"],"baseBranch":"main","targetSubdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."}
+{"repos":["git@github.com:Molten-Bot/moltenhub-code.git"],"baseBranch":"main","targetSubdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."}
 ```
 
 Follow-up contract includes:
