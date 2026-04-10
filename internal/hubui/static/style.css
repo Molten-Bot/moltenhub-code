@@ -110,8 +110,11 @@
   --surface-auth-button-bg: rgba(255, 255, 255, 0.05);
   --surface-auth-button-hover-bg: rgba(255, 255, 255, 0.1);
   --surface-auth-link: #8dc6ff;
-  --surface-auth-verify-bg: #173d2b;
-  --surface-auth-verify-hover-bg: #1f533a;
+  --surface-auth-verify-bg: linear-gradient(180deg, #0a84ff, #0057d8);
+  --surface-auth-verify-hover-bg: linear-gradient(180deg, #2191ff, #0a6ae6);
+  --surface-auth-verify-border: rgba(10, 132, 255, 0.24);
+  --surface-auth-verify-shadow: 0 12px 24px rgba(10, 132, 255, 0.22);
+  --surface-auth-verify-hover-shadow: 0 16px 28px rgba(10, 132, 255, 0.28);
   --surface-auth-verify-text: #ffffff;
   --radius: 6px;
   --glass-bg: rgba(255, 255, 255, 0.45);
@@ -179,6 +182,7 @@ body {
     var(--body-radial-right),
     var(--body-linear);
   font-family: "Instrument Sans", "Segoe UI", sans-serif;
+  transition: color 0.18s ease, background 0.24s ease;
 }
 
 body::before,
@@ -329,6 +333,13 @@ textarea {
   box-shadow: var(--shadow-sm);
   backdrop-filter: blur(18px) saturate(130%);
   -webkit-backdrop-filter: blur(18px) saturate(130%);
+  transition:
+    background-color 0.18s ease,
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    opacity 0.18s ease;
 }
 
 .status-item {
@@ -2227,6 +2238,7 @@ select.prompt-control {
 
 .agent-auth-gate {
   background: var(--surface-auth-backdrop);
+  transition: background-color 0.18s ease, background 0.18s ease;
 }
 
 .agent-auth-shell {
@@ -2237,10 +2249,25 @@ select.prompt-control {
   box-shadow: var(--surface-auth-panel-shadow);
 }
 
+.agent-auth-shell {
+  transition:
+    background-color 0.18s ease,
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
 .agent-auth-copy {
   border: 1px solid var(--surface-auth-button-border);
   background: var(--surface-auth-button-bg);
   color: var(--text);
+  transition:
+    background-color 0.18s ease,
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .agent-auth-copy:hover,
@@ -2283,9 +2310,23 @@ select.prompt-control {
   color: var(--surface-auth-verify-text);
 }
 
+.agent-auth-verify {
+  box-shadow: var(--surface-auth-verify-shadow);
+  transition:
+    background-color 0.18s ease,
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
 .agent-auth-verify:hover,
 .agent-auth-verify:focus-visible {
   background: var(--surface-auth-verify-hover-bg);
+  border-color: color-mix(in srgb, var(--running) 60%, transparent);
+  box-shadow: var(--surface-auth-verify-hover-shadow);
+  transform: translateY(-1px);
 }
 
 .hub-setup-shell {
@@ -2429,7 +2470,13 @@ select.prompt-control {
   font-weight: var(--font-weight-medium);
   padding: 8px 12px;
   cursor: pointer;
-  transition: .2s ease;
+  transition:
+    background-color 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
 
 @media (max-width: 820px) {
@@ -2560,8 +2607,11 @@ html.dark {
   --surface-auth-button-bg: rgba(232, 240, 255, 0.06);
   --surface-auth-button-hover-bg: rgba(232, 240, 255, 0.1);
   --surface-auth-link: #9bd1ff;
-  --surface-auth-verify-bg: #174b35;
-  --surface-auth-verify-hover-bg: #1e5e43;
+  --surface-auth-verify-bg: linear-gradient(180deg, #0a84ff, #0057d8);
+  --surface-auth-verify-hover-bg: linear-gradient(180deg, #2191ff, #0a6ae6);
+  --surface-auth-verify-border: rgba(61, 155, 255, 0.28);
+  --surface-auth-verify-shadow: 0 14px 28px rgba(10, 132, 255, 0.24);
+  --surface-auth-verify-hover-shadow: 0 18px 34px rgba(10, 132, 255, 0.3);
   --muted-foreground: rgba(152, 152, 157, 1);
   --glass-bg: rgba(50, 50, 52, 0.55);
   --glass-border: rgba(255, 255, 255, 0.08);
@@ -2686,8 +2736,11 @@ html.night {
   --surface-auth-button-bg: rgba(237, 243, 255, 0.05);
   --surface-auth-button-hover-bg: rgba(237, 243, 255, 0.1);
   --surface-auth-link: #a8d2ff;
-  --surface-auth-verify-bg: #164432;
-  --surface-auth-verify-hover-bg: #1d5942;
+  --surface-auth-verify-bg: linear-gradient(180deg, #0a84ff, #0057d8);
+  --surface-auth-verify-hover-bg: linear-gradient(180deg, #2191ff, #0a6ae6);
+  --surface-auth-verify-border: rgba(61, 155, 255, 0.28);
+  --surface-auth-verify-shadow: 0 14px 28px rgba(10, 132, 255, 0.24);
+  --surface-auth-verify-hover-shadow: 0 18px 34px rgba(10, 132, 255, 0.3);
   --muted-foreground: rgba(118, 118, 128, 1);
   --elevation-sm: 0px 1px 3px 0px rgba(0, 0, 0, 0.7);
   --glass-bg: rgba(22, 22, 26, 0.6);
