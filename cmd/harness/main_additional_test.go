@@ -597,6 +597,27 @@ func TestUnexpectedNoChangesFollowUpRunConfigPreservesTaskTargetingAndAddsContex
 	}
 }
 
+func TestUnexpectedNoChangesFollowUpRunConfigReusesObservedNonMainBranch(t *testing.T) {
+	t.Parallel()
+
+	cfg := unexpectedNoChangesFollowUpRunConfig(
+		"local-1712345678-000001",
+		harness.Result{
+			NoChanges: true,
+			Branch:    "moltenhub-add-the-emoji-picker-to-the-agent-profil",
+		},
+		config.Config{
+			Repos:      []string{"git@github.com:acme/repo.git"},
+			BaseBranch: "main",
+		},
+		t.TempDir(),
+	)
+
+	if got, want := cfg.BaseBranch, "moltenhub-add-the-emoji-picker-to-the-agent-profil"; got != want {
+		t.Fatalf("BaseBranch = %q, want %q", got, want)
+	}
+}
+
 func TestShouldQueueFailureFollowUpQueuesNoDeltaFailures(t *testing.T) {
 	t.Parallel()
 

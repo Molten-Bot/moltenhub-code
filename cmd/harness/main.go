@@ -905,9 +905,14 @@ func unexpectedNoChangesFollowUpRunConfig(
 ) config.Config {
 	runCfg.ApplyDefaults()
 	logPaths := failurefollowup.TaskLogPaths(logRoot, requestID)
+	baseBranch := strings.TrimSpace(runCfg.BaseBranch)
+	resultBranch := strings.TrimSpace(result.Branch)
+	if baseBranch == "main" && resultBranch != "" && resultBranch != "main" {
+		baseBranch = resultBranch
+	}
 	return config.Config{
 		Repos:        failureFollowUpRepos(result, runCfg),
-		BaseBranch:   runCfg.BaseBranch,
+		BaseBranch:   baseBranch,
 		TargetSubdir: runCfg.TargetSubdir,
 		Prompt:       unexpectedNoChangesFollowUpPrompt(logPaths, requestID, result, runCfg),
 	}
