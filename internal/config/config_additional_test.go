@@ -91,6 +91,15 @@ func TestTrimGeneratedPRTitleSuffixAndEnsureFooter(t *testing.T) {
 	if got := ensurePRBodyFooter("body\n\n" + prBodyFooter); strings.Count(got, "https://molten.bot/hub") != 1 {
 		t.Fatalf("ensurePRBodyFooter(contains footer) duplicated link: %q", got)
 	}
+	if got := ensurePRBodyPromptAndFooter("body", "investigate failing tests"); !strings.Contains(got, "Original task prompt:\n```text\ninvestigate failing tests\n```") {
+		t.Fatalf("ensurePRBodyPromptAndFooter() = %q, want original prompt block", got)
+	}
+	if got := ensurePRBodyPromptAndFooter("body\n\nOriginal task prompt:\n```text\ninvestigate failing tests\n```", "investigate failing tests"); strings.Count(got, "Original task prompt:") != 1 {
+		t.Fatalf("ensurePRBodyPromptAndFooter(existing prompt) duplicated heading: %q", got)
+	}
+	if got := ensurePRBodyPromptAndFooter("body\n\n"+prBodyFooter, "investigate failing tests"); !strings.HasSuffix(got, prBodyFooter) {
+		t.Fatalf("ensurePRBodyPromptAndFooter(existing footer) = %q, want footer at end", got)
+	}
 }
 
 func TestLoadRejectsSnakeCaseAgentHarnessFields(t *testing.T) {

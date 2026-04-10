@@ -260,7 +260,7 @@ func TestApplyDefaultsDerivesProfileRuntimeFields(t *testing.T) {
 		Profile: ProfileConfig{
 			DisplayName: "Molten Agent",
 			Emoji:       "🤖",
-			Bio:         "Owns automation",
+			ProfileText: "Owns automation",
 		},
 	}
 	cfg.ApplyDefaults()

@@ -158,7 +158,7 @@
 
         <section class="panel prompt-wrap min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
           <div class="panel-header prompt-titlebar flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
-            <span class="panel-section-title">Studio</span>
+            <span id="prompt-panel-title" class="panel-section-title">Prompt</span>
             <button id="prompt-visibility-toggle" class="prompt-visibility-toggle" type="button" aria-pressed="true" aria-label="Minimize Studio panel" title="Minimize Studio panel">▾</button>
           </div>
           <form id="local-prompt-form" class="prompt-form grid gap-2.5 p-3">
@@ -410,9 +410,9 @@
               <option value="🚀"></option>
             </datalist>
           </label>
-          <label class="prompt-field hub-setup-profile-bio">
-            <span class="prompt-label">Bio</span>
-            <textarea id="hub-setup-bio" class="prompt-text prompt-control min-h-[96px] w-full rounded-lg border border-hub-border p-2.5 text-[0.84rem] leading-[1.4]" rows="4" spellcheck="false" placeholder="What this runtime is for"></textarea>
+          <label class="prompt-field hub-setup-profile-text">
+            <span class="prompt-label">Profile</span>
+            <textarea id="hub-setup-profile" class="prompt-text prompt-control min-h-[96px] w-full rounded-lg border border-hub-border p-2.5 text-[0.84rem] leading-[1.4]" rows="4" spellcheck="false" placeholder="What this runtime is for"></textarea>
           </label>
         </div>
 
@@ -431,7 +431,7 @@
           <div class="hub-setup-actions">
             <span id="hub-setup-status" class="hub-setup-status submit-status submit-status-inline min-h-[1.3em] text-[0.74rem] leading-[1.3] text-hub-muted"></span>
             <button id="hub-setup-connection-toggle" class="hub-setup-connection-toggle hidden" type="button">Disconnect</button>
-            <button id="hub-setup-submit" class="agent-auth-verify !block" type="submit">Done</button>
+            <button id="hub-setup-submit" class="prompt-action-button prompt-submit" type="submit">Done</button>
           </div>
         </div>
       </form>
@@ -674,7 +674,7 @@
         tokenType: agentMode === "new" ? "bind" : "agent",
         handle: String(hub.handle || "").trim(),
         profile: {
-          bio: String(profile.bio || "").trim(),
+          profileText: String(profile.profile || profile.bio || "").trim(),
           displayName: String(profile.display_name || profile.displayName || "").trim(),
           emoji: String(profile.emoji || "").trim(),
         },
@@ -909,6 +909,7 @@
     const promptModeBuilder = document.getElementById("prompt-mode-builder");
     const promptModeLibrary = document.getElementById("prompt-mode-library");
     const promptModeJSON = document.getElementById("prompt-mode-json");
+    const promptPanelTitle = document.getElementById("prompt-panel-title");
     const githubProfileLink = document.getElementById("github-profile-link");
     const moltenBotHubDockGroup = document.getElementById("moltenbot-hub-dock-group");
     const moltenBotHubLink = document.getElementById("moltenbot-hub-link");
@@ -955,7 +956,7 @@
     const hubSetupHandle = document.getElementById("hub-setup-handle");
     const hubSetupDisplayName = document.getElementById("hub-setup-display-name");
     const hubSetupEmoji = document.getElementById("hub-setup-emoji");
-    const hubSetupBio = document.getElementById("hub-setup-bio");
+    const hubSetupProfile = document.getElementById("hub-setup-profile");
     const hubSetupSigninLink = document.getElementById("hub-setup-signin-link");
     const hubSetupStatus = document.getElementById("hub-setup-status");
     const hubSetupConnectionToggle = document.getElementById("hub-setup-connection-toggle");
@@ -1301,8 +1302,8 @@
       if (hubSetupHandle) hubSetupHandle.disabled = state.hubSetupBusy;
       if (hubSetupDisplayName) hubSetupDisplayName.disabled = state.hubSetupBusy;
       if (hubSetupEmoji) hubSetupEmoji.disabled = state.hubSetupBusy;
-      if (hubSetupBio) hubSetupBio.disabled = state.hubSetupBusy;
       if (hubSetupConnectionToggle) hubSetupConnectionToggle.disabled = state.hubSetupBusy;
+      if (hubSetupProfile) hubSetupProfile.disabled = state.hubSetupBusy;
       if (hubSetupSubmit) hubSetupSubmit.disabled = state.hubSetupBusy;
     }
 
@@ -1367,6 +1368,8 @@
       }
       if (hubSetupHandle) {
         hubSetupHandle.value = state.hubSetup.handle || "";
+        hubSetupHandle.readOnly = profileEditor;
+        hubSetupHandle.setAttribute("aria-readonly", profileEditor ? "true" : "false");
       }
       if (hubSetupDisplayName) {
         hubSetupDisplayName.value = state.hubSetup.profile.displayName || "";
@@ -1374,8 +1377,8 @@
       if (hubSetupEmoji) {
         hubSetupEmoji.value = state.hubSetup.profile.emoji || "";
       }
-      if (hubSetupBio) {
-        hubSetupBio.value = state.hubSetup.profile.bio || "";
+      if (hubSetupProfile) {
+        hubSetupProfile.value = state.hubSetup.profile.profileText || "";
       }
 
       const isNew = state.hubSetup.agentMode === "new";
@@ -1467,7 +1470,7 @@
         token: String(hubSetupToken?.value || "").trim(),
         handle: String(hubSetupHandle?.value || "").trim(),
         profile: {
-          bio: String(hubSetupBio?.value || "").trim(),
+          profile: String(hubSetupProfile?.value || "").trim(),
           display_name: String(hubSetupDisplayName?.value || "").trim(),
           emoji: String(hubSetupEmoji?.value || "").trim(),
         },
@@ -1482,7 +1485,7 @@
         tokenType: payload.token_type,
         handle: payload.handle,
         profile: {
-          bio: payload.profile.bio,
+          profileText: payload.profile.profile,
           displayName: payload.profile.display_name,
           emoji: payload.profile.emoji,
         },
@@ -3238,6 +3241,17 @@
       renderRepoHistorySelect(libraryRepoHistoryField, libraryRepoSelect, libraryRepoInput);
     }
 
+    function promptModeTitle(mode) {
+      switch (mode) {
+        case "library":
+          return "Library";
+        case "json":
+          return "JSON";
+        default:
+          return "Prompt";
+      }
+    }
+
     function setPromptMode(mode) {
       if (mode !== "builder" && mode !== "library" && mode !== "json") {
         mode = "builder";
@@ -3255,6 +3269,9 @@
       promptModeBuilder.setAttribute("aria-selected", String(isBuilder));
       promptModeLibrary.setAttribute("aria-selected", String(isLibrary));
       promptModeJSON.setAttribute("aria-selected", String(isJSON));
+      if (promptPanelTitle) {
+        promptPanelTitle.textContent = promptModeTitle(state.promptMode);
+      }
       promptBuilderPanel.classList.toggle("hidden", !isBuilder);
       promptLibraryPanel.classList.toggle("hidden", !isLibrary);
       promptRawPanel.classList.toggle("hidden", !isJSON);

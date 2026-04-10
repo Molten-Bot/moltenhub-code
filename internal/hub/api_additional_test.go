@@ -32,7 +32,7 @@ func TestExtractAgentProfileFromJSONPrefersNestedAgentAndMetadata(t *testing.T) 
 				"metadata": {
 					"display_name": "Molten Agent",
 					"emoji": "🔥",
-					"bio": "Builds production changes"
+					"profile": "Builds production changes"
 				}
 			}
 		}
@@ -47,8 +47,8 @@ func TestExtractAgentProfileFromJSONPrefersNestedAgentAndMetadata(t *testing.T) 
 	if got, want := profile.Profile.Emoji, "🔥"; got != want {
 		t.Fatalf("Emoji = %q, want %q", got, want)
 	}
-	if got, want := profile.Profile.Bio, "Builds production changes"; got != want {
-		t.Fatalf("Bio = %q, want %q", got, want)
+	if got, want := profile.Profile.ProfileText, "Builds production changes"; got != want {
+		t.Fatalf("ProfileText = %q, want %q", got, want)
 	}
 }
 
@@ -61,7 +61,7 @@ func TestExtractAgentProfileFromJSONUsesExplicitProfileObject(t *testing.T) {
 			"profile": {
 				"display_name": "Builder Two",
 				"emoji": "🤖",
-				"bio": "Owns UI automation",
+				"profile": "Owns UI automation",
 				"llm": "claude",
 				"harness": "moltenhub-code",
 				"skills": ["code_for_me"]
@@ -78,8 +78,8 @@ func TestExtractAgentProfileFromJSONUsesExplicitProfileObject(t *testing.T) {
 	if got, want := profile.Profile.Emoji, "🤖"; got != want {
 		t.Fatalf("Emoji = %q, want %q", got, want)
 	}
-	if got, want := profile.Profile.Bio, "Owns UI automation"; got != want {
-		t.Fatalf("Bio = %q, want %q", got, want)
+	if got, want := profile.Profile.ProfileText, "Owns UI automation"; got != want {
+		t.Fatalf("ProfileText = %q, want %q", got, want)
 	}
 	if got, want := profile.Profile.LLM, "claude"; got != want {
 		t.Fatalf("LLM = %q, want %q", got, want)

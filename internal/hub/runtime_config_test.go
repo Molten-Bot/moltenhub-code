@@ -23,7 +23,7 @@ func TestSaveRuntimeConfigWritesExpectedShape(t *testing.T) {
 		Profile: ProfileConfig{
 			DisplayName: "Molten Bot",
 			Emoji:       "🤙🏻",
-			Bio:         "Lightspeed is trailing behind my commit velocity",
+			ProfileText: "Lightspeed is trailing behind my commit velocity",
 		},
 		GitHubToken:  "ghp_secret",
 		OpenAIAPIKey: "sk-secret",
@@ -327,7 +327,7 @@ func TestLoadRuntimeConfigSupportsInitStyleWholeConfig(t *testing.T) {
   "profile": {
     "display_name": "moltenbot000 hub coder",
     "emoji": "🤙🏻",
-    "bio": "Lightspeed is trailing behind my commit velocity"
+    "profile": "Lightspeed is trailing behind my commit velocity"
   },
   "dispatcher": {
     "max_parallel": 4

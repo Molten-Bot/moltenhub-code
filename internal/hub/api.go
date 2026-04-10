@@ -196,7 +196,7 @@ func (c APIClient) SyncProfile(ctx context.Context, token string, cfg InitConfig
 		if !ok {
 			return fmt.Errorf("set profile failed: %s", trace)
 		}
-		return nil
+		return c.syncProfileMetadata(ctx, token, cfg)
 	}
 
 	bodyWithHandle := map[string]any{
@@ -205,13 +205,36 @@ func (c APIClient) SyncProfile(ctx context.Context, token string, cfg InitConfig
 	}
 	ok, trace := updateProfile(bodyWithHandle)
 	if ok {
-		return nil
+		return c.syncProfileMetadata(ctx, token, cfg)
 	}
 	ok, retryTrace := updateProfile(profileBody)
 	if ok {
-		return nil
+		return c.syncProfileMetadata(ctx, token, cfg)
 	}
 	return fmt.Errorf("set profile failed: %s; retry_without_handle: %s", trace, retryTrace)
+}
+
+func (c APIClient) syncProfileMetadata(ctx context.Context, token string, cfg InitConfig) error {
+	metadata, err := c.AgentMetadata(ctx, token)
+	if err != nil {
+		return fmt.Errorf("load agent metadata: %w", err)
+	}
+
+	metadata = cloneMetadataMap(metadata)
+	for key, value := range buildAgentMetadata(cfg) {
+		metadata[key] = value
+	}
+
+	ok, trace := c.tryAny(ctx, token, []apiAttempt{
+		{Method: http.MethodPatch, Path: "/agents/me/metadata", Body: map[string]any{"metadata": metadata}},
+		{Method: http.MethodPatch, Path: "/agents/me", Body: map[string]any{"metadata": metadata}},
+		{Method: http.MethodPost, Path: "/agents/me/metadata", Body: map[string]any{"metadata": metadata}},
+		{Method: http.MethodPost, Path: "/agents/me", Body: map[string]any{"metadata": metadata}},
+	})
+	if !ok {
+		return fmt.Errorf("sync profile metadata failed: %s", trace)
+	}
+	return nil
 }
 
 // UpdateAgentStatus updates the hub-visible lifecycle status for this agent.
@@ -933,8 +956,8 @@ func mergeAgentProfiles(primary, secondary AgentProfile) AgentProfile {
 	if strings.TrimSpace(merged.Profile.Emoji) == "" {
 		merged.Profile.Emoji = strings.TrimSpace(secondary.Profile.Emoji)
 	}
-	if strings.TrimSpace(merged.Profile.Bio) == "" {
-		merged.Profile.Bio = strings.TrimSpace(secondary.Profile.Bio)
+	if strings.TrimSpace(merged.Profile.ProfileText) == "" {
+		merged.Profile.ProfileText = strings.TrimSpace(secondary.Profile.ProfileText)
 	}
 	if strings.TrimSpace(merged.Profile.LLM) == "" {
 		merged.Profile.LLM = strings.TrimSpace(secondary.Profile.LLM)
@@ -960,7 +983,8 @@ func extractProfileConfig(raw map[string]any) ProfileConfig {
 			stringAt(raw, "emoji"),
 			stringAt(raw, "icon"),
 		),
-		Bio: firstNonEmpty(
+		ProfileText: firstNonEmpty(
+			stringAt(raw, "profile"),
 			stringAt(raw, "bio"),
 			stringAt(raw, "description"),
 			stringAt(raw, "summary"),
@@ -984,7 +1008,7 @@ func agentProfileEmpty(profile AgentProfile) bool {
 func profileConfigEmpty(profile ProfileConfig) bool {
 	return strings.TrimSpace(profile.DisplayName) == "" &&
 		strings.TrimSpace(profile.Emoji) == "" &&
-		strings.TrimSpace(profile.Bio) == "" &&
+		strings.TrimSpace(profile.ProfileText) == "" &&
 		strings.TrimSpace(profile.LLM) == "" &&
 		strings.TrimSpace(profile.Harness) == "" &&
 		len(profile.Skills) == 0
@@ -992,7 +1016,7 @@ func profileConfigEmpty(profile ProfileConfig) bool {
 
 func buildAgentProfilePayload(cfg InitConfig) map[string]any {
 	return map[string]any{
-		"bio":          strings.TrimSpace(cfg.Profile.Bio),
+		"profile":      strings.TrimSpace(cfg.Profile.ProfileText),
 		"display_name": strings.TrimSpace(cfg.Profile.DisplayName),
 		"emoji":        strings.TrimSpace(cfg.Profile.Emoji),
 		"llm":          strings.TrimSpace(cfg.Profile.LLM),
@@ -1071,10 +1095,10 @@ func buildAgentMetadata(cfg InitConfig) map[string]any {
 	if strings.TrimSpace(cfg.Profile.Emoji) != "" {
 		metadata["emoji"] = strings.TrimSpace(cfg.Profile.Emoji)
 	}
-	if strings.TrimSpace(cfg.Profile.Bio) != "" {
-		metadata["bio"] = strings.TrimSpace(cfg.Profile.Bio)
+	if strings.TrimSpace(cfg.Profile.ProfileText) != "" {
+		metadata["profile"] = strings.TrimSpace(cfg.Profile.ProfileText)
 	}
-	if markdown := buildProfileMarkdown(cfg.Profile.DisplayName, cfg.Profile.Emoji, cfg.Profile.Bio); markdown != "" {
+	if markdown := buildProfileMarkdown(cfg.Profile.DisplayName, cfg.Profile.Emoji, cfg.Profile.ProfileText); markdown != "" {
 		metadata["profile_markdown"] = markdown
 	}
 	metadata["public"] = true
@@ -1388,18 +1412,18 @@ func firstString(values ...any) string {
 	return ""
 }
 
-func buildProfileMarkdown(displayName, emoji, bio string) string {
+func buildProfileMarkdown(displayName, emoji, profileText string) string {
 	displayName = strings.TrimSpace(displayName)
 	emoji = strings.TrimSpace(emoji)
-	bio = strings.TrimSpace(bio)
+	profileText = strings.TrimSpace(profileText)
 
 	header := strings.TrimSpace(strings.Join([]string{emoji, displayName}, " "))
 	switch {
-	case header != "" && bio != "":
-		return "# " + header + "\n\n" + bio
+	case header != "" && profileText != "":
+		return "# " + header + "\n\n" + profileText
 	case header != "":
 		return "# " + header
 	default:
-		return bio
+		return profileText
 	}
 }

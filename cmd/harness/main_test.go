@@ -692,7 +692,7 @@ func TestCurrentHubSetupStateUsesStoredBindTokenAsNewAgentMode(t *testing.T) {
   "profile": {
     "display_name": "Builder",
     "emoji": "🔥",
-    "bio": "Ships UI work"
+    "profile": "Ships UI work"
   },
   "timeout_ms": 20000
 }`), 0o600); err != nil {
@@ -738,8 +738,9 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 			if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != "agent-resolved" {
 				t.Fatalf("GET /agents/me token = %q, want %q", got, "agent-resolved")
 			}
-			_, _ = w.Write([]byte(`{"handle":"new-builder","profile":{"display_name":"Molten Builder","emoji":"🔥","bio":"Builds things"}}`))
-		case (r.Method == http.MethodPost || r.Method == http.MethodPatch) && r.URL.Path == "/v1/agents/me":
+			_, _ = w.Write([]byte(`{"handle":"new-builder","profile":{"display_name":"Molten Builder","emoji":"🔥","profile":"Builds things"}}`))
+		case (r.Method == http.MethodPost || r.Method == http.MethodPatch) &&
+			(r.URL.Path == "/v1/agents/me" || r.URL.Path == "/v1/agents/me/metadata"):
 			if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != "agent-resolved" {
 				t.Fatalf("sync token = %q, want %q", got, "agent-resolved")
 			}
@@ -751,7 +752,7 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 			if strings.Contains(body, `"profile"`) {
 				syncedProfile = true
 			}
-			if strings.Contains(body, `"metadata"`) {
+			if r.URL.Path == "/v1/agents/me" && strings.Contains(body, `"metadata"`) {
 				t.Fatalf("profile sync should not send metadata payload: %s", body)
 			}
 			_, _ = w.Write([]byte(`{"ok":true}`))
@@ -771,11 +772,11 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 		Token:     bindToken,
 		Handle:    "new-builder",
 		Profile: struct {
-			Bio         string `json:"bio"`
+			ProfileText string `json:"profile"`
 			DisplayName string `json:"display_name"`
 			Emoji       string `json:"emoji"`
 		}{
-			Bio:         "Builds things",
+			ProfileText: "Builds things",
 			DisplayName: "Molten Builder",
 			Emoji:       "🔥",
 		},
@@ -836,7 +837,7 @@ func TestConfigureHubSetupExistingAgentUsesAgentTokenFlow(t *testing.T) {
 			if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != agentToken {
 				t.Fatalf("GET /agents/me token = %q, want %q", got, agentToken)
 			}
-			_, _ = w.Write([]byte(`{"handle":"existing-agent","profile":{"display_name":"Existing Agent","emoji":"🤖","bio":"Owns automation"}}`))
+			_, _ = w.Write([]byte(`{"handle":"existing-agent","profile":{"display_name":"Existing Agent","emoji":"🤖","profile":"Owns automation"}}`))
 			return
 		}
 		if r.Method == http.MethodPatch && r.URL.Path == "/v1/agents/me/status" {
@@ -978,7 +979,7 @@ func TestConfigureHubSetupExistingAgentIgnoresStatusUpdateFailuresDuringVerifica
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
 			getCalls++
-			_, _ = w.Write([]byte(`{"handle":"existing-agent","profile":{"display_name":"Existing Agent","emoji":"🤖","bio":"Owns automation"}}`))
+			_, _ = w.Write([]byte(`{"handle":"existing-agent","profile":{"display_name":"Existing Agent","emoji":"🤖","profile":"Owns automation"}}`))
 		case r.Method == http.MethodPatch && r.URL.Path == "/v1/agents/me/status":
 			statusCalls++
 			http.Error(w, `{"error":"invalid status payload"}`, http.StatusBadRequest)
@@ -1087,14 +1088,14 @@ func TestConfigureHubSetupExistingAgentProfileEditUsesSavedCredentials(t *testin
 			if !strings.Contains(body, `"emoji":"⚙️"`) {
 				t.Fatalf("profile sync missing emoji: %s", body)
 			}
-			if !strings.Contains(body, `"bio":"Owns hub edits"`) {
-				t.Fatalf("profile sync missing bio: %s", body)
+			if !strings.Contains(body, `"profile":"Owns hub edits"`) {
+				t.Fatalf("profile sync missing profile text: %s", body)
 			}
 			syncCalls++
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
 			profileGets++
-			_, _ = w.Write([]byte(`{"handle":"existing-agent","profile":{"display_name":"Molten Bot","emoji":"⚙️","bio":"Owns hub edits"}}`))
+			_, _ = w.Write([]byte(`{"handle":"existing-agent","profile":{"display_name":"Molten Bot","emoji":"⚙️","profile":"Owns hub edits"}}`))
 		case r.Method == http.MethodPatch && r.URL.Path == "/v1/agents/me/status":
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		default:
@@ -1107,7 +1108,7 @@ func TestConfigureHubSetupExistingAgentProfileEditUsesSavedCredentials(t *testin
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
-	if err := os.WriteFile(configPath, []byte(fmt.Sprintf(`{"base_url":%q,"agent_token":%q,"profile":{"display_name":"Old Name","emoji":"🤖","bio":"Old bio"}}`, server.URL+"/v1", savedToken)), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf(`{"base_url":%q,"agent_token":%q,"profile":{"display_name":"Old Name","emoji":"🤖","profile":"Old bio"}}`, server.URL+"/v1", savedToken)), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
@@ -1118,11 +1119,11 @@ func TestConfigureHubSetupExistingAgentProfileEditUsesSavedCredentials(t *testin
 	}, hubui.HubSetupRequest{
 		AgentMode: "existing",
 		Profile: struct {
-			Bio         string `json:"bio"`
+			ProfileText string `json:"profile"`
 			DisplayName string `json:"display_name"`
 			Emoji       string `json:"emoji"`
 		}{
-			Bio:         "Owns hub edits",
+			ProfileText: "Owns hub edits",
 			DisplayName: "Molten Bot",
 			Emoji:       "⚙️",
 		},
@@ -1142,8 +1143,8 @@ func TestConfigureHubSetupExistingAgentProfileEditUsesSavedCredentials(t *testin
 	if got, want := state.Profile.Emoji, "⚙️"; got != want {
 		t.Fatalf("Emoji = %q, want %q", got, want)
 	}
-	if got, want := state.Profile.Bio, "Owns hub edits"; got != want {
-		t.Fatalf("Bio = %q, want %q", got, want)
+	if got, want := state.Profile.ProfileText, "Owns hub edits"; got != want {
+		t.Fatalf("ProfileText = %q, want %q", got, want)
 	}
 }
 
@@ -1155,7 +1156,7 @@ func TestConfigureHubSetupReturnsSavedStateWhenLiveApplyFails(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me" {
-			_, _ = w.Write([]byte(`{"handle":"existing-agent","profile":{"display_name":"Existing Agent","emoji":"🤖","bio":"Owns automation"}}`))
+			_, _ = w.Write([]byte(`{"handle":"existing-agent","profile":{"display_name":"Existing Agent","emoji":"🤖","profile":"Owns automation"}}`))
 			return
 		}
 		if r.Method == http.MethodPatch && r.URL.Path == "/v1/agents/me/status" {

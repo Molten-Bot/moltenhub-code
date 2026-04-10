@@ -44,11 +44,38 @@ type InitConfig struct {
 type ProfileConfig struct {
 	DisplayName string         `json:"display_name"`
 	Emoji       string         `json:"emoji"`
-	Bio         string         `json:"bio"`
+	ProfileText string         `json:"profile"`
 	LLM         string         `json:"llm"`
 	Harness     string         `json:"harness"`
 	Skills      []string       `json:"skills"`
 	Metadata    map[string]any `json:"-"`
+}
+
+func (p *ProfileConfig) UnmarshalJSON(data []byte) error {
+	type rawProfileConfig struct {
+		DisplayName string         `json:"display_name"`
+		Emoji       string         `json:"emoji"`
+		ProfileText string         `json:"profile"`
+		LegacyBio   string         `json:"bio"`
+		LLM         string         `json:"llm"`
+		Harness     string         `json:"harness"`
+		Skills      []string       `json:"skills"`
+		Metadata    map[string]any `json:"-"`
+	}
+
+	var raw rawProfileConfig
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	p.DisplayName = raw.DisplayName
+	p.Emoji = raw.Emoji
+	p.ProfileText = firstNonEmpty(raw.ProfileText, raw.LegacyBio)
+	p.LLM = raw.LLM
+	p.Harness = raw.Harness
+	p.Skills = append([]string(nil), raw.Skills...)
+	p.Metadata = raw.Metadata
+	return nil
 }
 
 // SkillConfig defines the inbound dispatch and outbound result contract.
@@ -124,7 +151,7 @@ func (c *InitConfig) ApplyDefaults() {
 	c.Handle = strings.TrimSpace(c.Handle)
 	c.Profile.DisplayName = strings.TrimSpace(c.Profile.DisplayName)
 	c.Profile.Emoji = strings.TrimSpace(c.Profile.Emoji)
-	c.Profile.Bio = strings.TrimSpace(c.Profile.Bio)
+	c.Profile.ProfileText = strings.TrimSpace(c.Profile.ProfileText)
 	normalizeProfileConfig(&c.Profile, c.AgentHarness, c.AgentCommand)
 	c.Skill = runtimeSkillConfig()
 
@@ -166,7 +193,7 @@ func normalizeProfileConfig(profile *ProfileConfig, agentHarness, agentCommand s
 
 	profile.DisplayName = strings.TrimSpace(profile.DisplayName)
 	profile.Emoji = strings.TrimSpace(profile.Emoji)
-	profile.Bio = strings.TrimSpace(profile.Bio)
+	profile.ProfileText = strings.TrimSpace(profile.ProfileText)
 	profile.LLM = strings.TrimSpace(runtime.Harness)
 	profile.Harness = runtimeIdentifier
 	profile.Skills = supportedProfileSkills()

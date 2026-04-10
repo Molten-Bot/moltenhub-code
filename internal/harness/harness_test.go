@@ -91,7 +91,7 @@ func sampleConfig() config.Config {
 		Prompt:        "Build API",
 		CommitMessage: "feat: automate api",
 		PRTitle:       "moltenhub-feat: automate api",
-		PRBody:        "Automated by MoltenHub Code\n\nIf you would like to connect agents together checkout [Molten Bot Hub](https://molten.bot/hub).",
+		PRBody:        "Automated by MoltenHub Code\n\nOriginal task prompt:\n```text\nBuild API\n```\n\nIf you would like to connect agents together checkout [Molten Bot Hub](https://molten.bot/hub).",
 		Labels:        []string{"automation", ""},
 		Reviewers:     []string{"octocat", ""},
 	}
@@ -268,6 +268,7 @@ func TestRunBuildsReviewContextBeforeInvokingCodex(t *testing.T) {
 
 	cfg := sampleConfig()
 	cfg.Prompt = "Review the pull request"
+	cfg.PRBody = "Automated by MoltenHub Code\n\nOriginal task prompt:\n```text\nReview the pull request\n```\n\nIf you would like to connect agents together checkout [Molten Bot Hub](https://molten.bot/hub)."
 	cfg.Review = &config.ReviewConfig{PRNumber: 42}
 
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)

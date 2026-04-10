@@ -266,7 +266,7 @@ Key fields:
 - `handle` (optional)
 - `profile.display_name`
 - `profile.emoji`
-- `profile.bio`
+- `profile.profile`
 - `agent_harness` (optional: `codex`, `claude`, `auggie`; defaults to `codex` or `HARNESS_AGENT_HARNESS`)
 - `agent_command` (optional CLI executable override)
 - `dispatcher.*` (adaptive worker parallelism)

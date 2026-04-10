@@ -325,6 +325,9 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `.hub-setup-profile-grid {`) {
 		t.Fatalf("expected stylesheet to include hub setup profile grid styles")
 	}
+	if !strings.Contains(stylesheet, `.hub-setup-profile-text {`) {
+		t.Fatalf("expected stylesheet to keep the profile textarea spanning the full profile grid width")
+	}
 	if !strings.Contains(stylesheet, `.hub-setup-signin-logo {`) {
 		t.Fatalf("expected stylesheet to include the hub setup sign-in logo styles")
 	}

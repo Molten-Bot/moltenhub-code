@@ -79,7 +79,7 @@ type HubSetupState struct {
 	Region     string `json:"region,omitempty"`
 	Handle     string `json:"handle,omitempty"`
 	Profile    struct {
-		Bio         string `json:"bio"`
+		ProfileText string `json:"profile"`
 		DisplayName string `json:"display_name"`
 		Emoji       string `json:"emoji"`
 	} `json:"profile"`
@@ -97,7 +97,7 @@ type HubSetupRequest struct {
 	Token     string `json:"token"`
 	Handle    string `json:"handle"`
 	Profile   struct {
-		Bio         string `json:"bio"`
+		ProfileText string `json:"profile"`
 		DisplayName string `json:"display_name"`
 		Emoji       string `json:"emoji"`
 	} `json:"profile"`
@@ -200,7 +200,7 @@ func defaultHubSetupState() HubSetupState {
 		ConnectURL:   "https://app.molten.bot/signin?target=hub",
 		DashboardURL: "https://app.molten.bot/hub",
 	}
-	state.Profile.Bio = ""
+	state.Profile.ProfileText = ""
 	state.Profile.DisplayName = ""
 	state.Profile.Emoji = ""
 	return state

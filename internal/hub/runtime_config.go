@@ -168,7 +168,7 @@ func SaveRuntimeConfigHubSettings(path string, initCfg InitConfig, resolvedAgent
 	doc["session_key"] = initCfg.SessionKey
 	doc["handle"] = initCfg.Handle
 	doc["profile"] = map[string]any{
-		"bio":          initCfg.Profile.Bio,
+		"profile":      initCfg.Profile.ProfileText,
 		"display_name": initCfg.Profile.DisplayName,
 		"emoji":        initCfg.Profile.Emoji,
 		"llm":          initCfg.Profile.LLM,

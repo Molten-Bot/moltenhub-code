@@ -587,6 +587,9 @@ func TestApplyDefaultsAppendsMoltenBotHubFooterToDefaultPRBody(t *testing.T) {
 	if !strings.HasSuffix(cfg.PRBody, prBodyFooter) {
 		t.Fatalf("PRBody = %q, want footer %q at the end", cfg.PRBody, prBodyFooter)
 	}
+	if !strings.Contains(cfg.PRBody, "Original task prompt:\n```text\nfix tests\n```") {
+		t.Fatalf("PRBody = %q, want original prompt block", cfg.PRBody)
+	}
 }
 
 func TestApplyDefaultsAppendsMoltenBotHubFooterToCustomPRBody(t *testing.T) {
@@ -601,6 +604,9 @@ func TestApplyDefaultsAppendsMoltenBotHubFooterToCustomPRBody(t *testing.T) {
 
 	if !strings.Contains(cfg.PRBody, "Custom PR body.") {
 		t.Fatalf("PRBody = %q, want to preserve the custom body", cfg.PRBody)
+	}
+	if !strings.Contains(cfg.PRBody, "Original task prompt:\n```text\nfix tests\n```") {
+		t.Fatalf("PRBody = %q, want original prompt block", cfg.PRBody)
 	}
 	if !strings.HasSuffix(cfg.PRBody, prBodyFooter) {
 		t.Fatalf("PRBody = %q, want footer %q at the end", cfg.PRBody, prBodyFooter)
@@ -619,5 +625,41 @@ func TestApplyDefaultsDoesNotDuplicateMoltenBotHubFooter(t *testing.T) {
 
 	if got := strings.Count(cfg.PRBody, "https://molten.bot/hub"); got != 1 {
 		t.Fatalf("PRBody contains %d hub links, want exactly 1: %q", got, cfg.PRBody)
+	}
+}
+
+func TestApplyDefaultsDoesNotDuplicateOriginalPromptInCustomPRBody(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		RepoURL: "git@github.com:acme/repo.git",
+		Prompt:  "fix tests",
+		PRBody:  "Custom PR body.\n\nOriginal task prompt:\n```text\nfix tests\n```",
+	}
+	cfg.ApplyDefaults()
+
+	if got := strings.Count(cfg.PRBody, "Original task prompt:"); got != 1 {
+		t.Fatalf("PRBody contains %d original prompt headings, want 1: %q", got, cfg.PRBody)
+	}
+	if got := strings.Count(cfg.PRBody, "fix tests"); got != 1 {
+		t.Fatalf("PRBody contains %d prompt copies, want 1: %q", got, cfg.PRBody)
+	}
+}
+
+func TestApplyDefaultsReplacesStaleOriginalPromptBlock(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		RepoURL: "git@github.com:acme/repo.git",
+		Prompt:  "review the pull request",
+		PRBody:  "Custom PR body.\n\nOriginal task prompt:\n```text\nfix tests\n```",
+	}
+	cfg.ApplyDefaults()
+
+	if strings.Contains(cfg.PRBody, "fix tests") {
+		t.Fatalf("PRBody retained stale prompt block: %q", cfg.PRBody)
+	}
+	if !strings.Contains(cfg.PRBody, "Original task prompt:\n```text\nreview the pull request\n```") {
+		t.Fatalf("PRBody = %q, want updated prompt block", cfg.PRBody)
 	}
 }

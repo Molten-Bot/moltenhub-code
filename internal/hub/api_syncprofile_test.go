@@ -47,7 +47,7 @@ func TestSyncProfileUsesAgentProfilePayload(t *testing.T) {
 		Profile: ProfileConfig{
 			DisplayName: "MoltenHub Code",
 			Emoji:       "🎮",
-			Bio:         "Automation worker",
+			ProfileText: "Automation worker",
 		},
 	}
 	cfg.ApplyDefaults()
@@ -59,8 +59,8 @@ func TestSyncProfileUsesAgentProfilePayload(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if len(calls) != 1 {
-		t.Fatalf("calls = %d, want 1", len(calls))
+	if len(calls) != 3 {
+		t.Fatalf("calls = %d, want 3", len(calls))
 	}
 	if calls[0].Method != http.MethodPatch {
 		t.Fatalf("method = %q, want PATCH", calls[0].Method)
@@ -86,8 +86,8 @@ func TestSyncProfileUsesAgentProfilePayload(t *testing.T) {
 	if got := profile["emoji"]; got != "🎮" {
 		t.Fatalf("profile.emoji = %#v", got)
 	}
-	if got := profile["bio"]; got != "Automation worker" {
-		t.Fatalf("profile.bio = %#v", got)
+	if got := profile["profile"]; got != "Automation worker" {
+		t.Fatalf("profile.profile = %#v", got)
 	}
 	if got := profile["llm"]; got != "codex" {
 		t.Fatalf("profile.llm = %#v", got)
@@ -104,6 +104,23 @@ func TestSyncProfileUsesAgentProfilePayload(t *testing.T) {
 	}
 	if _, ok := calls[0].Body["metadata"]; ok {
 		t.Fatalf("metadata should not be sent in profile sync payload: %#v", calls[0].Body["metadata"])
+	}
+	if calls[1].Method != http.MethodGet || calls[1].Path != "/v1/agents/me" {
+		t.Fatalf("second call = %s %s, want GET /v1/agents/me", calls[1].Method, calls[1].Path)
+	}
+	if calls[2].Method != http.MethodPatch || calls[2].Path != "/v1/agents/me/metadata" {
+		t.Fatalf("third call = %s %s, want PATCH /v1/agents/me/metadata", calls[2].Method, calls[2].Path)
+	}
+	metadataRaw, ok := calls[2].Body["metadata"]
+	if !ok {
+		t.Fatalf("metadata missing from metadata sync payload: %#v", calls[2].Body)
+	}
+	metadata, ok := metadataRaw.(map[string]any)
+	if !ok {
+		t.Fatalf("metadata has wrong type: %#v", metadataRaw)
+	}
+	if got := metadata["profile"]; got != "Automation worker" {
+		t.Fatalf("metadata.profile = %#v", got)
 	}
 }
 
@@ -140,7 +157,7 @@ func TestSyncProfileRetriesWithoutHandleWhenHandleUpdateFails(t *testing.T) {
 		Profile: ProfileConfig{
 			DisplayName: "Existing Agent",
 			Emoji:       "🤖",
-			Bio:         "Owns automation",
+			ProfileText: "Owns automation",
 		},
 	}
 
@@ -150,8 +167,8 @@ func TestSyncProfileRetriesWithoutHandleWhenHandleUpdateFails(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	if len(calls) != 3 {
-		t.Fatalf("calls = %d, want 3", len(calls))
+	if len(calls) != 5 {
+		t.Fatalf("calls = %d, want 5", len(calls))
 	}
 	if _, hasHandle := calls[0]["handle"]; !hasHandle {
 		t.Fatalf("first request should include handle: %#v", calls[0])

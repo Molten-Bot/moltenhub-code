@@ -278,7 +278,7 @@ func TestSaveRuntimeConfigHubSettingsMergesHubFieldsWithoutDroppingExtras(t *tes
 		BindToken: "bind_saved",
 		Handle:    "molten-builder",
 		Profile: ProfileConfig{
-			Bio:         "Builds things",
+			ProfileText: "Builds things",
 			DisplayName: "Molten Builder",
 			Emoji:       "🔥",
 		},
