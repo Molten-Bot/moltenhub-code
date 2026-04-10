@@ -198,6 +198,41 @@ func (c *AdaptiveDispatchController) Acquire(ctx context.Context, requestID stri
 	}
 }
 
+// AcquireForce admits a caller immediately, even when current running work exceeds allowed capacity.
+// Use this sparingly for explicit operator override actions.
+func (c *AdaptiveDispatchController) AcquireForce(ctx context.Context, requestID string) (func(), error) {
+	if c == nil {
+		return func() {}, nil
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	requestID = strings.TrimSpace(requestID)
+
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return nil, errDispatchControllerClosed
+	}
+	c.running++
+	running := c.running
+	allowed := c.allowed
+	c.mu.Unlock()
+
+	c.logf(
+		"dispatch status=forced request_id=%s running=%d allowed=%d",
+		firstNonEmpty(requestID, "forced"),
+		running,
+		allowed,
+	)
+
+	return c.releaseFunc(), nil
+}
+
 func (c *AdaptiveDispatchController) releaseFunc() func() {
 	var once sync.Once
 	return func() {

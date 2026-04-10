@@ -24,6 +24,7 @@ type localTaskHandle struct {
 	paused        bool
 	running       bool
 	stopped       bool
+	forceAcquire  bool
 	pauseWait     chan struct{}
 	acquireCancel context.CancelFunc
 }
@@ -109,6 +110,14 @@ func (c *localTaskController) Stop(requestID string) error {
 	return nil
 }
 
+func (c *localTaskController) ForceRun(requestID string) error {
+	handle, err := c.handleFor(requestID)
+	if err != nil {
+		return err
+	}
+	return handle.ForceRun()
+}
+
 func (h *localTaskHandle) Pause() error {
 	if h == nil {
 		return hubui.ErrTaskNotFound
@@ -165,6 +174,43 @@ func (h *localTaskHandle) Run() error {
 	return nil
 }
 
+func (h *localTaskHandle) ForceRun() error {
+	if h == nil {
+		return hubui.ErrTaskNotFound
+	}
+
+	var (
+		pauseWait     chan struct{}
+		acquireCancel context.CancelFunc
+	)
+	h.mu.Lock()
+	switch {
+	case h.stopped:
+		h.mu.Unlock()
+		return fmt.Errorf("task is already stopped")
+	case h.running:
+		h.mu.Unlock()
+		return fmt.Errorf("task is already running")
+	default:
+		h.forceAcquire = true
+		if h.paused {
+			h.paused = false
+			pauseWait = h.pauseWait
+			h.pauseWait = nil
+		}
+		acquireCancel = h.acquireCancel
+		h.mu.Unlock()
+	}
+
+	if pauseWait != nil {
+		close(pauseWait)
+	}
+	if acquireCancel != nil {
+		acquireCancel()
+	}
+	return nil
+}
+
 func (h *localTaskHandle) Stop() bool {
 	if h == nil {
 		return false
@@ -182,6 +228,7 @@ func (h *localTaskHandle) Stop() bool {
 	}
 	h.stopped = true
 	h.paused = false
+	h.forceAcquire = false
 	pauseWait = h.pauseWait
 	h.pauseWait = nil
 	acquireCancel = h.acquireCancel
@@ -239,6 +286,9 @@ func (h *localTaskHandle) SetRunning(running bool) {
 	}
 	h.mu.Lock()
 	h.running = running
+	if running {
+		h.forceAcquire = false
+	}
 	h.mu.Unlock()
 }
 
@@ -288,4 +338,24 @@ func (h *localTaskHandle) IsStopped() bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.stopped
+}
+
+func (h *localTaskHandle) ConsumeForceAcquire() bool {
+	if h == nil {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	force := h.forceAcquire
+	h.forceAcquire = false
+	return force
+}
+
+func (h *localTaskHandle) HasForceAcquire() bool {
+	if h == nil {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.forceAcquire
 }

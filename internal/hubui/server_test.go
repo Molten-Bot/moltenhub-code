@@ -1106,6 +1106,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `pauseRun.textContent = paused ? "▶" : "||";`) {
 		t.Fatalf("expected index html to render task pause/run icon control")
 	}
+	if !strings.Contains(markup, `forceStart.title = "Force start this queued task now";`) {
+		t.Fatalf("expected index html to render force-start control for pending tasks")
+	}
 	if !strings.Contains(markup, `stop.textContent = "■";`) {
 		t.Fatalf("expected index html to render task stop icon control")
 	}
@@ -2445,6 +2448,94 @@ func TestHandlerTaskRunAccepted(t *testing.T) {
 	}
 	if gotRequestID != "req-run" {
 		t.Fatalf("run request id = %q, want %q", gotRequestID, "req-run")
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if forced, _ := body["forced"].(bool); forced {
+		t.Fatalf("forced = %#v, want false", body["forced"])
+	}
+}
+
+func TestHandlerTaskRunForceAccepted(t *testing.T) {
+	t.Parallel()
+
+	var (
+		forceRequestID string
+		runCalled      bool
+	)
+	srv := NewServer("", NewBroker())
+	srv.RunTask = func(_ context.Context, requestID string) error {
+		runCalled = true
+		return nil
+	}
+	srv.ForceRunTask = func(_ context.Context, requestID string) error {
+		forceRequestID = requestID
+		return nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/req-force/run?force=yes", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/req-force/run?force=yes error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if runCalled {
+		t.Fatal("RunTask handler called for forced run, want ForceRunTask handler")
+	}
+	if forceRequestID != "req-force" {
+		t.Fatalf("force run request id = %q, want %q", forceRequestID, "req-force")
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if forced, _ := body["forced"].(bool); !forced {
+		t.Fatalf("forced = %#v, want true", body["forced"])
+	}
+}
+
+func TestHandlerTaskRunForceFallsBackToRunHandlerWhenNoForceHandler(t *testing.T) {
+	t.Parallel()
+
+	var gotRequestID string
+	srv := NewServer("", NewBroker())
+	srv.RunTask = func(_ context.Context, requestID string) error {
+		gotRequestID = requestID
+		return nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/req-force-fallback/run?force=1", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/req-force-fallback/run?force=1 error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if gotRequestID != "req-force-fallback" {
+		t.Fatalf("run request id = %q, want %q", gotRequestID, "req-force-fallback")
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if forced, _ := body["forced"].(bool); !forced {
+		t.Fatalf("forced = %#v, want true", body["forced"])
 	}
 }
 

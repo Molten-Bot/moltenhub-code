@@ -4234,9 +4234,10 @@
       return false;
     }
 
-    async function controlTask(requestID, action) {
+    async function controlTask(requestID, action, options = {}) {
       requestID = String(requestID || "").trim();
       action = String(action || "").trim();
+      const force = Boolean(options && options.force);
       if (!requestID || !action) {
         return;
       }
@@ -4248,12 +4249,19 @@
       state.taskControlInFlight.add(flightKey);
       render(state.snapshot);
 
-      const actionLabel = action === "run" ? "Run" : action === "pause" ? "Pause" : "Stop";
-      trackAnalyticsEvent("task_control_started", { request_id: requestID, action });
+      const actionLabel = force && action === "run"
+        ? "Force start"
+        : action === "run"
+          ? "Run"
+          : action === "pause"
+            ? "Pause"
+            : "Stop";
+      trackAnalyticsEvent("task_control_started", { request_id: requestID, action, forced: force });
       setLocalPromptStatus("warn", `${actionLabel} ${requestID}...`);
 
       try {
-        const response = await fetch(`/api/tasks/${encodeURIComponent(requestID)}/${encodeURIComponent(action)}`, {
+        const query = force ? "?force=1" : "";
+        const response = await fetch(`/api/tasks/${encodeURIComponent(requestID)}/${encodeURIComponent(action)}${query}`, {
           method: "POST",
         });
         let body = null;
@@ -4265,10 +4273,10 @@
         if (!response.ok) {
           throw new Error(body?.error || `${action} http ${response.status}`);
         }
-        trackAnalyticsEvent("task_control_succeeded", { request_id: requestID, action });
+        trackAnalyticsEvent("task_control_succeeded", { request_id: requestID, action, forced: force });
         setLocalPromptStatus("ok", `${actionLabel} applied to ${requestID}`);
       } catch (err) {
-        trackAnalyticsEvent("task_control_failed", { request_id: requestID, action });
+        trackAnalyticsEvent("task_control_failed", { request_id: requestID, action, forced: force });
         setLocalPromptStatus("error", `${actionLabel} failed: ${err.message}`);
       } finally {
         state.taskControlInFlight.delete(flightKey);
@@ -4628,8 +4636,25 @@
 
         const taskControlBusy = isTaskControlInFlight(task.request_id);
         if (!isCompletedTask(task)) {
-          const paused = String(task.status || "").toLowerCase() === "paused";
-          const canTogglePauseRun = paused || String(task.status || "").toLowerCase() !== "running";
+          const statusLower = String(task.status || "").toLowerCase();
+          const paused = statusLower === "paused";
+          const pending = statusLower === "pending";
+          const canTogglePauseRun = paused || statusLower !== "running";
+
+          if (pending) {
+            const forceStart = document.createElement("button");
+            forceStart.type = "button";
+            forceStart.className = "task-control-toggle";
+            forceStart.textContent = "▶";
+            forceStart.title = "Force start this queued task now";
+            forceStart.setAttribute("aria-label", "Force start task");
+            forceStart.disabled = taskControlBusy;
+            forceStart.addEventListener("click", (event) => {
+              event.stopPropagation();
+              controlTask(task.request_id, "run", { force: true });
+            });
+            topActions.appendChild(forceStart);
+          }
 
           const pauseRun = document.createElement("button");
           pauseRun.type = "button";

@@ -32,26 +32,27 @@ const maxStreamTaskLogs = 500
 
 // Server provides an HTTP UI for live hub/task monitoring.
 type Server struct {
-	Addr               string
-	Broker             *Broker
-	AutomaticMode      bool
-	ConfiguredHarness  string
-	Logf               func(string, ...any)
-	SubmitLocalPrompt  func(context.Context, []byte) (string, error)
-	SubmitTaskRerun    func(context.Context, string, []byte, bool) (string, error)
-	CloseTask          func(context.Context, string) error
-	PauseTask          func(context.Context, string) error
-	RunTask            func(context.Context, string) error
-	StopTask           func(context.Context, string) error
-	LoadLibraryTasks   func() ([]library.TaskSummary, error)
-	AgentAuthStatus    func(context.Context) (AgentAuthState, error)
-	StartAgentAuth     func(context.Context) (AgentAuthState, error)
-	VerifyAgentAuth    func(context.Context) (AgentAuthState, error)
-	ConfigureAgentAuth func(context.Context, string) (AgentAuthState, error)
-	HubSetupStatus     func(context.Context) (HubSetupState, error)
-	ConfigureHubSetup  func(context.Context, HubSetupRequest) (HubSetupState, error)
-	ConnectHubSetup    func(context.Context) (HubSetupState, error)
-	DisconnectHubSetup func(context.Context) (HubSetupState, error)
+	Addr                    string
+	Broker                  *Broker
+	AutomaticMode           bool
+	ConfiguredHarness       string
+	Logf                    func(string, ...any)
+	SubmitLocalPrompt       func(context.Context, []byte) (string, error)
+	SubmitTaskRerun         func(context.Context, string, []byte, bool) (string, error)
+	CloseTask               func(context.Context, string) error
+	PauseTask               func(context.Context, string) error
+	RunTask                 func(context.Context, string) error
+	ForceRunTask            func(context.Context, string) error
+	StopTask                func(context.Context, string) error
+	LoadLibraryTasks        func() ([]library.TaskSummary, error)
+	AgentAuthStatus         func(context.Context) (AgentAuthState, error)
+	StartAgentAuth          func(context.Context) (AgentAuthState, error)
+	VerifyAgentAuth         func(context.Context) (AgentAuthState, error)
+	ConfigureAgentAuth      func(context.Context, string) (AgentAuthState, error)
+	HubSetupStatus          func(context.Context) (HubSetupState, error)
+	ConfigureHubSetup       func(context.Context, HubSetupRequest) (HubSetupState, error)
+	ConnectHubSetup         func(context.Context) (HubSetupState, error)
+	DisconnectHubSetup      func(context.Context) (HubSetupState, error)
 	ResolveGitHubProfileURL func(context.Context) (string, error)
 }
 
@@ -83,14 +84,14 @@ type HubSetupState struct {
 		DisplayName string `json:"display_name"`
 		Emoji       string `json:"emoji"`
 	} `json:"profile"`
-	ConnectURL        string         `json:"connect_url,omitempty"`
-	DashboardURL      string         `json:"dashboard_url,omitempty"`
-	Message           string         `json:"message,omitempty"`
-	NeedsRestart      bool           `json:"needs_restart,omitempty"`
-	Onboarding        []HubSetupStep `json:"onboarding,omitempty"`
-	OnboardingActive  bool           `json:"onboarding_active,omitempty"`
-	OnboardingStage   string         `json:"onboarding_stage,omitempty"`
-	ActivationReady   bool           `json:"activation_ready,omitempty"`
+	ConnectURL       string         `json:"connect_url,omitempty"`
+	DashboardURL     string         `json:"dashboard_url,omitempty"`
+	Message          string         `json:"message,omitempty"`
+	NeedsRestart     bool           `json:"needs_restart,omitempty"`
+	Onboarding       []HubSetupStep `json:"onboarding,omitempty"`
+	OnboardingActive bool           `json:"onboarding_active,omitempty"`
+	OnboardingStage  string         `json:"onboarding_stage,omitempty"`
+	ActivationReady  bool           `json:"activation_ready,omitempty"`
 }
 
 type HubSetupStep struct {
@@ -943,7 +944,22 @@ func (s Server) handleTaskAction(w http.ResponseWriter, r *http.Request) {
 	case "pause":
 		s.handleTaskControl(w, r, decoded, "pause", "paused", s.PauseTask)
 	case "run":
-		s.handleTaskControl(w, r, decoded, "run", "running", s.RunTask)
+		runHandler := s.RunTask
+		force := parseTruthyQueryParam(r.URL.Query().Get("force"))
+		if force && s.ForceRunTask != nil {
+			runHandler = s.ForceRunTask
+		}
+		s.handleTaskControlWithMeta(
+			w,
+			r,
+			decoded,
+			"run",
+			"running",
+			runHandler,
+			map[string]any{
+				"forced": force,
+			},
+		)
 	case "stop":
 		s.handleTaskControl(w, r, decoded, "stop", "stopped", s.StopTask)
 	default:
@@ -958,6 +974,18 @@ func (s Server) handleTaskControl(
 	action string,
 	status string,
 	handler func(context.Context, string) error,
+) {
+	s.handleTaskControlWithMeta(w, r, requestID, action, status, handler, nil)
+}
+
+func (s Server) handleTaskControlWithMeta(
+	w http.ResponseWriter,
+	r *http.Request,
+	requestID string,
+	action string,
+	status string,
+	handler func(context.Context, string) error,
+	meta map[string]any,
 ) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
@@ -986,12 +1014,16 @@ func (s Server) handleTaskControl(
 		}
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	response := map[string]any{
 		"ok":         true,
 		"request_id": requestID,
 		"action":     action,
 		"status":     status,
-	})
+	}
+	for key, value := range meta {
+		response[key] = value
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (s Server) handleTaskRerun(w http.ResponseWriter, r *http.Request, requestID string) {

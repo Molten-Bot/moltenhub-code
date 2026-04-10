@@ -51,6 +51,32 @@ func TestLocalTaskControllerPauseAndRun(t *testing.T) {
 	}
 }
 
+func TestLocalTaskControllerForceRunQueuedTask(t *testing.T) {
+	t.Parallel()
+
+	controller := newLocalTaskController()
+	_, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+
+	handle := controller.Register("local-force", cancel)
+	if handle == nil {
+		t.Fatal("Register() returned nil handle")
+	}
+
+	if err := controller.ForceRun("local-force"); err != nil {
+		t.Fatalf("ForceRun() error = %v", err)
+	}
+	if !handle.HasForceAcquire() {
+		t.Fatal("HasForceAcquire() = false, want true after ForceRun()")
+	}
+	if !handle.ConsumeForceAcquire() {
+		t.Fatal("ConsumeForceAcquire() = false, want true on first consume")
+	}
+	if handle.ConsumeForceAcquire() {
+		t.Fatal("ConsumeForceAcquire() = true, want false after consume")
+	}
+}
+
 func TestLocalTaskControllerStopCancelsContextWithStopCause(t *testing.T) {
 	t.Parallel()
 
@@ -96,7 +122,7 @@ func TestLocalTaskControllerMissingTaskReturnsNotFound(t *testing.T) {
 	t.Parallel()
 
 	controller := newLocalTaskController()
-	for _, action := range []func(string) error{controller.Pause, controller.Run, controller.Stop} {
+	for _, action := range []func(string) error{controller.Pause, controller.Run, controller.ForceRun, controller.Stop} {
 		if err := action("missing"); !errors.Is(err, hubui.ErrTaskNotFound) {
 			t.Fatalf("action(missing) error = %v, want %v", err, hubui.ErrTaskNotFound)
 		}

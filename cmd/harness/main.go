@@ -398,7 +398,15 @@ func runHub(args []string) int {
 				if taskHandle != nil {
 					taskHandle.SetAcquireCancel(cancelAcquire)
 				}
-				release, acquireErr := dispatchController.Acquire(acquireCtx, requestID)
+				forceAcquire := false
+				if taskHandle != nil {
+					forceAcquire = taskHandle.ConsumeForceAcquire()
+				}
+				acquire := dispatchController.Acquire
+				if forceAcquire {
+					acquire = dispatchController.AcquireForce
+				}
+				release, acquireErr := acquire(acquireCtx, requestID)
 				if taskHandle != nil {
 					taskHandle.ClearAcquireCancel(cancelAcquire)
 				}
@@ -411,6 +419,9 @@ func runHub(args []string) int {
 						return
 					}
 					if taskHandle != nil && taskHandle.IsPaused() && errors.Is(acquireErr, context.Canceled) && runCtx.Err() == nil {
+						continue
+					}
+					if taskHandle != nil && taskHandle.HasForceAcquire() && errors.Is(acquireErr, context.Canceled) && runCtx.Err() == nil {
 						continue
 					}
 					finalState = "error"
@@ -645,6 +656,13 @@ func runHub(args []string) int {
 				return err
 			}
 			daemonLogger("dispatch status=resumed request_id=%s", requestID)
+			return nil
+		}
+		uiServer.ForceRunTask = func(_ context.Context, requestID string) error {
+			if err := localTaskController.ForceRun(requestID); err != nil {
+				return err
+			}
+			daemonLogger("dispatch status=forced request_id=%s", requestID)
 			return nil
 		}
 		uiServer.StopTask = func(_ context.Context, requestID string) error {

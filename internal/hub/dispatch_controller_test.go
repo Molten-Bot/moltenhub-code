@@ -332,6 +332,73 @@ func TestAcquireCancellationRemovesWaiterAndPromotesNext(t *testing.T) {
 	close(releaseReq3)
 }
 
+func TestAcquireForceBypassesQueueLimit(t *testing.T) {
+	t.Parallel()
+
+	controller := NewAdaptiveDispatchController(DispatcherConfig{
+		MaxParallel:            1,
+		MinParallel:            1,
+		SampleWindow:           1,
+		SampleIntervalMS:       1000,
+		CPUHighWatermark:       85,
+		MemoryHighWatermark:    90,
+		DiskIOHighWatermarkMBs: 120,
+	}, nil)
+
+	releaseFirst, err := controller.Acquire(context.Background(), "req-1")
+	if err != nil {
+		t.Fatalf("Acquire(req-1) error = %v", err)
+	}
+
+	req2Acquired := make(chan struct{}, 1)
+	req2ErrCh := make(chan error, 1)
+	releaseReq2 := make(chan struct{})
+	go func() {
+		release, acquireErr := controller.Acquire(context.Background(), "req-2")
+		if acquireErr != nil {
+			req2ErrCh <- acquireErr
+			return
+		}
+		req2Acquired <- struct{}{}
+		<-releaseReq2
+		release()
+	}()
+	waitForQueuedRequest(t, controller, "req-2")
+
+	releaseForced, err := controller.AcquireForce(context.Background(), "req-force")
+	if err != nil {
+		t.Fatalf("AcquireForce(req-force) error = %v", err)
+	}
+
+	controller.mu.Lock()
+	if got, want := controller.running, 2; got != want {
+		controller.mu.Unlock()
+		t.Fatalf("running after force acquire = %d, want %d", got, want)
+	}
+	controller.mu.Unlock()
+
+	select {
+	case <-req2Acquired:
+		t.Fatal("req-2 granted too early while req-1 + forced run are active")
+	case err := <-req2ErrCh:
+		t.Fatalf("unexpected req-2 acquire error: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	releaseForced()
+	releaseFirst()
+
+	select {
+	case <-req2Acquired:
+	case err := <-req2ErrCh:
+		t.Fatalf("unexpected req-2 acquire error: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for req-2 grant after releases")
+	}
+
+	close(releaseReq2)
+}
+
 func TestStopUnblocksQueuedAcquireWithClosedError(t *testing.T) {
 	t.Parallel()
 

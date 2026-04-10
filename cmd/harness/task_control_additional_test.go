@@ -52,6 +52,53 @@ func TestLocalTaskHandlePauseRunAndStopErrorPaths(t *testing.T) {
 	if err := handle.Run(); err == nil {
 		t.Fatal("Run(stopped) error = nil, want non-nil")
 	}
+	if err := handle.ForceRun(); err == nil {
+		t.Fatal("ForceRun(stopped) error = nil, want non-nil")
+	}
+}
+
+func TestLocalTaskHandleForceRunUnpausesAndCancelsAcquire(t *testing.T) {
+	t.Parallel()
+
+	canceled := false
+	handle := &localTaskHandle{
+		paused:        true,
+		pauseWait:     make(chan struct{}),
+		acquireCancel: func() { canceled = true },
+	}
+
+	waitDone := make(chan error, 1)
+	go func() {
+		waitDone <- handle.WaitUntilRunnable(context.Background())
+	}()
+
+	if err := handle.ForceRun(); err != nil {
+		t.Fatalf("ForceRun() error = %v", err)
+	}
+	if !canceled {
+		t.Fatal("ForceRun() did not invoke acquire cancel function")
+	}
+	if !handle.HasForceAcquire() {
+		t.Fatal("HasForceAcquire() = false, want true after ForceRun()")
+	}
+
+	select {
+	case err := <-waitDone:
+		if err != nil {
+			t.Fatalf("WaitUntilRunnable() error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("WaitUntilRunnable() did not unblock after ForceRun()")
+	}
+}
+
+func TestLocalTaskHandleForceRunRejectsRunningTask(t *testing.T) {
+	t.Parallel()
+
+	handle := &localTaskHandle{running: true}
+	if err := handle.ForceRun(); err == nil {
+		t.Fatal("ForceRun(running) error = nil, want non-nil")
+	}
 }
 
 func TestSetAcquireCancelAndClearAcquireCancel(t *testing.T) {
