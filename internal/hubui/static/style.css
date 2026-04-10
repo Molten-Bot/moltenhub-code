@@ -761,7 +761,7 @@ body .right-col.prompt-collapsed.task-list-hidden {
 
 .prompt-compose-stack {
   display: grid;
-  gap: 4px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -1140,7 +1140,8 @@ select.prompt-control {
 
 .prompt-actions-start {
   display: flex;
-  flex: 0 1 auto;
+  flex: 0 1 var(--prompt-paste-width, 25%);
+  width: min(100%, var(--prompt-paste-width, 25%));
   max-width: 50%;
   min-width: 0;
 }
@@ -1180,9 +1181,12 @@ select.prompt-control {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
   text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   opacity: 0;
   transition: opacity 220ms ease;
 }

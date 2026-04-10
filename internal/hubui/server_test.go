@@ -835,11 +835,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="local-prompt-submit" class="prompt-action-button prompt-submit"`) {
 		t.Fatalf("expected index html to keep the Run button in prompt actions")
 	}
-	if !strings.Contains(markup, `const QUEUED_STATUS_TIMEOUT_MS = 8_000;`) {
-		t.Fatalf("expected index html to include queued status timeout constant")
+	if !strings.Contains(markup, `const QUEUED_STATUS_TIMEOUT_MS = 12_000;`) {
+		t.Fatalf("expected index html to keep success notifications visible for 12 seconds")
 	}
-	if !strings.Contains(markup, `return String(text || "").startsWith("Queued request ");`) {
-		t.Fatalf("expected index html to auto-dismiss queued status text")
+	if !strings.Contains(markup, `if (kind !== "ok") {`) || !strings.Contains(markup, `return String(text || "").trim() !== "";`) {
+		t.Fatalf("expected index html to auto-dismiss only non-empty success status text")
 	}
 	if !strings.Contains(markup, `}, QUEUED_STATUS_TIMEOUT_MS);`) {
 		t.Fatalf("expected index html to clear queued status after timeout")
