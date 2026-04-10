@@ -1608,24 +1608,28 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 	state.Profile.Emoji = strings.TrimSpace(req.Profile.Emoji)
 	state.Onboarding = hubui.DefaultHubSetupOnboarding(state.AgentMode)
 	hubSetupMarkStep(&state, "bind", "current", "")
+	bindError := func(err error) (hubui.HubSetupState, error) {
+		hubSetupMarkStep(&state, "bind", "error", err.Error())
+		return state, err
+	}
 
 	token := strings.TrimSpace(req.Token)
 
 	activeCfg, err := effectiveHubSetupConfig(cfg)
 	if err != nil {
-		return state, fmt.Errorf("load runtime config: %w", err)
+		return bindError(fmt.Errorf("load runtime config: %w", err))
 	}
 	activeCfg.BaseURL = hubSetupBaseURL(activeCfg.BaseURL, state.Region)
 
 	useSavedCredentials := token == ""
 	if !useSavedCredentials {
 		if err := validateHubSetupToken(token); err != nil {
-			return state, err
+			return bindError(err)
 		}
 	}
 	if useSavedCredentials {
 		if strings.TrimSpace(activeCfg.AgentToken) == "" && strings.TrimSpace(activeCfg.BindToken) == "" {
-			return state, fmt.Errorf("%s token is required", state.TokenType)
+			return bindError(fmt.Errorf("%s token is required", state.TokenType))
 		}
 	} else {
 		activeCfg.BindToken = ""
@@ -1644,7 +1648,7 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 		return state, fmt.Errorf("resolve hub token: %w", err)
 	}
 	hubSetupMarkStep(&state, "bind", "completed", "")
-	hubSetupMarkStep(&state, "work_bind", "current", "")
+	hubSetupMarkStep(&state, "work_bind", "completed", "Molten Hub credentials verified.")
 
 	finalCfg := activeCfg
 	if baseURL := strings.TrimRight(strings.TrimSpace(client.BaseURL), "/"); baseURL != "" {
@@ -1662,15 +1666,14 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 		finalCfg.Profile.ProfileText = state.Profile.ProfileText
 		finalCfg.Profile.DisplayName = state.Profile.DisplayName
 		finalCfg.Profile.Emoji = state.Profile.Emoji
+		hubSetupMarkStep(&state, "profile_set", "current", "")
 		if err := client.SyncProfile(ctx, resolvedToken, finalCfg); err != nil {
 			hubSetupMarkStep(&state, "profile_set", "error", err.Error())
 			return state, fmt.Errorf("sync hub profile: %w", err)
 		}
-		hubSetupMarkStep(&state, "work_bind", "completed", "")
 		hubSetupMarkStep(&state, "profile_set", "completed", "Molten Hub profile saved.")
 	} else {
 		_ = client.UpdateAgentStatus(ctx, resolvedToken, "online")
-		hubSetupMarkStep(&state, "work_bind", "completed", "")
 		hubSetupMarkStep(&state, "profile_set", "completed", "Existing Molten Hub profile confirmed.")
 	}
 	hubSetupMarkStep(&state, "work_activate", "current", "")
@@ -1779,6 +1782,12 @@ func hubSetupMarkStep(state *hubui.HubSetupState, stepID, status, detail string)
 	state.OnboardingActive = status == "current"
 	state.OnboardingStage = stepID
 	for i := range state.Onboarding {
+		if status == "current" && state.Onboarding[i].ID != stepID && state.Onboarding[i].Status == "current" {
+			state.Onboarding[i].Status = "completed"
+		}
+		if status == "error" && state.Onboarding[i].ID != stepID && state.Onboarding[i].Status == "current" {
+			state.Onboarding[i].Status = "completed"
+		}
 		if state.Onboarding[i].ID != stepID {
 			continue
 		}

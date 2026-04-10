@@ -258,8 +258,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="hub-setup-token-label"`) {
 		t.Fatalf("expected index html to include the dynamic hub setup token label")
 	}
-	if !strings.Contains(markup, `id="hub-setup-onboarding"`) || !strings.Contains(markup, `id="hub-setup-onboarding-steps"`) {
-		t.Fatalf("expected index html to include hub setup onboarding progress elements")
+	if !strings.Contains(markup, `id="hub-setup-status" class="hub-setup-status submit-status submit-status-inline`) {
+		t.Fatalf("expected index html to include a dedicated hub setup status line")
+	}
+	if strings.Contains(markup, `id="hub-setup-onboarding"`) || strings.Contains(markup, `id="hub-setup-onboarding-steps"`) {
+		t.Fatalf("expected index html to remove the hub setup onboarding progress list")
 	}
 	if !strings.Contains(markup, `id="hub-setup-region-na-toggle"`) || !strings.Contains(markup, `id="hub-setup-region-eu-toggle"`) {
 		t.Fatalf("expected index html to include hub setup region toggles")
@@ -297,8 +300,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `function defaultHubSetupOnboarding(agentMode)`) {
 		t.Fatalf("expected index html to include default hub setup onboarding steps")
 	}
-	if !strings.Contains(markup, `function renderHubSetupOnboarding()`) {
-		t.Fatalf("expected index html to include hub setup onboarding renderer")
+	if !strings.Contains(markup, `function hubSetupStatusMessageForStep(stepID, fallbackText = "")`) {
+		t.Fatalf("expected index html to include hub setup step-to-status mapping")
 	}
 	if !strings.Contains(markup, `function normalizeHubSetupDialogMode(mode)`) {
 		t.Fatalf("expected index html to include hub setup dialog mode normalization")
@@ -372,17 +375,16 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `hubSetupSubmit.textContent = profileEditor ? "Save" : "Done";`) {
 		t.Fatalf("expected index html to relabel the profile editor submit button to Save")
 	}
-	if !strings.Contains(markup, `hubSetupStatus.className = kind ? `+"`hub-setup-status submit-status submit-status-inline ${kind}`"+` : "hub-setup-status submit-status submit-status-inline";`) {
-		t.Fatalf("expected index html to preserve hub setup status styling while updating tones")
+	if !strings.Contains(markup, `hubSetupStatus.className = value`) || !strings.Contains(markup, `hub-setup-status submit-status submit-status-inline is-visible`) {
+		t.Fatalf("expected index html to keep the hub setup status line visible when populated")
 	}
 	if !strings.Contains(markup, `if (autoSubmit || isHubProfileDialogMode()) {`) || !strings.Contains(markup, `await new Promise((resolve) => window.setTimeout(resolve, 700));`) {
 		t.Fatalf("expected index html to close the profile dialog after a successful save confirmation")
 	}
-	hubSetupDisconnectIndex := strings.Index(markup, `id="hub-setup-connection-toggle"`)
 	hubSetupStatusIndex := strings.Index(markup, `id="hub-setup-status"`)
 	hubSetupSaveIndex := strings.Index(markup, `id="hub-setup-submit"`)
-	if hubSetupDisconnectIndex == -1 || hubSetupStatusIndex == -1 || hubSetupSaveIndex == -1 || hubSetupDisconnectIndex > hubSetupStatusIndex || hubSetupStatusIndex > hubSetupSaveIndex {
-		t.Fatalf("expected hub setup actions to render in left-to-right order Disconnect/status/Save")
+	if hubSetupStatusIndex == -1 || hubSetupSaveIndex == -1 || hubSetupStatusIndex > hubSetupSaveIndex {
+		t.Fatalf("expected the hub setup status line to render before the action buttons")
 	}
 	if !strings.Contains(markup, "function syncBrandLogoRotation()") {
 		t.Fatalf("expected index html to include brand logo rotation controller")
