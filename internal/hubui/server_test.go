@@ -210,6 +210,21 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `const LOGO_ROTATION_INTERVAL_MS = 8_000;`) {
 		t.Fatalf("expected index html to rotate brand logos every 8 seconds")
 	}
+	if !strings.Contains(markup, `const TASK_TIMING_REFRESH_INTERVAL_MS = 30_000;`) {
+		t.Fatalf("expected index html to refresh task timing labels on a separate interval")
+	}
+	if !strings.Contains(markup, `function refreshVisibleTaskTimingSummaries()`) {
+		t.Fatalf("expected index html to refresh visible task timing labels without a full task rerender")
+	}
+	if !strings.Contains(markup, `timing: taskTimingSignature(task),`) {
+		t.Fatalf("expected task collection render signatures to use stable task timing data")
+	}
+	if !strings.Contains(markup, `update.className = "task-timing-summary";`) {
+		t.Fatalf("expected task timing labels to render into dedicated nodes for in-place refresh")
+	}
+	if !strings.Contains(markup, `scheduleTaskTimingRefresh();`) {
+		t.Fatalf("expected index html to start the task timing refresh scheduler during boot")
+	}
 	if !strings.Contains(markup, `id="moltenbot-hub-link"`) {
 		t.Fatalf("expected index html to include molten bot hub dock link")
 	}
