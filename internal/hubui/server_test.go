@@ -938,6 +938,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="builder-repo-input" class="prompt-control prompt-input"`) || !strings.Contains(markup, `id="builder-target-subdir" class="prompt-control prompt-input"`) {
 		t.Fatalf("expected index html to include builder repo and target subdir inputs")
 	}
+	if !strings.Contains(markup, `id="builder-reviewer-select" class="prompt-control"`) ||
+		!strings.Contains(markup, `id="builder-reviewer-input" class="prompt-control prompt-input"`) ||
+		!strings.Contains(markup, `id="library-reviewer-select" class="prompt-control"`) ||
+		!strings.Contains(markup, `id="library-reviewer-input" class="prompt-control prompt-input"`) {
+		t.Fatalf("expected index html to include reviewer history and manual entry controls for prompt and library modes")
+	}
 	if !strings.Contains(markup, `id="builder-base-branch-clear"`) {
 		t.Fatalf("expected index html to include branch clear action")
 	}
@@ -1003,6 +1009,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function rememberRepos(") {
 		t.Fatalf("expected index html to include repo history persistence")
 	}
+	if !strings.Contains(markup, "function rememberReviewers(") ||
+		!strings.Contains(markup, "function renderReviewerHistorySelect(") ||
+		!strings.Contains(markup, "function renderReviewerHistoryOptions(") {
+		t.Fatalf("expected index html to include reviewer history persistence and rendering helpers")
+	}
 	if !strings.Contains(markup, "function defaultRepoSelection(") {
 		t.Fatalf("expected index html to include repo history default selection helper")
 	}
@@ -1020,6 +1031,16 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "if (nextValue) {") ||
 		!strings.Contains(markup, "input.value = nextValue;") {
 		t.Fatalf("expected index html to sync default saved repo selection into the repository input")
+	}
+	if !strings.Contains(markup, "Enter reviewers manually") ||
+		!strings.Contains(markup, "No saved reviewers yet") ||
+		!strings.Contains(markup, "function reviewerListFromValue(") ||
+		!strings.Contains(markup, "payload.reviewers = reviewers;") ||
+		!strings.Contains(markup, "rememberReviewers(dedupeReviewerValues([...(Array.isArray(parsed?.reviewers) ? parsed.reviewers : []), parsed?.githubHandle]));") {
+		t.Fatalf("expected index html to capture reviewers in prompt payloads and persist reviewer history after submission")
+	}
+	if !strings.Contains(markup, `"reviewers": [`) || !strings.Contains(markup, `"octocat"`) || !strings.Contains(markup, `"hubot"`) {
+		t.Fatalf("expected index html JSON example to include reviewers")
 	}
 	if !strings.Contains(markup, "const repo = normalizeRepoValue(builderRepoInput.value) || defaultRepository();") ||
 		!strings.Contains(markup, "const repo = normalizeRepoValue(libraryRepoInput.value) || defaultRepository();") {

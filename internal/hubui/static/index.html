@@ -195,6 +195,17 @@
                     <input id="builder-target-subdir" class="prompt-control prompt-input" type="text" value="." spellcheck="false" placeholder=".">
                   </label>
                 </div>
+                <div class="prompt-grid">
+                  <label id="builder-reviewer-history-field" class="prompt-field prompt-field-repo-history">
+                    <span class="prompt-label">Reviewer</span>
+                    <select id="builder-reviewer-select" class="prompt-control">
+                      <option value="">Enter reviewers manually</option>
+                    </select>
+                  </label>
+                  <label id="builder-reviewer-field" class="prompt-field prompt-field-repository">
+                    <input id="builder-reviewer-input" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="octocat, hubot" aria-label="Reviewers">
+                  </label>
+                </div>
                 <label id="builder-prompt-field" class="prompt-field">
                   <span class="prompt-label">Prompt</span>
                   <textarea
@@ -226,6 +237,17 @@
                     <input id="library-target-subdir" class="prompt-control prompt-input" type="text" value="." spellcheck="false" placeholder=".">
                   </label>
                 </div>
+                <div class="prompt-grid">
+                  <label id="library-reviewer-history-field" class="prompt-field prompt-field-repo-history">
+                    <span class="prompt-label">Reviewer</span>
+                    <select id="library-reviewer-select" class="prompt-control">
+                      <option value="">Enter reviewers manually</option>
+                    </select>
+                  </label>
+                  <label id="library-reviewer-field" class="prompt-field prompt-field-repository">
+                    <input id="library-reviewer-input" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="octocat, hubot" aria-label="Reviewers">
+                  </label>
+                </div>
                 <div class="prompt-field">
                   <span class="prompt-label">Task Library</span>
                   <div id="library-task-list" class="library-task-list"></div>
@@ -244,7 +266,11 @@
     "git@github.com:org/repo-two.git"
   ],
   "branch": "main",
-  "libraryTaskName": "unit-test-coverage"
+  "libraryTaskName": "unit-test-coverage",
+  "reviewers": [
+    "octocat",
+    "hubot"
+  ]
 }'></textarea>
               </div>
               <div class="prompt-actions">
@@ -502,6 +528,7 @@
   <script>
     const DISMISSED_TASKS_KEY = "hubui.dismissedTaskIds";
     const REPO_HISTORY_KEY = "hubui.repoHistory.v1";
+    const REVIEWER_HISTORY_KEY = "hubui.reviewerHistory.v1";
     const PROMPT_MODE_KEY = "hubui.localPromptMode";
     const PROMPT_VISIBILITY_KEY = "hubui.localPromptVisible";
     const THEME_KEY = "hubui.theme";
@@ -930,6 +957,18 @@
       }
     }
 
+    function loadReviewerHistory() {
+      try {
+        const raw = localStorage.getItem(REVIEWER_HISTORY_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+        return dedupeReviewerValues(parsed);
+      } catch (_err) {
+        return [];
+      }
+    }
+
     function loadPromptMode() {
       try {
         const raw = localStorage.getItem(PROMPT_MODE_KEY);
@@ -981,6 +1020,7 @@
       libraryTasks: [],
       libraryLoadError: "",
       repoHistory: loadRepoHistory(),
+      reviewerHistory: loadReviewerHistory(),
       promptMode: loadPromptMode(),
       selectedLibraryTask: "",
       promptVisible: loadPromptVisibility(),
@@ -1060,6 +1100,10 @@
     const builderBaseBranch = document.getElementById("builder-base-branch");
     const builderBaseBranchClear = document.getElementById("builder-base-branch-clear");
     const builderTargetSubdir = document.getElementById("builder-target-subdir");
+    const builderReviewerSelect = document.getElementById("builder-reviewer-select");
+    const builderReviewerHistoryField = document.getElementById("builder-reviewer-history-field");
+    const builderReviewerField = document.getElementById("builder-reviewer-field");
+    const builderReviewerInput = document.getElementById("builder-reviewer-input");
     const builderPromptInput = document.getElementById("builder-prompt-input");
     const builderImagePasteTarget = document.getElementById("builder-image-paste-target");
     const builderImagePasteTargetWrap = builderImagePasteTarget ? builderImagePasteTarget.parentElement : null;
@@ -1070,6 +1114,10 @@
     const libraryRepoInput = document.getElementById("library-repo-input");
     const libraryBaseBranch = document.getElementById("library-base-branch");
     const libraryTargetSubdir = document.getElementById("library-target-subdir");
+    const libraryReviewerSelect = document.getElementById("library-reviewer-select");
+    const libraryReviewerHistoryField = document.getElementById("library-reviewer-history-field");
+    const libraryReviewerField = document.getElementById("library-reviewer-field");
+    const libraryReviewerInput = document.getElementById("library-reviewer-input");
     const libraryTaskList = document.getElementById("library-task-list");
     const rightCol = document.querySelector(".right-col");
     const promptWrap = document.querySelector(".prompt-wrap");
@@ -2967,11 +3015,39 @@
       return String(value || "").trim();
     }
 
+    function normalizeReviewerValue(value) {
+      return String(value || "").trim().replace(/^@+/, "");
+    }
+
+    function reviewerListFromValue(value) {
+      const out = [];
+      const seen = new Set();
+      for (const part of String(value || "").split(",")) {
+        const normalized = normalizeReviewerValue(part);
+        if (!normalized || seen.has(normalized)) continue;
+        seen.add(normalized);
+        out.push(normalized);
+      }
+      return out;
+    }
+
     function dedupeRepoValues(values) {
       const out = [];
       const seen = new Set();
       for (const value of values || []) {
         const normalized = normalizeRepoValue(value);
+        if (!normalized || seen.has(normalized)) continue;
+        seen.add(normalized);
+        out.push(normalized);
+      }
+      return out;
+    }
+
+    function dedupeReviewerValues(values) {
+      const out = [];
+      const seen = new Set();
+      for (const value of values || []) {
+        const normalized = normalizeReviewerValue(value);
         if (!normalized || seen.has(normalized)) continue;
         seen.add(normalized);
         out.push(normalized);
@@ -3150,6 +3226,14 @@
       }
     }
 
+    function persistReviewerHistory() {
+      try {
+        localStorage.setItem(REVIEWER_HISTORY_KEY, JSON.stringify(state.reviewerHistory));
+      } catch (_err) {
+        // Ignore localStorage failures.
+      }
+    }
+
     function rememberRepos(repos) {
       const unique = dedupeRepoValues([...(repos || []), ...state.repoHistory]);
       if (unique.length === state.repoHistory.length && unique.every((value, index) => value === state.repoHistory[index])) {
@@ -3172,6 +3256,16 @@
       state.repoHistory = filtered;
       persistRepoHistory();
       renderRepoHistoryOptions();
+    }
+
+    function rememberReviewers(reviewers) {
+      const unique = dedupeReviewerValues([...(reviewers || []), ...state.reviewerHistory]);
+      if (unique.length === state.reviewerHistory.length && unique.every((value, index) => value === state.reviewerHistory[index])) {
+        return;
+      }
+      state.reviewerHistory = unique;
+      persistReviewerHistory();
+      renderReviewerHistoryOptions();
     }
 
     function selectedLibraryTaskName() {
@@ -3302,6 +3396,11 @@
       syncRepositoryVisibility(libraryRepoSelect, libraryRepositoryField);
     }
 
+    function syncReviewerFieldVisibility() {
+      syncRepositoryVisibility(builderReviewerSelect, builderReviewerField);
+      syncRepositoryVisibility(libraryReviewerSelect, libraryReviewerField);
+    }
+
     function displayRepoLabel(repo) {
       const cleaned = cleanRepoName(repo);
       return cleaned || repo;
@@ -3334,13 +3433,18 @@
       if (!prompt) {
         throw new Error("Prompt is required.");
       }
-      return {
+      const payload = {
         repos: [repo],
         baseBranch: branch,
         targetSubdir: String(builderTargetSubdir.value || "").trim() || ".",
         prompt,
         images: normalizePromptImages(state.promptImages),
       };
+      const reviewers = reviewerListFromValue(builderReviewerInput.value);
+      if (reviewers.length) {
+        payload.reviewers = reviewers;
+      }
+      return payload;
     }
 
     function libraryPayload() {
@@ -3355,12 +3459,17 @@
       }
 
       const branch = String(libraryBaseBranch.value || "").trim() || "main";
-      return {
+      const payload = {
         repo,
         branch,
         targetSubdir: String(libraryTargetSubdir.value || "").trim() || ".",
         libraryTaskName: libraryTaskName,
       };
+      const reviewers = reviewerListFromValue(libraryReviewerInput.value);
+      if (reviewers.length) {
+        payload.reviewers = reviewers;
+      }
+      return payload;
     }
 
     function syncRawFromMode(mode) {
@@ -3382,10 +3491,16 @@
 
       const repo = repos[0] || "";
       const branch = String(payload.baseBranch || payload.branch || "main").trim() || "main";
+      const reviewers = dedupeReviewerValues([
+        ...(Array.isArray(payload.reviewers) ? payload.reviewers : []),
+        payload.githubHandle,
+      ]);
       builderRepoInput.value = repo;
       builderBaseBranch.value = branch;
       libraryRepoInput.value = repo;
       libraryBaseBranch.value = branch;
+      builderReviewerInput.value = reviewers.join(", ");
+      libraryReviewerInput.value = reviewers.join(", ");
       syncBaseBranchClearState();
       const targetSubdir = String(payload.targetSubdir || ".").trim() || ".";
       builderTargetSubdir.value = targetSubdir;
@@ -3395,6 +3510,7 @@
       syncBuilderDraftClearState();
       state.selectedLibraryTask = String(payload.libraryTaskName || "").trim();
       renderRepoHistoryOptions();
+      renderReviewerHistoryOptions();
       renderLibraryTaskOptions();
     }
 
@@ -3479,6 +3595,57 @@
     function renderRepoHistoryOptions() {
       renderRepoHistorySelect(builderRepoHistoryField, builderRepoSelect, builderRepoInput);
       renderRepoHistorySelect(libraryRepoHistoryField, libraryRepoSelect, libraryRepoInput);
+    }
+
+    function renderReviewerHistorySelect(historyField, select, input) {
+      if (!historyField || !select || !input) {
+        return;
+      }
+
+      const currentReviewers = reviewerListFromValue(input.value);
+      const currentValue = currentReviewers.length === 1 ? currentReviewers[0] : "";
+      const selectedValue = normalizeReviewerValue(select.value);
+      const manualSelected = selectedValue === "";
+      const unique = dedupeReviewerValues([currentValue, ...state.reviewerHistory]);
+      const hasSavedHistory = state.reviewerHistory.length > 0;
+
+      historyField.classList.toggle("hidden", !hasSavedHistory);
+
+      select.replaceChildren();
+      const manualOption = document.createElement("option");
+      manualOption.value = "";
+      manualOption.textContent = unique.length ? "Enter reviewers manually" : "No saved reviewers yet";
+      select.appendChild(manualOption);
+
+      for (const reviewer of unique) {
+        if (!reviewer) continue;
+        const option = document.createElement("option");
+        option.value = reviewer;
+        option.textContent = reviewer;
+        select.appendChild(option);
+      }
+
+      let nextValue = "";
+      if (!(manualSelected && currentReviewers.length !== 1)) {
+        if (selectedValue && unique.includes(selectedValue)) {
+          nextValue = selectedValue;
+        } else if (currentValue && unique.includes(currentValue)) {
+          nextValue = currentValue;
+        } else if (state.reviewerHistory.length > 0 && unique.length > 0) {
+          nextValue = unique[0];
+        }
+      }
+      select.value = nextValue;
+      if (nextValue && currentReviewers.length <= 1) {
+        input.value = nextValue;
+      }
+
+      syncReviewerFieldVisibility();
+    }
+
+    function renderReviewerHistoryOptions() {
+      renderReviewerHistorySelect(builderReviewerHistoryField, builderReviewerSelect, builderReviewerInput);
+      renderReviewerHistorySelect(libraryReviewerHistoryField, libraryReviewerSelect, libraryReviewerInput);
     }
 
     function promptModeTitle(mode) {
@@ -4777,8 +4944,9 @@
         try {
           const parsed = JSON.parse(normalized.compact);
           rememberRepos(dedupeRepoValues([...(Array.isArray(parsed?.repos) ? parsed.repos : []), parsed?.repo, parsed?.repoUrl]));
+          rememberReviewers(dedupeReviewerValues([...(Array.isArray(parsed?.reviewers) ? parsed.reviewers : []), parsed?.githubHandle]));
         } catch (_err) {
-          // Ignore repo history extraction failures.
+          // Ignore local history extraction failures.
         }
         clearSubmittedPromptState();
         trackAnalyticsEvent("prompt_submit_succeeded", { prompt_mode: state.promptMode, request_id: requestID });
@@ -4824,6 +4992,24 @@
       renderRepoHistoryOptions();
     });
 
+    builderReviewerSelect.addEventListener("change", () => {
+      const value = normalizeReviewerValue(builderReviewerSelect.value);
+      if (value) {
+        builderReviewerInput.value = value;
+        libraryReviewerInput.value = value;
+      }
+      renderReviewerHistoryOptions();
+    });
+
+    libraryReviewerSelect.addEventListener("change", () => {
+      const value = normalizeReviewerValue(libraryReviewerSelect.value);
+      if (value) {
+        libraryReviewerInput.value = value;
+        builderReviewerInput.value = value;
+      }
+      renderReviewerHistoryOptions();
+    });
+
     builderRepoInput.addEventListener("input", () => {
       libraryRepoInput.value = builderRepoInput.value;
       if (normalizeRepoValue(builderRepoSelect.value) !== "") {
@@ -4838,6 +5024,24 @@
         libraryRepoSelect.value = "";
       }
       renderRepoHistoryOptions();
+    });
+
+    builderReviewerInput.addEventListener("input", () => {
+      libraryReviewerInput.value = builderReviewerInput.value;
+      if (normalizeReviewerValue(builderReviewerSelect.value) !== "") {
+        builderReviewerSelect.value = "";
+      }
+      syncBuilderDraftClearState();
+      renderReviewerHistoryOptions();
+    });
+
+    libraryReviewerInput.addEventListener("input", () => {
+      builderReviewerInput.value = libraryReviewerInput.value;
+      if (normalizeReviewerValue(libraryReviewerSelect.value) !== "") {
+        libraryReviewerSelect.value = "";
+      }
+      syncBuilderDraftClearState();
+      renderReviewerHistoryOptions();
     });
 
     builderBaseBranch.addEventListener("input", () => {
@@ -5099,7 +5303,9 @@
     libraryRepoInput.value = builderRepoInput.value;
     libraryBaseBranch.value = builderBaseBranch.value;
     libraryTargetSubdir.value = builderTargetSubdir.value;
+    libraryReviewerInput.value = builderReviewerInput.value;
     renderRepoHistoryOptions();
+    renderReviewerHistoryOptions();
     renderLibraryTaskOptions();
     renderPromptImages();
     syncBaseBranchClearState();
