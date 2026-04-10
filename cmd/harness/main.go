@@ -942,9 +942,6 @@ func shouldQueueFailureFollowUp(failedResult harness.Result) (bool, string) {
 	if errText == "" {
 		return false, "failed task error was empty"
 	}
-	if reason := failurefollowup.NonRemediableFailureReason(failedResult.Err); reason != "" {
-		return false, reason
-	}
 	return true, ""
 }
 

@@ -656,44 +656,35 @@ func TestTaskLogDirAndTaskLogPathsValidateInputs(t *testing.T) {
 	}
 }
 
-func TestShouldQueueFailureFollowUpSkipsNonRemediableErrors(t *testing.T) {
+func TestShouldQueueFailureFollowUpQueuesFailuresWithErrorDetails(t *testing.T) {
 	t.Parallel()
 
 	ok, reason := shouldQueueFailureFollowUp(harness.Result{
 		Err: errors.New("codex: ERROR: Quota exceeded. Check your plan and billing details."),
 	})
-	if ok {
-		t.Fatalf("shouldQueueFailureFollowUp(quota exceeded) = true, want false")
-	}
-	if !strings.Contains(reason, "quota exceeded") {
-		t.Fatalf("reason = %q, want marker containing quota exceeded", reason)
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureFollowUp(quota exceeded) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
 	ok, reason = shouldQueueFailureFollowUp(harness.Result{
 		Err: errors.New("codex: unexpected status 401 Unauthorized: Missing bearer or basic authentication in header"),
 	})
-	if ok {
-		t.Fatalf("shouldQueueFailureFollowUp(auth failure) = true, want false")
-	}
-	if !strings.Contains(reason, "401 unauthorized") {
-		t.Fatalf("reason = %q, want marker containing 401 unauthorized", reason)
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureFollowUp(auth failure) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
 	ok, reason = shouldQueueFailureFollowUp(harness.Result{
 		Err: errors.New("clone: run git [clone ...]: exit status 128"),
 	})
-	if !ok {
-		t.Fatalf("shouldQueueFailureFollowUp(clone failure) = false, want true (reason=%q)", reason)
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureFollowUp(clone failure) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
 	ok, reason = shouldQueueFailureFollowUp(harness.Result{
 		Err: errors.New("git: verify remote write access for repo https://github.com/acme/repo.git branch \"moltenhub-fix\": exit status 128: remote: Write access to repository not granted. fatal: unable to access 'https://github.com/acme/repo.git/': The requested URL returned error: 403"),
 	})
-	if ok {
-		t.Fatalf("shouldQueueFailureFollowUp(repo write access failure) = true, want false")
-	}
-	if !strings.Contains(reason, "write access to repository not granted") {
-		t.Fatalf("reason = %q, want marker containing write access to repository not granted", reason)
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureFollowUp(repo write access failure) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 }
 
