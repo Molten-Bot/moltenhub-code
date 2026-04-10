@@ -18,6 +18,7 @@ import (
 const piProviderAuthField = "pi_provider_auth"
 const piAuthProbeTimeout = 20 * time.Second
 const piAuthProbePrompt = "Reply with OK."
+const openRouterProviderSetupDocURL = "https://raw.githubusercontent.com/Dicklesworthstone/pi_agent_rust/refs/heads/main/docs/provider-openrouter-setup.json"
 
 type piProviderOption struct {
 	EnvVar      string
@@ -38,7 +39,7 @@ var piProviderOptions = []piProviderOption{
 	{EnvVar: "GROQ_API_KEY", Label: "Groq API key", Description: "Use Groq with an API key."},
 	{EnvVar: "CEREBRAS_API_KEY", Label: "Cerebras API key", Description: "Use Cerebras with an API key."},
 	{EnvVar: "XAI_API_KEY", Label: "xAI Grok API key", Description: "Use xAI Grok with an API key."},
-	{EnvVar: "OPENROUTER_API_KEY", Label: "OpenRouter API key", Description: "Use OpenRouter with an API key."},
+	{EnvVar: "OPENROUTER_API_KEY", Label: "OpenRouter API key", Description: "Use an OpenRouter API key (sk-or-vN-...), not a Personal Access Token."},
 	{EnvVar: "AI_GATEWAY_API_KEY", Label: "Vercel AI Gateway API key", Description: ""},
 	{EnvVar: "ZAI_API_KEY", Label: "ZAI API key", Description: "Use ZAI with an API key."},
 	{EnvVar: "MISTRAL_API_KEY", Label: "Mistral API key", Description: "Use Mistral with an API key."},
@@ -194,7 +195,7 @@ func (g *piAuthGate) Configure(ctx context.Context, rawInput string) (hubui.Agen
 		g.mu.Unlock()
 		return snap, err
 	}
-	if err := g.probe(ctx); err != nil {
+	if err := annotatePiProviderProbeError(g.probe(ctx), auth.EnvVar); err != nil {
 		g.mu.Lock()
 		g.ready = false
 		g.state = "needs_configure"
@@ -229,7 +230,7 @@ func (g *piAuthGate) refreshAndSnapshot(ctx context.Context) (hubui.AgentAuthSta
 	canonical := strings.TrimSpace(g.initCfg.PiProviderAuth)
 	g.mu.Unlock()
 
-	if err := g.probe(ctx); err != nil {
+	if err := annotatePiProviderProbeError(g.probe(ctx), canonicalPiProviderEnvVar(canonical)); err != nil {
 		g.mu.Lock()
 		g.ready = false
 		g.state = "needs_configure"
@@ -380,7 +381,42 @@ func decodePiProviderAuth(rawInput string) (piProviderAuth, error) {
 	if auth.Value == "" {
 		return piProviderAuth{}, fmt.Errorf("value is required")
 	}
+	if err := validatePiProviderAuthValue(auth.EnvVar, auth.Value); err != nil {
+		return piProviderAuth{}, err
+	}
 	return auth, nil
+}
+
+func validatePiProviderAuthValue(envVar, value string) error {
+	switch strings.TrimSpace(envVar) {
+	case "OPENROUTER_API_KEY":
+		if isLikelyOpenRouterAPIKey(value) {
+			return nil
+		}
+		return fmt.Errorf("OPENROUTER_API_KEY must be an OpenRouter API key (sk-or-vN-...), not a Personal Access Token. See %s", openRouterProviderSetupDocURL)
+	default:
+		return nil
+	}
+}
+
+func isLikelyOpenRouterAPIKey(value string) bool {
+	value = strings.TrimSpace(value)
+	if !strings.HasPrefix(value, "sk-or-v") {
+		return false
+	}
+	rest := strings.TrimPrefix(value, "sk-or-v")
+	if rest == "" {
+		return false
+	}
+
+	versionDigits := 0
+	for versionDigits < len(rest) && rest[versionDigits] >= '0' && rest[versionDigits] <= '9' {
+		versionDigits++
+	}
+	if versionDigits == 0 || versionDigits >= len(rest) || rest[versionDigits] != '-' {
+		return false
+	}
+	return versionDigits+1 < len(rest)
 }
 
 func encodePiProviderAuth(auth piProviderAuth) (string, error) {
@@ -426,4 +462,30 @@ func (g *piAuthGate) probe(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+func canonicalPiProviderEnvVar(canonical string) string {
+	auth, err := decodePiProviderAuth(canonical)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(auth.EnvVar)
+}
+
+func annotatePiProviderProbeError(err error, envVar string) error {
+	if err == nil {
+		return nil
+	}
+
+	errText := strings.TrimSpace(err.Error())
+	if errText == "" {
+		errText = "unknown error"
+	}
+
+	detail := errText
+	if strings.EqualFold(strings.TrimSpace(envVar), "OPENROUTER_API_KEY") &&
+		strings.Contains(strings.ToLower(errText), "personal access tokens are not supported for this endpoint") {
+		detail += ". OpenRouter Personal Access Tokens are not supported for this PI flow. Use an OpenRouter API key for OPENROUTER_API_KEY. See " + openRouterProviderSetupDocURL
+	}
+	return fmt.Errorf("PI provider validation failed. Error details: %s", detail)
 }
