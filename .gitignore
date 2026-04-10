@@ -11,3 +11,4 @@ moltenhub/
 !.env.example
 bin/*
 prompt-images/*
+*.out
