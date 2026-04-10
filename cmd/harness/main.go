@@ -539,6 +539,8 @@ func runHub(args []string) int {
 			queueFailureFollowUp(requestID, result, runCfg)
 		}
 	}
+	hubRuntimeReloader := newHubRuntimeConfigReloader(cfg, hubController.Update, hubController.Stop, daemonLogger)
+	go hubRuntimeReloader.Run(ctx, hubRuntimeConfigReloadInterval)
 
 	waitForHubRuntime := func() int {
 		for {
