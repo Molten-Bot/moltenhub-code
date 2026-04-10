@@ -169,6 +169,9 @@ func SaveRuntimeConfigHubSettings(path string, initCfg InitConfig, resolvedAgent
 		"bio":          initCfg.Profile.Bio,
 		"display_name": initCfg.Profile.DisplayName,
 		"emoji":        initCfg.Profile.Emoji,
+		"llm":          initCfg.Profile.LLM,
+		"harness":      initCfg.Profile.Harness,
+		"skills":       append([]string(nil), initCfg.Profile.Skills...),
 	}
 	doc["agent_token"] = resolvedAgentToken
 	if strings.TrimSpace(initCfg.BindToken) != "" {

@@ -718,7 +718,7 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 
 	var bindCalled bool
 	var syncedHandle string
-	var syncedMetadata bool
+	var syncedProfile bool
 	var liveCfg hub.InitConfig
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -736,7 +736,7 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 				t.Fatalf("GET /agents/me token = %q, want %q", got, "agent-resolved")
 			}
 			_, _ = w.Write([]byte(`{"handle":"new-builder","profile":{"display_name":"Molten Builder","emoji":"🔥","bio":"Builds things"}}`))
-		case (r.Method == http.MethodPost || r.Method == http.MethodPatch) && (r.URL.Path == "/v1/agents/me/metadata" || r.URL.Path == "/v1/agents/me"):
+		case (r.Method == http.MethodPost || r.Method == http.MethodPatch) && r.URL.Path == "/v1/agents/me":
 			if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != "agent-resolved" {
 				t.Fatalf("sync token = %q, want %q", got, "agent-resolved")
 			}
@@ -745,8 +745,11 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 			if strings.Contains(body, `"handle":"new-builder"`) {
 				syncedHandle = "new-builder"
 			}
+			if strings.Contains(body, `"profile"`) {
+				syncedProfile = true
+			}
 			if strings.Contains(body, `"metadata"`) {
-				syncedMetadata = true
+				t.Fatalf("profile sync should not send metadata payload: %s", body)
 			}
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		default:
@@ -783,8 +786,8 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 	if !bindCalled {
 		t.Fatal("expected bind token flow to be used for new agent setup")
 	}
-	if syncedHandle == "" || !syncedMetadata {
-		t.Fatalf("expected profile sync requests, got handle=%q metadata=%v", syncedHandle, syncedMetadata)
+	if syncedHandle == "" || !syncedProfile {
+		t.Fatalf("expected profile sync requests, got handle=%q profile=%v", syncedHandle, syncedProfile)
 	}
 	if got, want := state.AgentMode, "new"; got != want {
 		t.Fatalf("AgentMode = %q, want %q", got, want)
@@ -1025,6 +1028,9 @@ func TestConfigureHubSetupExistingAgentReturnsLoginVerificationFailure(t *testin
 		case r.Method == http.MethodPost && (r.URL.Path == "/v1/agents/bind-tokens" || r.URL.Path == "/v1/agents/bind"):
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		case (r.Method == http.MethodPatch || r.Method == http.MethodPost) &&
+			(r.URL.Path == "/v1/agents/me/status" || r.URL.Path == "/v1/agents/me" || r.URL.Path == "/v1/agents/me/metadata"):
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)

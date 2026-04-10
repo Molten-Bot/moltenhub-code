@@ -68,6 +68,15 @@ func TestSaveRuntimeConfigWritesExpectedShape(t *testing.T) {
 	if got.Profile.DisplayName != "Molten Bot" {
 		t.Fatalf("Profile.DisplayName = %q", got.Profile.DisplayName)
 	}
+	if got.Profile.LLM != "codex" {
+		t.Fatalf("Profile.LLM = %q, want codex", got.Profile.LLM)
+	}
+	if got.Profile.Harness != runtimeIdentifier {
+		t.Fatalf("Profile.Harness = %q, want %q", got.Profile.Harness, runtimeIdentifier)
+	}
+	if len(got.Profile.Skills) != 1 || got.Profile.Skills[0] != "code_for_me" {
+		t.Fatalf("Profile.Skills = %#v, want [code_for_me]", got.Profile.Skills)
+	}
 	if got.GitHubToken != "ghp_secret" {
 		t.Fatalf("GitHubToken = %q", got.GitHubToken)
 	}

@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/jef/moltenhub-code/internal/agentruntime"
 )
 
 func TestRuntimeConfigInitCarriesRuntimeConfigPath(t *testing.T) {
@@ -306,6 +308,16 @@ func TestSaveRuntimeConfigHubSettingsMergesHubFieldsWithoutDroppingExtras(t *tes
 	profile, _ := got["profile"].(map[string]any)
 	if profile["display_name"] != "Molten Builder" {
 		t.Fatalf("profile.display_name = %#v, want %q", profile["display_name"], "Molten Builder")
+	}
+	if got, want := profile["llm"], agentruntime.Default().Harness; got != want {
+		t.Fatalf("profile.llm = %#v, want %q", got, want)
+	}
+	if profile["harness"] != runtimeIdentifier {
+		t.Fatalf("profile.harness = %#v, want %q", profile["harness"], runtimeIdentifier)
+	}
+	skills, _ := profile["skills"].([]any)
+	if len(skills) != 1 || skills[0] != "code_for_me" {
+		t.Fatalf("profile.skills = %#v, want [code_for_me]", profile["skills"])
 	}
 	if got["custom"] != "preserved" {
 		t.Fatalf("custom = %#v, want %q", got["custom"], "preserved")

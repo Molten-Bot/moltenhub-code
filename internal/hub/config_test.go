@@ -251,3 +251,51 @@ func TestLoadInitReadsAgentRuntimeFromEnv(t *testing.T) {
 		t.Fatalf("AgentCommand = %q, want %q", got, want)
 	}
 }
+
+func TestApplyDefaultsDerivesProfileRuntimeFields(t *testing.T) {
+	t.Parallel()
+
+	cfg := InitConfig{
+		AgentHarness: "claude",
+		Profile: ProfileConfig{
+			DisplayName: "Molten Agent",
+			Emoji:       "🤖",
+			Bio:         "Owns automation",
+		},
+	}
+	cfg.ApplyDefaults()
+
+	if got, want := cfg.Profile.LLM, "claude"; got != want {
+		t.Fatalf("Profile.LLM = %q, want %q", got, want)
+	}
+	if got, want := cfg.Profile.Harness, runtimeIdentifier; got != want {
+		t.Fatalf("Profile.Harness = %q, want %q", got, want)
+	}
+	if len(cfg.Profile.Skills) != 1 || cfg.Profile.Skills[0] != defaultRuntimeSkillName {
+		t.Fatalf("Profile.Skills = %#v, want [%q]", cfg.Profile.Skills, defaultRuntimeSkillName)
+	}
+}
+
+func TestApplyDefaultsForcesImmutableProfileRuntimeFields(t *testing.T) {
+	t.Parallel()
+
+	cfg := InitConfig{
+		AgentHarness: "codex",
+		Profile: ProfileConfig{
+			LLM:     "manual",
+			Harness: "custom",
+			Skills:  []string{"other"},
+		},
+	}
+	cfg.ApplyDefaults()
+
+	if got, want := cfg.Profile.LLM, "codex"; got != want {
+		t.Fatalf("Profile.LLM = %q, want %q", got, want)
+	}
+	if got, want := cfg.Profile.Harness, runtimeIdentifier; got != want {
+		t.Fatalf("Profile.Harness = %q, want %q", got, want)
+	}
+	if len(cfg.Profile.Skills) != 1 || cfg.Profile.Skills[0] != defaultRuntimeSkillName {
+		t.Fatalf("Profile.Skills = %#v, want [%q]", cfg.Profile.Skills, defaultRuntimeSkillName)
+	}
+}

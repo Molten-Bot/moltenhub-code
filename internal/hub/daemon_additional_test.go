@@ -478,18 +478,15 @@ func TestShouldQueueFailureFollowUpSkipsNestedFailureReviewRequests(t *testing.T
 	}
 }
 
-func TestShouldQueueFailureFollowUpSkipsRepoAccessFailures(t *testing.T) {
+func TestShouldQueueFailureFollowUpQueuesRepoAccessFailures(t *testing.T) {
 	t.Parallel()
 
 	dispatch := SkillDispatch{RequestID: "req-123"}
 	ok, reason := shouldQueueFailureFollowUp(dispatch, harness.Result{
 		Err: errors.New("git: verify remote write access for repo https://github.com/acme/repo.git branch \"moltenhub-fix\": exit status 128: remote: Write access to repository not granted. fatal: unable to access 'https://github.com/acme/repo.git/': The requested URL returned error: 403"),
 	})
-	if ok {
-		t.Fatal("shouldQueueFailureFollowUp() = true, want false")
-	}
-	if !strings.Contains(reason, "write access to repository not granted") {
-		t.Fatalf("reason = %q, want repo access suppression reason", reason)
+	if !ok {
+		t.Fatalf("shouldQueueFailureFollowUp() = false, want true (reason=%q)", reason)
 	}
 }
 

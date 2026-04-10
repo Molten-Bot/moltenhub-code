@@ -1566,24 +1566,28 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 		if err := client.SyncProfile(ctx, resolvedToken, finalCfg); err != nil {
 			return state, fmt.Errorf("sync hub profile: %w", err)
 		}
+	} else {
+		_ = client.UpdateAgentStatus(ctx, resolvedToken, "online")
 	}
 
+	// Always read back profile after token resolution so config initialization
+	// stays accurate for first-time binds and re-binds.
 	profile, err := client.AgentProfile(ctx, resolvedToken)
 	if err != nil {
 		return state, fmt.Errorf("load hub profile: %w", err)
 	}
-	_ = client.UpdateAgentStatus(ctx, resolvedToken, "online")
-	finalCfg.Handle = strings.TrimSpace(profile.Handle)
-	finalCfg.Profile = profile.Profile
-
-	if state.AgentMode == "new" {
-		if profile, err := client.AgentProfile(ctx, resolvedToken); err == nil {
-			if strings.TrimSpace(finalCfg.Handle) == "" {
-				finalCfg.Handle = strings.TrimSpace(profile.Handle)
-			}
-			finalCfg.Profile = mergeProfileConfig(finalCfg.Profile, profile.Profile)
+	if normalizeHubSetupMode(state.AgentMode) == "existing" {
+		if strings.TrimSpace(profile.Handle) != "" {
+			finalCfg.Handle = strings.TrimSpace(profile.Handle)
 		}
+		finalCfg.Profile = mergeProfileConfig(profile.Profile, finalCfg.Profile)
+	} else {
+		if strings.TrimSpace(finalCfg.Handle) == "" {
+			finalCfg.Handle = strings.TrimSpace(profile.Handle)
+		}
+		finalCfg.Profile = mergeProfileConfig(finalCfg.Profile, profile.Profile)
 	}
+	finalCfg.ApplyDefaults()
 
 	if err := hub.SaveRuntimeConfigHubSettings(cfg.RuntimeConfigPath, finalCfg, resolvedToken); err != nil {
 		return state, fmt.Errorf("save runtime config: %w", err)
@@ -1689,6 +1693,15 @@ func mergeProfileConfig(primary, secondary hub.ProfileConfig) hub.ProfileConfig 
 	}
 	if strings.TrimSpace(primary.Bio) == "" {
 		primary.Bio = strings.TrimSpace(secondary.Bio)
+	}
+	if strings.TrimSpace(primary.LLM) == "" {
+		primary.LLM = strings.TrimSpace(secondary.LLM)
+	}
+	if strings.TrimSpace(primary.Harness) == "" {
+		primary.Harness = strings.TrimSpace(secondary.Harness)
+	}
+	if len(primary.Skills) == 0 && len(secondary.Skills) > 0 {
+		primary.Skills = append([]string(nil), secondary.Skills...)
 	}
 	return primary
 }
