@@ -105,7 +105,8 @@ func TestRuntimeDockerfileUsesAlpineBaseImages(t *testing.T) {
 		"apk add --no-cache",
 		"github-cli",
 		"openssh-client-default",
-		"RUN adduser -D -s /bin/sh app",
+		"chown -R node:node /workspace",
+		"USER node",
 	} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("%s missing Alpine runtime requirement %q", dockerfilePath, want)
