@@ -315,11 +315,26 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `<span class="prompt-label">Profile</span>`) {
 		t.Fatalf("expected index html to relabel the agent summary field as Profile")
 	}
+	if !strings.Contains(markup, `id="hub-setup-profile" class="prompt-text prompt-control hub-setup-profile-input`) || !strings.Contains(markup, `rows="2"`) {
+		t.Fatalf("expected index html to render a two-line stretching profile textarea")
+	}
 	if !strings.Contains(markup, `hubSetupHandle.readOnly = profileEditor;`) {
 		t.Fatalf("expected index html to make the handle field readonly in profile edit mode")
 	}
+	if !strings.Contains(markup, `if (hubSetupForm) hubSetupForm.setAttribute("aria-busy", state.hubSetupBusy ? "true" : "false");`) {
+		t.Fatalf("expected index html to mark the hub setup form busy while saving")
+	}
+	if !strings.Contains(markup, `if (hubSetupClose) hubSetupClose.disabled = state.hubSetupBusy;`) {
+		t.Fatalf("expected index html to lock the setup dialog close control during save")
+	}
 	if !strings.Contains(markup, `hubSetupSubmit.textContent = profileEditor ? "Save" : "Done";`) {
 		t.Fatalf("expected index html to relabel the profile editor submit button to Save")
+	}
+	if !strings.Contains(markup, `hubSetupStatus.className = kind ? `+"`hub-setup-status submit-status submit-status-inline ${kind}`"+` : "hub-setup-status submit-status submit-status-inline";`) {
+		t.Fatalf("expected index html to preserve hub setup status styling while updating tones")
+	}
+	if !strings.Contains(markup, `if (autoSubmit || isHubProfileDialogMode()) {`) || !strings.Contains(markup, `await new Promise((resolve) => window.setTimeout(resolve, 700));`) {
+		t.Fatalf("expected index html to close the profile dialog after a successful save confirmation")
 	}
 	hubSetupDisconnectIndex := strings.Index(markup, `id="hub-setup-connection-toggle"`)
 	hubSetupStatusIndex := strings.Index(markup, `id="hub-setup-status"`)
@@ -1477,6 +1492,9 @@ func TestHandlerServesStaticEmojiPickerScript(t *testing.T) {
 	}
 	if !strings.Contains(body, `hub.ui.emoji.recent`) {
 		t.Fatalf("expected emoji picker script to persist recent emoji selections")
+	}
+	if !strings.Contains(body, `toggle.addEventListener("mousedown", (event) => {`) || !strings.Contains(body, `event.preventDefault();`) {
+		t.Fatalf("expected emoji picker script to preserve toggle activation while preventing input focus conflicts")
 	}
 }
 
