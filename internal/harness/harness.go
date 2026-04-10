@@ -1975,6 +1975,17 @@ func pullRebaseCommand(repoDir, branch string) execx.Command {
 	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"pull", "--rebase", "origin", branch}}
 }
 
+func appendPRReviewers(args []string, reviewers []string) []string {
+	for _, reviewer := range reviewers {
+		normalized := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(reviewer), "@"))
+		if normalized == "" || strings.EqualFold(normalized, "none") {
+			continue
+		}
+		args = append(args, "--reviewer", normalized)
+	}
+	return args
+}
+
 func prCreateCommand(repoDir string, cfg config.Config, branch string) execx.Command {
 	args := []string{
 		"pr", "create",
@@ -1989,12 +2000,7 @@ func prCreateCommand(repoDir string, cfg config.Config, branch string) execx.Com
 		}
 		args = append(args, "--label", label)
 	}
-	for _, reviewer := range cfg.Reviewers {
-		if strings.TrimSpace(reviewer) == "" {
-			continue
-		}
-		args = append(args, "--reviewer", reviewer)
-	}
+	args = appendPRReviewers(args, cfg.Reviewers)
 	return execx.Command{Dir: repoDir, Name: "gh", Args: args}
 }
 
@@ -2011,12 +2017,7 @@ func prCreateWithoutBaseCommand(repoDir string, cfg config.Config, branch string
 		}
 		args = append(args, "--label", label)
 	}
-	for _, reviewer := range cfg.Reviewers {
-		if strings.TrimSpace(reviewer) == "" {
-			continue
-		}
-		args = append(args, "--reviewer", reviewer)
-	}
+	args = appendPRReviewers(args, cfg.Reviewers)
 	return execx.Command{Dir: repoDir, Name: "gh", Args: args}
 }
 

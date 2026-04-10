@@ -1827,6 +1827,10 @@ func TestCommandBuilders(t *testing.T) {
 	if containsSequence(prNoReviewer.Args, []string{"--reviewer", "none"}) {
 		t.Fatalf("pr args should omit none reviewer sentinel: %v", prNoReviewer.Args)
 	}
+	prNoBaseReviewer := prCreateWithoutBaseCommand(repoDir, cfg, branch)
+	if containsSequence(prNoBaseReviewer.Args, []string{"--reviewer", "none"}) {
+		t.Fatalf("pr without base args should omit none reviewer sentinel: %v", prNoBaseReviewer.Args)
+	}
 
 	prLookup := prLookupByHeadCommand(repoDir, branch)
 	wantLookup := []string{"pr", "list", "--state", "open", "--head", branch, "--json", "url", "--limit", "1"}
