@@ -137,8 +137,8 @@ func TestAsyncAPIClientTokenBoundMethods(t *testing.T) {
 	wantContains := []string{
 		"GET /v1/agents/me",
 		"GET /v1/openclaw/messages/pull",
+		"PATCH /v1/agents/me",
 		"PATCH /v1/agents/me/status",
-		"POST /v1/agents/me/metadata",
 		"POST /v1/openclaw/messages/ack",
 		"POST /v1/openclaw/messages/nack",
 		"POST /v1/openclaw/messages/offline",

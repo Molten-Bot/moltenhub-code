@@ -88,9 +88,21 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	if strings.TrimSpace(api.BaseURL()) != "" {
 		cfg.BaseURL = strings.TrimRight(strings.TrimSpace(api.BaseURL()), "/")
 	}
+	cfg.AgentToken = strings.TrimSpace(token)
+	if remoteProfile, profileErr := transport.AgentProfile(ctx, token); profileErr != nil {
+		d.logf("hub.profile status=warn action=load err=%q", profileErr)
+	} else {
+		merged := mergeAgentProfiles(remoteProfile, AgentProfile{
+			Handle:  cfg.Handle,
+			Profile: cfg.Profile,
+		})
+		cfg.Handle = strings.TrimSpace(merged.Handle)
+		cfg.Profile = merged.Profile
+		cfg.ApplyDefaults()
+	}
 	d.logf("hub.connection status=configured base_url=%s", cfg.BaseURL)
 	d.logf("hub.auth status=ok")
-	if err := SaveRuntimeConfig(runtimeCfgPath, cfg, token); err != nil {
+	if err := SaveRuntimeConfigHubSettings(runtimeCfgPath, cfg, token); err != nil {
 		return fmt.Errorf("hub runtime config: %w", err)
 	}
 	d.logf("hub.runtime_config status=saved path=%s", runtimeCfgPath)
@@ -720,9 +732,6 @@ func shouldQueueFailureFollowUp(dispatch SkillDispatch, res harness.Result) (boo
 	}
 	if isFailureFollowUpRequestID(dispatch.RequestID) {
 		return false, "follow-up request failed; skipping nested follow-up queue"
-	}
-	if reason := failurefollowup.NonRemediableFailureReason(res.Err); reason != "" {
-		return false, reason
 	}
 	return true, ""
 }

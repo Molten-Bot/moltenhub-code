@@ -173,37 +173,45 @@ func (c *APIClient) bindTokenFlow(ctx context.Context, bindToken string) (string
 	return "", fmt.Errorf("bind flow failed: %s", strings.Join(failures, "; "))
 }
 
-// SyncProfile applies optional handle/profile/metadata updates.
+// SyncProfile applies handle/profile updates.
 func (c APIClient) SyncProfile(ctx context.Context, token string, cfg InitConfig) error {
 	if strings.TrimSpace(token) == "" {
 		return fmt.Errorf("profile sync requires token")
 	}
 
-	if handle := strings.TrimSpace(cfg.Handle); handle != "" {
-		handleBody := map[string]any{"handle": handle}
-		ok, trace := c.tryAny(ctx, token, []apiAttempt{
-			{Method: http.MethodPost, Path: "/agents/me/metadata", Body: handleBody},
-			{Method: http.MethodPatch, Path: "/agents/me/metadata", Body: handleBody},
-			{Method: http.MethodPost, Path: "/agents/me", Body: handleBody},
-			{Method: http.MethodPatch, Path: "/agents/me", Body: handleBody},
+	cfg.ApplyDefaults()
+	profileBody := map[string]any{
+		"profile": buildAgentProfilePayload(cfg),
+	}
+	updateProfile := func(body map[string]any) (bool, string) {
+		return c.tryAny(ctx, token, []apiAttempt{
+			{Method: http.MethodPatch, Path: "/agents/me", Body: body},
+			{Method: http.MethodPost, Path: "/agents/me", Body: body},
 		})
+	}
+
+	handle := strings.TrimSpace(cfg.Handle)
+	if handle == "" {
+		ok, trace := updateProfile(profileBody)
 		if !ok {
-			return fmt.Errorf("set handle failed: %s", trace)
+			return fmt.Errorf("set profile failed: %s", trace)
 		}
+		return nil
 	}
 
-	metadata := buildAgentMetadata(cfg)
-	ok, trace := c.tryAny(ctx, token, []apiAttempt{
-		{Method: http.MethodPost, Path: "/agents/me/metadata", Body: map[string]any{"metadata": metadata}},
-		{Method: http.MethodPatch, Path: "/agents/me/metadata", Body: map[string]any{"metadata": metadata}},
-		{Method: http.MethodPost, Path: "/agents/me", Body: map[string]any{"metadata": metadata}},
-		{Method: http.MethodPatch, Path: "/agents/me", Body: map[string]any{"metadata": metadata}},
-	})
-	if !ok {
-		return fmt.Errorf("set metadata failed: %s", trace)
+	bodyWithHandle := map[string]any{
+		"handle":  handle,
+		"profile": profileBody["profile"],
 	}
-
-	return nil
+	ok, trace := updateProfile(bodyWithHandle)
+	if ok {
+		return nil
+	}
+	ok, retryTrace := updateProfile(profileBody)
+	if ok {
+		return nil
+	}
+	return fmt.Errorf("set profile failed: %s; retry_without_handle: %s", trace, retryTrace)
 }
 
 // UpdateAgentStatus updates the hub-visible lifecycle status for this agent.
@@ -928,10 +936,20 @@ func mergeAgentProfiles(primary, secondary AgentProfile) AgentProfile {
 	if strings.TrimSpace(merged.Profile.Bio) == "" {
 		merged.Profile.Bio = strings.TrimSpace(secondary.Profile.Bio)
 	}
+	if strings.TrimSpace(merged.Profile.LLM) == "" {
+		merged.Profile.LLM = strings.TrimSpace(secondary.Profile.LLM)
+	}
+	if strings.TrimSpace(merged.Profile.Harness) == "" {
+		merged.Profile.Harness = strings.TrimSpace(secondary.Profile.Harness)
+	}
+	if len(merged.Profile.Skills) == 0 && len(secondary.Profile.Skills) > 0 {
+		merged.Profile.Skills = append([]string(nil), secondary.Profile.Skills...)
+	}
 	return merged
 }
 
 func extractProfileConfig(raw map[string]any) ProfileConfig {
+	skills := parseProfileSkills(raw["skills"])
 	return ProfileConfig{
 		DisplayName: firstNonEmpty(
 			stringAt(raw, "display_name"),
@@ -947,6 +965,15 @@ func extractProfileConfig(raw map[string]any) ProfileConfig {
 			stringAt(raw, "description"),
 			stringAt(raw, "summary"),
 		),
+		LLM: firstNonEmpty(
+			stringAt(raw, "llm"),
+			stringAt(raw, "model"),
+		),
+		Harness: firstNonEmpty(
+			stringAt(raw, "harness"),
+			stringAt(raw, "runtime"),
+		),
+		Skills: skills,
 	}
 }
 
@@ -957,7 +984,64 @@ func agentProfileEmpty(profile AgentProfile) bool {
 func profileConfigEmpty(profile ProfileConfig) bool {
 	return strings.TrimSpace(profile.DisplayName) == "" &&
 		strings.TrimSpace(profile.Emoji) == "" &&
-		strings.TrimSpace(profile.Bio) == ""
+		strings.TrimSpace(profile.Bio) == "" &&
+		strings.TrimSpace(profile.LLM) == "" &&
+		strings.TrimSpace(profile.Harness) == "" &&
+		len(profile.Skills) == 0
+}
+
+func buildAgentProfilePayload(cfg InitConfig) map[string]any {
+	return map[string]any{
+		"bio":          strings.TrimSpace(cfg.Profile.Bio),
+		"display_name": strings.TrimSpace(cfg.Profile.DisplayName),
+		"emoji":        strings.TrimSpace(cfg.Profile.Emoji),
+		"llm":          strings.TrimSpace(cfg.Profile.LLM),
+		"harness":      runtimeIdentifier,
+		"skills":       append([]string(nil), cfg.Profile.Skills...),
+	}
+}
+
+func parseProfileSkills(raw any) []string {
+	switch typed := raw.(type) {
+	case []string:
+		if len(typed) == 0 {
+			return nil
+		}
+		out := make([]string, 0, len(typed))
+		for _, entry := range typed {
+			entry = strings.TrimSpace(entry)
+			if entry == "" {
+				continue
+			}
+			out = append(out, entry)
+		}
+		if len(out) == 0 {
+			return nil
+		}
+		return out
+	case []any:
+		out := make([]string, 0, len(typed))
+		for _, entry := range typed {
+			switch value := entry.(type) {
+			case string:
+				value = strings.TrimSpace(value)
+				if value != "" {
+					out = append(out, value)
+				}
+			case map[string]any:
+				name := strings.TrimSpace(firstString(value["name"], value["skill"], value["id"]))
+				if name != "" {
+					out = append(out, name)
+				}
+			}
+		}
+		if len(out) == 0 {
+			return nil
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 func truncateBody(body []byte) string {

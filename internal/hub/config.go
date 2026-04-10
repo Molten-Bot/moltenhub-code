@@ -45,6 +45,9 @@ type ProfileConfig struct {
 	DisplayName string         `json:"display_name"`
 	Emoji       string         `json:"emoji"`
 	Bio         string         `json:"bio"`
+	LLM         string         `json:"llm"`
+	Harness     string         `json:"harness"`
+	Skills      []string       `json:"skills"`
 	Metadata    map[string]any `json:"-"`
 }
 
@@ -122,6 +125,7 @@ func (c *InitConfig) ApplyDefaults() {
 	c.Profile.DisplayName = strings.TrimSpace(c.Profile.DisplayName)
 	c.Profile.Emoji = strings.TrimSpace(c.Profile.Emoji)
 	c.Profile.Bio = strings.TrimSpace(c.Profile.Bio)
+	normalizeProfileConfig(&c.Profile, c.AgentHarness, c.AgentCommand)
 	c.Skill = runtimeSkillConfig()
 
 	if c.Dispatcher.MinParallel < 1 {
@@ -148,6 +152,32 @@ func (c *InitConfig) ApplyDefaults() {
 	if c.Dispatcher.DiskIOHighWatermarkMBs <= 0 {
 		c.Dispatcher.DiskIOHighWatermarkMBs = 120
 	}
+}
+
+func normalizeProfileConfig(profile *ProfileConfig, agentHarness, agentCommand string) {
+	if profile == nil {
+		return
+	}
+
+	runtime := agentruntime.Default()
+	if resolved, err := agentruntime.Resolve(agentHarness, agentCommand); err == nil {
+		runtime = resolved
+	}
+
+	profile.DisplayName = strings.TrimSpace(profile.DisplayName)
+	profile.Emoji = strings.TrimSpace(profile.Emoji)
+	profile.Bio = strings.TrimSpace(profile.Bio)
+	profile.LLM = strings.TrimSpace(runtime.Harness)
+	profile.Harness = runtimeIdentifier
+	profile.Skills = supportedProfileSkills()
+}
+
+func supportedProfileSkills() []string {
+	name := normalizeSkillName(runtimeSkillConfig().Name)
+	if name == "" {
+		name = defaultRuntimeSkillName
+	}
+	return []string{name}
 }
 
 func runtimeSkillConfig() SkillConfig {

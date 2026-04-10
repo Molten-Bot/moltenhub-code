@@ -163,8 +163,8 @@ func TestDaemonRunPublishesAgentLifecycleStatus(t *testing.T) {
 	if len(metadataCalls) < 1 {
 		t.Fatalf("metadata calls = %d, want at least 1", len(metadataCalls))
 	}
-	if metadataCalls[0].Method != http.MethodPost {
-		t.Fatalf("first metadata method = %q, want %q", metadataCalls[0].Method, http.MethodPost)
+	if metadataCalls[0].Method != http.MethodPost && metadataCalls[0].Method != http.MethodPatch {
+		t.Fatalf("first metadata method = %q, want POST or PATCH", metadataCalls[0].Method)
 	}
 	if metadataCalls[0].Path != "/v1/agents/me/metadata" {
 		t.Fatalf("first metadata path = %q, want %q", metadataCalls[0].Path, "/v1/agents/me/metadata")

@@ -61,7 +61,10 @@ func TestExtractAgentProfileFromJSONUsesExplicitProfileObject(t *testing.T) {
 			"profile": {
 				"display_name": "Builder Two",
 				"emoji": "🤖",
-				"bio": "Owns UI automation"
+				"bio": "Owns UI automation",
+				"llm": "claude",
+				"harness": "moltenhub-code",
+				"skills": ["code_for_me"]
 			}
 		}
 	}`))
@@ -77,5 +80,14 @@ func TestExtractAgentProfileFromJSONUsesExplicitProfileObject(t *testing.T) {
 	}
 	if got, want := profile.Profile.Bio, "Owns UI automation"; got != want {
 		t.Fatalf("Bio = %q, want %q", got, want)
+	}
+	if got, want := profile.Profile.LLM, "claude"; got != want {
+		t.Fatalf("LLM = %q, want %q", got, want)
+	}
+	if got, want := profile.Profile.Harness, "moltenhub-code"; got != want {
+		t.Fatalf("Harness = %q, want %q", got, want)
+	}
+	if len(profile.Profile.Skills) != 1 || profile.Profile.Skills[0] != "code_for_me" {
+		t.Fatalf("Skills = %#v, want [code_for_me]", profile.Profile.Skills)
 	}
 }
