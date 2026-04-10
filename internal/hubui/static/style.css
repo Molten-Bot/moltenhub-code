@@ -2481,7 +2481,7 @@ select.prompt-control {
 
 .hub-setup-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   column-gap: 14px;
   row-gap: 10px;
@@ -2489,18 +2489,19 @@ select.prompt-control {
 }
 
 .hub-setup-status {
-  grid-column: 1 / -1;
-  justify-self: center;
-  width: min(100%, 52ch);
+  grid-column: 2;
+  justify-self: stretch;
+  width: 100%;
   min-height: 2.8em;
   text-align: center;
 }
 
 .hub-setup-connection-toggle {
-  min-height: 40px;
-  padding: 0 16px;
+  min-inline-size: 72px;
+  min-height: 38px;
+  padding: 8px 13px;
   border: 1px solid var(--surface-control-border);
-  border-radius: 999px;
+  border-radius: 14px;
   background: var(--surface-control-bg);
   box-shadow: var(--surface-control-shadow);
   color: var(--surface-tab-text);
@@ -2575,7 +2576,11 @@ select.prompt-control {
 
   .hub-setup-actions {
     width: 100%;
-    justify-content: space-between;
+    grid-template-columns: 1fr;
+  }
+
+  .hub-setup-status {
+    grid-column: 1;
   }
 }
 

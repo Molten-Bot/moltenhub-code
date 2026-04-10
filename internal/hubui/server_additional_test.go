@@ -926,6 +926,15 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".prompt-action-button {\n  width: auto;\n  display: inline-flex;") {
 		t.Fatalf("expected action buttons to avoid full-width auto-column overflow")
 	}
+	if !strings.Contains(css, ".hub-setup-actions {\n  display: grid;\n  grid-template-columns: auto minmax(0, 1fr) auto;\n  align-items: center;\n  column-gap: 14px;\n  row-gap: 10px;\n  width: min(100%, 560px);\n}") {
+		t.Fatalf("expected the profile modal action row to pin Disconnect left, status center, and Save right")
+	}
+	if !strings.Contains(css, ".hub-setup-status {\n  grid-column: 2;\n  justify-self: stretch;\n  width: 100%;\n") {
+		t.Fatalf("expected the profile modal status copy to occupy the center lane between actions")
+	}
+	if !strings.Contains(css, ".hub-setup-connection-toggle {\n  min-inline-size: 72px;\n") {
+		t.Fatalf("expected the profile modal disconnect button to reuse the shared action button footprint")
+	}
 	if !strings.Contains(css, ".submit-status-inline {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  flex: 1 1 0;\n  min-width: 0;\n  text-align: center;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  opacity: 0;\n  transition: opacity 220ms ease;\n}") {
 		t.Fatalf("expected inline status to stay centered in the whitespace between screenshots and the action buttons")
 	}
