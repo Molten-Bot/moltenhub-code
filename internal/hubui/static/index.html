@@ -498,7 +498,8 @@
     const DEFAULT_THEME_MODE = "dark";
     const HOVER_MODES = ["auto", "on", "off"];
     const CLOSE_TASK_FADE_MS = 2000;
-    const QUEUED_STATUS_TIMEOUT_MS = 8_000;
+    const QUEUED_STATUS_TIMEOUT_MS = 12_000;
+    const LOCAL_PROMPT_STATUS_FADE_MS = 240;
     const LOGO_ROTATION_INTERVAL_MS = 8_000;
     const STREAM_RENDER_INTERVAL_MS = 120;
     const MAX_TERMINAL_LINES = 500;
@@ -926,6 +927,7 @@
     const builderTargetSubdir = document.getElementById("builder-target-subdir");
     const builderPromptInput = document.getElementById("builder-prompt-input");
     const builderImagePasteTarget = document.getElementById("builder-image-paste-target");
+    const builderImagePasteTargetWrap = builderImagePasteTarget ? builderImagePasteTarget.parentElement : null;
     const builderImagesClear = document.getElementById("builder-images-clear");
     const libraryRepoSelect = document.getElementById("library-repo-select");
     const libraryRepoHistoryField = document.getElementById("library-repo-history-field");
@@ -2707,10 +2709,16 @@
       if (!builderImagePasteTarget || !builderImagesClear) return;
       const summary = promptImageSummary(state.promptImages);
       const hasImages = state.promptImages.length > 0;
+      const imageCount = state.promptImages.length;
+      const pasteWidth = Math.min(50, 25 + Math.max(0, imageCount-1) * 6.25);
       builderImagePasteTarget.textContent = summary;
       builderImagePasteTarget.title = hasImages ? summary : "Paste screenshots.";
       builderImagePasteTarget.setAttribute("aria-label", hasImages ? `Attached screenshots: ${summary}` : "Paste screenshots.");
       builderImagePasteTarget.dataset.empty = hasImages ? "false" : "true";
+      if (builderImagePasteTargetWrap) {
+        builderImagePasteTargetWrap.style.setProperty("--prompt-paste-width", `${pasteWidth}%`);
+        builderImagePasteTargetWrap.style.flexBasis = `${pasteWidth}%`;
+      }
       syncBuilderDraftClearState();
     }
 
@@ -3221,7 +3229,7 @@
       if (kind !== "ok") {
         return false;
       }
-      return String(text || "").startsWith("Queued request ");
+      return String(text || "").trim() !== "";
     }
 
     function applyPromptVisibility() {
@@ -3439,15 +3447,20 @@
 
     function setLocalPromptStatus(kind, text) {
       clearLocalPromptStatusTimer();
-      localPromptStatus.className = kind ? `submit-status ${kind}` : "submit-status";
+      localPromptStatus.className = kind ? `submit-status submit-status-inline ${kind}` : "submit-status submit-status-inline";
       localPromptStatus.textContent = text;
+      localPromptStatus.classList.toggle("is-visible", String(text || "").trim() !== "");
+      localPromptStatus.classList.remove("is-fading");
       if (!shouldAutoDismissLocalPromptStatus(kind, text)) {
         return;
       }
       localPromptStatusTimer = window.setTimeout(() => {
-        localPromptStatusTimer = 0;
-        localPromptStatus.className = "submit-status";
-        localPromptStatus.textContent = "";
+        localPromptStatus.classList.add("is-fading");
+        localPromptStatusTimer = window.setTimeout(() => {
+          localPromptStatusTimer = 0;
+          localPromptStatus.className = "submit-status submit-status-inline";
+          localPromptStatus.textContent = "";
+        }, LOCAL_PROMPT_STATUS_FADE_MS);
       }, QUEUED_STATUS_TIMEOUT_MS);
     }
 

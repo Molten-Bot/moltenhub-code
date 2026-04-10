@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -518,6 +519,29 @@ func TestAgentAuthEndpointsDefaultAndMethodHandling(t *testing.T) {
 	defer methodResp.Body.Close()
 	if methodResp.StatusCode != http.StatusMethodNotAllowed {
 		t.Fatalf("POST /api/agent-auth status = %d, want 405", methodResp.StatusCode)
+	}
+}
+
+func TestEmbeddedPromptActionStylesCoverPasteWidthAndStatusFade(t *testing.T) {
+	t.Parallel()
+
+	data, err := fs.ReadFile(staticFiles, "static/style.css")
+	if err != nil {
+		t.Fatalf("read embedded style.css: %v", err)
+	}
+	css := string(data)
+
+	for _, want := range []string{
+		"flex: 0 1 auto;",
+		"max-width: 50%;",
+		"flex: 1 1 auto;",
+		"transition: opacity 220ms ease;",
+		".submit-status-inline.is-visible {",
+		".submit-status-inline.is-fading {",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("embedded style.css missing %q", want)
+		}
 	}
 }
 

@@ -471,6 +471,27 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "const taskFullscreenClose = document.getElementById(\"task-fullscreen-close\");") {
 		t.Fatalf("expected index html to cache the dedicated full screen close control")
 	}
+	if !strings.Contains(markup, "const QUEUED_STATUS_TIMEOUT_MS = 12_000;") {
+		t.Fatalf("expected index html to keep prompt success notifications visible for 12s")
+	}
+	if !strings.Contains(markup, "const LOCAL_PROMPT_STATUS_FADE_MS = 240;") {
+		t.Fatalf("expected index html to define a dedicated prompt-status fade duration")
+	}
+	if !strings.Contains(markup, "const pasteWidth = Math.min(50, 25 + Math.max(0, imageCount-1) * 6.25);") {
+		t.Fatalf("expected index html to size pasted screenshot summary width between 25%% and 50%%")
+	}
+	if !strings.Contains(markup, "builderImagePasteTargetWrap.style.setProperty(\"--prompt-paste-width\", `${pasteWidth}%`);") {
+		t.Fatalf("expected index html to drive pasted screenshot width through the action-row wrapper")
+	}
+	if !strings.Contains(markup, "builderImagePasteTargetWrap.style.flexBasis = `${pasteWidth}%`;") {
+		t.Fatalf("expected index html to size the pasted screenshot lane from the computed width")
+	}
+	if !strings.Contains(markup, "localPromptStatus.classList.add(\"is-fading\");") {
+		t.Fatalf("expected index html to fade prompt success notifications before clearing them")
+	}
+	if !strings.Contains(markup, "localPromptStatus.className = kind ? `submit-status submit-status-inline ${kind}` : \"submit-status submit-status-inline\";") {
+		t.Fatalf("expected index html to preserve the inline prompt-status layout classes when updating text")
+	}
 	if !strings.Contains(markup, "renderTaskCollection(tasks, taskFullscreenList, null, {") {
 		t.Fatalf("expected index html to render the full task list in fullscreen mode")
 	}
