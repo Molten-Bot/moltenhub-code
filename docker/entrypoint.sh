@@ -3,6 +3,10 @@ set -eu
 
 config_dir="${HARNESS_CONFIG_DIR:-/workspace/config}"
 
+if [ ! -w "${config_dir}" ]; then
+    echo "warning: config directory ${config_dir} is not writable by uid=$(id -u) gid=$(id -g); persisted onboarding/auth settings may fail to save." >&2
+fi
+
 detect_init_path_from_args() {
     prev=""
     for arg in "$@"; do

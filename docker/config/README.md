@@ -1,6 +1,6 @@
 # Docker Runtime Config Mount
 
-`docker-compose.yml` now mounts `./moltenhub` to `/workspace/config` in the container.
+`docker-compose.yml` mounts `./.moltenhub` to `/workspace/config` in the container.
 
 This directory remains available if you prefer a manual bind mount (for example with `docker run`).
 
@@ -23,8 +23,10 @@ After the first successful onboarding/hub auth, runtime fields are persisted int
 You can bootstrap from examples:
 
 ```bash
-mkdir -p moltenhub
-cp run.example.json moltenhub/config.json
+mkdir -p .moltenhub
+cp run.example.json .moltenhub/config.json
 # Optional bootstrap if you want to pre-seed hub credentials:
-cp init.example.json moltenhub/init.json
+cp init.example.json .moltenhub/init.json
 ```
+
+For manual `docker run` with a bind mount, if your host user is not uid/gid `1000`, add `--user "$(id -u):$(id -g)"` to avoid config write-permission failures.

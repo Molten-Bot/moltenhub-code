@@ -118,26 +118,45 @@ Offline runtime integration snapshot in this repo:
 
 ## Container
 
-Build:
+Build default (Codex) variant:
 
 ```bash
 docker build -t moltenhub-code:latest .
 ```
 
-Run hub mode (default UI on `:7777`):
+Build Pi variant:
+
+```bash
+docker build \
+  -t moltenhub-code:latest-pi \
+  --build-arg AGENT_HARNESS=pi \
+  --build-arg AGENT_NPM_PACKAGE=@mariozechner/pi-coding-agent@latest \
+  .
+```
+
+Run hub mode (default UI on `:7777`) from Docker Hub:
 
 ```bash
 docker run --rm -p 7777:7777 moltenai/moltenhub-code:latest-codex
 ```
 
-Pi variant:
+Run Pi variant from Docker Hub:
 
 ```bash
 docker run --rm -p 7777:7777 moltenai/moltenhub-code:latest-pi
 ```
+
+For persistent local runtime config, mount `./.moltenhub` to `/workspace/config`:
+
+```bash
+mkdir -p ./.moltenhub
+docker run --rm -p 7777:7777 \
+  -e HOME=/tmp \
+  -v "$PWD/.moltenhub:/workspace/config" \
+  moltenhub-code:latest-pi
 ```
 
-For persistent local runtime config, mount `./.moltenhub` to `/workspace/config`.
+If your host user is not uid/gid `1000`, add `--user "$(id -u):$(id -g)"` so onboarding can persist `config.json` to the bind mount.
 
 ## Test
 
