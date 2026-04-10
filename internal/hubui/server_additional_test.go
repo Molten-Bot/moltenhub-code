@@ -329,11 +329,20 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `.hub-setup-profile-text {`) {
 		t.Fatalf("expected stylesheet to keep the profile textarea spanning the full profile grid width")
 	}
+	if !strings.Contains(stylesheet, `.hub-setup-profile-input {`) || !strings.Contains(stylesheet, `min-height: calc(2 * 1.45em + 24px);`) {
+		t.Fatalf("expected stylesheet to size the hub profile textarea to two lines by default while keeping it resizable")
+	}
 	if !strings.Contains(stylesheet, `.hub-setup-signin-logo {`) {
 		t.Fatalf("expected stylesheet to include the hub setup sign-in logo styles")
 	}
 	if !strings.Contains(stylesheet, `.hub-setup-status {`) {
 		t.Fatalf("expected stylesheet to include centered hub setup status styles")
+	}
+	if !strings.Contains(stylesheet, `.hub-setup-actions {`) || !strings.Contains(stylesheet, `margin-left: auto;`) {
+		t.Fatalf("expected stylesheet to keep the hub setup actions docked to the right edge")
+	}
+	if !strings.Contains(stylesheet, `.hub-emoji-picker-toggle {`) || !strings.Contains(stylesheet, `z-index: 2;`) {
+		t.Fatalf("expected stylesheet to keep the emoji picker toggle above the text input hit area")
 	}
 }
 
@@ -926,7 +935,7 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".prompt-action-button {\n  width: auto;\n  display: inline-flex;") {
 		t.Fatalf("expected action buttons to avoid full-width auto-column overflow")
 	}
-	if !strings.Contains(css, ".hub-setup-actions {\n  display: grid;\n  grid-template-columns: auto minmax(0, 1fr) auto;\n  align-items: center;\n  column-gap: 14px;\n  row-gap: 10px;\n  width: min(100%, 560px);\n}") {
+	if !strings.Contains(css, ".hub-setup-actions {\n  display: grid;\n  grid-template-columns: auto minmax(0, 1fr) auto;\n  align-items: center;\n  column-gap: 14px;\n  row-gap: 10px;\n  width: min(100%, 560px);\n  margin-left: auto;\n}") {
 		t.Fatalf("expected the profile modal action row to pin Disconnect left, status center, and Save right")
 	}
 	if !strings.Contains(css, ".hub-setup-status {\n  grid-column: 2;\n  justify-self: stretch;\n  width: 100%;\n") {

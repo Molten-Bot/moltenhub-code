@@ -325,6 +325,10 @@
       input.focus();
     });
 
+    toggle.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+    });
+
     toggle.addEventListener("click", () => {
       setOpen(!open);
     });

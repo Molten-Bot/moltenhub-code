@@ -2451,6 +2451,8 @@ select.prompt-control {
 }
 
 .hub-emoji-picker-input {
+  position: relative;
+  z-index: 1;
   padding-right: 56px;
 }
 
@@ -2458,6 +2460,7 @@ select.prompt-control {
   position: absolute;
   top: 50%;
   right: 7px;
+  z-index: 2;
   transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
@@ -2658,6 +2661,12 @@ select.prompt-control {
   grid-column: 1 / -1;
 }
 
+.hub-setup-profile-input {
+  height: auto;
+  min-height: calc(2 * 1.45em + 24px);
+  resize: vertical;
+}
+
 .hub-setup-footer {
   display: flex;
   flex-wrap: wrap;
@@ -2702,6 +2711,7 @@ select.prompt-control {
   column-gap: 14px;
   row-gap: 10px;
   width: min(100%, 560px);
+  margin-left: auto;
 }
 
 .hub-setup-status {

@@ -414,7 +414,7 @@
           </label>
           <label class="prompt-field hub-setup-profile-text">
             <span class="prompt-label">Profile</span>
-            <textarea id="hub-setup-profile" class="prompt-text prompt-control min-h-[96px] w-full rounded-lg border border-hub-border p-2.5 text-[0.84rem] leading-[1.4]" rows="4" spellcheck="false" placeholder="What this runtime is for"></textarea>
+            <textarea id="hub-setup-profile" class="prompt-text prompt-control hub-setup-profile-input min-h-[96px] w-full rounded-lg border border-hub-border p-2.5 text-[0.84rem] leading-[1.4]" rows="2" spellcheck="false" placeholder="What this runtime is for"></textarea>
           </label>
         </div>
 
@@ -1296,12 +1296,13 @@
 
     function setHubSetupStatus(kind, text) {
       if (!hubSetupStatus) return;
-      hubSetupStatus.className = kind ? `submit-status submit-status-inline ${kind}` : "submit-status submit-status-inline";
+      hubSetupStatus.className = kind ? `hub-setup-status submit-status submit-status-inline ${kind}` : "hub-setup-status submit-status submit-status-inline";
       hubSetupStatus.textContent = String(text || "").trim();
     }
 
     function setHubSetupBusy(busy) {
       state.hubSetupBusy = Boolean(busy);
+      if (hubSetupForm) hubSetupForm.setAttribute("aria-busy", state.hubSetupBusy ? "true" : "false");
       if (hubSetupExistingToggle) hubSetupExistingToggle.disabled = state.hubSetupBusy;
       if (hubSetupNewToggle) hubSetupNewToggle.disabled = state.hubSetupBusy;
       if (hubSetupRegionNAToggle) hubSetupRegionNAToggle.disabled = state.hubSetupBusy;
@@ -1316,6 +1317,7 @@
       if (hubSetupConnectionToggle) hubSetupConnectionToggle.disabled = state.hubSetupBusy;
       if (hubSetupProfile) hubSetupProfile.disabled = state.hubSetupBusy;
       if (hubSetupSubmit) hubSetupSubmit.disabled = state.hubSetupBusy;
+      if (hubSetupClose) hubSetupClose.disabled = state.hubSetupBusy;
     }
 
     function hubConnectionIsLive(snapshot = state.snapshot) {
@@ -1551,11 +1553,13 @@
         applyHubSetupState(body?.hub);
         await loadAgentAuthStatus();
         trackAnalyticsEvent("hub_setup_succeeded", { agent_mode: payload.agent_mode, token_type: payload.token_type });
-        setHubSetupStatus("ok", state.hubSetup.message || "Molten Hub setup saved.");
+        const successMessage = state.hubSetup.message || "Molten Hub setup saved.";
+        setHubSetupStatus("ok", successMessage);
         if (hubSetupToken) {
           hubSetupToken.value = "";
         }
-        if (autoSubmit) {
+        if (autoSubmit || isHubProfileDialogMode()) {
+          await new Promise((resolve) => window.setTimeout(resolve, 700));
           setHubSetupOpen(false);
         }
       } catch (err) {
