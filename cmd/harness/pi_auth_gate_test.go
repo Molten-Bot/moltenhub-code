@@ -34,7 +34,7 @@ func TestNewPiAuthGateRequiresConfigureWhenMissingProviderAuth(t *testing.T) {
 	if got, want := status.Message, "Select a PI provider, and supply the token."; got != want {
 		t.Fatalf("Message = %q, want %q", got, want)
 	}
-	if got, want := status.ConfigurePlaceholder, "Paste the selected providers token in here..."; got != want {
+	if got, want := status.ConfigurePlaceholder, "Paste provider token..."; got != want {
 		t.Fatalf("ConfigurePlaceholder = %q, want %q", got, want)
 	}
 }

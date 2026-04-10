@@ -293,7 +293,7 @@ func (g *piAuthGate) snapshotLocked() hubui.AgentAuthState {
 		Ready:                g.ready,
 		State:                strings.TrimSpace(g.state),
 		Message:              strings.TrimSpace(g.message),
-		ConfigurePlaceholder: "Paste the selected providers token in here...",
+		ConfigurePlaceholder: "Paste provider token...",
 		ConfigureOptions:     append([]hubui.AgentAuthOption(nil), g.configureOptions...),
 		UpdatedAt:            g.updatedAt.UTC().Format(time.RFC3339Nano),
 	}
