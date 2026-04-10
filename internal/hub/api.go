@@ -1023,12 +1023,7 @@ func extractProfileConfig(raw map[string]any) ProfileConfig {
 			stringAt(raw, "emoji"),
 			stringAt(raw, "icon"),
 		),
-		ProfileText: firstNonEmpty(
-			stringAt(raw, "profile"),
-			stringAt(raw, "bio"),
-			stringAt(raw, "description"),
-			stringAt(raw, "summary"),
-		),
+		ProfileText: extractProfileText(raw),
 		LLM: firstNonEmpty(
 			stringAt(raw, "llm"),
 			stringAt(raw, "model"),
@@ -1039,6 +1034,49 @@ func extractProfileConfig(raw map[string]any) ProfileConfig {
 		),
 		Skills: skills,
 	}
+}
+
+func extractProfileText(raw map[string]any) string {
+	profileText := firstNonEmpty(
+		stringAt(raw, "profile"),
+		stringAt(raw, "bio"),
+		stringAt(raw, "description"),
+		stringAt(raw, "summary"),
+	)
+	if profileText != "" {
+		return profileText
+	}
+	return profileTextFromMarkdown(firstNonEmpty(
+		stringAt(raw, "profile_markdown"),
+		stringAt(raw, "profileMarkdown"),
+		stringAt(raw, "markdown"),
+	))
+}
+
+func profileTextFromMarkdown(markdown string) string {
+	markdown = strings.TrimSpace(markdown)
+	if markdown == "" {
+		return ""
+	}
+
+	lines := strings.Split(markdown, "\n")
+	if len(lines) == 0 {
+		return ""
+	}
+
+	header := strings.TrimSpace(lines[0])
+	if strings.HasPrefix(header, "#") {
+		bodyStart := 1
+		for bodyStart < len(lines) && strings.TrimSpace(lines[bodyStart]) == "" {
+			bodyStart++
+		}
+		if bodyStart >= len(lines) {
+			return ""
+		}
+		return strings.TrimSpace(strings.Join(lines[bodyStart:], "\n"))
+	}
+
+	return markdown
 }
 
 func agentProfileEmpty(profile AgentProfile) bool {

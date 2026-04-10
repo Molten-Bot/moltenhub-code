@@ -386,7 +386,7 @@ func TestFailureFollowUpRunConfigUsesRequiredPayloadShapeAndLogContext(t *testin
 	}
 
 	cfg := failureFollowUpRunConfig("local-1712345678-000001", failedResult, failedRunCfg, logRoot)
-	if got, want := cfg.Repos, []string{"git@github.com:acme/repo-a.git"}; !reflect.DeepEqual(got, want) {
+	if got, want := cfg.Repos, []string{config.DefaultRepositoryURL}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Repos = %v, want %v", got, want)
 	}
 	if cfg.BaseBranch != "main" {
@@ -408,7 +408,7 @@ func TestFailureFollowUpRunConfigUsesRequiredPayloadShapeAndLogContext(t *testin
 	}
 }
 
-func TestFailureFollowUpRunConfigPreservesNonMainBranchAndTarget(t *testing.T) {
+func TestFailureFollowUpRunConfigForcesMainBranchAndRootTarget(t *testing.T) {
 	t.Parallel()
 
 	logRoot := filepath.Join(t.TempDir(), ".log")
@@ -424,11 +424,11 @@ func TestFailureFollowUpRunConfigPreservesNonMainBranchAndTarget(t *testing.T) {
 	}
 
 	cfg := failureFollowUpRunConfig("local-1712345678-000001", failedResult, failedRunCfg, logRoot)
-	if cfg.BaseBranch != "moltenhub-add-slight-padding-between-prompt-and-lo" {
-		t.Fatalf("BaseBranch = %q, want %q", cfg.BaseBranch, "moltenhub-add-slight-padding-between-prompt-and-lo")
+	if cfg.BaseBranch != "main" {
+		t.Fatalf("BaseBranch = %q, want %q", cfg.BaseBranch, "main")
 	}
-	if cfg.TargetSubdir != "internal/hubui" {
-		t.Fatalf("TargetSubdir = %q, want %q", cfg.TargetSubdir, "internal/hubui")
+	if cfg.TargetSubdir != "." {
+		t.Fatalf("TargetSubdir = %q, want %q", cfg.TargetSubdir, ".")
 	}
 	for _, want := range []string{
 		"- target_subdir=internal/hubui",
@@ -441,7 +441,7 @@ func TestFailureFollowUpRunConfigPreservesNonMainBranchAndTarget(t *testing.T) {
 	}
 }
 
-func TestFailureFollowUpReposUsesFailedResultRepoWhenItIdentifiesASingleRepo(t *testing.T) {
+func TestFailureFollowUpReposAlwaysUsesMoltenHubRepositoryWhenResultHasSingleRepo(t *testing.T) {
 	t.Parallel()
 
 	failedResult := harness.Result{
@@ -455,12 +455,12 @@ func TestFailureFollowUpReposUsesFailedResultRepoWhenItIdentifiesASingleRepo(t *
 			"git@github.com:acme/from-config.git",
 		},
 	}
-	if got, want := failureFollowUpRepos(failedResult, failedRunCfg), []string{"git@github.com:acme/failed-result.git"}; !reflect.DeepEqual(got, want) {
+	if got, want := failureFollowUpRepos(failedResult, failedRunCfg), []string{config.DefaultRepositoryURL}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("failureFollowUpRepos() = %v, want %v", got, want)
 	}
 }
 
-func TestFailureFollowUpReposPrefersSingleRepoFromResult(t *testing.T) {
+func TestFailureFollowUpReposAlwaysUsesMoltenHubRepositoryWhenResultAndConfigDiffer(t *testing.T) {
 	t.Parallel()
 
 	failedResult := harness.Result{
@@ -475,12 +475,12 @@ func TestFailureFollowUpReposPrefersSingleRepoFromResult(t *testing.T) {
 			"git@github.com:acme/other-config.git",
 		},
 	}
-	if got, want := failureFollowUpRepos(failedResult, failedRunCfg), []string{"git@github.com:acme/from-result.git"}; !reflect.DeepEqual(got, want) {
+	if got, want := failureFollowUpRepos(failedResult, failedRunCfg), []string{config.DefaultRepositoryURL}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("failureFollowUpRepos() = %v, want %v", got, want)
 	}
 }
 
-func TestFailureFollowUpReposFallsBackToFailedResultRepo(t *testing.T) {
+func TestFailureFollowUpReposAlwaysUsesMoltenHubRepositoryWhenOnlyResultRepoExists(t *testing.T) {
 	t.Parallel()
 
 	failedResult := harness.Result{
@@ -488,12 +488,12 @@ func TestFailureFollowUpReposFallsBackToFailedResultRepo(t *testing.T) {
 			{RepoURL: "git@github.com:acme/from-result.git"},
 		},
 	}
-	if got, want := failureFollowUpRepos(failedResult, config.Config{}), []string{"git@github.com:acme/from-result.git"}; !reflect.DeepEqual(got, want) {
+	if got, want := failureFollowUpRepos(failedResult, config.Config{}), []string{config.DefaultRepositoryURL}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("failureFollowUpRepos() = %v, want %v", got, want)
 	}
 }
 
-func TestFailureFollowUpReposFallsBackToConfigRepoWhenResultIsAmbiguous(t *testing.T) {
+func TestFailureFollowUpReposAlwaysUsesMoltenHubRepositoryWhenResultIsAmbiguous(t *testing.T) {
 	t.Parallel()
 
 	failedResult := harness.Result{
@@ -509,12 +509,12 @@ func TestFailureFollowUpReposFallsBackToConfigRepoWhenResultIsAmbiguous(t *testi
 		},
 	}
 
-	if got, want := failureFollowUpRepos(failedResult, failedRunCfg), []string{"git@github.com:acme/from-config.git"}; !reflect.DeepEqual(got, want) {
+	if got, want := failureFollowUpRepos(failedResult, failedRunCfg), []string{config.DefaultRepositoryURL}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("failureFollowUpRepos() = %v, want %v", got, want)
 	}
 }
 
-func TestFailureFollowUpReposReturnsNilWhenNoRepoFound(t *testing.T) {
+func TestFailureFollowUpReposUsesMoltenHubRepositoryWhenNoRepoFound(t *testing.T) {
 	t.Parallel()
 
 	if got, want := failureFollowUpRepos(harness.Result{}, config.Config{}), []string{config.DefaultRepositoryURL}; !reflect.DeepEqual(got, want) {
@@ -1183,6 +1183,59 @@ func TestConfigureHubSetupExistingAgentProfileEditUsesSavedCredentials(t *testin
 		t.Fatalf("Emoji = %q, want %q", got, want)
 	}
 	if got, want := state.Profile.ProfileText, "Owns hub edits"; got != want {
+		t.Fatalf("ProfileText = %q, want %q", got, want)
+	}
+}
+
+func TestConfigureHubSetupExistingAgentLoadsProfileTextFromProfileMarkdown(t *testing.T) {
+	t.Parallel()
+
+	const savedToken = "f9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != savedToken {
+			t.Fatalf("%s %s token = %q, want %q", r.Method, r.URL.Path, got, savedToken)
+		}
+		switch {
+		case (r.Method == http.MethodPatch || r.Method == http.MethodPost) &&
+			(r.URL.Path == "/v1/agents/me/metadata" || r.URL.Path == "/v1/agents/me"):
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
+			_, _ = w.Write([]byte(`{"result":{"agent":{"handle":"existing-agent","metadata":{"display_name":"Molten Bot","emoji":"💯","profile_markdown":"# 💯 Molten Bot\n\nOwns markdown profile text"}}}}`))
+		case r.Method == http.MethodPatch && r.URL.Path == "/v1/agents/me/status":
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf(`{"base_url":%q,"agent_token":%q}`, server.URL+"/v1", savedToken)), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	state, err := configureHubSetup(context.Background(), hub.InitConfig{
+		BaseURL:           server.URL + "/v1",
+		AgentHarness:      "codex",
+		RuntimeConfigPath: configPath,
+	}, hubui.HubSetupRequest{
+		AgentMode: "existing",
+	}, nil)
+	if err != nil {
+		t.Fatalf("configureHubSetup() error = %v", err)
+	}
+	if got, want := state.Profile.DisplayName, "Molten Bot"; got != want {
+		t.Fatalf("DisplayName = %q, want %q", got, want)
+	}
+	if got, want := state.Profile.Emoji, "💯"; got != want {
+		t.Fatalf("Emoji = %q, want %q", got, want)
+	}
+	if got, want := state.Profile.ProfileText, "Owns markdown profile text"; got != want {
 		t.Fatalf("ProfileText = %q, want %q", got, want)
 	}
 }

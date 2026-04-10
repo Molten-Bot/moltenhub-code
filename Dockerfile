@@ -46,9 +46,8 @@ RUN apk add --no-cache \
     && npm install --global "${agent_pkg}" \
     && npm cache clean --force
 
-RUN adduser -D -s /bin/sh app \
-    && mkdir -p /workspace/config \
-    && chown -R app:app /workspace
+RUN mkdir -p /workspace/config \
+    && chown -R node:node /workspace
 WORKDIR /workspace
 
 COPY --from=build /out/harness /usr/local/bin/harness
@@ -62,7 +61,7 @@ RUN chmod +x /usr/local/bin/harness /usr/local/bin/entrypoint /usr/local/bin/wit
 
 VOLUME ["/workspace/config"]
 
-USER app
+USER node
 
 ENTRYPOINT ["/usr/local/bin/entrypoint"]
 CMD ["/usr/local/bin/with-config"]

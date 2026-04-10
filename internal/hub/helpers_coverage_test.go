@@ -21,8 +21,8 @@ func TestFailureFollowUpHelperBranches(t *testing.T) {
 	if ok, reason := shouldQueueFailureFollowUp(dispatch, harness.Result{}); ok || !strings.Contains(reason, "did not include an error") {
 		t.Fatalf("shouldQueueFailureFollowUp(no error) = (%v, %q)", ok, reason)
 	}
-	if ok, reason := shouldQueueFailureFollowUp(SkillDispatch{RequestID: "req-1-failure-review"}, harness.Result{Err: errors.New("boom")}); ok || !strings.Contains(reason, "nested follow-up") {
-		t.Fatalf("shouldQueueFailureFollowUp(nested) = (%v, %q)", ok, reason)
+	if ok, reason := shouldQueueFailureFollowUp(SkillDispatch{RequestID: "req-1-failure-review"}, harness.Result{Err: errors.New("boom")}); !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureFollowUp(nested) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
 	res := harness.Result{
@@ -39,7 +39,7 @@ func TestFailureFollowUpHelperBranches(t *testing.T) {
 	runCfg := config.Config{RepoURL: "git@github.com:acme/repo.git", TargetSubdir: "internal/hub"}
 	runCfg.ApplyDefaults()
 
-	if got := failureFollowUpRepos(res, config.Config{}); len(got) != 1 || got[0] != "git@github.com:acme/repo.git" {
+	if got := failureFollowUpRepos(res, config.Config{}); len(got) != 1 || got[0] != config.DefaultRepositoryURL {
 		t.Fatalf("failureFollowUpRepos() = %#v", got)
 	}
 	if got := singleRepoFromResults([]harness.RepoResult{{RepoURL: "a"}, {RepoURL: "b"}}); got != "" {

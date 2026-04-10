@@ -434,11 +434,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function taskProgressStepIconURL(") {
 		t.Fatalf("expected index html to include task progress icon URL resolver")
 	}
+	if !strings.Contains(markup, `pi: "/static/logos/pi.svg"`) {
+		t.Fatalf("expected index html to map the pi harness to the pi logo asset")
+	}
 	if !strings.Contains(markup, "task-progress-step-icon") {
 		t.Fatalf("expected index html to render task progress step icons")
 	}
-	if !strings.Contains(markup, "stage === \"claude\"") || !strings.Contains(markup, "stage === \"auggie\"") {
-		t.Fatalf("expected index html to map claude and auggie stages into the agent progress step")
+	if !strings.Contains(markup, "stage === \"claude\"") || !strings.Contains(markup, "stage === \"auggie\"") || !strings.Contains(markup, "stage === \"pi\"") {
+		t.Fatalf("expected index html to map claude, auggie, and pi stages into the agent progress step")
 	}
 	if strings.Contains(markup, "current step:") {
 		t.Fatalf("expected index html to remove current step label text from task progress")
@@ -1267,7 +1270,7 @@ func TestHandlerIndexInjectsConfiguredHarness(t *testing.T) {
 	}
 }
 
-func TestHandlerIndexInjectsPiHarness(t *testing.T) {
+func TestHandlerIndexInjectsPiHarnessConfig(t *testing.T) {
 	t.Parallel()
 
 	srv := NewServer("", NewBroker())
@@ -1282,10 +1285,10 @@ func TestHandlerIndexInjectsPiHarness(t *testing.T) {
 
 	markup := resp.Body.String()
 	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"pi","configuredAgentLabel":"Pi","defaultRepository":"`+config.DefaultRepositoryURL+`"};`) {
-		t.Fatalf("expected pi harness UI config, got %q", markup)
+		t.Fatalf("expected configured pi harness UI config, got %q", markup)
 	}
 	if !strings.Contains(markup, `pi: "/static/logos/pi.svg"`) {
-		t.Fatalf("expected index html to include pi logo mapping")
+		t.Fatalf("expected configured pi harness markup to include the pi logo asset mapping")
 	}
 }
 
@@ -1316,6 +1319,11 @@ func TestHandlerIndexIncludesClaudeBrowserCodeFlow(t *testing.T) {
 		`id="agent-auth-browser-command-primary-copy"`,
 		`id="agent-auth-browser-command-secondary"`,
 		`id="agent-auth-browser-command-secondary-copy"`,
+		`id="agent-auth-configure-option"`,
+		`>Provider</label>`,
+		`class="prompt-control text-[0.95rem]" aria-label="Provider"`,
+		`Paste provider token...`,
+		`agent-auth-configure-input-single-line`,
 		`const useClaudeLogoLink = authHarness(state.agentAuth) === "claude" && authURL !== "" && !useClaudeCommandFlow;`,
 		`const code = claudeBrowserCodeValue();`,
 		`agentAuthURL.addEventListener("click", markAgentAuthInteraction);`,

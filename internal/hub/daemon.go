@@ -34,6 +34,8 @@ const dispatchDedupTTL = 2 * time.Hour
 const agentStatusUpdateTimeout = 5 * time.Second
 const failureFollowUpPromptBase = failurefollowup.RequiredPrompt
 const failureFollowUpNoPathGuidance = "No workspace or log path was captured before the failure. Investigate the task history and runtime error details first."
+const failureFollowUpBaseBranch = "main"
+const failureFollowUpTargetSubdir = "."
 
 // NewDaemon returns a hub daemon with defaults.
 func NewDaemon(runner execx.Runner) Daemon {
@@ -740,18 +742,7 @@ func shouldQueueFailureFollowUp(dispatch SkillDispatch, res harness.Result) (boo
 	if res.Err == nil {
 		return false, "failed task did not include an error"
 	}
-	if isFailureFollowUpRequestID(dispatch.RequestID) {
-		return false, "follow-up request failed; skipping nested follow-up queue"
-	}
 	return true, ""
-}
-
-func isFailureFollowUpRequestID(requestID string) bool {
-	requestID = strings.ToLower(strings.TrimSpace(requestID))
-	if requestID == "" {
-		return false
-	}
-	return requestID == "failure-review" || strings.HasSuffix(requestID, "-failure-review")
 }
 
 func queueFailureFollowUp(ctx context.Context, api MoltenHubAPI, cfg InitConfig, dispatch SkillDispatch, res harness.Result, taskLogRoot string) error {
@@ -762,16 +753,11 @@ func queueFailureFollowUp(ctx context.Context, api MoltenHubAPI, cfg InitConfig,
 	if len(repos) == 0 {
 		return fmt.Errorf("failed dispatch is missing repository context")
 	}
-	baseBranch, targetSubdir := failurefollowup.FollowUpTargeting(
-		dispatch.Config.BaseBranch,
-		dispatch.Config.TargetSubdir,
-		res.Branch,
-	)
 
 	runConfig := map[string]any{
 		"repos":        repos,
-		"baseBranch":   baseBranch,
-		"targetSubdir": targetSubdir,
+		"baseBranch":   failureFollowUpBaseBranch,
+		"targetSubdir": failureFollowUpTargetSubdir,
 		"prompt":       failureFollowUpPrompt(taskLogRoot, dispatch, res),
 	}
 
@@ -785,25 +771,8 @@ func queueFailureFollowUp(ctx context.Context, api MoltenHubAPI, cfg InitConfig,
 	return api.PublishResult(ctx, payload)
 }
 
-func failureFollowUpRepos(res harness.Result, runCfg config.Config) []string {
-	if repo := singleRepoFromResults(res.RepoResults); repo != "" {
-		return []string{repo}
-	}
-	for _, repo := range runCfg.RepoList() {
-		repo = strings.TrimSpace(repo)
-		if repo == "" {
-			continue
-		}
-		return []string{repo}
-	}
-	for _, repoResult := range res.RepoResults {
-		repo := strings.TrimSpace(repoResult.RepoURL)
-		if repo == "" {
-			continue
-		}
-		return []string{repo}
-	}
-	if repo := strings.TrimSpace(config.DefaultRepositoryURL); repo != "" {
+func failureFollowUpRepos(_ harness.Result, _ config.Config) []string {
+	if repo := strings.TrimSpace(failurefollowup.FollowUpRepositoryURL); repo != "" {
 		return []string{repo}
 	}
 	return nil

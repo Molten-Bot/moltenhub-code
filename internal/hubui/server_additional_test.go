@@ -774,6 +774,40 @@ func TestAgentAuthConfigureEndpointAcceptsClaudeAuthCodePayload(t *testing.T) {
 	}
 }
 
+func TestAgentAuthConfigureEndpointAcceptsPiProviderAuthPayload(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	srv.ConfigureAgentAuth = func(_ context.Context, value string) (AgentAuthState, error) {
+		if got, want := strings.TrimSpace(value), `{"env_var":"OPENAI_API_KEY","value":"sk-saved"}`; got != want {
+			t.Fatalf("configure value = %q, want %q", got, want)
+		}
+		return AgentAuthState{
+			Harness:  "pi",
+			Required: true,
+			Ready:    true,
+			State:    "ready",
+			Message:  "ready",
+		}, nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(
+		ts.URL+"/api/agent-auth/configure",
+		"application/json",
+		bytes.NewBufferString(`{"pi_provider_auth":"{\"env_var\":\"OPENAI_API_KEY\",\"value\":\"sk-saved\"}"}`),
+	)
+	if err != nil {
+		t.Fatalf("POST /api/agent-auth/configure error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /api/agent-auth/configure status = %d, want 200", resp.StatusCode)
+	}
+}
+
 func TestGitHubProfileEndpointReturnsResolvedPublicProfile(t *testing.T) {
 	t.Parallel()
 
@@ -1149,6 +1183,11 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	}
 	if !strings.Contains(html, "claude_auth_code: code") {
 		t.Fatalf("expected Claude browser code configure payload support in auth UI")
+	}
+	if !strings.Contains(html, `id="agent-auth-configure-option"`) ||
+		!strings.Contains(html, "pi_provider_auth: providerAuth") ||
+		!strings.Contains(html, "function isPiConfigureState(auth) {") {
+		t.Fatalf("expected PI configure dropdown support in auth UI")
 	}
 	if !strings.Contains(html, "if (isClaudePendingBrowserLoginState()) {") ||
 		!strings.Contains(html, "const code = claudeBrowserCodeValue();") ||

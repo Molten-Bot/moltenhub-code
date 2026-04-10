@@ -68,7 +68,14 @@ type AgentAuthState struct {
 	AcceptsBrowserCode   bool   `json:"accepts_browser_code,omitempty"`
 	ConfigureCommand     string `json:"configure_command,omitempty"`
 	ConfigurePlaceholder string `json:"configure_placeholder,omitempty"`
+	ConfigureOptions     []AgentAuthOption `json:"configure_options,omitempty"`
 	UpdatedAt            string `json:"updated_at,omitempty"`
+}
+
+type AgentAuthOption struct {
+	Value       string `json:"value,omitempty"`
+	Label       string `json:"label,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 // HubSetupState describes whether Molten Hub is configured locally and what
@@ -674,6 +681,8 @@ func (s Server) handleAgentAuthVerify(w http.ResponseWriter, r *http.Request) {
 type agentAuthConfigureRequest struct {
 	AugmentSessionAuth      string `json:"augment_session_auth"`
 	AugmentSessionAuthAlias string `json:"augmentSessionAuth"`
+	PiProviderAuth          string `json:"pi_provider_auth"`
+	PiProviderAuthAlias     string `json:"piProviderAuth"`
 	SessionAuth             string `json:"session_auth"`
 	SessionAuthAlias        string `json:"sessionAuth"`
 	GitHubToken             string `json:"github_token"`
@@ -722,6 +731,8 @@ func (s Server) handleAgentAuthConfigure(w http.ResponseWriter, r *http.Request)
 	sessionAuth := firstNonEmptyString(
 		req.AugmentSessionAuth,
 		req.AugmentSessionAuthAlias,
+		req.PiProviderAuth,
+		req.PiProviderAuthAlias,
 		req.SessionAuth,
 		req.SessionAuthAlias,
 		req.GitHubToken,

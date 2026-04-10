@@ -1,13 +1,18 @@
 package failurefollowup
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/jef/moltenhub-code/internal/config"
 )
 
 const RequiredPrompt = "Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."
 
-const ExecutionContract = `Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.
+const FollowUpRepositoryURL = config.DefaultRepositoryURL
+
+var ExecutionContract = fmt.Sprintf(`Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.
 
 When failures occur, send a response back to the calling agent that clearly states failure and includes the error details.
 
@@ -15,7 +20,7 @@ When a task fails:
 - Queue a follow-up task dedicated to reviewing the logs and fixing all underlying issues in this codebase.
 - Pass the relevant failing file/folder log path(s) into that follow-up task context.
 - Use this follow-up run config payload shape:
-  {"repos":["<same_repo_as_failed_task>"],"baseBranch":"main","targetSubdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."}
+  {"repos":["%s"],"baseBranch":"main","targetSubdir":".","prompt":"%s"}
 
 Completion requirements:
 - Only create a new branch when starting from 'main'; if you're fixing an existing non-'main' branch, stay on it.
@@ -24,7 +29,7 @@ Completion requirements:
 - If no file changes are required, return a clear no-op result with concrete evidence instead of forcing an empty PR.
 - If CI/CD fails, continue fixing code/tests/workflows until checks pass.
 - If you changed multiple repositories, ensure each changed repository has its own branch and PR.
-- Optimize for the highest-quality PR you can produce with focused, production-ready changes.`
+- Optimize for the highest-quality PR you can produce with focused, production-ready changes.`, FollowUpRepositoryURL, RequiredPrompt)
 
 const (
 	LogFileName           = "terminal.log"
@@ -97,20 +102,7 @@ func ComposePrompt(requiredPrompt string, logPaths, fallbackLogPaths []string, n
 }
 
 func FollowUpTargeting(baseBranch, targetSubdir, currentBranch string) (string, string) {
-	baseBranch = strings.TrimSpace(baseBranch)
-	targetSubdir = strings.TrimSpace(targetSubdir)
-	currentBranch = strings.TrimSpace(currentBranch)
-
-	if targetSubdir == "" {
-		targetSubdir = "."
-	}
-	if baseBranch == "" {
-		baseBranch = "main"
-	}
-	if normalizeBranchRef(baseBranch) != "main" && currentBranch != "" {
-		baseBranch = currentBranch
-	}
-	return baseBranch, targetSubdir
+	return "main", "."
 }
 
 func TaskLogPaths(logRoot, requestID string) []string {
@@ -201,13 +193,6 @@ func SanitizeLogPathPart(part string) string {
 		return ""
 	}
 	return trimmed
-}
-
-func normalizeBranchRef(branch string) string {
-	branch = strings.TrimSpace(branch)
-	branch = strings.TrimPrefix(branch, "refs/heads/")
-	branch = strings.TrimPrefix(branch, "origin/")
-	return branch
 }
 
 func NonRemediableRepoAccessReason(err error) string {

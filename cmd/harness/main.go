@@ -480,7 +480,7 @@ func runHub(args []string) int {
 			daemonLogger(
 				"dispatch status=warn action=skip_failure_followup request_id=%s err=%q",
 				failedRequestID,
-				fmt.Sprintf("non-remediable failure detected: %s", reason),
+				reason,
 			)
 			return
 		}
@@ -494,7 +494,7 @@ func runHub(args []string) int {
 			)
 			return
 		}
-		followUpRequestID, followUpErr := enqueueLocalRun(ctx, followUpCfg, false, "failure_followup", false)
+		followUpRequestID, followUpErr := enqueueLocalRun(ctx, followUpCfg, true, "failure_followup", false)
 		if followUpErr != nil {
 			daemonLogger(
 				"dispatch status=warn action=queue_failure_followup request_id=%s err=%q",
@@ -951,11 +951,6 @@ func shouldQueueFailureFollowUp(failedResult harness.Result) (bool, string) {
 	if failedResult.Err == nil {
 		return false, "failed task did not include an error"
 	}
-
-	errText := strings.ToLower(strings.TrimSpace(failedResult.Err.Error()))
-	if errText == "" {
-		return false, "failed task error was empty"
-	}
 	return true, ""
 }
 
@@ -976,25 +971,8 @@ func shouldEscalateNoChangesFollowUp(source string, result harness.Result) (bool
 	return shouldQueueUnexpectedNoChangesFollowUp(result)
 }
 
-func failureFollowUpRepos(failedResult harness.Result, failedRunCfg config.Config) []string {
-	if repo := singleRepoFromResults(failedResult.RepoResults); repo != "" {
-		return []string{repo}
-	}
-	for _, repo := range failedRunCfg.RepoList() {
-		repo = strings.TrimSpace(repo)
-		if repo == "" {
-			continue
-		}
-		return []string{repo}
-	}
-	for _, repoResult := range failedResult.RepoResults {
-		repo := strings.TrimSpace(repoResult.RepoURL)
-		if repo == "" {
-			continue
-		}
-		return []string{repo}
-	}
-	if repo := strings.TrimSpace(config.DefaultRepositoryURL); repo != "" {
+func failureFollowUpRepos(_ harness.Result, _ config.Config) []string {
+	if repo := strings.TrimSpace(failurefollowup.FollowUpRepositoryURL); repo != "" {
 		return []string{repo}
 	}
 	return nil
@@ -1457,7 +1435,7 @@ func maybeStartAgentAuth(ctx context.Context, runtime agentruntime.Runtime, gate
 
 func shouldEnableAgentAuthConfigure(harness string) bool {
 	switch strings.TrimSpace(strings.ToLower(harness)) {
-	case agentruntime.HarnessCodex, agentruntime.HarnessClaude, agentruntime.HarnessAuggie:
+	case agentruntime.HarnessCodex, agentruntime.HarnessClaude, agentruntime.HarnessAuggie, agentruntime.HarnessPi:
 		return true
 	default:
 		return false
