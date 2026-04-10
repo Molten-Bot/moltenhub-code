@@ -234,8 +234,8 @@ func TestSyncProfileRetriesWithoutHandleWhenHandleUpdateFails(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	if len(calls) != 3 {
-		t.Fatalf("calls = %d, want 3", len(calls))
+	if len(calls) != 4 {
+		t.Fatalf("calls = %d, want 4", len(calls))
 	}
 	if calls[0].Method != http.MethodGet || calls[0].Path != "/v1/agents/me" {
 		t.Fatalf("first call = %s %s, want GET /v1/agents/me", calls[0].Method, calls[0].Path)
@@ -243,7 +243,19 @@ func TestSyncProfileRetriesWithoutHandleWhenHandleUpdateFails(t *testing.T) {
 	if _, hasHandle := calls[1].Body["handle"]; !hasHandle {
 		t.Fatalf("second request should include handle: %#v", calls[1].Body)
 	}
-	if _, hasHandle := calls[2].Body["handle"]; hasHandle {
-		t.Fatalf("retry request should omit handle: %#v", calls[2].Body)
+	if calls[1].Path != "/v1/agents/me/metadata" {
+		t.Fatalf("second path = %q, want /v1/agents/me/metadata", calls[1].Path)
+	}
+	if _, hasHandle := calls[2].Body["handle"]; !hasHandle {
+		t.Fatalf("third request should include handle for /agents/me alias retry: %#v", calls[2].Body)
+	}
+	if calls[2].Path != "/v1/agents/me" {
+		t.Fatalf("third path = %q, want /v1/agents/me", calls[2].Path)
+	}
+	if _, hasHandle := calls[3].Body["handle"]; hasHandle {
+		t.Fatalf("final retry request should omit handle: %#v", calls[3].Body)
+	}
+	if calls[3].Path != "/v1/agents/me/metadata" {
+		t.Fatalf("final retry path = %q, want /v1/agents/me/metadata", calls[3].Path)
 	}
 }
