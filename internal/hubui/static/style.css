@@ -2493,7 +2493,6 @@ select.prompt-control {
 
 .hub-emoji-picker-toggle:disabled {
   opacity: 0.55;
-  cursor: not-allowed;
 }
 
 .hub-emoji-picker-toggle-preview {
