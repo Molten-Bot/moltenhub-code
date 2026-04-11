@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,24 +27,52 @@ type expectedRun struct {
 }
 
 type fakeRunner struct {
-	t     *testing.T
-	exps  []expectedRun
-	calls []execx.Command
+	t                    *testing.T
+	exps                 []expectedRun
+	calls                []execx.Command
+	allowUnorderedClones bool
+	mu                   sync.Mutex
 }
 
 func (f *fakeRunner) Run(_ context.Context, cmd execx.Command) (execx.Result, error) {
 	f.t.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if len(f.exps) == 0 {
 		f.t.Fatalf("unexpected command: %+v", cmd)
 	}
-	exp := f.exps[0]
-	f.exps = f.exps[1:]
-	f.calls = append(f.calls, cmd)
 
-	if exp.cmd.Name != cmd.Name || exp.cmd.Dir != cmd.Dir || !reflect.DeepEqual(exp.cmd.Args, cmd.Args) {
-		f.t.Fatalf("command mismatch\n got:  %+v\n want: %+v", cmd, exp.cmd)
+	matchIndex := -1
+	if commandsEqual(f.exps[0].cmd, cmd) {
+		matchIndex = 0
+	} else if f.allowUnorderedClones && isCloneGitCommand(cmd) {
+		for i, exp := range f.exps {
+			if !isCloneGitCommand(exp.cmd) {
+				continue
+			}
+			if commandsEqual(exp.cmd, cmd) {
+				matchIndex = i
+				break
+			}
+		}
 	}
+
+	if matchIndex < 0 {
+		f.t.Fatalf("command mismatch\n got:  %+v\n want: %+v", cmd, f.exps[0].cmd)
+	}
+
+	exp := f.exps[matchIndex]
+	f.exps = append(f.exps[:matchIndex], f.exps[matchIndex+1:]...)
+	f.calls = append(f.calls, cmd)
 	return exp.res, exp.err
+}
+
+func commandsEqual(a, b execx.Command) bool {
+	return a.Name == b.Name && a.Dir == b.Dir && reflect.DeepEqual(a.Args, b.Args)
+}
+
+func isCloneGitCommand(cmd execx.Command) bool {
+	return cmd.Name == "git" && len(cmd.Args) > 0 && cmd.Args[0] == "clone"
 }
 
 type captureRunner struct {
@@ -1351,7 +1380,7 @@ func TestRunMultiRepoCreatesPRsForEachChangedRepo(t *testing.T) {
 	})
 	codexPrompt = withAgentsPrompt(codexPrompt, agentsPath)
 
-	fake := &fakeRunner{t: t, exps: []expectedRun{
+	fake := &fakeRunner{t: t, allowUnorderedClones: true, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
 		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
 		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
@@ -1431,7 +1460,7 @@ func TestRunMultiRepoRemediationUsesWorkspaceCodexOptions(t *testing.T) {
 	checkSummary := "X integration-tests failing"
 	repairPrompt := remediationPromptForRepo(codexPrompt, repoRelA, cfg.Repos[0], prURL, checkSummary, 1, true)
 
-	fake := &fakeRunner{t: t, exps: []expectedRun{
+	fake := &fakeRunner{t: t, allowUnorderedClones: true, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
 		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
 		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
@@ -1472,6 +1501,90 @@ func TestRunMultiRepoRemediationUsesWorkspaceCodexOptions(t *testing.T) {
 	}
 	if len(fake.exps) != 0 {
 		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+type cloneBarrierRunner struct {
+	mu        sync.Mutex
+	cloneSeen int
+	cloneGate chan struct{}
+}
+
+func newCloneBarrierRunner() *cloneBarrierRunner {
+	return &cloneBarrierRunner{
+		cloneGate: make(chan struct{}),
+	}
+}
+
+func (r *cloneBarrierRunner) Run(ctx context.Context, cmd execx.Command) (execx.Result, error) {
+	if isCloneGitCommand(cmd) {
+		r.mu.Lock()
+		r.cloneSeen++
+		if r.cloneSeen == 2 {
+			close(r.cloneGate)
+		}
+		r.mu.Unlock()
+
+		select {
+		case <-r.cloneGate:
+			return execx.Result{}, nil
+		case <-ctx.Done():
+			return execx.Result{}, ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+			return execx.Result{}, errors.New("clone concurrency barrier timed out")
+		}
+	}
+
+	if cmd.Name == "git" && len(cmd.Args) >= 2 && cmd.Args[0] == "switch" && cmd.Args[1] == "-c" {
+		return execx.Result{}, errors.New("stop after clone stage")
+	}
+
+	return execx.Result{}, nil
+}
+
+func (r *cloneBarrierRunner) CloneSeen() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cloneSeen
+}
+
+func TestRunMultiRepoClonesConcurrently(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.RepoURL = ""
+	cfg.Repo = ""
+	cfg.Repos = []string{
+		"git@github.com:acme/repo-a.git",
+		"git@github.com:acme/repo-b.git",
+	}
+	cfg.TargetSubdir = "."
+
+	guid := "cloneconcurrency123"
+	runDir := testRunDir(guid)
+	repoRelA := repoWorkspaceDirName(cfg.Repos[0], 0, len(cfg.Repos))
+	repoDirA := filepath.Join(runDir, repoRelA)
+
+	runner := newCloneBarrierRunner()
+	h := New(runner)
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == repoDirA }
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	res := h.Run(ctx, cfg)
+	if res.Err == nil {
+		t.Fatal("Run() err = nil, want branch-stage stop error")
+	}
+	if res.ExitCode != ExitGit {
+		t.Fatalf("ExitCode = %d, want %d (clone stage should have succeeded)", res.ExitCode, ExitGit)
+	}
+	if strings.Contains(strings.ToLower(res.Err.Error()), "clone concurrency barrier timed out") {
+		t.Fatalf("Run() err = %v, want clone stage to proceed concurrently", res.Err)
+	}
+	if got, want := runner.CloneSeen(), len(cfg.Repos); got != want {
+		t.Fatalf("clone calls observed = %d, want %d", got, want)
 	}
 }
 
