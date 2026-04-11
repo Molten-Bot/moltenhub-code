@@ -69,7 +69,7 @@ func TestHubLogRouterFiltersByConfiguredLevel(t *testing.T) {
 	}
 
 	snapshot := broker.Snapshot()
-	if got, want := len(snapshot.Events), 2; got != want {
+	if got, want := len(snapshot.Events), 3; got != want {
 		t.Fatalf("len(snapshot.Events) = %d, want %d", got, want)
 	}
 }
@@ -100,7 +100,7 @@ func TestHubLogRouterWarnLevelSuppressesInfoAndKeepsErrors(t *testing.T) {
 	}
 
 	snapshot := broker.Snapshot()
-	if got, want := len(snapshot.Events), 2; got != want {
+	if got, want := len(snapshot.Events), 3; got != want {
 		t.Fatalf("len(snapshot.Events) = %d, want %d", got, want)
 	}
 }
@@ -135,7 +135,13 @@ func TestHubLogRouterInfoLevelSuppressesHighVolumeDebugLifecycleLogs(t *testing.
 	}
 
 	snapshot := broker.Snapshot()
-	if got, want := len(snapshot.Events), 1; got != want {
+	if got, want := len(snapshot.Events), 3; got != want {
 		t.Fatalf("len(snapshot.Events) = %d, want %d", got, want)
+	}
+	if got, want := len(snapshot.Tasks), 1; got != want {
+		t.Fatalf("len(snapshot.Tasks) = %d, want %d", got, want)
+	}
+	if got, want := snapshot.Tasks[0].Status, "running"; got != want {
+		t.Fatalf("snapshot.Tasks[0].Status = %q, want %q", got, want)
 	}
 }

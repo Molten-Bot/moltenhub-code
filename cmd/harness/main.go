@@ -856,6 +856,10 @@ func (r hubLogRouter) Log(line string) {
 		return
 	}
 
+	if r.broker != nil {
+		r.broker.IngestLog(line)
+	}
+
 	eventLevel := classifyHubLogLine(line)
 	if !r.level.Allows(eventLevel) {
 		if r.logger != nil {
@@ -867,9 +871,6 @@ func (r hubLogRouter) Log(line string) {
 
 	if r.logger != nil {
 		r.logger.Print(line)
-	}
-	if r.broker != nil {
-		r.broker.IngestLog(line)
 	}
 }
 
