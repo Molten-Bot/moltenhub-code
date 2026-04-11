@@ -26,22 +26,23 @@ const (
 
 // InitConfig is the init.json contract for hub runtime mode.
 type InitConfig struct {
-	Version           string           `json:"version"`
-	BaseURL           string           `json:"base_url"`
-	BindToken         string           `json:"bind_token"`
-	AgentToken        string           `json:"agent_token"`
-	AgentHarness      string           `json:"agent_harness,omitempty"`
-	AgentCommand      string           `json:"agent_command,omitempty"`
-	SessionKey        string           `json:"session_key"`
-	Handle            string           `json:"handle"`
-	Profile           ProfileConfig    `json:"profile"`
+	Version            string           `json:"version"`
+	BaseURL            string           `json:"base_url"`
+	BindToken          string           `json:"bind_token"`
+	AgentToken         string           `json:"agent_token"`
+	LogLevel           string           `json:"log_level,omitempty"`
+	AgentHarness       string           `json:"agent_harness,omitempty"`
+	AgentCommand       string           `json:"agent_command,omitempty"`
+	SessionKey         string           `json:"session_key"`
+	Handle             string           `json:"handle"`
+	Profile            ProfileConfig    `json:"profile"`
 	GitHubToken        string           `json:"github_token,omitempty"`
 	OpenAIAPIKey       string           `json:"openai_api_key,omitempty"`
 	AugmentSessionAuth string           `json:"augment_session_auth,omitempty"`
 	PiProviderAuth     string           `json:"pi_provider_auth,omitempty"`
-	Skill             SkillConfig      `json:"-"`
-	RuntimeConfigPath string           `json:"-"`
-	Dispatcher        DispatcherConfig `json:"dispatcher"`
+	Skill              SkillConfig      `json:"-"`
+	RuntimeConfigPath  string           `json:"-"`
+	Dispatcher         DispatcherConfig `json:"dispatcher"`
 }
 
 // ProfileConfig controls optional agent profile sync on startup.
@@ -136,6 +137,16 @@ func (c *InitConfig) ApplyDefaults() {
 
 	c.BindToken = strings.TrimSpace(c.BindToken)
 	c.AgentToken = strings.TrimSpace(c.AgentToken)
+	rawLogLevel := strings.TrimSpace(c.LogLevel)
+	switch {
+	case rawLogLevel == "":
+		c.LogLevel = DefaultLogLevel
+	case NormalizeLogLevel(rawLogLevel) != "":
+		c.LogLevel = NormalizeLogLevel(rawLogLevel)
+	default:
+		// Preserve invalid value so Validate can return a clear error.
+		c.LogLevel = strings.ToLower(rawLogLevel)
+	}
 	c.GitHubToken = strings.TrimSpace(c.GitHubToken)
 	c.OpenAIAPIKey = strings.TrimSpace(c.OpenAIAPIKey)
 	c.AugmentSessionAuth = strings.TrimSpace(c.AugmentSessionAuth)
@@ -246,6 +257,13 @@ func (c InitConfig) Validate() error {
 	}
 	if strings.TrimSpace(c.Skill.ResultType) == "" {
 		return fmt.Errorf("skill.result_type is required")
+	}
+	logLevel := strings.TrimSpace(c.LogLevel)
+	if logLevel == "" {
+		logLevel = DefaultLogLevel
+	}
+	if _, err := ParseLogLevel(logLevel); err != nil {
+		return err
 	}
 	if _, err := agentruntime.Resolve(c.AgentHarness, c.AgentCommand); err != nil {
 		return err

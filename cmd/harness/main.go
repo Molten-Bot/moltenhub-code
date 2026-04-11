@@ -238,11 +238,12 @@ func runHub(args []string) int {
 	defer logger.Close()
 	runner := execx.OSRunner{}
 	monitorBroker := hubui.NewBroker()
-	daemonLogger := func(format string, args ...any) {
-		line := fmt.Sprintf(format, args...)
-		logger.Print(line)
-		monitorBroker.IngestLog(line)
+	logLevel, err := hub.ParseLogLevel(cfg.LogLevel)
+	if err != nil {
+		logLevel = hub.LogLevelInfo
 	}
+	logRouter := newHubLogRouter(logger, monitorBroker, logLevel)
+	daemonLogger := logRouter.Printf
 
 	runtimeCfg, runtimeErr := agentruntime.Resolve(cfg.AgentHarness, cfg.AgentCommand)
 	var authGate agentAuthGate
@@ -588,7 +589,7 @@ func runHub(args []string) int {
 		uiServer := hubui.NewServer(*uiListen, monitorBroker)
 		uiServer.AutomaticMode = *uiAutomatic
 		uiServer.ConfiguredHarness = cfg.AgentHarness
-		uiServer.Logf = logger.Printf
+		uiServer.Logf = daemonLogger
 		uiServer.LoadLibraryTasks = func() ([]library.TaskSummary, error) {
 			catalog, err := library.LoadCatalog(library.DefaultDir)
 			if err != nil {
@@ -681,21 +682,21 @@ func runHub(args []string) int {
 			daemonLogger("dispatch status=stopped request_id=%s err=%q", requestID, errTaskStoppedByOperator)
 			return nil
 		}
-		logger.Printf("hub.ui status=ready url=%s", monitorURL(*uiListen))
+		daemonLogger("hub.ui status=ready url=%s", monitorURL(*uiListen))
 		prMonitor := &hubui.PRMergeMonitor{
 			Runner:      runner,
 			Broker:      monitorBroker,
-			Logf:        logger.Printf,
+			Logf:        daemonLogger,
 			CleanupTask: cleanupTaskLogs,
 		}
 		go func() {
 			if err := prMonitor.Run(ctx); err != nil {
-				logger.Printf("hub.ui status=warn event=pr_monitor err=%q", err)
+				daemonLogger("hub.ui status=warn event=pr_monitor err=%q", err)
 			}
 		}()
 		go func() {
 			if err := uiServer.Run(ctx); err != nil {
-				logger.Printf("hub.ui status=error err=%q", err)
+				daemonLogger("hub.ui status=error err=%q", err)
 			}
 		}()
 	}
@@ -802,6 +803,93 @@ func defaultHubBootConfig(runtimeConfigPath string) (hub.InitConfig, int, error)
 		return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("init config error: %w", err)
 	}
 	return cfg, harness.ExitSuccess, nil
+}
+
+type hubLogRouter struct {
+	logger *terminalLogger
+	broker *hubui.Broker
+	level  hub.LogLevel
+}
+
+func newHubLogRouter(logger *terminalLogger, broker *hubui.Broker, level hub.LogLevel) hubLogRouter {
+	return hubLogRouter{
+		logger: logger,
+		broker: broker,
+		level:  level,
+	}
+}
+
+func (r hubLogRouter) Printf(format string, args ...any) {
+	r.Log(strings.TrimSpace(fmt.Sprintf(format, args...)))
+}
+
+func (r hubLogRouter) Log(line string) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return
+	}
+
+	eventLevel := classifyHubLogLine(line)
+	if !r.level.Allows(eventLevel) {
+		if r.logger != nil {
+			// Keep filtered lines in the task mirror for follow-up diagnostics.
+			r.logger.Capture(line)
+		}
+		return
+	}
+
+	if r.logger != nil {
+		r.logger.Print(line)
+	}
+	if r.broker != nil {
+		r.broker.IngestLog(line)
+	}
+}
+
+func classifyHubLogLine(line string) hub.LogLevel {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return hub.LogLevelInfo
+	}
+
+	lowerLine := strings.ToLower(line)
+	if strings.HasPrefix(lowerLine, "error:") {
+		return hub.LogLevelError
+	}
+	if strings.HasPrefix(lowerLine, "warn:") {
+		return hub.LogLevelWarn
+	}
+	if strings.HasPrefix(line, "debug ") {
+		return hub.LogLevelDebug
+	}
+
+	fields := parseSimpleKVFields(line)
+	status := strings.ToLower(strings.TrimSpace(fields["status"]))
+	switch status {
+	case "error", "failed", "invalid":
+		return hub.LogLevelError
+	case "warn":
+		return hub.LogLevelWarn
+	case "running":
+		return hub.LogLevelDebug
+	}
+
+	if isDebugCommandLogLine(line, fields) {
+		return hub.LogLevelDebug
+	}
+
+	return hub.LogLevelInfo
+}
+
+func isDebugCommandLogLine(line string, fields map[string]string) bool {
+	if len(fields) == 0 {
+		return false
+	}
+	phase := strings.TrimSpace(fields["phase"])
+	if phase == "" {
+		return false
+	}
+	return strings.HasPrefix(line, "cmd ") || strings.Contains(line, " cmd ")
 }
 
 func writeStdoutLine(logger *terminalLogger, line string) {
