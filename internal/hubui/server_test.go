@@ -584,8 +584,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function sortTasksByActivity(") {
 		t.Fatalf("expected index html to include activity-based task sorting for list rendering")
 	}
-	if !strings.Contains(markup, "const STREAM_RENDER_INTERVAL_MS = 4_000;") {
-		t.Fatalf("expected index html to batch stream-driven task transitions on a 4s cadence")
+	if !strings.Contains(markup, "const STREAM_RENDER_INTERVAL_MS = 120;") {
+		t.Fatalf("expected index html to keep stream-driven task transitions responsive at 120ms cadence")
 	}
 	if !strings.Contains(markup, "const TASK_ORDER_TRANSITION_DELAY_MS = 2_000;") || !strings.Contains(markup, "const TASK_ORDER_SYNC_INTERVAL_MS = 4_000;") {
 		t.Fatalf("expected index html to delay and synchronize task reordering transitions")
