@@ -621,9 +621,12 @@ func TestUnexpectedNoChangesFollowUpRunConfigPreservesTaskTargetingAndAddsContex
 		t.Fatalf("Repos = %v, want %v", got, want)
 	}
 
+	expectedLogDir := filepath.Join(logRoot, followUpTaskLogArchiveSubdir, "local", "1712345678", "000001")
+
 	for _, want := range []string{
 		"Review the previous local task logs first.",
-		filepath.Join(logRoot, "local", "1712345678", "000001"),
+		expectedLogDir,
+		filepath.Join(expectedLogDir, logFileName),
 		"Observed no-change context:",
 		"- request_id=local-1712345678-000001",
 		"- workspace_dir=/tmp/run-123",
@@ -722,6 +725,51 @@ func TestUnexpectedNoChangesFollowUpRunConfigUsesNoPathGuidanceWhenTaskLogsMissi
 	}
 	if !strings.Contains(cfg.Prompt, "No local task log path was captured before the task completed without changes.") {
 		t.Fatalf("Prompt missing no-path guidance: %q", cfg.Prompt)
+	}
+}
+
+func TestFollowUpTaskLogPathsArchivesLocalTaskLogs(t *testing.T) {
+	t.Parallel()
+
+	logRoot := filepath.Join(t.TempDir(), ".log")
+	requestID := "local-1712345678-000001"
+	sourceDir := filepath.Join(logRoot, "local", "1712345678", "000001")
+	if err := os.MkdirAll(sourceDir, 0o755); err != nil {
+		t.Fatalf("mkdir source dir: %v", err)
+	}
+
+	legacyContent := []byte("legacy log\n")
+	if err := os.WriteFile(filepath.Join(sourceDir, legacyTaskLogFileName), legacyContent, 0o644); err != nil {
+		t.Fatalf("write legacy log: %v", err)
+	}
+	currentContent := []byte("current log\n")
+	if err := os.WriteFile(filepath.Join(sourceDir, logFileName), currentContent, 0o644); err != nil {
+		t.Fatalf("write current log: %v", err)
+	}
+
+	paths := followUpTaskLogPaths(logRoot, requestID)
+	archiveDir := filepath.Join(logRoot, followUpTaskLogArchiveSubdir, "local", "1712345678", "000001")
+	wantPaths := []string{
+		archiveDir,
+		filepath.Join(archiveDir, legacyTaskLogFileName),
+		filepath.Join(archiveDir, logFileName),
+	}
+	if !reflect.DeepEqual(paths, wantPaths) {
+		t.Fatalf("followUpTaskLogPaths() = %v, want %v", paths, wantPaths)
+	}
+
+	if got, err := os.ReadFile(filepath.Join(archiveDir, legacyTaskLogFileName)); err != nil || string(got) != string(legacyContent) {
+		t.Fatalf("archived legacy log mismatch: content=%q err=%v", string(got), err)
+	}
+	if got, err := os.ReadFile(filepath.Join(archiveDir, logFileName)); err != nil || string(got) != string(currentContent) {
+		t.Fatalf("archived current log mismatch: content=%q err=%v", string(got), err)
+	}
+
+	if err := os.RemoveAll(sourceDir); err != nil {
+		t.Fatalf("remove source dir: %v", err)
+	}
+	if got := existingPaths(paths); !reflect.DeepEqual(got, wantPaths) {
+		t.Fatalf("existingPaths(archived) = %v, want %v", got, wantPaths)
 	}
 }
 

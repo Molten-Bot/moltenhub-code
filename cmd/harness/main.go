@@ -38,6 +38,7 @@ const hubPingRemoteContinueDetail = "Hub endpoint ping precheck failed; continui
 const hubPingHeadlessNoopDetail = "Hub endpoint ping precheck failed with UI disabled and no Hub credentials configured; startup completed without remote transport."
 const gitHubCLIPackageLabel = "github-cli (gh)"
 const gitHubCLIAuthRecommendation = "Run `gh auth login` (the GitHub CLI binary from the `github-cli` package) or set GH_TOKEN before dispatching tasks."
+const followUpTaskLogArchiveSubdir = "followup"
 
 const hubBootDiagnosticTimeout = 10 * time.Second
 const hubPingDiagnosticTimeout = 5 * time.Second
@@ -1000,7 +1001,7 @@ func failureFollowUpRunConfig(
 	failedRunCfg config.Config,
 	logRoot string,
 ) config.Config {
-	logPaths := failurefollowup.TaskLogPaths(logRoot, failedRequestID)
+	logPaths := followUpTaskLogPaths(logRoot, failedRequestID)
 	baseBranch, targetSubdir := failurefollowup.FollowUpTargeting(
 		failedRunCfg.BaseBranch,
 		failedRunCfg.TargetSubdir,
@@ -1021,7 +1022,7 @@ func unexpectedNoChangesFollowUpRunConfig(
 	logRoot string,
 ) config.Config {
 	runCfg.ApplyDefaults()
-	logPaths := existingPaths(failurefollowup.TaskLogPaths(logRoot, requestID))
+	logPaths := existingPaths(followUpTaskLogPaths(logRoot, requestID))
 	baseBranch := strings.TrimSpace(runCfg.BaseBranch)
 	return config.Config{
 		Repos:        unexpectedNoChangesFollowUpRepos(runCfg),
@@ -1210,6 +1211,106 @@ func existingPaths(paths []string) []string {
 		return nil
 	}
 	return existing
+}
+
+func followUpTaskLogPaths(logRoot, requestID string) []string {
+	paths := taskLogPaths(logRoot, requestID)
+	if _, ok := localTaskLogDir(logRoot, requestID); !ok {
+		return paths
+	}
+
+	archived := archiveLocalTaskLogsForFollowUp(logRoot, requestID)
+	if len(archived) > 0 {
+		return archived
+	}
+	return paths
+}
+
+func archiveLocalTaskLogsForFollowUp(logRoot, requestID string) []string {
+	sourceDir, ok := localTaskLogDir(logRoot, requestID)
+	if !ok {
+		return nil
+	}
+	sourceDir = strings.TrimSpace(sourceDir)
+	if sourceDir == "" {
+		return nil
+	}
+	if stat, err := os.Stat(sourceDir); err != nil || !stat.IsDir() {
+		return nil
+	}
+
+	archiveDir, ok := followUpTaskLogArchiveDir(logRoot, requestID)
+	if !ok {
+		return nil
+	}
+	if err := os.MkdirAll(archiveDir, 0o755); err != nil {
+		return nil
+	}
+
+	paths := []string{archiveDir}
+	for _, fileName := range []string{legacyTaskLogFileName, logFileName} {
+		sourcePath := filepath.Join(sourceDir, fileName)
+		archivePath := filepath.Join(archiveDir, fileName)
+		copied, err := copyFileIfPresent(sourcePath, archivePath)
+		if err != nil || !copied {
+			continue
+		}
+		paths = append(paths, archivePath)
+	}
+	if len(paths) == 1 {
+		return nil
+	}
+	return paths
+}
+
+func copyFileIfPresent(sourcePath, targetPath string) (bool, error) {
+	sourcePath = strings.TrimSpace(sourcePath)
+	targetPath = strings.TrimSpace(targetPath)
+	if sourcePath == "" || targetPath == "" {
+		return false, nil
+	}
+
+	in, err := os.Open(sourcePath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(targetPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, maxLogFileOpenMode)
+	if err != nil {
+		return false, err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return false, err
+	}
+	if err := out.Close(); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func followUpTaskLogArchiveDir(logRoot, requestID string) (string, bool) {
+	logRoot = strings.TrimSpace(logRoot)
+	if logRoot == "" {
+		return "", false
+	}
+	subdir, ok := failurefollowup.IdentifierSubdir(requestID)
+	if !ok {
+		return "", false
+	}
+	subdir = filepath.Clean(subdir)
+	if subdir == "." || subdir == "" || subdir == ".." {
+		return "", false
+	}
+	if filepath.IsAbs(subdir) || strings.HasPrefix(subdir, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+
+	return filepath.Join(logRoot, followUpTaskLogArchiveSubdir, subdir), true
 }
 
 func taskLogPaths(logRoot, requestID string) []string {

@@ -396,7 +396,7 @@ func TestFailureFollowUpRunConfigUsesRequiredPayloadShapeAndLogContext(t *testin
 		t.Fatalf("TargetSubdir = %q, want %q", cfg.TargetSubdir, ".")
 	}
 
-	expectedLogDir := filepath.Join(logRoot, "local", "1712345678", "000001")
+	expectedLogDir := filepath.Join(logRoot, followUpTaskLogArchiveSubdir, "local", "1712345678", "000001")
 	if !strings.Contains(cfg.Prompt, expectedLogDir) {
 		t.Fatalf("Prompt missing log dir path %q: %q", expectedLogDir, cfg.Prompt)
 	}
