@@ -678,6 +678,19 @@ func (h Harness) populateNoChangePRURLs(ctx context.Context, repos []repoWorkspa
 			continue
 		}
 		if prURL == "" {
+			prURL, err = h.lookupAnyPRURLByHead(ctx, repos[i])
+			if err != nil {
+				h.logf(
+					"stage=pr status=warn action=lookup_existing reason=fallback_failed repo=%s repo_dir=%s branch=%s err=%q",
+					repos[i].URL,
+					repos[i].RelDir,
+					repos[i].Branch,
+					err,
+				)
+				continue
+			}
+		}
+		if prURL == "" {
 			continue
 		}
 		repos[i].PRURL = prURL
@@ -706,6 +719,22 @@ func (h Harness) lookupOpenPRURLByHead(ctx context.Context, repo repoWorkspace) 
 	}
 
 	lookupRes, err := h.runCommand(ctx, "pr", prLookupByHeadCommand(repo.Dir, branch))
+	if err != nil {
+		return "", err
+	}
+	if prURL := parsePRURLFromLookupOutput(lookupRes.Stdout); prURL != "" {
+		return prURL, nil
+	}
+	return parsePRURLFromLookupOutput(lookupRes.Stderr), nil
+}
+
+func (h Harness) lookupAnyPRURLByHead(ctx context.Context, repo repoWorkspace) (string, error) {
+	branch := normalizeBranchRef(repo.Branch)
+	if branch == "" {
+		return "", nil
+	}
+
+	lookupRes, err := h.runCommand(ctx, "pr", prLookupAnyByHeadCommand(repo.Dir, branch))
 	if err != nil {
 		return "", err
 	}
@@ -2514,6 +2543,14 @@ func prLookupByHeadCommand(repoDir, branch string) execx.Command {
 		Dir:  repoDir,
 		Name: "gh",
 		Args: []string{"pr", "list", "--state", "open", "--head", branch, "--json", "url", "--limit", "1"},
+	}
+}
+
+func prLookupAnyByHeadCommand(repoDir, branch string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: []string{"pr", "list", "--state", "all", "--head", branch, "--json", "url", "--limit", "1"},
 	}
 }
 

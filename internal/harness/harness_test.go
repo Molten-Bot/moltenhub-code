@@ -322,6 +322,7 @@ func TestRunCommitNoOpReturnsNoChanges(t *testing.T) {
 		},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## moltenhub-build-api\n"}},
 		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch)},
+		{cmd: prLookupAnyByHeadCommand(repoDir, branch)},
 	}}
 
 	h := New(fake)
@@ -542,6 +543,7 @@ func TestRunWithPromptImagesKeepsArtifactsOutOfRepo(t *testing.T) {
 		})},
 		{cmd: statusCommand(repoDir)},
 		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch)},
+		{cmd: prLookupAnyByHeadCommand(repoDir, branch)},
 	}}
 
 	h := New(fake)
@@ -849,6 +851,7 @@ func TestRunNoChangesSkipsPR(t *testing.T) {
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "\n"}},
 		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch)},
+		{cmd: prLookupAnyByHeadCommand(repoDir, branch)},
 	}}
 
 	h := New(fake)
@@ -899,6 +902,62 @@ func TestRunNoChangesOnMainReportsExistingPR(t *testing.T) {
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "\n"}},
 		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch), res: execx.Result{Stdout: "abc123\trefs/heads/" + branch + "\n"}},
 		{cmd: prLookupByHeadCommand(repoDir, branch), res: execx.Result{Stdout: "[{\"url\":\"" + prURL + "\"}]\n"}},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if !res.NoChanges {
+		t.Fatal("NoChanges = false, want true")
+	}
+	if got, want := res.PRURL, prURL; got != want {
+		t.Fatalf("PRURL = %q, want %q", got, want)
+	}
+	if len(res.RepoResults) != 1 {
+		t.Fatalf("RepoResults length = %d, want 1", len(res.RepoResults))
+	}
+	if got, want := res.RepoResults[0].PRURL, prURL; got != want {
+		t.Fatalf("RepoResults[0].PRURL = %q, want %q", got, want)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunNoChangesReportsMergedPRWhenBranchNoLongerExists(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+	prURL := "https://github.com/acme/repo/pull/123"
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "\n"}},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch), res: execx.Result{Stdout: ""}},
+		{cmd: prLookupAnyByHeadCommand(repoDir, branch), res: execx.Result{Stdout: "[{\"url\":\"" + prURL + "\"}]\n"}},
 	}}
 
 	h := New(fake)
@@ -2267,6 +2326,7 @@ func TestRunUsesConfiguredRuntimeCommand(t *testing.T) {
 		{cmd: runtimeCmd},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: ""}},
 		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch)},
+		{cmd: prLookupAnyByHeadCommand(repoDir, branch)},
 	}}
 
 	h := New(fake)

@@ -1130,7 +1130,13 @@ func shouldEscalateNoChangesFollowUp(source string, result harness.Result) (bool
 	if strings.TrimSpace(source) != "no_changes_followup" {
 		return false, "run is not a no-changes follow-up"
 	}
-	return shouldQueueUnexpectedNoChangesFollowUp(result)
+	if !result.NoChanges {
+		return false, "follow-up did not complete as no_changes"
+	}
+	if strings.TrimSpace(joinAllPRURLs(result.RepoResults)) != "" || strings.TrimSpace(result.PRURL) != "" {
+		return false, "task already has a pull request"
+	}
+	return false, "no-changes follow-up can complete as a documented no-op"
 }
 
 func failureFollowUpRepos(_ harness.Result, _ config.Config) []string {

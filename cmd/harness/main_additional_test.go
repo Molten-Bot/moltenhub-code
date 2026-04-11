@@ -616,8 +616,11 @@ func TestShouldEscalateNoChangesFollowUpRequiresFollowUpSourceAndMissingPR(t *te
 	}
 
 	ok, reason = shouldEscalateNoChangesFollowUp("no_changes_followup", harness.Result{NoChanges: true})
-	if !ok || reason != "" {
-		t.Fatalf("shouldEscalateNoChangesFollowUp(no_changes_followup,no PR) = (%v, %q), want (true, \"\")", ok, reason)
+	if ok {
+		t.Fatal("shouldEscalateNoChangesFollowUp(no_changes_followup,no PR) = true, want false")
+	}
+	if reason != "no-changes follow-up can complete as a documented no-op" {
+		t.Fatalf("reason = %q, want %q", reason, "no-changes follow-up can complete as a documented no-op")
 	}
 
 	ok, reason = shouldEscalateNoChangesFollowUp("no_changes_followup", harness.Result{
