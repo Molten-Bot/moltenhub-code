@@ -266,10 +266,9 @@ func isImportantCodexCommandText(text string) bool {
 	if lower == "" {
 		return false
 	}
-
-	// Suppress nested dispatch log echoes to avoid recursive log amplification
+	// Suppress nested harness log echoes to avoid recursive log amplification
 	// during follow-up investigations.
-	if looksLikeNestedDispatchLogEcho(lower) {
+	if looksLikeNestedHarnessLogLine(lower) {
 		return false
 	}
 
@@ -313,18 +312,18 @@ func isImportantCodexCommandText(text string) bool {
 	return false
 }
 
-func looksLikeNestedDispatchLogEcho(lower string) bool {
+func looksLikeNestedHarnessLogLine(lower string) bool {
+	lower = strings.TrimSpace(lower)
 	if lower == "" {
 		return false
 	}
-	if strings.HasPrefix(lower, "dispatch ") &&
-		strings.Contains(lower, "request_id=") &&
-		strings.Contains(lower, "cmd phase=") {
+	if strings.HasPrefix(lower, "dispatch ") || strings.HasPrefix(lower, "stage=") || strings.HasPrefix(lower, "cmd phase=") {
 		return true
 	}
+	// rg search output often prefixes matched lines with "<line>:dispatch ...".
+	// Match the embedded harness line so those echoes stay suppressed too.
 	if strings.Contains(lower, "dispatch request_id=") &&
-		strings.Contains(lower, " cmd phase=") &&
-		(strings.Contains(lower, ".log:") || strings.Contains(lower, `text="dispatch `)) {
+		(strings.Contains(lower, " stage=") || strings.Contains(lower, " cmd phase=")) {
 		return true
 	}
 	return false
