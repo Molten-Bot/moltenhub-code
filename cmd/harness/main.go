@@ -2288,34 +2288,21 @@ func normalizeHubSetupTokenType(tokenType string) string {
 }
 
 func normalizeHubSetupRegion(region string) string {
-	switch strings.ToLower(strings.TrimSpace(region)) {
-	case "eu":
-		return "eu"
-	default:
-		return "na"
-	}
+	return hub.NormalizeHubRegion(region)
 }
 
 func hubSetupRegionForBaseURL(baseURL string) string {
-	baseURL = strings.ToLower(strings.TrimSpace(baseURL))
-	switch {
-	case strings.Contains(baseURL, "://eu.hub.molten.bot/"), strings.HasPrefix(baseURL, "https://eu.hub.molten.bot"), strings.HasPrefix(baseURL, "http://eu.hub.molten.bot"):
-		return "eu"
-	default:
-		return "na"
-	}
+	return hub.HubRegionFromBaseURL(baseURL)
 }
 
 func hubSetupBaseURL(baseURL, region string) string {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
-	region = normalizeHubSetupRegion(region)
-	if baseURL == "" || baseURL == "https://na.hub.molten.bot/v1" || baseURL == "https://eu.hub.molten.bot/v1" {
-		if region == "eu" {
-			return "https://eu.hub.molten.bot/v1"
+	if hub.AllowNonMoltenHubBaseURL() && baseURL != "" {
+		if err := hub.ValidateHubBaseURLStrict(baseURL); err != nil {
+			return baseURL
 		}
-		return "https://na.hub.molten.bot/v1"
 	}
-	return baseURL
+	return hub.HubBaseURLForRegion(region)
 }
 
 func hubSetupTokenTypeForMode(mode string) string {

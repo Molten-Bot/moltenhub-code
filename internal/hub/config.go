@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -242,12 +241,8 @@ func (c InitConfig) Validate() error {
 	if strings.TrimSpace(c.BaseURL) == "" {
 		return fmt.Errorf("base_url is required")
 	}
-	u, err := url.Parse(c.BaseURL)
-	if err != nil {
-		return fmt.Errorf("base_url: %w", err)
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("base_url must use http or https")
+	if err := ValidateHubBaseURL(c.BaseURL); err != nil {
+		return err
 	}
 	if strings.TrimSpace(c.Skill.Name) == "" {
 		return fmt.Errorf("skill.name is required")

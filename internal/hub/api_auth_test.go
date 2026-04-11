@@ -206,3 +206,59 @@ func TestResolveAgentToken_RequiresSomeCredential(t *testing.T) {
 		t.Fatalf("ResolveAgentToken() err = %q", err)
 	}
 }
+
+func TestBindTokenFlowIgnoresNonMoltenAPIBaseWhenOverrideDisabled(t *testing.T) {
+	t.Setenv(allowNonMoltenHubBaseURLEnvName, "")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/agents/bind-tokens":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"agent_token":"agent_bound","api_base":"http://127.0.0.1:37581/v1"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := NewAPIClient(server.URL + "/v1")
+	token, err := client.bindTokenFlow(context.Background(), "bind_valid")
+	if err != nil {
+		t.Fatalf("bindTokenFlow() error = %v", err)
+	}
+	if got, want := token, "agent_bound"; got != want {
+		t.Fatalf("bindTokenFlow() token = %q, want %q", got, want)
+	}
+	if got, want := client.BaseURL, server.URL+"/v1"; got != want {
+		t.Fatalf("client.BaseURL = %q, want %q", got, want)
+	}
+}
+
+func TestBindTokenFlowCanonicalizesMoltenAPIBaseWhenOverrideDisabled(t *testing.T) {
+	t.Setenv(allowNonMoltenHubBaseURLEnvName, "")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/agents/bind-tokens":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"agent_token":"agent_bound","api_base":"https://eu.hub.molten.bot/v1/"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := NewAPIClient(server.URL + "/v1")
+	token, err := client.bindTokenFlow(context.Background(), "bind_valid")
+	if err != nil {
+		t.Fatalf("bindTokenFlow() error = %v", err)
+	}
+	if got, want := token, "agent_bound"; got != want {
+		t.Fatalf("bindTokenFlow() token = %q, want %q", got, want)
+	}
+	if got, want := client.BaseURL, "https://eu.hub.molten.bot/v1"; got != want {
+		t.Fatalf("client.BaseURL = %q, want %q", got, want)
+	}
+}
