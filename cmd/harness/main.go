@@ -2451,10 +2451,14 @@ func normalizeHubSetupRegion(region string) string {
 	if location, ok := hubSetupLocationByKey(locations, normalized); ok {
 		return location.Key
 	}
+	normalized = hub.NormalizeHubRegion(normalized)
+	if location, ok := hubSetupLocationByKey(locations, normalized); ok {
+		return location.Key
+	}
 	if len(locations) > 0 {
 		return locations[0].Key
 	}
-	return "na"
+	return normalized
 }
 
 func hubSetupRegionForBaseURL(baseURL string) string {
@@ -2465,13 +2469,14 @@ func hubSetupRegionForBaseURLWithLocations(baseURL string, locations []hubSetupL
 	if location, ok := hubSetupLocationForBaseURL(locations, baseURL); ok {
 		return location.Key
 	}
-	return normalizeHubSetupRegion("")
+	return normalizeHubSetupRegion(hub.HubRegionFromBaseURL(baseURL))
 }
 
 func hubSetupBaseURL(baseURL, region string) string {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	locations := currentHubSetupLocations()
 	region = normalizeHubSetupRegion(region)
+
 	selected, ok := hubSetupLocationByKey(locations, region)
 	if !ok {
 		if len(locations) > 0 {
@@ -2479,18 +2484,29 @@ func hubSetupBaseURL(baseURL, region string) string {
 			ok = true
 		}
 	}
-	if !ok {
-		return baseURL
+
+	if baseURL != "" {
+		if _, matched := hubSetupLocationForBaseURL(locations, baseURL); matched {
+			if ok {
+				if selectedBaseURL := hubSetupLocationBaseURL(selected); selectedBaseURL != "" {
+					return selectedBaseURL
+				}
+			}
+			return hub.HubBaseURLForRegion(region)
+		}
+		if hub.AllowNonMoltenHubBaseURL() {
+			if err := hub.ValidateHubBaseURLStrict(baseURL); err != nil {
+				return baseURL
+			}
+		}
 	}
 
-	selectedBaseURL := hubSetupLocationBaseURL(selected)
-	if baseURL == "" {
-		return selectedBaseURL
+	if ok {
+		if selectedBaseURL := hubSetupLocationBaseURL(selected); selectedBaseURL != "" {
+			return selectedBaseURL
+		}
 	}
-	if _, matched := hubSetupLocationForBaseURL(locations, baseURL); matched {
-		return selectedBaseURL
-	}
-	return baseURL
+	return hub.HubBaseURLForRegion(region)
 }
 
 func hubSetupTokenTypeForMode(mode string) string {

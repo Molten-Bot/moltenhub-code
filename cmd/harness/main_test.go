@@ -1096,7 +1096,7 @@ func TestCurrentHubSetupStateDerivesRegionFromRuntimeConfigBaseURL(t *testing.T)
 	}
 }
 
-func TestHubSetupBaseURLUsesSelectedRegionForDefaultHubEndpoints(t *testing.T) {
+func TestHubSetupBaseURLUsesSelectedRegionForHubEndpoints(t *testing.T) {
 	t.Parallel()
 
 	if got, want := hubSetupBaseURL("", "eu"), "https://eu.hub.molten.bot/v1"; got != want {

@@ -16,6 +16,51 @@ json_escape() {
     printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
+normalize_hub_region() {
+    region=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+    case "${region}" in
+        ""|na)
+            printf 'na'
+            ;;
+        eu)
+            printf 'eu'
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+hub_base_url_from_region() {
+    region="$1"
+    printf 'https://%s.hub.molten.bot/v1' "${region}"
+}
+
+resolve_hub_bootstrap_base_url() {
+    if [ "${MOLTEN_HUB_URL:-}" != "" ]; then
+        case "$(printf '%s' "${MOLTEN_HUB_URL}" | tr -d '[:space:]')" in
+            "https://na.hub.molten.bot/v1")
+                printf 'https://na.hub.molten.bot/v1'
+                return 0
+                ;;
+            "https://eu.hub.molten.bot/v1")
+                printf 'https://eu.hub.molten.bot/v1'
+                return 0
+                ;;
+            *)
+                echo "invalid MOLTEN_HUB_URL; expected https://na.hub.molten.bot/v1 or https://eu.hub.molten.bot/v1" >&2
+                return 1
+                ;;
+        esac
+    fi
+
+    if ! hub_region=$(normalize_hub_region "${MOLTEN_HUB_REGION:-na}"); then
+        echo "invalid MOLTEN_HUB_REGION; expected na or eu" >&2
+        return 1
+    fi
+    hub_base_url_from_region "${hub_region}"
+}
+
 is_hub_config_json() {
     file_path="$1"
     if [ ! -f "${file_path}" ]; then
@@ -97,7 +142,9 @@ try_run_hub_from_env() {
         return 1
     fi
 
-    hub_base_url="${MOLTEN_HUB_URL:-https://na.hub.molten.bot/v1}"
+    if ! hub_base_url="$(resolve_hub_bootstrap_base_url)"; then
+        return 1
+    fi
     session_key="${MOLTEN_HUB_SESSION_KEY:-main}"
     generated_init_dir=$(dirname "${generated_init_path}")
     mkdir -p "${generated_init_dir}"
@@ -135,6 +182,6 @@ fi
 echo "no config file found; starting hub onboarding mode with defaults" >&2
 echo "optional run config path: ${run_config_path}" >&2
 echo "optional init config path: ${init_config_path}" >&2
-echo "or set MOLTEN_HUB_TOKEN (and optionally MOLTEN_HUB_URL) for remote-hub bootstrap." >&2
+echo "or set MOLTEN_HUB_TOKEN (and optionally MOLTEN_HUB_REGION=na|eu) for remote-hub bootstrap." >&2
 
 exec_hub

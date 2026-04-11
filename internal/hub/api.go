@@ -156,7 +156,12 @@ func (c *APIClient) bindTokenFlow(ctx context.Context, bindToken string) (string
 		if status/100 == 2 {
 			if token := extractTokenFromJSON(body); token != "" {
 				if apiBase := extractAPIBaseFromJSON(body); apiBase != "" {
-					c.BaseURL = strings.TrimRight(apiBase, "/")
+					canonicalBase, canonicalErr := CanonicalHubBaseURL(apiBase)
+					if canonicalErr != nil {
+						c.logf("hub.auth attempt=%s status=warn action=ignore_api_base err=%q", attempt.name, canonicalErr)
+					} else {
+						c.BaseURL = canonicalBase
+					}
 				}
 				c.logf("hub.auth attempt=%s status=ok credential=exchanged", attempt.name)
 				return token, nil
