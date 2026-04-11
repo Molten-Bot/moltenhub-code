@@ -778,6 +778,7 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 			return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("init config error: %w", err)
 		}
 		cfg.RuntimeConfigPath = hub.ResolveRuntimeConfigPath(initPath)
+		cfg.LogLevel = configuredHubLogLevel(cfg.LogLevel, cfg.RuntimeConfigPath)
 		return cfg, harness.ExitSuccess, nil
 	}
 
@@ -792,6 +793,31 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 	cfg := runtimeCfg.Init()
 	cfg.RuntimeConfigPath = runtimeCfg.RuntimeConfigPath
 	return cfg, harness.ExitSuccess, nil
+}
+
+func configuredHubLogLevel(preferred, runtimeConfigPath string) string {
+	level := hub.NormalizeLogLevel(preferred)
+	if level == "" {
+		level = hub.DefaultLogLevel
+	}
+
+	runtimeConfigPath = strings.TrimSpace(runtimeConfigPath)
+	if runtimeConfigPath == "" {
+		return level
+	}
+
+	configured := hub.NormalizeLogLevel(hub.ReadRuntimeConfigString(runtimeConfigPath, "log_level", "logLevel", "LOG_LEVEL"))
+	if configured != "" {
+		return configured
+	}
+
+	if runtimeCfg, err := hub.LoadRuntimeConfig(runtimeConfigPath); err == nil {
+		if configured = hub.NormalizeLogLevel(runtimeCfg.LogLevel); configured != "" {
+			return configured
+		}
+	}
+
+	return level
 }
 
 func defaultHubBootConfig(runtimeConfigPath string) (hub.InitConfig, int, error) {
@@ -874,11 +900,33 @@ func classifyHubLogLine(line string) hub.LogLevel {
 		return hub.LogLevelDebug
 	}
 
-	if isDebugCommandLogLine(line, fields) {
+	if shouldClassifyHubDebugLine(line, lowerLine, fields, status) {
 		return hub.LogLevelDebug
 	}
 
 	return hub.LogLevelInfo
+}
+
+func shouldClassifyHubDebugLine(line, lowerLine string, fields map[string]string, status string) bool {
+	if isDebugCommandLogLine(line, fields) {
+		return true
+	}
+	if strings.TrimSpace(fields["stage"]) != "" {
+		return true
+	}
+	if strings.HasPrefix(lowerLine, "dispatch status=") && isDebugDispatchStatus(status) {
+		return true
+	}
+	return false
+}
+
+func isDebugDispatchStatus(status string) bool {
+	switch strings.TrimSpace(status) {
+	case "start", "ack", "queued", "duplicate", "paused", "resumed", "forced", "running":
+		return true
+	default:
+		return false
+	}
 }
 
 func isDebugCommandLogLine(line string, fields map[string]string) bool {

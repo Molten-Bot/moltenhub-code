@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -156,6 +157,70 @@ func TestLoadHubBootConfigWithMissingInitFlagUsesSiblingRuntimeConfigWhenAvailab
 	}
 	if got, want := cfg.AgentToken, "agent_123"; got != want {
 		t.Fatalf("AgentToken = %q, want %q", got, want)
+	}
+}
+
+func TestLoadHubBootConfigWithInitUsesRuntimeConfigLogLevelWhenPresent(t *testing.T) {
+	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
+
+	tempDir := t.TempDir()
+	initPath := filepath.Join(tempDir, "init.json")
+	runtimeConfigPath := filepath.Join(tempDir, "config.json")
+
+	if err := os.WriteFile(initPath, []byte(`{"base_url":"https://na.hub.molten.bot/v1"}`), 0o600); err != nil {
+		t.Fatalf("write init config: %v", err)
+	}
+	if err := os.WriteFile(runtimeConfigPath, []byte(`{"base_url":"https://na.hub.molten.bot/v1","agent_token":"agent_saved","log_level":"debug"}`), 0o600); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+
+	cfg, exitCode, err := loadHubBootConfig(initPath, "")
+	if err != nil {
+		t.Fatalf("loadHubBootConfig() error = %v", err)
+	}
+	if exitCode != harness.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	}
+	if got, want := cfg.LogLevel, hub.LogLevelDebug.String(); got != want {
+		t.Fatalf("LogLevel = %q, want %q", got, want)
+	}
+}
+
+func TestLoadHubBootConfigWithInitBackfillsMissingRuntimeConfigLogLevel(t *testing.T) {
+	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
+
+	tempDir := t.TempDir()
+	initPath := filepath.Join(tempDir, "init.json")
+	runtimeConfigPath := filepath.Join(tempDir, "config.json")
+
+	if err := os.WriteFile(initPath, []byte(`{"base_url":"https://na.hub.molten.bot/v1"}`), 0o600); err != nil {
+		t.Fatalf("write init config: %v", err)
+	}
+	if err := os.WriteFile(runtimeConfigPath, []byte(`{"base_url":"https://na.hub.molten.bot/v1","agent_token":"agent_saved"}`), 0o600); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+
+	cfg, exitCode, err := loadHubBootConfig(initPath, "")
+	if err != nil {
+		t.Fatalf("loadHubBootConfig() error = %v", err)
+	}
+	if exitCode != harness.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	}
+	if got, want := cfg.LogLevel, hub.DefaultLogLevel; got != want {
+		t.Fatalf("LogLevel = %q, want %q", got, want)
+	}
+
+	data, err := os.ReadFile(runtimeConfigPath)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if got, want := doc["log_level"], any(hub.DefaultLogLevel); got != want {
+		t.Fatalf("config.json log_level = %#v, want %q", got, want)
 	}
 }
 

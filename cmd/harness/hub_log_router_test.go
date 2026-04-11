@@ -18,7 +18,10 @@ func TestClassifyHubLogLine(t *testing.T) {
 		{line: `dispatch status=error request_id=req-1 err="boom"`, want: hub.LogLevelError},
 		{line: `hub.auth status=warn action=start err="denied"`, want: hub.LogLevelWarn},
 		{line: `cmd phase=git name=git stream=stdout b64=SGVsbG8=`, want: hub.LogLevelDebug},
+		{line: `dispatch status=start request_id=req-1 skill=code_for_me`, want: hub.LogLevelDebug},
+		{line: `dispatch request_id=req-1 stage=clone status=ok repo=git@github.com:acme/repo.git`, want: hub.LogLevelDebug},
 		{line: `dispatch request_id=req-1 stage=codex status=running elapsed_s=9`, want: hub.LogLevelDebug},
+		{line: `dispatch status=ok request_id=req-1 workspace=/tmp/run branch=moltenhub-fix`, want: hub.LogLevelInfo},
 		{line: `hub.auth status=ok`, want: hub.LogLevelInfo},
 	}
 
@@ -98,6 +101,41 @@ func TestHubLogRouterWarnLevelSuppressesInfoAndKeepsErrors(t *testing.T) {
 
 	snapshot := broker.Snapshot()
 	if got, want := len(snapshot.Events), 2; got != want {
+		t.Fatalf("len(snapshot.Events) = %d, want %d", got, want)
+	}
+}
+
+func TestHubLogRouterInfoLevelSuppressesHighVolumeDebugLifecycleLogs(t *testing.T) {
+	t.Parallel()
+
+	sink := &recordingTerminalLogSink{}
+	var rendered strings.Builder
+	logger := newTerminalLogger(&rendered, false)
+	logger.sink = sink
+	broker := hubui.NewBroker()
+	router := newHubLogRouter(logger, broker, hub.LogLevelInfo)
+
+	router.Log(`dispatch request_id=req-1 stage=clone status=start repo=git@github.com:acme/repo.git`)
+	router.Log(`dispatch status=start request_id=req-1 skill=code_for_me`)
+	router.Log(`hub.auth status=ok`)
+
+	out := rendered.String()
+	if strings.Contains(out, "stage=clone status=start") {
+		t.Fatalf("stage debug line rendered at info level: %q", out)
+	}
+	if strings.Contains(out, "dispatch status=start request_id=req-1") {
+		t.Fatalf("dispatch lifecycle debug line rendered at info level: %q", out)
+	}
+	if !strings.Contains(out, "hub.auth status=ok") {
+		t.Fatalf("info line missing from rendered output: %q", out)
+	}
+
+	if got, want := len(sink.lines), 3; got != want {
+		t.Fatalf("len(sink.lines) = %d, want %d", got, want)
+	}
+
+	snapshot := broker.Snapshot()
+	if got, want := len(snapshot.Events), 1; got != want {
 		t.Fatalf("len(snapshot.Events) = %d, want %d", got, want)
 	}
 }
