@@ -859,8 +859,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function formatCompactMetricNumber(") {
 		t.Fatalf("expected index html to include compact metric formatter")
 	}
-	if !strings.Contains(markup, `class="metric-copy"`) || !strings.Contains(markup, `class="metric-label text-xs leading-tight">CPU</span>`) {
-		t.Fatalf("expected index html to separate compact metric values from hover-revealed labels")
+	if !strings.Contains(markup, `class="metric-copy"`) || !strings.Contains(markup, `class="metric-label metric-label-visible text-xs leading-tight">CPU</span>`) {
+		t.Fatalf("expected index html to render the CPU metric label as visible copy")
+	}
+	if !strings.Contains(markup, `class="metric-label metric-label-visible text-xs leading-tight">MEM</span>`) {
+		t.Fatalf("expected index html to render the memory metric label as visible copy")
+	}
+	if !strings.Contains(markup, `class="metric-label metric-label-visible text-xs leading-tight">I/O</span>`) {
+		t.Fatalf("expected index html to render the I/O metric label as visible copy")
 	}
 	if !strings.Contains(markup, `id="resource-metrics-unit"`) {
 		t.Fatalf("expected index html to include a dedicated disk throughput unit element")
