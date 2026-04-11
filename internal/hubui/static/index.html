@@ -574,13 +574,17 @@
           <span class="sr-only">Edit agent profile</span>
         </button>
       </div>
+      <span class="prompt-mode-divider" aria-hidden="true"></span>
+      <button id="theme-toggle" class="prompt-mode-link theme-toggle theme-toggle-dock" type="button" aria-label="Switch theme. Currently: Dark" title="Dark">
+        <span class="prompt-mode-link-shell" aria-hidden="true"></span>
+        <span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true"></span>
+        <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
+        <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
+        <span class="prompt-mode-link-tooltip" id="theme-toggle-tooltip" aria-hidden="true">Dark</span>
+        <span id="theme-toggle-label">Dark</span>
+      </button>
     </div>
   </div>
-
-  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch theme. Currently: Dark">
-    <span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true"></span>
-    <span id="theme-toggle-label">Dark</span>
-  </button>
 
   <script>
     const DISMISSED_TASKS_KEY = "hubui.dismissedTaskIds";
@@ -1250,6 +1254,7 @@
     const themeToggleButton = document.getElementById("theme-toggle");
     const themeToggleLabel = document.getElementById("theme-toggle-label");
     const themeToggleIcon = document.getElementById("theme-toggle-icon");
+    const themeToggleTooltip = document.getElementById("theme-toggle-tooltip");
     const hoverSelect = document.getElementById("hover-select");
     let brandLogoRotationTimer = null;
     let brandLogoRotationPhase = 0;
@@ -1333,6 +1338,10 @@
       const currentLabel = themeLabel(currentTheme);
       themeToggleLabel.textContent = currentLabel;
       themeToggleIcon.innerHTML = THEME_ICONS[currentTheme] || "";
+      if (themeToggleTooltip) {
+        themeToggleTooltip.textContent = currentLabel;
+      }
+      themeToggleButton.title = currentLabel;
       themeToggleButton.setAttribute("aria-label", `Switch theme. Currently: ${currentLabel}`);
     }
 

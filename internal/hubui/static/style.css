@@ -3003,6 +3003,62 @@ select.prompt-control {
   box-shadow: var(--theme-button-focus);
 }
 
+.theme-toggle.theme-toggle-dock {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  z-index: auto;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.theme-toggle.theme-toggle-dock:focus-visible {
+  box-shadow: none;
+}
+
+.theme-toggle.theme-toggle-dock .theme-toggle-icon {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 999px;
+  border: 1px solid var(--glass-icon-border);
+  background: var(--glass-bg);
+  box-shadow: var(--glass-icon-shadow);
+}
+
+.theme-toggle.theme-toggle-dock .theme-toggle-icon svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.theme-toggle.theme-toggle-dock #theme-toggle-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 html.dark,
 html.night {
   color-scheme: dark;
