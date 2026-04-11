@@ -41,6 +41,7 @@ func (c *RuntimeConfig) UnmarshalJSON(data []byte) error {
 		Token      string `json:"token"`
 		SessionKey string `json:"sessionKey"`
 		TimeoutMs  int    `json:"timeoutMs"`
+		LogLevel   string `json:"logLevel"`
 	}
 	if err := json.Unmarshal(data, &legacy); err != nil {
 		return err
@@ -57,6 +58,9 @@ func (c *RuntimeConfig) UnmarshalJSON(data []byte) error {
 	}
 	if c.TimeoutMs <= 0 {
 		c.TimeoutMs = legacy.TimeoutMs
+	}
+	if strings.TrimSpace(c.LogLevel) == "" {
+		c.LogLevel = legacy.LogLevel
 	}
 
 	return nil
@@ -109,6 +113,7 @@ func LoadRuntimeConfig(path string) (RuntimeConfig, error) {
 	if err := cfg.Validate(); err != nil {
 		return RuntimeConfig{}, err
 	}
+	_ = ensureRuntimeConfigLogLevelPersisted(path, cfg.LogLevel)
 
 	return cfg, nil
 }
@@ -193,6 +198,7 @@ func SaveRuntimeConfigHubSettings(path string, initCfg InitConfig, resolvedAgent
 	if dispatcherDoc, ok := runtimeConfigDispatcherDoc(initCfg); ok {
 		doc["dispatcher"] = dispatcherDoc
 	}
+	ensureRuntimeConfigLogLevel(doc, initCfg.LogLevel)
 
 	encoded, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
@@ -307,6 +313,7 @@ func IncrementRuntimeConfigLibraryTaskUsage(path string, initCfg InitConfig, tas
 	}
 	usage[taskName]++
 	doc["library_task_usage"] = usage
+	ensureRuntimeConfigLogLevel(doc, initCfg.LogLevel)
 
 	encoded, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
@@ -338,6 +345,7 @@ func saveRuntimeConfigStringField(
 		return err
 	}
 	doc[field] = value
+	ensureRuntimeConfigLogLevel(doc, initCfg.LogLevel)
 
 	encoded, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
@@ -383,6 +391,54 @@ func readRuntimeConfigDoc(path string) (map[string]any, error) {
 func docStringValue(v any) string {
 	s, _ := v.(string)
 	return strings.TrimSpace(s)
+}
+
+func ensureRuntimeConfigLogLevel(doc map[string]any, preferred string) {
+	if doc == nil {
+		return
+	}
+	if existing := runtimeConfigLogLevelFromDoc(doc); existing != "" {
+		doc["log_level"] = existing
+		return
+	}
+	level := NormalizeLogLevel(preferred)
+	if level == "" {
+		level = DefaultLogLevel
+	}
+	doc["log_level"] = level
+}
+
+func runtimeConfigLogLevelFromDoc(doc map[string]any) string {
+	if doc == nil {
+		return ""
+	}
+	for _, key := range []string{"log_level", "logLevel", "LOG_LEVEL"} {
+		if level := NormalizeLogLevel(docStringValue(doc[key])); level != "" {
+			return level
+		}
+	}
+	return ""
+}
+
+func ensureRuntimeConfigLogLevelPersisted(path, preferred string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil
+	}
+	doc, err := readRuntimeConfigDoc(path)
+	if err != nil {
+		return fmt.Errorf("read runtime config: %w", err)
+	}
+	if runtimeConfigLogLevelFromDoc(doc) != "" {
+		return nil
+	}
+	ensureRuntimeConfigLogLevel(doc, preferred)
+	encoded, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode runtime config: %w", err)
+	}
+	encoded = append(encoded, '\n')
+	return writeRuntimeConfigFile(path, encoded)
 }
 
 func runtimeConfigLibraryTaskUsage(v any) map[string]int {
@@ -462,6 +518,7 @@ func SaveRuntimeConfigClaudeOAuthToken(path string, initCfg InitConfig, oauthTok
 	}
 
 	doc["claude_code_oauth_token"] = oauthToken
+	ensureRuntimeConfigLogLevel(doc, initCfg.LogLevel)
 
 	encoded, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {

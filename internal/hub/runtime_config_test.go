@@ -65,6 +65,9 @@ func TestSaveRuntimeConfigWritesExpectedShape(t *testing.T) {
 	if got.TimeoutMs != 20000 {
 		t.Fatalf("TimeoutMs = %d", got.TimeoutMs)
 	}
+	if got.LogLevel != DefaultLogLevel {
+		t.Fatalf("LogLevel = %q, want %q", got.LogLevel, DefaultLogLevel)
+	}
 	if got.Profile.DisplayName != "Molten Bot" {
 		t.Fatalf("Profile.DisplayName = %q", got.Profile.DisplayName)
 	}
@@ -187,6 +190,9 @@ func TestLoadRuntimeConfigDefaultsOptionalFieldsWhenMissing(t *testing.T) {
 	}
 	if got.TimeoutMs != runtimeTimeoutMs {
 		t.Fatalf("TimeoutMs = %d, want %d", got.TimeoutMs, runtimeTimeoutMs)
+	}
+	if got.LogLevel != DefaultLogLevel {
+		t.Fatalf("LogLevel = %q, want %q", got.LogLevel, DefaultLogLevel)
 	}
 }
 

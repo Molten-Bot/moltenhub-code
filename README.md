@@ -95,6 +95,7 @@ Key fields:
 - `handle`
 - `profile.display_name`, `profile.emoji`, `profile.profile`
 - `agent_harness`, `agent_command`
+- `log_level` (`error`, `warn`, `info`, `debug`; default `info`)
 - `dispatcher.*`
 - Optional bootstrap secrets: `github_token`, `openai_api_key`, `augment_session_auth`
 
