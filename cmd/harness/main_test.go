@@ -22,6 +22,17 @@ import (
 	"github.com/jef/moltenhub-code/internal/hubui"
 )
 
+func useHubSetupLocationsLoaderForTest(t *testing.T, loader func(context.Context) ([]hubSetupLocation, error)) {
+	t.Helper()
+	previous := hubSetupLocationsLoader
+	resetHubSetupLocationsCache()
+	hubSetupLocationsLoader = loader
+	t.Cleanup(func() {
+		hubSetupLocationsLoader = previous
+		resetHubSetupLocationsCache()
+	})
+}
+
 func TestRunUsageMissingSubcommand(t *testing.T) {
 	orig := os.Args
 	t.Cleanup(func() { os.Args = orig })
@@ -1099,6 +1110,90 @@ func TestHubSetupBaseURLUsesSelectedRegionForHubEndpoints(t *testing.T) {
 	}
 	if got, want := hubSetupBaseURL("http://127.0.0.1:7777/v1", "eu"), "http://127.0.0.1:7777/v1"; got != want {
 		t.Fatalf("hubSetupBaseURL(custom, eu) = %q, want %q", got, want)
+	}
+}
+
+func TestHubSetupBaseURLUsesHubRegistryLocations(t *testing.T) {
+	useHubSetupLocationsLoaderForTest(t, func(context.Context) ([]hubSetupLocation, error) {
+		return []hubSetupLocation{
+			{Display: "North America", Key: "na", Domain: "north-america.hub.molten.bot"},
+			{Display: "Europe", Key: "eu", Domain: "europe.hub.molten.bot"},
+		}, nil
+	})
+
+	if got, want := hubSetupBaseURL("", "eu"), "https://europe.hub.molten.bot/v1"; got != want {
+		t.Fatalf("hubSetupBaseURL(empty, eu) = %q, want %q", got, want)
+	}
+	if got, want := hubSetupBaseURL("https://north-america.hub.molten.bot/v1", "eu"), "https://europe.hub.molten.bot/v1"; got != want {
+		t.Fatalf("hubSetupBaseURL(registry default, eu) = %q, want %q", got, want)
+	}
+}
+
+func TestHubSetupRegionForBaseURLUsesHubRegistryLocations(t *testing.T) {
+	useHubSetupLocationsLoaderForTest(t, func(context.Context) ([]hubSetupLocation, error) {
+		return []hubSetupLocation{
+			{Display: "North America", Key: "na", Domain: "north-america.hub.molten.bot"},
+			{Display: "Europe", Key: "eu", Domain: "europe.hub.molten.bot"},
+		}, nil
+	})
+
+	if got, want := hubSetupRegionForBaseURL("https://europe.hub.molten.bot/v1"), "eu"; got != want {
+		t.Fatalf("hubSetupRegionForBaseURL(registry eu) = %q, want %q", got, want)
+	}
+	if got, want := hubSetupRegionForBaseURL("https://north-america.hub.molten.bot/v1"), "na"; got != want {
+		t.Fatalf("hubSetupRegionForBaseURL(registry na) = %q, want %q", got, want)
+	}
+}
+
+func TestHubSetupLocationsFallbackWhenRegistryFails(t *testing.T) {
+	useHubSetupLocationsLoaderForTest(t, func(context.Context) ([]hubSetupLocation, error) {
+		return nil, errors.New("registry unavailable")
+	})
+
+	if got, want := hubSetupBaseURL("", "eu"), "https://eu.hub.molten.bot/v1"; got != want {
+		t.Fatalf("hubSetupBaseURL(fallback, eu) = %q, want %q", got, want)
+	}
+	if got, want := hubSetupRegionForBaseURL("https://na.hub.molten.bot/v1"), "na"; got != want {
+		t.Fatalf("hubSetupRegionForBaseURL(fallback na) = %q, want %q", got, want)
+	}
+}
+
+func TestFetchHubSetupLocationsNormalizesRegistryResponse(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/hubs.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[
+			{"display":"North America","key":"NA","domain":"https://north-america.hub.molten.bot/"},
+			{"display":"Europe","key":"eu","domain":"europe.hub.molten.bot/"}
+		]`))
+	}))
+	defer server.Close()
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/hubs.json", nil)
+	if err != nil {
+		t.Fatalf("NewRequestWithContext() error = %v", err)
+	}
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	var raw []hubSetupLocation
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+	got := cloneHubSetupLocations(raw)
+	want := []hubSetupLocation{
+		{Display: "North America", Key: "na", Domain: "north-america.hub.molten.bot"},
+		{Display: "Europe", Key: "eu", Domain: "europe.hub.molten.bot"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("cloneHubSetupLocations() = %#v, want %#v", got, want)
 	}
 }
 

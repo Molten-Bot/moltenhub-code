@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -39,10 +40,32 @@ const hubPingHeadlessNoopDetail = "Hub endpoint ping precheck failed with UI dis
 const gitHubCLIPackageLabel = "github-cli (gh)"
 const gitHubCLIAuthRecommendation = "Run `gh auth login` (the GitHub CLI binary from the `github-cli` package) or set GH_TOKEN before dispatching tasks."
 const followUpTaskLogArchiveSubdir = "followup"
+const hubSetupLocationsURL = "https://molten.bot/hubs.json"
 
 const hubBootDiagnosticTimeout = 10 * time.Second
 const hubPingDiagnosticTimeout = 5 * time.Second
 const hubPingRetryInterval = 12 * time.Second
+const hubSetupLocationsFetchTimeout = 2 * time.Second
+const hubSetupLocationsCacheTTL = 5 * time.Minute
+
+type hubSetupLocation struct {
+	Display string `json:"display"`
+	Key     string `json:"key"`
+	Domain  string `json:"domain"`
+}
+
+var defaultHubSetupLocations = []hubSetupLocation{
+	{Display: "North America", Key: "na", Domain: "na.hub.molten.bot"},
+	{Display: "Europe", Key: "eu", Domain: "eu.hub.molten.bot"},
+}
+
+var hubSetupLocationsLoader = fetchHubSetupLocations
+
+var hubSetupLocationsCache struct {
+	mu        sync.Mutex
+	locations []hubSetupLocation
+	fetchedAt time.Time
+}
 
 func main() {
 	os.Exit(run())
@@ -1892,6 +1915,139 @@ func hubCredentialsConfigured(cfg hub.InitConfig, loadRuntimeConfig runtimeConfi
 	return strings.TrimSpace(stored.AgentToken) != "" || strings.TrimSpace(stored.BindToken) != ""
 }
 
+func currentHubSetupLocations() []hubSetupLocation {
+	hubSetupLocationsCache.mu.Lock()
+	defer hubSetupLocationsCache.mu.Unlock()
+
+	if len(hubSetupLocationsCache.locations) > 0 && time.Since(hubSetupLocationsCache.fetchedAt) < hubSetupLocationsCacheTTL {
+		return cloneHubSetupLocations(hubSetupLocationsCache.locations)
+	}
+
+	locations := cloneHubSetupLocations(defaultHubSetupLocations)
+	if hubSetupLocationsLoader != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), hubSetupLocationsFetchTimeout)
+		defer cancel()
+		if loaded, err := hubSetupLocationsLoader(ctx); err == nil && len(loaded) > 0 {
+			locations = cloneHubSetupLocations(loaded)
+		}
+	}
+
+	hubSetupLocationsCache.locations = cloneHubSetupLocations(locations)
+	hubSetupLocationsCache.fetchedAt = time.Now()
+	return cloneHubSetupLocations(locations)
+}
+
+func cloneHubSetupLocations(locations []hubSetupLocation) []hubSetupLocation {
+	if len(locations) == 0 {
+		return nil
+	}
+	cloned := make([]hubSetupLocation, 0, len(locations))
+	for _, location := range locations {
+		key := strings.ToLower(strings.TrimSpace(location.Key))
+		domain := normalizeHubSetupLocationDomain(location.Domain)
+		if key == "" || domain == "" {
+			continue
+		}
+		display := strings.TrimSpace(location.Display)
+		if display == "" {
+			display = strings.ToUpper(key)
+		}
+		cloned = append(cloned, hubSetupLocation{
+			Display: display,
+			Key:     key,
+			Domain:  domain,
+		})
+	}
+	return cloned
+}
+
+func fetchHubSetupLocations(ctx context.Context) ([]hubSetupLocation, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, hubSetupLocationsURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build hub locations request: %w", err)
+	}
+
+	resp, err := (&http.Client{Timeout: hubSetupLocationsFetchTimeout}).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch hub locations: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fetch hub locations returned status=%d", resp.StatusCode)
+	}
+
+	var locations []hubSetupLocation
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&locations); err != nil {
+		return nil, fmt.Errorf("decode hub locations: %w", err)
+	}
+	locations = cloneHubSetupLocations(locations)
+	if len(locations) == 0 {
+		return nil, fmt.Errorf("hub locations registry returned no usable locations")
+	}
+	return locations, nil
+}
+
+func normalizeHubSetupLocationDomain(domain string) string {
+	domain = strings.TrimSpace(domain)
+	if domain == "" {
+		return ""
+	}
+	if strings.Contains(domain, "://") {
+		if parsed, err := url.Parse(domain); err == nil {
+			domain = parsed.Host
+		}
+	}
+	domain = strings.TrimSpace(strings.TrimRight(domain, "/"))
+	return strings.ToLower(domain)
+}
+
+func hubSetupLocationByKey(locations []hubSetupLocation, key string) (hubSetupLocation, bool) {
+	key = strings.ToLower(strings.TrimSpace(key))
+	for _, location := range locations {
+		if strings.EqualFold(strings.TrimSpace(location.Key), key) {
+			return location, true
+		}
+	}
+	return hubSetupLocation{}, false
+}
+
+func hubSetupLocationBaseURL(location hubSetupLocation) string {
+	domain := normalizeHubSetupLocationDomain(location.Domain)
+	if domain == "" {
+		return ""
+	}
+	return "https://" + domain + "/v1"
+}
+
+func hubSetupLocationForBaseURL(locations []hubSetupLocation, baseURL string) (hubSetupLocation, bool) {
+	baseURL = strings.TrimSpace(baseURL)
+	if baseURL == "" {
+		return hubSetupLocation{}, false
+	}
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		return hubSetupLocation{}, false
+	}
+	host := strings.ToLower(strings.TrimSpace(parsed.Host))
+	if host == "" {
+		return hubSetupLocation{}, false
+	}
+	for _, location := range locations {
+		if normalizeHubSetupLocationDomain(location.Domain) == host {
+			return location, true
+		}
+	}
+	return hubSetupLocation{}, false
+}
+
+func resetHubSetupLocationsCache() {
+	hubSetupLocationsCache.mu.Lock()
+	defer hubSetupLocationsCache.mu.Unlock()
+	hubSetupLocationsCache.locations = nil
+	hubSetupLocationsCache.fetchedAt = time.Time{}
+}
+
 func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 	state := hubui.HubSetupState{
 		ConnectURL:      "https://app.molten.bot/signin?target=hub",
@@ -1902,6 +2058,8 @@ func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 		Onboarding:      hubui.DefaultHubSetupOnboarding("existing"),
 		OnboardingStage: "bind",
 	}
+	locations := currentHubSetupLocations()
+	state.Region = normalizeHubSetupRegion("")
 
 	activeCfg, err := effectiveHubSetupConfig(cfg)
 	if err != nil {
@@ -1920,9 +2078,9 @@ func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 	}
 	state.Configured = persistedBindToken != "" || persistedAgentToken != ""
 	if storedFound && strings.TrimSpace(storedCfg.BaseURL) != "" {
-		state.Region = hubSetupRegionForBaseURL(storedCfg.BaseURL)
+		state.Region = hubSetupRegionForBaseURLWithLocations(storedCfg.BaseURL, locations)
 	} else {
-		state.Region = hubSetupRegionForBaseURL(activeCfg.BaseURL)
+		state.Region = hubSetupRegionForBaseURLWithLocations(activeCfg.BaseURL, locations)
 	}
 	state.Handle = strings.TrimSpace(activeCfg.Handle)
 	state.Profile.ProfileText = strings.TrimSpace(activeCfg.Profile.ProfileText)
@@ -2288,18 +2446,64 @@ func normalizeHubSetupTokenType(tokenType string) string {
 }
 
 func normalizeHubSetupRegion(region string) string {
-	return hub.NormalizeHubRegion(region)
+	normalized := strings.ToLower(strings.TrimSpace(region))
+	locations := currentHubSetupLocations()
+	if location, ok := hubSetupLocationByKey(locations, normalized); ok {
+		return location.Key
+	}
+	normalized = hub.NormalizeHubRegion(normalized)
+	if location, ok := hubSetupLocationByKey(locations, normalized); ok {
+		return location.Key
+	}
+	if len(locations) > 0 {
+		return locations[0].Key
+	}
+	return normalized
 }
 
 func hubSetupRegionForBaseURL(baseURL string) string {
-	return hub.HubRegionFromBaseURL(baseURL)
+	return hubSetupRegionForBaseURLWithLocations(baseURL, currentHubSetupLocations())
+}
+
+func hubSetupRegionForBaseURLWithLocations(baseURL string, locations []hubSetupLocation) string {
+	if location, ok := hubSetupLocationForBaseURL(locations, baseURL); ok {
+		return location.Key
+	}
+	return normalizeHubSetupRegion(hub.HubRegionFromBaseURL(baseURL))
 }
 
 func hubSetupBaseURL(baseURL, region string) string {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
-	if hub.AllowNonMoltenHubBaseURL() && baseURL != "" {
-		if err := hub.ValidateHubBaseURLStrict(baseURL); err != nil {
-			return baseURL
+	locations := currentHubSetupLocations()
+	region = normalizeHubSetupRegion(region)
+
+	selected, ok := hubSetupLocationByKey(locations, region)
+	if !ok {
+		if len(locations) > 0 {
+			selected = locations[0]
+			ok = true
+		}
+	}
+
+	if baseURL != "" {
+		if _, matched := hubSetupLocationForBaseURL(locations, baseURL); matched {
+			if ok {
+				if selectedBaseURL := hubSetupLocationBaseURL(selected); selectedBaseURL != "" {
+					return selectedBaseURL
+				}
+			}
+			return hub.HubBaseURLForRegion(region)
+		}
+		if hub.AllowNonMoltenHubBaseURL() {
+			if err := hub.ValidateHubBaseURLStrict(baseURL); err != nil {
+				return baseURL
+			}
+		}
+	}
+
+	if ok {
+		if selectedBaseURL := hubSetupLocationBaseURL(selected); selectedBaseURL != "" {
+			return selectedBaseURL
 		}
 	}
 	return hub.HubBaseURLForRegion(region)
