@@ -978,11 +978,11 @@ body .right-col.prompt-collapsed.task-list-hidden {
 }
 
 .hub-profile-button {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(-6px) scale(0.96);
+  opacity: 1;
+  pointer-events: auto;
+  color: var(--theme-button-text);
+  transform: translateX(0) scale(1);
   transition:
-    opacity 180ms ease,
     color 180ms ease,
     transform 180ms ease;
 }
@@ -996,13 +996,6 @@ body .right-col.prompt-collapsed.task-list-hidden {
   stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-
-.hub-dock-group[data-configured="true"]:hover .hub-profile-button,
-.hub-dock-group[data-configured="true"]:focus-within .hub-profile-button {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateX(0) scale(1);
 }
 
 .hub-profile-button:hover,
