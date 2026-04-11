@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -188,15 +190,18 @@ func dedupeKeyForRunConfig(cfg config.Config) string {
 	}
 
 	repos := normalizeRepoList(cfg.RepoList())
+	targetSubdir := normalizeTargetSubdirForDeduper(cfg.TargetSubdir)
 	payload := struct {
 		Repos        []string `json:"repos"`
 		BaseBranch   string   `json:"baseBranch"`
+		TargetSubdir string   `json:"targetSubdir"`
 		AgentHarness string   `json:"agentHarness,omitempty"`
 		AgentCommand string   `json:"agentCommand,omitempty"`
 		PromptHash   string   `json:"promptHash"`
 	}{
 		Repos:        repos,
 		BaseBranch:   baseBranch,
+		TargetSubdir: targetSubdir,
 		AgentHarness: strings.ToLower(strings.TrimSpace(cfg.AgentHarness)),
 		AgentCommand: strings.TrimSpace(cfg.AgentCommand),
 		PromptHash:   promptHashForDeduper(cfg.Prompt),
@@ -228,7 +233,20 @@ func normalizeRepoList(repos []string) []string {
 		}
 		out = append(out, repo)
 	}
+	sort.Strings(out)
 	return out
+}
+
+func normalizeTargetSubdirForDeduper(subdir string) string {
+	subdir = strings.TrimSpace(subdir)
+	if subdir == "" {
+		return "."
+	}
+	clean := filepath.Clean(subdir)
+	if clean == "" {
+		return "."
+	}
+	return clean
 }
 
 func promptHashForDeduper(prompt string) string {
