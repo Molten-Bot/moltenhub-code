@@ -1404,7 +1404,7 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".hub-emoji-picker-panel") || !strings.Contains(css, ".hub-emoji-picker-grid") {
 		t.Fatalf("expected stylesheet to include emoji picker styles")
 	}
-	if !strings.Contains(css, ".hub-emoji-picker-selected") || !strings.Contains(css, ".hub-emoji-picker-search-icon") {
+	if !strings.Contains(css, ".hub-emoji-picker-panel-header") || !strings.Contains(css, ".hub-emoji-picker-toggle-text") {
 		t.Fatalf("expected stylesheet to include the refreshed emoji picker layout styles")
 	}
 	if !strings.Contains(css, ".panel-header,\n.task-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 8px;\n  padding: 13px 16px;\n  border-bottom: 1px solid var(--surface-header-border);\n  background: var(--surface-header);\n  color: var(--surface-label);") {
@@ -1674,22 +1674,19 @@ func TestHandlerServesStaticEmojiPickerScript(t *testing.T) {
 	if !strings.Contains(body, `hub.ui.emoji.recent`) {
 		t.Fatalf("expected emoji picker script to persist recent emoji selections")
 	}
-	if !strings.Contains(body, `toggle.addEventListener("mousedown", (event) => {`) || !strings.Contains(body, `event.preventDefault();`) {
-		t.Fatalf("expected emoji picker script to preserve toggle activation while preventing input focus conflicts")
-	}
 	if !strings.Contains(body, `function limitGraphemes(value, maxGraphemes)`) || !strings.Contains(body, `Intl.Segmenter`) {
 		t.Fatalf("expected emoji picker script to clamp emoji values by grapheme cluster")
 	}
 	if !strings.Contains(body, `clearButton.addEventListener("click", () => {`) || !strings.Contains(body, `setValue("");`) {
 		t.Fatalf("expected emoji picker script to support clearing the selected emoji")
 	}
-	if !strings.Contains(body, `hub-emoji-picker-selected-text`) || !strings.Contains(body, `Frequently used`) {
-		t.Fatalf("expected emoji picker script to render the refreshed selected state and recent section labels")
+	if !strings.Contains(body, `Pick one emoji`) || !strings.Contains(body, `Frequently used`) {
+		t.Fatalf("expected emoji picker script to render the refreshed panel heading and recent section labels")
 	}
-	if !strings.Contains(body, `document.addEventListener("click", (event) => {`) || !strings.Contains(body, `if (!root.contains(event.target)) {`) {
+	if !strings.Contains(body, `global.addEventListener("mousedown", handleOutsidePointer);`) || !strings.Contains(body, `if (root.contains(target) || panel.contains(target)) {`) {
 		t.Fatalf("expected emoji picker script to close on outside click")
 	}
-	if !strings.Contains(body, `if (event.key === "Escape" && open) {`) || !strings.Contains(body, `setOpen(false);`) {
+	if !strings.Contains(body, `function handleEscape(event) {`) || !strings.Contains(body, `event.key !== "Escape"`) || !strings.Contains(body, `setOpen(false);`) {
 		t.Fatalf("expected emoji picker script to close on Escape")
 	}
 	if !strings.Contains(body, `if (nextDisabled) {`) || !strings.Contains(body, `setOpen(false);`) {

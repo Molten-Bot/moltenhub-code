@@ -341,8 +341,11 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `.hub-setup-profile-grid {`) {
 		t.Fatalf("expected stylesheet to include hub setup profile grid styles")
 	}
-	if !strings.Contains(stylesheet, `grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;`) {
-		t.Fatalf("expected profile grid to reserve a compact auto-width column for the emoji picker")
+	if !strings.Contains(stylesheet, `grid-template-columns: repeat(2, minmax(0, 1fr));`) {
+		t.Fatalf("expected profile grid to keep two equal columns and move emoji controls onto their own row")
+	}
+	if !strings.Contains(stylesheet, `.hub-setup-profile-emoji {`) || !strings.Contains(stylesheet, `grid-column: 1 / -1;`) {
+		t.Fatalf("expected stylesheet to make the emoji profile field span the full profile grid width")
 	}
 	if !strings.Contains(stylesheet, `.hub-setup-profile-text {`) {
 		t.Fatalf("expected stylesheet to keep the profile textarea spanning the full profile grid width")
@@ -362,11 +365,11 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `.hub-setup-actions {`) || !strings.Contains(stylesheet, `margin-left: auto;`) {
 		t.Fatalf("expected stylesheet to keep the hub setup actions docked to the right edge")
 	}
-	if !strings.Contains(stylesheet, `.hub-emoji-picker-toggle {`) || !strings.Contains(stylesheet, `z-index: 2;`) {
-		t.Fatalf("expected stylesheet to keep the emoji picker toggle above the text input hit area")
+	if !strings.Contains(stylesheet, `.hub-emoji-picker-toggle {`) || !strings.Contains(stylesheet, `width: 100%;`) {
+		t.Fatalf("expected stylesheet to render the emoji picker as a full-width button control")
 	}
-	if !strings.Contains(stylesheet, `.hub-emoji-picker-input {`) || !strings.Contains(stylesheet, `width: 5.75rem;`) {
-		t.Fatalf("expected emoji picker input to stay compact and only show a single emoji selection width")
+	if !strings.Contains(stylesheet, `.hub-emoji-picker-input {`) || !strings.Contains(stylesheet, `clip-path: inset(50%);`) {
+		t.Fatalf("expected stylesheet to hide the raw emoji input and rely on the picker button presentation")
 	}
 }
 

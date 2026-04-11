@@ -435,15 +435,19 @@
             <span class="prompt-label">Display name</span>
             <input id="hub-setup-display-name" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="Molten Builder">
           </label>
-          <label class="prompt-field">
+          <label class="prompt-field hub-setup-profile-emoji">
             <span class="prompt-label">Emoji</span>
             <div id="hub-setup-emoji-picker" class="hub-emoji-picker" data-emoji-picker>
-              <div class="hub-emoji-picker-control">
-                <input id="hub-setup-emoji" class="prompt-control prompt-input hub-emoji-picker-input" type="text" spellcheck="false" placeholder="🔥" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" aria-describedby="hub-setup-emoji-help">
-                <button id="hub-setup-emoji-toggle" class="hub-emoji-picker-toggle" type="button" aria-label="Choose emoji" aria-haspopup="dialog" aria-expanded="false">
-                  <span id="hub-setup-emoji-preview" class="hub-emoji-picker-toggle-preview" aria-hidden="true">😀</span>
-                </button>
-              </div>
+              <input id="hub-setup-emoji" class="hub-emoji-picker-input" type="text" spellcheck="false" placeholder="🔥" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" aria-describedby="hub-setup-emoji-help">
+              <button id="hub-setup-emoji-toggle" class="hub-emoji-picker-toggle" type="button" aria-label="Choose an emoji" aria-haspopup="dialog" aria-expanded="false">
+                <span class="hub-emoji-picker-toggle-main">
+                  <span class="hub-emoji-picker-toggle-chip" aria-hidden="true">
+                    <span id="hub-setup-emoji-preview" class="hub-emoji-picker-toggle-preview" aria-hidden="true">🙂</span>
+                  </span>
+                  <span class="hub-emoji-picker-toggle-text" data-empty-label="Choose an emoji">Choose an emoji</span>
+                </span>
+                <span class="hub-emoji-picker-toggle-chevron" aria-hidden="true">▾</span>
+              </button>
               <div id="hub-setup-emoji-panel" class="hub-emoji-picker-panel hidden" role="dialog" aria-label="Choose emoji" hidden></div>
             </div>
             <span id="hub-setup-emoji-help" class="sr-only">Type or choose one emoji for this agent.</span>
@@ -636,7 +640,7 @@
     const CLAUDE_POST_SUBMIT_VERIFY_INTERVAL_MS = 1200;
     const CLAUDE_POST_SUBMIT_VERIFY_MAX_ATTEMPTS = 25;
     const HUB_SETUP_DIALOG_MODES = ["connect", "profile"];
-    const HUB_PROFILE_DEFAULT_EMOJI = "😀";
+    const HUB_PROFILE_DEFAULT_EMOJI = "🙂";
 
     function normalizeUIConfig(raw) {
       const config = raw && typeof raw === "object" ? raw : {};
