@@ -584,6 +584,32 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function sortTasksByActivity(") {
 		t.Fatalf("expected index html to include activity-based task sorting for list rendering")
 	}
+	if !strings.Contains(markup, "const STREAM_RENDER_INTERVAL_MS = 4_000;") {
+		t.Fatalf("expected index html to batch stream-driven task transitions on a 4s cadence")
+	}
+	if !strings.Contains(markup, "const TASK_ORDER_TRANSITION_DELAY_MS = 2_000;") || !strings.Contains(markup, "const TASK_ORDER_SYNC_INTERVAL_MS = 4_000;") {
+		t.Fatalf("expected index html to delay and synchronize task reordering transitions")
+	}
+	if !strings.Contains(markup, "taskOrderPendingDesired: [],") {
+		t.Fatalf("expected index html state to track pending desired task order for stable transition delay windows")
+	}
+	if !strings.Contains(markup, "if (!sameTaskOrder(state.taskOrderPendingDesired, desiredOrder)) {") ||
+		!strings.Contains(markup, "state.taskOrderPendingSince = nowMs;") {
+		t.Fatalf("expected index html to reset task reorder delay timing whenever the desired order changes")
+	}
+	if !strings.Contains(markup, "const TASK_REFLOW_TRANSITION_MS = 560;") ||
+		!strings.Contains(markup, "const TASK_REFLOW_TRANSITION_EASING = \"cubic-bezier(0.16, 1, 0.3, 1)\";") {
+		t.Fatalf("expected index html to define smoother task reflow transition parameters")
+	}
+	if !strings.Contains(markup, "translate ${TASK_REFLOW_TRANSITION_MS}ms ${TASK_REFLOW_TRANSITION_EASING}") {
+		t.Fatalf("expected index html to animate task reflow with translate-based transitions for smoother movement")
+	}
+	if !strings.Contains(markup, "function applyTaskOrderCadence(tasks)") {
+		t.Fatalf("expected index html to include cadence-based task order stabilization")
+	}
+	if !strings.Contains(markup, "function animateTaskReflow(listNode, previousRects)") {
+		t.Fatalf("expected index html to animate task reflow transitions")
+	}
 	if strings.Contains(markup, "taskFullscreenBody.classList.toggle(\"task-output-hidden\", !outputVisible);") {
 		t.Fatalf("expected index html to remove full screen output visibility toggling")
 	}
@@ -641,7 +667,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "taskPanel.classList.toggle(\"hidden\", !hasTasks);") {
 		t.Fatalf("expected index html to hide the task panel when there are no tasks")
 	}
-	if !strings.Contains(markup, "openTaskOutput(task.request_id);") {
+	if !strings.Contains(markup, "openTaskOutput(requestID);") {
 		t.Fatalf("expected index html to open focused full screen output from the task action")
 	}
 	if strings.Contains(markup, "Output hidden. Click Open Output to view terminal logs.") {

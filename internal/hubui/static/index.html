@@ -601,7 +601,11 @@
     const QUEUED_STATUS_TIMEOUT_MS = 12_000;
     const LOCAL_PROMPT_STATUS_FADE_MS = 240;
     const LOGO_ROTATION_INTERVAL_MS = 8_000;
-    const STREAM_RENDER_INTERVAL_MS = 120;
+    const STREAM_RENDER_INTERVAL_MS = 4_000;
+    const TASK_ORDER_TRANSITION_DELAY_MS = 2_000;
+    const TASK_ORDER_SYNC_INTERVAL_MS = 4_000;
+    const TASK_REFLOW_TRANSITION_MS = 560;
+    const TASK_REFLOW_TRANSITION_EASING = "cubic-bezier(0.16, 1, 0.3, 1)";
     const TASK_TIMING_REFRESH_INTERVAL_MS = 30_000;
     const MAX_TERMINAL_LINES = 500;
     const HUB_LOGIN_URL = "https://app.molten.bot/signin?target=hub";
@@ -1105,6 +1109,10 @@
       taskControlInFlight: new Set(),
       sparkleTaskIDs: new Set(),
       sparkleTimers: new Map(),
+      taskDisplayOrder: [],
+      taskOrderPendingSince: 0,
+      taskOrderPendingDesired: [],
+      taskOrderLastSyncBucket: Math.floor(Date.now() / TASK_ORDER_SYNC_INTERVAL_MS),
       taskFullscreenOpen: false,
       agentAuthBusy: false,
       agentAuthInteracted: false,
@@ -4501,6 +4509,148 @@
       return out;
     }
 
+    function taskRequestID(task) {
+      return String(task?.request_id || "").trim();
+    }
+
+    function taskOrderSyncBucket(nowMs) {
+      return Math.floor(nowMs / TASK_ORDER_SYNC_INTERVAL_MS);
+    }
+
+    function sameTaskOrder(left, right) {
+      if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+        return false;
+      }
+      for (let i = 0; i < left.length; i += 1) {
+        if (left[i] !== right[i]) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    function taskListByOrder(order, tasks) {
+      const byID = new Map();
+      for (const task of tasks || []) {
+        const requestID = taskRequestID(task);
+        if (!requestID || byID.has(requestID)) {
+          continue;
+        }
+        byID.set(requestID, task);
+      }
+
+      const ordered = [];
+      for (const requestID of order || []) {
+        const task = byID.get(requestID);
+        if (!task) {
+          continue;
+        }
+        ordered.push(task);
+        byID.delete(requestID);
+      }
+
+      for (const task of tasks || []) {
+        const requestID = taskRequestID(task);
+        if (!requestID || !byID.has(requestID)) {
+          continue;
+        }
+        ordered.push(task);
+        byID.delete(requestID);
+      }
+
+      return ordered;
+    }
+
+    function mergeTaskOrder(currentOrder, desiredOrder) {
+      const desiredSet = new Set(desiredOrder || []);
+      const merged = [];
+      const mergedSet = new Set();
+      for (const requestID of currentOrder || []) {
+        if (!desiredSet.has(requestID) || mergedSet.has(requestID)) {
+          continue;
+        }
+        merged.push(requestID);
+        mergedSet.add(requestID);
+      }
+
+      for (const requestID of desiredOrder || []) {
+        if (mergedSet.has(requestID)) {
+          continue;
+        }
+        // Keep current task cards visually stable while a synced reorder is pending.
+        // New tasks can appear immediately, but existing cards keep their relative order.
+        merged.push(requestID);
+        mergedSet.add(requestID);
+      }
+
+      return merged;
+    }
+
+    function applyTaskOrderCadence(tasks) {
+      const nowMs = Date.now();
+      const syncBucket = taskOrderSyncBucket(nowMs);
+      if (!tasks.length) {
+        state.taskDisplayOrder = [];
+        state.taskOrderPendingSince = 0;
+        state.taskOrderPendingDesired = [];
+        state.taskOrderLastSyncBucket = syncBucket;
+        return [];
+      }
+
+      const desiredOrder = [];
+      const seen = new Set();
+      for (const task of tasks) {
+        const requestID = taskRequestID(task);
+        if (!requestID || seen.has(requestID)) {
+          continue;
+        }
+        seen.add(requestID);
+        desiredOrder.push(requestID);
+      }
+      if (!desiredOrder.length) {
+        state.taskDisplayOrder = [];
+        state.taskOrderPendingSince = 0;
+        state.taskOrderPendingDesired = [];
+        state.taskOrderLastSyncBucket = syncBucket;
+        return [];
+      }
+
+      if (!Array.isArray(state.taskDisplayOrder) || state.taskDisplayOrder.length === 0) {
+        state.taskDisplayOrder = [...desiredOrder];
+        state.taskOrderPendingSince = 0;
+        state.taskOrderPendingDesired = [];
+        state.taskOrderLastSyncBucket = syncBucket;
+        return taskListByOrder(state.taskDisplayOrder, tasks);
+      }
+
+      const currentOrder = mergeTaskOrder(state.taskDisplayOrder, desiredOrder);
+      if (sameTaskOrder(currentOrder, desiredOrder)) {
+        state.taskDisplayOrder = currentOrder;
+        state.taskOrderPendingSince = 0;
+        state.taskOrderPendingDesired = [];
+        return taskListByOrder(currentOrder, tasks);
+      }
+
+      if (!sameTaskOrder(state.taskOrderPendingDesired, desiredOrder)) {
+        state.taskOrderPendingDesired = [...desiredOrder];
+        state.taskOrderPendingSince = nowMs;
+      }
+
+      const delayElapsed = state.taskOrderPendingSince > 0 &&
+        (nowMs - state.taskOrderPendingSince) >= TASK_ORDER_TRANSITION_DELAY_MS;
+      const syncWindowReady = syncBucket > state.taskOrderLastSyncBucket;
+      if (delayElapsed && syncWindowReady) {
+        state.taskDisplayOrder = [...state.taskOrderPendingDesired];
+        state.taskOrderPendingSince = 0;
+        state.taskOrderPendingDesired = [];
+        state.taskOrderLastSyncBucket = syncBucket;
+        return taskListByOrder(state.taskDisplayOrder, tasks);
+      }
+
+      state.taskDisplayOrder = currentOrder;
+      return taskListByOrder(currentOrder, tasks);
+    }
+
     function displayTasks(snapshot) {
       const taskItems = (snapshot.tasks || []).filter((task) => {
         if (!task || !task.request_id) {
@@ -4512,7 +4662,8 @@
         return !isCompletedTask(task);
       });
 
-      return sortTasksByActivity(taskItems);
+      const byActivity = sortTasksByActivity(taskItems);
+      return applyTaskOrderCadence(byActivity);
     }
 
     function fullscreenTasks(snapshot) {
@@ -4695,6 +4846,75 @@
       return false;
     }
 
+    function captureTaskRects(listNode) {
+      const rects = new Map();
+      if (!listNode) {
+        return rects;
+      }
+      for (const node of listNode.querySelectorAll(".task[data-request-id]")) {
+        const requestID = String(node.dataset.requestId || "").trim();
+        if (!requestID) {
+          continue;
+        }
+        rects.set(requestID, node.getBoundingClientRect());
+      }
+      return rects;
+    }
+
+    function animateTaskReflow(listNode, previousRects) {
+      if (!listNode || !(previousRects instanceof Map) || previousRects.size === 0) {
+        return;
+      }
+
+      for (const node of listNode.querySelectorAll(".task[data-request-id]")) {
+        const requestID = String(node.dataset.requestId || "").trim();
+        if (!requestID) {
+          continue;
+        }
+        const previousRect = previousRects.get(requestID);
+        if (!previousRect) {
+          continue;
+        }
+
+        const nextRect = node.getBoundingClientRect();
+        const deltaX = previousRect.left - nextRect.left;
+        const deltaY = previousRect.top - nextRect.top;
+        if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) {
+          continue;
+        }
+
+        const supportsTranslateProperty = typeof node.style.translate === "string";
+        node.style.transition = "none";
+        if (supportsTranslateProperty) {
+          node.style.translate = `${deltaX}px ${deltaY}px`;
+        } else {
+          node.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+        }
+        window.requestAnimationFrame(() => {
+          if (supportsTranslateProperty) {
+            node.style.transition = `translate ${TASK_REFLOW_TRANSITION_MS}ms ${TASK_REFLOW_TRANSITION_EASING}`;
+            node.style.translate = "0 0";
+          } else {
+            node.style.transition = `transform ${TASK_REFLOW_TRANSITION_MS}ms ${TASK_REFLOW_TRANSITION_EASING}`;
+            node.style.transform = "";
+          }
+          const clearTransition = (event) => {
+            if (supportsTranslateProperty && event?.propertyName && event.propertyName !== "translate") {
+              return;
+            }
+            if (!supportsTranslateProperty && event?.propertyName && event.propertyName !== "transform") {
+              return;
+            }
+            node.style.transition = "";
+            if (supportsTranslateProperty) {
+              node.style.translate = "";
+            }
+          };
+          node.addEventListener("transitionend", clearTransition, { once: true });
+        });
+      }
+    }
+
     function taskCollectionRenderSig(tasks, options = {}) {
       const showOutputAction = options.showOutputAction !== false;
       const allowCollapse = options.allowCollapse !== false;
@@ -4745,6 +4965,7 @@
         listNode.dataset.pendingRenderSig = renderSig;
         return;
       }
+      const previousTaskRects = captureTaskRects(listNode);
       listNode.dataset.renderSig = renderSig;
       listNode.dataset.pendingRenderSig = "";
       listNode.replaceChildren();
@@ -4758,11 +4979,15 @@
       }
 
       for (const task of tasks) {
+        const requestID = taskRequestID(task);
         const collapsed = allowCollapse && isMinimizedTask(task);
-        const closing = isTaskClosing(task.request_id);
+        const closing = isTaskClosing(requestID);
         const node = document.createElement("article");
         node.className = "task";
-        if (task.request_id === state.selectedTaskId) {
+        if (requestID) {
+          node.dataset.requestId = requestID;
+        }
+        if (requestID === state.selectedTaskId) {
           node.classList.add("active");
         }
         if (collapsed) {
@@ -4771,7 +4996,7 @@
         if (closing) {
           node.classList.add("task-closing");
         }
-        node.addEventListener("click", () => selectTask(task.request_id));
+        node.addEventListener("click", () => selectTask(requestID));
 
         const top = document.createElement("div");
         top.className = "task-top";
@@ -4814,12 +5039,12 @@
           outputToggle.title = "Open full screen task output";
           outputToggle.addEventListener("click", (event) => {
             event.stopPropagation();
-            openTaskOutput(task.request_id);
+            openTaskOutput(requestID);
           });
           topActions.appendChild(outputToggle);
         }
 
-        const taskControlBusy = isTaskControlInFlight(task.request_id);
+        const taskControlBusy = isTaskControlInFlight(requestID);
         if (!isCompletedTask(task)) {
           const statusLower = String(task.status || "").toLowerCase();
           const paused = statusLower === "paused";
@@ -4836,7 +5061,7 @@
             forceStart.disabled = taskControlBusy;
             forceStart.addEventListener("click", (event) => {
               event.stopPropagation();
-              controlTask(task.request_id, "run", { force: true });
+              controlTask(requestID, "run", { force: true });
             });
             topActions.appendChild(forceStart);
           }
@@ -4854,7 +5079,7 @@
           pauseRun.disabled = taskControlBusy || !canTogglePauseRun;
           pauseRun.addEventListener("click", (event) => {
             event.stopPropagation();
-            controlTask(task.request_id, paused ? "run" : "pause");
+            controlTask(requestID, paused ? "run" : "pause");
           });
           topActions.appendChild(pauseRun);
 
@@ -4867,7 +5092,7 @@
           stop.disabled = taskControlBusy;
           stop.addEventListener("click", (event) => {
             event.stopPropagation();
-            controlTask(task.request_id, "stop");
+            controlTask(requestID, "stop");
           });
           topActions.appendChild(stop);
         }
@@ -4878,16 +5103,16 @@
           rerun.className = "task-rerun";
           rerun.textContent = "Re-run";
           rerun.title = "Queue this task configuration again";
-          rerun.disabled = state.rerunInFlight.has(task.request_id);
+          rerun.disabled = state.rerunInFlight.has(requestID);
           rerun.addEventListener("click", (event) => {
             event.stopPropagation();
-            rerunTask(task.request_id);
+            rerunTask(requestID);
           });
           topActions.appendChild(rerun);
         }
 
         if (isCompletedTask(task)) {
-          const closePending = isTaskClosePending(task.request_id);
+          const closePending = isTaskClosePending(requestID);
           const close = document.createElement("button");
           close.type = "button";
           close.className = "task-close";
@@ -4898,7 +5123,7 @@
           close.disabled = closePending;
           close.addEventListener("click", (event) => {
             event.stopPropagation();
-            dismissTask(task.request_id);
+            dismissTask(requestID);
           });
           topActions.appendChild(close);
         }
@@ -5007,6 +5232,7 @@
         }
         listNode.appendChild(node);
       }
+      animateTaskReflow(listNode, previousTaskRects);
     }
 
     function renderTasks(snapshot) {
