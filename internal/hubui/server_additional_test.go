@@ -942,6 +942,12 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".page-bottom-dock {\n  position: fixed;\n  left: 50%;\n  bottom: max(16px, env(safe-area-inset-bottom));\n  z-index: 61;\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  justify-content: center;\n  width: min-content;\n  max-width: calc(100vw - 28px);\n  transform: translateX(-50%);\n}") {
 		t.Fatalf("expected Studio mode tabs to dock at the absolute bottom center of the page")
 	}
+	if !strings.Contains(css, "--hub-content-bottom-padding: calc(var(--hub-floating-bottom) + var(--hub-floating-stack-height) + var(--hub-studio-dock-gap) + 28px);") {
+		t.Fatalf("expected Studio shell to compute bottom content clearance from floating dock stack tokens")
+	}
+	if !strings.Contains(css, ".app {\n  width: min(1500px, 100%);\n  margin: 0 auto;\n  padding: 28px 20px var(--hub-content-bottom-padding);\n  display: grid;\n  gap: 24px;\n}") {
+		t.Fatalf("expected app shell to reserve dynamic bottom space for the floating dock")
+	}
 	if !strings.Contains(css, ".prompt-mode-tabs-dock {\n  width: max-content;\n  max-width: calc(100vw - 28px);\n  overflow: visible;\n}") {
 		t.Fatalf("expected Studio mode tabs to remain scrollable within the bottom dock on narrow viewports")
 	}
@@ -1016,6 +1022,9 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	}
 	if !strings.Contains(css, "@media (max-width: 640px) {\n  .prompt-actions {\n    flex-wrap: wrap;\n    gap: 6px;\n  }\n\n  .prompt-actions-start,\n  .submit-status-inline,\n  .prompt-actions-end {\n    flex: 1 1 100%;\n    width: 100%;\n  }\n\n  .prompt-actions-end {\n    justify-content: flex-end;\n    margin-left: 0;\n  }\n\n  .prompt-action-paste {\n    max-width: none;\n  }\n\n  .submit-status-inline {\n    min-width: 0;\n  }\n\n  .prompt-action-button {\n    flex: 1 1 0;\n    min-inline-size: 0;\n  }") {
 		t.Fatalf("expected mobile layout to keep Studio action controls fully visible")
+	}
+	if !strings.Contains(css, ".app {\n    padding: 20px 14px var(--hub-content-bottom-padding);\n  }") {
+		t.Fatalf("expected compact layouts to keep the same dynamic dock clearance padding")
 	}
 }
 

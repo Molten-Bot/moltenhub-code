@@ -3,6 +3,7 @@
   --hub-floating-bottom: max(16px, env(safe-area-inset-bottom));
   --hub-floating-stack-height: 64px;
   --hub-studio-dock-gap: 16px;
+  --hub-content-bottom-padding: calc(var(--hub-floating-bottom) + var(--hub-floating-stack-height) + var(--hub-studio-dock-gap) + 28px);
   --hub-studio-dock-bottom: calc(var(--hub-floating-bottom) + var(--hub-floating-stack-height) + var(--hub-studio-dock-gap));
   --hub-studio-dock-height: clamp(280px, 34vh, 388px);
   --hub-studio-collapsed-height: 84px;
@@ -246,7 +247,7 @@ textarea {
 .app {
   width: min(1500px, 100%);
   margin: 0 auto;
-  padding: 28px 20px 124px;
+  padding: 28px 20px var(--hub-content-bottom-padding);
   display: grid;
   gap: 24px;
 }
@@ -2291,7 +2292,7 @@ select.prompt-control {
   }
 
   .app {
-    padding: 20px 14px 132px;
+    padding: 20px 14px var(--hub-content-bottom-padding);
   }
 
   .brand-logo {
