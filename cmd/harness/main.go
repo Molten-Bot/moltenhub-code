@@ -1961,7 +1961,6 @@ func loadHubSetupRuntimeConfig(path string) (hub.InitConfig, bool, error) {
 	}
 
 	runtimeCfg.RuntimeConfigPath = path
-	runtimeCfg.ApplyDefaults()
 	initCfg := runtimeCfg.Init()
 	initCfg.RuntimeConfigPath = path
 	return initCfg, true, nil
