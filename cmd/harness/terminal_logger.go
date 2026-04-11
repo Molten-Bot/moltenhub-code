@@ -266,6 +266,9 @@ func isImportantCodexCommandText(text string) bool {
 	if lower == "" {
 		return false
 	}
+	if looksLikeNestedHarnessLogLine(lower) {
+		return false
+	}
 
 	if strings.HasPrefix(lower, "/bin/bash -lc") || strings.HasPrefix(lower, "bash -lc") {
 		return false
@@ -300,6 +303,16 @@ func isImportantCodexCommandText(text string) bool {
 		}
 	}
 	if strings.HasPrefix(lower, "failure:") || strings.HasPrefix(lower, "error ") {
+		return true
+	}
+	return false
+}
+
+func looksLikeNestedHarnessLogLine(lower string) bool {
+	if strings.TrimSpace(lower) == "" {
+		return false
+	}
+	if strings.HasPrefix(lower, "dispatch ") || strings.HasPrefix(lower, "stage=") || strings.HasPrefix(lower, "cmd phase=") {
 		return true
 	}
 	return false

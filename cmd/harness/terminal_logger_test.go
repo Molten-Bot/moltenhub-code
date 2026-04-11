@@ -103,6 +103,32 @@ func TestFormatTerminalLogLineKeepsCodexCompilerStyleFailure(t *testing.T) {
 	}
 }
 
+func TestFormatTerminalLogLineDropsNestedHarnessLogLinesFromCodexOutput(t *testing.T) {
+	t.Parallel()
+
+	line := "cmd phase=codex name=codex stream=stderr b64=" + base64.StdEncoding.EncodeToString([]byte(`dispatch request_id=local-1775872076-000002 stage=codex status=running elapsed_s=75`))
+	got, mode := formatTerminalLogLine(line)
+	if mode != terminalLogModeDrop {
+		t.Fatalf("mode = %v, want drop", mode)
+	}
+	if got != "" {
+		t.Fatalf("got %q, want empty", got)
+	}
+}
+
+func TestFormatTerminalLogLineDropsNestedHarnessErrorLinesFromCodexOutput(t *testing.T) {
+	t.Parallel()
+
+	line := "cmd phase=codex name=codex stream=stderr b64=" + base64.StdEncoding.EncodeToString([]byte(`dispatch request_id=local-1775872076-000002 cmd phase=clone name=git stream=stderr text="fatal: Remote branch moltenhub-review missing"`))
+	got, mode := formatTerminalLogLine(line)
+	if mode != terminalLogModeDrop {
+		t.Fatalf("mode = %v, want drop", mode)
+	}
+	if got != "" {
+		t.Fatalf("got %q, want empty", got)
+	}
+}
+
 func TestFormatTerminalLogLineCompactsSingleRunAgentHeartbeat(t *testing.T) {
 	t.Parallel()
 
