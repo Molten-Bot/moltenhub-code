@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -587,6 +588,15 @@ func TestUnexpectedNoChangesFollowUpRunConfigPreservesTaskTargetingAndAddsContex
 	t.Parallel()
 
 	logRoot := filepath.Join(t.TempDir(), ".log")
+	logDir := filepath.Join(logRoot, "local", "1712345678", "000001")
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		t.Fatalf("mkdir log dir: %v", err)
+	}
+	logPath := filepath.Join(logDir, logFileName)
+	if err := os.WriteFile(logPath, []byte("dispatch status=no_changes\n"), 0o644); err != nil {
+		t.Fatalf("write log file: %v", err)
+	}
+
 	runCfg := config.Config{
 		Repos:        []string{"git@github.com:acme/repo.git"},
 		BaseBranch:   "release/2026.04-hotfix",
@@ -649,6 +659,31 @@ func TestUnexpectedNoChangesFollowUpRunConfigReusesObservedNonMainBranch(t *test
 
 	if got, want := cfg.BaseBranch, "moltenhub-add-the-emoji-picker-to-the-agent-profil"; got != want {
 		t.Fatalf("BaseBranch = %q, want %q", got, want)
+	}
+}
+
+func TestUnexpectedNoChangesFollowUpRunConfigUsesNoPathGuidanceWhenTaskLogsMissing(t *testing.T) {
+	t.Parallel()
+
+	logRoot := filepath.Join(t.TempDir(), ".log")
+	runCfg := config.Config{
+		Repos:        []string{"git@github.com:acme/repo.git"},
+		BaseBranch:   "main",
+		TargetSubdir: ".",
+		Prompt:       "investigate missing changes",
+	}
+	result := harness.Result{
+		NoChanges: true,
+		Branch:    "main",
+	}
+
+	cfg := unexpectedNoChangesFollowUpRunConfig("local-1712345678-000001", result, runCfg, logRoot)
+	missingLogPath := filepath.Join(logRoot, "local", "1712345678", "000001")
+	if strings.Contains(cfg.Prompt, missingLogPath) {
+		t.Fatalf("Prompt should not include missing log path %q: %q", missingLogPath, cfg.Prompt)
+	}
+	if !strings.Contains(cfg.Prompt, "No local task log path was captured before the task completed without changes.") {
+		t.Fatalf("Prompt missing no-path guidance: %q", cfg.Prompt)
 	}
 }
 

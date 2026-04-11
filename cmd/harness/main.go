@@ -933,7 +933,7 @@ func unexpectedNoChangesFollowUpRunConfig(
 	logRoot string,
 ) config.Config {
 	runCfg.ApplyDefaults()
-	logPaths := failurefollowup.TaskLogPaths(logRoot, requestID)
+	logPaths := existingPaths(failurefollowup.TaskLogPaths(logRoot, requestID))
 	baseBranch := strings.TrimSpace(runCfg.BaseBranch)
 	resultBranch := strings.TrimSpace(result.Branch)
 	if baseBranch == "main" && resultBranch != "" && resultBranch != "main" {
@@ -1091,6 +1091,33 @@ func failureFollowUpContextRepos(failedResult harness.Result, failedRunCfg confi
 		appendRepo(repoResult.RepoURL)
 	}
 	return repos
+}
+
+func existingPaths(paths []string) []string {
+	if len(paths) == 0 {
+		return nil
+	}
+
+	existing := make([]string, 0, len(paths))
+	seen := make(map[string]struct{}, len(paths))
+	for _, path := range paths {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		if _, err := os.Stat(path); err != nil {
+			continue
+		}
+		seen[path] = struct{}{}
+		existing = append(existing, path)
+	}
+	if len(existing) == 0 {
+		return nil
+	}
+	return existing
 }
 
 func taskLogPaths(logRoot, requestID string) []string {
