@@ -1907,15 +1907,29 @@ func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 	if err != nil {
 		state.Message = fmt.Sprintf("Runtime config load failed: %v", err)
 	}
+	storedCfg, storedFound, storedErr := loadHubSetupRuntimeConfig(cfg.RuntimeConfigPath)
+	if storedErr != nil && state.Message == "" {
+		state.Message = fmt.Sprintf("Runtime config load failed: %v", storedErr)
+	}
 
-	state.Configured = strings.TrimSpace(activeCfg.BindToken) != "" || strings.TrimSpace(activeCfg.AgentToken) != ""
-	state.Region = hubSetupRegionForBaseURL(activeCfg.BaseURL)
+	persistedBindToken := ""
+	persistedAgentToken := ""
+	if storedFound {
+		persistedBindToken = strings.TrimSpace(storedCfg.BindToken)
+		persistedAgentToken = strings.TrimSpace(storedCfg.AgentToken)
+	}
+	state.Configured = persistedBindToken != "" || persistedAgentToken != ""
+	if storedFound && strings.TrimSpace(storedCfg.BaseURL) != "" {
+		state.Region = hubSetupRegionForBaseURL(storedCfg.BaseURL)
+	} else {
+		state.Region = hubSetupRegionForBaseURL(activeCfg.BaseURL)
+	}
 	state.Handle = strings.TrimSpace(activeCfg.Handle)
 	state.Profile.ProfileText = strings.TrimSpace(activeCfg.Profile.ProfileText)
 	state.Profile.DisplayName = strings.TrimSpace(activeCfg.Profile.DisplayName)
 	state.Profile.Emoji = strings.TrimSpace(activeCfg.Profile.Emoji)
 	if state.Configured {
-		if strings.TrimSpace(activeCfg.BindToken) != "" {
+		if persistedBindToken != "" {
 			state.AgentMode = "new"
 			state.TokenType = "bind"
 		} else {
@@ -1925,6 +1939,31 @@ func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 	state.Onboarding = hubui.DefaultHubSetupOnboarding(state.AgentMode)
 	state.ActivationReady = state.Configured
 	return state
+}
+
+func loadHubSetupRuntimeConfig(path string) (hub.InitConfig, bool, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return hub.InitConfig{}, false, nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return hub.InitConfig{}, false, nil
+		}
+		return hub.InitConfig{}, false, fmt.Errorf("read runtime config: %w", err)
+	}
+
+	var runtimeCfg hub.RuntimeConfig
+	if err := json.Unmarshal(data, &runtimeCfg); err != nil {
+		return hub.InitConfig{}, false, fmt.Errorf("parse runtime config: %w", err)
+	}
+
+	runtimeCfg.RuntimeConfigPath = path
+	initCfg := runtimeCfg.Init()
+	initCfg.RuntimeConfigPath = path
+	return initCfg, true, nil
 }
 
 func currentHubSetupStateWithRemoteProfile(ctx context.Context, cfg hub.InitConfig) hubui.HubSetupState {
@@ -1981,15 +2020,14 @@ func effectiveHubSetupConfig(cfg hub.InitConfig) (hub.InitConfig, error) {
 	activeCfg := cfg
 	activeCfg.ApplyDefaults()
 
-	runtimeCfg, err := hub.LoadRuntimeConfig(cfg.RuntimeConfigPath)
+	storedCfg, found, err := loadHubSetupRuntimeConfig(cfg.RuntimeConfigPath)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return activeCfg, nil
-		}
 		return activeCfg, err
 	}
+	if !found {
+		return activeCfg, nil
+	}
 
-	storedCfg := runtimeCfg.Init()
 	if strings.TrimSpace(storedCfg.BindToken) == "" {
 		storedCfg.BindToken = strings.TrimSpace(activeCfg.BindToken)
 	}
@@ -2006,9 +2044,7 @@ func effectiveHubSetupConfig(cfg hub.InitConfig) (hub.InitConfig, error) {
 	if strings.TrimSpace(storedCfg.AgentCommand) == "" {
 		storedCfg.AgentCommand = strings.TrimSpace(activeCfg.AgentCommand)
 	}
-	if strings.TrimSpace(runtimeCfg.BindToken) == "" &&
-		strings.TrimSpace(runtimeCfg.AgentToken) == "" &&
-		strings.TrimSpace(activeCfg.BaseURL) != "" {
+	if strings.TrimSpace(storedCfg.BaseURL) == "" && strings.TrimSpace(activeCfg.BaseURL) != "" {
 		storedCfg.BaseURL = strings.TrimSpace(activeCfg.BaseURL)
 	}
 	storedCfg.ApplyDefaults()

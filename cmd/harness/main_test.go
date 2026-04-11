@@ -1601,7 +1601,7 @@ func TestConnectHubSetupUsesSavedRuntimeConfig(t *testing.T) {
 	}
 }
 
-func TestCurrentHubSetupStatePreservesLiveInitCredentialsWhenRuntimeConfigOmitsTokens(t *testing.T) {
+func TestCurrentHubSetupStateRequiresPersistedCredentialsForConfiguredMode(t *testing.T) {
 	t.Parallel()
 
 	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
@@ -1627,8 +1627,8 @@ func TestCurrentHubSetupStatePreservesLiveInitCredentialsWhenRuntimeConfigOmitsT
 		},
 	})
 
-	if !state.Configured {
-		t.Fatal("Configured = false, want true")
+	if state.Configured {
+		t.Fatal("Configured = true, want false")
 	}
 	if got, want := state.Region, "eu"; got != want {
 		t.Fatalf("Region = %q, want %q", got, want)
@@ -1644,6 +1644,43 @@ func TestCurrentHubSetupStatePreservesLiveInitCredentialsWhenRuntimeConfigOmitsT
 	}
 	if got, want := state.Profile.ProfileText, "Owns connected hub sessions"; got != want {
 		t.Fatalf("ProfileText = %q, want %q", got, want)
+	}
+	if got, want := state.AgentMode, "existing"; got != want {
+		t.Fatalf("AgentMode = %q, want %q", got, want)
+	}
+	if got, want := state.TokenType, "agent"; got != want {
+		t.Fatalf("TokenType = %q, want %q", got, want)
+	}
+}
+
+func TestCurrentHubSetupStateUsesSavedBaseURLForRegionWhenCredentialsAreMissing(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{
+  "version": "v1",
+  "base_url": "https://eu.hub.molten.bot/v1",
+  "timeout_ms": 20000
+}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	state := currentHubSetupState(hub.InitConfig{
+		BaseURL:           "https://na.hub.molten.bot/v1",
+		RuntimeConfigPath: configPath,
+	})
+
+	if state.Configured {
+		t.Fatal("Configured = true, want false")
+	}
+	if got, want := state.Region, "eu"; got != want {
+		t.Fatalf("Region = %q, want %q", got, want)
+	}
+	if got := state.Message; got != "" {
+		t.Fatalf("Message = %q, want empty", got)
 	}
 }
 
