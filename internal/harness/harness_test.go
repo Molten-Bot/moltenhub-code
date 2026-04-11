@@ -111,6 +111,13 @@ func (s *streamCaptureRunner) RunStream(_ context.Context, cmd execx.Command, ha
 	return s.res, s.err
 }
 
+type blockingContextRunner struct{}
+
+func (r *blockingContextRunner) Run(ctx context.Context, _ execx.Command) (execx.Result, error) {
+	<-ctx.Done()
+	return execx.Result{}, ctx.Err()
+}
+
 func sampleConfig() config.Config {
 	return config.Config{
 		Version:       "v1",
@@ -2637,6 +2644,30 @@ func TestRunCodexReturnsErrorWhenCodexReportsFailure(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(err.Error()), "codex reported failure") {
 		t.Fatalf("runCodex() error = %v, want codex reported failure marker", err)
+	}
+}
+
+func TestRunCodexReturnsTimeoutWhenAgentStageRunsTooLong(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	runner := &blockingContextRunner{}
+
+	h := New(runner)
+	h.AgentStageTimeout = 40 * time.Millisecond
+
+	start := time.Now()
+	err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, "investigate timeout", codexRunOptions{}, "")
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("runCodex() error = nil, want timeout error")
+	}
+	if !strings.Contains(err.Error(), "codex timed out after 40ms") {
+		t.Fatalf("runCodex() error = %q, want explicit codex timeout detail", err)
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("runCodex() elapsed = %s, want fast timeout", elapsed)
 	}
 }
 
