@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jef/moltenhub-code/internal/agentruntime"
@@ -169,7 +170,6 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	if len(repoURLs) == 0 {
 		return h.fail(ExitConfig, "config", fmt.Errorf("one of repo, repoUrl, or repos[] is required"), runDir)
 	}
-	repoOwnerHints := repoOwnerFallbackCandidates(repoURLs)
 	runCfg := cfg
 	cloneBaseBranch := strings.TrimSpace(runCfg.BaseBranch)
 	if cloneBaseBranch == "" {
@@ -177,113 +177,20 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 
 	repos := make([]repoWorkspace, 0, len(repoURLs))
-	for i, requestedRepoURL := range repoURLs {
-		repoURL := requestedRepoURL
+	for i, repoURL := range repoURLs {
 		relDir := repoWorkspaceDirName(repoURL, i, len(repoURLs))
 		repoDir := filepath.Join(runDir, relDir)
-		branchForClone := cloneBaseBranch
-		h.logf("stage=clone status=start repo=%s branch=%s repo_dir=%s", repoURL, branchForClone, relDir)
-		cloneRes, cloneErr := h.runCloneWithRetry(
-			ctx,
-			repoURL,
-			branchForClone,
-			repoDir,
-			relDir,
-			cloneRepoCommand(repoURL, branchForClone, repoDir),
-		)
-		if cloneErr != nil && isRepoNotFoundCloneError(cloneErr, cloneRes) {
-			if fallbackRepoURL, ok := repoOwnerFallbackURL(repoURL, repoOwnerHints); ok {
-				h.logf(
-					"stage=clone status=warn action=fallback_repo_owner reason=repository_not_found repo=%s fallback_repo=%s branch=%s repo_dir=%s",
-					repoURL,
-					fallbackRepoURL,
-					branchForClone,
-					relDir,
-				)
-				if err := os.RemoveAll(repoDir); err != nil {
-					return h.fail(ExitClone, "clone", fmt.Errorf("cleanup failed clone dir %s: %w", repoDir, err), runDir)
-				}
-				fallbackRes, fallbackErr := h.runCloneWithRetry(
-					ctx,
-					fallbackRepoURL,
-					branchForClone,
-					repoDir,
-					relDir,
-					cloneRepoCommand(fallbackRepoURL, branchForClone, repoDir),
-				)
-				if fallbackErr == nil {
-					repoURL = fallbackRepoURL
-					cloneRes = fallbackRes
-					cloneErr = nil
-					h.logf(
-						"stage=clone status=ok action=fallback_repo_owner repo=%s fallback_repo=%s branch=%s repo_dir=%s",
-						requestedRepoURL,
-						fallbackRepoURL,
-						branchForClone,
-						relDir,
-					)
-				} else {
-					repoURL = fallbackRepoURL
-					cloneRes = fallbackRes
-					cloneErr = fallbackErr
-					h.logf(
-						"stage=clone status=warn action=fallback_repo_owner reason=fallback_failed repo=%s fallback_repo=%s branch=%s repo_dir=%s err=%q",
-						requestedRepoURL,
-						fallbackRepoURL,
-						branchForClone,
-						relDir,
-						fallbackErr,
-					)
-				}
-			}
-		}
-		if cloneErr != nil {
-			if !shouldFallbackCloneToDefaultBranch(branchForClone, cloneRes, cloneErr) {
-				return h.fail(ExitClone, "clone", cloneErr, runDir)
-			}
-
-			h.logf(
-				"stage=clone status=warn action=fallback_default_branch reason=missing_remote_branch repo=%s branch=%s repo_dir=%s",
-				repoURL,
-				branchForClone,
-				relDir,
-			)
-			if err := os.RemoveAll(repoDir); err != nil {
-				return h.fail(ExitClone, "clone", fmt.Errorf("cleanup failed clone dir %s: %w", repoDir, err), runDir)
-			}
-			if _, err := h.runCloneWithRetry(
-				ctx,
-				repoURL,
-				"",
-				repoDir,
-				relDir,
-				cloneRepoDefaultBranchCommand(repoURL, repoDir),
-			); err != nil {
-				return h.fail(ExitClone, "clone", err, runDir)
-			}
-			cloneBaseBranch = "main"
-			h.logf(
-				"stage=clone status=ok action=fallback_default_branch repo=%s repo_dir=%s resolved_branch=%s",
-				repoURL,
-				relDir,
-				cloneBaseBranch,
-			)
-		} else {
-			h.logf("stage=clone status=ok repo=%s repo_dir=%s", repoURL, relDir)
-		}
-		if !shouldCreateWorkBranch(cloneBaseBranch) {
-			h.logf("stage=clone status=start action=fetch_main repo=%s repo_dir=%s", repoURL, relDir)
-			if _, err := h.runCommand(ctx, "clone", fetchMainBranchCommand(repoDir)); err != nil {
-				return h.fail(ExitClone, "clone", err, runDir)
-			}
-			h.logf("stage=clone status=ok action=fetch_main repo=%s repo_dir=%s", repoURL, relDir)
-		}
 		repos = append(repos, repoWorkspace{
 			URL:    repoURL,
 			Dir:    repoDir,
 			RelDir: relDir,
 		})
 	}
+	effectiveBaseBranch, err := h.cloneRepositories(ctx, repos, cloneBaseBranch)
+	if err != nil {
+		return h.fail(ExitClone, "clone", err, runDir)
+	}
+	cloneBaseBranch = effectiveBaseBranch
 	runCfg.BaseBranch = cloneBaseBranch
 
 	targetDir, err := resolveTargetDir(repos[0].Dir, cfg.TargetSubdir)
@@ -838,6 +745,177 @@ func (h Harness) runCloneWithRetry(
 			return res, fmt.Errorf("clone retry interrupted: %w", sleepErr)
 		}
 	}
+}
+
+func (h Harness) cloneRepositories(ctx context.Context, repos []repoWorkspace, baseBranch string) (string, error) {
+	baseBranch = strings.TrimSpace(baseBranch)
+	if baseBranch == "" {
+		baseBranch = "main"
+	}
+	if len(repos) == 0 {
+		return baseBranch, nil
+	}
+	repoURLs := make([]string, 0, len(repos))
+	for _, repo := range repos {
+		repoURLs = append(repoURLs, repo.URL)
+	}
+	repoOwnerHints := repoOwnerFallbackCandidates(repoURLs)
+
+	usedFallback := make([]bool, len(repos))
+	cloneErrors := make([]error, len(repos))
+
+	cloneOne := func(index int) {
+		fellBack, err := h.cloneRepository(ctx, &repos[index], baseBranch, repoOwnerHints)
+		usedFallback[index] = fellBack
+		cloneErrors[index] = err
+	}
+
+	if len(repos) == 1 {
+		cloneOne(0)
+	} else {
+		var wg sync.WaitGroup
+		wg.Add(len(repos))
+		for i := range repos {
+			i := i
+			go func() {
+				defer wg.Done()
+				cloneOne(i)
+			}()
+		}
+		wg.Wait()
+	}
+
+	for _, err := range cloneErrors {
+		if err != nil {
+			return baseBranch, err
+		}
+	}
+
+	effectiveBaseBranch := baseBranch
+	for _, fellBack := range usedFallback {
+		if fellBack {
+			effectiveBaseBranch = "main"
+			break
+		}
+	}
+
+	if !shouldCreateWorkBranch(effectiveBaseBranch) {
+		for _, repo := range repos {
+			h.logf("stage=clone status=start action=fetch_main repo=%s repo_dir=%s", repo.URL, repo.RelDir)
+			if _, err := h.runCommand(ctx, "clone", fetchMainBranchCommand(repo.Dir)); err != nil {
+				return effectiveBaseBranch, err
+			}
+			h.logf("stage=clone status=ok action=fetch_main repo=%s repo_dir=%s", repo.URL, repo.RelDir)
+		}
+	}
+
+	return effectiveBaseBranch, nil
+}
+
+func (h Harness) cloneRepository(ctx context.Context, repo *repoWorkspace, branch string, repoOwnerHints []string) (bool, error) {
+	if repo == nil {
+		return false, fmt.Errorf("repo workspace is required")
+	}
+
+	branch = strings.TrimSpace(branch)
+	if branch == "" {
+		branch = "main"
+	}
+
+	repoURL := repo.URL
+	requestedRepoURL := repoURL
+	h.logf("stage=clone status=start repo=%s branch=%s repo_dir=%s", repoURL, branch, repo.RelDir)
+	cloneRes, cloneErr := h.runCloneWithRetry(
+		ctx,
+		repoURL,
+		branch,
+		repo.Dir,
+		repo.RelDir,
+		cloneRepoCommand(repoURL, branch, repo.Dir),
+	)
+	if cloneErr != nil && isRepoNotFoundCloneError(cloneErr, cloneRes) {
+		if fallbackRepoURL, ok := repoOwnerFallbackURL(repoURL, repoOwnerHints); ok {
+			h.logf(
+				"stage=clone status=warn action=fallback_repo_owner reason=repository_not_found repo=%s fallback_repo=%s branch=%s repo_dir=%s",
+				repoURL,
+				fallbackRepoURL,
+				branch,
+				repo.RelDir,
+			)
+			if err := os.RemoveAll(repo.Dir); err != nil {
+				return false, fmt.Errorf("cleanup failed clone dir %s: %w", repo.Dir, err)
+			}
+			fallbackRes, fallbackErr := h.runCloneWithRetry(
+				ctx,
+				fallbackRepoURL,
+				branch,
+				repo.Dir,
+				repo.RelDir,
+				cloneRepoCommand(fallbackRepoURL, branch, repo.Dir),
+			)
+			if fallbackErr == nil {
+				repo.URL = fallbackRepoURL
+				repoURL = fallbackRepoURL
+				cloneRes = fallbackRes
+				cloneErr = nil
+				h.logf(
+					"stage=clone status=ok action=fallback_repo_owner repo=%s fallback_repo=%s branch=%s repo_dir=%s",
+					requestedRepoURL,
+					fallbackRepoURL,
+					branch,
+					repo.RelDir,
+				)
+			} else {
+				repo.URL = fallbackRepoURL
+				repoURL = fallbackRepoURL
+				cloneRes = fallbackRes
+				cloneErr = fallbackErr
+				h.logf(
+					"stage=clone status=warn action=fallback_repo_owner reason=fallback_failed repo=%s fallback_repo=%s branch=%s repo_dir=%s err=%q",
+					requestedRepoURL,
+					fallbackRepoURL,
+					branch,
+					repo.RelDir,
+					fallbackErr,
+				)
+			}
+		}
+	}
+	if cloneErr == nil {
+		h.logf("stage=clone status=ok repo=%s repo_dir=%s", repoURL, repo.RelDir)
+		return false, nil
+	}
+	if !shouldFallbackCloneToDefaultBranch(branch, cloneRes, cloneErr) {
+		return false, cloneErr
+	}
+
+	h.logf(
+		"stage=clone status=warn action=fallback_default_branch reason=missing_remote_branch repo=%s branch=%s repo_dir=%s",
+		repoURL,
+		branch,
+		repo.RelDir,
+	)
+	if err := os.RemoveAll(repo.Dir); err != nil {
+		return false, fmt.Errorf("cleanup failed clone dir %s: %w", repo.Dir, err)
+	}
+	if _, err := h.runCloneWithRetry(
+		ctx,
+		repoURL,
+		"",
+		repo.Dir,
+		repo.RelDir,
+		cloneRepoDefaultBranchCommand(repoURL, repo.Dir),
+	); err != nil {
+		return false, err
+	}
+
+	h.logf(
+		"stage=clone status=ok action=fallback_default_branch repo=%s repo_dir=%s resolved_branch=%s",
+		repoURL,
+		repo.RelDir,
+		"main",
+	)
+	return true, nil
 }
 
 func cloneRetryBranchLabel(branch string) string {

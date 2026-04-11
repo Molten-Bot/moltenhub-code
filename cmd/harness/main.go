@@ -38,6 +38,7 @@ const hubPingRemoteContinueDetail = "Hub endpoint ping precheck failed; continui
 const hubPingHeadlessNoopDetail = "Hub endpoint ping precheck failed with UI disabled and no Hub credentials configured; startup completed without remote transport."
 const gitHubCLIPackageLabel = "github-cli (gh)"
 const gitHubCLIAuthRecommendation = "Run `gh auth login` (the GitHub CLI binary from the `github-cli` package) or set GH_TOKEN before dispatching tasks."
+const followUpTaskLogArchiveSubdir = "followup"
 
 const hubBootDiagnosticTimeout = 10 * time.Second
 const hubPingDiagnosticTimeout = 5 * time.Second
@@ -238,11 +239,12 @@ func runHub(args []string) int {
 	defer logger.Close()
 	runner := execx.OSRunner{}
 	monitorBroker := hubui.NewBroker()
-	daemonLogger := func(format string, args ...any) {
-		line := fmt.Sprintf(format, args...)
-		logger.Print(line)
-		monitorBroker.IngestLog(line)
+	logLevel, err := hub.ParseLogLevel(cfg.LogLevel)
+	if err != nil {
+		logLevel = hub.LogLevelInfo
 	}
+	logRouter := newHubLogRouter(logger, monitorBroker, logLevel)
+	daemonLogger := logRouter.Printf
 
 	runtimeCfg, runtimeErr := agentruntime.Resolve(cfg.AgentHarness, cfg.AgentCommand)
 	var authGate agentAuthGate
@@ -588,7 +590,7 @@ func runHub(args []string) int {
 		uiServer := hubui.NewServer(*uiListen, monitorBroker)
 		uiServer.AutomaticMode = *uiAutomatic
 		uiServer.ConfiguredHarness = cfg.AgentHarness
-		uiServer.Logf = logger.Printf
+		uiServer.Logf = daemonLogger
 		uiServer.LoadLibraryTasks = func() ([]library.TaskSummary, error) {
 			catalog, err := library.LoadCatalog(library.DefaultDir)
 			if err != nil {
@@ -681,21 +683,21 @@ func runHub(args []string) int {
 			daemonLogger("dispatch status=stopped request_id=%s err=%q", requestID, errTaskStoppedByOperator)
 			return nil
 		}
-		logger.Printf("hub.ui status=ready url=%s", monitorURL(*uiListen))
+		daemonLogger("hub.ui status=ready url=%s", monitorURL(*uiListen))
 		prMonitor := &hubui.PRMergeMonitor{
 			Runner:      runner,
 			Broker:      monitorBroker,
-			Logf:        logger.Printf,
+			Logf:        daemonLogger,
 			CleanupTask: cleanupTaskLogs,
 		}
 		go func() {
 			if err := prMonitor.Run(ctx); err != nil {
-				logger.Printf("hub.ui status=warn event=pr_monitor err=%q", err)
+				daemonLogger("hub.ui status=warn event=pr_monitor err=%q", err)
 			}
 		}()
 		go func() {
 			if err := uiServer.Run(ctx); err != nil {
-				logger.Printf("hub.ui status=error err=%q", err)
+				daemonLogger("hub.ui status=error err=%q", err)
 			}
 		}()
 	}
@@ -802,6 +804,93 @@ func defaultHubBootConfig(runtimeConfigPath string) (hub.InitConfig, int, error)
 		return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("init config error: %w", err)
 	}
 	return cfg, harness.ExitSuccess, nil
+}
+
+type hubLogRouter struct {
+	logger *terminalLogger
+	broker *hubui.Broker
+	level  hub.LogLevel
+}
+
+func newHubLogRouter(logger *terminalLogger, broker *hubui.Broker, level hub.LogLevel) hubLogRouter {
+	return hubLogRouter{
+		logger: logger,
+		broker: broker,
+		level:  level,
+	}
+}
+
+func (r hubLogRouter) Printf(format string, args ...any) {
+	r.Log(strings.TrimSpace(fmt.Sprintf(format, args...)))
+}
+
+func (r hubLogRouter) Log(line string) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return
+	}
+
+	eventLevel := classifyHubLogLine(line)
+	if !r.level.Allows(eventLevel) {
+		if r.logger != nil {
+			// Keep filtered lines in the task mirror for follow-up diagnostics.
+			r.logger.Capture(line)
+		}
+		return
+	}
+
+	if r.logger != nil {
+		r.logger.Print(line)
+	}
+	if r.broker != nil {
+		r.broker.IngestLog(line)
+	}
+}
+
+func classifyHubLogLine(line string) hub.LogLevel {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return hub.LogLevelInfo
+	}
+
+	lowerLine := strings.ToLower(line)
+	if strings.HasPrefix(lowerLine, "error:") {
+		return hub.LogLevelError
+	}
+	if strings.HasPrefix(lowerLine, "warn:") {
+		return hub.LogLevelWarn
+	}
+	if strings.HasPrefix(line, "debug ") {
+		return hub.LogLevelDebug
+	}
+
+	fields := parseSimpleKVFields(line)
+	status := strings.ToLower(strings.TrimSpace(fields["status"]))
+	switch status {
+	case "error", "failed", "invalid":
+		return hub.LogLevelError
+	case "warn":
+		return hub.LogLevelWarn
+	case "running":
+		return hub.LogLevelDebug
+	}
+
+	if isDebugCommandLogLine(line, fields) {
+		return hub.LogLevelDebug
+	}
+
+	return hub.LogLevelInfo
+}
+
+func isDebugCommandLogLine(line string, fields map[string]string) bool {
+	if len(fields) == 0 {
+		return false
+	}
+	phase := strings.TrimSpace(fields["phase"])
+	if phase == "" {
+		return false
+	}
+	return strings.HasPrefix(line, "cmd ") || strings.Contains(line, " cmd ")
 }
 
 func writeStdoutLine(logger *terminalLogger, line string) {
@@ -912,7 +1001,7 @@ func failureFollowUpRunConfig(
 	failedRunCfg config.Config,
 	logRoot string,
 ) config.Config {
-	logPaths := failurefollowup.TaskLogPaths(logRoot, failedRequestID)
+	logPaths := followUpTaskLogPaths(logRoot, failedRequestID)
 	baseBranch, targetSubdir := failurefollowup.FollowUpTargeting(
 		failedRunCfg.BaseBranch,
 		failedRunCfg.TargetSubdir,
@@ -933,7 +1022,7 @@ func unexpectedNoChangesFollowUpRunConfig(
 	logRoot string,
 ) config.Config {
 	runCfg.ApplyDefaults()
-	logPaths := existingPaths(failurefollowup.TaskLogPaths(logRoot, requestID))
+	logPaths := existingPaths(followUpTaskLogPaths(logRoot, requestID))
 	baseBranch := strings.TrimSpace(runCfg.BaseBranch)
 	return config.Config{
 		Repos:        unexpectedNoChangesFollowUpRepos(runCfg),
@@ -1122,6 +1211,106 @@ func existingPaths(paths []string) []string {
 		return nil
 	}
 	return existing
+}
+
+func followUpTaskLogPaths(logRoot, requestID string) []string {
+	paths := taskLogPaths(logRoot, requestID)
+	if _, ok := localTaskLogDir(logRoot, requestID); !ok {
+		return paths
+	}
+
+	archived := archiveLocalTaskLogsForFollowUp(logRoot, requestID)
+	if len(archived) > 0 {
+		return archived
+	}
+	return paths
+}
+
+func archiveLocalTaskLogsForFollowUp(logRoot, requestID string) []string {
+	sourceDir, ok := localTaskLogDir(logRoot, requestID)
+	if !ok {
+		return nil
+	}
+	sourceDir = strings.TrimSpace(sourceDir)
+	if sourceDir == "" {
+		return nil
+	}
+	if stat, err := os.Stat(sourceDir); err != nil || !stat.IsDir() {
+		return nil
+	}
+
+	archiveDir, ok := followUpTaskLogArchiveDir(logRoot, requestID)
+	if !ok {
+		return nil
+	}
+	if err := os.MkdirAll(archiveDir, 0o755); err != nil {
+		return nil
+	}
+
+	paths := []string{archiveDir}
+	for _, fileName := range []string{legacyTaskLogFileName, logFileName} {
+		sourcePath := filepath.Join(sourceDir, fileName)
+		archivePath := filepath.Join(archiveDir, fileName)
+		copied, err := copyFileIfPresent(sourcePath, archivePath)
+		if err != nil || !copied {
+			continue
+		}
+		paths = append(paths, archivePath)
+	}
+	if len(paths) == 1 {
+		return nil
+	}
+	return paths
+}
+
+func copyFileIfPresent(sourcePath, targetPath string) (bool, error) {
+	sourcePath = strings.TrimSpace(sourcePath)
+	targetPath = strings.TrimSpace(targetPath)
+	if sourcePath == "" || targetPath == "" {
+		return false, nil
+	}
+
+	in, err := os.Open(sourcePath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(targetPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, maxLogFileOpenMode)
+	if err != nil {
+		return false, err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return false, err
+	}
+	if err := out.Close(); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func followUpTaskLogArchiveDir(logRoot, requestID string) (string, bool) {
+	logRoot = strings.TrimSpace(logRoot)
+	if logRoot == "" {
+		return "", false
+	}
+	subdir, ok := failurefollowup.IdentifierSubdir(requestID)
+	if !ok {
+		return "", false
+	}
+	subdir = filepath.Clean(subdir)
+	if subdir == "." || subdir == "" || subdir == ".." {
+		return "", false
+	}
+	if filepath.IsAbs(subdir) || strings.HasPrefix(subdir, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+
+	return filepath.Join(logRoot, followUpTaskLogArchiveSubdir, subdir), true
 }
 
 func taskLogPaths(logRoot, requestID string) []string {
