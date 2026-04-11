@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jef/moltenhub-code/internal/execx"
+	"github.com/jef/moltenhub-code/internal/githubutil"
 )
 
 const defaultPRMergePollInterval = 30 * time.Second
@@ -138,7 +139,7 @@ func (m *PRMergeMonitor) prState(ctx context.Context, prURL string) (prViewState
 	}
 	res, err := m.Runner.Run(ctx, execx.Command{
 		Name: "gh",
-		Args: []string{"pr", "view", prURL, "--json", "state,mergedAt"},
+		Args: []string{"pr", "view", githubutil.PullRequestSelector(prURL), "--json", "state,mergedAt"},
 	})
 	if err != nil {
 		return prViewState{}, err
