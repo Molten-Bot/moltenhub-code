@@ -50,6 +50,19 @@ func TestFormatTerminalLogLineSuppressesLowSignalCodexOutput(t *testing.T) {
 	}
 }
 
+func TestFormatTerminalLogLineDropsEmptyCommandPayloadMarker(t *testing.T) {
+	t.Parallel()
+
+	line := "dispatch request_id=local-1712345678-000007 cmd phase=codex name=codex stream=stderr b64="
+	got, mode := formatTerminalLogLine(line)
+	if mode != terminalLogModeDrop {
+		t.Fatalf("mode = %v, want drop", mode)
+	}
+	if got != "" {
+		t.Fatalf("got %q, want empty output", got)
+	}
+}
+
 func TestFormatTerminalLogLineKeepsImportantCodexOutput(t *testing.T) {
 	t.Parallel()
 

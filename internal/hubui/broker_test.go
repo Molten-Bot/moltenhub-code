@@ -57,6 +57,48 @@ func TestBrokerTracksTaskLifecycleAndCommandOutput(t *testing.T) {
 	}
 }
 
+func TestBrokerDropsEmptyCommandPayloadMarkers(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-empty-b64"
+
+	b.IngestLog("dispatch status=start request_id=" + requestID)
+	b.IngestLog("dispatch request_id=req-empty-b64 cmd phase=codex name=codex stream=stderr b64=")
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	if got := len(snap.Tasks[0].Logs); got != 1 {
+		t.Fatalf("len(task logs) = %d, want 1 start meta line only", got)
+	}
+	if got, want := len(snap.Events), 1; got != want {
+		t.Fatalf("len(events) = %d, want %d (drop empty command marker event)", got, want)
+	}
+}
+
+func TestBrokerDropsInvalidCommandPayloadMarkers(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-invalid-b64"
+
+	b.IngestLog("dispatch status=start request_id=" + requestID)
+	b.IngestLog("dispatch request_id=req-invalid-b64 cmd phase=codex name=codex stream=stderr b64=%%%")
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	if got := len(snap.Tasks[0].Logs); got != 1 {
+		t.Fatalf("len(task logs) = %d, want 1 start meta line only", got)
+	}
+	if got, want := len(snap.Events), 1; got != want {
+		t.Fatalf("len(events) = %d, want %d (drop invalid command marker event)", got, want)
+	}
+}
+
 func TestBrokerTracksMoltenHubConnectionAndDomain(t *testing.T) {
 	t.Parallel()
 

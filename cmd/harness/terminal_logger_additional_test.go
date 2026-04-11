@@ -61,6 +61,9 @@ func TestDecodeCommandLogLineHandlesInvalidAndEmptyPayloads(t *testing.T) {
 	if _, handled, drop := decodeCommandLogLine("cmd phase=clone b64=%%%"); handled || drop {
 		t.Fatal("decodeCommandLogLine(invalid b64) should not be handled")
 	}
+	if _, handled, drop := decodeCommandLogLine("cmd phase=clone b64="); !handled || !drop {
+		t.Fatal("decodeCommandLogLine(empty b64 payload marker) should be dropped")
+	}
 	if _, handled, drop := decodeCommandLogLine("cmd phase=clone b64=IA=="); !handled || !drop {
 		t.Fatal("decodeCommandLogLine(blank decoded payload) should be dropped")
 	}

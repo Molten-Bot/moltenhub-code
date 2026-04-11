@@ -223,7 +223,7 @@ func decodeCommandLogLine(line string) (text string, handled bool, drop bool) {
 	fields := parseSimpleKVFields(line)
 	encoded := strings.TrimSpace(fields["b64"])
 	if encoded == "" {
-		return "", false, false
+		return "", true, true
 	}
 
 	decoded, err := base64.StdEncoding.DecodeString(encoded)

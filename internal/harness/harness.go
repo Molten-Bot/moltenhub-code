@@ -1199,6 +1199,9 @@ func (h Harness) logf(format string, args ...any) {
 
 func (h Harness) runCommand(ctx context.Context, phase string, cmd execx.Command) (execx.Result, error) {
 	onLine := func(stream, line string) {
+		if strings.TrimSpace(line) == "" {
+			return
+		}
 		h.logf("cmd phase=%s name=%s stream=%s b64=%s", phase, cmd.Name, stream, encodeLogLine(line))
 	}
 

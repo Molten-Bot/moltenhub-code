@@ -165,6 +165,9 @@ func (b *Broker) IngestLog(line string) {
 
 	now := b.now().UTC()
 	fields := parseKVFields(line)
+	if shouldDropNoisyCommandLine(line, fields) {
+		return
+	}
 	requestID := fields["request_id"]
 
 	b.mu.Lock()
@@ -622,16 +625,28 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 		t.Error = firstNonEmpty(fields["err"], fields["error"], t.Error)
 	}
 
-	if strings.Contains(line, " cmd ") && fields["b64"] != "" {
-		decoded, err := base64.StdEncoding.DecodeString(fields["b64"])
-		if err == nil {
-			b.appendTaskLogLocked(t, TaskLog{
-				Time:   now.Format(time.RFC3339Nano),
-				Stream: firstNonEmpty(fields["stream"], "stdout"),
-				Text:   string(decoded),
-			})
+	if strings.Contains(line, " cmd ") {
+		text := strings.TrimSpace(fields["text"])
+		if text == "" {
+			encoded := strings.TrimSpace(fields["b64"])
+			if encoded == "" {
+				return
+			}
+			decoded, err := base64.StdEncoding.DecodeString(encoded)
+			if err != nil {
+				return
+			}
+			text = strings.TrimSpace(string(decoded))
+		}
+		if text == "" {
 			return
 		}
+		b.appendTaskLogLocked(t, TaskLog{
+			Time:   now.Format(time.RFC3339Nano),
+			Stream: firstNonEmpty(fields["stream"], "stdout"),
+			Text:   text,
+		})
+		return
 	}
 
 	if strings.HasPrefix(line, "dispatch ") {
@@ -645,6 +660,24 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 
 func (b *Broker) appendTaskLogLocked(t *taskState, line TaskLog) {
 	t.Logs = appendCappedTaskLog(t.Logs, b.maxTaskLog, line)
+}
+
+func shouldDropNoisyCommandLine(line string, fields map[string]string) bool {
+	if !strings.Contains(line, " cmd ") {
+		return false
+	}
+	if strings.TrimSpace(fields["text"]) != "" {
+		return false
+	}
+	encoded := strings.TrimSpace(fields["b64"])
+	if encoded == "" {
+		return true
+	}
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return true
+	}
+	return strings.TrimSpace(string(decoded)) == ""
 }
 
 func (b *Broker) updateHubConnectionFromLineLocked(line string, fields map[string]string) {

@@ -2319,6 +2319,42 @@ func TestRunCommandStreamRunnerMergesCapturedOutput(t *testing.T) {
 	}
 }
 
+func TestRunCommandSkipsLoggingEmptyStreamLines(t *testing.T) {
+	t.Parallel()
+
+	runner := &streamCaptureRunner{
+		res: execx.Result{},
+		lines: []streamLine{
+			{stream: "stderr", line: ""},
+			{stream: "stderr", line: "ERROR: failed to apply patch"},
+		},
+	}
+
+	var logs []string
+	h := New(runner)
+	h.Logf = func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	if _, err := h.runCommand(
+		context.Background(),
+		"codex",
+		execx.Command{Name: "codex", Args: []string{"exec"}},
+	); err != nil {
+		t.Fatalf("runCommand() error = %v", err)
+	}
+
+	if len(logs) != 1 {
+		t.Fatalf("len(logs) = %d, want 1", len(logs))
+	}
+	if strings.HasSuffix(logs[0], "b64=") {
+		t.Fatalf("log = %q, want non-empty encoded payload", logs[0])
+	}
+	if !strings.Contains(logs[0], "stream=stderr") {
+		t.Fatalf("log = %q, want stderr stream marker", logs[0])
+	}
+}
+
 func TestRunCodexReturnsErrorWhenCodexReportsFailure(t *testing.T) {
 	t.Parallel()
 
