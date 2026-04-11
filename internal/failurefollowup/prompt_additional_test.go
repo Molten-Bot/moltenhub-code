@@ -85,6 +85,32 @@ func TestTaskLogPathsExcludesAggregateLogToAvoidSelfReferentialPrompts(t *testin
 	}
 }
 
+func TestTaskLogPathsOmitsFallbackMainLogsForLocalRequests(t *testing.T) {
+	t.Parallel()
+
+	root := "/tmp/logs"
+	paths := TaskLogPaths(root, "local-1775613327-000024")
+	for _, path := range paths {
+		if strings.Contains(path, filepath.Join(root, FallbackLogSubdir)+string(filepath.Separator)) {
+			t.Fatalf("TaskLogPaths(local request) should exclude fallback main logs: %v", paths)
+		}
+	}
+}
+
+func TestShouldIncludeFallbackTaskLogsByRequestType(t *testing.T) {
+	t.Parallel()
+
+	if !shouldIncludeFallbackTaskLogs("") {
+		t.Fatal("shouldIncludeFallbackTaskLogs(empty request) = false, want true")
+	}
+	if shouldIncludeFallbackTaskLogs("local-1775613327-000024") {
+		t.Fatal("shouldIncludeFallbackTaskLogs(local request) = true, want false")
+	}
+	if !shouldIncludeFallbackTaskLogs("req-1775613327-000024") {
+		t.Fatal("shouldIncludeFallbackTaskLogs(non-local request) = false, want true")
+	}
+}
+
 func TestTaskLogDirRejectsBlankInputs(t *testing.T) {
 	t.Parallel()
 

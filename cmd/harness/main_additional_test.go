@@ -613,7 +613,6 @@ func TestUnexpectedNoChangesFollowUpRunConfigPreservesTaskTargetingAndAddsContex
 	for _, want := range []string{
 		"Review the previous local task logs first.",
 		filepath.Join(logRoot, "local", "1712345678", "000001"),
-		filepath.Join(logRoot, fallbackLogSubdir, logFileName),
 		"Observed no-change context:",
 		"- request_id=local-1712345678-000001",
 		"- workspace_dir=/tmp/run-123",
@@ -684,8 +683,6 @@ func TestTaskLogDirAndTaskLogPathsValidateInputs(t *testing.T) {
 		filepath.Join("/tmp/.log", "local", "1712345678", "000001"),
 		filepath.Join("/tmp/.log", "local", "1712345678", "000001", legacyTaskLogFileName),
 		filepath.Join("/tmp/.log", "local", "1712345678", "000001", logFileName),
-		filepath.Join("/tmp/.log", fallbackLogSubdir, legacyTaskLogFileName),
-		filepath.Join("/tmp/.log", fallbackLogSubdir, logFileName),
 	}
 	if got, wantJoined := strings.Join(paths, "\n"), strings.Join(want, "\n"); got != wantJoined {
 		t.Fatalf("taskLogPaths(...) = %q, want %q", got, wantJoined)

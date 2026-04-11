@@ -137,9 +137,21 @@ func TaskLogPaths(logRoot, requestID string) []string {
 	}
 
 	appendTaskLogPaths(logDir, true)
-	appendTaskLogPaths(filepath.Join(logRoot, FallbackLogSubdir), false)
+	if shouldIncludeFallbackTaskLogs(requestID) {
+		appendTaskLogPaths(filepath.Join(logRoot, FallbackLogSubdir), false)
+	}
 
 	return paths
+}
+
+func shouldIncludeFallbackTaskLogs(requestID string) bool {
+	subdir, ok := IdentifierSubdir(requestID)
+	if !ok {
+		return true
+	}
+	subdir = filepath.Clean(subdir)
+	localPrefix := "local" + string(filepath.Separator)
+	return !(subdir == "local" || strings.HasPrefix(subdir, localPrefix))
 }
 
 func TaskLogDir(logRoot, requestID string) (string, bool) {
