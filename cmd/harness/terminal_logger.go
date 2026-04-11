@@ -267,6 +267,12 @@ func isImportantCodexCommandText(text string) bool {
 		return false
 	}
 
+	// Suppress nested dispatch log echoes to avoid recursive log amplification
+	// during follow-up investigations.
+	if looksLikeNestedDispatchLogEcho(lower) {
+		return false
+	}
+
 	if strings.HasPrefix(lower, "/bin/bash -lc") || strings.HasPrefix(lower, "bash -lc") {
 		return false
 	}
@@ -280,7 +286,9 @@ func isImportantCodexCommandText(text string) bool {
 		"fatal:",
 		"panic:",
 		"traceback",
-		"exception",
+		"exception in thread",
+		"unhandled exception",
+		"exception:",
 		"timed out",
 		"timeout",
 		"permission denied",
@@ -300,6 +308,23 @@ func isImportantCodexCommandText(text string) bool {
 		}
 	}
 	if strings.HasPrefix(lower, "failure:") || strings.HasPrefix(lower, "error ") {
+		return true
+	}
+	return false
+}
+
+func looksLikeNestedDispatchLogEcho(lower string) bool {
+	if lower == "" {
+		return false
+	}
+	if strings.HasPrefix(lower, "dispatch ") &&
+		strings.Contains(lower, "request_id=") &&
+		strings.Contains(lower, "cmd phase=") {
+		return true
+	}
+	if strings.Contains(lower, "dispatch request_id=") &&
+		strings.Contains(lower, " cmd phase=") &&
+		(strings.Contains(lower, ".log:") || strings.Contains(lower, `text="dispatch `)) {
 		return true
 	}
 	return false

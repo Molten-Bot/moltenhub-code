@@ -90,6 +90,58 @@ func TestFormatTerminalLogLineDropsCodexSearchResultNoise(t *testing.T) {
 	}
 }
 
+func TestFormatTerminalLogLineDropsNestedDispatchLogEchoNoise(t *testing.T) {
+	t.Parallel()
+
+	line := "cmd phase=codex name=codex stream=stderr b64=" + base64.StdEncoding.EncodeToString([]byte(`dispatch request_id=local-1775872065-000001 cmd phase=codex name=codex stream=stderr text="fatal: unable to access 'https://github.com/acme/repo.git/': Could not resolve host: github.com"`))
+	got, mode := formatTerminalLogLine(line)
+	if mode != terminalLogModeDrop {
+		t.Fatalf("mode = %v, want drop", mode)
+	}
+	if got != "" {
+		t.Fatalf("got %q, want empty", got)
+	}
+}
+
+func TestFormatTerminalLogLineDropsNestedDispatchLogEchoFromSearchResults(t *testing.T) {
+	t.Parallel()
+
+	line := "cmd phase=codex name=codex stream=stderr b64=" + base64.StdEncoding.EncodeToString([]byte(`/home/jef/git/moltenbot/local/moltenhub-code/.log/terminal.log:431:dispatch request_id=local-1775872228-000004 cmd phase=codex name=codex stream=stderr text=\"fatal: unable to access 'https://github.com/acme/repo.git/': Could not resolve host: github.com\"`))
+	got, mode := formatTerminalLogLine(line)
+	if mode != terminalLogModeDrop {
+		t.Fatalf("mode = %v, want drop", mode)
+	}
+	if got != "" {
+		t.Fatalf("got %q, want empty", got)
+	}
+}
+
+func TestFormatTerminalLogLineDropsCodexNoiseContainingExceptionally(t *testing.T) {
+	t.Parallel()
+
+	line := "cmd phase=codex name=codex stream=stderr b64=" + base64.StdEncoding.EncodeToString([]byte("- Functions that do one thing exceptionally well"))
+	got, mode := formatTerminalLogLine(line)
+	if mode != terminalLogModeDrop {
+		t.Fatalf("mode = %v, want drop", mode)
+	}
+	if got != "" {
+		t.Fatalf("got %q, want empty", got)
+	}
+}
+
+func TestFormatTerminalLogLineKeepsCodexUnhandledExceptionOutput(t *testing.T) {
+	t.Parallel()
+
+	line := "cmd phase=codex name=codex stream=stderr b64=" + base64.StdEncoding.EncodeToString([]byte(`Exception in thread "main" java.lang.NullPointerException`))
+	got, mode := formatTerminalLogLine(line)
+	if mode != terminalLogModeNormal {
+		t.Fatalf("mode = %v, want normal", mode)
+	}
+	if !strings.Contains(got, "NullPointerException") {
+		t.Fatalf("expected unhandled exception output to be preserved: %q", got)
+	}
+}
+
 func TestFormatTerminalLogLineKeepsCodexCompilerStyleFailure(t *testing.T) {
 	t.Parallel()
 
