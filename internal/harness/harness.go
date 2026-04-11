@@ -1722,10 +1722,8 @@ func isStructuredTaskFailureLine(lower string) bool {
 	prefixes := []string{
 		`"summary":`,
 		`\"summary\":`,
-		`summary:`,
 		`"message":`,
 		`\"message\":`,
-		`message:`,
 	}
 	for _, prefix := range prefixes {
 		if strings.HasPrefix(line, prefix) {
@@ -1740,10 +1738,8 @@ func isStructuredFailureErrorLine(lower string) bool {
 	prefixes := []string{
 		`"error":`,
 		`\"error\":`,
-		`error:`,
 		`"stack":`,
 		`\"stack\":`,
-		`stack:`,
 	}
 	for _, prefix := range prefixes {
 		if strings.HasPrefix(line, prefix) {

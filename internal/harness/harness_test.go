@@ -2516,6 +2516,21 @@ func TestCodexReportedFailureIgnoresQuotedDispatchLogEcho(t *testing.T) {
 	}
 }
 
+func TestCodexReportedFailureIgnoresGoStructSnippet(t *testing.T) {
+	t.Parallel()
+
+	res := execx.Result{
+		Stderr: strings.Join([]string{
+			`Message: "Task failed while dispatching to a connected agent.",`,
+			`Error:   strings.TrimSpace(message.Error),`,
+		}, "\n"),
+	}
+
+	if failed, detail := codexReportedFailure(res); failed || detail != "" {
+		t.Fatalf("codexReportedFailure(go struct snippet) = (%v, %q), want (false, \"\")", failed, detail)
+	}
+}
+
 func TestWithCompletionGatePromptIncludesFailureQueueContract(t *testing.T) {
 	t.Parallel()
 
