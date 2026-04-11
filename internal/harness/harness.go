@@ -19,6 +19,7 @@ import (
 	"github.com/jef/moltenhub-code/internal/config"
 	"github.com/jef/moltenhub-code/internal/execx"
 	"github.com/jef/moltenhub-code/internal/failurefollowup"
+	"github.com/jef/moltenhub-code/internal/githubutil"
 	"github.com/jef/moltenhub-code/internal/slug"
 	"github.com/jef/moltenhub-code/internal/workspace"
 )
@@ -1250,7 +1251,7 @@ func reviewSelector(reviewCfg config.ReviewConfig) string {
 		return fmt.Sprintf("%d", reviewCfg.PRNumber)
 	}
 	if prURL := strings.TrimSpace(reviewCfg.PRURL); prURL != "" {
-		return prURL
+		return githubutil.PullRequestSelector(prURL)
 	}
 	return strings.TrimSpace(reviewCfg.HeadBranch)
 }
@@ -2580,7 +2581,7 @@ func prChecksCommand(repoDir, prURL string) execx.Command {
 		Dir:  repoDir,
 		Name: "gh",
 		Args: []string{
-			"pr", "checks", prURL,
+			"pr", "checks", githubutil.PullRequestSelector(prURL),
 			"--watch",
 			"--required",
 			"--interval", fmt.Sprintf("%d", prChecksWatchIntervalSeconds),
@@ -2593,7 +2594,7 @@ func prChecksAnyCommand(repoDir, prURL string) execx.Command {
 		Dir:  repoDir,
 		Name: "gh",
 		Args: []string{
-			"pr", "checks", prURL,
+			"pr", "checks", githubutil.PullRequestSelector(prURL),
 			"--watch",
 			"--interval", fmt.Sprintf("%d", prChecksWatchIntervalSeconds),
 		},
@@ -2602,7 +2603,7 @@ func prChecksAnyCommand(repoDir, prURL string) execx.Command {
 
 func prChecksJSONCommand(repoDir, prURL string, requiredOnly bool) execx.Command {
 	args := []string{
-		"pr", "checks", prURL,
+		"pr", "checks", githubutil.PullRequestSelector(prURL),
 		"--json", "name,bucket,completedAt,startedAt",
 	}
 	if requiredOnly {

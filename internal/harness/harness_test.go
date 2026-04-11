@@ -2177,25 +2177,25 @@ func TestCommandBuilders(t *testing.T) {
 	}
 
 	checks := prChecksCommand(repoDir, "https://github.com/acme/repo/pull/42")
-	wantChecks := []string{"pr", "checks", "https://github.com/acme/repo/pull/42", "--watch", "--required", "--interval", "10"}
+	wantChecks := []string{"pr", "checks", "42", "--watch", "--required", "--interval", "10"}
 	if checks.Name != "gh" || checks.Dir != repoDir || !reflect.DeepEqual(checks.Args, wantChecks) {
 		t.Fatalf("pr checks command unexpected: %+v", checks)
 	}
 
 	allChecks := prChecksAnyCommand(repoDir, "https://github.com/acme/repo/pull/42")
-	wantAllChecks := []string{"pr", "checks", "https://github.com/acme/repo/pull/42", "--watch", "--interval", "10"}
+	wantAllChecks := []string{"pr", "checks", "42", "--watch", "--interval", "10"}
 	if allChecks.Name != "gh" || allChecks.Dir != repoDir || !reflect.DeepEqual(allChecks.Args, wantAllChecks) {
 		t.Fatalf("pr checks any command unexpected: %+v", allChecks)
 	}
 
 	jsonChecks := prChecksJSONCommand(repoDir, "https://github.com/acme/repo/pull/42", true)
-	wantJSONChecks := []string{"pr", "checks", "https://github.com/acme/repo/pull/42", "--json", "name,bucket,completedAt,startedAt", "--required"}
+	wantJSONChecks := []string{"pr", "checks", "42", "--json", "name,bucket,completedAt,startedAt", "--required"}
 	if jsonChecks.Name != "gh" || jsonChecks.Dir != repoDir || !reflect.DeepEqual(jsonChecks.Args, wantJSONChecks) {
 		t.Fatalf("pr checks json command unexpected: %+v", jsonChecks)
 	}
 
 	jsonAnyChecks := prChecksJSONCommand(repoDir, "https://github.com/acme/repo/pull/42", false)
-	wantJSONAnyChecks := []string{"pr", "checks", "https://github.com/acme/repo/pull/42", "--json", "name,bucket,completedAt,startedAt"}
+	wantJSONAnyChecks := []string{"pr", "checks", "42", "--json", "name,bucket,completedAt,startedAt"}
 	if jsonAnyChecks.Name != "gh" || jsonAnyChecks.Dir != repoDir || !reflect.DeepEqual(jsonAnyChecks.Args, wantJSONAnyChecks) {
 		t.Fatalf("pr checks any json command unexpected: %+v", jsonAnyChecks)
 	}

@@ -97,7 +97,7 @@ func TestPRMergeMonitorRemovesCompletedTaskOncePRMerges(t *testing.T) {
 	if got, want := commands[0].Name, "gh"; got != want {
 		t.Fatalf("command name = %q, want %q", got, want)
 	}
-	if got, want := commands[0].Args, []string{"pr", "view", "https://github.com/acme/repo/pull/42", "--json", "state,mergedAt"}; !slices.Equal(got, want) {
+	if got, want := commands[0].Args, []string{"pr", "view", "42", "--json", "state,mergedAt"}; !slices.Equal(got, want) {
 		t.Fatalf("command args = %v, want %v", got, want)
 	}
 }

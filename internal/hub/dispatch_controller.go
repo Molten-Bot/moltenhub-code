@@ -436,6 +436,13 @@ func computeAllowedParallel(cfg DispatcherConfig, avg resourceSample, prevAllowe
 	return prevAllowed
 }
 
+func maxFloat(a, b float64) float64 {
+	if b > a {
+		return b
+	}
+	return a
+}
+
 func normalizeDispatcherConfig(cfg DispatcherConfig) DispatcherConfig {
 	normalized := InitConfig{
 		Dispatcher: cfg,
