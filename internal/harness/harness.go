@@ -51,6 +51,7 @@ const (
 	maxReviewCommentsChars     = 16000
 	maxReviewDiffStatChars     = 12000
 	maxReviewDiffPatchChars    = 30000
+	defaultAgentStageTimeout   = 30 * time.Minute
 )
 
 type logFn func(string, ...any)
@@ -94,17 +95,21 @@ type Harness struct {
 	Logf        logFn
 	TargetDirOK func(string) bool
 	Sleep       func(context.Context, time.Duration) error
+	// AgentStageTimeout bounds each agent execution attempt; zero falls back to
+	// the default and negative disables the timeout.
+	AgentStageTimeout time.Duration
 }
 
 // New returns a harness configured with defaults.
 func New(runner execx.Runner) Harness {
 	return Harness{
-		Runner:      runner,
-		Workspace:   workspace.NewManager(),
-		Now:         time.Now,
-		Logf:        func(string, ...any) {},
-		TargetDirOK: pathIsDir,
-		Sleep:       sleepWithContext,
+		Runner:            runner,
+		Workspace:         workspace.NewManager(),
+		Now:               time.Now,
+		Logf:              func(string, ...any) {},
+		TargetDirOK:       pathIsDir,
+		Sleep:             sleepWithContext,
+		AgentStageTimeout: defaultAgentStageTimeout,
 	}
 }
 
@@ -128,6 +133,9 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 	if h.Sleep == nil {
 		h.Sleep = sleepWithContext
+	}
+	if h.AgentStageTimeout == 0 {
+		h.AgentStageTimeout = defaultAgentStageTimeout
 	}
 	runtime, err := agentruntime.Resolve(cfg.AgentHarness, cfg.AgentCommand)
 	if err != nil {
@@ -1910,14 +1918,22 @@ func (h Harness) runCodexWithHeartbeat(
 		cmd.Args = overrideCodexSandbox(cmd.Args, sandboxOverride)
 	}
 
+	runCtx := ctx
+	agentStage := runtimeLogStage(runtime)
+	if timeout := h.agentStageTimeout(); timeout > 0 {
+		timeoutErr := fmt.Errorf("%s timed out after %s", agentStage, timeout)
+		timeoutCtx, cancel := context.WithTimeoutCause(ctx, timeout, timeoutErr)
+		defer cancel()
+		runCtx = timeoutCtx
+	}
+
 	type codexRunResult struct {
 		res execx.Result
 		err error
 	}
 	done := make(chan codexRunResult, 1)
-	agentStage := runtimeLogStage(runtime)
 	go func() {
-		runRes, runErr := h.runCommand(ctx, agentStage, cmd)
+		runRes, runErr := h.runCommand(runCtx, agentStage, cmd)
 		done <- codexRunResult{res: runRes, err: runErr}
 	}()
 
@@ -1936,19 +1952,24 @@ func (h Harness) runCodexWithHeartbeat(
 			return run.res, run.err
 		case <-ticker.C:
 			h.logf("stage=%s status=running elapsed_s=%d", agentStage, int(time.Since(start).Seconds()))
-		case <-ctx.Done():
-			run := <-done
-			if run.err == nil {
-				if failed, detail := codexReportedFailure(run.res); failed {
-					return run.res, fmt.Errorf("%s reported failure: %s", agentStage, detail)
-				}
+		case <-runCtx.Done():
+			cause := context.Cause(runCtx)
+			if cause != nil {
+				return execx.Result{}, cause
 			}
-			if run.err != nil {
-				return run.res, run.err
-			}
-			return run.res, ctx.Err()
+			return execx.Result{}, runCtx.Err()
 		}
 	}
+}
+
+func (h Harness) agentStageTimeout() time.Duration {
+	if h.AgentStageTimeout < 0 {
+		return 0
+	}
+	if h.AgentStageTimeout == 0 {
+		return defaultAgentStageTimeout
+	}
+	return h.AgentStageTimeout
 }
 
 func overrideCodexSandbox(args []string, sandbox string) []string {
