@@ -1719,13 +1719,15 @@ func isStructuredTaskFailureLine(lower string) bool {
 		return false
 	}
 
+	// Structured task-failure payloads arrive as JSON-style key/value lines.
+	// Restrict detection to quoted keys so regular source snippets like:
+	// Message: "Task failed ...", Error: strings.TrimSpace(...)
+	// do not trigger false-positive run failures.
 	prefixes := []string{
 		`"summary":`,
 		`\"summary\":`,
-		`summary:`,
 		`"message":`,
 		`\"message\":`,
-		`message:`,
 	}
 	for _, prefix := range prefixes {
 		if strings.HasPrefix(line, prefix) {
@@ -1740,10 +1742,8 @@ func isStructuredFailureErrorLine(lower string) bool {
 	prefixes := []string{
 		`"error":`,
 		`\"error\":`,
-		`error:`,
 		`"stack":`,
 		`\"stack\":`,
-		`stack:`,
 	}
 	for _, prefix := range prefixes {
 		if strings.HasPrefix(line, prefix) {
