@@ -42,6 +42,7 @@ const followUpTaskLogArchiveSubdir = "followup"
 
 const hubBootDiagnosticTimeout = 10 * time.Second
 const hubPingDiagnosticTimeout = 5 * time.Second
+const hubPingRetryInterval = 12 * time.Second
 
 func main() {
 	os.Exit(run())
@@ -266,7 +267,11 @@ func runHub(args []string) int {
 	hubConfigured := hubCredentialsConfigured(cfg, runtimeCfgLoader)
 	bootDiag := runHubBootDiagnosticsWithRuntimeLoaderDetailed(ctx, runner, daemonLogger, cfg, runtimeCfgLoader)
 	forceLocalOnlyMode := shouldRunHubInLocalOnlyMode(bootDiag.PingChecked, bootDiag.PingOK, *uiListen, hubConfigured)
+	var hubPingLive <-chan struct{}
 	if bootDiag.PingChecked && !bootDiag.PingOK {
+		if pingURL, pingURLErr := hubPingURL(cfg.BaseURL); pingURLErr == nil {
+			hubPingLive = startHubPingRetryLoop(ctx, cfg.BaseURL, pingURL, bootDiag.PingErr, daemonLogger, checkHubPing)
+		}
 		if forceLocalOnlyMode {
 			daemonLogger("hub.auth status=local_only detail=%q", hubPingFailureDetail(hubPingLocalOnlyDetail, bootDiag.PingErr))
 		} else {
@@ -565,10 +570,27 @@ func runHub(args []string) int {
 	go hubRuntimeReloader.Run(ctx, hubRuntimeConfigReloadInterval)
 
 	waitForHubRuntime := func() int {
+		pingLive := hubPingLive
 		for {
 			select {
 			case <-ctx.Done():
 				return harness.ExitSuccess
+			case <-pingLive:
+				pingLive = nil
+				if !hubConfigured {
+					continue
+				}
+				if err := hubController.Update(ctx, cfg); err != nil {
+					if shouldFallbackToLocalOnlyMode(*uiListen, err) {
+						daemonLogger(
+							"hub.auth status=local_only detail=%q",
+							"Remote hub auth failed; continuing in local-only mode. Use the local UI/API to submit tasks.",
+						)
+						continue
+					}
+					writeStderrLine(logger, fmt.Sprintf("error: %v", err))
+					return hubExitCode(err)
+				}
 			case err := <-hubController.Errors():
 				if err == nil {
 					continue
@@ -722,6 +744,10 @@ func runHub(args []string) int {
 			)
 			return harness.ExitAuth
 		}
+		return waitForHubRuntime()
+	}
+
+	if bootDiag.PingChecked && !bootDiag.PingOK && hubPingLive != nil {
 		return waitForHubRuntime()
 	}
 
@@ -1756,6 +1782,93 @@ func checkHubPing(ctx context.Context, pingURL string) (string, error) {
 		return "", fmt.Errorf("GET %s returned status=%d", pingURL, resp.StatusCode)
 	}
 	return detail, nil
+}
+
+func startHubPingRetryLoop(
+	ctx context.Context,
+	baseURL string,
+	pingURL string,
+	initialErr error,
+	logf func(string, ...any),
+	pingCheck func(context.Context, string) (string, error),
+) <-chan struct{} {
+	return startHubPingRetryLoopWithInterval(ctx, baseURL, pingURL, initialErr, hubPingRetryInterval, logf, pingCheck)
+}
+
+func startHubPingRetryLoopWithInterval(
+	ctx context.Context,
+	baseURL string,
+	pingURL string,
+	initialErr error,
+	interval time.Duration,
+	logf func(string, ...any),
+	pingCheck func(context.Context, string) (string, error),
+) <-chan struct{} {
+	live := make(chan struct{}, 1)
+	if logf == nil {
+		logf = func(string, ...any) {}
+	}
+	baseURL = strings.TrimSpace(baseURL)
+	pingURL = strings.TrimSpace(pingURL)
+	if interval <= 0 {
+		interval = hubPingRetryInterval
+	}
+	if pingURL == "" {
+		return live
+	}
+	if pingCheck == nil {
+		pingCheck = checkHubPing
+	}
+
+	go func() {
+		logHubPingRetryState(logf, baseURL, interval, initialErr)
+
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+
+			pingCtx, cancel := context.WithTimeout(ctx, hubPingDiagnosticTimeout)
+			detail, err := pingCheck(pingCtx, pingURL)
+			cancel()
+			if err != nil {
+				logHubPingRetryState(logf, baseURL, interval, err)
+				continue
+			}
+
+			logf(
+				"hub.connection status=reachable base_url=%s detail=%q",
+				baseURL,
+				firstNonEmptyString(strings.TrimSpace(detail), "Hub endpoint is live."),
+			)
+			select {
+			case live <- struct{}{}:
+			default:
+			}
+			return
+		}
+	}()
+
+	return live
+}
+
+func logHubPingRetryState(logf func(string, ...any), baseURL string, interval time.Duration, pingErr error) {
+	if logf == nil {
+		return
+	}
+	logf(
+		"hub.connection status=retrying base_url=%s detail=%q",
+		strings.TrimSpace(baseURL),
+		hubPingFailureDetail(
+			fmt.Sprintf("Hub endpoint ping failed; retrying every %s until live.", interval),
+			pingErr,
+		),
+	)
 }
 
 func hubCredentialsConfigured(cfg hub.InitConfig, loadRuntimeConfig runtimeConfigLoader) bool {

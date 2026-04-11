@@ -166,6 +166,42 @@ func TestBrokerTracksMoltenHubConnectionTransitions(t *testing.T) {
 	}
 }
 
+func TestBrokerTracksMoltenHubPingRetryState(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog(`hub.connection status=retrying base_url=https://na.hub.molten.bot/v1 detail="Hub endpoint ping failed; retrying every 12s until live. Error: GET https://na.hub.molten.bot/ping returned status=503"`)
+
+	snap := b.Snapshot()
+	if snap.Connection.HubConnected {
+		t.Fatal("connection.hub_connected = true during ping retry, want false")
+	}
+	if snap.Connection.HubTransport != hubTransportRetrying {
+		t.Fatalf("connection.hub_transport = %q, want %q", snap.Connection.HubTransport, hubTransportRetrying)
+	}
+	if !strings.Contains(snap.Connection.HubDetail, "retrying every 12s") {
+		t.Fatalf("connection.hub_detail = %q", snap.Connection.HubDetail)
+	}
+
+	b.IngestLog(`hub.connection status=reachable base_url=https://na.hub.molten.bot/v1 detail="https://na.hub.molten.bot/ping status=204"`)
+	snap = b.Snapshot()
+	if snap.Connection.HubTransport != hubTransportReachable {
+		t.Fatalf("connection.hub_transport = %q, want %q", snap.Connection.HubTransport, hubTransportReachable)
+	}
+	if snap.Connection.HubDetail != "https://na.hub.molten.bot/ping status=204" {
+		t.Fatalf("connection.hub_detail = %q", snap.Connection.HubDetail)
+	}
+
+	b.IngestLog("hub.ws status=connected")
+	snap = b.Snapshot()
+	if snap.Connection.HubTransport != hubTransportWS {
+		t.Fatalf("connection.hub_transport = %q after websocket connect, want %q", snap.Connection.HubTransport, hubTransportWS)
+	}
+	if snap.Connection.HubDetail != "" {
+		t.Fatalf("connection.hub_detail = %q after websocket connect, want empty", snap.Connection.HubDetail)
+	}
+}
+
 func TestBrokerTracksDispatcherResourceWindow(t *testing.T) {
 	t.Parallel()
 

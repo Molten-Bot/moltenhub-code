@@ -781,11 +781,20 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "conn.hub_transport") {
 		t.Fatalf("expected index html to read hub transport mode from connection state")
 	}
+	if !strings.Contains(markup, "conn.hub_detail") {
+		t.Fatalf("expected index html to read hub connection detail from connection state")
+	}
 	if !strings.Contains(markup, "Connected via WebSocket") {
 		t.Fatalf("expected index html to include websocket connection copy")
 	}
 	if !strings.Contains(markup, "Connected via HTTP long polling") {
 		t.Fatalf("expected index html to include HTTP long-polling connection copy")
+	}
+	if !strings.Contains(markup, "Hub endpoint is waking up") {
+		t.Fatalf("expected index html to include ping retry connection copy")
+	}
+	if !strings.Contains(markup, "Hub endpoint is live at") {
+		t.Fatalf("expected index html to include ping reachable connection copy")
 	}
 	if !strings.Contains(markup, `const HUB_LOGIN_URL = "https://app.molten.bot/signin?target=hub";`) {
 		t.Fatalf("expected index html to define the molten hub login url for disconnected runtimes")

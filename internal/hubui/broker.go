@@ -30,6 +30,8 @@ const (
 	hubTransportWS           = "ws"
 	hubTransportHTTPLongPoll = "http_long_poll"
 	hubTransportDisconnected = "disconnected"
+	hubTransportReachable    = "reachable"
+	hubTransportRetrying     = "retrying"
 )
 
 // Event is one monitor timeline entry.
@@ -76,6 +78,7 @@ type Connection struct {
 	HubTransport string `json:"hub_transport,omitempty"`
 	HubDomain    string `json:"hub_domain,omitempty"`
 	HubBaseURL   string `json:"hub_base_url,omitempty"`
+	HubDetail    string `json:"hub_detail,omitempty"`
 }
 
 // ResourceMetrics captures the current dispatcher sample window values.
@@ -116,6 +119,7 @@ type Broker struct {
 	hubTransport string
 	hubBaseURL   string
 	hubDomain    string
+	hubDetail    string
 	resources    ResourceMetrics
 }
 
@@ -214,6 +218,7 @@ func (b *Broker) Snapshot() Snapshot {
 			HubTransport: b.hubTransport,
 			HubDomain:    b.hubDomain,
 			HubBaseURL:   b.hubBaseURL,
+			HubDetail:    strings.TrimSpace(b.hubDetail),
 		},
 		Resources: b.resources,
 		Events:    append([]Event(nil), b.events...),
@@ -694,29 +699,43 @@ func (b *Broker) updateHubConnectionFromLineLocked(line string, fields map[strin
 	switch {
 	case strings.HasPrefix(line, "hub.auth status=ok"):
 		b.hubConnected = true
-		if b.hubTransport == hubTransportDisconnected {
+		b.hubDetail = ""
+		if b.hubTransport == hubTransportDisconnected || b.hubTransport == hubTransportRetrying {
 			b.hubTransport = ""
 		}
 	case strings.HasPrefix(line, "hub.ws status=connected"):
 		b.hubConnected = true
 		b.hubTransport = hubTransportWS
+		b.hubDetail = ""
 	case strings.HasPrefix(line, "hub.transport mode=openclaw_pull"):
 		// Pull mode still means the daemon is connected to MoltenHub transport.
 		b.hubConnected = true
 		b.hubTransport = hubTransportHTTPLongPoll
+		b.hubDetail = ""
 	case strings.HasPrefix(line, "hub.transport mode=openclaw_ws"):
 		b.hubConnected = true
 		b.hubTransport = hubTransportWS
+		b.hubDetail = ""
 	case strings.HasPrefix(line, "hub.connection "):
 		switch strings.ToLower(strings.TrimSpace(fields["status"])) {
 		case "connected", "online", "ok":
 			b.hubConnected = true
-			if b.hubTransport == hubTransportDisconnected {
+			b.hubDetail = strings.TrimSpace(firstNonEmpty(fields["detail"], fields["err"]))
+			if b.hubTransport == hubTransportDisconnected || b.hubTransport == hubTransportRetrying {
 				b.hubTransport = ""
 			}
+		case "reachable":
+			b.hubConnected = false
+			b.hubTransport = hubTransportReachable
+			b.hubDetail = strings.TrimSpace(firstNonEmpty(fields["detail"], fields["err"]))
+		case "retrying":
+			b.hubConnected = false
+			b.hubTransport = hubTransportRetrying
+			b.hubDetail = strings.TrimSpace(firstNonEmpty(fields["detail"], fields["err"]))
 		case "disconnected", "offline", "error":
 			b.hubConnected = false
 			b.hubTransport = hubTransportDisconnected
+			b.hubDetail = strings.TrimSpace(firstNonEmpty(fields["detail"], fields["err"]))
 		}
 	case strings.HasPrefix(line, "hub.ws status=disabled"),
 		strings.HasPrefix(line, "hub.ws status=error"),
@@ -725,6 +744,7 @@ func (b *Broker) updateHubConnectionFromLineLocked(line string, fields map[strin
 		strings.HasPrefix(line, "hub.agent status=offline"):
 		b.hubConnected = false
 		b.hubTransport = hubTransportDisconnected
+		b.hubDetail = strings.TrimSpace(firstNonEmpty(fields["detail"], fields["err"]))
 	}
 }
 

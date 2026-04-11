@@ -3000,6 +3000,7 @@
       const domain = typeof conn.hub_domain === "string" ? conn.hub_domain.trim() : "";
       const baseURL = typeof conn.hub_base_url === "string" ? conn.hub_base_url.trim() : "";
       const transport = typeof conn.hub_transport === "string" ? conn.hub_transport.trim() : "";
+      const detail = typeof conn.hub_detail === "string" ? conn.hub_detail.trim() : "";
       const target = domain || baseURL || "hub";
 
       if (transport === "ws") {
@@ -3020,8 +3021,20 @@
         return;
       }
 
+      if (transport === "reachable") {
+        setHubConnection("reachable", detail || `Hub endpoint is live at ${target}. Connecting...`);
+        renderHubSetupConnectionToggle();
+        return;
+      }
+
+      if (transport === "retrying") {
+        setHubConnection("retrying", detail || `Hub endpoint is waking up at ${target}. Retrying ping every 12s.`);
+        renderHubSetupConnectionToggle();
+        return;
+      }
+
       if (domain || baseURL) {
-        setHubConnection("disconnected", `Disconnected from ${target}`);
+        setHubConnection("disconnected", detail || `Disconnected from ${target}`);
         renderHubSetupConnectionToggle();
         return;
       }
