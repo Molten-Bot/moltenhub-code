@@ -531,6 +531,13 @@ textarea {
   margin-left: 3px;
 }
 
+.metric-label-visible {
+  max-width: 56px;
+  opacity: 1;
+  overflow: visible;
+  transform: translateX(0);
+}
+
 .metric-unit-visible {
   max-width: 56px;
   opacity: 1;
