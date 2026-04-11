@@ -2501,6 +2501,41 @@ func TestCodexReportedFailureDetectsStructuredTaskFailurePayload(t *testing.T) {
 	}
 }
 
+func TestCodexReportedFailureIgnoresGoStructStyleFailureSnippets(t *testing.T) {
+	t.Parallel()
+
+	res := execx.Result{
+		Stderr: strings.Join([]string{
+			`Message: "Task failed because the downstream agent did not reply before the timeout.",`,
+			`Error:   err.Error(),`,
+			`Detail:  map[string]any{"timeout": true},`,
+		}, "\n"),
+	}
+
+	if failed, detail := codexReportedFailure(res); failed || detail != "" {
+		t.Fatalf("codexReportedFailure(go struct snippet) = (%v, %q), want (false, \"\")", failed, detail)
+	}
+}
+
+func TestCodexReportedFailureDetectsLowercaseStructuredKeyValuePayload(t *testing.T) {
+	t.Parallel()
+
+	res := execx.Result{
+		Stderr: strings.Join([]string{
+			`message: "Task failed because the downstream agent did not reply before the timeout."`,
+			`error: "task timed out waiting for code_for_me"`,
+		}, "\n"),
+	}
+
+	failed, detail := codexReportedFailure(res)
+	if !failed {
+		t.Fatal("codexReportedFailure(lowercase key-value payload) = false, want true")
+	}
+	if !strings.Contains(detail, `message: "Task failed because the downstream agent did not reply before the timeout."`) {
+		t.Fatalf("codexReportedFailure(...) detail = %q, want message line", detail)
+	}
+}
+
 func TestCodexReportedFailureIgnoresQuotedDispatchLogEcho(t *testing.T) {
 	t.Parallel()
 

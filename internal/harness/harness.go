@@ -1695,11 +1695,11 @@ func codexReportedFailure(res execx.Result) (bool, string) {
 		if strings.HasPrefix(lower, "task failed") {
 			return true, trimmed
 		}
-		if structuredTaskFailureLine == "" && isStructuredTaskFailureLine(lower) {
+		if structuredTaskFailureLine == "" && isStructuredTaskFailureLine(trimmed) {
 			structuredTaskFailureLine = trimmed
 			continue
 		}
-		if structuredTaskFailureLine != "" && structuredErrorLine == "" && isStructuredFailureErrorLine(lower) {
+		if structuredTaskFailureLine != "" && structuredErrorLine == "" && isStructuredFailureErrorLine(trimmed) {
 			structuredErrorLine = trimmed
 		}
 	}
@@ -1712,39 +1712,52 @@ func codexReportedFailure(res execx.Result) (bool, string) {
 	return false, ""
 }
 
-func isStructuredTaskFailureLine(lower string) bool {
-	line := strings.TrimSpace(lower)
+func isStructuredTaskFailureLine(raw string) bool {
+	line := strings.TrimSpace(raw)
+	lower := strings.ToLower(line)
 	taskFailedMarker := "task failed"
-	if !strings.Contains(line, taskFailedMarker) {
+	if !strings.Contains(lower, taskFailedMarker) {
 		return false
 	}
 
-	prefixes := []string{
+	// Accept JSON-style/escaped JSON-style keys regardless of case.
+	caseInsensitivePrefixes := []string{
 		`"summary":`,
 		`\"summary\":`,
 		`"message":`,
 		`\"message\":`,
 	}
-	for _, prefix := range prefixes {
-		if strings.HasPrefix(line, prefix) {
+	for _, prefix := range caseInsensitivePrefixes {
+		if strings.HasPrefix(lower, prefix) {
 			return true
 		}
+	}
+	// For unquoted keys, require lowercase prefixes so Go struct fields
+	// like `Message: "Task failed..."` do not trigger false positives.
+	if strings.HasPrefix(line, "summary:") || strings.HasPrefix(line, "message:") {
+		return true
 	}
 	return false
 }
 
-func isStructuredFailureErrorLine(lower string) bool {
-	line := strings.TrimSpace(lower)
-	prefixes := []string{
+func isStructuredFailureErrorLine(raw string) bool {
+	line := strings.TrimSpace(raw)
+	lower := strings.ToLower(line)
+	caseInsensitivePrefixes := []string{
 		`"error":`,
 		`\"error\":`,
 		`"stack":`,
 		`\"stack\":`,
 	}
-	for _, prefix := range prefixes {
-		if strings.HasPrefix(line, prefix) {
+	for _, prefix := range caseInsensitivePrefixes {
+		if strings.HasPrefix(lower, prefix) {
 			return true
 		}
+	}
+	// For unquoted keys, require lowercase prefixes so Go struct fields
+	// like `Error: err.Error()` do not trigger false positives.
+	if strings.HasPrefix(line, "error:") || strings.HasPrefix(line, "stack:") {
+		return true
 	}
 	return false
 }
