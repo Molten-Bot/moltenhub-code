@@ -630,6 +630,13 @@ textarea {
   text-transform: uppercase;
 }
 
+.task-fullscreen-head-label {
+  min-width: 0;
+  flex: 1 1 auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .counter {
   color: var(--accent);
   font-size: 0.8rem;

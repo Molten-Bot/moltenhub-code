@@ -918,6 +918,9 @@ func TestTaskPanelStylesConstrainHorizontalOverflow(t *testing.T) {
 	if !strings.Contains(css, ".task-fullscreen-output-panel {\n  min-height: 0;\n  overflow: hidden;\n  display: grid;\n  grid-template-rows: auto auto minmax(0, 1fr);\n}") {
 		t.Fatalf("expected full screen output panel to reserve the remaining viewport for terminal output")
 	}
+	if !strings.Contains(css, ".task-fullscreen-head-label {\n  min-width: 0;\n  flex: 1 1 auto;\n  white-space: normal;\n  overflow-wrap: anywhere;\n}") {
+		t.Fatalf("expected full screen task headers to wrap long prompts instead of truncating")
+	}
 	if !strings.Contains(css, "#task-fullscreen-terminal {\n  min-height: 0;\n  height: 100%;\n  padding-right: 10px;\n  scrollbar-gutter: stable;\n  overscroll-behavior: contain;\n}") {
 		t.Fatalf("expected full screen terminal to stabilize its vertical scrollbar gutter")
 	}

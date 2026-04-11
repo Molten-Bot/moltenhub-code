@@ -554,6 +554,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="task-fullscreen-output-panel"`) {
 		t.Fatalf("expected index html to include full screen output panel wrapper")
 	}
+	if !strings.Contains(markup, `id="task-fullscreen-head-label" class="task-fullscreen-head-label"`) {
+		t.Fatalf("expected full screen task header to render a dedicated wrapping label class")
+	}
+	if strings.Contains(markup, `id="task-fullscreen-head-label" class="min-w-0 flex-1 truncate"`) {
+		t.Fatalf("expected full screen task header to avoid truncating long prompts")
+	}
 	if !strings.Contains(markup, `id="task-fullscreen-terminal"`) {
 		t.Fatalf("expected index html to include full screen terminal output")
 	}
