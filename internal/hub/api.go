@@ -99,18 +99,11 @@ func (c *APIClient) ResolveAgentToken(ctx context.Context, cfg InitConfig) (stri
 		return "", fmt.Errorf("missing bind_token and agent_token")
 	}
 
-	bound, err := c.bindTokenFlow(ctx, bindToken)
-	if err != nil {
-		c.logf("hub.auth source=bind status=failed err=%q", err)
-		return "", fmt.Errorf("bind flow failed for provided bind_token: %w", err)
+	if bound, ok := c.bindTokenFallback(ctx, bindToken, "bind"); ok {
+		return bound, nil
 	}
-	if c.verifyToken(ctx, bound) {
-		c.logf("hub.auth source=bind status=verified")
-	} else {
-		c.logf("hub.auth source=bind status=unverified")
-	}
-	return bound, nil
 
+	return "", fmt.Errorf("bind flow failed for provided bind_token")
 }
 
 func (c *APIClient) bindTokenFallback(ctx context.Context, bindToken, source string) (string, bool) {
@@ -143,7 +136,13 @@ func (c *APIClient) bindTokenFlow(ctx context.Context, bindToken string) (string
 		authToken string
 		body      map[string]any
 	}{
+		{name: "bind-tokens.bind_token", path: "/agents/bind-tokens", body: map[string]any{"bind_token": bindToken}},
+		{name: "bind-tokens.bindToken", path: "/agents/bind-tokens", body: map[string]any{"bindToken": bindToken}},
+		{name: "bind-tokens.token", path: "/agents/bind-tokens", body: map[string]any{"token": bindToken}},
 		{name: "bind.bind_token", path: "/agents/bind", body: map[string]any{"bind_token": bindToken}},
+		{name: "bind.bindToken", path: "/agents/bind", body: map[string]any{"bindToken": bindToken}},
+		{name: "bind.token", path: "/agents/bind", body: map[string]any{"token": bindToken}},
+		{name: "bind.auth", path: "/agents/bind", authToken: bindToken, body: map[string]any{"bind_token": bindToken}},
 	}
 
 	var failures []string
@@ -170,7 +169,7 @@ func (c *APIClient) bindTokenFlow(ctx context.Context, bindToken string) (string
 			continue
 		}
 
-		failures = append(failures, fmt.Sprintf("%s: %s", attempt.path, formatHubAPIStatus(status, body)))
+		failures = append(failures, fmt.Sprintf("%s status=%d", attempt.name, status))
 	}
 
 	return "", fmt.Errorf("bind flow failed: %s", strings.Join(failures, "; "))
@@ -633,56 +632,6 @@ func extractAPIBaseFromJSON(body []byte) string {
 		return ""
 	}
 	return extractAPIBaseFromAny(parsed)
-}
-
-func formatHubAPIStatus(status int, body []byte) string {
-	statusText := fmt.Sprintf("hub API %d", status)
-	trimmedBody := bytes.TrimSpace(body)
-	if len(trimmedBody) == 0 {
-		return statusText
-	}
-
-	var parsed any
-	if err := json.Unmarshal(trimmedBody, &parsed); err != nil {
-		return statusText + " body=" + truncateBody(trimmedBody)
-	}
-
-	if detail := extractHubAPIErrorDetail(parsed); detail != "" {
-		return statusText + " " + detail
-	}
-	return statusText + " body=" + truncateBody(trimmedBody)
-}
-
-func extractHubAPIErrorDetail(v any) string {
-	switch typed := v.(type) {
-	case map[string]any:
-		errCode := strings.TrimSpace(firstString(typed["error"], typed["code"]))
-		message := strings.TrimSpace(firstString(typed["message"], typed["detail"], typed["error_detail"]))
-		if errCode != "" && message != "" {
-			return errCode + ": " + message
-		}
-		if errCode != "" {
-			return errCode
-		}
-		if message != "" {
-			return message
-		}
-
-		for _, key := range []string{"result", "data", "payload", "error_detail"} {
-			if nested, ok := typed[key]; ok {
-				if detail := extractHubAPIErrorDetail(nested); detail != "" {
-					return detail
-				}
-			}
-		}
-	case []any:
-		for _, entry := range typed {
-			if detail := extractHubAPIErrorDetail(entry); detail != "" {
-				return detail
-			}
-		}
-	}
-	return ""
 }
 
 func parsePulledOpenClawMessage(body []byte) (PulledOpenClawMessage, error) {

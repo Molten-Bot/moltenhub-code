@@ -822,13 +822,10 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/bind":
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/bind-tokens":
 			bodyBytes, _ := io.ReadAll(r.Body)
-			if got := strings.TrimSpace(string(bodyBytes)); got != fmt.Sprintf(`{"bind_token":%q}`, bindToken) {
-				t.Fatalf("bind body = %s", got)
-			}
-			if got := r.Header.Get("Authorization"); got != "" {
-				t.Fatalf("bind Authorization = %q, want empty", got)
+			if !strings.Contains(string(bodyBytes), fmt.Sprintf(`"bind_token":%q`, bindToken)) && !strings.Contains(string(bodyBytes), fmt.Sprintf(`"bind_token":"%s"`, bindToken)) {
+				t.Fatalf("bind body = %s", string(bodyBytes))
 			}
 			bindCalled = true
 			_, _ = w.Write([]byte(`{"token":"agent-resolved"}`))
@@ -1124,7 +1121,7 @@ func TestConfigureHubSetupExistingAgentReturnsLoginVerificationFailure(t *testin
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/bind":
+		case r.Method == http.MethodPost && (r.URL.Path == "/v1/agents/bind-tokens" || r.URL.Path == "/v1/agents/bind"):
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)

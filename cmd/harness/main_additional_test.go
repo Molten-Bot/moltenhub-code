@@ -422,7 +422,7 @@ func TestConfigureHubSetupTracksCompletedOnboardingSteps(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/bind":
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/bind-tokens":
 			_, _ = w.Write([]byte(`{"agent_token":"agent_bound"}`))
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
 			_, _ = w.Write([]byte(`{"handle":"saved-agent","profile":{"display_name":"Saved Agent","emoji":"🔥","profile":"Ships onboarding"}}`))
@@ -488,7 +488,7 @@ func TestConfigureHubSetupMarksFailingOnboardingStep(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/bind":
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/bind-tokens":
 			_, _ = w.Write([]byte(`{"agent_token":"agent_bound"}`))
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
 			agentProfileReads++
