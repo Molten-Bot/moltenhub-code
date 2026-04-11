@@ -1104,6 +1104,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "const repo = normalizeRepoValue(libraryRepoInput.value) || defaultRepository();") {
 		t.Fatalf("expected index html payload builders to fall back to the configured default repository")
 	}
+	if !strings.Contains(markup, "const payload = {\n        repos: [repo],\n        branch,") {
+		t.Fatalf("expected index html library payload to emit selected repositories through repos[]")
+	}
 	if !strings.Contains(markup, "function dropReposFromHistory(") {
 		t.Fatalf("expected index html to include repo history cleanup helper")
 	}

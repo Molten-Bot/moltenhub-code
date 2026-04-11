@@ -3639,7 +3639,7 @@
 
       const branch = String(libraryBaseBranch.value || "").trim() || "main";
       const payload = {
-        repo,
+        repos: [repo],
         branch,
         targetSubdir: String(libraryTargetSubdir.value || "").trim() || ".",
         libraryTaskName: libraryTaskName,
