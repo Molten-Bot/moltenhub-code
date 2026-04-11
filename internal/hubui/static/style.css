@@ -980,6 +980,7 @@ body .right-col.prompt-collapsed.task-list-hidden {
 .hub-profile-button {
   opacity: 1;
   pointer-events: auto;
+  color: var(--theme-button-text);
   transform: translateX(0) scale(1);
   transition:
     color 180ms ease,

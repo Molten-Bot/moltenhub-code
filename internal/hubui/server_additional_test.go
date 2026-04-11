@@ -323,6 +323,9 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, ".hub-profile-button {\n  opacity: 1;\n  pointer-events: auto;") {
 		t.Fatalf("expected stylesheet to keep the hub profile button visible by default")
 	}
+	if !strings.Contains(stylesheet, ".hub-profile-button {\n  opacity: 1;\n  pointer-events: auto;\n  color: var(--theme-button-text);") {
+		t.Fatalf("expected hub profile button to use a readable default icon color without hover")
+	}
 	if strings.Contains(stylesheet, `.hub-dock-group[data-configured="true"]:hover .hub-profile-button`) {
 		t.Fatalf("expected stylesheet to remove hover-only hub profile button visibility")
 	}
