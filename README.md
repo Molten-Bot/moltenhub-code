@@ -2,6 +2,8 @@
 
 MoltenHub Code is a Go harness that turns agent prompts into repository changes across one or more GitHub repositories.
 
+For further information, see [molten.bot/code](https://molten.bot/code).
+
 It supports three execution modes:
 - Single run (`run`)
 - Parallel local runs (`multiplex`)
