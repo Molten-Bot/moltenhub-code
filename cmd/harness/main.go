@@ -935,12 +935,8 @@ func unexpectedNoChangesFollowUpRunConfig(
 	runCfg.ApplyDefaults()
 	logPaths := existingPaths(failurefollowup.TaskLogPaths(logRoot, requestID))
 	baseBranch := strings.TrimSpace(runCfg.BaseBranch)
-	resultBranch := strings.TrimSpace(result.Branch)
-	if baseBranch == "main" && resultBranch != "" && resultBranch != "main" {
-		baseBranch = resultBranch
-	}
 	return config.Config{
-		Repos:        failureFollowUpRepos(result, runCfg),
+		Repos:        unexpectedNoChangesFollowUpRepos(runCfg),
 		BaseBranch:   baseBranch,
 		TargetSubdir: runCfg.TargetSubdir,
 		Prompt:       unexpectedNoChangesFollowUpPrompt(logPaths, requestID, result, runCfg),
@@ -979,6 +975,14 @@ func failureFollowUpRepos(_ harness.Result, _ config.Config) []string {
 		return []string{repo}
 	}
 	return nil
+}
+
+func unexpectedNoChangesFollowUpRepos(runCfg config.Config) []string {
+	repos := runCfg.RepoList()
+	if len(repos) > 0 {
+		return repos
+	}
+	return failureFollowUpRepos(harness.Result{}, runCfg)
 }
 
 func unexpectedNoChangesFollowUpPrompt(logPaths []string, requestID string, result harness.Result, runCfg config.Config) string {

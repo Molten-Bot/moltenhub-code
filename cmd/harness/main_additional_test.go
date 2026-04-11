@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -616,7 +617,7 @@ func TestUnexpectedNoChangesFollowUpRunConfigPreservesTaskTargetingAndAddsContex
 	if got, want := cfg.TargetSubdir, "cmd/harness"; got != want {
 		t.Fatalf("TargetSubdir = %q, want %q", got, want)
 	}
-	if got, want := cfg.Repos, []string{config.DefaultRepositoryURL}; len(got) != len(want) || got[0] != want[0] {
+	if got, want := cfg.Repos, []string{"git@github.com:acme/repo.git"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Repos = %v, want %v", got, want)
 	}
 
@@ -641,7 +642,7 @@ func TestUnexpectedNoChangesFollowUpRunConfigPreservesTaskTargetingAndAddsContex
 	}
 }
 
-func TestUnexpectedNoChangesFollowUpRunConfigReusesObservedNonMainBranch(t *testing.T) {
+func TestUnexpectedNoChangesFollowUpRunConfigKeepsConfiguredMainBranch(t *testing.T) {
 	t.Parallel()
 
 	cfg := unexpectedNoChangesFollowUpRunConfig(
@@ -657,8 +658,45 @@ func TestUnexpectedNoChangesFollowUpRunConfigReusesObservedNonMainBranch(t *test
 		t.TempDir(),
 	)
 
-	if got, want := cfg.BaseBranch, "moltenhub-add-the-emoji-picker-to-the-agent-profil"; got != want {
+	if got, want := cfg.BaseBranch, "main"; got != want {
 		t.Fatalf("BaseBranch = %q, want %q", got, want)
+	}
+}
+
+func TestUnexpectedNoChangesFollowUpRunConfigRetainsOriginalRepoList(t *testing.T) {
+	t.Parallel()
+
+	runCfg := config.Config{
+		Repo: "git@github.com:acme/repo-a.git",
+		Repos: []string{
+			"git@github.com:acme/repo-b.git",
+			"git@github.com:acme/repo-a.git",
+		},
+	}
+	cfg := unexpectedNoChangesFollowUpRunConfig(
+		"local-1712345678-000001",
+		harness.Result{NoChanges: true},
+		runCfg,
+		t.TempDir(),
+	)
+
+	if got, want := cfg.Repos, runCfg.RepoList(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("Repos = %v, want %v", got, want)
+	}
+}
+
+func TestUnexpectedNoChangesFollowUpRunConfigFallsBackToMoltenHubRepoWhenNoOriginalRepo(t *testing.T) {
+	t.Parallel()
+
+	cfg := unexpectedNoChangesFollowUpRunConfig(
+		"local-1712345678-000001",
+		harness.Result{NoChanges: true},
+		config.Config{},
+		t.TempDir(),
+	)
+
+	if got, want := cfg.Repos, []string{config.DefaultRepositoryURL}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Repos = %v, want %v", got, want)
 	}
 }
 
