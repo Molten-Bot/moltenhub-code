@@ -1133,9 +1133,6 @@ func shouldQueueFailureFollowUp(failedResult harness.Result) (bool, string) {
 	if failedResult.Err == nil {
 		return false, "failed task did not include an error"
 	}
-	if reason := failurefollowup.NonRemediableFailureReason(failedResult.Err); reason != "" {
-		return false, fmt.Sprintf("non-remediable failure: %s", reason)
-	}
 	return true, ""
 }
 

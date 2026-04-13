@@ -54,7 +54,7 @@ Branch/PR rules:
 
 When a task fails, the runtime:
 - Returns a failure response to the calling agent that clearly marks failure and includes error details.
-- Queues a focused follow-up remediation task in the MoltenHub code repository (when the failure is remediable).
+- Queues a focused follow-up remediation task in the MoltenHub code repository.
 - Passes relevant failing log path context into that follow-up prompt.
 
 Failure follow-up run config shape:

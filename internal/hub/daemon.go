@@ -739,9 +739,6 @@ func shouldQueueFailureFollowUp(dispatch SkillDispatch, res harness.Result) (boo
 	if res.Err == nil {
 		return false, "failed task did not include an error"
 	}
-	if reason := failurefollowup.NonRemediableFailureReason(res.Err); reason != "" {
-		return false, fmt.Sprintf("non-remediable failure: %s", reason)
-	}
 	return true, ""
 }
 

@@ -866,15 +866,15 @@ func TestShouldQueueFailureFollowUpQueuesFailuresWithErrorDetails(t *testing.T) 
 	ok, reason := shouldQueueFailureFollowUp(harness.Result{
 		Err: errors.New("codex: ERROR: Quota exceeded. Check your plan and billing details."),
 	})
-	if ok || !strings.Contains(reason, "non-remediable failure: quota exceeded") {
-		t.Fatalf("shouldQueueFailureFollowUp(quota exceeded) = (%v, %q), want non-remediable skip", ok, reason)
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureFollowUp(quota exceeded) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
 	ok, reason = shouldQueueFailureFollowUp(harness.Result{
 		Err: errors.New("codex: unexpected status 401 Unauthorized: Missing bearer or basic authentication in header"),
 	})
-	if ok || !strings.Contains(reason, "non-remediable failure:") {
-		t.Fatalf("shouldQueueFailureFollowUp(auth failure) = (%v, %q), want non-remediable skip", ok, reason)
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureFollowUp(auth failure) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
 	ok, reason = shouldQueueFailureFollowUp(harness.Result{
@@ -887,15 +887,15 @@ func TestShouldQueueFailureFollowUpQueuesFailuresWithErrorDetails(t *testing.T) 
 	ok, reason = shouldQueueFailureFollowUp(harness.Result{
 		Err: errors.New("git: verify remote write access for repo https://github.com/acme/repo.git branch \"moltenhub-fix\": exit status 128: remote: Write access to repository not granted. fatal: unable to access 'https://github.com/acme/repo.git/': The requested URL returned error: 403"),
 	})
-	if ok || !strings.Contains(reason, "non-remediable failure: write access to repository not granted") {
-		t.Fatalf("shouldQueueFailureFollowUp(repo write access failure) = (%v, %q), want non-remediable skip", ok, reason)
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureFollowUp(repo write access failure) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
 	ok, reason = shouldQueueFailureFollowUp(harness.Result{
 		Err: errors.New("git: run git [push -u origin moltenhub-branch]: exit status 1: remote: refusing to allow an OAuth App to create or update workflow `.github/workflows/docker-release.yml` without `workflow` scope"),
 	})
-	if ok || !strings.Contains(reason, "non-remediable failure: refusing to allow an oauth app to create or update workflow") {
-		t.Fatalf("shouldQueueFailureFollowUp(workflow scope failure) = (%v, %q), want non-remediable skip", ok, reason)
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureFollowUp(workflow scope failure) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 }
 
