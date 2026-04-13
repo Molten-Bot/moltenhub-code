@@ -577,6 +577,97 @@ func TestDispatchResultPayloadNoChangesIncludesExistingPRURLs(t *testing.T) {
 	if len(prURLs) != 1 || prURLs[0] != "https://github.com/acme/repo-a/pull/10" {
 		t.Fatalf("prUrls = %#v, want [https://github.com/acme/repo-a/pull/10]", prURLs)
 	}
+	if got := payload["message"]; got != "Success: task completed." {
+		t.Fatalf("message = %#v, want %q", got, "Success: task completed.")
+	}
+	if got := result["status"]; got != "completed" {
+		t.Fatalf("result.status = %#v, want %q", got, "completed")
+	}
+	if got := result["message"]; got != "Success: task completed." {
+		t.Fatalf("result.message = %#v, want %q", got, "Success: task completed.")
+	}
+}
+
+func TestDispatchResultPayloadNoChangesWithoutPRIncludesExplicitMessage(t *testing.T) {
+	t.Parallel()
+
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:       "code_for_me",
+			ResultType: "skill_result",
+		},
+	}
+	dispatch := SkillDispatch{
+		RequestID: "req-no-change-no-pr",
+		Skill:     "code_for_me",
+		ReplyTo:   "agent-123",
+	}
+	res := harness.Result{
+		ExitCode:  harness.ExitSuccess,
+		NoChanges: true,
+	}
+
+	payload := dispatchResultPayload(cfg, dispatch, res)
+	if got := payload["status"]; got != "no_changes" {
+		t.Fatalf("status = %#v, want %q", got, "no_changes")
+	}
+	if got := payload["message"]; got != "No changes: task completed without repository changes or pull requests." {
+		t.Fatalf("message = %#v", got)
+	}
+	if got := payload["reply_to"]; got != "agent-123" {
+		t.Fatalf("reply_to = %#v, want %q", got, "agent-123")
+	}
+	result, _ := payload["result"].(map[string]any)
+	if result == nil {
+		t.Fatal("result payload missing")
+	}
+	if got := result["status"]; got != "no_changes" {
+		t.Fatalf("result.status = %#v, want %q", got, "no_changes")
+	}
+	if got := result["message"]; got != "No changes: task completed without repository changes or pull requests." {
+		t.Fatalf("result.message = %#v", got)
+	}
+}
+
+func TestDispatchResultPayloadCompletedIncludesExplicitMessage(t *testing.T) {
+	t.Parallel()
+
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:       "code_for_me",
+			ResultType: "skill_result",
+		},
+	}
+	dispatch := SkillDispatch{
+		RequestID: "req-success",
+		Skill:     "code_for_me",
+		ReplyTo:   "agent-123",
+	}
+	res := harness.Result{
+		ExitCode: harness.ExitSuccess,
+		Branch:   "moltenhub-fix-success-response",
+	}
+
+	payload := dispatchResultPayload(cfg, dispatch, res)
+	if got := payload["status"]; got != "completed" {
+		t.Fatalf("status = %#v, want %q", got, "completed")
+	}
+	if got := payload["message"]; got != "Success: task completed." {
+		t.Fatalf("message = %#v, want %q", got, "Success: task completed.")
+	}
+	if got := payload["reply_to"]; got != "agent-123" {
+		t.Fatalf("reply_to = %#v, want %q", got, "agent-123")
+	}
+	result, _ := payload["result"].(map[string]any)
+	if result == nil {
+		t.Fatal("result payload missing")
+	}
+	if got := result["status"]; got != "completed" {
+		t.Fatalf("result.status = %#v, want %q", got, "completed")
+	}
+	if got := result["message"]; got != "Success: task completed." {
+		t.Fatalf("result.message = %#v, want %q", got, "Success: task completed.")
+	}
 }
 
 func TestDispatchResultPayloadIncludesTopLevelFailureMessage(t *testing.T) {
