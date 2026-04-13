@@ -78,12 +78,15 @@ type RepoResult struct {
 }
 
 type repoWorkspace struct {
-	URL     string
-	Dir     string
-	RelDir  string
-	Branch  string
-	PRURL   string
-	Changed bool
+	URL                string
+	Dir                string
+	RelDir             string
+	Branch             string
+	PRURL              string
+	Changed            bool
+	WriteAccessChecked bool
+	WriteAccessAllowed bool
+	WriteAccessErr     error
 }
 
 type codexRunOptions = agentruntime.RunOptions
@@ -235,8 +238,24 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 	for i := range repos {
 		if err := h.verifyRemoteWriteAccess(ctx, repos[i]); err != nil {
+			if len(repos) > 1 && failurefollowup.NonRemediableRepoAccessReason(err) != "" {
+				repos[i].WriteAccessChecked = true
+				repos[i].WriteAccessAllowed = false
+				repos[i].WriteAccessErr = err
+				h.logf(
+					"stage=git status=warn action=probe_write_access reason=read_only_repo repo=%s repo_dir=%s branch=%s err=%q",
+					repos[i].URL,
+					repos[i].RelDir,
+					repos[i].Branch,
+					err,
+				)
+				continue
+			}
 			return h.fail(ExitGit, "git", err, runDir)
 		}
+		repos[i].WriteAccessChecked = true
+		repos[i].WriteAccessAllowed = true
+		repos[i].WriteAccessErr = nil
 	}
 
 	codexDir := targetDir
@@ -349,6 +368,20 @@ func (h Harness) processChangedRepo(
 ) (int, string, error) {
 	if repo == nil {
 		return ExitConfig, "config", fmt.Errorf("repo workspace is required")
+	}
+	if repo.WriteAccessChecked && !repo.WriteAccessAllowed {
+		if repo.WriteAccessErr != nil {
+			return ExitGit, "git", fmt.Errorf("cannot publish changes for repo %s branch %q: %w", repo.URL, repo.Branch, repo.WriteAccessErr)
+		}
+		return ExitGit, "git", fmt.Errorf("cannot publish changes for repo %s branch %q: remote write access unavailable", repo.URL, repo.Branch)
+	}
+	if !repo.WriteAccessChecked {
+		if err := h.verifyRemoteWriteAccess(ctx, *repo); err != nil {
+			return ExitGit, "git", err
+		}
+		repo.WriteAccessChecked = true
+		repo.WriteAccessAllowed = true
+		repo.WriteAccessErr = nil
 	}
 
 	h.logf("stage=git status=start action=commit repo=%s repo_dir=%s", repo.URL, repo.RelDir)
