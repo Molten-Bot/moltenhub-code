@@ -156,7 +156,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	if _, err := h.runCommand(ctx, "auth", authCommand()); err != nil {
 		return h.fail(ExitAuth, "auth", err, "")
 	}
-	if hasGitHubAuthToken() {
+	if shouldSetupGitHubAuthForRepos(cfg.RepoList()) || hasGitHubAuthToken() {
 		if _, err := h.runCommand(ctx, "auth", authSetupGitCommand()); err != nil {
 			return h.fail(ExitAuth, "auth", err, "")
 		}
@@ -2250,6 +2250,16 @@ func authSetupGitCommand() execx.Command {
 
 func hasGitHubAuthToken() bool {
 	return strings.TrimSpace(os.Getenv("GH_TOKEN")) != "" || strings.TrimSpace(os.Getenv("GITHUB_TOKEN")) != ""
+}
+
+func shouldSetupGitHubAuthForRepos(repoURLs []string) bool {
+	for _, repoURL := range repoURLs {
+		repoURL = strings.TrimSpace(strings.ToLower(repoURL))
+		if strings.HasPrefix(repoURL, "https://github.com/") || strings.HasPrefix(repoURL, "http://github.com/") {
+			return true
+		}
+	}
+	return false
 }
 
 func cloneCommand(cfg config.Config, repoDir string) execx.Command {

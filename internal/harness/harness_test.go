@@ -2935,6 +2935,74 @@ func TestHasGitHubAuthToken(t *testing.T) {
 	}
 }
 
+func TestShouldSetupGitHubAuthForRepos(t *testing.T) {
+	t.Parallel()
+
+	if shouldSetupGitHubAuthForRepos([]string{"git@github.com:acme/repo.git"}) {
+		t.Fatal("shouldSetupGitHubAuthForRepos(ssh github) = true, want false")
+	}
+	if !shouldSetupGitHubAuthForRepos([]string{"https://github.com/acme/repo.git"}) {
+		t.Fatal("shouldSetupGitHubAuthForRepos(https github) = false, want true")
+	}
+	if !shouldSetupGitHubAuthForRepos([]string{" http://github.com/acme/repo.git "}) {
+		t.Fatal("shouldSetupGitHubAuthForRepos(http github) = false, want true")
+	}
+	if shouldSetupGitHubAuthForRepos([]string{"https://gitlab.com/acme/repo.git"}) {
+		t.Fatal("shouldSetupGitHubAuthForRepos(non-github https) = true, want false")
+	}
+}
+
+func TestRunHTTPSGitHubRepoConfiguresGitAuthWithoutEnvToken(t *testing.T) {
+	t.Parallel()
+
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+
+	cfg := sampleConfig()
+	cfg.RepoURL = "https://github.com/acme/repo.git"
+	cfg.Repo = cfg.RepoURL
+	cfg.Repos = []string{cfg.RepoURL}
+
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "httpsauth123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+
+	fake := &fakeRunner{t: t, allowUnorderedClones: true, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "setup-git"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## moltenhub-build-api\n M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: "https://github.com/acme/repo/pull/42\n"}},
+		{cmd: prChecksCommand(repoDir, "https://github.com/acme/repo/pull/42")},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
 func TestShouldCreateWorkBranch(t *testing.T) {
 	t.Parallel()
 
