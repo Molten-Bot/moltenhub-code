@@ -67,6 +67,13 @@ var hubSetupLocationsCache struct {
 	fetchedAt time.Time
 }
 
+var hubSetupProfileCache struct {
+	mu      sync.Mutex
+	key     string
+	profile hub.AgentProfile
+	loaded  bool
+}
+
 func main() {
 	os.Exit(run())
 }
@@ -2066,6 +2073,53 @@ func resetHubSetupLocationsCache() {
 	hubSetupLocationsCache.fetchedAt = time.Time{}
 }
 
+func resetHubSetupProfileCache() {
+	hubSetupProfileCache.mu.Lock()
+	defer hubSetupProfileCache.mu.Unlock()
+	hubSetupProfileCache.key = ""
+	hubSetupProfileCache.profile = hub.AgentProfile{}
+	hubSetupProfileCache.loaded = false
+}
+
+func hubSetupProfileCacheKey(baseURL, token string) string {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	token = strings.TrimSpace(token)
+	if baseURL == "" || token == "" {
+		return ""
+	}
+	return baseURL + "\n" + token
+}
+
+func loadHubSetupRemoteProfile(ctx context.Context, baseURL, token string, forceRefresh bool) (hub.AgentProfile, error) {
+	cacheKey := hubSetupProfileCacheKey(baseURL, token)
+	if cacheKey == "" {
+		return hub.AgentProfile{}, fmt.Errorf("hub profile lookup requires base_url and token")
+	}
+
+	if !forceRefresh {
+		hubSetupProfileCache.mu.Lock()
+		if hubSetupProfileCache.loaded && hubSetupProfileCache.key == cacheKey {
+			cached := hubSetupProfileCache.profile
+			hubSetupProfileCache.mu.Unlock()
+			return cached, nil
+		}
+		hubSetupProfileCache.mu.Unlock()
+	}
+
+	client := hub.NewAPIClient(baseURL)
+	profile, err := client.AgentProfile(ctx, token)
+	if err != nil {
+		return hub.AgentProfile{}, err
+	}
+
+	hubSetupProfileCache.mu.Lock()
+	hubSetupProfileCache.key = cacheKey
+	hubSetupProfileCache.profile = profile
+	hubSetupProfileCache.loaded = true
+	hubSetupProfileCache.mu.Unlock()
+	return profile, nil
+}
+
 func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 	state := hubui.HubSetupState{
 		ConnectURL:      "https://app.molten.bot/signin?target=hub",
@@ -2144,7 +2198,7 @@ func loadHubSetupRuntimeConfig(path string) (hub.InitConfig, bool, error) {
 
 func currentHubSetupStateWithRemoteProfile(ctx context.Context, cfg hub.InitConfig) hubui.HubSetupState {
 	state := currentHubSetupState(cfg)
-	if !hubSetupProfileNeedsRemoteHydration(state) {
+	if !state.Configured {
 		return state
 	}
 
@@ -2157,8 +2211,7 @@ func currentHubSetupStateWithRemoteProfile(ctx context.Context, cfg hub.InitConf
 		return state
 	}
 
-	client := hub.NewAPIClient(activeCfg.BaseURL)
-	remoteProfile, err := client.AgentProfile(ctx, token)
+	remoteProfile, err := loadHubSetupRemoteProfile(ctx, activeCfg.BaseURL, token, false)
 	if err != nil {
 		return state
 	}
@@ -2178,18 +2231,6 @@ func currentHubSetupStateWithRemoteProfile(ctx context.Context, cfg hub.InitConf
 	state.Profile.Emoji = strings.TrimSpace(mergedProfile.Emoji)
 	state.Profile.ProfileText = strings.TrimSpace(mergedProfile.ProfileText)
 	return state
-}
-
-func hubSetupProfileNeedsRemoteHydration(state hubui.HubSetupState) bool {
-	if !state.Configured {
-		return false
-	}
-	if strings.TrimSpace(state.Handle) == "" {
-		return true
-	}
-	return strings.TrimSpace(state.Profile.DisplayName) == "" &&
-		strings.TrimSpace(state.Profile.Emoji) == "" &&
-		strings.TrimSpace(state.Profile.ProfileText) == ""
 }
 
 func effectiveHubSetupConfig(cfg hub.InitConfig) (hub.InitConfig, error) {
@@ -2285,15 +2326,53 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 		finalCfg.BaseURL = baseURL
 	}
 	finalCfg.AgentToken = resolvedToken
-	profileUpdateRequested := strings.TrimSpace(state.Handle) != strings.TrimSpace(activeCfg.Handle) ||
-		strings.TrimSpace(state.Profile.ProfileText) != strings.TrimSpace(activeCfg.Profile.ProfileText) ||
-		strings.TrimSpace(state.Profile.DisplayName) != strings.TrimSpace(activeCfg.Profile.DisplayName) ||
-		strings.TrimSpace(state.Profile.Emoji) != strings.TrimSpace(activeCfg.Profile.Emoji)
+
+	currentHandle := strings.TrimSpace(activeCfg.Handle)
+	currentProfile := activeCfg.Profile
+	if remoteProfile, remoteErr := loadHubSetupRemoteProfile(ctx, finalCfg.BaseURL, resolvedToken, false); remoteErr == nil {
+		if strings.TrimSpace(remoteProfile.Handle) != "" {
+			currentHandle = strings.TrimSpace(remoteProfile.Handle)
+		}
+		currentProfile = mergeProfileConfig(remoteProfile.Profile, currentProfile)
+	}
+
+	requestedHandle := strings.TrimSpace(req.Handle)
+	requestedProfileText := strings.TrimSpace(req.Profile.ProfileText)
+	requestedDisplayName := strings.TrimSpace(req.Profile.DisplayName)
+	requestedEmoji := strings.TrimSpace(req.Profile.Emoji)
+	explicitProfileUpdate := requestedHandle != "" ||
+		requestedProfileText != "" ||
+		requestedDisplayName != "" ||
+		requestedEmoji != ""
+
+	if requestedHandle == "" {
+		requestedHandle = currentHandle
+	}
+	if requestedProfileText == "" {
+		requestedProfileText = strings.TrimSpace(currentProfile.ProfileText)
+	}
+	if requestedDisplayName == "" {
+		requestedDisplayName = strings.TrimSpace(currentProfile.DisplayName)
+	}
+	if requestedEmoji == "" {
+		requestedEmoji = strings.TrimSpace(currentProfile.Emoji)
+	}
+
+	state.Handle = requestedHandle
+	state.Profile.ProfileText = requestedProfileText
+	state.Profile.DisplayName = requestedDisplayName
+	state.Profile.Emoji = requestedEmoji
+
+	profileUpdateRequested := explicitProfileUpdate ||
+		requestedHandle != currentHandle ||
+		requestedProfileText != strings.TrimSpace(currentProfile.ProfileText) ||
+		requestedDisplayName != strings.TrimSpace(currentProfile.DisplayName) ||
+		requestedEmoji != strings.TrimSpace(currentProfile.Emoji)
 	if profileUpdateRequested {
-		finalCfg.Handle = state.Handle
-		finalCfg.Profile.ProfileText = state.Profile.ProfileText
-		finalCfg.Profile.DisplayName = state.Profile.DisplayName
-		finalCfg.Profile.Emoji = state.Profile.Emoji
+		finalCfg.Handle = requestedHandle
+		finalCfg.Profile.ProfileText = requestedProfileText
+		finalCfg.Profile.DisplayName = requestedDisplayName
+		finalCfg.Profile.Emoji = requestedEmoji
 		hubSetupMarkStep(&state, "profile_set", "current", "")
 		if err := client.SyncProfile(ctx, resolvedToken, finalCfg); err != nil {
 			hubSetupMarkStep(&state, "profile_set", "error", err.Error())
@@ -2306,9 +2385,9 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 	}
 	hubSetupMarkStep(&state, "work_activate", "current", "")
 
-	// Always read back profile after token resolution so config initialization
-	// stays accurate for first-time binds and re-binds.
-	profile, err := client.AgentProfile(ctx, resolvedToken)
+	// Always read back profile after token resolution and force refresh when a
+	// profile write happened so UI state reflects the latest hub values.
+	profile, err := loadHubSetupRemoteProfile(ctx, finalCfg.BaseURL, resolvedToken, profileUpdateRequested)
 	if err != nil {
 		hubSetupMarkStep(&state, "work_activate", "error", err.Error())
 		return state, fmt.Errorf("load hub profile: %w", err)

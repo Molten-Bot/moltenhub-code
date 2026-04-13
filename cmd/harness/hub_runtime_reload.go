@@ -31,11 +31,11 @@ func newHubRuntimeConfigReloader(
 	logf func(string, ...any),
 ) *hubRuntimeConfigReloader {
 	return &hubRuntimeConfigReloader{
-		baseCfg:        baseCfg,
-		loadEffective:  effectiveHubSetupConfig,
-		apply:          apply,
-		stop:           stop,
-		logf:           logf,
+		baseCfg:       baseCfg,
+		loadEffective: effectiveHubSetupConfig,
+		apply:         apply,
+		stop:          stop,
+		logf:          logf,
 	}
 }
 
@@ -118,23 +118,15 @@ func (r *hubRuntimeConfigReloader) Poll(ctx context.Context) {
 func hubRuntimeReloadSignature(cfg hub.InitConfig) string {
 	cfg.ApplyDefaults()
 	doc := struct {
-		BaseURL      string            `json:"base_url"`
-		BindToken    string            `json:"bind_token"`
-		AgentToken   string            `json:"agent_token"`
-		SessionKey   string            `json:"session_key"`
-		Handle       string            `json:"handle"`
-		AgentHarness string            `json:"agent_harness"`
-		AgentCommand string            `json:"agent_command"`
-		Profile      hub.ProfileConfig `json:"profile"`
+		BaseURL    string `json:"base_url"`
+		BindToken  string `json:"bind_token"`
+		AgentToken string `json:"agent_token"`
+		SessionKey string `json:"session_key"`
 	}{
-		BaseURL:      strings.TrimSpace(cfg.BaseURL),
-		BindToken:    strings.TrimSpace(cfg.BindToken),
-		AgentToken:   strings.TrimSpace(cfg.AgentToken),
-		SessionKey:   strings.TrimSpace(cfg.SessionKey),
-		Handle:       strings.TrimSpace(cfg.Handle),
-		AgentHarness: strings.TrimSpace(cfg.AgentHarness),
-		AgentCommand: strings.TrimSpace(cfg.AgentCommand),
-		Profile:      cfg.Profile,
+		BaseURL:    strings.TrimSpace(cfg.BaseURL),
+		BindToken:  strings.TrimSpace(cfg.BindToken),
+		AgentToken: strings.TrimSpace(cfg.AgentToken),
+		SessionKey: strings.TrimSpace(cfg.SessionKey),
 	}
 	data, err := json.Marshal(doc)
 	if err != nil {

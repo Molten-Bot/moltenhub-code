@@ -885,6 +885,78 @@ func TestCurrentHubSetupStateWithRemoteProfileHydratesMissingProfileFromHub(t *t
 	}
 }
 
+func TestCurrentHubSetupStateWithRemoteProfileLoadsFromHubAndCachesInMemory(t *testing.T) {
+	resetHubSetupProfileCache()
+	defer resetHubSetupProfileCache()
+
+	const savedToken = "n9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+
+	var getCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/agents/me" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		getCalls++
+		_, _ = w.Write([]byte(`{
+			"ok": true,
+			"result": {
+				"agent": {
+					"handle": "hub-agent",
+					"metadata": {
+						"display_name": "Hub Agent",
+						"emoji": "🚀",
+						"profile": "Loaded from hub"
+					}
+				}
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf(`{
+		"base_url": %q,
+		"agent_token": %q,
+		"handle": "stale-local",
+		"profile": {
+			"display_name": "Stale Local",
+			"emoji": "🤖",
+			"profile": "Stale local profile"
+		}
+	}`, server.URL+"/v1", savedToken)), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	stateA := currentHubSetupStateWithRemoteProfile(context.Background(), hub.InitConfig{
+		RuntimeConfigPath: configPath,
+	})
+	stateB := currentHubSetupStateWithRemoteProfile(context.Background(), hub.InitConfig{
+		RuntimeConfigPath: configPath,
+	})
+
+	if getCalls != 1 {
+		t.Fatalf("GET /agents/me calls = %d, want 1 due in-memory cache", getCalls)
+	}
+	for _, state := range []hubui.HubSetupState{stateA, stateB} {
+		if got, want := state.Handle, "hub-agent"; got != want {
+			t.Fatalf("Handle = %q, want %q", got, want)
+		}
+		if got, want := state.Profile.DisplayName, "Hub Agent"; got != want {
+			t.Fatalf("DisplayName = %q, want %q", got, want)
+		}
+		if got, want := state.Profile.Emoji, "🚀"; got != want {
+			t.Fatalf("Emoji = %q, want %q", got, want)
+		}
+		if got, want := state.Profile.ProfileText, "Loaded from hub"; got != want {
+			t.Fatalf("ProfileText = %q, want %q", got, want)
+		}
+	}
+}
+
 func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 	t.Parallel()
 
@@ -982,11 +1054,14 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
 	contents := string(data)
-	if !strings.Contains(contents, fmt.Sprintf(`"bind_token": %q`, bindToken)) {
-		t.Fatalf("saved config missing bind_token: %s", contents)
+	if strings.Contains(contents, `"bind_token"`) {
+		t.Fatalf("saved config should not persist bind_token once agent_token is resolved: %s", contents)
 	}
 	if !strings.Contains(contents, `"agent_token": "agent-resolved"`) {
 		t.Fatalf("saved config missing resolved agent token: %s", contents)
+	}
+	if !strings.Contains(contents, fmt.Sprintf(`"base_url": %q`, server.URL+"/v1")) {
+		t.Fatalf("saved config missing base_url: %s", contents)
 	}
 }
 
