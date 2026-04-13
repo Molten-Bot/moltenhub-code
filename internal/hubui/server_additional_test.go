@@ -359,6 +359,9 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `.hub-setup-signin-logo {`) {
 		t.Fatalf("expected stylesheet to include the hub setup sign-in logo styles")
 	}
+	if !strings.Contains(stylesheet, `.hub-setup-copy {`) {
+		t.Fatalf("expected stylesheet to include hub setup supporting copy styles")
+	}
 	if !strings.Contains(stylesheet, `.hub-setup-status {`) {
 		t.Fatalf("expected stylesheet to include hub setup status line styles")
 	}
@@ -370,6 +373,15 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	}
 	if !strings.Contains(stylesheet, `.hub-emoji-picker-input {`) || !strings.Contains(stylesheet, `clip-path: inset(50%);`) {
 		t.Fatalf("expected stylesheet to hide the raw emoji input and rely on the picker button presentation")
+	}
+	if !strings.Contains(stylesheet, `.brand-login-card-shell {`) || !strings.Contains(stylesheet, `.brand-chip-action {`) {
+		t.Fatalf("expected stylesheet to expose user-portal-derived glass primitives for hub surfaces and chips")
+	}
+	if !strings.Contains(stylesheet, `.prompt-hero {`) || !strings.Contains(stylesheet, `.prompt-field-copy {`) {
+		t.Fatalf("expected stylesheet to include the Studio hero and helper copy styles")
+	}
+	if !strings.Contains(stylesheet, `.task-empty {`) || !strings.Contains(stylesheet, `.task-empty-copy {`) {
+		t.Fatalf("expected stylesheet to include the richer task queue empty state styles")
 	}
 }
 
@@ -1026,7 +1038,7 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, "@media (max-width: 700px) {\n  .page-bottom-dock {\n    bottom: max(12px, env(safe-area-inset-bottom));\n    max-width: calc(100vw - 24px);\n  }\n\n  .prompt-mode-tabs-dock {\n    max-width: calc(100vw - 24px);\n    overflow-x: auto;\n    overflow-y: visible;\n  }\n\n  .theme-toggle {\n    right: 12px;\n    bottom: 12px;\n    left: auto;\n  }\n\n  :root {\n    --hub-floating-bottom: max(12px, env(safe-area-inset-bottom));\n    --hub-floating-stack-height: 128px;\n    --hub-studio-dock-gap: 12px;\n  }") {
 		t.Fatalf("expected mobile layout to coordinate the bottom dock stack and theme toggle spacing")
 	}
-	if !strings.Contains(css, "@media (max-width: 640px) {\n  .prompt-actions {\n    flex-wrap: wrap;\n    gap: 6px;\n  }\n\n  .prompt-actions-start,\n  .submit-status-inline,\n  .prompt-actions-end {\n    flex: 1 1 100%;\n    width: 100%;\n  }\n\n  .prompt-actions-end {\n    justify-content: flex-end;\n    margin-left: 0;\n  }\n\n  .prompt-action-paste {\n    max-width: none;\n  }\n\n  .submit-status-inline {\n    min-width: 0;\n  }\n\n  .prompt-action-button {\n    flex: 1 1 0;\n    min-inline-size: 0;\n  }") {
+	if !strings.Contains(css, "@media (max-width: 640px) {\n  .panel-section-copy {\n    max-width: none;\n  }\n\n  .prompt-actions {\n    flex-wrap: wrap;\n    gap: 6px;\n  }\n\n  .prompt-actions-start,\n  .submit-status-inline,\n  .prompt-actions-end {\n    flex: 1 1 100%;\n    width: 100%;\n  }\n\n  .prompt-actions-end {\n    justify-content: flex-end;\n    margin-left: 0;\n  }\n\n  .prompt-action-paste {\n    max-width: none;\n  }\n\n  .submit-status-inline {\n    min-width: 0;\n  }\n\n  .prompt-action-button {\n    flex: 1 1 0;\n    min-inline-size: 0;\n  }\n\n  .task-empty {\n    min-height: 0;\n    padding: 18px;\n  }") {
 		t.Fatalf("expected mobile layout to keep Studio action controls fully visible")
 	}
 	if !strings.Contains(css, ".app {\n    padding: 20px 14px var(--hub-content-bottom-padding);\n  }") {

@@ -4,9 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Molten Hub Code</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap">
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-BY33RFG2WB"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
@@ -43,7 +40,7 @@
                 }
               },
               fontFamily: {
-                sans: ["Instrument Sans", "Segoe UI", "sans-serif"],
+                sans: ["SF Pro", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
                 mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "monospace"]
               }
             }
@@ -137,9 +134,12 @@
 
     <div class="layout min-h-[calc(100vh-130px)] max-[980px]:min-h-0">
       <div class="right-col grid gap-4">
-        <section id="task-panel" class="panel min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))] hidden" aria-hidden="true">
+        <section id="task-panel" class="panel brand-login-card-shell min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]" aria-hidden="false">
           <div class="panel-header flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
-            <span class="panel-section-title">Task View</span>
+            <div class="panel-header-copy">
+              <span class="panel-section-title">Task Queue</span>
+              <p class="panel-section-copy">Runs move through prepare, clone, agent, and finalize. Re-runs, local clone links, and PRs stay attached here.</p>
+            </div>
             <button
               id="task-fullscreen-toggle"
               class="task-fullscreen-toggle"
@@ -157,12 +157,35 @@
           </div>
         </section>
 
-        <section class="panel prompt-wrap min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
+        <section class="panel prompt-wrap brand-login-card-shell min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
           <div class="panel-header prompt-titlebar flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
-            <span id="prompt-panel-title" class="panel-section-title">Prompt</span>
+            <div class="panel-header-copy">
+              <span id="prompt-panel-title" class="panel-section-title">Studio</span>
+              <p id="prompt-panel-copy" class="panel-section-copy">Compose a repository run, start from a library task, or edit the raw JSON payload.</p>
+            </div>
             <button id="prompt-visibility-toggle" class="prompt-visibility-toggle" type="button" aria-pressed="true" aria-label="Minimize Studio panel" title="Minimize Studio panel">▾</button>
           </div>
           <form id="local-prompt-form" class="prompt-form grid gap-2.5 p-3">
+            <section class="prompt-hero brand-login-card-shell" aria-label="Studio overview">
+              <div class="prompt-hero-inner">
+                <div class="prompt-hero-copy-stack">
+                  <div class="brand-login-badge prompt-hero-badge">
+                    <img src="/static/logo.svg" alt="" aria-hidden="true" class="brand-login-badge-logo">
+                  </div>
+                  <div class="prompt-hero-text-stack">
+                    <span class="prompt-hero-eyebrow brand-label-uppercase">Run Studio</span>
+                    <h2 class="prompt-hero-title">Queue repository work with the same repo, branch, reviewer, and prompt contract the hub executes.</h2>
+                    <p class="prompt-hero-copy">Choose a remote, keep the base branch explicit, add screenshots when helpful, and send a change request that flows straight into the live queue.</p>
+                  </div>
+                </div>
+                <div class="prompt-hero-chips" aria-hidden="true">
+                  <span class="prompt-hero-chip brand-chip-action">Repo remote</span>
+                  <span class="prompt-hero-chip brand-chip-action">Base branch</span>
+                  <span class="prompt-hero-chip brand-chip-action">Reviewers</span>
+                  <span class="prompt-hero-chip brand-chip-action">Screenshots</span>
+                </div>
+              </div>
+            </section>
             <div class="prompt-compose-stack">
               <div id="prompt-builder-panel" class="prompt-panel grid gap-2.5">
                 <div class="prompt-grid">
@@ -195,6 +218,7 @@
                     <input id="builder-target-subdir" class="prompt-control prompt-input" type="text" value="." spellcheck="false" placeholder=".">
                   </label>
                 </div>
+                <p class="prompt-field-copy">Pick a recent remote or paste any git URL. Keeping branch and directory explicit makes re-runs reproducible.</p>
                 <div class="prompt-grid">
                   <label id="builder-reviewer-history-field" class="prompt-field prompt-field-repo-history">
                     <span class="prompt-label">Reviewer</span>
@@ -216,6 +240,7 @@
                     spellcheck="false"
                     placeholder="Describe the change you want"></textarea>
                 </label>
+                <p class="prompt-field-copy">Use plain language. Paste screenshots directly into the prompt box or the screenshot target below when visual context matters.</p>
               </div>
 
               <div id="prompt-library-panel" class="prompt-panel hidden grid gap-2.5">
@@ -238,6 +263,7 @@
                     <input id="library-target-subdir" class="prompt-control prompt-input" type="text" value="." spellcheck="false" placeholder=".">
                   </label>
                 </div>
+                <p class="prompt-field-copy">Library tasks provide a preset prompt, but they still run against the repository, branch, directory, and reviewers you choose here.</p>
                 <div class="prompt-grid">
                   <label id="library-reviewer-history-field" class="prompt-field prompt-field-repo-history">
                     <span class="prompt-label">Reviewer</span>
@@ -290,7 +316,7 @@
                     class="prompt-action-button prompt-action-clear"
                     type="button"
                     disabled>Clear</button>
-                  <button id="local-prompt-submit" class="prompt-action-button prompt-submit" type="submit">Run</button>
+                  <button id="local-prompt-submit" class="prompt-action-button prompt-submit" type="submit">Queue Task</button>
                 </div>
               </div>
             </div>
@@ -392,7 +418,8 @@
       <div class="flex items-start justify-between gap-4">
         <div>
           <h2 id="hub-setup-title" class="text-[2rem] font-semibold leading-tight text-hub-text">Connect Molten Hub</h2>
-          <p id="hub-setup-message" class="mt-3 max-w-xl text-base leading-7 text-hub-text/85">Save your Molten Hub token, to enable your team.</p>
+          <p id="hub-setup-message" class="mt-3 max-w-xl text-base leading-7 text-hub-text/85">Connect this runtime to Molten Hub.</p>
+          <p id="hub-setup-copy" class="hub-setup-copy">Existing agents use an agent token. New agents use a bind token, then save display name, emoji, and profile details for the selected region.</p>
         </div>
         <button id="hub-setup-close" class="task-fullscreen-close !relative !top-0 !right-0 !flex" type="button" aria-label="Close Molten Hub setup" title="Close Molten Hub setup">
           <span class="task-fullscreen-close-icon" aria-hidden="true">&times;</span>
@@ -422,8 +449,8 @@
         </div>
 
         <label id="hub-setup-token-field" class="prompt-field">
-          <span id="hub-setup-token-label" class="prompt-label">Token</span>
-          <input id="hub-setup-token" class="prompt-control prompt-input w-full font-mono text-[0.84rem]" type="text" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Paste token">
+          <span id="hub-setup-token-label" class="prompt-label">Agent Token</span>
+          <input id="hub-setup-token" class="prompt-control prompt-input w-full font-mono text-[0.84rem]" type="text" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Paste agent token">
         </label>
 
         <div id="hub-setup-new-agent-fields" class="hub-setup-profile-grid hidden">
@@ -474,7 +501,7 @@
           </a>
           <div class="hub-setup-actions">
             <button id="hub-setup-connection-toggle" class="hub-setup-connection-toggle prompt-action-button hidden" type="button">Disconnect</button>
-            <button id="hub-setup-submit" class="prompt-action-button prompt-submit" type="submit">Done</button>
+            <button id="hub-setup-submit" class="prompt-action-button prompt-submit" type="submit">Connect Runtime</button>
           </div>
         </div>
       </form>
@@ -483,7 +510,7 @@
 
   <div class="page-bottom-dock" aria-hidden="false">
     <div class="prompt-mode-tabs prompt-mode-tabs-dock" aria-label="Main menu">
-      <a id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true" title="Prompt">
+      <a id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true" title="Studio">
         <span class="prompt-mode-link-shell" aria-hidden="true"></span>
         <span class="prompt-mode-link-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" focusable="false">
@@ -493,8 +520,8 @@
         </span>
         <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
         <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
-        <span class="prompt-mode-link-tooltip" aria-hidden="true">Prompt</span>
-        <span class="sr-only">Prompt</span>
+        <span class="prompt-mode-link-tooltip" aria-hidden="true">Studio</span>
+        <span class="sr-only">Studio</span>
       </a>
       <a id="prompt-mode-library" class="prompt-mode-link" href="#studio-library" aria-selected="false" title="Library">
         <span class="prompt-mode-link-shell" aria-hidden="true"></span>
@@ -947,11 +974,21 @@
     }
 
     function currentHubSetupTokenLabel() {
-      return state.hubSetup.agentMode === "new" ? "Bind Token" : "Token";
+      return state.hubSetup.agentMode === "new" ? "Bind Token" : "Agent Token";
     }
 
     function currentHubSetupTokenPlaceholder() {
-      return state.hubSetup.agentMode === "new" ? "Paste bind token" : "Paste token";
+      return state.hubSetup.agentMode === "new" ? "Paste bind token" : "Paste agent token";
+    }
+
+    function currentHubSetupSupportingCopy() {
+      if (isHubProfileDialogMode()) {
+        return "Update how this runtime appears in Molten Hub. The handle stays stable; display name, emoji, and profile text can change.";
+      }
+      if (state.hubSetup.agentMode === "new") {
+        return "Paste a bind token to redeem a new agent credential, then save the runtime profile for the selected region.";
+      }
+      return "Paste an existing agent token to reconnect this runtime while preserving the current Molten Hub identity.";
     }
 
     function currentHubSetupAutoSubmitKey() {
@@ -1171,6 +1208,7 @@
     const promptModeLibrary = document.getElementById("prompt-mode-library");
     const promptModeJSON = document.getElementById("prompt-mode-json");
     const promptPanelTitle = document.getElementById("prompt-panel-title");
+    const promptPanelCopy = document.getElementById("prompt-panel-copy");
     const githubProfileLink = document.getElementById("github-profile-link");
     const moltenBotHubDockGroup = document.getElementById("moltenbot-hub-dock-group");
     const moltenBotHubLink = document.getElementById("moltenbot-hub-link");
@@ -1213,6 +1251,7 @@
     const hubSetupTitle = document.getElementById("hub-setup-title");
     const hubSetupForm = document.getElementById("hub-setup-form");
     const hubSetupMessage = document.getElementById("hub-setup-message");
+    const hubSetupCopy = document.getElementById("hub-setup-copy");
     const hubSetupClose = document.getElementById("hub-setup-close");
     const hubSetupConnectRegionRow = document.getElementById("hub-setup-connect-region-row");
     const hubSetupConnectAgentRow = document.getElementById("hub-setup-connect-agent-row");
@@ -1700,7 +1739,10 @@
       if (hubSetupMessage) {
         hubSetupMessage.textContent = state.hubSetup.message || (profileEditor
           ? "Update how this runtime appears in Molten Hub."
-          : "Save your Molten Hub token, to enable your team.");
+          : "Connect this runtime to Molten Hub.");
+      }
+      if (hubSetupCopy) {
+        hubSetupCopy.textContent = currentHubSetupSupportingCopy();
       }
       if (hubSetupHandle) {
         hubSetupHandle.value = state.hubSetup.handle || "";
@@ -1764,7 +1806,7 @@
         syncHubTokenValidation();
       }
       if (hubSetupSubmit) {
-        hubSetupSubmit.textContent = profileEditor ? "Save" : "Done";
+        hubSetupSubmit.textContent = profileEditor ? "Save" : (isNew ? "Redeem Token" : "Connect Runtime");
       }
       applyHubDockState();
       renderHubSetupConnectionToggle();
@@ -3867,7 +3909,18 @@
         case "json":
           return "JSON";
         default:
-          return "Prompt";
+          return "Studio";
+      }
+    }
+
+    function promptModeDescription(mode) {
+      switch (mode) {
+        case "library":
+          return "Start from a saved task recipe, then apply it to the repository, branch, directory, and reviewers above.";
+        case "json":
+          return "Edit the raw payload exactly as the hub receives it, including multi-repo runs and review configuration.";
+        default:
+          return "Compose a repository run with remotes, branch, reviewers, screenshots, and a plain-language task brief.";
       }
     }
 
@@ -3890,6 +3943,9 @@
       promptModeJSON.setAttribute("aria-selected", String(isJSON));
       if (promptPanelTitle) {
         promptPanelTitle.textContent = promptModeTitle(state.promptMode);
+      }
+      if (promptPanelCopy) {
+        promptPanelCopy.textContent = promptModeDescription(state.promptMode);
       }
       promptBuilderPanel.classList.toggle("hidden", !isBuilder);
       promptLibraryPanel.classList.toggle("hidden", !isLibrary);
@@ -5003,9 +5059,40 @@
       listNode.replaceChildren();
 
       if (!tasks.length) {
-        const empty = document.createElement("div");
-        empty.className = "placeholder";
-        empty.textContent = "No tasks started yet.";
+        const empty = document.createElement("section");
+        empty.className = "task-empty brand-login-card-shell";
+
+        const badge = document.createElement("div");
+        badge.className = "brand-login-badge task-empty-badge";
+        const badgeLogo = document.createElement("img");
+        badgeLogo.className = "brand-login-badge-logo";
+        badgeLogo.src = MOLTENHUB_LOGO_URL;
+        badgeLogo.alt = "";
+        badgeLogo.setAttribute("aria-hidden", "true");
+        badge.appendChild(badgeLogo);
+
+        const eyebrow = document.createElement("span");
+        eyebrow.className = "task-empty-eyebrow brand-label-uppercase";
+        eyebrow.textContent = "Queue Ready";
+
+        const title = document.createElement("h3");
+        title.className = "task-empty-title";
+        title.textContent = "The queue is clear.";
+
+        const copy = document.createElement("p");
+        copy.className = "task-empty-copy";
+        copy.textContent = "Start from Studio, Library, or JSON. New runs will appear here with stage progress, replay controls, local clone actions, and PR links.";
+
+        const stages = document.createElement("div");
+        stages.className = "task-empty-chips";
+        for (const label of ["prepare", "clone", "agent", "finalize"]) {
+          const chip = document.createElement("span");
+          chip.className = "task-empty-chip brand-chip-action";
+          chip.textContent = label;
+          stages.appendChild(chip);
+        }
+
+        empty.append(badge, eyebrow, title, copy, stages);
         listNode.appendChild(empty);
         return;
       }
@@ -5275,11 +5362,12 @@
         document.body.classList.remove("task-fullscreen-open");
       }
       if (rightCol) {
-        rightCol.classList.toggle("task-list-hidden", !hasTasks);
+        rightCol.classList.toggle("task-list-hidden", false);
       }
       if (taskPanel) {
-        taskPanel.classList.toggle("hidden", !hasTasks);
-        taskPanel.setAttribute("aria-hidden", hasTasks ? "false" : "true");
+        taskPanel.classList.toggle("hidden", false);
+        taskPanel.classList.toggle("is-empty", !hasTasks);
+        taskPanel.setAttribute("aria-hidden", "false");
       }
       if (taskFullscreenToggle) {
         taskFullscreenToggle.disabled = !hasTasks;
