@@ -2953,8 +2953,6 @@ func TestShouldSetupGitHubAuthForRepos(t *testing.T) {
 }
 
 func TestRunHTTPSGitHubRepoConfiguresGitAuthWithoutEnvToken(t *testing.T) {
-	t.Parallel()
-
 	t.Setenv("GH_TOKEN", "")
 	t.Setenv("GITHUB_TOKEN", "")
 
