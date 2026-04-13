@@ -77,6 +77,32 @@ The follow-up run config looks like this:
 
 ## Configuration
 
+### Response Modes
+
+Run configs can optionally set `responseMode` to compress agent prose without changing the underlying task flow. Supported values:
+
+- `default`
+- `caveman-lite`
+- `caveman-full`
+- `caveman-ultra`
+- `caveman-wenyan-lite`
+- `caveman-wenyan-full`
+- `caveman-wenyan-ultra`
+
+MoltenHub Code applies the bundled Caveman skill as a prompt overlay, so the same `responseMode` works across all supported harnesses (`codex`, `claude`, `auggie`, `pi`) without depending on provider-specific plugins or hooks.
+
+Example run config fragment:
+
+```json
+{
+  "repos": ["git@github.com:owner/repo.git"],
+  "baseBranch": "main",
+  "targetSubdir": ".",
+  "prompt": "Fix the failing tests and update coverage.",
+  "responseMode": "caveman-full"
+}
+```
+
 
 **Hub OpenAPI spec:**
 - Live: [`https://na.hub.molten.bot/openapi.yaml`](https://na.hub.molten.bot/openapi.yaml)

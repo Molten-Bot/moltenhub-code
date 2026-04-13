@@ -2723,7 +2723,7 @@ func TestRunCodexStagesAgentsPromptWithinTargetDir(t *testing.T) {
 	runner := &captureRunner{}
 
 	h := New(runner)
-	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, "", codexRunOptions{}, sourcePath); err != nil {
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, "", codexRunOptions{}, sourcePath, ""); err != nil {
 		t.Fatalf("runCodex() error = %v", err)
 	}
 
@@ -2745,6 +2745,31 @@ func TestRunCodexStagesAgentsPromptWithinTargetDir(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(targetDir, "AGENTS.md")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("target AGENTS.md still exists after codex run: err=%v", err)
+	}
+}
+
+func TestRunCodexInjectsResponseModePrompt(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	runner := &captureRunner{}
+
+	h := New(runner)
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, "ship fix", codexRunOptions{}, "", "caveman-ultra"); err != nil {
+		t.Fatalf("runCodex() error = %v", err)
+	}
+
+	if !strings.Contains(runner.cmd.Stdin, "Caveman response mode is enabled for this run only.") {
+		t.Fatalf("captured prompt missing response-mode banner: %q", runner.cmd.Stdin)
+	}
+	if !strings.Contains(runner.cmd.Stdin, "Selected intensity: ultra.") {
+		t.Fatalf("captured prompt missing selected intensity: %q", runner.cmd.Stdin)
+	}
+	if !strings.Contains(runner.cmd.Stdin, "Respond terse like smart caveman.") {
+		t.Fatalf("captured prompt missing caveman skill body: %q", runner.cmd.Stdin)
+	}
+	if !strings.Contains(runner.cmd.Stdin, "ship fix") {
+		t.Fatalf("captured prompt missing task prompt: %q", runner.cmd.Stdin)
 	}
 }
 
@@ -2772,7 +2797,7 @@ func TestRunCodexRetriesWithoutSandboxOnBwrapFailure(t *testing.T) {
 	}}
 
 	h := New(fake)
-	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, ""); err != nil {
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
 		t.Fatalf("runCodex() error = %v", err)
 	}
 	if got := len(fake.exps); got != 0 {
@@ -2863,7 +2888,7 @@ func TestRunCodexReturnsErrorWhenCodexReportsFailure(t *testing.T) {
 	}}
 
 	h := New(fake)
-	err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "")
+	err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", "")
 	if err == nil {
 		t.Fatal("runCodex() error = nil, want codex reported failure error")
 	}
@@ -2882,7 +2907,7 @@ func TestRunCodexReturnsTimeoutWhenAgentStageRunsTooLong(t *testing.T) {
 	h.AgentStageTimeout = 40 * time.Millisecond
 
 	start := time.Now()
-	err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, "investigate timeout", codexRunOptions{}, "")
+	err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, "investigate timeout", codexRunOptions{}, "", "")
 	elapsed := time.Since(start)
 
 	if err == nil {
@@ -2918,7 +2943,7 @@ func TestRunCodexReturnsErrorWhenCodexReportsStructuredTaskFailure(t *testing.T)
 	}}
 
 	h := New(fake)
-	err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "")
+	err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", "")
 	if err == nil {
 		t.Fatal("runCodex() error = nil, want codex reported failure error")
 	}

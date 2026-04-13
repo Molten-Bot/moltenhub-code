@@ -336,6 +336,7 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 				"agentHarness": propertyStringEnum("codex", "claude", "auggie", "pi"),
 				"agentCommand": propertyNonEmptyString(),
 				"prompt":       propertyNonEmptyString(),
+				"responseMode": propertyStringEnum(config.SupportedResponseModesWithDefault()...),
 				"images": map[string]any{
 					"type": "array",
 					"items": map[string]any{

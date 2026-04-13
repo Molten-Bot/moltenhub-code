@@ -112,6 +112,35 @@ func TestNormalizationAndValidationHelpers(t *testing.T) {
 	if err := validateRepoRef("file:///tmp/repo.git"); err != nil {
 		t.Fatalf("validateRepoRef(file URL) error = %v", err)
 	}
+	if got := NormalizeResponseMode("wenyan"); got != "caveman-wenyan-full" {
+		t.Fatalf("NormalizeResponseMode(wenyan) = %q, want caveman-wenyan-full", got)
+	}
+	if got := NormalizeResponseMode("default"); got != "" {
+		t.Fatalf("NormalizeResponseMode(default) = %q, want empty", got)
+	}
+	if modes := SupportedResponseModesWithDefault(); len(modes) != 7 || modes[0] != "default" {
+		t.Fatalf("SupportedResponseModesWithDefault() = %#v", modes)
+	}
+}
+
+func TestValidateRejectsUnsupportedResponseMode(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		Version:       "v1",
+		RepoURL:       "git@github.com:acme/repo.git",
+		BaseBranch:    "main",
+		TargetSubdir:  ".",
+		Prompt:        "review",
+		ResponseMode:  "loud-mode",
+		AgentHarness:  "codex",
+		CommitMessage: "msg",
+		PRTitle:       "title",
+		PRBody:        "body",
+	}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "unsupported responseMode") {
+		t.Fatalf("Validate(unsupported responseMode) error = %v", err)
+	}
 }
 
 func TestDefaultMetadataAndStringHelpers(t *testing.T) {

@@ -142,6 +142,28 @@ func TestDispatchAndProfileHelperBranches(t *testing.T) {
 	if got := buildSupportedSkillsMetadata(); len(got) != 3 {
 		t.Fatalf("buildSupportedSkillsMetadata() len = %d, want 3", len(got))
 	}
+	runConfigPayload := requiredSkillPayloadSchema("", "", []string{"unit-test-coverage"})
+	runConfigSchema, _ := runConfigPayload["run_config_schema"].(map[string]any)
+	properties, _ := runConfigSchema["properties"].(map[string]any)
+	responseMode, _ := properties["responseMode"].(map[string]any)
+	enumValues, ok := responseMode["enum"].([]string)
+	if !ok {
+		rawEnum, rawOK := responseMode["enum"].([]any)
+		if rawOK {
+			enumValues = make([]string, 0, len(rawEnum))
+			for _, item := range rawEnum {
+				value, valueOK := item.(string)
+				if !valueOK {
+					continue
+				}
+				enumValues = append(enumValues, value)
+			}
+			ok = true
+		}
+	}
+	if !ok || len(enumValues) == 0 || enumValues[0] != "default" {
+		t.Fatalf("requiredSkillPayloadSchema().responseMode = %#v, want enum with default", responseMode)
+	}
 }
 
 func TestAPIExtractionHelperBranches(t *testing.T) {

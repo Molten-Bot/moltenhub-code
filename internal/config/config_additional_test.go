@@ -142,3 +142,45 @@ func TestApplyDefaultsReadsAgentRuntimeFromEnv(t *testing.T) {
 		t.Fatalf("AgentCommand = %q, want %q", got, want)
 	}
 }
+
+func TestApplyDefaultsNormalizesResponseModeAliases(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		RepoURL:       "git@github.com:acme/repo.git",
+		Prompt:        "run task",
+		ResponseMode:  " caveman ",
+		AgentHarness:  "codex",
+		CommitMessage: "msg",
+		PRTitle:       "title",
+		PRBody:        "body",
+	}
+	cfg.ApplyDefaults()
+
+	if got, want := cfg.ResponseMode, "caveman-full"; got != want {
+		t.Fatalf("ResponseMode = %q, want %q", got, want)
+	}
+}
+
+func TestLoadRejectsSnakeCaseResponseModeField(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	json := `{
+  "repo": "git@github.com:acme/repo.git",
+  "prompt": "run task",
+  "response_mode": "caveman-full"
+}`
+	if err := os.WriteFile(path, []byte(json), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("Load() error = nil, want unsupported field error")
+	}
+	if !strings.Contains(err.Error(), "response_mode") || !strings.Contains(err.Error(), "responseMode") {
+		t.Fatalf("Load() error = %v, want response_mode canonicalization hint", err)
+	}
+}

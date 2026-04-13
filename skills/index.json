@@ -3,7 +3,7 @@
     "name": "code_for_me",
     "handle": "code_for_me",
     "mode": "prompt",
-    "description": "Prompt-driven repository task run.",
+    "description": "Prompt-driven repository task run. Optional `responseMode` enables bundled Caveman response compression across all supported harnesses.",
     "activation": {
       "type": "skill_request",
       "skill": "code_for_me",
@@ -14,6 +14,7 @@
           ],
           "branch": "main",
           "prompt": "<describe the requested change>",
+          "responseMode": "<default|caveman-lite|caveman-full|caveman-ultra|caveman-wenyan-lite|caveman-wenyan-full|caveman-wenyan-ultra>",
           "reviewers": [
             "<githubhandle>"
           ],
@@ -27,7 +28,7 @@
     "handle": "code_review",
     "mode": "review",
     "displayName": "Pull Request Code Review",
-    "description": "Runs the code-review workflow using repo + either branch or prNumber context.",
+    "description": "Runs the code-review workflow using repo + either branch or prNumber context. Optional `responseMode` enables bundled Caveman response compression.",
     "activation": {
       "type": "skill_request",
       "skill": "code_review",
@@ -36,7 +37,8 @@
           "repos": [
             "<git@github.com:owner/repo.git>"
           ],
-          "branch": "main"
+          "branch": "main",
+          "responseMode": "<default|caveman-lite|caveman-full|caveman-ultra|caveman-wenyan-lite|caveman-wenyan-full|caveman-wenyan-ultra>"
         }
       }
     }
@@ -46,7 +48,7 @@
     "handle": "library_task",
     "mode": "library_task",
     "displayName": "Library Task",
-    "description": "Runs a checked-in library task by handle. Available handles: code-review, delete-prompt-images, fix-merge-main, reduce-codebase-centralize-classes, security-review, security-secrets, unit-test-coverage.",
+    "description": "Runs a checked-in library task by handle. Available handles: code-review, delete-prompt-images, fix-merge-main, reduce-codebase-centralize-classes, security-review, security-secrets, unit-test-coverage. Optional `responseMode` enables bundled Caveman response compression.",
     "activation": {
       "type": "skill_request",
       "skill": "library_task",
@@ -57,6 +59,7 @@
           ],
           "branch": "main",
           "libraryTaskName": "<library-handle>",
+          "responseMode": "<default|caveman-lite|caveman-full|caveman-ultra|caveman-wenyan-lite|caveman-wenyan-full|caveman-wenyan-ultra>",
           "reviewers": [
             "<githubhandle>"
           ]
