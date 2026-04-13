@@ -668,6 +668,8 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 	} else if res.NoChanges && !resultHasPR(res) {
 		status = "no_changes"
 	}
+	detailStatus := dispatchResultDetailStatus(status, res)
+	message := dispatchResultMessage(status, res)
 
 	prURLs := completedPRURLs(res)
 
@@ -680,6 +682,8 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 		"changedRepos": countChangedRepoResults(res.RepoResults),
 		"repoResults":  repoResultPayloads(res.RepoResults),
 		"noChanges":    res.NoChanges,
+		"status":       detailStatus,
+		"message":      message,
 	}
 	if res.Err != nil {
 		result["error"] = res.Err.Error()
@@ -692,18 +696,15 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 		"status":     status,
 		"failed":     res.Err != nil,
 		"ok":         res.Err == nil,
+		"message":    message,
 		"result":     result,
 	}
 	if res.Err != nil {
 		errText := res.Err.Error()
-		failureMessage := failureResponseMessage(errText)
-		result["status"] = "failed"
-		result["message"] = failureMessage
 		payload["error"] = errText
-		payload["message"] = failureMessage
 		payload["failure"] = map[string]any{
 			"status":  "failed",
-			"message": failureMessage,
+			"message": message,
 			"error":   errText,
 			"details": result,
 		}
@@ -713,6 +714,23 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 		payload["to"] = dispatch.ReplyTo
 	}
 	return payload
+}
+
+func dispatchResultDetailStatus(status string, res harness.Result) string {
+	if res.Err != nil || status == "error" {
+		return "failed"
+	}
+	return status
+}
+
+func dispatchResultMessage(status string, res harness.Result) string {
+	if res.Err != nil || status == "error" {
+		return failureResponseMessage(res.Err.Error())
+	}
+	if status == "no_changes" {
+		return "No changes: task completed without repository changes or pull requests."
+	}
+	return "Success: task completed."
 }
 
 func failureResponseMessage(errText string) string {
