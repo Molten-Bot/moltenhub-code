@@ -50,26 +50,35 @@ type TaskLog struct {
 	Text   string `json:"text"`
 }
 
+// TaskControls describes which runtime controls are currently supported.
+type TaskControls struct {
+	Pause    bool `json:"pause,omitempty"`
+	Run      bool `json:"run,omitempty"`
+	ForceRun bool `json:"force_run,omitempty"`
+	Stop     bool `json:"stop,omitempty"`
+}
+
 // Task represents one hub dispatch execution state.
 type Task struct {
-	RequestID    string    `json:"request_id"`
-	Prompt       string    `json:"prompt,omitempty"`
-	Skill        string    `json:"skill,omitempty"`
-	Repo         string    `json:"repo,omitempty"`
-	Repos        []string  `json:"repos,omitempty"`
-	BaseBranch   string    `json:"base_branch,omitempty"`
-	Status       string    `json:"status"`
-	Stage        string    `json:"stage,omitempty"`
-	StageStatus  string    `json:"stage_status,omitempty"`
-	ExitCode     int       `json:"exit_code,omitempty"`
-	WorkspaceDir string    `json:"workspace_dir,omitempty"`
-	Branch       string    `json:"branch,omitempty"`
-	PRURL        string    `json:"pr_url,omitempty"`
-	Error        string    `json:"error,omitempty"`
-	StartedAt    string    `json:"started_at"`
-	UpdatedAt    string    `json:"updated_at"`
-	CanRerun     bool      `json:"can_rerun,omitempty"`
-	Logs         []TaskLog `json:"logs"`
+	RequestID    string       `json:"request_id"`
+	Prompt       string       `json:"prompt,omitempty"`
+	Skill        string       `json:"skill,omitempty"`
+	Repo         string       `json:"repo,omitempty"`
+	Repos        []string     `json:"repos,omitempty"`
+	BaseBranch   string       `json:"base_branch,omitempty"`
+	Status       string       `json:"status"`
+	Stage        string       `json:"stage,omitempty"`
+	StageStatus  string       `json:"stage_status,omitempty"`
+	ExitCode     int          `json:"exit_code,omitempty"`
+	WorkspaceDir string       `json:"workspace_dir,omitempty"`
+	Branch       string       `json:"branch,omitempty"`
+	PRURL        string       `json:"pr_url,omitempty"`
+	Error        string       `json:"error,omitempty"`
+	StartedAt    string       `json:"started_at"`
+	UpdatedAt    string       `json:"updated_at"`
+	CanRerun     bool         `json:"can_rerun,omitempty"`
+	Controls     TaskControls `json:"controls,omitempty"`
+	Logs         []TaskLog    `json:"logs"`
 }
 
 // Connection captures current monitor connectivity state.
@@ -261,6 +270,51 @@ func (b *Broker) Snapshot() Snapshot {
 	}
 
 	return snapshot
+}
+
+// Task returns a copy of the current task snapshot for one request id.
+func (b *Broker) Task(requestID string) (Task, bool) {
+	if b == nil {
+		return Task{}, false
+	}
+
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return Task{}, false
+	}
+
+	now := b.now().UTC()
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.pruneExpiredTasksLocked(now)
+
+	t, ok := b.tasks[requestID]
+	if !ok || t == nil {
+		return Task{}, false
+	}
+	_, canRerun := b.runConfigs[requestID]
+	return Task{
+		RequestID:    t.RequestID,
+		Prompt:       t.Prompt,
+		Skill:        t.Skill,
+		Repo:         t.Repo,
+		Repos:        append([]string(nil), t.Repos...),
+		BaseBranch:   t.BaseBranch,
+		Status:       normalizeTaskTerminalStatus(t.Status),
+		Stage:        t.Stage,
+		StageStatus:  t.StageStatus,
+		ExitCode:     t.ExitCode,
+		WorkspaceDir: t.WorkspaceDir,
+		Branch:       t.Branch,
+		PRURL:        t.PRURL,
+		Error:        t.Error,
+		StartedAt:    t.StartedAt.UTC().Format(time.RFC3339Nano),
+		UpdatedAt:    t.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		CanRerun:     canRerun,
+		Logs:         append([]TaskLog(nil), t.Logs...),
+	}, true
 }
 
 // RecordTaskRunConfig stores a parsed task run config payload for future reruns.

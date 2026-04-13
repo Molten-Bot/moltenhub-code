@@ -4966,6 +4966,12 @@
             prURL: String(task?.pr_url || "").trim(),
             canRerun: canRerunTask(task),
             canCopyClone: canCopyTaskCloneCommand(task),
+            controls: {
+              pause: Boolean(task?.controls?.pause),
+              run: Boolean(task?.controls?.run),
+              forceRun: Boolean(task?.controls?.force_run),
+              stop: Boolean(task?.controls?.stop),
+            },
             taskControlBusy: isTaskControlInFlight(requestID),
             closePending: isTaskClosePending(requestID),
           };
@@ -5071,13 +5077,13 @@
         }
 
         const taskControlBusy = isTaskControlInFlight(requestID);
-        if (!isCompletedTask(task)) {
-          const statusLower = String(task.status || "").toLowerCase();
-          const paused = statusLower === "paused";
-          const pending = statusLower === "pending";
-          const canTogglePauseRun = paused || statusLower !== "running";
-
-          if (pending) {
+        const controls = task?.controls || {};
+        const canPause = Boolean(controls.pause);
+        const canRun = Boolean(controls.run);
+        const canForceRun = Boolean(controls.force_run);
+        const canStop = Boolean(controls.stop);
+        if (!isCompletedTask(task) && (canPause || canRun || canForceRun || canStop)) {
+          if (canForceRun) {
             const forceStart = document.createElement("button");
             forceStart.type = "button";
             forceStart.className = "task-control-toggle";
@@ -5095,32 +5101,32 @@
           const pauseRun = document.createElement("button");
           pauseRun.type = "button";
           pauseRun.className = "task-control-toggle";
-          pauseRun.textContent = paused ? "▶" : "||";
-          pauseRun.title = paused
-            ? "Resume this queued task"
-            : canTogglePauseRun
-              ? "Pause this queued task"
-              : "Use Stop to kill a running task";
-          pauseRun.setAttribute("aria-label", paused ? "Run task" : "Pause task");
-          pauseRun.disabled = taskControlBusy || !canTogglePauseRun;
+          pauseRun.textContent = canRun ? "▶" : "||";
+          pauseRun.title = canRun ? "Resume this queued task" : "Pause this queued task";
+          pauseRun.setAttribute("aria-label", canRun ? "Run task" : "Pause task");
+          pauseRun.disabled = taskControlBusy;
           pauseRun.addEventListener("click", (event) => {
             event.stopPropagation();
-            controlTask(requestID, paused ? "run" : "pause");
+            controlTask(requestID, canRun ? "run" : "pause");
           });
-          topActions.appendChild(pauseRun);
+          if (canPause || canRun) {
+            topActions.appendChild(pauseRun);
+          }
 
-          const stop = document.createElement("button");
-          stop.type = "button";
-          stop.className = "task-stop";
-          stop.textContent = "■";
-          stop.title = "Kill this task";
-          stop.setAttribute("aria-label", "Stop task");
-          stop.disabled = taskControlBusy;
-          stop.addEventListener("click", (event) => {
-            event.stopPropagation();
-            controlTask(requestID, "stop");
-          });
-          topActions.appendChild(stop);
+          if (canStop) {
+            const stop = document.createElement("button");
+            stop.type = "button";
+            stop.className = "task-stop";
+            stop.textContent = "■";
+            stop.title = "Kill this task";
+            stop.setAttribute("aria-label", "Stop task");
+            stop.disabled = taskControlBusy;
+            stop.addEventListener("click", (event) => {
+              event.stopPropagation();
+              controlTask(requestID, "stop");
+            });
+            topActions.appendChild(stop);
+          }
         }
 
         if (canRerunTask(task)) {

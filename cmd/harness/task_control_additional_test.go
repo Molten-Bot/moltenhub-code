@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/jef/moltenhub-code/internal/hubui"
 )
 
 func TestLocalTaskControllerCompleteRemovesTask(t *testing.T) {
@@ -156,4 +158,47 @@ func TestWaitUntilRunnableContextCancelAndStoppedHandle(t *testing.T) {
 	if err := handle.WaitUntilRunnable(context.Background()); !errors.Is(err, errTaskStoppedByOperator) {
 		t.Fatalf("WaitUntilRunnable(stopped) error = %v, want %v", err, errTaskStoppedByOperator)
 	}
+}
+
+func TestLocalTaskControllerControlsReflectHandleState(t *testing.T) {
+	t.Parallel()
+
+	controller := newLocalTaskController()
+	_, cancel := context.WithCancelCause(context.Background())
+	handle := controller.Register("local-controls", cancel)
+	if handle == nil {
+		t.Fatal("Register() returned nil handle")
+	}
+
+	assertControls := func(label string, got, want hubui.TaskControls) {
+		t.Helper()
+		if got != want {
+			t.Fatalf("%s controls = %#v, want %#v", label, got, want)
+		}
+	}
+
+	assertControls("pending", controller.Controls("local-controls"), hubui.TaskControls{
+		Pause:    true,
+		ForceRun: true,
+		Stop:     true,
+	})
+
+	if err := controller.Pause("local-controls"); err != nil {
+		t.Fatalf("Pause() error = %v", err)
+	}
+	assertControls("paused", controller.Controls("local-controls"), hubui.TaskControls{
+		Run:  true,
+		Stop: true,
+	})
+
+	handle.SetRunning(true)
+	assertControls("running", controller.Controls("local-controls"), hubui.TaskControls{
+		Stop: true,
+	})
+
+	if !handle.Stop() {
+		t.Fatal("Stop() = false, want true")
+	}
+	assertControls("stopped", controller.Controls("local-controls"), hubui.TaskControls{})
+	assertControls("missing", controller.Controls("missing"), hubui.TaskControls{})
 }

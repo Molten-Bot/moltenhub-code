@@ -743,6 +743,7 @@ func runHub(args []string) int {
 			return enqueueLocalRun(reqCtx, runCfg, true, "rerun", force)
 		}
 		uiServer.CloseTask = cleanupTaskLogs
+		uiServer.ResolveTaskControls = localTaskController.Controls
 		uiServer.PauseTask = func(_ context.Context, requestID string) error {
 			if err := localTaskController.Pause(requestID); err != nil {
 				return err
