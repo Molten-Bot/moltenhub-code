@@ -615,7 +615,7 @@
     const HUB_LOGIN_URL = "https://app.molten.bot/signin?target=hub";
     const HUB_DASHBOARD_URL = "https://app.molten.bot/hub";
     const GOOGLE_ANALYTICS_MEASUREMENT_ID = "G-BY33RFG2WB";
-    const COMPLETED_STATUSES = new Set(["ok", "no_changes", "error", "invalid", "duplicate", "stopped"]);
+    const COMPLETED_STATUSES = new Set(["completed", "ok", "no_changes", "error", "invalid", "duplicate", "stopped"]);
     const TASK_PROGRESS_STEPS = [
       { id: "received", label: "Task Received", detail: "Dispatch accepted by hub.", icon: "moltenhub" },
       { id: "run", label: "Run Started", detail: "Harness run initialized.", icon: "moltenhub" },
@@ -4505,7 +4505,7 @@
       if (status === "pending" || status === "active" || status === "paused") return 1;
       if (status === "error" || status === "invalid" || status === "stopped") return 2;
       if (status === "duplicate") return 3;
-      if (status === "ok" || status === "no_changes") return 4;
+      if (status === "completed" || status === "ok" || status === "no_changes") return 4;
       return 5;
     }
 
@@ -4797,7 +4797,7 @@
       }
 
       const status = task.status || "";
-      if (status !== "ok" && status !== "no_changes" && status !== "error" && status !== "invalid" && status !== "duplicate" && status !== "stopped") {
+      if (status !== "completed" && status !== "ok" && status !== "no_changes" && status !== "error" && status !== "invalid" && status !== "duplicate" && status !== "stopped") {
         return;
       }
 
@@ -4810,7 +4810,7 @@
       const detail = document.createElement("span");
       detail.className = "task-result-detail";
 
-      if (status === "ok") {
+      if (status === "completed" || status === "ok") {
         title.textContent = "Task Success";
         detail.textContent = task.pr_url ? "Pull request created." : "Completed.";
       } else if (status === "no_changes") {

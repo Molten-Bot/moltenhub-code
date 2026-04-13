@@ -1729,6 +1729,7 @@ select.prompt-control {
   background: var(--surface-badge-idle);
 }
 
+.badge.completed,
 .badge.ok {
   background: var(--good);
 }
@@ -1947,6 +1948,7 @@ select.prompt-control {
   display: flex;
 }
 
+.task-result.completed,
 .task-result.ok {
   color: var(--surface-success);
   background: rgba(43, 182, 115, 0.1);

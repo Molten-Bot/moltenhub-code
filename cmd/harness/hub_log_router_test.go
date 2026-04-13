@@ -21,7 +21,7 @@ func TestClassifyHubLogLine(t *testing.T) {
 		{line: `dispatch status=start request_id=req-1 skill=code_for_me`, want: hub.LogLevelDebug},
 		{line: `dispatch request_id=req-1 stage=clone status=ok repo=git@github.com:acme/repo.git`, want: hub.LogLevelDebug},
 		{line: `dispatch request_id=req-1 stage=codex status=running elapsed_s=9`, want: hub.LogLevelDebug},
-		{line: `dispatch status=ok request_id=req-1 workspace=/tmp/run branch=moltenhub-fix`, want: hub.LogLevelInfo},
+		{line: `dispatch status=completed request_id=req-1 workspace=/tmp/run branch=moltenhub-fix`, want: hub.LogLevelInfo},
 		{line: `hub.auth status=ok`, want: hub.LogLevelInfo},
 	}
 

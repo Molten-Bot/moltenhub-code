@@ -38,7 +38,7 @@ func TestPRMergeMonitorRemovesCompletedTaskOncePRMerges(t *testing.T) {
 	broker := NewBroker()
 	broker.RecordTaskRunConfig("req-merged", []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"ship it"}`))
 	broker.IngestLog("dispatch status=start request_id=req-merged repo=git@github.com:acme/repo.git")
-	broker.IngestLog("dispatch status=ok request_id=req-merged workspace=/tmp/run branch=moltenhub-ship pr_url=https://github.com/acme/repo/pull/42")
+	broker.IngestLog("dispatch status=completed request_id=req-merged workspace=/tmp/run branch=moltenhub-ship pr_url=https://github.com/acme/repo/pull/42")
 
 	runner := &stubPRMonitorRunner{
 		result: execx.Result{Stdout: `{"state":"MERGED","mergedAt":"2026-04-09T12:00:00Z"}`},
@@ -107,7 +107,7 @@ func TestPRMergeMonitorKeepsTaskVisibleUntilPRIsMerged(t *testing.T) {
 
 	broker := NewBroker()
 	broker.IngestLog("dispatch status=start request_id=req-open repo=git@github.com:acme/repo.git")
-	broker.IngestLog("dispatch status=ok request_id=req-open workspace=/tmp/run branch=moltenhub-ship pr_url=https://github.com/acme/repo/pull/77")
+	broker.IngestLog("dispatch status=completed request_id=req-open workspace=/tmp/run branch=moltenhub-ship pr_url=https://github.com/acme/repo/pull/77")
 
 	runner := &stubPRMonitorRunner{
 		result: execx.Result{Stdout: `{"state":"OPEN","mergedAt":""}`},
@@ -155,7 +155,7 @@ func TestPRMergeMonitorLogsCheckFailuresAndKeepsTask(t *testing.T) {
 
 	broker := NewBroker()
 	broker.IngestLog("dispatch status=start request_id=req-fail repo=git@github.com:acme/repo.git")
-	broker.IngestLog("dispatch status=ok request_id=req-fail workspace=/tmp/run branch=moltenhub-ship pr_url=https://github.com/acme/repo/pull/99")
+	broker.IngestLog("dispatch status=completed request_id=req-fail workspace=/tmp/run branch=moltenhub-ship pr_url=https://github.com/acme/repo/pull/99")
 
 	runner := &stubPRMonitorRunner{err: errors.New("gh failed")}
 	logs := make(chan string, 8)

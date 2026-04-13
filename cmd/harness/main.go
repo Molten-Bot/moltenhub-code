@@ -140,7 +140,7 @@ func runSingle(args []string) int {
 		return result.ExitCode
 	}
 
-	if result.NoChanges {
+	if result.NoChanges && !resultHasPR(result) {
 		var line strings.Builder
 		line.WriteString(fmt.Sprintf("status=no_changes workspace=%s branch=%s", result.WorkspaceDir, result.Branch))
 		if result.PRURL != "" {
@@ -153,11 +153,11 @@ func runSingle(args []string) int {
 		return harness.ExitSuccess
 	}
 	var line strings.Builder
-	line.WriteString(fmt.Sprintf("status=ok workspace=%s branch=%s", result.WorkspaceDir, result.Branch))
+	line.WriteString(fmt.Sprintf("status=completed workspace=%s branch=%s", result.WorkspaceDir, result.Branch))
 	if result.PRURL != "" {
 		line.WriteString(fmt.Sprintf(" pr_url=%s", result.PRURL))
 	}
-	if prURLs := joinPRURLs(result.RepoResults); prURLs != "" {
+	if prURLs := completedPRURLs(result); prURLs != "" {
 		line.WriteString(fmt.Sprintf(" pr_urls=%s", prURLs))
 	}
 	if changedRepos := countChangedRepos(result.RepoResults); changedRepos > 0 {
@@ -1069,7 +1069,7 @@ func runLocalDispatch(
 		)
 		return localDispatchOutcome{State: "error", Result: res}
 	}
-	if res.NoChanges {
+	if res.NoChanges && !resultHasPR(res) {
 		logf(
 			"dispatch status=no_changes request_id=%s workspace=%s branch=%s pr_url=%s pr_urls=%s",
 			requestID,
@@ -1081,15 +1081,15 @@ func runLocalDispatch(
 		return localDispatchOutcome{State: "no_changes", Result: res}
 	}
 	logf(
-		"dispatch status=ok request_id=%s workspace=%s branch=%s pr_url=%s pr_urls=%s changed_repos=%d",
+		"dispatch status=completed request_id=%s workspace=%s branch=%s pr_url=%s pr_urls=%s changed_repos=%d",
 		requestID,
 		res.WorkspaceDir,
 		res.Branch,
 		res.PRURL,
-		joinPRURLs(res.RepoResults),
+		completedPRURLs(res),
 		countChangedRepos(res.RepoResults),
 	)
-	return localDispatchOutcome{State: "ok", Result: res}
+	return localDispatchOutcome{State: "completed", Result: res}
 }
 
 func failureFollowUpRunConfig(
@@ -1522,6 +1522,20 @@ func joinAllPRURLs(results []harness.RepoResult) string {
 		urls = append(urls, strings.TrimSpace(result.PRURL))
 	}
 	return strings.Join(urls, ",")
+}
+
+func resultHasPR(result harness.Result) bool {
+	if strings.TrimSpace(result.PRURL) != "" {
+		return true
+	}
+	return strings.TrimSpace(joinAllPRURLs(result.RepoResults)) != ""
+}
+
+func completedPRURLs(result harness.Result) string {
+	if result.NoChanges {
+		return joinAllPRURLs(result.RepoResults)
+	}
+	return joinPRURLs(result.RepoResults)
 }
 
 func countChangedRepos(results []harness.RepoResult) int {

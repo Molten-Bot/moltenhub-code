@@ -2074,7 +2074,7 @@ func TestHandlerTaskRerunAccepted(t *testing.T) {
 	payload := `{"repo":"git@github.com:acme/repo.git","baseBranch":"main","targetSubdir":".","prompt":"rerun this"}`
 	b.RecordTaskRunConfig(requestID, []byte(payload))
 	b.IngestLog("dispatch status=start request_id=req-100")
-	b.IngestLog("dispatch status=ok request_id=req-100 workspace=/tmp/run branch=moltenhub-rerun")
+	b.IngestLog("dispatch status=completed request_id=req-100 workspace=/tmp/run branch=moltenhub-rerun")
 
 	var gotBody string
 	var closeCalls []string
@@ -2387,7 +2387,7 @@ func TestHandlerTaskCloseAccepted(t *testing.T) {
 	b := NewBroker()
 	b.RecordTaskRunConfig("req-close", []byte(`{"repo":"x","prompt":"x"}`))
 	b.IngestLog("dispatch status=start request_id=req-close")
-	b.IngestLog("dispatch status=ok request_id=req-close workspace=/tmp/run branch=moltenhub-close")
+	b.IngestLog("dispatch status=completed request_id=req-close workspace=/tmp/run branch=moltenhub-close")
 
 	var closedID string
 	srv := NewServer("", b)

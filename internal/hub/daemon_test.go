@@ -560,8 +560,8 @@ func TestDispatchResultPayloadNoChangesIncludesExistingPRURLs(t *testing.T) {
 	}
 
 	payload := dispatchResultPayload(cfg, dispatch, res)
-	if got := payload["status"]; got != "no_changes" {
-		t.Fatalf("status = %#v, want %q", got, "no_changes")
+	if got := payload["status"]; got != "completed" {
+		t.Fatalf("status = %#v, want %q", got, "completed")
 	}
 	result, ok := payload["result"].(map[string]any)
 	if !ok {

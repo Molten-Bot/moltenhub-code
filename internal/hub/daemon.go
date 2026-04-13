@@ -642,7 +642,7 @@ func (d Daemon) handleDispatch(
 		return
 	}
 	d.recordGitHubTaskCompleteActivity(ctx, api, dispatch.RequestID)
-	if res.NoChanges {
+	if res.NoChanges && !resultHasPR(res) {
 		d.logf(
 			"dispatch status=no_changes request_id=%s workspace=%s branch=%s pr_url=%s pr_urls=%s",
 			dispatch.RequestID,
@@ -654,12 +654,12 @@ func (d Daemon) handleDispatch(
 		return
 	}
 	d.logf(
-		"dispatch status=ok request_id=%s workspace=%s branch=%s pr_url=%s pr_urls=%s changed_repos=%d",
+		"dispatch status=completed request_id=%s workspace=%s branch=%s pr_url=%s pr_urls=%s changed_repos=%d",
 		dispatch.RequestID,
 		res.WorkspaceDir,
 		res.Branch,
 		res.PRURL,
-		joinRepoPRURLs(res.RepoResults),
+		completedPRURLs(res),
 		countChangedRepoResults(res.RepoResults),
 	)
 }
@@ -674,17 +674,14 @@ func (d Daemon) recordGitHubTaskCompleteActivity(ctx context.Context, api Molten
 }
 
 func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.Result) map[string]any {
-	status := "ok"
+	status := "completed"
 	if res.Err != nil {
 		status = "error"
-	} else if res.NoChanges {
+	} else if res.NoChanges && !resultHasPR(res) {
 		status = "no_changes"
 	}
 
-	prURLs := joinRepoPRURLs(res.RepoResults)
-	if res.NoChanges {
-		prURLs = joinAllRepoPRURLs(res.RepoResults)
-	}
+	prURLs := completedPRURLs(res)
 
 	result := map[string]any{
 		"exitCode":     res.ExitCode,
@@ -893,6 +890,20 @@ func joinAllRepoPRURLs(results []harness.RepoResult) string {
 		urls = append(urls, url)
 	}
 	return strings.Join(urls, ",")
+}
+
+func resultHasPR(result harness.Result) bool {
+	if strings.TrimSpace(result.PRURL) != "" {
+		return true
+	}
+	return strings.TrimSpace(joinAllRepoPRURLs(result.RepoResults)) != ""
+}
+
+func completedPRURLs(result harness.Result) string {
+	if result.NoChanges {
+		return joinAllRepoPRURLs(result.RepoResults)
+	}
+	return joinRepoPRURLs(result.RepoResults)
 }
 
 func countChangedRepoResults(results []harness.RepoResult) int {
