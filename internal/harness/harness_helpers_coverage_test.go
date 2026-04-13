@@ -110,8 +110,11 @@ func TestHarnessFilesystemAndPromptHelpers(t *testing.T) {
 	if got := cavemanIntensityLabel("caveman-wenyan-ultra"); got != "wenyan-ultra" {
 		t.Fatalf("cavemanIntensityLabel() = %q, want wenyan-ultra", got)
 	}
-	if got, err := withResponseModePrompt("ship fix", "default"); err != nil || got != "ship fix" {
-		t.Fatalf("withResponseModePrompt(default) = (%q, %v), want original prompt", got, err)
+	if got, err := withResponseModePrompt("ship fix", "default"); err != nil || !strings.Contains(got, "Caveman response mode is enabled for this run only.") {
+		t.Fatalf("withResponseModePrompt(default) = (%q, %v), want caveman overlay", got, err)
+	}
+	if got, err := withResponseModePrompt("ship fix", "off"); err != nil || got != "ship fix" {
+		t.Fatalf("withResponseModePrompt(off) = (%q, %v), want original prompt", got, err)
 	}
 }
 

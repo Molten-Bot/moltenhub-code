@@ -17,6 +17,8 @@ import (
 const (
 	prTitlePrefix        = "moltenhub-"
 	DefaultRepositoryURL = "git@github.com:Molten-Bot/moltenhub-code.git"
+	DefaultResponseMode  = "caveman-full"
+	DisabledResponseMode = "off"
 )
 
 const prBodyFooter = "If you would like to connect agents together checkout [Molten Bot Hub](https://molten.bot/hub)."
@@ -308,6 +310,7 @@ func normalizePromptImages(images []PromptImage) []PromptImage {
 }
 
 var supportedResponseModes = []string{
+	DisabledResponseMode,
 	"caveman-lite",
 	"caveman-full",
 	"caveman-ultra",
@@ -321,12 +324,12 @@ func SupportedResponseModes() []string {
 	return append([]string(nil), supportedResponseModes...)
 }
 
-// SupportedResponseModesWithDefault returns canonical response modes including default prose.
+// SupportedResponseModesWithDefault returns canonical response modes plus the default alias.
 func SupportedResponseModesWithDefault() []string {
 	return append([]string{"default"}, supportedResponseModes...)
 }
 
-// NormalizeResponseMode returns the canonical response mode or empty for default prose.
+// NormalizeResponseMode returns the canonical response mode. "off" disables caveman compression.
 func NormalizeResponseMode(mode string) string {
 	normalized, ok := normalizeResponseMode(mode)
 	if !ok {
@@ -339,10 +342,12 @@ func normalizeResponseMode(mode string) (string, bool) {
 	normalized := strings.ToLower(strings.TrimSpace(mode))
 	normalized = strings.ReplaceAll(normalized, "_", "-")
 	switch normalized {
-	case "", "default", "off", "none", "normal":
-		return "", true
+	case "", "default":
+		return DefaultResponseMode, true
+	case DisabledResponseMode, "none", "normal":
+		return DisabledResponseMode, true
 	case "caveman":
-		return "caveman-full", true
+		return DefaultResponseMode, true
 	case "caveman-lite", "caveman-full", "caveman-ultra":
 		return normalized, true
 	case "wenyan", "wenyan-full", "caveman-wenyan", "caveman-wenyan-full":

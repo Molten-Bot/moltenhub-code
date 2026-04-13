@@ -19,7 +19,7 @@ const (
 func withResponseModePrompt(prompt, responseMode string) (string, error) {
 	prompt = strings.TrimSpace(prompt)
 	responseMode = config.NormalizeResponseMode(responseMode)
-	if responseMode == "" {
+	if responseMode == config.DisabledResponseMode {
 		return prompt, nil
 	}
 

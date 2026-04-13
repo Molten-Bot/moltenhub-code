@@ -162,6 +162,43 @@ func TestApplyDefaultsNormalizesResponseModeAliases(t *testing.T) {
 	}
 }
 
+func TestApplyDefaultsDefaultsResponseModeToCavemanFull(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		RepoURL:       "git@github.com:acme/repo.git",
+		Prompt:        "run task",
+		AgentHarness:  "codex",
+		CommitMessage: "msg",
+		PRTitle:       "title",
+		PRBody:        "body",
+	}
+	cfg.ApplyDefaults()
+
+	if got, want := cfg.ResponseMode, "caveman-full"; got != want {
+		t.Fatalf("ResponseMode = %q, want %q", got, want)
+	}
+}
+
+func TestApplyDefaultsPreservesExplicitResponseModeOptOut(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		RepoURL:       "git@github.com:acme/repo.git",
+		Prompt:        "run task",
+		ResponseMode:  " off ",
+		AgentHarness:  "codex",
+		CommitMessage: "msg",
+		PRTitle:       "title",
+		PRBody:        "body",
+	}
+	cfg.ApplyDefaults()
+
+	if got, want := cfg.ResponseMode, DisabledResponseMode; got != want {
+		t.Fatalf("ResponseMode = %q, want %q", got, want)
+	}
+}
+
 func TestLoadRejectsSnakeCaseResponseModeField(t *testing.T) {
 	t.Parallel()
 

@@ -27,7 +27,7 @@ type stubMoltenHubAPI struct {
 	mu           sync.Mutex
 	acked        []string
 	nacked       []string
-	published     []map[string]any
+	published    []map[string]any
 	offlineCalls []struct {
 		SessionKey string
 		Reason     string
@@ -350,6 +350,9 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 	if got := rerunConfig["targetSubdir"]; got != "internal/hub" {
 		t.Fatalf("rerun targetSubdir = %#v, want internal/hub", got)
 	}
+	if got := rerunConfig["responseMode"]; got != config.DefaultResponseMode {
+		t.Fatalf("rerun responseMode = %#v, want %q", got, config.DefaultResponseMode)
+	}
 
 	followUpPayload := api.published[2]
 	if got := followUpPayload["type"]; got != "skill_request" {
@@ -415,6 +418,58 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 	}
 	if got := api.offlineCalls[0].Reason; got != transportOfflineReasonExecutionFailure {
 		t.Fatalf("offline reason = %q, want %q", got, transportOfflineReasonExecutionFailure)
+	}
+}
+
+func TestHandleDispatchQueuesFailureRerunWithExplicitResponseModeOptOut(t *testing.T) {
+	t.Parallel()
+
+	d := NewDaemon(failingRunner{err: errors.New("runner exploded")})
+	api := &stubMoltenHubAPI{token: "t"}
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:         "code_for_me",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+	}
+
+	runCfg := config.Config{
+		Repo:         "git@github.com:acme/repo.git",
+		BaseBranch:   "release",
+		TargetSubdir: "internal/hub",
+		Prompt:       "fix failing checks",
+		ResponseMode: config.DisabledResponseMode,
+	}
+	runCfg.ApplyDefaults()
+
+	d.handleDispatch(
+		context.Background(),
+		api,
+		cfg,
+		SkillDispatch{
+			RequestID: "req-follow-up-off",
+			Skill:     "code_for_me",
+			Config:    runCfg,
+		},
+		"",
+		false,
+	)
+
+	api.mu.Lock()
+	defer api.mu.Unlock()
+
+	if got, want := len(api.published), 3; got != want {
+		t.Fatalf("published payload count = %d, want %d", got, want)
+	}
+
+	rerunPayload := api.published[1]
+	rerunConfig, _ := rerunPayload["config"].(map[string]any)
+	if rerunConfig == nil {
+		t.Fatalf("rerun config missing: %#v", rerunPayload)
+	}
+	if got := rerunConfig["responseMode"]; got != config.DisabledResponseMode {
+		t.Fatalf("rerun responseMode = %#v, want %q", got, config.DisabledResponseMode)
 	}
 }
 

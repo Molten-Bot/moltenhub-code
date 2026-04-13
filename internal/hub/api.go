@@ -1312,7 +1312,7 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 		"name":        normalizeSkillName(skillCfg.Name),
 		"handle":      normalizeSkillName(skillCfg.Name),
 		"mode":        "prompt",
-		"description": "Prompt-driven repository task run. Optional `responseMode` enables bundled Caveman response compression across all supported harnesses.",
+		"description": "Prompt-driven repository task run. Omitted or `default` `responseMode` uses bundled `caveman-full`; set `off` for normal prose.",
 		"activation": buildActivation(skillCfg.Name, map[string]any{
 			"repos":        []string{"<git@github.com:owner/repo.git>"},
 			"branch":       "main",
@@ -1328,7 +1328,7 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 		"handle":      normalizeSkillName(codeReviewSkillName),
 		"mode":        "review",
 		"displayName": "Pull Request Code Review",
-		"description": fmt.Sprintf("Runs the %s workflow using repo + either branch or prNumber context. Optional `responseMode` enables bundled Caveman response compression.", codeReviewLibraryTaskName),
+		"description": fmt.Sprintf("Runs the %s workflow using repo + either branch or prNumber context. Omitted or `default` `responseMode` uses bundled `caveman-full`; set `off` for normal prose.", codeReviewLibraryTaskName),
 		"activation": buildActivation(codeReviewSkillName, map[string]any{
 			"repos":        []string{"<git@github.com:owner/repo.git>"},
 			"branch":       "main",
@@ -1355,7 +1355,7 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 		"handle":      normalizeSkillName(libraryTaskSkillName),
 		"mode":        "library_task",
 		"displayName": "Library Task",
-		"description": libraryTaskDescription + " Optional `responseMode` enables bundled Caveman response compression.",
+		"description": libraryTaskDescription + " Omitted or `default` `responseMode` uses bundled `caveman-full`; set `off` for normal prose.",
 		"activation": buildActivation(libraryTaskSkillName, map[string]any{
 			"repos":           []string{"<git@github.com:owner/repo.git>"},
 			"branch":          "main",
@@ -1373,15 +1373,15 @@ func buildSupportedSkillsMetadata() []map[string]any {
 	return []map[string]any{
 		{
 			"name":        normalizeSkillName(runtimeSkill.Name),
-			"description": "Prompt-driven repository task run with optional `responseMode` for Caveman response compression.",
+			"description": "Prompt-driven repository task run. Defaults to `caveman-full`; set `responseMode=off` for normal prose.",
 		},
 		{
 			"name":        normalizeSkillName(codeReviewSkillName),
-			"description": "Repository code review run that targets the checked-in review workflow and supports optional `responseMode` compression.",
+			"description": "Repository code review run that targets the checked-in review workflow. Defaults to `caveman-full`; set `responseMode=off` for normal prose.",
 		},
 		{
 			"name":        normalizeSkillName(libraryTaskSkillName),
-			"description": "Generic library task entrypoint that requires a library task handle and supports optional `responseMode` compression.",
+			"description": "Generic library task entrypoint that requires a library task handle. Defaults to `caveman-full`; set `responseMode=off` for normal prose.",
 		},
 	}
 }

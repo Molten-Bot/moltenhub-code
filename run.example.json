@@ -8,8 +8,8 @@
   // Then switch to: "agentHarness": "pi",
   // optional override when executable name differs from harness default
   // "agentCommand": "codex",
-  // optional shared response compression across codex/claude/auggie/pi:
-  // "responseMode": "caveman-full",
+  // optional override; omitted or "default" uses "caveman-full", "off" disables compression:
+  // "responseMode": "off",
   "githubHandle": "octocat",
   "prompt": "Add your prompt here."
   // library task example:

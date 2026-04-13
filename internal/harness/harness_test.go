@@ -2542,6 +2542,10 @@ func TestRunUsesConfiguredRuntimeCommand(t *testing.T) {
 		t.Fatalf("Resolve() error = %v", err)
 	}
 	runtimePrompt := withAgentsPrompt(cfg.Prompt, agentsPath)
+	runtimePrompt, err = withResponseModePrompt(runtimePrompt, cfg.ResponseMode)
+	if err != nil {
+		t.Fatalf("withResponseModePrompt() error = %v", err)
+	}
 	runtimeCmd, err := agentCommandWithOptions(runtime, targetDir, runtimePrompt, codexRunOptions{})
 	if err != nil {
 		t.Fatalf("agentCommandWithOptions() error = %v", err)
