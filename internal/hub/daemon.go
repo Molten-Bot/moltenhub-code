@@ -32,6 +32,7 @@ type Daemon struct {
 const wsFallbackWindow = 30 * time.Second
 const dispatchDedupTTL = 2 * time.Hour
 const agentStatusUpdateTimeout = 5 * time.Second
+const failureFollowUpRequestIDSuffix = "-failure-review"
 const failureFollowUpPromptBase = failurefollowup.RequiredPrompt
 const failureFollowUpNoPathGuidance = "No workspace or log path was captured before the failure. Investigate the task history and runtime error details first."
 const failureFollowUpBaseBranch = "main"
@@ -739,6 +740,9 @@ func shouldQueueFailureFollowUp(dispatch SkillDispatch, res harness.Result) (boo
 	if res.Err == nil {
 		return false, "failed task did not include an error"
 	}
+	if isFailureFollowUpRequestID(dispatch.RequestID) {
+		return false, "run is already a failure follow-up"
+	}
 	return true, ""
 }
 
@@ -853,7 +857,15 @@ func failureFollowUpRequestID(requestID string) string {
 	if requestID == "" {
 		return "failure-review"
 	}
-	return requestID + "-failure-review"
+	if isFailureFollowUpRequestID(requestID) {
+		return requestID
+	}
+	return requestID + failureFollowUpRequestIDSuffix
+}
+
+func isFailureFollowUpRequestID(requestID string) bool {
+	requestID = strings.TrimSpace(requestID)
+	return strings.HasSuffix(requestID, failureFollowUpRequestIDSuffix)
 }
 
 func joinRepoPRURLs(results []harness.RepoResult) string {

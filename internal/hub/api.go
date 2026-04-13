@@ -757,11 +757,24 @@ func enrichInboundMessageRouting(message, result, root map[string]any) map[strin
 		return message
 	}
 
-	transportMessage := firstNonEmptyMap(
+	transportMessages := []map[string]any{
 		toMap(valueAt(result, "message")),
 		toMap(valueAt(root, "message")),
-	)
-	if len(transportMessage) == 0 {
+		toMap(valueAt(result, "openclaw_message")),
+		toMap(valueAt(root, "openclaw_message")),
+		toMap(valueAt(result, "openclaw_message", "message")),
+		toMap(valueAt(root, "openclaw_message", "message")),
+		toMap(valueAt(result, "delivery", "message")),
+		toMap(valueAt(root, "delivery", "message")),
+	}
+	hasTransportMetadata := false
+	for _, transportMessage := range transportMessages {
+		if len(transportMessage) > 0 {
+			hasTransportMetadata = true
+			break
+		}
+	}
+	if !hasTransportMetadata {
 		return message
 	}
 
@@ -769,10 +782,15 @@ func enrichInboundMessageRouting(message, result, root map[string]any) map[strin
 		if strings.TrimSpace(stringAt(message, key)) != "" {
 			return
 		}
-		for _, candidate := range candidates {
-			if value := stringAt(transportMessage, candidate); value != "" {
-				message[key] = value
-				return
+		for _, transportMessage := range transportMessages {
+			if len(transportMessage) == 0 {
+				continue
+			}
+			for _, candidate := range candidates {
+				if value := stringAt(transportMessage, candidate); value != "" {
+					message[key] = value
+					return
+				}
 			}
 		}
 	}
@@ -835,15 +853,6 @@ func valueAt(root map[string]any, path ...string) any {
 		current = next
 	}
 	return current
-}
-
-func firstNonEmptyMap(values ...map[string]any) map[string]any {
-	for _, value := range values {
-		if len(value) > 0 {
-			return value
-		}
-	}
-	return nil
 }
 
 func looksLikeAgentURI(value string) bool {

@@ -311,7 +311,7 @@ func runHub(args []string) int {
 		logRoot = strings.TrimSpace(mirror.rootDir)
 	}
 
-	var queueFailureFollowUp func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config)
+	var queueFailureFollowUp func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config, source string)
 	var queueUnexpectedNoChangesFollowUp func(requestID string, result harness.Result, runCfg config.Config)
 	var enqueueLocalRun func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string, force bool) (string, error)
 	enqueueLocalRun = func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string, force bool) (string, error) {
@@ -418,7 +418,7 @@ func runHub(args []string) int {
 							queueFailureFollowUp(requestID, harness.Result{
 								ExitCode: harness.ExitPreflight,
 								Err:      fmt.Errorf("dispatch wait: %w", waitErr),
-							}, runCfg)
+							}, runCfg, source)
 						}
 						return
 					}
@@ -460,7 +460,7 @@ func runHub(args []string) int {
 						queueFailureFollowUp(requestID, harness.Result{
 							ExitCode: harness.ExitPreflight,
 							Err:      fmt.Errorf("dispatch acquire: %w", acquireErr),
-						}, runCfg)
+						}, runCfg, source)
 					}
 					return
 				}
@@ -483,7 +483,7 @@ func runHub(args []string) int {
 				switch outcome.State {
 				case "error":
 					if allowFailureFollowUp && queueFailureFollowUp != nil {
-						queueFailureFollowUp(requestID, outcome.Result, runCfg)
+						queueFailureFollowUp(requestID, outcome.Result, runCfg, source)
 					}
 				case "no_changes":
 					if source != "no_changes_followup" && queueUnexpectedNoChangesFollowUp != nil {
@@ -495,7 +495,7 @@ func runHub(args []string) int {
 							if escalationResult.Err == nil {
 								escalationResult.Err = fmt.Errorf("no-changes follow-up completed without file changes or a pull request")
 							}
-							queueFailureFollowUp(requestID, escalationResult, runCfg)
+							queueFailureFollowUp(requestID, escalationResult, runCfg, source)
 						}
 					}
 				}
@@ -505,8 +505,8 @@ func runHub(args []string) int {
 
 		return requestID, nil
 	}
-	queueFailureFollowUp = func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config) {
-		if ok, reason := shouldQueueFailureFollowUp(failedResult); !ok {
+	queueFailureFollowUp = func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config, source string) {
+		if ok, reason := shouldQueueFailureFollowUp(source, failedResult); !ok {
 			daemonLogger(
 				"dispatch status=warn action=skip_failure_followup request_id=%s err=%q",
 				failedRequestID,
@@ -586,7 +586,7 @@ func runHub(args []string) int {
 	}
 	hubController.onDispatchFailed = func(requestID string, runCfg config.Config, result harness.Result) {
 		if queueFailureFollowUp != nil {
-			queueFailureFollowUp(requestID, result, runCfg)
+			queueFailureFollowUp(requestID, result, runCfg, "hub_dispatch")
 		}
 	}
 	hubRuntimeReloader := newHubRuntimeConfigReloader(cfg, hubController.Update, hubController.Stop, daemonLogger)
@@ -1129,9 +1129,16 @@ func unexpectedNoChangesFollowUpRunConfig(
 	}
 }
 
-func shouldQueueFailureFollowUp(failedResult harness.Result) (bool, string) {
+func shouldQueueFailureFollowUp(source string, failedResult harness.Result) (bool, string) {
+	source = strings.TrimSpace(source)
 	if failedResult.Err == nil {
 		return false, "failed task did not include an error"
+	}
+	if source == "failure_followup" {
+		return false, "run is already a failure follow-up"
+	}
+	if source == "hub_dispatch" {
+		return false, "hub dispatch failures are already escalated by hub transport"
 	}
 	return true, ""
 }

@@ -542,13 +542,13 @@ func TestHandleDispatchQueuesFailureFollowUpForNoDeltaFailures(t *testing.T) {
 	}
 }
 
-func TestShouldQueueFailureFollowUpAllowsNestedFailureReviewRequests(t *testing.T) {
+func TestShouldQueueFailureFollowUpSkipsNestedFailureReviewRequests(t *testing.T) {
 	t.Parallel()
 
 	dispatch := SkillDispatch{RequestID: "req-123-failure-review"}
 	ok, reason := shouldQueueFailureFollowUp(dispatch, harness.Result{Err: errors.New("still failing")})
-	if !ok || reason != "" {
-		t.Fatalf("shouldQueueFailureFollowUp() = (%v, %q), want (true, \"\")", ok, reason)
+	if ok || reason != "run is already a failure follow-up" {
+		t.Fatalf("shouldQueueFailureFollowUp() = (%v, %q), want (false, %q)", ok, reason, "run is already a failure follow-up")
 	}
 }
 

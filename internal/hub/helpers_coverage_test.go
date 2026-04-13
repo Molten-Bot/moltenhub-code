@@ -21,8 +21,8 @@ func TestFailureFollowUpHelperBranches(t *testing.T) {
 	if ok, reason := shouldQueueFailureFollowUp(dispatch, harness.Result{}); ok || !strings.Contains(reason, "did not include an error") {
 		t.Fatalf("shouldQueueFailureFollowUp(no error) = (%v, %q)", ok, reason)
 	}
-	if ok, reason := shouldQueueFailureFollowUp(SkillDispatch{RequestID: "req-1-failure-review"}, harness.Result{Err: errors.New("boom")}); !ok || reason != "" {
-		t.Fatalf("shouldQueueFailureFollowUp(nested) = (%v, %q), want (true, \"\")", ok, reason)
+	if ok, reason := shouldQueueFailureFollowUp(SkillDispatch{RequestID: "req-1-failure-review"}, harness.Result{Err: errors.New("boom")}); ok || reason != "run is already a failure follow-up" {
+		t.Fatalf("shouldQueueFailureFollowUp(nested) = (%v, %q), want (false, %q)", ok, reason, "run is already a failure follow-up")
 	}
 
 	res := harness.Result{
@@ -44,6 +44,9 @@ func TestFailureFollowUpHelperBranches(t *testing.T) {
 	}
 	if got := failureFollowUpRequestID(""); got != "failure-review" {
 		t.Fatalf("failureFollowUpRequestID(empty) = %q", got)
+	}
+	if got := failureFollowUpRequestID("req-1-failure-review"); got != "req-1-failure-review" {
+		t.Fatalf("failureFollowUpRequestID(existing) = %q", got)
 	}
 	if got := joinRepoPRURLs(res.RepoResults); got != "https://github.com/acme/repo/pull/1" {
 		t.Fatalf("joinRepoPRURLs() = %q", got)

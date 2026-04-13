@@ -604,6 +604,39 @@ func TestShouldQueueUnexpectedNoChangesFollowUpRequiresMissingPR(t *testing.T) {
 	}
 }
 
+func TestShouldQueueFailureFollowUpSkipsNestedFailureFollowUpSource(t *testing.T) {
+	t.Parallel()
+
+	ok, reason := shouldQueueFailureFollowUp("failure_followup", harness.Result{Err: errors.New("still failing")})
+	if ok {
+		t.Fatal("shouldQueueFailureFollowUp(failure_followup) = true, want false")
+	}
+	if reason != "run is already a failure follow-up" {
+		t.Fatalf("reason = %q, want %q", reason, "run is already a failure follow-up")
+	}
+
+	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{Err: errors.New("clone failed")})
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureFollowUp(local_submit,error) = (%v, %q), want (true, \"\")", ok, reason)
+	}
+
+	ok, reason = shouldQueueFailureFollowUp("hub_dispatch", harness.Result{Err: errors.New("clone failed")})
+	if ok {
+		t.Fatal("shouldQueueFailureFollowUp(hub_dispatch,error) = true, want false")
+	}
+	if reason != "hub dispatch failures are already escalated by hub transport" {
+		t.Fatalf("reason = %q, want %q", reason, "hub dispatch failures are already escalated by hub transport")
+	}
+
+	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{})
+	if ok {
+		t.Fatal("shouldQueueFailureFollowUp(local_submit,nil error) = true, want false")
+	}
+	if reason != "failed task did not include an error" {
+		t.Fatalf("reason = %q, want %q", reason, "failed task did not include an error")
+	}
+}
+
 func TestShouldEscalateNoChangesFollowUpRequiresFollowUpSourceAndMissingPR(t *testing.T) {
 	t.Parallel()
 
@@ -830,7 +863,7 @@ func TestShouldQueueFailureFollowUpQueuesNoDeltaFailures(t *testing.T) {
 		Err: errors.New("task failed to meet completion requirements because this branch has no delta from `main`; No commits between main and moltenhub-fix"),
 	}
 
-	ok, reason := shouldQueueFailureFollowUp(result)
+	ok, reason := shouldQueueFailureFollowUp("local_submit", result)
 	if !ok {
 		t.Fatalf("shouldQueueFailureFollowUp() = false, want true for no-delta failures (reason=%q)", reason)
 	}
@@ -863,35 +896,35 @@ func TestTaskLogDirAndTaskLogPathsValidateInputs(t *testing.T) {
 func TestShouldQueueFailureFollowUpQueuesFailuresWithErrorDetails(t *testing.T) {
 	t.Parallel()
 
-	ok, reason := shouldQueueFailureFollowUp(harness.Result{
+	ok, reason := shouldQueueFailureFollowUp("local_submit", harness.Result{
 		Err: errors.New("codex: ERROR: Quota exceeded. Check your plan and billing details."),
 	})
 	if !ok || reason != "" {
 		t.Fatalf("shouldQueueFailureFollowUp(quota exceeded) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
-	ok, reason = shouldQueueFailureFollowUp(harness.Result{
+	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{
 		Err: errors.New("codex: unexpected status 401 Unauthorized: Missing bearer or basic authentication in header"),
 	})
 	if !ok || reason != "" {
 		t.Fatalf("shouldQueueFailureFollowUp(auth failure) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
-	ok, reason = shouldQueueFailureFollowUp(harness.Result{
+	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{
 		Err: errors.New("clone: run git [clone ...]: exit status 128"),
 	})
 	if !ok || reason != "" {
 		t.Fatalf("shouldQueueFailureFollowUp(clone failure) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
-	ok, reason = shouldQueueFailureFollowUp(harness.Result{
+	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{
 		Err: errors.New("git: verify remote write access for repo https://github.com/acme/repo.git branch \"moltenhub-fix\": exit status 128: remote: Write access to repository not granted. fatal: unable to access 'https://github.com/acme/repo.git/': The requested URL returned error: 403"),
 	})
 	if !ok || reason != "" {
 		t.Fatalf("shouldQueueFailureFollowUp(repo write access failure) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
-	ok, reason = shouldQueueFailureFollowUp(harness.Result{
+	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{
 		Err: errors.New("git: run git [push -u origin moltenhub-branch]: exit status 1: remote: refusing to allow an OAuth App to create or update workflow `.github/workflows/docker-release.yml` without `workflow` scope"),
 	})
 	if !ok || reason != "" {
