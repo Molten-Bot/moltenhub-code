@@ -149,8 +149,8 @@ func SaveRuntimeConfig(path string, initCfg InitConfig, token string) error {
 	return writeRuntimeConfigFile(path, data)
 }
 
-// SaveRuntimeConfigHubSettings persists hub credentials plus handle/profile
-// fields while preserving unrelated runtime config keys already on disk.
+// SaveRuntimeConfigHubSettings persists the minimal hub runtime config needed
+// to reconnect: hub base URL plus credentials.
 func SaveRuntimeConfigHubSettings(path string, initCfg InitConfig, resolvedAgentToken string) error {
 	path = strings.TrimSpace(path)
 	if path == "" {
@@ -163,42 +163,14 @@ func SaveRuntimeConfigHubSettings(path string, initCfg InitConfig, resolvedAgent
 		return fmt.Errorf("runtime config requires agent_token or bind_token")
 	}
 
-	doc, err := loadRuntimeConfigDoc(path, initCfg)
-	if err != nil {
-		return err
+	doc := map[string]any{
+		"base_url": strings.TrimSpace(initCfg.BaseURL),
 	}
-
-	doc["version"] = initCfg.Version
-	doc["base_url"] = initCfg.BaseURL
-	doc["session_key"] = initCfg.SessionKey
-	doc["handle"] = initCfg.Handle
-	doc["profile"] = map[string]any{
-		"profile":      initCfg.Profile.ProfileText,
-		"display_name": initCfg.Profile.DisplayName,
-		"emoji":        initCfg.Profile.Emoji,
-		"llm":          initCfg.Profile.LLM,
-		"harness":      initCfg.Profile.Harness,
-		"skills":       append([]string(nil), initCfg.Profile.Skills...),
-	}
-	doc["agent_token"] = resolvedAgentToken
-	if strings.TrimSpace(initCfg.BindToken) != "" {
-		doc["bind_token"] = initCfg.BindToken
+	if resolvedAgentToken != "" {
+		doc["agent_token"] = resolvedAgentToken
 	} else {
-		delete(doc, "bind_token")
+		doc["bind_token"] = strings.TrimSpace(initCfg.BindToken)
 	}
-	if strings.TrimSpace(initCfg.AgentHarness) != "" {
-		doc["agent_harness"] = initCfg.AgentHarness
-	}
-	if strings.TrimSpace(initCfg.AgentCommand) != "" {
-		doc["agent_command"] = initCfg.AgentCommand
-	}
-	if _, ok := doc["timeout_ms"]; !ok {
-		doc["timeout_ms"] = runtimeTimeoutMs
-	}
-	if dispatcherDoc, ok := runtimeConfigDispatcherDoc(initCfg); ok {
-		doc["dispatcher"] = dispatcherDoc
-	}
-	ensureRuntimeConfigLogLevel(doc, initCfg.LogLevel)
 
 	encoded, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {

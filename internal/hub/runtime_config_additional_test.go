@@ -5,8 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/jef/moltenhub-code/internal/agentruntime"
 )
 
 func TestRuntimeConfigInitCarriesRuntimeConfigPath(t *testing.T) {
@@ -295,7 +293,7 @@ func TestSaveRuntimeConfigGitHubTokenMergesIntoExistingConfig(t *testing.T) {
 	}
 }
 
-func TestSaveRuntimeConfigHubSettingsMergesHubFieldsWithoutDroppingExtras(t *testing.T) {
+func TestSaveRuntimeConfigHubSettingsPersistsMinimalHubConnectivityConfig(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
@@ -329,34 +327,29 @@ func TestSaveRuntimeConfigHubSettingsMergesHubFieldsWithoutDroppingExtras(t *tes
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
-	if got["bind_token"] != "bind_saved" {
-		t.Fatalf("bind_token = %#v, want %q", got["bind_token"], "bind_saved")
+	if got["base_url"] != "https://na.hub.molten.bot/v1" {
+		t.Fatalf("base_url = %#v, want %q", got["base_url"], "https://na.hub.molten.bot/v1")
 	}
 	if got["agent_token"] != "agent_saved" {
 		t.Fatalf("agent_token = %#v, want %q", got["agent_token"], "agent_saved")
 	}
-	if got["handle"] != "molten-builder" {
-		t.Fatalf("handle = %#v, want %q", got["handle"], "molten-builder")
+	if _, ok := got["bind_token"]; ok {
+		t.Fatalf("bind_token present = %#v, want removed", got["bind_token"])
 	}
-	profile, _ := got["profile"].(map[string]any)
-	if profile["display_name"] != "Molten Builder" {
-		t.Fatalf("profile.display_name = %#v, want %q", profile["display_name"], "Molten Builder")
+	if _, ok := got["profile"]; ok {
+		t.Fatalf("profile present = %#v, want removed", got["profile"])
 	}
-	if got, want := profile["llm"], agentruntime.Default().Harness; got != want {
-		t.Fatalf("profile.llm = %#v, want %q", got, want)
+	if _, ok := got["handle"]; ok {
+		t.Fatalf("handle present = %#v, want removed", got["handle"])
 	}
-	if profile["harness"] != runtimeIdentifier {
-		t.Fatalf("profile.harness = %#v, want %q", profile["harness"], runtimeIdentifier)
+	if _, ok := got["custom"]; ok {
+		t.Fatalf("custom present = %#v, want removed", got["custom"])
 	}
-	skills, _ := profile["skills"].([]any)
-	if len(skills) != 3 || skills[0] != "code_for_me" || skills[1] != "code_review" || skills[2] != "library_task" {
-		t.Fatalf("profile.skills = %#v, want [code_for_me code_review library_task]", profile["skills"])
+	if _, ok := got["github_token"]; ok {
+		t.Fatalf("github_token present = %#v, want removed", got["github_token"])
 	}
-	if got["custom"] != "preserved" {
-		t.Fatalf("custom = %#v, want %q", got["custom"], "preserved")
-	}
-	if got["github_token"] != "ghp_saved" {
-		t.Fatalf("github_token = %#v, want %q", got["github_token"], "ghp_saved")
+	if len(got) != 2 {
+		t.Fatalf("saved config keys = %#v, want only base_url + agent_token", got)
 	}
 }
 
@@ -396,7 +389,7 @@ func TestSaveRuntimeConfigHubSettingsClearsStaleBindTokenForAgentTokenFlow(t *te
 	}
 }
 
-func TestSaveRuntimeConfigHubSettingsPreservesConfiguredLogLevel(t *testing.T) {
+func TestSaveRuntimeConfigHubSettingsDropsLegacyExtraFields(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
@@ -423,8 +416,8 @@ func TestSaveRuntimeConfigHubSettingsPreservesConfiguredLogLevel(t *testing.T) {
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
-	if got["log_level"] != "debug" {
-		t.Fatalf("log_level = %#v, want %q", got["log_level"], "debug")
+	if _, ok := got["log_level"]; ok {
+		t.Fatalf("log_level present = %#v, want removed", got["log_level"])
 	}
 }
 

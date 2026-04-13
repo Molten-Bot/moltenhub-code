@@ -58,18 +58,18 @@ type Server struct {
 
 // AgentAuthState describes current runtime agent-auth readiness and device flow hints.
 type AgentAuthState struct {
-	Harness              string `json:"harness,omitempty"`
-	Required             bool   `json:"required"`
-	Ready                bool   `json:"ready"`
-	State                string `json:"state,omitempty"`
-	Message              string `json:"message,omitempty"`
-	AuthURL              string `json:"auth_url,omitempty"`
-	DeviceCode           string `json:"device_code,omitempty"`
-	AcceptsBrowserCode   bool   `json:"accepts_browser_code,omitempty"`
-	ConfigureCommand     string `json:"configure_command,omitempty"`
-	ConfigurePlaceholder string `json:"configure_placeholder,omitempty"`
+	Harness              string            `json:"harness,omitempty"`
+	Required             bool              `json:"required"`
+	Ready                bool              `json:"ready"`
+	State                string            `json:"state,omitempty"`
+	Message              string            `json:"message,omitempty"`
+	AuthURL              string            `json:"auth_url,omitempty"`
+	DeviceCode           string            `json:"device_code,omitempty"`
+	AcceptsBrowserCode   bool              `json:"accepts_browser_code,omitempty"`
+	ConfigureCommand     string            `json:"configure_command,omitempty"`
+	ConfigurePlaceholder string            `json:"configure_placeholder,omitempty"`
 	ConfigureOptions     []AgentAuthOption `json:"configure_options,omitempty"`
-	UpdatedAt            string `json:"updated_at,omitempty"`
+	UpdatedAt            string            `json:"updated_at,omitempty"`
 }
 
 type AgentAuthOption struct {
@@ -78,8 +78,8 @@ type AgentAuthOption struct {
 	Description string `json:"description,omitempty"`
 }
 
-// HubSetupState describes whether Molten Hub is configured locally and what
-// profile details should be reflected in config.json.
+// HubSetupState describes whether Molten Hub is configured locally and which
+// profile details should be displayed and edited in the UI.
 type HubSetupState struct {
 	Configured bool   `json:"configured"`
 	AgentMode  string `json:"agent_mode,omitempty"`
