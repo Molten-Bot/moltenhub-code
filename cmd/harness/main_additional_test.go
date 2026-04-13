@@ -637,6 +637,47 @@ func TestShouldQueueFailureFollowUpSkipsNestedFailureFollowUpSource(t *testing.T
 	}
 }
 
+func TestShouldQueueFailureRerunSkipsNestedFailureRerunSource(t *testing.T) {
+	t.Parallel()
+
+	ok, reason := shouldQueueFailureRerun("rerun", harness.Result{Err: errors.New("still failing")})
+	if ok {
+		t.Fatal("shouldQueueFailureRerun(rerun) = true, want false")
+	}
+	if reason != "run is already a failure rerun" {
+		t.Fatalf("reason = %q, want %q", reason, "run is already a failure rerun")
+	}
+
+	ok, reason = shouldQueueFailureRerun("local_submit", harness.Result{Err: errors.New("clone failed")})
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureRerun(local_submit,error) = (%v, %q), want (true, \"\")", ok, reason)
+	}
+
+	ok, reason = shouldQueueFailureRerun("hub_dispatch", harness.Result{Err: errors.New("clone failed")})
+	if ok {
+		t.Fatal("shouldQueueFailureRerun(hub_dispatch,error) = true, want false")
+	}
+	if reason != "hub dispatch failures are already rerun by hub transport" {
+		t.Fatalf("reason = %q, want %q", reason, "hub dispatch failures are already rerun by hub transport")
+	}
+
+	ok, reason = shouldQueueFailureRerun("failure_followup", harness.Result{Err: errors.New("clone failed")})
+	if ok {
+		t.Fatal("shouldQueueFailureRerun(failure_followup,error) = true, want false")
+	}
+	if reason != "run is already a failure follow-up" {
+		t.Fatalf("reason = %q, want %q", reason, "run is already a failure follow-up")
+	}
+
+	ok, reason = shouldQueueFailureRerun("local_submit", harness.Result{})
+	if ok {
+		t.Fatal("shouldQueueFailureRerun(local_submit,nil error) = true, want false")
+	}
+	if reason != "failed task did not include an error" {
+		t.Fatalf("reason = %q, want %q", reason, "failed task did not include an error")
+	}
+}
+
 func TestShouldEscalateNoChangesFollowUpRequiresFollowUpSourceAndMissingPR(t *testing.T) {
 	t.Parallel()
 

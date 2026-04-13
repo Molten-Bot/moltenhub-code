@@ -3127,7 +3127,8 @@ func TestWithCompletionGatePromptIncludesFailureQueueContract(t *testing.T) {
 	wantSnippets := []string{
 		"Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
 		`When failures occur, send a response back to the calling agent that clearly states failure and includes the error details.`,
-		"When a task fails:",
+		"When a task fails (execution failure):",
+		"- Re-run the original task once.",
 		"Queue a follow-up task dedicated to reviewing the logs and fixing all underlying issues in this codebase.",
 		"Pass the relevant failing file/folder log path(s) into that follow-up task context.",
 		`{"repos":["git@github.com:Molten-Bot/moltenhub-code.git"],"baseBranch":"main","targetSubdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."}`,
