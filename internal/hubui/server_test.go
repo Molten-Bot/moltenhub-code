@@ -39,6 +39,12 @@ func TestHandlerStateEndpointReturnsSnapshot(t *testing.T) {
 	b.IngestLog("dispatch status=start request_id=req-1")
 
 	srv := NewServer("", b)
+	srv.ResolveTaskControls = func(requestID string) TaskControls {
+		if requestID == "req-1" {
+			return TaskControls{Stop: true}
+		}
+		return TaskControls{}
+	}
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -61,6 +67,9 @@ func TestHandlerStateEndpointReturnsSnapshot(t *testing.T) {
 	}
 	if snap.Tasks[0].RequestID != "req-1" {
 		t.Fatalf("request id = %q", snap.Tasks[0].RequestID)
+	}
+	if !snap.Tasks[0].Controls.Stop {
+		t.Fatalf("controls.stop = false, want true")
 	}
 }
 
@@ -218,6 +227,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `timing: taskTimingSignature(task),`) {
 		t.Fatalf("expected task collection render signatures to use stable task timing data")
+	}
+	if !strings.Contains(markup, `const controls = task?.controls || {};`) || !strings.Contains(markup, `const canStop = Boolean(controls.stop);`) {
+		t.Fatalf("expected index html to render task controls from backend-provided capabilities")
 	}
 	if !strings.Contains(markup, `update.className = "task-timing-summary";`) {
 		t.Fatalf("expected task timing labels to render into dedicated nodes for in-place refresh")
@@ -1178,8 +1190,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `promptVisibilityToggle.textContent = visible ? "▾" : "▸";`) {
 		t.Fatalf("expected index html to render studio toggle arrow icons for minimize/expand")
 	}
-	if !strings.Contains(markup, `pauseRun.textContent = paused ? "▶" : "||";`) {
-		t.Fatalf("expected index html to render task pause/run icon control")
+	if !strings.Contains(markup, `pauseRun.textContent = canRun ? "▶" : "||";`) {
+		t.Fatalf("expected index html to render task pause/run icon control from backend capabilities")
 	}
 	if !strings.Contains(markup, `forceStart.title = "Force start this queued task now";`) {
 		t.Fatalf("expected index html to render force-start control for pending tasks")
@@ -2690,6 +2702,78 @@ func TestHandlerTaskControlReturnsNotFound(t *testing.T) {
 
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+	}
+}
+
+func TestHandlerTaskControlReturnsUnavailableForExistingUncontrolledTask(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog("dispatch status=start request_id=req-remote")
+
+	srv := NewServer("", b)
+	srv.StopTask = func(_ context.Context, requestID string) error {
+		if requestID != "req-remote" {
+			t.Fatalf("requestID = %q, want %q", requestID, "req-remote")
+		}
+		return ErrTaskNotFound
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/req-remote/stop", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/req-remote/stop error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusConflict)
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got := body["error"]; got != "task stop is unavailable for this task" {
+		t.Fatalf("error = %#v, want unavailable task control message", got)
+	}
+}
+
+func TestHandlerTaskControlReturnsAlreadyStoppedForFinishedTask(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog(`dispatch status=stopped request_id=req-stop-finished err="task was stopped by operator"`)
+
+	srv := NewServer("", b)
+	srv.StopTask = func(_ context.Context, requestID string) error {
+		if requestID != "req-stop-finished" {
+			t.Fatalf("requestID = %q, want %q", requestID, "req-stop-finished")
+		}
+		return ErrTaskNotFound
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/req-stop-finished/stop", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/req-stop-finished/stop error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusConflict)
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got := body["error"]; got != "task is already stopped" {
+		t.Fatalf("error = %#v, want already stopped message", got)
 	}
 }
 
