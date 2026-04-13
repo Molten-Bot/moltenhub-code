@@ -2575,6 +2575,80 @@ func TestRunUsesConfiguredRuntimeCommand(t *testing.T) {
 	}
 }
 
+func TestRunAppliesResponseModeAcrossNonCodexRuntimes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		harness string
+	}{
+		{name: "claude", harness: agentruntime.HarnessClaude},
+		{name: "auggie", harness: agentruntime.HarnessAuggie},
+		{name: "pi", harness: agentruntime.HarnessPi},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := sampleConfig()
+			cfg.AgentHarness = tt.harness
+			cfg.ResponseMode = "caveman-full"
+
+			now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+			guid := "runtimemode123456"
+			runDir := testRunDir(guid)
+			agentsPath := filepath.Join(runDir, "AGENTS.md")
+			repoDir := filepath.Join(runDir, "repo")
+			targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+			branch := "moltenhub-build-api"
+
+			runtime, err := agentruntime.Resolve(cfg.AgentHarness, cfg.AgentCommand)
+			if err != nil {
+				t.Fatalf("Resolve() error = %v", err)
+			}
+
+			runtimePrompt := withAgentsPrompt(cfg.Prompt, agentsPath)
+			runtimePrompt, err = withResponseModePrompt(runtimePrompt, cfg.ResponseMode)
+			if err != nil {
+				t.Fatalf("withResponseModePrompt() error = %v", err)
+			}
+			runtimeCmd, err := agentCommandWithOptions(runtime, targetDir, runtimePrompt, codexRunOptions{})
+			if err != nil {
+				t.Fatalf("agentCommandWithOptions() error = %v", err)
+			}
+
+			fake := &fakeRunner{t: t, exps: []expectedRun{
+				{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+				{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+				{cmd: execx.Command{Name: runtime.Command, Args: []string{"--help"}}},
+				{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+				{cmd: cloneCommand(cfg, repoDir)},
+				{cmd: branchCommand(repoDir, branch)},
+				{cmd: pushDryRunCommand(repoDir, branch)},
+				{cmd: runtimeCmd},
+				{cmd: statusCommand(repoDir), res: execx.Result{Stdout: ""}},
+				{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch)},
+				{cmd: prLookupAnyByHeadCommand(repoDir, branch)},
+			}}
+
+			h := New(fake)
+			h.Now = func() time.Time { return now }
+			h.Workspace = testWorkspaceManager(guid)
+			h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+			res := h.Run(context.Background(), cfg)
+			if res.Err != nil {
+				t.Fatalf("Run() err = %v", res.Err)
+			}
+			if !res.NoChanges {
+				t.Fatal("NoChanges = false, want true")
+			}
+		})
+	}
+}
+
 func TestMaterializePromptImages(t *testing.T) {
 	t.Parallel()
 
