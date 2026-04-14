@@ -3,7 +3,6 @@ package hubui
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -15,7 +14,8 @@ import (
 
 const defaultPRMergePollInterval = 30 * time.Second
 
-// PRMergeMonitor removes completed tasks from the monitor once their PRs merge.
+// PRMergeMonitor watches task pull requests and records merge observations
+// without removing the task from the monitor.
 type PRMergeMonitor struct {
 	Runner       execx.Runner
 	Broker       *Broker
@@ -25,6 +25,7 @@ type PRMergeMonitor struct {
 
 	mu       sync.Mutex
 	inFlight map[string]struct{}
+	merged   map[string]struct{}
 }
 
 type prViewState struct {
@@ -60,7 +61,9 @@ func (m *PRMergeMonitor) Run(ctx context.Context) error {
 
 func (m *PRMergeMonitor) pollOnce(ctx context.Context) {
 	snapshot := m.Broker.Snapshot()
+	active := make(map[string]struct{}, len(snapshot.Tasks))
 	for _, task := range snapshot.Tasks {
+		active[task.RequestID] = struct{}{}
 		if !shouldMonitorTaskPR(task) {
 			continue
 		}
@@ -72,6 +75,7 @@ func (m *PRMergeMonitor) pollOnce(ctx context.Context) {
 			m.checkTaskPR(ctx, task)
 		}(task)
 	}
+	m.forgetMissingTasks(active)
 }
 
 func shouldMonitorTaskPR(task Task) bool {
@@ -96,7 +100,13 @@ func (m *PRMergeMonitor) beginCheck(requestID string) bool {
 	if m.inFlight == nil {
 		m.inFlight = map[string]struct{}{}
 	}
+	if m.merged == nil {
+		m.merged = map[string]struct{}{}
+	}
 	if _, exists := m.inFlight[requestID]; exists {
+		return false
+	}
+	if _, exists := m.merged[requestID]; exists {
 		return false
 	}
 	m.inFlight[requestID] = struct{}{}
@@ -109,6 +119,30 @@ func (m *PRMergeMonitor) endCheck(requestID string) {
 	delete(m.inFlight, strings.TrimSpace(requestID))
 }
 
+func (m *PRMergeMonitor) markMerged(requestID string) {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.merged == nil {
+		m.merged = map[string]struct{}{}
+	}
+	m.merged[requestID] = struct{}{}
+}
+
+func (m *PRMergeMonitor) forgetMissingTasks(active map[string]struct{}) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for requestID := range m.merged {
+		if _, ok := active[requestID]; ok {
+			continue
+		}
+		delete(m.merged, requestID)
+	}
+}
+
 func (m *PRMergeMonitor) checkTaskPR(ctx context.Context, task Task) {
 	state, err := m.prState(ctx, task.PRURL)
 	if err != nil {
@@ -118,17 +152,7 @@ func (m *PRMergeMonitor) checkTaskPR(ctx context.Context, task Task) {
 	if !state.Merged() {
 		return
 	}
-	if err := m.Broker.CloseTask(task.RequestID); err != nil {
-		if !errors.Is(err, ErrTaskNotFound) {
-			m.Logf("hub.ui status=warn event=pr_monitor_close request_id=%s pr_url=%s err=%q", task.RequestID, task.PRURL, err)
-		}
-		return
-	}
-	if m.CleanupTask != nil {
-		if err := m.CleanupTask(ctx, task.RequestID); err != nil {
-			m.Logf("hub.ui status=warn event=pr_monitor_cleanup request_id=%s pr_url=%s err=%q", task.RequestID, task.PRURL, err)
-		}
-	}
+	m.markMerged(task.RequestID)
 	m.Logf("hub.ui status=ok event=pr_merged request_id=%s pr_url=%s", task.RequestID, task.PRURL)
 }
 

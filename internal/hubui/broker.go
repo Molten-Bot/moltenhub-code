@@ -15,10 +15,9 @@ import (
 )
 
 const (
-	defaultMaxEvents             = 600
-	defaultMaxTaskLogs           = 2000
-	defaultOKTaskRetentionWindow = 5 * time.Minute
-	defaultClosedTaskRetention   = 24 * time.Hour
+	defaultMaxEvents           = 600
+	defaultMaxTaskLogs         = 2000
+	defaultClosedTaskRetention = 24 * time.Hour
 )
 
 var (
@@ -114,7 +113,6 @@ type Broker struct {
 	now        func() time.Time
 	maxEvents  int
 	maxTaskLog int
-	okTaskTTL  time.Duration
 
 	nextEventID int64
 	events      []Event
@@ -158,7 +156,6 @@ func NewBroker() *Broker {
 		now:         time.Now,
 		maxEvents:   defaultMaxEvents,
 		maxTaskLog:  defaultMaxTaskLogs,
-		okTaskTTL:   defaultOKTaskRetentionWindow,
 		tasks:       map[string]*taskState{},
 		closedTasks: map[string]time.Time{},
 		runConfigs:  map[string][]byte{},
@@ -457,7 +454,7 @@ func (b *Broker) TaskRunConfig(requestID string) ([]byte, bool) {
 	return append([]byte(nil), runConfigJSON...), true
 }
 
-// CloseTask removes a completed task and its stored rerun config.
+// CloseTask removes a terminal task and its stored rerun config.
 func (b *Broker) CloseTask(requestID string) error {
 	if b == nil {
 		return ErrTaskNotFound
@@ -486,15 +483,6 @@ func (b *Broker) CloseTask(requestID string) error {
 }
 
 func (b *Broker) pruneExpiredTasksLocked(now time.Time) {
-	if b.okTaskTTL > 0 {
-		for requestID, task := range b.tasks {
-			if !b.shouldHideTaskLocked(task, now) {
-				continue
-			}
-			delete(b.tasks, requestID)
-			delete(b.runConfigs, requestID)
-		}
-	}
 	for requestID, closedAt := range b.closedTasks {
 		if now.Sub(closedAt) < defaultClosedTaskRetention {
 			continue
@@ -513,13 +501,6 @@ func (b *Broker) isClosedTaskLocked(requestID string, now time.Time) bool {
 		return false
 	}
 	return true
-}
-
-func (b *Broker) shouldHideTaskLocked(task *taskState, now time.Time) bool {
-	if task == nil || normalizeTaskTerminalStatus(task.Status) != "completed" || b.okTaskTTL <= 0 {
-		return false
-	}
-	return !task.UpdatedAt.IsZero() && now.Sub(task.UpdatedAt) >= b.okTaskTTL
 }
 
 // Subscribe returns a change notification channel and cancel function.

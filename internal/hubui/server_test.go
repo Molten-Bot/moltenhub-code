@@ -2105,7 +2105,7 @@ func TestHandlerLibraryRunMethodNotAllowed(t *testing.T) {
 	}
 }
 
-func TestHandlerTaskRerunAccepted(t *testing.T) {
+func TestHandlerTaskRerunAcceptedKeepsOriginalTaskVisible(t *testing.T) {
 	t.Parallel()
 
 	b := NewBroker()
@@ -2159,14 +2159,18 @@ func TestHandlerTaskRerunAccepted(t *testing.T) {
 	if gotRerunOf, _ := body["rerun_of"].(string); gotRerunOf != requestID {
 		t.Fatalf("rerun_of = %q, want %q", gotRerunOf, requestID)
 	}
-	if len(closeCalls) != 1 || closeCalls[0] != requestID {
-		t.Fatalf("close calls = %v, want [%s]", closeCalls, requestID)
+	if len(closeCalls) != 0 {
+		t.Fatalf("close calls = %v, want none", closeCalls)
 	}
-	if _, ok := b.TaskRunConfig(requestID); ok {
-		t.Fatalf("TaskRunConfig(%q) found after rerun, want closed", requestID)
+	if _, ok := b.TaskRunConfig(requestID); !ok {
+		t.Fatalf("TaskRunConfig(%q) missing after rerun, want preserved", requestID)
 	}
-	if got := len(b.Snapshot().Tasks); got != 0 {
-		t.Fatalf("len(tasks) after rerun = %d, want 0", got)
+	snap := b.Snapshot()
+	if got := len(snap.Tasks); got != 1 {
+		t.Fatalf("len(tasks) after rerun = %d, want 1", got)
+	}
+	if got, want := snap.Tasks[0].RequestID, requestID; got != want {
+		t.Fatalf("task request_id = %q, want %q", got, want)
 	}
 }
 

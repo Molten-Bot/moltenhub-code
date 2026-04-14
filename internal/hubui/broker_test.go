@@ -690,13 +690,14 @@ func TestBrokerCloseTaskAllowsStoppedTasks(t *testing.T) {
 	}
 }
 
-func TestBrokerHidesCompletedOKTasksAfterFiveMinutes(t *testing.T) {
+func TestBrokerKeepsCompletedTasksVisibleUntilClosed(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 4, 6, 12, 0, 0, 0, time.UTC)
 	b := NewBroker()
 	b.now = func() time.Time { return now }
 
+	b.RecordTaskRunConfig("req-ok", []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"keep me visible"}`))
 	b.IngestLog("dispatch status=start request_id=req-ok")
 	b.IngestLog("dispatch status=completed request_id=req-ok workspace=/tmp/run branch=moltenhub-cleanup")
 
@@ -704,18 +705,16 @@ func TestBrokerHidesCompletedOKTasksAfterFiveMinutes(t *testing.T) {
 		t.Fatalf("len(tasks) before retention = %d, want 1", got)
 	}
 
-	now = now.Add(4*time.Minute + 59*time.Second)
-	if got := len(b.Snapshot().Tasks); got != 1 {
-		t.Fatalf("len(tasks) before ttl expiry = %d, want 1", got)
-	}
-
-	now = now.Add(1 * time.Second)
+	now = now.Add(10 * time.Minute)
 	snap := b.Snapshot()
-	if got := len(snap.Tasks); got != 0 {
-		t.Fatalf("len(tasks) after ttl expiry = %d, want 0", got)
+	if got := len(snap.Tasks); got != 1 {
+		t.Fatalf("len(tasks) after waiting = %d, want 1", got)
 	}
-	if _, ok := b.TaskRunConfig("req-ok"); ok {
-		t.Fatal("TaskRunConfig() found = true for pruned completed task, want false")
+	if got, want := snap.Tasks[0].Status, "completed"; got != want {
+		t.Fatalf("task.Status = %q, want %q", got, want)
+	}
+	if _, ok := b.TaskRunConfig("req-ok"); !ok {
+		t.Fatal("TaskRunConfig() found = false for visible completed task, want true")
 	}
 }
 
