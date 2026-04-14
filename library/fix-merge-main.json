@@ -3,6 +3,6 @@
     "displayName": "Fix Merge Conflicts With Main",
     "description": "Resolve merge conflicts against main and keep iterating until checks pass.",
     "targetSubdir": ".",
-    "prompt": "Fix the conflict of this branch with main, validate locally where possible, and ensure there are no remaining merge conflicts with main. Fail out if you are on main."
+    "prompt": "Before proceeding, confirm the current branch is not main; if it is, stop immediately and report an error. Fix the conflict of this branch with main by merging the latest main into the current branch and resolving all conflicts. Validate locally where possible with git status that no conflicts remain, ensure there are no remaining merge conflicts with main, and fail out if you are on main."
   }
 }
