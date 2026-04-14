@@ -137,8 +137,7 @@
         <section id="task-panel" class="panel brand-login-card-shell min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]" aria-hidden="false">
           <div class="panel-header flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
             <div class="panel-header-copy">
-              <span class="panel-section-title">Task Queue</span>
-              <p class="panel-section-copy">Runs move through prepare, clone, agent, and finalize. Re-runs, local clone links, and PRs stay attached here.</p>
+              <span class="panel-section-title">Current Work</span>
             </div>
             <button
               id="task-fullscreen-toggle"
@@ -3900,7 +3899,7 @@
         case "json":
           return "Edit the raw payload exactly as the hub receives it, including multi-repo runs and review configuration.";
         default:
-          return "Compose a repository run with remotes, branch, reviewers, screenshots, and a plain-language task brief.";
+          return "Compose a repository run, start from a library task, or edit the raw JSON payload.";
       }
     }
 
