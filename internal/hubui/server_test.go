@@ -192,8 +192,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `>Molten Hub Code</div>`) {
 		t.Fatalf("expected index html to render app heading as Molten Hub Code")
 	}
-	if !strings.Contains(markup, `Task Queue</span>`) || !strings.Contains(markup, `Re-runs, local clone links, and PRs stay attached here.`) {
-		t.Fatalf("expected index html to render the richer task queue header copy")
+	if !strings.Contains(markup, `Current Work</span>`) {
+		t.Fatalf("expected index html to render the task panel under a Current Work heading")
+	}
+	if strings.Contains(markup, `Runs move through prepare, clone, agent, and finalize. Re-runs, local clone links, and PRs stay attached here.`) {
+		t.Fatalf("expected index html to remove the old task queue supporting copy")
 	}
 	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title">Studio</span>`) {
 		t.Fatalf("expected index html to label the builder mode as Studio")
@@ -201,8 +204,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="prompt-panel-copy"`) || !strings.Contains(markup, `Compose a repository run, start from a library task, or edit the raw JSON payload.`) {
 		t.Fatalf("expected index html to include prompt panel supporting copy")
 	}
+	if strings.Contains(markup, `Compose a repository run with remotes, branch, reviewers, screenshots, and a plain-language task brief.`) {
+		t.Fatalf("expected index html to remove the verbose builder mode description")
+	}
 	if strings.Contains(markup, `Run Studio`) || strings.Contains(markup, `Queue repository work with the same repo, branch, reviewer, and prompt contract the hub executes.`) {
 		t.Fatalf("expected index html to remove the Studio overview hero panel")
+	}
 	}
 	if !strings.Contains(markup, `>Queue Task</button>`) {
 		t.Fatalf("expected index html to rename the primary prompt submit action to Queue Task")
@@ -581,8 +588,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="task-panel" class="panel brand-login-card-shell min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]" aria-hidden="false"`) {
 		t.Fatalf("expected index html to render the task queue panel immediately with the shared glass shell")
 	}
-	if !strings.Contains(markup, `>Task Queue</span>`) {
-		t.Fatalf("expected index html to render the task panel under a Task Queue heading")
+	if !strings.Contains(markup, `>Current Work</span>`) {
+		t.Fatalf("expected index html to render the task panel under a Current Work heading")
 	}
 	if !strings.Contains(markup, `id="task-fullscreen-list"`) {
 		t.Fatalf("expected index html to include full screen task list")
@@ -980,7 +987,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to keep the GitHub dock item screen-reader accessible without visible text")
 	}
 	if strings.Index(markup, `id="task-panel"`) > strings.Index(markup, `class="panel prompt-wrap`) {
-		t.Fatalf("expected index html to render Task Queue before Studio in the page layout")
+		t.Fatalf("expected index html to render Current Work before Studio in the page layout")
 	}
 	if !strings.Contains(markup, `id="builder-repo-select"`) {
 		t.Fatalf("expected index html to include repo history select")
