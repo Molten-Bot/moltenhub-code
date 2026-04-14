@@ -9,7 +9,7 @@ func TestWebsocketURLFromHTTPSBase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WebsocketURL() error = %v", err)
 	}
-	want := "wss://na.hub.molten.bot/v1/openclaw/messages/ws?sessionKey=main&session_key=main"
+	want := "wss://na.hub.molten.bot/v1/openclaw/messages/ws?session_key=main"
 	if got != want {
 		t.Fatalf("WebsocketURL() = %q, want %q", got, want)
 	}

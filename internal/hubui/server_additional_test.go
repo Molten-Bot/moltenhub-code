@@ -377,8 +377,11 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `.brand-login-card-shell {`) || !strings.Contains(stylesheet, `.brand-chip-action {`) {
 		t.Fatalf("expected stylesheet to expose user-portal-derived glass primitives for hub surfaces and chips")
 	}
-	if !strings.Contains(stylesheet, `.prompt-hero {`) || !strings.Contains(stylesheet, `.prompt-field-copy {`) {
-		t.Fatalf("expected stylesheet to include the Studio hero and helper copy styles")
+	if strings.Contains(stylesheet, `.prompt-hero {`) {
+		t.Fatalf("expected stylesheet to remove the Studio hero styles")
+	}
+	if !strings.Contains(stylesheet, `.prompt-field-copy {`) {
+		t.Fatalf("expected stylesheet to retain helper copy styles")
 	}
 	if !strings.Contains(stylesheet, `.task-empty {`) || !strings.Contains(stylesheet, `.task-empty-copy {`) {
 		t.Fatalf("expected stylesheet to include the richer task queue empty state styles")

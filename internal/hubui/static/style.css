@@ -870,65 +870,6 @@ body .right-col.prompt-collapsed.task-list-hidden {
   min-width: 0;
 }
 
-.prompt-hero {
-  overflow: hidden;
-}
-
-.prompt-hero-inner {
-  display: grid;
-  gap: 16px;
-  padding: 20px 22px;
-}
-
-.prompt-hero-copy-stack {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  min-width: 0;
-}
-
-.prompt-hero-badge {
-  flex: 0 0 auto;
-}
-
-.prompt-hero-text-stack {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-}
-
-.prompt-hero-eyebrow {
-  color: var(--surface-label);
-}
-
-.prompt-hero-title {
-  margin: 0;
-  color: var(--text);
-  font-family: var(--font-family);
-  font-size: clamp(1.05rem, 1.2vw, 1.28rem);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.35;
-}
-
-.prompt-hero-copy {
-  margin: 0;
-  max-width: 68ch;
-  color: var(--text-soft);
-  font-size: 0.86rem;
-  line-height: 1.65;
-}
-
-.prompt-hero-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.prompt-hero-chip {
-  color: var(--text-soft);
-}
-
 .prompt-mode-row {
   margin-bottom: 2px;
 }
@@ -2406,15 +2347,6 @@ select.prompt-control {
 
   .prompt-grid {
     flex-wrap: wrap;
-  }
-
-  .prompt-hero-inner {
-    padding: 18px;
-  }
-
-  .prompt-hero-copy-stack {
-    flex-direction: column;
-    gap: 14px;
   }
 
   .prompt-field-repo-history,

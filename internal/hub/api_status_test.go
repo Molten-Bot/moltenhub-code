@@ -195,8 +195,8 @@ func TestMarkOpenClawOfflineUsesOfflineEndpoint(t *testing.T) {
 	if calls[0].Body["session_key"] != "main" {
 		t.Fatalf("session_key = %#v", calls[0].Body["session_key"])
 	}
-	if calls[0].Body["sessionKey"] != "main" {
-		t.Fatalf("sessionKey = %#v", calls[0].Body["sessionKey"])
+	if _, ok := calls[0].Body["sessionKey"]; ok {
+		t.Fatalf("sessionKey = %#v, want absent", calls[0].Body["sessionKey"])
 	}
 	if calls[0].Body["reason"] != "harness_shutdown" {
 		t.Fatalf("reason = %#v", calls[0].Body["reason"])

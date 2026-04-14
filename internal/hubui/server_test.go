@@ -201,8 +201,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="prompt-panel-copy"`) || !strings.Contains(markup, `Compose a repository run, start from a library task, or edit the raw JSON payload.`) {
 		t.Fatalf("expected index html to include prompt panel supporting copy")
 	}
-	if !strings.Contains(markup, `Run Studio`) || !strings.Contains(markup, `Queue repository work with the same repo, branch, reviewer, and prompt contract the hub executes.`) {
-		t.Fatalf("expected index html to include the Studio overview hero")
+	if strings.Contains(markup, `Run Studio`) || strings.Contains(markup, `Queue repository work with the same repo, branch, reviewer, and prompt contract the hub executes.`) {
+		t.Fatalf("expected index html to remove the Studio overview hero panel")
 	}
 	if !strings.Contains(markup, `>Queue Task</button>`) {
 		t.Fatalf("expected index html to rename the primary prompt submit action to Queue Task")
@@ -1022,8 +1022,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if strings.Contains(markup, `prompt-image-chip`) {
 		t.Fatalf("expected index html to remove stacked screenshot chip rendering")
 	}
-	if !strings.Contains(markup, `class="prompt-hero-chip brand-chip-action">Screenshots</span>`) {
-		t.Fatalf("expected index html to surface screenshots as part of the Studio overview hero instead of a dedicated attachment section title")
+	if strings.Contains(markup, `class="prompt-hero-chip brand-chip-action">Screenshots</span>`) {
+		t.Fatalf("expected index html to remove the Studio overview hero screenshot chip")
 	}
 	if strings.Contains(markup, "No screenshots attached.") {
 		t.Fatalf("expected index html to hide screenshot empty-state copy until images are attached")

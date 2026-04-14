@@ -288,7 +288,6 @@ func (c APIClient) MarkOpenClawOffline(ctx context.Context, token, sessionKey, r
 	if strings.TrimSpace(sessionKey) != "" {
 		normalizedSessionKey := strings.TrimSpace(sessionKey)
 		body["session_key"] = normalizedSessionKey
-		body["sessionKey"] = normalizedSessionKey
 	}
 	if strings.TrimSpace(reason) != "" {
 		body["reason"] = strings.TrimSpace(reason)
@@ -478,7 +477,6 @@ func WebsocketURL(baseURL, sessionKey string) (string, error) {
 	q := u.Query()
 	if strings.TrimSpace(sessionKey) != "" {
 		q.Set("session_key", sessionKey)
-		q.Set("sessionKey", sessionKey)
 	}
 	u.RawQuery = q.Encode()
 	return u.String(), nil
