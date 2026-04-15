@@ -2652,7 +2652,7 @@ func TestRunAppliesResponseModeAcrossNonCodexRuntimes(t *testing.T) {
 			fake := &fakeRunner{t: t, exps: []expectedRun{
 				{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
 				{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
-				{cmd: execx.Command{Name: runtime.Command, Args: []string{"--help"}}},
+				{cmd: runtime.PreflightCommand()},
 				{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 				{cmd: cloneCommand(cfg, repoDir)},
 				{cmd: branchCommand(repoDir, branch)},
