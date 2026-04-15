@@ -1,12 +1,15 @@
 (function initMoltenEmojiPicker(global) {
   const RECENT_STORAGE_KEY = "hub.ui.emoji.recent";
-  const RECENT_CATEGORY_ID = "recent";
+  const EMOJI_MART_SCRIPT_URL = "/static/emoji-mart-browser.js";
+  const EMOJI_MART_DATA_URL = "/static/emoji-mart-data.json";
   const DEFAULT_PREVIEW = "🙂";
-  const MAX_RECENT = 18;
   const VIEWPORT_GUTTER = 8;
   const PANEL_OFFSET = 8;
   const PANEL_MAX_WIDTH = 360;
   const PANEL_ESTIMATED_HEIGHT = 430;
+
+  let emojiMartScriptPromise = null;
+  let emojiMartDataPromise = null;
 
   function splitGraphemes(value) {
     const text = String(value || "");
@@ -48,185 +51,9 @@
     return limitGraphemes(String(value || "").trim(), 1);
   }
 
-  const CATEGORIES = [
-    {
-      id: "recent",
-      label: "Frequently used",
-      icon: "🕘",
-      emojis: [],
-    },
-    {
-      id: "people",
-      label: "Smileys & People",
-      icon: "😀",
-      emojis: [
-        { emoji: "😀", name: "grinning face", keywords: ["happy", "smile"] },
-        { emoji: "😃", name: "grinning face with big eyes", keywords: ["happy", "smile"] },
-        { emoji: "😄", name: "grinning face with smiling eyes", keywords: ["happy", "smile"] },
-        { emoji: "😁", name: "beaming face with smiling eyes", keywords: ["happy", "smile"] },
-        { emoji: "😂", name: "face with tears of joy", keywords: ["laugh", "funny"] },
-        { emoji: "🤣", name: "rolling on the floor laughing", keywords: ["laugh", "funny"] },
-        { emoji: "😊", name: "smiling face with smiling eyes", keywords: ["warm", "smile"] },
-        { emoji: "🙂", name: "slightly smiling face", keywords: ["smile"] },
-        { emoji: "🙃", name: "upside-down face", keywords: ["playful"] },
-        { emoji: "😉", name: "winking face", keywords: ["playful", "wink"] },
-        { emoji: "😍", name: "smiling face with heart-eyes", keywords: ["love", "heart"] },
-        { emoji: "🥳", name: "partying face", keywords: ["party", "celebration"] },
-        { emoji: "😎", name: "smiling face with sunglasses", keywords: ["cool"] },
-        { emoji: "🤩", name: "star-struck", keywords: ["excited", "stars"] },
-        { emoji: "🤖", name: "robot", keywords: ["bot", "agent", "automation"] },
-        { emoji: "🧠", name: "brain", keywords: ["smart", "thinking", "mind"] },
-        { emoji: "👋", name: "waving hand", keywords: ["hello", "wave"] },
-        { emoji: "👍", name: "thumbs up", keywords: ["approve", "yes"] },
-        { emoji: "👏", name: "clapping hands", keywords: ["applause"] },
-        { emoji: "🙏", name: "folded hands", keywords: ["thanks", "please"] },
-        { emoji: "💡", name: "light bulb", keywords: ["idea", "insight"] },
-      ],
-    },
-    {
-      id: "nature",
-      label: "Animals & Nature",
-      icon: "🌿",
-      emojis: [
-        { emoji: "🔥", name: "fire", keywords: ["hot", "energy", "burn"] },
-        { emoji: "⚡", name: "high voltage", keywords: ["energy", "fast", "power"] },
-        { emoji: "🌤️", name: "sun behind small cloud", keywords: ["weather", "sun"] },
-        { emoji: "🌊", name: "water wave", keywords: ["ocean", "flow"] },
-        { emoji: "🌿", name: "herb", keywords: ["leaf", "green", "nature"] },
-        { emoji: "🍀", name: "four leaf clover", keywords: ["luck", "nature"] },
-        { emoji: "🌙", name: "crescent moon", keywords: ["night", "moon"] },
-        { emoji: "☀️", name: "sun", keywords: ["bright", "day"] },
-        { emoji: "🪴", name: "potted plant", keywords: ["plant", "growth"] },
-        { emoji: "🌵", name: "cactus", keywords: ["plant", "desert"] },
-        { emoji: "🌸", name: "cherry blossom", keywords: ["flower", "pink"] },
-        { emoji: "🦋", name: "butterfly", keywords: ["nature", "insect"] },
-        { emoji: "🐸", name: "frog", keywords: ["animal"] },
-        { emoji: "🐙", name: "octopus", keywords: ["animal", "ocean"] },
-        { emoji: "🦊", name: "fox", keywords: ["animal"] },
-        { emoji: "🦍", name: "gorilla", keywords: ["gorilla", "strength"] },
-      ],
-    },
-    {
-      id: "food",
-      label: "Food & Drink",
-      icon: "☕",
-      emojis: [
-        { emoji: "☕", name: "hot beverage", keywords: ["coffee", "tea"] },
-        { emoji: "🍎", name: "red apple", keywords: ["fruit"] },
-        { emoji: "🍇", name: "grapes", keywords: ["fruit"] },
-        { emoji: "🍕", name: "pizza", keywords: ["food"] },
-        { emoji: "🍔", name: "hamburger", keywords: ["food"] },
-        { emoji: "🌮", name: "taco", keywords: ["food"] },
-        { emoji: "🍣", name: "sushi", keywords: ["food"] },
-        { emoji: "🍜", name: "steaming bowl", keywords: ["ramen", "noodles"] },
-        { emoji: "🍪", name: "cookie", keywords: ["snack"] },
-        { emoji: "🍩", name: "doughnut", keywords: ["dessert"] },
-        { emoji: "🍿", name: "popcorn", keywords: ["snack"] },
-        { emoji: "🥐", name: "croissant", keywords: ["breakfast"] },
-        { emoji: "🍺", name: "beer mug", keywords: ["drink"] },
-        { emoji: "🥤", name: "cup with straw", keywords: ["drink"] },
-      ],
-    },
-    {
-      id: "activity",
-      label: "Activity",
-      icon: "🎯",
-      emojis: [
-        { emoji: "🎯", name: "direct hit", keywords: ["goal", "target"] },
-        { emoji: "🎮", name: "video game", keywords: ["game", "controller"] },
-        { emoji: "🕹️", name: "joystick", keywords: ["game"] },
-        { emoji: "🎲", name: "game die", keywords: ["game", "dice"] },
-        { emoji: "🎨", name: "artist palette", keywords: ["art", "creative"] },
-        { emoji: "🎧", name: "headphone", keywords: ["music", "audio"] },
-        { emoji: "🎸", name: "guitar", keywords: ["music"] },
-        { emoji: "🏁", name: "chequered flag", keywords: ["finish", "race"] },
-        { emoji: "🚀", name: "rocket", keywords: ["launch", "ship", "fast"] },
-        { emoji: "🛠️", name: "hammer and wrench", keywords: ["build", "tool", "fix"] },
-        { emoji: "🏆", name: "trophy", keywords: ["win", "award"] },
-        { emoji: "🏅", name: "sports medal", keywords: ["award", "win"] },
-        { emoji: "⚽", name: "soccer ball", keywords: ["sport"] },
-        { emoji: "🏀", name: "basketball", keywords: ["sport"] },
-      ],
-    },
-    {
-      id: "travel",
-      label: "Travel & Places",
-      icon: "🚗",
-      emojis: [
-        { emoji: "🚗", name: "automobile", keywords: ["car", "travel"] },
-        { emoji: "🚕", name: "taxi", keywords: ["car", "travel"] },
-        { emoji: "🚌", name: "bus", keywords: ["travel", "vehicle"] },
-        { emoji: "🚲", name: "bicycle", keywords: ["travel", "bike"] },
-        { emoji: "✈️", name: "airplane", keywords: ["flight", "travel"] },
-        { emoji: "🚢", name: "ship", keywords: ["travel", "boat"] },
-        { emoji: "🏠", name: "house", keywords: ["home"] },
-        { emoji: "🏢", name: "office building", keywords: ["work", "building"] },
-        { emoji: "🌉", name: "bridge at night", keywords: ["city", "bridge"] },
-        { emoji: "🗽", name: "statue of liberty", keywords: ["landmark"] },
-      ],
-    },
-    {
-      id: "objects",
-      label: "Objects",
-      icon: "🔧",
-      emojis: [
-        { emoji: "🔧", name: "wrench", keywords: ["tool", "fix"] },
-        { emoji: "⚙️", name: "gear", keywords: ["settings", "system"] },
-        { emoji: "🧰", name: "toolbox", keywords: ["tools", "build"] },
-        { emoji: "📦", name: "package", keywords: ["ship", "box"] },
-        { emoji: "📌", name: "pushpin", keywords: ["pin"] },
-        { emoji: "📍", name: "round pushpin", keywords: ["pin", "location"] },
-        { emoji: "📎", name: "paperclip", keywords: ["attach"] },
-        { emoji: "📝", name: "memo", keywords: ["note", "write"] },
-        { emoji: "📚", name: "books", keywords: ["library", "read"] },
-        { emoji: "🛰️", name: "satellite", keywords: ["space", "signal"] },
-        { emoji: "💻", name: "laptop", keywords: ["computer", "code"] },
-        { emoji: "⌨️", name: "keyboard", keywords: ["computer", "type"] },
-        { emoji: "🖥️", name: "desktop computer", keywords: ["computer"] },
-        { emoji: "📡", name: "satellite antenna", keywords: ["signal", "network"] },
-        { emoji: "🔒", name: "lock", keywords: ["secure", "security"] },
-      ],
-    },
-    {
-      id: "symbols",
-      label: "Symbols",
-      icon: "✨",
-      emojis: [
-        { emoji: "✨", name: "sparkles", keywords: ["shine", "magic"] },
-        { emoji: "❤️", name: "red heart", keywords: ["love", "heart"] },
-        { emoji: "💯", name: "hundred points", keywords: ["score", "perfect"] },
-        { emoji: "✅", name: "check mark button", keywords: ["done", "complete"] },
-        { emoji: "❌", name: "cross mark", keywords: ["error", "stop"] },
-        { emoji: "❓", name: "question mark", keywords: ["question", "help"] },
-        { emoji: "❗", name: "exclamation mark", keywords: ["attention"] },
-        { emoji: "➕", name: "plus", keywords: ["add"] },
-        { emoji: "➖", name: "minus", keywords: ["subtract"] },
-        { emoji: "♻️", name: "recycling symbol", keywords: ["recycle"] },
-        { emoji: "📣", name: "megaphone", keywords: ["announce", "alert"] },
-        { emoji: "🌀", name: "cyclone", keywords: ["spin", "flow"] },
-      ],
-    },
-    {
-      id: "flags",
-      label: "Flags",
-      icon: "🏳️",
-      emojis: [
-        { emoji: "🏁", name: "chequered flag", keywords: ["flag", "race"] },
-        { emoji: "🚩", name: "triangular flag", keywords: ["flag"] },
-        { emoji: "🏳️", name: "white flag", keywords: ["flag"] },
-        { emoji: "🏴", name: "black flag", keywords: ["flag"] },
-        { emoji: "🏳️‍🌈", name: "rainbow flag", keywords: ["flag", "pride"] },
-        { emoji: "🏳️‍⚧️", name: "transgender flag", keywords: ["flag", "pride"] },
-      ],
-    },
-  ];
-
-  function categoryLabel(categoryID) {
-    if (categoryID === RECENT_CATEGORY_ID) {
-      return "Frequently used";
-    }
-    const category = CATEGORIES.find((item) => item.id === categoryID);
-    return category ? category.label : "Emoji";
+  function dispatchInputEvents(input) {
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
   function safeReadRecent() {
@@ -246,7 +73,7 @@
 
   function writeRecent(emojis) {
     try {
-      global.localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(emojis.slice(0, MAX_RECENT)));
+      global.localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(emojis.slice(0, 18)));
     } catch (_err) {
       // Ignore persistence failures.
     }
@@ -261,42 +88,74 @@
     writeRecent(next);
   }
 
-  function normalizedText(value) {
-    return String(value || "").trim().toLowerCase();
-  }
-
-  function dispatchInputEvents(input) {
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-  }
-
-  function matchesSearch(entry, query) {
-    if (!query) {
-      return true;
+  function requestFrame(callback) {
+    if (typeof global.requestAnimationFrame === "function") {
+      return global.requestAnimationFrame(callback);
     }
-    const haystack = [entry.name].concat(entry.keywords || []).join(" ").toLowerCase();
-    return haystack.includes(query);
+    return global.setTimeout(callback, 0);
   }
 
-  function categoryEntries(categoryID) {
-    if (categoryID === RECENT_CATEGORY_ID) {
-      const recent = safeReadRecent();
-      const lookup = new Map();
-      CATEGORIES.forEach((category) => {
-        (category.emojis || []).forEach((entry) => {
-          lookup.set(entry.emoji, entry);
-        });
+  function loadEmojiMartScript() {
+    if (global.EmojiMart && typeof global.EmojiMart.Picker === "function") {
+      return Promise.resolve(global.EmojiMart);
+    }
+    if (emojiMartScriptPromise) {
+      return emojiMartScriptPromise;
+    }
+
+    emojiMartScriptPromise = new Promise((resolve, reject) => {
+      const existing = global.document.querySelector('script[data-emoji-mart-script="true"]');
+      if (existing) {
+        existing.addEventListener("load", () => resolve(global.EmojiMart), { once: true });
+        existing.addEventListener("error", () => reject(new Error("emoji-mart script failed to load")), { once: true });
+        return;
+      }
+
+      const script = global.document.createElement("script");
+      script.src = EMOJI_MART_SCRIPT_URL;
+      script.async = true;
+      script.setAttribute("data-emoji-mart-script", "true");
+      script.addEventListener("load", () => resolve(global.EmojiMart), { once: true });
+      script.addEventListener("error", () => reject(new Error("emoji-mart script failed to load")), { once: true });
+      global.document.head.appendChild(script);
+    });
+
+    return emojiMartScriptPromise;
+  }
+
+  function loadEmojiMartData() {
+    if (emojiMartDataPromise) {
+      return emojiMartDataPromise;
+    }
+
+    emojiMartDataPromise = global.fetch(EMOJI_MART_DATA_URL)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`emoji-mart data request failed: ${response.status}`);
+        }
+        return response.json();
       });
-      return recent.map((emoji) => lookup.get(emoji)).filter(Boolean);
+
+    return emojiMartDataPromise;
+  }
+
+  function pickerTheme() {
+    const root = global.document && global.document.documentElement ? global.document.documentElement : null;
+    const explicitScheme = root ? String(root.style.colorScheme || "").trim().toLowerCase() : "";
+    if (explicitScheme === "dark") {
+      return "dark";
     }
-    const category = CATEGORIES.find((item) => item.id === categoryID);
-    return category ? category.emojis.slice() : [];
+    if (typeof global.matchMedia === "function" && global.matchMedia("(prefers-color-scheme: dark)").matches) {
+      return "dark";
+    }
+    return "light";
   }
 
   function attach(root) {
     if (!root) {
       return null;
     }
+
     const input = root.querySelector(".hub-emoji-picker-input") || root.querySelector("input");
     const toggle = root.querySelector(".hub-emoji-picker-toggle");
     const panel = root.querySelector(".hub-emoji-picker-panel");
@@ -306,35 +165,25 @@
       return null;
     }
 
-    let activeCategory = RECENT_CATEGORY_ID;
-    let searchValue = "";
-    let open = false;
-
     panel.innerHTML = [
       '<div class="hub-emoji-picker-panel-shell">',
       '  <div class="hub-emoji-picker-panel-header">',
       '    <p class="hub-emoji-picker-panel-title">Pick one emoji</p>',
       '    <button class="hub-emoji-picker-clear" type="button">Clear</button>',
       "  </div>",
-      '  <div class="hub-emoji-picker-toolbar">',
-      '    <div class="hub-emoji-picker-categories" role="tablist" aria-label="Emoji categories"></div>',
+      '  <div class="hub-emoji-picker-body">',
+      '    <div class="hub-emoji-picker-state">Loading emoji picker...</div>',
       "  </div>",
-      '  <label class="hub-emoji-picker-search-wrap">',
-      '    <span class="hub-emoji-picker-search-icon" aria-hidden="true">⌕</span>',
-      '    <span class="sr-only">Search emoji</span>',
-      '    <input class="hub-emoji-picker-search" type="text" autocomplete="off" spellcheck="false" placeholder="Search emoji">',
-      "  </label>",
-      '  <div class="hub-emoji-picker-results"></div>',
       "</div>",
     ].join("");
 
-    const categoriesNode = panel.querySelector(".hub-emoji-picker-categories");
     const clearButton = panel.querySelector(".hub-emoji-picker-clear");
-    const searchInput = panel.querySelector(".hub-emoji-picker-search");
-    const resultsNode = panel.querySelector(".hub-emoji-picker-results");
-    const requestFrame = typeof global.requestAnimationFrame === "function"
-      ? global.requestAnimationFrame.bind(global)
-      : (cb) => global.setTimeout(cb, 0);
+    const bodyNode = panel.querySelector(".hub-emoji-picker-body");
+
+    let open = false;
+    let pickerNode = null;
+    let pickerReady = false;
+    let pickerLoadPromise = null;
 
     function viewportSize() {
       const doc = global.document && global.document.documentElement ? global.document.documentElement : null;
@@ -424,6 +273,13 @@
       global.removeEventListener("keydown", handleEscape);
     }
 
+    function renderPickerState(message, stateClass) {
+      if (!bodyNode) {
+        return;
+      }
+      bodyNode.innerHTML = `<div class="hub-emoji-picker-state${stateClass ? ` ${stateClass}` : ""}">${message}</div>`;
+    }
+
     function setOpen(nextOpen) {
       const next = Boolean(nextOpen) && !toggle.disabled;
       if (open === next) {
@@ -442,16 +298,8 @@
       if (open) {
         attachOutsideWatchers();
         attachPositionWatchers();
-        renderCategories();
-        renderResults();
         updatePanelPosition();
-        if (searchInput) {
-          searchInput.value = searchValue;
-          requestFrame(() => {
-            searchInput.focus();
-            searchInput.select();
-          });
-        }
+        void ensurePickerLoaded();
       } else {
         detachOutsideWatchers();
         detachPositionWatchers();
@@ -487,10 +335,6 @@
       if (clearButton) {
         clearButton.disabled = !current;
       }
-      if (open) {
-        renderResults();
-        updatePanelPosition();
-      }
     }
 
     function setValue(nextValue) {
@@ -512,116 +356,98 @@
       }
     }
 
-    function visibleCategories() {
-      const hasRecent = categoryEntries(RECENT_CATEGORY_ID).length > 0;
-      return CATEGORIES.filter((category) => category.id !== RECENT_CATEGORY_ID || hasRecent);
+    function mountPickerNode(nextPickerNode) {
+      if (!bodyNode) {
+        return;
+      }
+      bodyNode.innerHTML = "";
+      bodyNode.appendChild(nextPickerNode);
     }
 
-    function renderCategories() {
-      if (!categoriesNode) {
-        return;
+    function ensurePickerLoaded() {
+      if (pickerReady) {
+        requestFrame(updatePanelPosition);
+        return Promise.resolve();
       }
-      const categories = visibleCategories();
-      if (!categories.length) {
-        categoriesNode.innerHTML = "";
-        return;
-      }
-      if (!categories.some((category) => category.id === activeCategory)) {
-        activeCategory = categories[0].id;
+      if (pickerLoadPromise) {
+        return pickerLoadPromise;
       }
 
-      categoriesNode.innerHTML = categories.map((category) => {
-        const selected = category.id === activeCategory;
-        return `<button class="hub-emoji-picker-category${selected ? " active" : ""}" type="button" data-category="${category.id}" role="tab" aria-selected="${selected ? "true" : "false"}" title="${category.label}">${category.icon}</button>`;
-      }).join("");
-    }
-
-    function renderResults() {
-      if (!resultsNode) {
-        return;
-      }
-      const query = normalizedText(searchValue);
-      const groups = [];
-
-      if (query) {
-        CATEGORIES.forEach((category) => {
-          const matches = categoryEntries(category.id).filter((entry) => matchesSearch(entry, query));
-          if (matches.length > 0) {
-            groups.push({ label: categoryLabel(category.id), entries: matches });
+      renderPickerState("Loading emoji picker...");
+      pickerLoadPromise = Promise.all([loadEmojiMartScript(), loadEmojiMartData()])
+        .then((loaded) => {
+          const emojiMart = loaded[0];
+          const data = loaded[1];
+          if (!emojiMart || typeof emojiMart.Picker !== "function") {
+            throw new Error("EmojiMart.Picker unavailable");
           }
+
+          pickerNode = new emojiMart.Picker({
+            data,
+            autoFocus: true,
+            i18n: {
+              categories: {
+                activity: "Activity",
+                flags: "Flags",
+                foods: "Food & Drink",
+                frequent: "Frequently used",
+                nature: "Animals & Nature",
+                objects: "Objects",
+                people: "Smileys & People",
+                places: "Travel & Places",
+                search: "Search Results",
+                symbols: "Symbols",
+              },
+              search: "Search emoji",
+            },
+            maxFrequentRows: 2,
+            onClickOutside: () => {
+              if (!open) {
+                return;
+              }
+              setOpen(false);
+              toggle.focus();
+            },
+            onEmojiSelect: (emoji) => {
+              if (!emoji || !emoji.native) {
+                return;
+              }
+              setValue(emoji.native);
+              setOpen(false);
+              toggle.focus();
+            },
+            previewPosition: "none",
+            searchPosition: "sticky",
+            skinTonePosition: "none",
+            theme: pickerTheme(),
+          });
+          pickerNode.classList.add("hub-emoji-mart");
+          mountPickerNode(pickerNode);
+          pickerReady = true;
+          sync();
+          requestFrame(() => {
+            updatePanelPosition();
+            const searchInput = panel.querySelector('input[type="search"]');
+            if (open && searchInput && typeof searchInput.focus === "function") {
+              searchInput.focus();
+            }
+          });
+        })
+        .catch((_err) => {
+          renderPickerState("Emoji picker unavailable.", "is-error");
+        })
+        .finally(() => {
+          pickerLoadPromise = null;
         });
-      } else {
-        const recentEntries = categoryEntries(RECENT_CATEGORY_ID);
-        if (activeCategory !== RECENT_CATEGORY_ID && recentEntries.length > 0) {
-          groups.push({ label: categoryLabel(RECENT_CATEGORY_ID), entries: recentEntries });
-        }
-        const activeEntries = categoryEntries(activeCategory);
-        if (activeEntries.length > 0) {
-          groups.push({ label: categoryLabel(activeCategory), entries: activeEntries });
-        }
-      }
 
-      if (groups.length === 0) {
-        resultsNode.innerHTML = '<div class="hub-emoji-picker-empty">No emoji matched that search.</div>';
-        return;
-      }
-
-      const selectedEmoji = normalizeEmojiValue(input.value);
-      resultsNode.innerHTML = groups.map((group) => {
-        const buttons = group.entries.map((entry) => {
-          const selected = selectedEmoji === entry.emoji;
-          return `<button class="hub-emoji-picker-option${selected ? " active" : ""}" type="button" data-emoji="${entry.emoji}" title="${entry.name}" aria-label="${entry.name}">${entry.emoji}</button>`;
-        }).join("");
-        return `<section class="hub-emoji-picker-group"><div class="hub-emoji-picker-group-label">${group.label}</div><div class="hub-emoji-picker-grid">${buttons}</div></section>`;
-      }).join("");
+      return pickerLoadPromise;
     }
 
-    renderCategories();
     sync();
-
-    if (categoriesNode) {
-      categoriesNode.addEventListener("click", (event) => {
-        const button = event.target.closest("[data-category]");
-        if (!button) {
-          return;
-        }
-        activeCategory = button.getAttribute("data-category") || "people";
-        searchValue = "";
-        if (searchInput) {
-          searchInput.value = "";
-        }
-        renderCategories();
-        renderResults();
-      });
-    }
 
     if (clearButton) {
       clearButton.addEventListener("click", () => {
         setValue("");
-        setOpen(false);
-        toggle.focus();
-      });
-    }
-
-    if (searchInput) {
-      searchInput.addEventListener("input", () => {
-        searchValue = searchInput.value;
-        renderResults();
-      });
-    }
-
-    if (resultsNode) {
-      resultsNode.addEventListener("click", (event) => {
-        const button = event.target.closest("[data-emoji]");
-        if (!button) {
-          return;
-        }
-        const emoji = normalizeEmojiValue(button.getAttribute("data-emoji") || "");
-        if (!emoji) {
-          return;
-        }
-        setValue(emoji);
-        renderCategories();
         setOpen(false);
         toggle.focus();
       });
