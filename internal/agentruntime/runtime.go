@@ -210,6 +210,11 @@ func buildPiCommand(targetDir, prompt string, opts RunOptions) (execx.Command, e
 	return execx.Command{Dir: targetDir, Args: args}, nil
 }
 
+// SupportsPromptImages reports whether this runtime accepts image attachments.
+func (r Runtime) SupportsPromptImages() bool {
+	return normalizeHarness(r.Harness) == HarnessCodex
+}
+
 func countNonEmptyStrings(values []string) int {
 	count := 0
 	for _, value := range values {

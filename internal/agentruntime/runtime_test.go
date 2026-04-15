@@ -228,6 +228,35 @@ func TestBuildCommandRejectsImagesForNonCodex(t *testing.T) {
 	}
 }
 
+func TestSupportsPromptImages(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		harness string
+		want    bool
+	}{
+		{harness: HarnessCodex, want: true},
+		{harness: HarnessClaude, want: false},
+		{harness: HarnessAuggie, want: false},
+		{harness: HarnessPi, want: false},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.harness, func(t *testing.T) {
+			t.Parallel()
+
+			rt, err := Resolve(tc.harness, "")
+			if err != nil {
+				t.Fatalf("Resolve() error = %v", err)
+			}
+			if got := rt.SupportsPromptImages(); got != tc.want {
+				t.Fatalf("SupportsPromptImages() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestPreflightCommandUsesResolvedCommand(t *testing.T) {
 	t.Parallel()
 

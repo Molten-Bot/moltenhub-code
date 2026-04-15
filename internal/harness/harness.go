@@ -142,6 +142,16 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		return h.fail(ExitConfig, "config", err, "")
 	}
 	agentStage := runtimeLogStage(runtime)
+	promptImages := cfg.Images
+	if len(promptImages) > 0 && !runtime.SupportsPromptImages() {
+		h.logf(
+			"stage=%s status=warn action=skip_prompt_images harness=%s count=%d",
+			agentStage,
+			runtime.Harness,
+			len(promptImages),
+		)
+		promptImages = nil
+	}
 
 	h.logf("stage=preflight status=start")
 	for _, cmd := range preflightCommandsWithRuntime(runtime) {
@@ -258,7 +268,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	if len(repos) > 1 {
 		codexDir = runDir
 	}
-	imagePaths, err := materializePromptImages(runDir, cfg.Images)
+	imagePaths, err := materializePromptImages(runDir, promptImages)
 	if err != nil {
 		return h.fail(ExitConfig, "config", err, runDir)
 	}

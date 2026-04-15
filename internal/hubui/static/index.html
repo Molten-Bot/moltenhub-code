@@ -5044,22 +5044,13 @@
 
         const title = document.createElement("h3");
         title.className = "task-empty-title";
-        title.textContent = "The queue is clear.";
+        title.textContent = "Lets get working!";
 
         const copy = document.createElement("p");
         copy.className = "task-empty-copy";
-        copy.textContent = "Start from Studio, Library, or JSON. New runs will appear here with stage progress, replay controls, local clone actions, and PR links.";
+        copy.textContent = "New runs will appear here with their progress, replay controls, local clone actions, and PR links.";
 
-        const stages = document.createElement("div");
-        stages.className = "task-empty-chips";
-        for (const label of ["prepare", "clone", "agent", "finalize"]) {
-          const chip = document.createElement("span");
-          chip.className = "task-empty-chip brand-chip-action";
-          chip.textContent = label;
-          stages.appendChild(chip);
-        }
-
-        empty.append(badge, eyebrow, title, copy, stages);
+        empty.append(badge, eyebrow, title, copy);
         listNode.appendChild(empty);
         return;
       }

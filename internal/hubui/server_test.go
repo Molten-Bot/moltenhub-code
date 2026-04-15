@@ -198,6 +198,21 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if strings.Contains(markup, `Runs move through prepare, clone, agent, and finalize. Re-runs, local clone links, and PRs stay attached here.`) {
 		t.Fatalf("expected index html to remove the old task queue supporting copy")
 	}
+	if !strings.Contains(markup, `Lets get working!`) {
+		t.Fatalf("expected index html to include updated empty-state title")
+	}
+	if strings.Contains(markup, `The queue is clear.`) {
+		t.Fatalf("expected index html to remove old empty-state title")
+	}
+	if !strings.Contains(markup, `New runs will appear here with their progress, replay controls, local clone actions, and PR links.`) {
+		t.Fatalf("expected index html to include updated empty-state copy")
+	}
+	if strings.Contains(markup, `Start from Studio, Library, or JSON. New runs will appear here with stage progress, replay controls, local clone actions, and PR links.`) {
+		t.Fatalf("expected index html to remove old empty-state copy")
+	}
+	if strings.Contains(markup, `for (const label of ["prepare", "clone", "agent", "finalize"])`) {
+		t.Fatalf("expected index html to remove empty-state stage chips")
+	}
 	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title">Studio</span>`) {
 		t.Fatalf("expected index html to label the builder mode as Studio")
 	}
