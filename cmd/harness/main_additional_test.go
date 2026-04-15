@@ -1158,10 +1158,10 @@ func TestRunHubBootDiagnosticsSupportsPiRuntime(t *testing.T) {
 
 	runner := &stubExecRunner{
 		results: map[string]stubExecResult{
-			stubCommandKey(execx.Command{Name: "git", Args: []string{"--version"}}):     {result: execx.Result{Stdout: "git version"}},
-			stubCommandKey(execx.Command{Name: "gh", Args: []string{"--version"}}):      {result: execx.Result{Stdout: "gh version"}},
-			stubCommandKey(execx.Command{Name: "pi-custom", Args: []string{"--help"}}):  {result: execx.Result{Stdout: "pi help"}},
-			stubCommandKey(execx.Command{Name: "gh", Args: []string{"auth", "status"}}): {result: execx.Result{Stdout: "Logged in to github.com as test\n"}},
+			stubCommandKey(execx.Command{Name: "git", Args: []string{"--version"}}):       {result: execx.Result{Stdout: "git version"}},
+			stubCommandKey(execx.Command{Name: "gh", Args: []string{"--version"}}):        {result: execx.Result{Stdout: "gh version"}},
+			stubCommandKey(execx.Command{Name: "pi-custom", Args: []string{"--version"}}): {result: execx.Result{Stdout: "0.67.2"}},
+			stubCommandKey(execx.Command{Name: "gh", Args: []string{"auth", "status"}}):   {result: execx.Result{Stdout: "Logged in to github.com as test\n"}},
 		},
 	}
 
