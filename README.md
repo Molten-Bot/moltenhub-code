@@ -10,6 +10,13 @@ For more information, see [molten.bot/code](https://molten.bot/code).
 
 ### Docker Images
 
+```bash
+docker run -p 7777:7777 moltenai/moltenhub-code:latest-claude
+docker run -p 7777:7777 moltenai/moltenhub-code:latest-codex
+docker run -p 7777:7777 moltenai/moltenhub-code:latest-pi
+docker run -p 7777:7777 moltenai/moltenhub-code:latest-auggie
+```
+
 | Harness | npm Package | docker |
 |---------|------------|------------|
 | `codex` | `@openai/codex@latest` | `moltenai/moltenhub-code:latest-codex` |
