@@ -52,6 +52,8 @@ func TestNewPiAuthGateRequiresConfigureWhenExistingPiProbeFails(t *testing.T) {
 
 func TestNewPiAuthGateReadyWhenEnvironmentAlreadyConfigured(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "sk-env")
+	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GITHUB_TOKEN", "")
 	runner := &authGateRunnerStub{}
 	g := newPiAuthGateWithRuntime(runner, "pi", filepath.Join(t.TempDir(), ".moltenhub", "config.json"), hub.InitConfig{}, nil)
 
@@ -67,8 +69,38 @@ func TestNewPiAuthGateReadyWhenEnvironmentAlreadyConfigured(t *testing.T) {
 	}
 }
 
-func TestNewPiAuthGateReadyWhenExistingPiAuthAlreadyWorks(t *testing.T) {
+func TestNewPiAuthGateRequiresGitHubConfigureWhenExistingPiAuthAlreadyWorks(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+	runner := &authGateRunnerStub{}
+	g := newPiAuthGateWithRuntime(runner, "pi", filepath.Join(t.TempDir(), ".moltenhub", "config.json"), hub.InitConfig{}, nil)
+
+	status, err := g.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if status.Ready || status.State != "needs_configure" {
+		t.Fatalf("status = %+v", status)
+	}
+	if got, want := status.ConfigureCommand, claudeGitHubConfigureCommand; got != want {
+		t.Fatalf("ConfigureCommand = %q, want %q", got, want)
+	}
+	if got, want := status.ConfigurePlaceholder, claudeGitHubConfigurePlaceholder; got != want {
+		t.Fatalf("ConfigurePlaceholder = %q, want %q", got, want)
+	}
+	if got, want := status.Message, "GitHub token is required."; got != want {
+		t.Fatalf("Message = %q, want %q", got, want)
+	}
+	if got := len(runner.calls); got != 1 {
+		t.Fatalf("probe calls = %d, want 1", got)
+	}
+}
+
+func TestNewPiAuthGateReadyWhenExistingPiAuthAndGitHubTokenAlreadyWork(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GITHUB_TOKEN", "")
 	runner := &authGateRunnerStub{}
 	g := newPiAuthGateWithRuntime(runner, "pi", filepath.Join(t.TempDir(), ".moltenhub", "config.json"), hub.InitConfig{}, nil)
 
@@ -89,6 +121,8 @@ func TestNewPiAuthGateReadyWhenExistingPiAuthAlreadyWorks(t *testing.T) {
 
 func TestPiAuthGateConfigurePersistsRuntimeConfigAndEnvironment(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GITHUB_TOKEN", "")
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	runner := &authGateRunnerStub{}
@@ -133,6 +167,8 @@ func TestPiAuthGateConfigurePersistsRuntimeConfigAndEnvironment(t *testing.T) {
 
 func TestPiAuthGateConfigurePersistsPiAuthJSONAndWritesAuthFile(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GITHUB_TOKEN", "")
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 
@@ -189,6 +225,8 @@ func TestPiAuthGateConfigureRejectsUnsupportedEnvVar(t *testing.T) {
 
 func TestPiAuthGateConfigureOfflineModeAllowsEmptyTokenWithoutProbe(t *testing.T) {
 	t.Setenv("PI_OFFLINE", "")
+	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GITHUB_TOKEN", "")
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	runner := &authGateRunnerStub{
@@ -229,6 +267,85 @@ func TestPiAuthGateConfigureOfflineModeAllowsEmptyTokenWithoutProbe(t *testing.T
 	}
 	if got, want := doc["pi_provider_auth"], expected; got != want {
 		t.Fatalf("pi_provider_auth = %#v, want %q", got, want)
+	}
+}
+
+func TestPiAuthGateConfigureTransitionsToGitHubConfigureWhenTokenMissing(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+	t.Setenv("HOME", t.TempDir())
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	runner := &authGateRunnerStub{}
+	g := newPiAuthGateWithRuntime(runner, "pi", path, hub.InitConfig{
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		AgentToken:   "agent_token",
+		AgentHarness: agentruntime.HarnessPi,
+	}, nil)
+
+	status, err := g.Configure(context.Background(), `{"provider":"demo","token":"saved"}`)
+	if err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	if status.Ready || status.State != "needs_configure" {
+		t.Fatalf("status = %+v", status)
+	}
+	if got, want := status.ConfigureCommand, claudeGitHubConfigureCommand; got != want {
+		t.Fatalf("ConfigureCommand = %q, want %q", got, want)
+	}
+	if got, want := status.ConfigurePlaceholder, claudeGitHubConfigurePlaceholder; got != want {
+		t.Fatalf("ConfigurePlaceholder = %q, want %q", got, want)
+	}
+}
+
+func TestPiAuthGateConfigureAcceptsGitHubTokenWhenRequired(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+	t.Setenv("HOME", t.TempDir())
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	runner := &authGateRunnerStub{}
+	g := newPiAuthGateWithRuntime(runner, "pi", path, hub.InitConfig{
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		AgentToken:   "agent_token",
+		AgentHarness: agentruntime.HarnessPi,
+		PiAuthJSON:   `{"provider":"demo","token":"saved"}`,
+	}, nil)
+
+	status, err := g.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if status.Ready || status.State != "needs_configure" {
+		t.Fatalf("status = %+v", status)
+	}
+
+	status, err = g.Configure(context.Background(), "ghp_saved_token")
+	if err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	if !status.Ready || status.State != "ready" {
+		t.Fatalf("status = %+v", status)
+	}
+	if got, want := os.Getenv("GH_TOKEN"), "ghp_saved_token"; got != want {
+		t.Fatalf("GH_TOKEN = %q, want %q", got, want)
+	}
+	if got, want := os.Getenv("GITHUB_TOKEN"), "ghp_saved_token"; got != want {
+		t.Fatalf("GITHUB_TOKEN = %q, want %q", got, want)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if got, want := doc["github_token"], "ghp_saved_token"; got != want {
+		t.Fatalf("github_token = %#v, want %q", got, want)
 	}
 }
 

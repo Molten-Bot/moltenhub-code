@@ -1260,12 +1260,13 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	if !strings.Contains(html, "claude_auth_code: code") {
 		t.Fatalf("expected Claude browser code configure payload support in auth UI")
 	}
-		if strings.Contains(html, `id="agent-auth-configure-option"`) ||
-			!strings.Contains(html, "pi_auth_json: authJSON") ||
-			!strings.Contains(html, "cat ~/.pi/agent/auth.json") ||
-			!strings.Contains(html, "function isPiConfigureState(auth) {") {
-			t.Fatalf("expected PI auth.json configure support in auth UI")
-		}
+	if strings.Contains(html, `id="agent-auth-configure-option"`) ||
+		!strings.Contains(html, "pi_auth_json: authJSON") ||
+		!strings.Contains(html, "cat ~/.pi/agent/auth.json") ||
+		!strings.Contains(html, "function isPiConfigureState(auth) {") ||
+		!strings.Contains(html, `return authHarness(current) === "pi" && isManualConfigureState(current) && !isGitHubTokenConfigureState(current);`) {
+		t.Fatalf("expected PI auth.json configure support in auth UI")
+	}
 	if !strings.Contains(html, "if (isClaudePendingBrowserLoginState()) {") ||
 		!strings.Contains(html, "const code = claudeBrowserCodeValue();") ||
 		!strings.Contains(html, "if (code !== \"\") {") {

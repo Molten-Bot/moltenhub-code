@@ -155,6 +155,37 @@ func (g *piAuthGate) Configure(ctx context.Context, rawInput string) (hubui.Agen
 		return readyAgentAuthState(), nil
 	}
 
+	g.mu.Lock()
+	configureCommand := strings.TrimSpace(g.authState.configureCommand)
+	runtimeConfigPath := g.runtimeConfigPath
+	initCfg := g.initCfg
+	g.mu.Unlock()
+
+	if configureCommand == claudeGitHubConfigureCommand {
+		requiredMessage := "GitHub token is required."
+		token, state, err := configureGitHubToken(
+			agentruntime.HarnessPi,
+			runtimeConfigPath,
+			initCfg,
+			rawInput,
+			requiredMessage,
+		)
+		if err != nil {
+			g.mu.Lock()
+			applySnapshotAuthState(&g.authState, state)
+			snap := g.snapshotLocked()
+			g.mu.Unlock()
+			return snap, err
+		}
+
+		g.mu.Lock()
+		g.initCfg.GitHubToken = token
+		g.refreshLocked()
+		snap := g.snapshotLocked()
+		g.mu.Unlock()
+		return snap, nil
+	}
+
 	if isLikelyPiProviderAuthInput(rawInput) {
 		return g.configureProviderAuth(ctx, rawInput)
 	}
@@ -168,7 +199,7 @@ func (g *piAuthGate) refreshAndSnapshot(ctx context.Context) (hubui.AgentAuthSta
 
 	g.mu.Lock()
 	g.refreshLocked()
-	if g.authState.ready || g.authState.state == "error" {
+	if g.authState.ready || g.authState.state == "error" || strings.TrimSpace(g.authState.configureCommand) == claudeGitHubConfigureCommand {
 		snap := g.snapshotLocked()
 		g.mu.Unlock()
 		return snap, nil
@@ -204,9 +235,8 @@ func (g *piAuthGate) refreshAndSnapshot(ctx context.Context) (hubui.AgentAuthSta
 		}
 
 		g.mu.Lock()
-		g.authState.ready = true
-		g.authState.state = "ready"
-		g.authState.message = piExistingLocalAuthReadyMessage
+		g.validatedAuth = validatedPiAuthStateKey("local", piAuthFileRelativePath)
+		g.refreshLocked()
 		snap := g.snapshotLocked()
 		g.mu.Unlock()
 		return snap, nil
@@ -259,6 +289,10 @@ func (g *piAuthGate) refreshLocked() {
 		}
 		g.initCfg.PiAuthJSON = canonical
 		if g.validatedAuth == validatedPiAuthStateKey("json", canonical) {
+			if blocked, state := githubTokenRequirementState(agentruntime.HarnessPi, g.runtimeConfigPath, g.initCfg); blocked {
+				applySnapshotAuthState(&g.authState, state)
+				return
+			}
 			g.authState.ready = true
 			g.authState.state = "ready"
 			g.authState.message = piAuthReadyMessage
@@ -285,6 +319,10 @@ func (g *piAuthGate) refreshLocked() {
 		}
 		g.initCfg.PiProviderAuth = canonical
 		if g.validatedAuth == validatedPiAuthStateKey("provider", canonical) {
+			if blocked, state := githubTokenRequirementState(agentruntime.HarnessPi, g.runtimeConfigPath, g.initCfg); blocked {
+				applySnapshotAuthState(&g.authState, state)
+				return
+			}
 			g.authState.ready = true
 			g.authState.state = "ready"
 			g.authState.message = fmt.Sprintf("PI provider auth is ready via %s.", auth.EnvVar)
@@ -292,6 +330,16 @@ func (g *piAuthGate) refreshLocked() {
 		}
 		g.authState.message = fmt.Sprintf("PI provider auth is configured via %s. Validating Pi launch.", auth.EnvVar)
 		return
+	}
+
+	if g.validatedAuth == validatedPiAuthStateKey("local", piAuthFileRelativePath) {
+		if blocked, state := githubTokenRequirementState(agentruntime.HarnessPi, g.runtimeConfigPath, g.initCfg); blocked {
+			applySnapshotAuthState(&g.authState, state)
+			return
+		}
+		g.authState.ready = true
+		g.authState.state = "ready"
+		g.authState.message = piExistingLocalAuthReadyMessage
 	}
 }
 
@@ -326,6 +374,17 @@ func applyPiConfigureUIState(state *configurableAgentAuthState, message string) 
 	state.configureCommand = piAuthConfigureCommand
 	state.configurePlaceholder = piAuthConfigurePlaceholder
 	state.configureOptions = nil
+}
+
+func applySnapshotAuthState(state *configurableAgentAuthState, snapshot hubui.AgentAuthState) {
+	state.required = snapshot.Required
+	state.ready = snapshot.Ready
+	state.state = strings.TrimSpace(snapshot.State)
+	state.message = strings.TrimSpace(snapshot.Message)
+	state.configureCommand = strings.TrimSpace(snapshot.ConfigureCommand)
+	state.configurePlaceholder = strings.TrimSpace(snapshot.ConfigurePlaceholder)
+	state.configureOptions = append([]hubui.AgentAuthOption(nil), snapshot.ConfigureOptions...)
+	state.touch()
 }
 
 func firstConfiguredPiAuthJSON(runtimeConfigPath string, initCfg hub.InitConfig) (string, string, error) {

@@ -2161,7 +2161,7 @@
 
     function isPiConfigureState(auth) {
       const current = auth && typeof auth === "object" ? auth : state.agentAuth;
-      return authHarness(current) === "pi" && isManualConfigureState(current);
+      return authHarness(current) === "pi" && isManualConfigureState(current) && !isGitHubTokenConfigureState(current);
     }
 
     function isClaudeGitHubConfigureState(auth) {
