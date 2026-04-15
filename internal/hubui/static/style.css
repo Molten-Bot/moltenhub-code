@@ -854,7 +854,7 @@ body .right-col.prompt-collapsed.task-list-hidden {
 .prompt-form {
   display: grid;
   gap: 10px;
-  padding: 14px;
+  padding: 14px 14px 18px;
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
