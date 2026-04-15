@@ -679,7 +679,10 @@ func (h Harness) pushWithSync(ctx context.Context, repo repoWorkspace, remediati
 				maxPushSyncAttempts-1,
 			)
 		}
-		if _, syncErr := h.runCommand(ctx, "git", pullRebaseCommand(repo.Dir, repo.Branch)); syncErr != nil {
+		if _, syncErr := h.runCommand(ctx, "git", fetchBranchCommand(repo.Dir, repo.Branch)); syncErr != nil {
+			return fmt.Errorf("sync branch %q before push retry: %w", repo.Branch, syncErr)
+		}
+		if _, syncErr := h.runCommand(ctx, "git", mergeFetchedBranchCommand(repo.Dir)); syncErr != nil {
 			return fmt.Errorf("sync branch %q before push retry: %w", repo.Branch, syncErr)
 		}
 	}
@@ -2663,8 +2666,12 @@ func commitsAheadOfBaseCommand(repoDir, baseBranch string) execx.Command {
 	}
 }
 
-func pullRebaseCommand(repoDir, branch string) execx.Command {
-	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"pull", "--rebase", "origin", branch}}
+func fetchBranchCommand(repoDir, branch string) execx.Command {
+	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"fetch", "origin", branch}}
+}
+
+func mergeFetchedBranchCommand(repoDir string) execx.Command {
+	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"merge", "--no-edit", "FETCH_HEAD"}}
 }
 
 func appendPRReviewers(args []string, reviewers []string) []string {

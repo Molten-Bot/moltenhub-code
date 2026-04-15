@@ -752,7 +752,7 @@ func TestRunTracksCurrentBranchFromLocalGitStatus(t *testing.T) {
 	}
 }
 
-func TestRunNonMainBranchPushNonFastForwardRetriesWithRebase(t *testing.T) {
+func TestRunNonMainBranchPushNonFastForwardRetriesWithMergeSync(t *testing.T) {
 	t.Parallel()
 
 	cfg := sampleConfig()
@@ -782,7 +782,8 @@ func TestRunNonMainBranchPushNonFastForwardRetriesWithRebase(t *testing.T) {
 		{cmd: addCommand(repoDir)},
 		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
 		{cmd: pushCommand(repoDir, cfg.BaseBranch), res: pushRejected, err: errors.New("push rejected")},
-		{cmd: pullRebaseCommand(repoDir, cfg.BaseBranch)},
+		{cmd: fetchBranchCommand(repoDir, cfg.BaseBranch)},
+		{cmd: mergeFetchedBranchCommand(repoDir)},
 		{cmd: pushCommand(repoDir, cfg.BaseBranch)},
 		{cmd: remoteBranchExistsOnOriginCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "abc123\trefs/heads/" + cfg.BaseBranch + "\n"}},
 		{cmd: prLookupByHeadCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: prURL + "\n"}},
@@ -2440,10 +2441,16 @@ func TestCommandBuilders(t *testing.T) {
 		t.Fatalf("workflow dispatch command unexpected: %+v", workflowDispatch)
 	}
 
-	pullRebase := pullRebaseCommand(repoDir, branch)
-	wantPullRebase := []string{"pull", "--rebase", "origin", branch}
-	if pullRebase.Name != "git" || pullRebase.Dir != repoDir || !reflect.DeepEqual(pullRebase.Args, wantPullRebase) {
-		t.Fatalf("pull rebase command unexpected: %+v", pullRebase)
+	fetchBranch := fetchBranchCommand(repoDir, branch)
+	wantFetchBranch := []string{"fetch", "origin", branch}
+	if fetchBranch.Name != "git" || fetchBranch.Dir != repoDir || !reflect.DeepEqual(fetchBranch.Args, wantFetchBranch) {
+		t.Fatalf("fetch branch command unexpected: %+v", fetchBranch)
+	}
+
+	mergeFetchedBranch := mergeFetchedBranchCommand(repoDir)
+	wantMergeFetchedBranch := []string{"merge", "--no-edit", "FETCH_HEAD"}
+	if mergeFetchedBranch.Name != "git" || mergeFetchedBranch.Dir != repoDir || !reflect.DeepEqual(mergeFetchedBranch.Args, wantMergeFetchedBranch) {
+		t.Fatalf("merge fetched branch command unexpected: %+v", mergeFetchedBranch)
 	}
 
 	pushDryRun := pushDryRunCommand(repoDir, branch)
