@@ -7,7 +7,9 @@
   // Optional for Auggie harness: full session JSON from `auggie token print`.
   // "augment_session_auth": "{\"accessToken\":\"XXX\",\"tenantURL\":\"https://YYY/\",\"scopes\":[\"email\"]}",
   // Optional for Pi harness: install with `npm install -g @mariozechner/pi-coding-agent`
-  // and configure Pi auth/providers separately. Example persisted runtime value:
+  // then run `pi`, use `/login`, and copy `~/.pi/agent/auth.json`. MoltenHub can persist it as:
+  // "pi_auth_json": "{\"provider\":\"pi\",\"token\":\"replace_with_your_auth_json_contents\"}",
+  // API-key provider mode is still supported as:
   // "pi_provider_auth": "{\"env_var\":\"OPENAI_API_KEY\",\"value\":\"sk-proj_replace_with_your_key\"}",
   "agent_token": "agent_replace_with_your_token",
   // Optional log level: error | warn | info | debug (default: info).
