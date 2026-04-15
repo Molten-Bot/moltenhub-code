@@ -16,67 +16,67 @@
   --hub-good-rgb: 43 182 115;
   --hub-warn-rgb: 245 158 11;
   --hub-bad-rgb: 239 68 68;
-  --hub-running-rgb: 10 132 255;
-  --hub-meta-rgb: 113 136 177;
-  --hub-accent-rgb: 123 97 255;
-  --bg: #f4f8ff;
-  --bg-soft: rgba(255, 255, 255, 0.84);
+  --hub-running-rgb: 255 79 163;
+  --hub-meta-rgb: 148 108 147;
+  --hub-accent-rgb: 255 115 200;
+  --bg: #fff1f8;
+  --bg-soft: rgba(255, 245, 251, 0.9);
   --bg-elevated: #ffffff;
-  --bg-panel: rgba(255, 255, 255, 0.76);
-  --bg-panel-strong: rgba(255, 255, 255, 0.92);
-  --bg-panel-muted: rgba(232, 239, 255, 0.82);
-  --border: rgba(17, 34, 68, 0.14);
-  --border-strong: rgba(10, 132, 255, 0.22);
-  --text: #0f1b33;
-  --text-soft: #35507a;
-  --muted: #5a6f95;
-  --meta: #7188b1;
+  --bg-panel: rgba(255, 246, 251, 0.82);
+  --bg-panel-strong: rgba(255, 250, 253, 0.94);
+  --bg-panel-muted: rgba(255, 228, 242, 0.82);
+  --border: rgba(104, 34, 84, 0.14);
+  --border-strong: rgba(255, 79, 163, 0.24);
+  --text: #4c1235;
+  --text-soft: #7f3b68;
+  --muted: #98557c;
+  --meta: #946c93;
   --good: #2bb673;
   --warn: #f59e0b;
   --bad: #ef4444;
-  --running: #0a84ff;
-  --accent: #7b61ff;
-  --accent-soft: rgba(123, 97, 255, 0.12);
-  --brand-gradient: linear-gradient(135deg, #3ecbff 0%, #0a84ff 48%, #7b61ff 100%);
-  --surface-glass: linear-gradient(160deg, rgba(255, 255, 255, 0.88), rgba(240, 245, 255, 0.74));
-  --surface-glass-strong: linear-gradient(160deg, rgba(255, 255, 255, 0.94), rgba(240, 246, 255, 0.9));
-  --surface-glass-solid: rgba(255, 255, 255, 0.92);
-  --surface-glow-border: rgba(74, 118, 178, 0.18);
+  --running: #ff4fa3;
+  --accent: #ff73c8;
+  --accent-soft: rgba(255, 115, 200, 0.14);
+  --brand-gradient: linear-gradient(135deg, #ffb3dd 0%, #ff4fa3 50%, #ff73c8 100%);
+  --surface-glass: linear-gradient(160deg, rgba(255, 248, 252, 0.9), rgba(255, 234, 245, 0.8));
+  --surface-glass-strong: linear-gradient(160deg, rgba(255, 251, 253, 0.95), rgba(255, 238, 247, 0.92));
+  --surface-glass-solid: rgba(255, 244, 250, 0.94);
+  --surface-glow-border: rgba(212, 92, 156, 0.18);
   --surface-glow:
-    linear-gradient(180deg, rgba(223, 241, 255, 0.96), rgba(245, 250, 255, 0.9) 18%, rgba(255, 255, 255, 0.92) 100%),
-    linear-gradient(160deg, rgba(255, 255, 255, 0.9), rgba(240, 246, 255, 0.8));
+    linear-gradient(180deg, rgba(255, 230, 242, 0.96), rgba(255, 243, 248, 0.92) 18%, rgba(255, 250, 253, 0.94) 100%),
+    linear-gradient(160deg, rgba(255, 251, 253, 0.92), rgba(255, 236, 246, 0.84));
   --surface-glow-shadow:
-    0 18px 42px rgba(83, 132, 197, 0.16),
+    0 18px 42px rgba(182, 82, 137, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  --surface-header: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08));
-  --surface-header-border: rgba(116, 160, 213, 0.2);
-  --surface-label: #7f98bb;
-  --surface-action-muted: #6b87af;
-  --surface-tab-border: rgba(112, 163, 221, 0.28);
-  --surface-tab-bg: linear-gradient(180deg, rgba(248, 252, 255, 0.96), rgba(226, 239, 255, 0.92));
+  --surface-header: linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 223, 239, 0.14));
+  --surface-header-border: rgba(231, 139, 188, 0.22);
+  --surface-label: #b06192;
+  --surface-action-muted: #9d5a86;
+  --surface-tab-border: rgba(228, 136, 186, 0.3);
+  --surface-tab-bg: linear-gradient(180deg, rgba(255, 251, 253, 0.98), rgba(255, 233, 244, 0.94));
   --surface-tab-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 12px 24px rgba(83, 132, 197, 0.12);
-  --surface-tab-text: #6280ad;
-  --surface-tab-hover-text: #245da8;
-  --surface-tab-hover-bg: rgba(121, 173, 232, 0.12);
-  --surface-tab-active-bg: linear-gradient(135deg, #fefefe 0%, #e7f2ff 48%, #d7eaff 100%);
-  --surface-tab-active-border: rgba(112, 163, 221, 0.34);
-  --surface-tab-active-text: #0f5ec7;
+    0 12px 24px rgba(182, 82, 137, 0.12);
+  --surface-tab-text: #a05885;
+  --surface-tab-hover-text: #c02c7b;
+  --surface-tab-hover-bg: rgba(255, 122, 181, 0.12);
+  --surface-tab-active-bg: linear-gradient(135deg, #fffdfd 0%, #ffe6f1 48%, #ffd6ea 100%);
+  --surface-tab-active-border: rgba(228, 136, 186, 0.36);
+  --surface-tab-active-text: #c22a7c;
   --surface-tab-active-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.96),
-    0 8px 16px rgba(83, 132, 197, 0.16);
-  --surface-control-border: rgba(112, 163, 221, 0.34);
-  --surface-control-bg: linear-gradient(180deg, rgba(251, 254, 255, 0.98), rgba(234, 245, 255, 0.88));
-  --surface-control-bg-strong: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 248, 255, 0.92));
+    0 8px 16px rgba(182, 82, 137, 0.16);
+  --surface-control-border: rgba(228, 136, 186, 0.36);
+  --surface-control-bg: linear-gradient(180deg, rgba(255, 252, 254, 0.99), rgba(255, 236, 246, 0.9));
+  --surface-control-bg-strong: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(255, 242, 249, 0.94));
   --surface-control-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 7px 18px rgba(115, 162, 214, 0.08);
-  --surface-control-arrow: #3d82dc;
+    0 7px 18px rgba(192, 84, 144, 0.08);
+  --surface-control-arrow: #d54591;
   --surface-button-bg: rgba(255, 255, 255, 0.72);
   --surface-button-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  --surface-library-bg: linear-gradient(155deg, rgba(255, 255, 255, 0.9), rgba(241, 246, 255, 0.86));
-  --surface-task-button-bg: rgba(255, 255, 255, 0.78);
+  --surface-library-bg: linear-gradient(155deg, rgba(255, 250, 253, 0.92), rgba(255, 238, 247, 0.88));
+  --surface-task-button-bg: rgba(255, 244, 250, 0.82);
   --surface-badge-idle: #8ea0bf;
   --surface-badge-default: #8aa2cd;
   --surface-progress-track: rgba(113, 136, 177, 0.22);
@@ -86,8 +86,8 @@
   --surface-warning: #8a5a00;
   --surface-danger: #b42318;
   --surface-terminal-bg:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(243, 247, 255, 0.92)),
-    radial-gradient(circle at top left, rgba(62, 203, 255, 0.07), transparent 40%);
+    linear-gradient(180deg, rgba(255, 250, 253, 0.9), rgba(255, 240, 248, 0.94)),
+    radial-gradient(circle at top left, rgba(255, 79, 163, 0.08), transparent 40%);
   --surface-scroll-track: rgba(232, 239, 255, 0.5);
   --surface-scroll-thumb: rgba(113, 136, 177, 0.55);
   --surface-scroll-thumb-border: rgba(232, 239, 255, 0.8);
@@ -102,20 +102,20 @@
   --surface-fullscreen-close-hover-border: rgba(15, 27, 51, 0.28);
   --surface-fullscreen-close-shadow: 0 16px 36px rgba(10, 44, 102, 0.22);
   --surface-auth-backdrop: rgba(4, 9, 17, 0.85);
-  --surface-auth-panel-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 248, 255, 0.96));
-  --surface-auth-panel-border: rgba(112, 163, 221, 0.28);
+  --surface-auth-panel-bg: linear-gradient(180deg, rgba(255, 252, 254, 0.99), rgba(255, 240, 248, 0.97));
+  --surface-auth-panel-border: rgba(228, 136, 186, 0.3);
   --surface-auth-panel-shadow:
-    0 24px 54px rgba(10, 44, 102, 0.22),
+    0 24px 54px rgba(140, 46, 102, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.82);
   --surface-auth-button-border: rgba(255, 255, 255, 0.2);
   --surface-auth-button-bg: rgba(255, 255, 255, 0.05);
   --surface-auth-button-hover-bg: rgba(255, 255, 255, 0.1);
-  --surface-auth-link: #8dc6ff;
-  --surface-auth-verify-bg: linear-gradient(180deg, #0a84ff, #0057d8);
-  --surface-auth-verify-hover-bg: linear-gradient(180deg, #2191ff, #0a6ae6);
-  --surface-auth-verify-border: rgba(10, 132, 255, 0.24);
-  --surface-auth-verify-shadow: 0 12px 24px rgba(10, 132, 255, 0.22);
-  --surface-auth-verify-hover-shadow: 0 16px 28px rgba(10, 132, 255, 0.28);
+  --surface-auth-link: #d85aa4;
+  --surface-auth-verify-bg: linear-gradient(180deg, #ff4fa3, #d92d7d);
+  --surface-auth-verify-hover-bg: linear-gradient(180deg, #ff68b2, #e23c89);
+  --surface-auth-verify-border: rgba(255, 79, 163, 0.24);
+  --surface-auth-verify-shadow: 0 12px 24px rgba(255, 79, 163, 0.22);
+  --surface-auth-verify-hover-shadow: 0 16px 28px rgba(255, 79, 163, 0.28);
   --surface-auth-verify-text: #ffffff;
   --radius: 6px;
   --radius-card: 15px;
@@ -138,31 +138,31 @@
   --text-label: 11px;
   --font-family: "SF Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-weight-medium: 500;
-  --theme-dock-border: rgba(128, 148, 190, 0.22);
-  --theme-dock-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 249, 255, 0.88));
+  --theme-dock-border: rgba(216, 128, 174, 0.24);
+  --theme-dock-bg: linear-gradient(180deg, rgba(255, 250, 253, 0.95), rgba(255, 238, 247, 0.9));
   --theme-dock-shadow:
-    0 14px 36px rgba(94, 116, 165, 0.16),
+    0 14px 36px rgba(160, 73, 121, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  --theme-dock-label: #6d82ac;
-  --theme-button-border: rgba(135, 152, 188, 0.34);
-  --theme-button-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(242, 246, 252, 0.98));
+  --theme-dock-label: #a25885;
+  --theme-button-border: rgba(216, 128, 174, 0.36);
+  --theme-button-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(255, 242, 249, 0.99));
   --theme-button-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.82),
-    0 1px 2px rgba(85, 107, 148, 0.08);
-  --theme-button-text: #364766;
-  --theme-button-meta: #5b6f96;
+    0 1px 2px rgba(160, 73, 121, 0.08);
+  --theme-button-text: #7a365f;
+  --theme-button-meta: #98557c;
   --theme-button-focus:
     inset 0 1px 0 rgba(255, 255, 255, 0.82),
-    0 0 0 3px rgba(76, 133, 233, 0.18);
+    0 0 0 3px rgba(255, 79, 163, 0.18);
   --agent-logo-filter: brightness(0) saturate(100%);
-  --body-radial-left: radial-gradient(1300px 600px at -10% -15%, rgba(10, 132, 255, 0.16), transparent 60%);
-  --body-radial-right: radial-gradient(980px 560px at 110% 8%, rgba(123, 97, 255, 0.12), transparent 62%);
+  --body-radial-left: radial-gradient(1300px 600px at -10% -15%, rgba(255, 79, 163, 0.18), transparent 60%);
+  --body-radial-right: radial-gradient(980px 560px at 110% 8%, rgba(255, 115, 200, 0.14), transparent 62%);
   --body-linear: linear-gradient(180deg, #f8fbff, #f2f7ff 55%, #ecf3ff);
-  --body-orb-a: radial-gradient(circle, rgba(62, 203, 255, 0.24) 0%, rgba(62, 203, 255, 0) 66%);
-  --body-orb-b: radial-gradient(circle, rgba(123, 97, 255, 0.2) 0%, rgba(123, 97, 255, 0) 70%);
-  --shadow-sm: 0 10px 28px rgba(10, 44, 102, 0.08);
-  --shadow-md: 0 18px 44px rgba(10, 44, 102, 0.14);
-  --shadow-lg: 0 28px 72px rgba(10, 44, 102, 0.18);
+  --body-orb-a: radial-gradient(circle, rgba(255, 79, 163, 0.22) 0%, rgba(255, 79, 163, 0) 66%);
+  --body-orb-b: radial-gradient(circle, rgba(255, 115, 200, 0.18) 0%, rgba(255, 115, 200, 0) 70%);
+  --shadow-sm: 0 10px 28px rgba(140, 46, 102, 0.08);
+  --shadow-md: 0 18px 44px rgba(140, 46, 102, 0.14);
+  --shadow-lg: 0 28px 72px rgba(140, 46, 102, 0.18);
 }
 
 .sr-only {
@@ -3256,11 +3256,11 @@ html.dark {
   --hub-text-rgb: 232 240 255;
   --hub-muted-rgb: 159 178 214;
   --hub-meta-rgb: 140 162 204;
-  --body-radial-left: radial-gradient(1200px 620px at -12% -12%, rgba(10, 132, 255, 0.28), transparent 58%);
-  --body-radial-right: radial-gradient(880px 540px at 108% 4%, rgba(123, 97, 255, 0.22), transparent 60%);
+  --body-radial-left: radial-gradient(1200px 620px at -12% -12%, rgba(255, 79, 163, 0.28), transparent 58%);
+  --body-radial-right: radial-gradient(880px 540px at 108% 4%, rgba(255, 115, 200, 0.22), transparent 60%);
   --body-linear: linear-gradient(180deg, #0d1424, #0a1120 58%, #09101d);
-  --body-orb-a: radial-gradient(circle, rgba(10, 132, 255, 0.22) 0%, rgba(10, 132, 255, 0) 68%);
-  --body-orb-b: radial-gradient(circle, rgba(123, 97, 255, 0.18) 0%, rgba(123, 97, 255, 0) 72%);
+  --body-orb-a: radial-gradient(circle, rgba(255, 79, 163, 0.22) 0%, rgba(255, 79, 163, 0) 68%);
+  --body-orb-b: radial-gradient(circle, rgba(255, 115, 200, 0.18) 0%, rgba(255, 115, 200, 0) 72%);
   --bg: #0f1627;
   --bg-soft: rgba(20, 29, 49, 0.88);
   --bg-elevated: #18233a;
@@ -3268,12 +3268,12 @@ html.dark {
   --bg-panel-strong: rgba(26, 38, 63, 0.9);
   --bg-panel-muted: rgba(34, 48, 78, 0.82);
   --border: rgba(150, 179, 230, 0.24);
-  --border-strong: rgba(92, 157, 255, 0.4);
-  --text: #e8f0ff;
-  --text-soft: #b8caea;
-  --muted: #9fb2d6;
-  --meta: #8ca2cc;
-  --accent-soft: rgba(123, 97, 255, 0.24);
+  --border-strong: rgba(255, 79, 163, 0.4);
+  --text: #ffe8f5;
+  --text-soft: #f0bcd6;
+  --muted: #d79bbd;
+  --meta: #c996b8;
+  --accent-soft: rgba(255, 115, 200, 0.24);
   --surface-glass: linear-gradient(160deg, rgba(25, 35, 57, 0.9), rgba(18, 27, 44, 0.82));
   --surface-glass-strong: linear-gradient(160deg, rgba(31, 43, 69, 0.94), rgba(20, 29, 47, 0.9));
   --surface-glass-solid: rgba(20, 30, 52, 0.94);
@@ -3285,34 +3285,34 @@ html.dark {
     0 18px 42px rgba(2, 8, 20, 0.44),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
   --surface-header: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
-  --surface-header-border: rgba(150, 179, 230, 0.2);
-  --surface-label: #9eb4da;
-  --surface-action-muted: #a5b8da;
-  --surface-tab-border: rgba(99, 122, 167, 0.4);
-  --surface-tab-bg: linear-gradient(180deg, rgba(27, 38, 60, 0.98), rgba(19, 28, 45, 0.96));
+  --surface-header-border: rgba(255, 140, 197, 0.22);
+  --surface-label: #efb8d7;
+  --surface-action-muted: #e6a8cb;
+  --surface-tab-border: rgba(176, 94, 141, 0.42);
+  --surface-tab-bg: linear-gradient(180deg, rgba(60, 27, 48, 0.98), rgba(45, 19, 36, 0.96));
   --surface-tab-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 12px 24px rgba(0, 0, 0, 0.24);
-  --surface-tab-text: #a9bbdc;
-  --surface-tab-hover-text: #d5e3ff;
-  --surface-tab-hover-bg: rgba(92, 157, 255, 0.12);
-  --surface-tab-active-bg: linear-gradient(135deg, rgba(46, 63, 97, 0.98) 0%, rgba(31, 46, 74, 0.98) 100%);
-  --surface-tab-active-border: rgba(108, 148, 224, 0.48);
-  --surface-tab-active-text: #edf3ff;
+  --surface-tab-text: #e3b2cf;
+  --surface-tab-hover-text: #ffe2f2;
+  --surface-tab-hover-bg: rgba(255, 79, 163, 0.12);
+  --surface-tab-active-bg: linear-gradient(135deg, rgba(97, 46, 77, 0.98) 0%, rgba(74, 31, 57, 0.98) 100%);
+  --surface-tab-active-border: rgba(255, 120, 185, 0.48);
+  --surface-tab-active-text: #fff0f8;
   --surface-tab-active-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
     0 10px 18px rgba(0, 0, 0, 0.28);
-  --surface-control-border: rgba(103, 119, 154, 0.42);
-  --surface-control-bg: linear-gradient(180deg, rgba(27, 38, 60, 0.98), rgba(19, 28, 45, 0.92));
-  --surface-control-bg-strong: linear-gradient(180deg, rgba(31, 43, 68, 0.98), rgba(19, 29, 46, 0.96));
+  --surface-control-border: rgba(176, 94, 141, 0.44);
+  --surface-control-bg: linear-gradient(180deg, rgba(60, 27, 48, 0.98), rgba(45, 19, 36, 0.92));
+  --surface-control-bg-strong: linear-gradient(180deg, rgba(68, 31, 54, 0.98), rgba(46, 19, 37, 0.96));
   --surface-control-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.03),
     0 7px 18px rgba(0, 0, 0, 0.2);
-  --surface-control-arrow: #9ab8ef;
+  --surface-control-arrow: #ff9bcc;
   --surface-button-bg: rgba(22, 33, 55, 0.9);
   --surface-button-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  --surface-library-bg: linear-gradient(155deg, rgba(29, 40, 63, 0.9), rgba(20, 29, 45, 0.86));
-  --surface-task-button-bg: rgba(23, 34, 56, 0.88);
+  --surface-library-bg: linear-gradient(155deg, rgba(63, 29, 49, 0.9), rgba(45, 20, 35, 0.86));
+  --surface-task-button-bg: rgba(56, 23, 42, 0.88);
   --surface-badge-idle: #62779d;
   --surface-badge-default: #6780ab;
   --surface-progress-track: rgba(140, 162, 204, 0.28);
@@ -3322,8 +3322,8 @@ html.dark {
   --surface-warning: #ffd178;
   --surface-danger: #ff9f97;
   --surface-terminal-bg:
-    linear-gradient(180deg, rgba(18, 27, 43, 0.94), rgba(10, 18, 31, 0.98)),
-    radial-gradient(circle at top left, rgba(62, 203, 255, 0.08), transparent 40%);
+    linear-gradient(180deg, rgba(43, 18, 33, 0.94), rgba(31, 10, 24, 0.98)),
+    radial-gradient(circle at top left, rgba(255, 79, 163, 0.08), transparent 40%);
   --surface-scroll-track: rgba(24, 35, 58, 0.8);
   --surface-scroll-thumb: rgba(119, 142, 184, 0.62);
   --surface-scroll-thumb-border: rgba(24, 35, 58, 0.82);
@@ -3346,12 +3346,12 @@ html.dark {
   --surface-auth-button-border: rgba(232, 240, 255, 0.16);
   --surface-auth-button-bg: rgba(232, 240, 255, 0.06);
   --surface-auth-button-hover-bg: rgba(232, 240, 255, 0.1);
-  --surface-auth-link: #9bd1ff;
-  --surface-auth-verify-bg: linear-gradient(180deg, #0a84ff, #0057d8);
-  --surface-auth-verify-hover-bg: linear-gradient(180deg, #2191ff, #0a6ae6);
-  --surface-auth-verify-border: rgba(61, 155, 255, 0.28);
-  --surface-auth-verify-shadow: 0 14px 28px rgba(10, 132, 255, 0.24);
-  --surface-auth-verify-hover-shadow: 0 18px 34px rgba(10, 132, 255, 0.3);
+  --surface-auth-link: #ff9bcc;
+  --surface-auth-verify-bg: linear-gradient(180deg, #ff4fa3, #d92d7d);
+  --surface-auth-verify-hover-bg: linear-gradient(180deg, #ff68b2, #e23c89);
+  --surface-auth-verify-border: rgba(255, 79, 163, 0.28);
+  --surface-auth-verify-shadow: 0 14px 28px rgba(255, 79, 163, 0.24);
+  --surface-auth-verify-hover-shadow: 0 18px 34px rgba(255, 79, 163, 0.3);
   --foreground: rgba(245, 245, 247, 1);
   --muted-foreground: rgba(152, 152, 157, 1);
   --glass-bg: rgba(50, 50, 52, 0.55);
@@ -3366,22 +3366,22 @@ html.dark {
   --glass-icon-shadow:
     0 1px 3px rgba(0, 0, 0, 0.2),
     0 4px 12px rgba(0, 0, 0, 0.12);
-  --theme-dock-border: rgba(104, 122, 159, 0.36);
-  --theme-dock-bg: linear-gradient(180deg, rgba(23, 29, 43, 0.94), rgba(15, 20, 31, 0.94));
+  --theme-dock-border: rgba(176, 94, 141, 0.38);
+  --theme-dock-bg: linear-gradient(180deg, rgba(43, 23, 36, 0.95), rgba(31, 15, 24, 0.95));
   --theme-dock-shadow:
     0 18px 40px rgba(0, 0, 0, 0.42),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  --theme-dock-label: #96a3bf;
-  --theme-button-border: rgba(103, 119, 154, 0.42);
-  --theme-button-bg: linear-gradient(180deg, rgba(33, 39, 54, 0.98), rgba(24, 29, 40, 0.98));
+  --theme-dock-label: #efb8d7;
+  --theme-button-border: rgba(176, 94, 141, 0.44);
+  --theme-button-bg: linear-gradient(180deg, rgba(54, 33, 46, 0.98), rgba(40, 24, 34, 0.98));
   --theme-button-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.03),
     0 1px 2px rgba(0, 0, 0, 0.28);
-  --theme-button-text: #c7d0e2;
-  --theme-button-meta: #9aa8c4;
+  --theme-button-text: #ffd7ea;
+  --theme-button-meta: #efb8d7;
   --theme-button-focus:
     inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    0 0 0 3px rgba(76, 133, 233, 0.22);
+    0 0 0 3px rgba(255, 79, 163, 0.22);
   --agent-logo-filter: brightness(0) saturate(100%) invert(1);
   --shadow-sm: 0 10px 28px rgba(4, 11, 27, 0.38);
   --shadow-md: 0 18px 44px rgba(4, 11, 27, 0.5);
@@ -3396,11 +3396,11 @@ html.night {
   --hub-text-rgb: 237 243 255;
   --hub-muted-rgb: 155 173 207;
   --hub-meta-rgb: 140 161 201;
-  --body-radial-left: radial-gradient(1100px 560px at -12% -16%, rgba(48, 124, 255, 0.2), transparent 56%);
-  --body-radial-right: radial-gradient(920px 520px at 112% 2%, rgba(86, 112, 255, 0.16), transparent 60%);
+  --body-radial-left: radial-gradient(1100px 560px at -12% -16%, rgba(255, 79, 163, 0.2), transparent 56%);
+  --body-radial-right: radial-gradient(920px 520px at 112% 2%, rgba(255, 115, 200, 0.16), transparent 60%);
   --body-linear: linear-gradient(180deg, #05070d, #070b14 55%, #090f1a);
-  --body-orb-a: radial-gradient(circle, rgba(55, 120, 255, 0.16) 0%, rgba(55, 120, 255, 0) 70%);
-  --body-orb-b: radial-gradient(circle, rgba(99, 117, 255, 0.14) 0%, rgba(99, 117, 255, 0) 74%);
+  --body-orb-a: radial-gradient(circle, rgba(255, 79, 163, 0.16) 0%, rgba(255, 79, 163, 0) 70%);
+  --body-orb-b: radial-gradient(circle, rgba(255, 115, 200, 0.14) 0%, rgba(255, 115, 200, 0) 74%);
   --bg: #080b14;
   --bg-soft: rgba(9, 14, 24, 0.92);
   --bg-elevated: #0f1626;
@@ -3408,12 +3408,12 @@ html.night {
   --bg-panel-strong: rgba(16, 24, 42, 0.94);
   --bg-panel-muted: rgba(25, 35, 58, 0.9);
   --border: rgba(122, 147, 191, 0.28);
-  --border-strong: rgba(98, 172, 255, 0.44);
-  --text: #edf3ff;
-  --text-soft: #bed0ef;
-  --muted: #9badcf;
-  --meta: #8ca1c9;
-  --accent-soft: rgba(123, 97, 255, 0.28);
+  --border-strong: rgba(255, 79, 163, 0.44);
+  --text: #fff0f8;
+  --text-soft: #f3c3dc;
+  --muted: #d8a3c3;
+  --meta: #cb9ab9;
+  --accent-soft: rgba(255, 115, 200, 0.28);
   --surface-glass: linear-gradient(160deg, rgba(16, 24, 41, 0.92), rgba(9, 14, 25, 0.88));
   --surface-glass-strong: linear-gradient(160deg, rgba(20, 29, 49, 0.96), rgba(11, 18, 31, 0.92));
   --surface-glass-solid: rgba(12, 18, 31, 0.95);
@@ -3425,34 +3425,34 @@ html.night {
     0 18px 42px rgba(0, 0, 0, 0.5),
     inset 0 1px 0 rgba(255, 255, 255, 0.03);
   --surface-header: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
-  --surface-header-border: rgba(122, 147, 191, 0.2);
-  --surface-label: #a7bcdd;
-  --surface-action-muted: #b0c1de;
-  --surface-tab-border: rgba(88, 109, 147, 0.42);
-  --surface-tab-bg: linear-gradient(180deg, rgba(18, 25, 42, 0.98), rgba(12, 17, 29, 0.98));
+  --surface-header-border: rgba(255, 140, 197, 0.22);
+  --surface-label: #f1bedb;
+  --surface-action-muted: #e7b0ce;
+  --surface-tab-border: rgba(166, 92, 133, 0.44);
+  --surface-tab-bg: linear-gradient(180deg, rgba(42, 18, 31, 0.98), rgba(29, 12, 22, 0.98));
   --surface-tab-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.03),
     0 12px 24px rgba(0, 0, 0, 0.3);
-  --surface-tab-text: #b3c4e0;
-  --surface-tab-hover-text: #eef4ff;
-  --surface-tab-hover-bg: rgba(98, 172, 255, 0.12);
-  --surface-tab-active-bg: linear-gradient(135deg, rgba(28, 40, 66, 0.98) 0%, rgba(16, 24, 41, 0.98) 100%);
-  --surface-tab-active-border: rgba(98, 172, 255, 0.5);
-  --surface-tab-active-text: #f2f7ff;
+  --surface-tab-text: #e8bdd5;
+  --surface-tab-hover-text: #fff0f8;
+  --surface-tab-hover-bg: rgba(255, 79, 163, 0.12);
+  --surface-tab-active-bg: linear-gradient(135deg, rgba(66, 28, 50, 0.98) 0%, rgba(41, 16, 31, 0.98) 100%);
+  --surface-tab-active-border: rgba(255, 120, 185, 0.5);
+  --surface-tab-active-text: #fff3f9;
   --surface-tab-active-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
     0 10px 18px rgba(0, 0, 0, 0.34);
-  --surface-control-border: rgba(88, 109, 147, 0.44);
-  --surface-control-bg: linear-gradient(180deg, rgba(18, 25, 42, 0.98), rgba(11, 17, 29, 0.94));
-  --surface-control-bg-strong: linear-gradient(180deg, rgba(20, 29, 49, 0.98), rgba(11, 18, 31, 0.98));
+  --surface-control-border: rgba(166, 92, 133, 0.46);
+  --surface-control-bg: linear-gradient(180deg, rgba(42, 18, 31, 0.98), rgba(29, 11, 22, 0.94));
+  --surface-control-bg-strong: linear-gradient(180deg, rgba(49, 20, 36, 0.98), rgba(31, 11, 23, 0.98));
   --surface-control-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.025),
     0 7px 18px rgba(0, 0, 0, 0.24);
-  --surface-control-arrow: #9fc1ff;
+  --surface-control-arrow: #ffacd4;
   --surface-button-bg: rgba(15, 23, 40, 0.92);
   --surface-button-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
-  --surface-library-bg: linear-gradient(155deg, rgba(18, 27, 45, 0.92), rgba(11, 17, 29, 0.9));
-  --surface-task-button-bg: rgba(14, 21, 36, 0.92);
+  --surface-library-bg: linear-gradient(155deg, rgba(45, 18, 31, 0.92), rgba(29, 11, 21, 0.9));
+  --surface-task-button-bg: rgba(36, 14, 25, 0.92);
   --surface-badge-idle: #57698a;
   --surface-badge-default: #5f769e;
   --surface-progress-track: rgba(140, 161, 201, 0.28);
@@ -3462,8 +3462,8 @@ html.night {
   --surface-warning: #ffd888;
   --surface-danger: #ffaaa3;
   --surface-terminal-bg:
-    linear-gradient(180deg, rgba(10, 16, 28, 0.96), rgba(7, 11, 20, 0.99)),
-    radial-gradient(circle at top left, rgba(55, 120, 255, 0.08), transparent 40%);
+    linear-gradient(180deg, rgba(28, 10, 20, 0.96), rgba(20, 7, 15, 0.99)),
+    radial-gradient(circle at top left, rgba(255, 79, 163, 0.08), transparent 40%);
   --surface-scroll-track: rgba(15, 22, 38, 0.86);
   --surface-scroll-thumb: rgba(108, 130, 168, 0.6);
   --surface-scroll-thumb-border: rgba(15, 22, 38, 0.88);
@@ -3486,12 +3486,12 @@ html.night {
   --surface-auth-button-border: rgba(237, 243, 255, 0.14);
   --surface-auth-button-bg: rgba(237, 243, 255, 0.05);
   --surface-auth-button-hover-bg: rgba(237, 243, 255, 0.1);
-  --surface-auth-link: #a8d2ff;
-  --surface-auth-verify-bg: linear-gradient(180deg, #0a84ff, #0057d8);
-  --surface-auth-verify-hover-bg: linear-gradient(180deg, #2191ff, #0a6ae6);
-  --surface-auth-verify-border: rgba(61, 155, 255, 0.28);
-  --surface-auth-verify-shadow: 0 14px 28px rgba(10, 132, 255, 0.24);
-  --surface-auth-verify-hover-shadow: 0 18px 34px rgba(10, 132, 255, 0.3);
+  --surface-auth-link: #ffabd3;
+  --surface-auth-verify-bg: linear-gradient(180deg, #ff4fa3, #d92d7d);
+  --surface-auth-verify-hover-bg: linear-gradient(180deg, #ff68b2, #e23c89);
+  --surface-auth-verify-border: rgba(255, 79, 163, 0.28);
+  --surface-auth-verify-shadow: 0 14px 28px rgba(255, 79, 163, 0.24);
+  --surface-auth-verify-hover-shadow: 0 18px 34px rgba(255, 79, 163, 0.3);
   --foreground: rgba(220, 220, 225, 1);
   --muted-foreground: rgba(118, 118, 128, 1);
   --elevation-sm: 0px 1px 3px 0px rgba(0, 0, 0, 0.7);
@@ -3507,22 +3507,22 @@ html.night {
   --glass-icon-shadow:
     0 1px 3px rgba(0, 0, 0, 0.35),
     0 4px 12px rgba(0, 0, 0, 0.2);
-  --theme-dock-border: rgba(88, 109, 147, 0.38);
-  --theme-dock-bg: linear-gradient(180deg, rgba(17, 23, 36, 0.96), rgba(10, 14, 24, 0.96));
+  --theme-dock-border: rgba(166, 92, 133, 0.4);
+  --theme-dock-bg: linear-gradient(180deg, rgba(36, 17, 25, 0.97), rgba(24, 10, 16, 0.97));
   --theme-dock-shadow:
     0 18px 40px rgba(0, 0, 0, 0.48),
     inset 0 1px 0 rgba(255, 255, 255, 0.03);
-  --theme-dock-label: #9cadc8;
-  --theme-button-border: rgba(88, 109, 147, 0.44);
-  --theme-button-bg: linear-gradient(180deg, rgba(21, 29, 44, 0.98), rgba(13, 18, 29, 0.98));
+  --theme-dock-label: #f0bdd9;
+  --theme-button-border: rgba(166, 92, 133, 0.46);
+  --theme-button-bg: linear-gradient(180deg, rgba(44, 21, 31, 0.98), rgba(29, 13, 21, 0.98));
   --theme-button-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.025),
     0 1px 2px rgba(0, 0, 0, 0.3);
-  --theme-button-text: #d3deef;
-  --theme-button-meta: #a2b3cf;
+  --theme-button-text: #ffe0ef;
+  --theme-button-meta: #f0bdd9;
   --theme-button-focus:
     inset 0 1px 0 rgba(255, 255, 255, 0.025),
-    0 0 0 3px rgba(76, 133, 233, 0.22);
+    0 0 0 3px rgba(255, 79, 163, 0.22);
   --agent-logo-filter: brightness(0) saturate(100%) invert(1);
   --shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.46);
   --shadow-md: 0 18px 44px rgba(0, 0, 0, 0.58);
