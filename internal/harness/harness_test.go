@@ -3168,7 +3168,8 @@ func TestWithCompletionGatePromptIncludesAgentRuntimeGuidance(t *testing.T) {
 	wantSnippets := []string{
 		"When failures occur, send a response back to the calling agent that clearly states failure and includes the error details.",
 		"Do not stop work just because you cannot create a pull request or watch remote CI/CD from inside this agent runtime.",
-		"If no file changes are required, return a clear no-op result with concrete evidence instead of forcing an empty PR.",
+		"For implementation or repository-change requests, do not stop at analysis.",
+		"Only return a no-op when the task is genuinely review/investigation-only",
 	}
 	for _, snippet := range wantSnippets {
 		if !strings.Contains(got, snippet) {

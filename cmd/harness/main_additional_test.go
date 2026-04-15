@@ -424,7 +424,7 @@ func TestFailureFollowUpPromptDefaultWhenNoPaths(t *testing.T) {
 	if !strings.Contains(got, `"repos":["git@github.com:Molten-Bot/moltenhub-code.git"],"baseBranch":"main","targetSubdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."`) {
 		t.Fatalf("prompt missing follow-up payload shape: %q", got)
 	}
-	if !strings.Contains(got, "If no file changes are required, return a clear no-op result with concrete evidence instead of forcing an empty PR.") {
+	if !strings.Contains(got, "Only return a no-op when the task is genuinely review/investigation-only") {
 		t.Fatalf("prompt missing no-op completion carve-out: %q", got)
 	}
 }
@@ -610,7 +610,7 @@ func TestShouldQueueUnexpectedNoChangesFollowUpRequiresMissingPR(t *testing.T) {
 func TestShouldQueueFailureFollowUpSkipsNestedFailureFollowUpSource(t *testing.T) {
 	t.Parallel()
 
-	ok, reason := shouldQueueFailureFollowUp("failure_followup", harness.Result{Err: errors.New("still failing")})
+	ok, reason := shouldQueueFailureFollowUp(failureFollowUpSource, harness.Result{Err: errors.New("still failing")})
 	if ok {
 		t.Fatal("shouldQueueFailureFollowUp(failure_followup) = true, want false")
 	}
@@ -618,7 +618,15 @@ func TestShouldQueueFailureFollowUpSkipsNestedFailureFollowUpSource(t *testing.T
 		t.Fatalf("reason = %q, want %q", reason, "run is already a failure follow-up")
 	}
 
-	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{Err: errors.New("clone failed")})
+	ok, reason = shouldQueueFailureFollowUp(noChangesEscalationSource, harness.Result{Err: errors.New("still failing")})
+	if ok {
+		t.Fatal("shouldQueueFailureFollowUp(no_changes_escalation) = true, want false")
+	}
+	if reason != "run is already a failure follow-up" {
+		t.Fatalf("reason = %q, want %q", reason, "run is already a failure follow-up")
+	}
+
+	ok, reason = shouldQueueFailureFollowUp(localSubmitSource, harness.Result{Err: errors.New("clone failed")})
 	if !ok || reason != "" {
 		t.Fatalf("shouldQueueFailureFollowUp(local_submit,error) = (%v, %q), want (true, \"\")", ok, reason)
 	}
@@ -631,7 +639,7 @@ func TestShouldQueueFailureFollowUpSkipsNestedFailureFollowUpSource(t *testing.T
 		t.Fatalf("reason = %q, want %q", reason, "hub dispatch failures are already escalated by hub transport")
 	}
 
-	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{})
+	ok, reason = shouldQueueFailureFollowUp(localSubmitSource, harness.Result{})
 	if ok {
 		t.Fatal("shouldQueueFailureFollowUp(local_submit,nil error) = true, want false")
 	}
@@ -643,7 +651,7 @@ func TestShouldQueueFailureFollowUpSkipsNestedFailureFollowUpSource(t *testing.T
 func TestShouldQueueFailureRerunSkipsNestedFailureRerunSource(t *testing.T) {
 	t.Parallel()
 
-	ok, reason := shouldQueueFailureRerun("rerun", harness.Result{Err: errors.New("still failing")})
+	ok, reason := shouldQueueFailureRerun(rerunSource, harness.Result{Err: errors.New("still failing")})
 	if ok {
 		t.Fatal("shouldQueueFailureRerun(rerun) = true, want false")
 	}
@@ -651,7 +659,7 @@ func TestShouldQueueFailureRerunSkipsNestedFailureRerunSource(t *testing.T) {
 		t.Fatalf("reason = %q, want %q", reason, "run is already a failure rerun")
 	}
 
-	ok, reason = shouldQueueFailureRerun("local_submit", harness.Result{Err: errors.New("clone failed")})
+	ok, reason = shouldQueueFailureRerun(localSubmitSource, harness.Result{Err: errors.New("clone failed")})
 	if !ok || reason != "" {
 		t.Fatalf("shouldQueueFailureRerun(local_submit,error) = (%v, %q), want (true, \"\")", ok, reason)
 	}
@@ -664,7 +672,7 @@ func TestShouldQueueFailureRerunSkipsNestedFailureRerunSource(t *testing.T) {
 		t.Fatalf("reason = %q, want %q", reason, "hub dispatch failures are already rerun by hub transport")
 	}
 
-	ok, reason = shouldQueueFailureRerun("failure_followup", harness.Result{Err: errors.New("clone failed")})
+	ok, reason = shouldQueueFailureRerun(failureFollowUpSource, harness.Result{Err: errors.New("clone failed")})
 	if ok {
 		t.Fatal("shouldQueueFailureRerun(failure_followup,error) = true, want false")
 	}
@@ -672,7 +680,15 @@ func TestShouldQueueFailureRerunSkipsNestedFailureRerunSource(t *testing.T) {
 		t.Fatalf("reason = %q, want %q", reason, "run is already a failure follow-up")
 	}
 
-	ok, reason = shouldQueueFailureRerun("local_submit", harness.Result{})
+	ok, reason = shouldQueueFailureRerun(noChangesEscalationSource, harness.Result{Err: errors.New("clone failed")})
+	if ok {
+		t.Fatal("shouldQueueFailureRerun(no_changes_escalation,error) = true, want false")
+	}
+	if reason != "run is already a failure follow-up" {
+		t.Fatalf("reason = %q, want %q", reason, "run is already a failure follow-up")
+	}
+
+	ok, reason = shouldQueueFailureRerun(localSubmitSource, harness.Result{})
 	if ok {
 		t.Fatal("shouldQueueFailureRerun(local_submit,nil error) = true, want false")
 	}
@@ -715,8 +731,8 @@ func TestEnqueueFailureRerunBypassesDuplicateSuppression(t *testing.T) {
 	if gotAllowFailureFollowUp {
 		t.Fatal("allowFailureFollowUp = true, want false")
 	}
-	if gotSource != "rerun" {
-		t.Fatalf("source = %q, want %q", gotSource, "rerun")
+	if gotSource != rerunSource {
+		t.Fatalf("source = %q, want %q", gotSource, rerunSource)
 	}
 	if !gotForce {
 		t.Fatal("force = false, want true")
@@ -726,7 +742,9 @@ func TestEnqueueFailureRerunBypassesDuplicateSuppression(t *testing.T) {
 func TestShouldEscalateNoChangesFollowUpRequiresFollowUpSourceAndMissingPR(t *testing.T) {
 	t.Parallel()
 
-	ok, reason := shouldEscalateNoChangesFollowUp("local_submit", harness.Result{NoChanges: true})
+	runCfg := config.Config{Prompt: "change the website to pink"}
+
+	ok, reason := shouldEscalateNoChangesFollowUp(localSubmitSource, harness.Result{NoChanges: true}, runCfg)
 	if ok {
 		t.Fatal("shouldEscalateNoChangesFollowUp(local_submit) = true, want false")
 	}
@@ -734,23 +752,30 @@ func TestShouldEscalateNoChangesFollowUpRequiresFollowUpSourceAndMissingPR(t *te
 		t.Fatalf("reason = %q, want %q", reason, "run is not a no-changes follow-up")
 	}
 
-	ok, reason = shouldEscalateNoChangesFollowUp("no_changes_followup", harness.Result{NoChanges: true})
-	if ok {
-		t.Fatal("shouldEscalateNoChangesFollowUp(no_changes_followup,no PR) = true, want false")
-	}
-	if reason != "no-changes follow-up can complete as a documented no-op" {
-		t.Fatalf("reason = %q, want %q", reason, "no-changes follow-up can complete as a documented no-op")
+	ok, reason = shouldEscalateNoChangesFollowUp(noChangesFollowUpSource, harness.Result{NoChanges: true}, runCfg)
+	if !ok || reason != "" {
+		t.Fatalf("shouldEscalateNoChangesFollowUp(no_changes_followup,actionable) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
-	ok, reason = shouldEscalateNoChangesFollowUp("no_changes_followup", harness.Result{
+	ok, reason = shouldEscalateNoChangesFollowUp(noChangesFollowUpSource, harness.Result{
 		NoChanges: true,
 		PRURL:     "https://github.com/acme/repo/pull/1",
-	})
+	}, runCfg)
 	if ok {
 		t.Fatal("shouldEscalateNoChangesFollowUp(existing PR) = true, want false")
 	}
 	if reason != "task already has a pull request" {
 		t.Fatalf("reason = %q, want %q", reason, "task already has a pull request")
+	}
+
+	ok, reason = shouldEscalateNoChangesFollowUp(noChangesFollowUpSource, harness.Result{NoChanges: true}, config.Config{
+		Prompt: "review the latest logs and explain what happened",
+	})
+	if ok {
+		t.Fatal("shouldEscalateNoChangesFollowUp(read-only prompt) = true, want false")
+	}
+	if reason != "original prompt does not clearly request repository changes" {
+		t.Fatalf("reason = %q, want %q", reason, "original prompt does not clearly request repository changes")
 	}
 }
 
@@ -794,6 +819,7 @@ func TestUnexpectedNoChangesFollowUpRunConfigPreservesTaskTargetingAndAddsContex
 
 	for _, want := range []string{
 		"Review the previous local task logs first.",
+		"Only return a no-op if you can cite concrete repository evidence",
 		expectedLogDir,
 		filepath.Join(expectedLogDir, logFileName),
 		"Observed no-change context:",
@@ -894,6 +920,61 @@ func TestUnexpectedNoChangesFollowUpRunConfigUsesNoPathGuidanceWhenTaskLogsMissi
 	}
 	if !strings.Contains(cfg.Prompt, "No local task log path was captured before the task completed without changes.") {
 		t.Fatalf("Prompt missing no-path guidance: %q", cfg.Prompt)
+	}
+}
+
+func TestEscalatedNoChangesFollowUpRunConfigAddsStricterPrompt(t *testing.T) {
+	t.Parallel()
+
+	logRoot := filepath.Join(t.TempDir(), ".log")
+	logDir := filepath.Join(logRoot, "local", "1712345678", "000001")
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		t.Fatalf("mkdir log dir: %v", err)
+	}
+	logPath := filepath.Join(logDir, logFileName)
+	if err := os.WriteFile(logPath, []byte("dispatch status=no_changes\n"), 0o644); err != nil {
+		t.Fatalf("write log file: %v", err)
+	}
+
+	runCfg := config.Config{
+		Repos:        []string{"git@github.com:acme/repo.git"},
+		BaseBranch:   "main",
+		TargetSubdir: "internal/hubui",
+		Prompt:       "change the website to pink",
+	}
+
+	cfg := escalatedNoChangesFollowUpRunConfig("local-1712345678-000001", harness.Result{NoChanges: true}, runCfg, logRoot)
+	for _, want := range []string{
+		"The original task and the no-changes follow-up both completed without file changes or a pull request.",
+		"do not return another no-op unless you can cite exact file paths",
+		"Observed repeated no-change context:",
+		"Original task prompt:",
+		"change the website to pink",
+	} {
+		if !strings.Contains(cfg.Prompt, want) {
+			t.Fatalf("Prompt missing %q: %q", want, cfg.Prompt)
+		}
+	}
+}
+
+func TestPromptRequestsRepositoryChange(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		prompt string
+		want   bool
+	}{
+		{prompt: "change the website to pink", want: true},
+		{prompt: "fix the broken auth flow", want: true},
+		{prompt: "review the latest logs and explain what happened", want: false},
+		{prompt: "what changed in the container?", want: false},
+		{prompt: "", want: true},
+	}
+
+	for _, tt := range tests {
+		if got := promptRequestsRepositoryChange(tt.prompt); got != tt.want {
+			t.Fatalf("promptRequestsRepositoryChange(%q) = %v, want %v", tt.prompt, got, tt.want)
+		}
 	}
 }
 

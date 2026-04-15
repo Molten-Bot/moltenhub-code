@@ -41,6 +41,11 @@ const gitHubCLIPackageLabel = "github-cli (gh)"
 const gitHubCLIAuthRecommendation = "Run `gh auth login` (the GitHub CLI binary from the `github-cli` package) or set GH_TOKEN before dispatching tasks."
 const followUpTaskLogArchiveSubdir = "followup"
 const hubSetupLocationsURL = "https://molten.bot/hubs.json"
+const localSubmitSource = "local_submit"
+const rerunSource = "rerun"
+const failureFollowUpSource = "failure_followup"
+const noChangesFollowUpSource = "no_changes_followup"
+const noChangesEscalationSource = "no_changes_escalation"
 
 const hubBootDiagnosticTimeout = 10 * time.Second
 const hubPingDiagnosticTimeout = 5 * time.Second
@@ -314,6 +319,7 @@ func runHub(args []string) int {
 	var queueFailureRerun func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config, source string)
 	var queueFailureFollowUp func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config, source string)
 	var queueUnexpectedNoChangesFollowUp func(requestID string, result harness.Result, runCfg config.Config)
+	var queueEscalatedNoChangesFollowUp func(requestID string, result harness.Result, runCfg config.Config)
 	var enqueueLocalRun func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string, force bool) (string, error)
 	enqueueLocalRun = func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string, force bool) (string, error) {
 		if authGate != nil {
@@ -332,14 +338,14 @@ func runHub(args []string) int {
 		runCfg = applyDefaultAgentRuntimeConfig(runCfg, cfg)
 		source = strings.TrimSpace(source)
 		if source == "" {
-			source = "local_submit"
+			source = localSubmitSource
 		}
 
 		dedupeKey := dedupeKeyForRunConfig(runCfg)
 		if force {
 			dedupeKey = ""
 		}
-		allowCompletedDuplicate := source == "rerun"
+		allowCompletedDuplicate := source == rerunSource
 		if dedupeKey != "" {
 			if duplicate, state, duplicateOf := localSubmitDeduper.Check(dedupeKey, allowCompletedDuplicate); duplicate {
 				daemonLogger(
@@ -504,16 +510,12 @@ func runHub(args []string) int {
 						}
 					}
 				case "no_changes":
-					if source != "no_changes_followup" && queueUnexpectedNoChangesFollowUp != nil {
+					if source != noChangesFollowUpSource && source != noChangesEscalationSource && queueUnexpectedNoChangesFollowUp != nil {
 						queueUnexpectedNoChangesFollowUp(requestID, outcome.Result, runCfg)
 					}
-					if allowFailureFollowUp && queueFailureFollowUp != nil {
-						if ok, _ := shouldEscalateNoChangesFollowUp(source, outcome.Result); ok {
-							escalationResult := outcome.Result
-							if escalationResult.Err == nil {
-								escalationResult.Err = fmt.Errorf("no-changes follow-up completed without file changes or a pull request")
-							}
-							queueFailureFollowUp(requestID, escalationResult, runCfg, source)
+					if queueEscalatedNoChangesFollowUp != nil {
+						if ok, _ := shouldEscalateNoChangesFollowUp(source, outcome.Result, runCfg); ok {
+							queueEscalatedNoChangesFollowUp(requestID, outcome.Result, runCfg)
 						}
 					}
 				}
@@ -567,7 +569,7 @@ func runHub(args []string) int {
 			)
 			return
 		}
-		followUpRequestID, followUpErr := enqueueLocalRun(ctx, followUpCfg, true, "failure_followup", false)
+		followUpRequestID, followUpErr := enqueueLocalRun(ctx, followUpCfg, true, failureFollowUpSource, false)
 		if followUpErr != nil {
 			daemonLogger(
 				"dispatch status=warn action=queue_failure_followup request_id=%s err=%q",
@@ -602,7 +604,7 @@ func runHub(args []string) int {
 			return
 		}
 
-		followUpRequestID, followUpErr := enqueueLocalRun(ctx, followUpCfg, true, "no_changes_followup", false)
+		followUpRequestID, followUpErr := enqueueLocalRun(ctx, followUpCfg, true, noChangesFollowUpSource, false)
 		if followUpErr != nil {
 			daemonLogger(
 				"dispatch status=warn action=queue_no_changes_followup request_id=%s err=%q",
@@ -613,6 +615,41 @@ func runHub(args []string) int {
 		}
 		daemonLogger(
 			"dispatch status=ok action=queue_no_changes_followup request_id=%s follow_up_request_id=%s",
+			requestID,
+			followUpRequestID,
+		)
+	}
+	queueEscalatedNoChangesFollowUp = func(requestID string, result harness.Result, runCfg config.Config) {
+		if ok, reason := shouldEscalateNoChangesFollowUp(noChangesFollowUpSource, result, runCfg); !ok {
+			daemonLogger(
+				"dispatch status=warn action=skip_no_changes_escalation request_id=%s err=%q",
+				requestID,
+				reason,
+			)
+			return
+		}
+
+		followUpCfg := escalatedNoChangesFollowUpRunConfig(requestID, result, runCfg, logRoot)
+		if len(followUpCfg.RepoList()) == 0 {
+			daemonLogger(
+				"dispatch status=warn action=queue_no_changes_escalation request_id=%s err=%q",
+				requestID,
+				"no task repo found for no-changes escalation",
+			)
+			return
+		}
+
+		followUpRequestID, followUpErr := enqueueLocalRun(ctx, followUpCfg, false, noChangesEscalationSource, false)
+		if followUpErr != nil {
+			daemonLogger(
+				"dispatch status=warn action=queue_no_changes_escalation request_id=%s err=%q",
+				requestID,
+				followUpErr,
+			)
+			return
+		}
+		daemonLogger(
+			"dispatch status=ok action=queue_no_changes_escalation request_id=%s follow_up_request_id=%s",
 			requestID,
 			followUpRequestID,
 		)
@@ -732,7 +769,7 @@ func runHub(args []string) int {
 				return "", fmt.Errorf("invalid run config: %w", err)
 			}
 			recordLibraryUsage(runCfg)
-			return enqueueLocalRun(reqCtx, runCfg, true, "local_submit", false)
+			return enqueueLocalRun(reqCtx, runCfg, true, localSubmitSource, false)
 		}
 		uiServer.SubmitTaskRerun = func(reqCtx context.Context, _ string, body []byte, force bool) (string, error) {
 			runCfg, err := hub.ParseRunConfigJSON(body)
@@ -740,7 +777,7 @@ func runHub(args []string) int {
 				return "", fmt.Errorf("invalid run config: %w", err)
 			}
 			recordLibraryUsage(runCfg)
-			return enqueueLocalRun(reqCtx, runCfg, true, "rerun", force)
+			return enqueueLocalRun(reqCtx, runCfg, true, rerunSource, force)
 		}
 		uiServer.CloseTask = cleanupTaskLogs
 		uiServer.ResolveTaskControls = localTaskController.Controls
@@ -1178,7 +1215,7 @@ func shouldQueueFailureFollowUp(source string, failedResult harness.Result) (boo
 	if failedResult.Err == nil {
 		return false, "failed task did not include an error"
 	}
-	if source == "failure_followup" {
+	if source == failureFollowUpSource || source == noChangesEscalationSource {
 		return false, "run is already a failure follow-up"
 	}
 	if source == "hub_dispatch" {
@@ -1193,11 +1230,11 @@ func shouldQueueFailureRerun(source string, failedResult harness.Result) (bool, 
 		return false, "failed task did not include an error"
 	}
 	switch source {
-	case "failure_followup":
+	case failureFollowUpSource, noChangesEscalationSource:
 		return false, "run is already a failure follow-up"
 	case "hub_dispatch":
 		return false, "hub dispatch failures are already rerun by hub transport"
-	case "rerun":
+	case rerunSource:
 		return false, "run is already a failure rerun"
 	}
 	return true, ""
@@ -1211,7 +1248,7 @@ func enqueueFailureRerun(ctx context.Context, enqueue localRunEnqueueFunc, faile
 	}
 	// The failed run still owns the dedupe key until its goroutine unwinds, so
 	// the required one-time rerun must bypass duplicate suppression.
-	return enqueue(ctx, failedRunCfg, false, "rerun", true)
+	return enqueue(ctx, failedRunCfg, false, rerunSource, true)
 }
 
 func shouldQueueUnexpectedNoChangesFollowUp(result harness.Result) (bool, string) {
@@ -1224,8 +1261,8 @@ func shouldQueueUnexpectedNoChangesFollowUp(result harness.Result) (bool, string
 	return true, ""
 }
 
-func shouldEscalateNoChangesFollowUp(source string, result harness.Result) (bool, string) {
-	if strings.TrimSpace(source) != "no_changes_followup" {
+func shouldEscalateNoChangesFollowUp(source string, result harness.Result, runCfg config.Config) (bool, string) {
+	if strings.TrimSpace(source) != noChangesFollowUpSource {
 		return false, "run is not a no-changes follow-up"
 	}
 	if !result.NoChanges {
@@ -1234,7 +1271,10 @@ func shouldEscalateNoChangesFollowUp(source string, result harness.Result) (bool
 	if strings.TrimSpace(joinAllPRURLs(result.RepoResults)) != "" || strings.TrimSpace(result.PRURL) != "" {
 		return false, "task already has a pull request"
 	}
-	return false, "no-changes follow-up can complete as a documented no-op"
+	if !promptRequestsRepositoryChange(runCfg.Prompt) {
+		return false, "original prompt does not clearly request repository changes"
+	}
+	return true, ""
 }
 
 func failureFollowUpRepos(_ harness.Result, _ config.Config) []string {
@@ -1253,7 +1293,7 @@ func unexpectedNoChangesFollowUpRepos(runCfg config.Config) []string {
 }
 
 func unexpectedNoChangesFollowUpPrompt(logPaths []string, requestID string, result harness.Result, runCfg config.Config) string {
-	const requiredPrompt = "Review the previous local task logs first. The prior run completed with no file changes and no pull request, which is unexpected for this task. Identify why the task produced no repository changes, fix the underlying issue, complete the requested work, validate locally where possible, and summarize the verified results. If the request is already satisfied, return a clear no-op result with concrete evidence."
+	const requiredPrompt = "Review the previous local task logs first. The prior run completed with no file changes and no pull request, which is unexpected for this task. Identify why the task produced no repository changes, fix the underlying issue, complete the requested work, validate locally where possible, and summarize the verified results. Only return a no-op if you can cite concrete repository evidence that the request is already satisfied; otherwise produce the smallest correct diff or return an explicit failure with blocker details."
 
 	var contextLines []string
 	if requestID = strings.TrimSpace(requestID); requestID != "" {
@@ -1292,6 +1332,108 @@ func unexpectedNoChangesFollowUpPrompt(logPaths []string, requestID string, resu
 		"No local task log path was captured before the task completed without changes. Review the task history and runtime logs first.",
 		contextBlock.String(),
 	)
+}
+
+func escalatedNoChangesFollowUpRunConfig(
+	requestID string,
+	result harness.Result,
+	runCfg config.Config,
+	logRoot string,
+) config.Config {
+	runCfg.ApplyDefaults()
+	logPaths := existingPaths(followUpTaskLogPaths(logRoot, requestID))
+	baseBranch := strings.TrimSpace(runCfg.BaseBranch)
+	return config.Config{
+		Repos:        unexpectedNoChangesFollowUpRepos(runCfg),
+		BaseBranch:   baseBranch,
+		TargetSubdir: runCfg.TargetSubdir,
+		Prompt:       escalatedNoChangesFollowUpPrompt(logPaths, requestID, result, runCfg),
+	}
+}
+
+func escalatedNoChangesFollowUpPrompt(logPaths []string, requestID string, result harness.Result, runCfg config.Config) string {
+	const requiredPrompt = "Review the previous local task logs first. The original task and the no-changes follow-up both completed without file changes or a pull request. For this escalation, do not return another no-op unless you can cite exact file paths and concrete repository evidence proving the requested outcome already exists. Otherwise make the smallest correct repository change that satisfies the request. If a real diff is blocked, return an explicit failure with the precise blocker details instead of another ambiguous no-op."
+
+	var contextLines []string
+	if requestID = strings.TrimSpace(requestID); requestID != "" {
+		contextLines = append(contextLines, fmt.Sprintf("- request_id=%s", requestID))
+	}
+	if workspaceDir := strings.TrimSpace(result.WorkspaceDir); workspaceDir != "" {
+		contextLines = append(contextLines, fmt.Sprintf("- workspace_dir=%s", workspaceDir))
+	}
+	if branch := strings.TrimSpace(result.Branch); branch != "" {
+		contextLines = append(contextLines, fmt.Sprintf("- branch=%s", branch))
+	}
+	if repo := strings.Join(runCfg.RepoList(), ","); strings.TrimSpace(repo) != "" {
+		contextLines = append(contextLines, fmt.Sprintf("- repos=%s", repo))
+	}
+	if targetSubdir := strings.TrimSpace(runCfg.TargetSubdir); targetSubdir != "" {
+		contextLines = append(contextLines, fmt.Sprintf("- target_subdir=%s", targetSubdir))
+	}
+
+	var contextBlock strings.Builder
+	if len(contextLines) > 0 {
+		contextBlock.WriteString("Observed repeated no-change context:\n")
+		contextBlock.WriteString(strings.Join(contextLines, "\n"))
+	}
+	if prompt := strings.TrimSpace(runCfg.Prompt); prompt != "" {
+		if contextBlock.Len() > 0 {
+			contextBlock.WriteString("\n\n")
+		}
+		contextBlock.WriteString("Original task prompt:\n")
+		contextBlock.WriteString(prompt)
+	}
+
+	return failurefollowup.ComposePrompt(
+		requiredPrompt,
+		logPaths,
+		nil,
+		"No local task log path was captured before repeated no-change completions. Review the task history and runtime logs first.",
+		contextBlock.String(),
+	)
+}
+
+func promptRequestsRepositoryChange(prompt string) bool {
+	text := strings.ToLower(strings.TrimSpace(prompt))
+	if text == "" {
+		return true
+	}
+
+	if strings.Contains(text, "?") {
+		questionPrefixes := []string{"what ", "why ", "how ", "when ", "where ", "who "}
+		for _, prefix := range questionPrefixes {
+			if strings.HasPrefix(text, prefix) {
+				return false
+			}
+		}
+	}
+
+	changeMarkers := []string{
+		"fix", "change", "update", "modify", "refactor", "add", "remove", "create",
+		"implement", "make", "rename", "replace", "convert", "style", "color",
+		"pink", "build", "ship", "wire", "hook up", "repair",
+	}
+	for _, marker := range changeMarkers {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+
+	readOnlyMarkers := []string{
+		"review", "investigate", "analysis", "analyze", "summarize", "summary",
+		"explain", "inspect", "read", "show", "list", "find", "compare", "audit",
+		"why", "what", "how",
+	}
+	for _, marker := range readOnlyMarkers {
+		if strings.Contains(text, marker) {
+			return false
+		}
+	}
+
+	if strings.Contains(text, "?") {
+		return false
+	}
+	return true
 }
 
 func failureFollowUpPrompt(logPaths []string, failedResult harness.Result, failedRunCfg config.Config) string {
