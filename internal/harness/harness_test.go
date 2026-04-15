@@ -3032,7 +3032,7 @@ func TestRunCodexDoesNotApplyDefaultAgentStageTimeout(t *testing.T) {
 	runner := &deadlineCaptureRunner{}
 
 	h := New(runner)
-	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, "stay pink as long as needed", codexRunOptions{}, ""); err != nil {
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, "stay pink as long as needed", codexRunOptions{}, "", ""); err != nil {
 		t.Fatalf("runCodex() error = %v, want nil", err)
 	}
 	if runner.hadDeadline {
