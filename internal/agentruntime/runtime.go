@@ -135,12 +135,11 @@ func SupportsPromptImages(harness string) bool {
 
 // SupportedPromptImageHarnesses returns the harnesses that accept prompt images.
 func SupportedPromptImageHarnesses() []string {
-	out := make([]string, 0, len(definitions))
-	for _, harness := range SupportedHarnesses() {
-		if SupportsPromptImages(harness) {
-			out = append(out, harness)
-		}
+	out := make([]string, 0, len(promptImageHarnesses))
+	for harness := range promptImageHarnesses {
+		out = append(out, harness)
 	}
+	sort.Strings(out)
 	return out
 }
 
