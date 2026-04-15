@@ -1462,10 +1462,10 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task-close") {
 		t.Fatalf("expected stylesheet to include task close styles")
 	}
-	if !strings.Contains(css, ".hub-emoji-picker-panel") || !strings.Contains(css, ".hub-emoji-picker-grid") {
+	if !strings.Contains(css, ".hub-emoji-picker-panel") || !strings.Contains(css, ".hub-emoji-picker-body") {
 		t.Fatalf("expected stylesheet to include emoji picker styles")
 	}
-	if !strings.Contains(css, ".hub-emoji-picker-panel-header") || !strings.Contains(css, ".hub-emoji-picker-toggle-text") {
+	if !strings.Contains(css, ".hub-emoji-picker-panel-header") || !strings.Contains(css, ".hub-emoji-picker-toggle-text") || !strings.Contains(css, ".hub-emoji-mart") {
 		t.Fatalf("expected stylesheet to include the refreshed emoji picker layout styles")
 	}
 	if !strings.Contains(css, ".panel-header,\n.task-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 8px;\n  padding: 13px 16px;\n  border-bottom: 1px solid var(--surface-header-border);\n  background: var(--surface-header);\n  color: var(--surface-label);") {
@@ -1738,6 +1738,9 @@ func TestHandlerServesStaticEmojiPickerScript(t *testing.T) {
 	if !strings.Contains(body, `function limitGraphemes(value, maxGraphemes)`) || !strings.Contains(body, `Intl.Segmenter`) {
 		t.Fatalf("expected emoji picker script to clamp emoji values by grapheme cluster")
 	}
+	if !strings.Contains(body, `/static/emoji-mart-browser.js`) || !strings.Contains(body, `/static/emoji-mart-data.json`) || !strings.Contains(body, `new emojiMart.Picker({`) {
+		t.Fatalf("expected emoji picker script to lazy-load the vendored emoji-mart assets")
+	}
 	if !strings.Contains(body, `clearButton.addEventListener("click", () => {`) || !strings.Contains(body, `setValue("");`) {
 		t.Fatalf("expected emoji picker script to support clearing the selected emoji")
 	}
@@ -1753,7 +1756,7 @@ func TestHandlerServesStaticEmojiPickerScript(t *testing.T) {
 	if !strings.Contains(body, `if (nextDisabled) {`) || !strings.Contains(body, `setOpen(false);`) {
 		t.Fatalf("expected emoji picker script to close when disabled")
 	}
-	if !strings.Contains(body, `if (!emoji) {`) || !strings.Contains(body, `setValue(emoji);`) {
+	if !strings.Contains(body, `if (!emoji || !emoji.native) {`) || !strings.Contains(body, `setValue(emoji.native);`) {
 		t.Fatalf("expected emoji picker script to ignore invalid selections and apply valid emoji selections")
 	}
 }

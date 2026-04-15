@@ -374,6 +374,9 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `.hub-emoji-picker-input {`) || !strings.Contains(stylesheet, `clip-path: inset(50%);`) {
 		t.Fatalf("expected stylesheet to hide the raw emoji input and rely on the picker button presentation")
 	}
+	if !strings.Contains(stylesheet, `.hub-emoji-picker-body {`) || !strings.Contains(stylesheet, `.hub-emoji-mart {`) {
+		t.Fatalf("expected stylesheet to include the embedded emoji-mart shell styles")
+	}
 	if !strings.Contains(stylesheet, `.brand-login-card-shell {`) || !strings.Contains(stylesheet, `.brand-chip-action {`) {
 		t.Fatalf("expected stylesheet to expose user-portal-derived glass primitives for hub surfaces and chips")
 	}
