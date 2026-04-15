@@ -377,10 +377,6 @@
           <div id="agent-auth-configure-command" class="font-mono text-[1rem] tracking-[0.04em] text-hub-text">auggie token print</div>
           <button id="agent-auth-configure-copy" class="agent-auth-copy rounded-md px-2.5 py-1.5 text-xs font-medium" type="button">Copy</button>
         </div>
-        <div id="agent-auth-configure-option-row" class="hidden space-y-2">
-          <label id="agent-auth-configure-option-label" class="text-sm font-medium text-hub-text/85" for="agent-auth-configure-option">Provider</label>
-          <select id="agent-auth-configure-option" class="prompt-control text-[0.95rem]" aria-label="Provider"></select>
-        </div>
         <label id="agent-auth-configure-label" class="text-sm font-medium text-hub-text/85" for="agent-auth-configure-input">Paste configuration value</label>
         <textarea id="agent-auth-configure-input" class="prompt-text font-mono text-[0.9rem]" placeholder='{"accessToken":"XXX","tenantURL":"https://YYY/","scopes":["email"]}' spellcheck="false" rows="5" wrap="off"></textarea>
         <p id="agent-auth-configure-error" class="hidden text-sm text-rose-200"></p>
@@ -2461,43 +2457,50 @@
         agentAuthConfigure.classList.toggle("hidden", !requiresManualConfigure);
       }
       const needsPiConfigure = isPiConfigureState(state.agentAuth);
+      const hasPiConfigureOptions = needsPiConfigure &&
+        Array.isArray(state.agentAuth.configureOptions) &&
+        state.agentAuth.configureOptions.length > 0;
       if (agentAuthConfigureCommandRow) {
-        agentAuthConfigureCommandRow.classList.toggle("hidden", needsPiConfigure);
+        agentAuthConfigureCommandRow.classList.toggle("hidden", needsPiConfigure && hasPiConfigureOptions);
       }
       if (agentAuthConfigureCommand) {
-        const fallbackCommand = needsAuggieConfigure ? "auggie token print" : "gh auth token";
+        const fallbackCommand = needsAuggieConfigure
+          ? "auggie token print"
+          : needsPiConfigure
+            ? "cat ~/.pi/agent/auth.json"
+            : "gh auth token";
         agentAuthConfigureCommand.textContent = state.agentAuth.configureCommand || fallbackCommand;
       }
       if (agentAuthConfigureCommandLabel) {
-        agentAuthConfigureCommandLabel.classList.toggle("hidden", needsClaudeGitHubConfigure || needsPiConfigure);
+        agentAuthConfigureCommandLabel.classList.toggle("hidden", needsClaudeGitHubConfigure || (needsPiConfigure && hasPiConfigureOptions));
       }
       if (agentAuthConfigureOptionRow) {
-        agentAuthConfigureOptionRow.classList.toggle("hidden", !needsPiConfigure);
+        agentAuthConfigureOptionRow.classList.toggle("hidden", !hasPiConfigureOptions);
       }
       if (agentAuthConfigureOptionLabel) {
-        agentAuthConfigureOptionLabel.classList.toggle("hidden", !needsPiConfigure);
+        agentAuthConfigureOptionLabel.classList.toggle("hidden", !hasPiConfigureOptions);
       }
       if (agentAuthConfigureLabel) {
         if (needsClaudeGitHubConfigure) {
           agentAuthConfigureLabel.textContent = "Paste GitHub token";
         } else if (needsPiConfigure) {
-          agentAuthConfigureLabel.textContent = "";
+          agentAuthConfigureLabel.textContent = "Paste ~/.pi/agent/auth.json";
         } else {
           agentAuthConfigureLabel.textContent = "Paste configuration value";
         }
-        agentAuthConfigureLabel.classList.toggle("hidden", needsClaudeGitHubConfigure || needsPiConfigure);
+        agentAuthConfigureLabel.classList.toggle("hidden", needsClaudeGitHubConfigure);
       }
       if (agentAuthConfigureInput) {
         const fallbackPlaceholder = needsAuggieConfigure
           ? '{"accessToken":"XXX","tenantURL":"https://YYY/","scopes":["email"]}'
           : needsPiConfigure
-            ? "Paste provider token..."
+            ? "Paste ~/.pi/agent/auth.json contents..."
             : "ghp_xxx";
         const placeholder = state.agentAuth.configurePlaceholder || fallbackPlaceholder;
         agentAuthConfigureInput.placeholder = placeholder;
         agentAuthConfigureInput.classList.toggle("agent-auth-configure-input-github", needsClaudeGitHubConfigure);
-        agentAuthConfigureInput.classList.toggle("agent-auth-configure-input-single-line", needsClaudeGitHubConfigure || needsPiConfigure);
-        agentAuthConfigureInput.rows = needsClaudeGitHubConfigure || needsPiConfigure ? 1 : 5;
+        agentAuthConfigureInput.classList.toggle("agent-auth-configure-input-single-line", needsClaudeGitHubConfigure || (needsPiConfigure && hasPiConfigureOptions));
+        agentAuthConfigureInput.rows = needsClaudeGitHubConfigure || (needsPiConfigure && hasPiConfigureOptions) ? 1 : 5;
       }
       if (agentAuthConfigureOption) {
         const options = Array.isArray(state.agentAuth.configureOptions) ? state.agentAuth.configureOptions : [];
@@ -2687,25 +2690,24 @@
       return token;
     }
 
-    function normalizePiProviderAuthPayload(envVar, raw) {
-      const normalizedEnvVar = String(envVar || "").trim();
-      if (!normalizedEnvVar) {
-        throw new Error("Select a provider first.");
-      }
+    function normalizePiAuthJSONPayload(raw) {
       const value = String(raw || "").trim();
-      if (normalizedEnvVar === "PI_OFFLINE") {
-        return JSON.stringify({
-          env_var: normalizedEnvVar,
-          value: value || "1",
-        });
-      }
       if (!value) {
-        throw new Error("Provider token is required.");
+        throw new Error("Paste ~/.pi/agent/auth.json first.");
       }
-      return JSON.stringify({
-        env_var: normalizedEnvVar,
-        value,
-      });
+      let parsed = null;
+      try {
+        parsed = JSON.parse(value);
+        if (typeof parsed === "string") {
+          parsed = JSON.parse(parsed);
+        }
+      } catch (_err) {
+        throw new Error("Paste a valid ~/.pi/agent/auth.json JSON object.");
+      }
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || Object.keys(parsed).length === 0) {
+        throw new Error("Paste a non-empty ~/.pi/agent/auth.json JSON object.");
+      }
+      return JSON.stringify(parsed);
     }
 
     function shouldAutoStartClaudeSetupAfterGitHubConfigure(auth) {
@@ -2894,12 +2896,11 @@
 
     async function configurePiAuth() {
       setAuggieConfigureError("");
-      let providerAuth = "";
+      let authJSON = "";
       try {
-        const envVar = agentAuthConfigureOption ? agentAuthConfigureOption.value : "";
-        providerAuth = normalizePiProviderAuthPayload(envVar, agentAuthConfigureInput ? agentAuthConfigureInput.value : "");
+        authJSON = normalizePiAuthJSONPayload(agentAuthConfigureInput ? agentAuthConfigureInput.value : "");
       } catch (err) {
-        const message = err && err.message ? err.message : "Invalid provider value.";
+        const message = err && err.message ? err.message : "Invalid Pi auth JSON.";
         setAuggieConfigureError(message);
         return;
       }
@@ -2908,7 +2909,7 @@
       setAgentAuthBusy(true);
       try {
         const auth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
-          pi_provider_auth: providerAuth,
+          pi_auth_json: authJSON,
         });
         applyAgentAuthGate(auth);
         if (auth.ready) {

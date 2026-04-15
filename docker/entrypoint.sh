@@ -61,6 +61,35 @@ try {
 ' "${raw_json}" "${field_name}"
 }
 
+write_pi_auth_json_file() {
+    raw_json="$1"
+    target_path="$2"
+    if [ "${raw_json}" = "" ] || [ "${target_path}" = "" ]; then
+        return 0
+    fi
+
+    node -e '
+const fs = require("node:fs");
+const path = require("node:path");
+const [, rawJSON, targetPath] = process.argv;
+let parsed;
+try {
+  parsed = JSON.parse(String(rawJSON || "").trim());
+  if (typeof parsed === "string") {
+    parsed = JSON.parse(parsed);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || Object.keys(parsed).length === 0) {
+    throw new Error("expected a non-empty JSON object");
+  }
+} catch (err) {
+  console.error(`warning: invalid PI auth JSON: ${err.message}`);
+  process.exit(1);
+}
+fs.mkdirSync(path.dirname(targetPath), { recursive: true, mode: 0o700 });
+fs.writeFileSync(targetPath, JSON.stringify(parsed), { mode: 0o600 });
+' "${raw_json}" "${target_path}"
+}
+
 read_json_key() {
     json_path="$1"
     keys_csv="$2"
@@ -206,6 +235,24 @@ if [ "${pi_provider_auth}" != "" ]; then
     if [ "${pi_provider_env_var}" != "" ] && [ "${pi_provider_value}" != "" ]; then
         export "${pi_provider_env_var}=${pi_provider_value}"
         export PI_PROVIDER_AUTH="${pi_provider_auth}"
+    fi
+fi
+
+pi_auth_json=""
+if [ "${PI_AUTH_JSON:-}" != "" ]; then
+    pi_auth_json="${PI_AUTH_JSON}"
+else
+    pi_auth_json="$(read_json_key "${init_path}" "pi_auth_json,piAuthJSON,PI_AUTH_JSON")"
+    if [ "${pi_auth_json}" = "" ]; then
+        pi_auth_json="$(read_json_key "${config_path}" "pi_auth_json,piAuthJSON,PI_AUTH_JSON")"
+    fi
+fi
+if [ "${pi_auth_json}" != "" ]; then
+    pi_auth_json_path="${HOME:-/home/node}/.pi/agent/auth.json"
+    if ! write_pi_auth_json_file "${pi_auth_json}" "${pi_auth_json_path}"; then
+        echo "warning: failed to write PI auth JSON to ${pi_auth_json_path}" >&2
+    else
+        export PI_AUTH_JSON="${pi_auth_json}"
     fi
 fi
 

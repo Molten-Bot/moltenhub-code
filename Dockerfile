@@ -30,6 +30,7 @@ RUN apk add --no-cache \
         ca-certificates \
         git \
         github-cli \
+        jq \
         openssh-client-default \
         ripgrep \
     && agent_harness="$(printf '%s' "${AGENT_HARNESS}" | tr '[:upper:]' '[:lower:]')" \

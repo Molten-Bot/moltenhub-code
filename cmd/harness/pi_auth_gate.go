@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -16,13 +17,21 @@ import (
 	"github.com/jef/moltenhub-code/internal/hubui"
 )
 
+const piAuthJSONField = "pi_auth_json"
 const piProviderAuthField = "pi_provider_auth"
+const piAuthFileRelativePath = ".pi/agent/auth.json"
 const piAuthProbeTimeout = 20 * time.Second
 const piAuthProbePrompt = "Reply with OK."
 const openRouterProviderSetupDocURL = "https://raw.githubusercontent.com/Dicklesworthstone/pi_agent_rust/refs/heads/main/docs/provider-openrouter-setup.json"
 const piOfflineProviderEnvVar = "PI_OFFLINE"
 const piOfflineProviderDefaultValue = "1"
-const piProviderConfigureMessage = "Select a PI provider, and supply the token."
+const piAuthConfigureCommand = "cat ~/.pi/agent/auth.json"
+const piAuthConfigurePlaceholder = "Paste ~/.pi/agent/auth.json contents..."
+const piAuthConfigureMessage = "Run `pi`, then `/login` on your computer. After Pi works locally, paste `~/.pi/agent/auth.json` here. MoltenHub will store it, write it to `$HOME/.pi/agent/auth.json`, and re-test Pi."
+const piAuthInvalidPrefix = "PI auth.json is invalid"
+const piAuthValidationFailureMessage = "PI auth.json did not validate. Refresh `~/.pi/agent/auth.json` from a working local Pi login, paste it here, and try again."
+const piAuthConfiguredMessage = "PI auth.json is configured. Validating Pi launch."
+const piAuthReadyMessage = "PI auth is ready via ~/.pi/agent/auth.json."
 const piExistingLocalAuthReadyMessage = "PI is ready using existing local auth."
 
 type piProviderOption struct {
@@ -119,8 +128,7 @@ func newPiAuthGateWithRuntime(
 		runtimeConfigPath: strings.TrimSpace(runtimeConfigPath),
 		initCfg:           initCfg,
 	}
-	g.authState.setNeedsConfigure(piProviderConfigureMessage)
-	g.authState.configureOptions = piAgentAuthOptions()
+	applyPiConfigureUIState(&g.authState, piAuthConfigureMessage)
 	g.mu.Lock()
 	g.refreshLocked()
 	g.mu.Unlock()
@@ -147,55 +155,10 @@ func (g *piAuthGate) Configure(ctx context.Context, rawInput string) (hubui.Agen
 		return readyAgentAuthState(), nil
 	}
 
-	canonical, err := normalizePiProviderAuth(rawInput)
-	if err != nil {
-		g.mu.Lock()
-		g.authState.setNeedsConfigure(fmt.Sprintf("PI provider auth is invalid: %v.", err))
-		snap := g.snapshotLocked()
-		g.mu.Unlock()
-		return snap, err
+	if isLikelyPiProviderAuthInput(rawInput) {
+		return g.configureProviderAuth(ctx, rawInput)
 	}
-
-	if err := hub.SaveRuntimeConfigPiProviderAuth(g.runtimeConfigPath, g.initCfg, canonical); err != nil {
-		g.mu.Lock()
-		g.authState.setNeedsConfigure(fmt.Sprintf("save pi config.json: %v", err))
-		snap := g.snapshotLocked()
-		g.mu.Unlock()
-		return snap, err
-	}
-
-	auth, err := decodePiProviderAuth(canonical)
-	if err != nil {
-		g.mu.Lock()
-		g.authState.setNeedsConfigure(fmt.Sprintf("PI provider auth is invalid: %v.", err))
-		snap := g.snapshotLocked()
-		g.mu.Unlock()
-		return snap, err
-	}
-	if err := os.Setenv(auth.EnvVar, auth.Value); err != nil {
-		g.mu.Lock()
-		g.authState.setNeedsConfigure(fmt.Sprintf("set %s: %v", auth.EnvVar, err))
-		snap := g.snapshotLocked()
-		g.mu.Unlock()
-		return snap, err
-	}
-	if !shouldSkipPiProviderProbe(auth.EnvVar) {
-		if err := annotatePiProviderProbeError(g.probe(ctx), auth.EnvVar); err != nil {
-			g.mu.Lock()
-			g.authState.setNeedsConfigure(fmt.Sprintf("launch pi with %s: %v", auth.EnvVar, err))
-			snap := g.snapshotLocked()
-			g.mu.Unlock()
-			return snap, err
-		}
-	}
-
-	g.mu.Lock()
-	g.initCfg.PiProviderAuth = canonical
-	g.validatedAuth = canonical
-	g.refreshLocked()
-	snap := g.snapshotLocked()
-	g.mu.Unlock()
-	return snap, nil
+	return g.configurePiAuthJSON(ctx, rawInput)
 }
 
 func (g *piAuthGate) refreshAndSnapshot(ctx context.Context) (hubui.AgentAuthState, error) {
@@ -210,13 +173,31 @@ func (g *piAuthGate) refreshAndSnapshot(ctx context.Context) (hubui.AgentAuthSta
 		g.mu.Unlock()
 		return snap, nil
 	}
+	canonicalAuthJSON := strings.TrimSpace(g.initCfg.PiAuthJSON)
 	canonical := strings.TrimSpace(g.initCfg.PiProviderAuth)
 	g.mu.Unlock()
+
+	if canonicalAuthJSON != "" {
+		if err := g.probe(ctx); err != nil {
+			g.mu.Lock()
+			applyPiConfigureUIState(&g.authState, piAuthValidationFailureMessage)
+			snap := g.snapshotLocked()
+			g.mu.Unlock()
+			return snap, nil
+		}
+
+		g.mu.Lock()
+		g.validatedAuth = validatedPiAuthStateKey("json", canonicalAuthJSON)
+		g.refreshLocked()
+		snap := g.snapshotLocked()
+		g.mu.Unlock()
+		return snap, nil
+	}
 
 	if canonical == "" {
 		if err := g.probe(ctx); err != nil {
 			g.mu.Lock()
-			g.authState.setNeedsConfigure(piExistingLocalAuthValidationStatusMessage())
+			applyPiConfigureUIState(&g.authState, piExistingLocalAuthValidationStatusMessage())
 			snap := g.snapshotLocked()
 			g.mu.Unlock()
 			return snap, nil
@@ -259,8 +240,33 @@ func (g *piAuthGate) refreshAndSnapshot(ctx context.Context) (hubui.AgentAuthSta
 }
 
 func (g *piAuthGate) refreshLocked() {
-	g.authState.setNeedsConfigure(piProviderConfigureMessage)
-	g.authState.configureOptions = piAgentAuthOptions()
+	applyPiConfigureUIState(&g.authState, piAuthConfigureMessage)
+
+	authJSON, source, err := firstConfiguredPiAuthJSON(g.runtimeConfigPath, g.initCfg)
+	if err != nil {
+		g.authState.setError(fmt.Sprintf("PI auth.json from %s is invalid: %v.", source, err))
+		return
+	}
+	if authJSON != "" {
+		if err := writePiAuthJSON(authJSON); err != nil {
+			g.authState.setError(fmt.Sprintf("write %s: %v", piAuthFileRelativePath, err))
+			return
+		}
+		canonical, err := normalizePiAuthJSON(authJSON)
+		if err != nil {
+			g.authState.setError(fmt.Sprintf("PI auth.json from %s is invalid: %v.", source, err))
+			return
+		}
+		g.initCfg.PiAuthJSON = canonical
+		if g.validatedAuth == validatedPiAuthStateKey("json", canonical) {
+			g.authState.ready = true
+			g.authState.state = "ready"
+			g.authState.message = piAuthReadyMessage
+			return
+		}
+		g.authState.message = fmt.Sprintf("%s Loaded from %s.", piAuthConfiguredMessage, source)
+		return
+	}
 
 	auth, source, err := firstConfiguredPiProviderAuth(g.runtimeConfigPath, g.initCfg)
 	if err != nil {
@@ -278,7 +284,7 @@ func (g *piAuthGate) refreshLocked() {
 			return
 		}
 		g.initCfg.PiProviderAuth = canonical
-		if g.validatedAuth == canonical {
+		if g.validatedAuth == validatedPiAuthStateKey("provider", canonical) {
 			g.authState.ready = true
 			g.authState.state = "ready"
 			g.authState.message = fmt.Sprintf("PI provider auth is ready via %s.", auth.EnvVar)
@@ -290,9 +296,7 @@ func (g *piAuthGate) refreshLocked() {
 }
 
 func (g *piAuthGate) snapshotLocked() hubui.AgentAuthState {
-	state := g.authState.snapshot(agentruntime.HarnessPi)
-	state.ConfigurePlaceholder = "Paste provider token..."
-	return state
+	return g.authState.snapshot(agentruntime.HarnessPi)
 }
 
 func piAgentAuthOptions() []hubui.AgentAuthOption {
@@ -315,6 +319,42 @@ func piAgentAuthOptions() []hubui.AgentAuthOption {
 		return leftLabel < rightLabel
 	})
 	return options
+}
+
+func applyPiConfigureUIState(state *configurableAgentAuthState, message string) {
+	state.setNeedsConfigure(message)
+	state.configureCommand = piAuthConfigureCommand
+	state.configurePlaceholder = piAuthConfigurePlaceholder
+	state.configureOptions = nil
+}
+
+func firstConfiguredPiAuthJSON(runtimeConfigPath string, initCfg hub.InitConfig) (string, string, error) {
+	if persistedEnv := strings.TrimSpace(os.Getenv("PI_AUTH_JSON")); persistedEnv != "" {
+		canonical, err := normalizePiAuthJSON(persistedEnv)
+		if err != nil {
+			return "", "environment", err
+		}
+		return canonical, "environment", nil
+	}
+
+	for _, candidate := range []struct {
+		value  string
+		source string
+	}{
+		{value: strings.TrimSpace(initCfg.PiAuthJSON), source: "init config"},
+		{value: hub.ReadRuntimeConfigString(runtimeConfigPath, piAuthJSONField, "piAuthJSON", "PI_AUTH_JSON"), source: "runtime config"},
+	} {
+		if candidate.value == "" {
+			continue
+		}
+		canonical, err := normalizePiAuthJSON(candidate.value)
+		if err != nil {
+			return "", candidate.source, err
+		}
+		return canonical, candidate.source, nil
+	}
+
+	return "", "", nil
 }
 
 func firstConfiguredPiProviderAuth(runtimeConfigPath string, initCfg hub.InitConfig) (piProviderAuth, string, error) {
@@ -349,6 +389,30 @@ func firstConfiguredPiProviderAuth(runtimeConfigPath string, initCfg hub.InitCon
 	}
 
 	return piProviderAuth{}, "", nil
+}
+
+func normalizePiAuthJSON(rawInput string) (string, error) {
+	rawInput = strings.TrimSpace(rawInput)
+	if rawInput == "" {
+		return "", fmt.Errorf("auth.json is required")
+	}
+
+	var rawMap map[string]any
+	if err := decodeJSONStrict(rawInput, &rawMap); err != nil {
+		var wrapped string
+		if err := decodeJSONStrict(rawInput, &wrapped); err == nil {
+			return normalizePiAuthJSON(wrapped)
+		}
+		return "", fmt.Errorf("expected a JSON object")
+	}
+	if len(rawMap) == 0 {
+		return "", fmt.Errorf("expected a non-empty JSON object")
+	}
+	canonical, err := json.Marshal(rawMap)
+	if err != nil {
+		return "", fmt.Errorf("encode pi auth json: %w", err)
+	}
+	return string(canonical), nil
 }
 
 func normalizePiProviderAuth(rawInput string) (string, error) {
@@ -413,7 +477,7 @@ func piProviderValidationStatusMessage(envVar string) string {
 }
 
 func piExistingLocalAuthValidationStatusMessage() string {
-	return "PI did not validate with existing local auth. Select a PI provider, and supply the token."
+	return "PI did not validate with existing local auth. Run `pi`, complete `/login`, then paste `~/.pi/agent/auth.json` here."
 }
 
 func validatePiProviderAuthValue(envVar, value string) error {
@@ -454,6 +518,152 @@ func encodePiProviderAuth(auth piProviderAuth) (string, error) {
 		return "", fmt.Errorf("encode pi provider auth: %w", err)
 	}
 	return string(encoded), nil
+}
+
+func isLikelyPiProviderAuthInput(rawInput string) bool {
+	rawInput = strings.TrimSpace(rawInput)
+	if rawInput == "" {
+		return false
+	}
+
+	var rawMap map[string]any
+	if err := decodeJSONStrict(rawInput, &rawMap); err != nil {
+		var wrapped string
+		if err := decodeJSONStrict(rawInput, &wrapped); err == nil {
+			return isLikelyPiProviderAuthInput(wrapped)
+		}
+		return false
+	}
+	_, hasEnvVar := rawMap["env_var"]
+	_, hasValue := rawMap["value"]
+	return hasEnvVar || hasValue
+}
+
+func (g *piAuthGate) configurePiAuthJSON(ctx context.Context, rawInput string) (hubui.AgentAuthState, error) {
+	canonical, err := normalizePiAuthJSON(rawInput)
+	if err != nil {
+		g.mu.Lock()
+		applyPiConfigureUIState(&g.authState, fmt.Sprintf("%s: %v.", piAuthInvalidPrefix, err))
+		snap := g.snapshotLocked()
+		g.mu.Unlock()
+		return snap, err
+	}
+
+	if err := hub.SaveRuntimeConfigPiAuthJSON(g.runtimeConfigPath, g.initCfg, canonical); err != nil {
+		g.mu.Lock()
+		applyPiConfigureUIState(&g.authState, fmt.Sprintf("save pi config.json: %v", err))
+		snap := g.snapshotLocked()
+		g.mu.Unlock()
+		return snap, err
+	}
+	if err := writePiAuthJSON(canonical); err != nil {
+		g.mu.Lock()
+		applyPiConfigureUIState(&g.authState, fmt.Sprintf("write %s: %v", piAuthFileRelativePath, err))
+		snap := g.snapshotLocked()
+		g.mu.Unlock()
+		return snap, err
+	}
+	if err := g.probe(ctx); err != nil {
+		g.mu.Lock()
+		applyPiConfigureUIState(&g.authState, fmt.Sprintf("launch pi with %s: %v", piAuthFileRelativePath, err))
+		snap := g.snapshotLocked()
+		g.mu.Unlock()
+		return snap, err
+	}
+
+	g.mu.Lock()
+	g.initCfg.PiAuthJSON = canonical
+	g.validatedAuth = validatedPiAuthStateKey("json", canonical)
+	g.refreshLocked()
+	snap := g.snapshotLocked()
+	g.mu.Unlock()
+	return snap, nil
+}
+
+func (g *piAuthGate) configureProviderAuth(ctx context.Context, rawInput string) (hubui.AgentAuthState, error) {
+	canonical, err := normalizePiProviderAuth(rawInput)
+	if err != nil {
+		g.mu.Lock()
+		applyPiConfigureUIState(&g.authState, fmt.Sprintf("PI provider auth is invalid: %v.", err))
+		snap := g.snapshotLocked()
+		g.mu.Unlock()
+		return snap, err
+	}
+
+	if err := hub.SaveRuntimeConfigPiProviderAuth(g.runtimeConfigPath, g.initCfg, canonical); err != nil {
+		g.mu.Lock()
+		applyPiConfigureUIState(&g.authState, fmt.Sprintf("save pi config.json: %v", err))
+		snap := g.snapshotLocked()
+		g.mu.Unlock()
+		return snap, err
+	}
+
+	auth, err := decodePiProviderAuth(canonical)
+	if err != nil {
+		g.mu.Lock()
+		applyPiConfigureUIState(&g.authState, fmt.Sprintf("PI provider auth is invalid: %v.", err))
+		snap := g.snapshotLocked()
+		g.mu.Unlock()
+		return snap, err
+	}
+	if err := os.Setenv(auth.EnvVar, auth.Value); err != nil {
+		g.mu.Lock()
+		applyPiConfigureUIState(&g.authState, fmt.Sprintf("set %s: %v", auth.EnvVar, err))
+		snap := g.snapshotLocked()
+		g.mu.Unlock()
+		return snap, err
+	}
+	if !shouldSkipPiProviderProbe(auth.EnvVar) {
+		if err := annotatePiProviderProbeError(g.probe(ctx), auth.EnvVar); err != nil {
+			g.mu.Lock()
+			applyPiConfigureUIState(&g.authState, fmt.Sprintf("launch pi with %s: %v", auth.EnvVar, err))
+			snap := g.snapshotLocked()
+			g.mu.Unlock()
+			return snap, err
+		}
+	}
+
+	g.mu.Lock()
+	g.initCfg.PiProviderAuth = canonical
+	g.validatedAuth = validatedPiAuthStateKey("provider", canonical)
+	g.refreshLocked()
+	snap := g.snapshotLocked()
+	g.mu.Unlock()
+	return snap, nil
+}
+
+func validatedPiAuthStateKey(kind, canonical string) string {
+	return strings.TrimSpace(kind) + ":" + strings.TrimSpace(canonical)
+}
+
+func writePiAuthJSON(authJSON string) error {
+	canonical, err := normalizePiAuthJSON(authJSON)
+	if err != nil {
+		return err
+	}
+	path, err := defaultPiAuthJSONPath()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return fmt.Errorf("mkdir %s: %w", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(canonical), 0o600); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}
+
+func defaultPiAuthJSONPath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve home directory: %w", err)
+	}
+	homeDir = strings.TrimSpace(homeDir)
+	if homeDir == "" {
+		return "", fmt.Errorf("resolve home directory: empty path")
+	}
+	return filepath.Join(homeDir, piAuthFileRelativePath), nil
 }
 
 func (g *piAuthGate) probe(ctx context.Context) error {

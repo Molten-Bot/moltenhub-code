@@ -698,6 +698,8 @@ func (s Server) handleAgentAuthVerify(w http.ResponseWriter, r *http.Request) {
 type agentAuthConfigureRequest struct {
 	AugmentSessionAuth      string `json:"augment_session_auth"`
 	AugmentSessionAuthAlias string `json:"augmentSessionAuth"`
+	PiAuthJSON              string `json:"pi_auth_json"`
+	PiAuthJSONAlias         string `json:"piAuthJSON"`
 	PiProviderAuth          string `json:"pi_provider_auth"`
 	PiProviderAuthAlias     string `json:"piProviderAuth"`
 	SessionAuth             string `json:"session_auth"`
@@ -748,6 +750,8 @@ func (s Server) handleAgentAuthConfigure(w http.ResponseWriter, r *http.Request)
 	sessionAuth := firstNonEmptyString(
 		req.AugmentSessionAuth,
 		req.AugmentSessionAuthAlias,
+		req.PiAuthJSON,
+		req.PiAuthJSONAlias,
 		req.PiProviderAuth,
 		req.PiProviderAuthAlias,
 		req.SessionAuth,
