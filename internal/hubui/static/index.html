@@ -2695,19 +2695,7 @@
       if (!value) {
         throw new Error("Paste ~/.pi/agent/auth.json first.");
       }
-      let parsed = null;
-      try {
-        parsed = JSON.parse(value);
-        if (typeof parsed === "string") {
-          parsed = JSON.parse(parsed);
-        }
-      } catch (_err) {
-        throw new Error("Paste a valid ~/.pi/agent/auth.json JSON object.");
-      }
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || Object.keys(parsed).length === 0) {
-        throw new Error("Paste a non-empty ~/.pi/agent/auth.json JSON object.");
-      }
-      return JSON.stringify(parsed);
+      return value;
     }
 
     function shouldAutoStartClaudeSetupAfterGitHubConfigure(auth) {
