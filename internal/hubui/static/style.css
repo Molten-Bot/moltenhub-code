@@ -3250,7 +3250,7 @@ html.night {
 
 html.dark {
   --hub-bg-rgb: 35 12 26;
-  --hub-panel-rgb: 54 19 39;
+  --hub-panel-rgb: 24 35 58;
   --hub-panel-soft-rgb: 76 28 55;
   --hub-border-rgb: 240 172 205;
   --hub-text-rgb: 255 235 244;
@@ -3258,7 +3258,7 @@ html.dark {
   --hub-meta-rgb: 209 146 176;
   --body-radial-left: radial-gradient(1200px 620px at -12% -12%, rgba(255, 74, 156, 0.3), transparent 58%);
   --body-radial-right: radial-gradient(880px 540px at 108% 4%, rgba(214, 51, 132, 0.24), transparent 60%);
-  --body-linear: linear-gradient(180deg, #210b18, #1c0914 58%, #170711);
+  --body-linear: linear-gradient(180deg, #0d1424, #0a1120 58%, #09101d);
   --body-orb-a: radial-gradient(circle, rgba(255, 74, 156, 0.24) 0%, rgba(255, 74, 156, 0) 68%);
   --body-orb-b: radial-gradient(circle, rgba(214, 51, 132, 0.2) 0%, rgba(214, 51, 132, 0) 72%);
   --bg: #230c19;
@@ -3390,7 +3390,7 @@ html.dark {
 
 html.night {
   --hub-bg-rgb: 22 8 17;
-  --hub-panel-rgb: 33 12 25;
+  --hub-panel-rgb: 15 22 38;
   --hub-panel-soft-rgb: 52 19 39;
   --hub-border-rgb: 214 151 183;
   --hub-text-rgb: 255 240 246;
@@ -3398,7 +3398,7 @@ html.night {
   --hub-meta-rgb: 203 144 171;
   --body-radial-left: radial-gradient(1100px 560px at -12% -16%, rgba(255, 74, 156, 0.22), transparent 56%);
   --body-radial-right: radial-gradient(920px 520px at 112% 2%, rgba(214, 51, 132, 0.18), transparent 60%);
-  --body-linear: linear-gradient(180deg, #14060f, #170812 55%, #1a0914);
+  --body-linear: linear-gradient(180deg, #05070d, #070b14 55%, #090f1a);
   --body-orb-a: radial-gradient(circle, rgba(255, 74, 156, 0.18) 0%, rgba(255, 74, 156, 0) 70%);
   --body-orb-b: radial-gradient(circle, rgba(214, 51, 132, 0.16) 0%, rgba(214, 51, 132, 0) 74%);
   --bg: #170811;
