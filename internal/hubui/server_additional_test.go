@@ -293,11 +293,14 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `.prompt-mode-link-logo {`) {
 		t.Fatalf("expected stylesheet to define shared dock icon link styles")
 	}
-	if !strings.Contains(stylesheet, `.prompt-mode-link-logo-divider::before {`) {
-		t.Fatalf("expected stylesheet to define the dock icon divider style")
+	if !strings.Contains(stylesheet, `.prompt-mode-divider {`) {
+		t.Fatalf("expected stylesheet to define the shared dock divider style")
 	}
-	if !strings.Contains(stylesheet, `.prompt-mode-link-logo img {`) {
+	if !strings.Contains(stylesheet, `.prompt-mode-link-icon img {`) {
 		t.Fatalf("expected stylesheet to size dock icon images through shared logo styles")
+	}
+	if !strings.Contains(stylesheet, `.prompt-mode-link-icon svg {`) {
+		t.Fatalf("expected stylesheet to size dock svg icons through shared icon styles")
 	}
 	if !strings.Contains(stylesheet, `filter: var(--agent-logo-filter);`) {
 		t.Fatalf("expected stylesheet to keep dock icons theme-reactive via agent logo filter")
@@ -314,13 +317,22 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `.hub-dock-plus {`) {
 		t.Fatalf("expected stylesheet to include molten hub plus badge styles")
 	}
-	if !strings.Contains(stylesheet, `.hub-dock-group[data-configured="true"]:hover .hub-profile-button`) {
-		t.Fatalf("expected stylesheet to reveal the hub profile button beside the hub icon on hover")
+	if !strings.Contains(stylesheet, `.hub-profile-button {`) {
+		t.Fatalf("expected stylesheet to include hub profile button base styles")
+	}
+	if !strings.Contains(stylesheet, ".hub-profile-button {\n  opacity: 1;\n  pointer-events: auto;") {
+		t.Fatalf("expected stylesheet to keep the hub profile button visible by default")
+	}
+	if !strings.Contains(stylesheet, ".hub-profile-button {\n  opacity: 1;\n  pointer-events: auto;\n  color: var(--theme-button-text);") {
+		t.Fatalf("expected hub profile button to use a readable default icon color without hover")
+	}
+	if strings.Contains(stylesheet, `.hub-dock-group[data-configured="true"]:hover .hub-profile-button`) {
+		t.Fatalf("expected stylesheet to remove hover-only hub profile button visibility")
 	}
 	if !strings.Contains(stylesheet, `.hub-profile-button svg {`) {
 		t.Fatalf("expected stylesheet to define hub profile button icon sizing")
 	}
-	if !strings.Contains(stylesheet, ".hub-profile-button:hover,\n.hub-profile-button:focus-visible {\n  color: var(--surface-tab-active-text);\n  background: transparent;\n  box-shadow: none;\n}") {
+	if !strings.Contains(stylesheet, ".hub-profile-button:hover,\n.hub-profile-button:focus-visible {\n  color: var(--running);\n  background: transparent;\n  box-shadow: none;\n}") {
 		t.Fatalf("expected hub profile button hover treatment to avoid background and box-shadow")
 	}
 	if !strings.Contains(stylesheet, `.hub-setup-toggle {`) {
@@ -329,8 +341,11 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `.hub-setup-profile-grid {`) {
 		t.Fatalf("expected stylesheet to include hub setup profile grid styles")
 	}
-	if !strings.Contains(stylesheet, `grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;`) {
-		t.Fatalf("expected profile grid to reserve a compact auto-width column for the emoji picker")
+	if !strings.Contains(stylesheet, `grid-template-columns: repeat(2, minmax(0, 1fr));`) {
+		t.Fatalf("expected profile grid to keep two equal columns and move emoji controls onto their own row")
+	}
+	if !strings.Contains(stylesheet, `.hub-setup-profile-emoji {`) || !strings.Contains(stylesheet, `grid-column: 1 / -1;`) {
+		t.Fatalf("expected stylesheet to make the emoji profile field span the full profile grid width")
 	}
 	if !strings.Contains(stylesheet, `.hub-setup-profile-text {`) {
 		t.Fatalf("expected stylesheet to keep the profile textarea spanning the full profile grid width")
@@ -344,17 +359,32 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `.hub-setup-signin-logo {`) {
 		t.Fatalf("expected stylesheet to include the hub setup sign-in logo styles")
 	}
+	if !strings.Contains(stylesheet, `.hub-setup-copy {`) {
+		t.Fatalf("expected stylesheet to include hub setup supporting copy styles")
+	}
 	if !strings.Contains(stylesheet, `.hub-setup-status {`) {
 		t.Fatalf("expected stylesheet to include hub setup status line styles")
 	}
 	if !strings.Contains(stylesheet, `.hub-setup-actions {`) || !strings.Contains(stylesheet, `margin-left: auto;`) {
 		t.Fatalf("expected stylesheet to keep the hub setup actions docked to the right edge")
 	}
-	if !strings.Contains(stylesheet, `.hub-emoji-picker-toggle {`) || !strings.Contains(stylesheet, `z-index: 2;`) {
-		t.Fatalf("expected stylesheet to keep the emoji picker toggle above the text input hit area")
+	if !strings.Contains(stylesheet, `.hub-emoji-picker-toggle {`) || !strings.Contains(stylesheet, `width: 100%;`) {
+		t.Fatalf("expected stylesheet to render the emoji picker as a full-width button control")
 	}
-	if !strings.Contains(stylesheet, `.hub-emoji-picker-input {`) || !strings.Contains(stylesheet, `width: 5.75rem;`) {
-		t.Fatalf("expected emoji picker input to stay compact and only show a single emoji selection width")
+	if !strings.Contains(stylesheet, `.hub-emoji-picker-input {`) || !strings.Contains(stylesheet, `clip-path: inset(50%);`) {
+		t.Fatalf("expected stylesheet to hide the raw emoji input and rely on the picker button presentation")
+	}
+	if !strings.Contains(stylesheet, `.brand-login-card-shell {`) || !strings.Contains(stylesheet, `.brand-chip-action {`) {
+		t.Fatalf("expected stylesheet to expose user-portal-derived glass primitives for hub surfaces and chips")
+	}
+	if strings.Contains(stylesheet, `.prompt-hero {`) {
+		t.Fatalf("expected stylesheet to remove the Studio hero styles")
+	}
+	if !strings.Contains(stylesheet, `.prompt-field-copy {`) {
+		t.Fatalf("expected stylesheet to retain helper copy styles")
+	}
+	if !strings.Contains(stylesheet, `.task-empty {`) || !strings.Contains(stylesheet, `.task-empty-copy {`) {
+		t.Fatalf("expected stylesheet to include the richer task queue empty state styles")
 	}
 }
 
@@ -903,6 +933,9 @@ func TestTaskPanelStylesConstrainHorizontalOverflow(t *testing.T) {
 	if !strings.Contains(css, ".task-fullscreen-output-panel {\n  min-height: 0;\n  overflow: hidden;\n  display: grid;\n  grid-template-rows: auto auto minmax(0, 1fr);\n}") {
 		t.Fatalf("expected full screen output panel to reserve the remaining viewport for terminal output")
 	}
+	if !strings.Contains(css, ".task-fullscreen-head-label {\n  min-width: 0;\n  flex: 1 1 auto;\n  white-space: normal;\n  overflow-wrap: anywhere;\n}") {
+		t.Fatalf("expected full screen task headers to wrap long prompts instead of truncating")
+	}
 	if !strings.Contains(css, "#task-fullscreen-terminal {\n  min-height: 0;\n  height: 100%;\n  padding-right: 10px;\n  scrollbar-gutter: stable;\n  overscroll-behavior: contain;\n}") {
 		t.Fatalf("expected full screen terminal to stabilize its vertical scrollbar gutter")
 	}
@@ -930,28 +963,34 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".page-bottom-dock {\n  position: fixed;\n  left: 50%;\n  bottom: max(16px, env(safe-area-inset-bottom));\n  z-index: 61;\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  justify-content: center;\n  width: min-content;\n  max-width: calc(100vw - 28px);\n  transform: translateX(-50%);\n}") {
 		t.Fatalf("expected Studio mode tabs to dock at the absolute bottom center of the page")
 	}
-	if !strings.Contains(css, ".prompt-mode-tabs-dock {\n  width: max-content;\n  max-width: calc(100vw - 28px);\n  overflow-x: auto;\n}") {
+	if !strings.Contains(css, "--hub-content-bottom-padding: calc(var(--hub-floating-bottom) + var(--hub-floating-stack-height) + var(--hub-studio-dock-gap) + 28px);") {
+		t.Fatalf("expected Studio shell to compute bottom content clearance from floating dock stack tokens")
+	}
+	if !strings.Contains(css, ".app {\n  width: min(1500px, 100%);\n  margin: 0 auto;\n  padding: 28px 20px var(--hub-content-bottom-padding);\n  display: grid;\n  gap: 24px;\n}") {
+		t.Fatalf("expected app shell to reserve dynamic bottom space for the floating dock")
+	}
+	if !strings.Contains(css, ".prompt-mode-tabs-dock {\n  width: max-content;\n  max-width: calc(100vw - 28px);\n  overflow: visible;\n}") {
 		t.Fatalf("expected Studio mode tabs to remain scrollable within the bottom dock on narrow viewports")
 	}
 	if !strings.Contains(css, ".prompt-wrap.panel {\n  display: flex;\n  flex-direction: column;\n  position: relative;") {
 		t.Fatalf("expected studio panel to participate in the page flow instead of docking itself to the viewport")
 	}
-	if !strings.Contains(css, ".prompt-mode-tabs {\n  display: inline-flex;\n  gap: 4px;\n  padding: 5px;\n  border-radius: 14px;\n  border: 1px solid var(--surface-tab-border);\n  background: var(--surface-tab-bg);") {
+	if !strings.Contains(css, ".prompt-mode-tabs {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  padding: 8px 10px;\n  border-radius: var(--radius-card);\n  border: 1px solid var(--glass-border);\n  background: var(--glass-bg);") {
 		t.Fatalf("expected studio mode tabs to use theme-aware segmented-control treatment")
 	}
-	if !strings.Contains(css, ".prompt-mode-link {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;") {
-		t.Fatalf("expected Studio mode controls to render as clickable link text inside the dock")
+	if !strings.Contains(css, ".prompt-mode-link {\n  position: relative;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;") {
+		t.Fatalf("expected Studio mode controls to render as clickable icon pills inside the dock")
 	}
-	if !strings.Contains(css, ".prompt-mode-link.active {\n  color: var(--surface-tab-active-text);\n  box-shadow: inset 0 -2px 0 var(--surface-tab-active-text);\n}") {
+	if !strings.Contains(css, ".prompt-mode-link.active {\n  color: var(--running);\n}") {
 		t.Fatalf("expected active Studio mode link to stay visually highlighted without button sections")
 	}
-	if !strings.Contains(css, ".prompt-mode-link img {\n  display: block;\n  width: 15px;\n  height: 15px;\n  object-fit: contain;\n  filter: var(--agent-logo-filter);\n}") {
+	if !strings.Contains(css, ".prompt-mode-link-icon img {\n  display: block;\n  width: 15px;\n  height: 15px;\n  object-fit: contain;\n  filter: var(--agent-logo-filter);\n}") {
 		t.Fatalf("expected integrated dock icons to inherit the shared monochrome treatment")
 	}
-	if !strings.Contains(css, ".prompt-mode-link-logo {\n  min-width: 40px;\n  padding-inline: 12px;\n}") {
+	if !strings.Contains(css, ".prompt-mode-link-logo {\n  min-width: 40px;\n  padding-inline: 0;\n}") {
 		t.Fatalf("expected icon-only dock items to align with the main segmented menu")
 	}
-	if !strings.Contains(css, ".prompt-mode-link-logo-divider::before {\n  content: \"\";\n  display: block;\n  width: 1px;\n  height: 18px;") {
+	if !strings.Contains(css, ".prompt-mode-divider {\n  width: 1px;\n  height: 24px;\n  margin-inline: 4px;") {
 		t.Fatalf("expected the leading dock icon to share the segmented main-menu treatment instead of rendering as a detached control")
 	}
 	if !strings.Contains(css, ".prompt-form {\n  display: grid;\n  gap: 10px;\n  padding: 14px;\n  min-width: 0;\n  min-height: 0;\n  overflow-y: auto;\n}") {
@@ -999,11 +1038,14 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if strings.Contains(css, ".prompt-image-chip {") {
 		t.Fatalf("expected stacked screenshot chip styles to be removed")
 	}
-	if !strings.Contains(css, "@media (max-width: 700px) {\n  .page-bottom-dock {\n    bottom: max(12px, env(safe-area-inset-bottom));\n    max-width: calc(100vw - 24px);\n  }\n\n  .prompt-mode-tabs-dock {\n    max-width: calc(100vw - 24px);\n  }\n\n  .theme-toggle {\n    right: 12px;\n    bottom: 12px;\n    left: auto;\n  }\n\n  :root {\n    --hub-floating-bottom: max(12px, env(safe-area-inset-bottom));\n    --hub-floating-stack-height: 128px;\n    --hub-studio-dock-gap: 12px;\n  }") {
+	if !strings.Contains(css, "@media (max-width: 700px) {\n  .page-bottom-dock {\n    bottom: max(12px, env(safe-area-inset-bottom));\n    max-width: calc(100vw - 24px);\n  }\n\n  .prompt-mode-tabs-dock {\n    max-width: calc(100vw - 24px);\n    overflow-x: auto;\n    overflow-y: visible;\n  }\n\n  .theme-toggle {\n    right: 12px;\n    bottom: 12px;\n    left: auto;\n  }\n\n  :root {\n    --hub-floating-bottom: max(12px, env(safe-area-inset-bottom));\n    --hub-floating-stack-height: 128px;\n    --hub-studio-dock-gap: 12px;\n  }") {
 		t.Fatalf("expected mobile layout to coordinate the bottom dock stack and theme toggle spacing")
 	}
-	if !strings.Contains(css, "@media (max-width: 640px) {\n  .prompt-actions {\n    flex-wrap: wrap;\n    gap: 6px;\n  }\n\n  .prompt-actions-start,\n  .submit-status-inline,\n  .prompt-actions-end {\n    flex: 1 1 100%;\n    width: 100%;\n  }\n\n  .prompt-actions-end {\n    justify-content: flex-end;\n    margin-left: 0;\n  }\n\n  .prompt-action-paste {\n    max-width: none;\n  }\n\n  .submit-status-inline {\n    min-width: 0;\n  }\n\n  .prompt-action-button {\n    flex: 1 1 0;\n    min-inline-size: 0;\n  }") {
+	if !strings.Contains(css, "@media (max-width: 640px) {\n  .panel-section-copy {\n    max-width: none;\n  }\n\n  .prompt-actions {\n    flex-wrap: wrap;\n    gap: 6px;\n  }\n\n  .prompt-actions-start,\n  .submit-status-inline,\n  .prompt-actions-end {\n    flex: 1 1 100%;\n    width: 100%;\n  }\n\n  .prompt-actions-end {\n    justify-content: flex-end;\n    margin-left: 0;\n  }\n\n  .prompt-action-paste {\n    max-width: none;\n  }\n\n  .submit-status-inline {\n    min-width: 0;\n  }\n\n  .prompt-action-button {\n    flex: 1 1 0;\n    min-inline-size: 0;\n  }\n\n  .task-empty {\n    min-height: 0;\n    padding: 18px;\n  }") {
 		t.Fatalf("expected mobile layout to keep Studio action controls fully visible")
+	}
+	if !strings.Contains(css, ".app {\n    padding: 20px 14px var(--hub-content-bottom-padding);\n  }") {
+		t.Fatalf("expected compact layouts to keep the same dynamic dock clearance padding")
 	}
 }
 
@@ -1047,7 +1089,7 @@ func TestStudioStylesUseRefinedPanelAndInputTreatment(t *testing.T) {
 	if !strings.Contains(css, ".prompt-wrap .panel-header {\n  border-bottom-color: var(--surface-header-border);\n  background: var(--surface-header);\n  color: var(--surface-label);\n  letter-spacing: 0.11em;\n  justify-content: space-between;\n}") {
 		t.Fatalf("expected studio header to separate its title from the minimize control in the stacked layout")
 	}
-	if !strings.Contains(css, ".prompt-mode-link.active {\n  color: var(--surface-tab-active-text);\n  box-shadow: inset 0 -2px 0 var(--surface-tab-active-text);\n}") {
+	if !strings.Contains(css, ".prompt-mode-link.active {\n  color: var(--running);\n}") {
 		t.Fatalf("expected active studio mode link to stay highlighted after removing button sections")
 	}
 	if !strings.Contains(css, ".prompt-control,\n.prompt-text,\n.prompt-action-paste {\n  width: 100%;\n  border: 1px solid var(--surface-control-border);\n  border-radius: 16px;\n  background: var(--surface-control-bg);") {

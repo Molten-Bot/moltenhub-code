@@ -23,7 +23,7 @@ func TestDedupeKeyForRunConfigDefaultsBranchAndNormalizesRepos(t *testing.T) {
 	}
 
 	got := dedupeKeyForRunConfig(cfg)
-	want := `{"repos":["git@github.com:acme/repo.git","git@github.com:acme/repo-two.git"],"baseBranch":"main","promptHash":"` + promptHashForTest("update docs") + `"}`
+	want := `{"repos":["git@github.com:acme/repo-two.git","git@github.com:acme/repo.git"],"baseBranch":"main","targetSubdir":".","promptHash":"` + promptHashForTest("update docs") + `"}`
 	if got != want {
 		t.Fatalf("dedupeKeyForRunConfig() = %q, want %q", got, want)
 	}
@@ -70,7 +70,7 @@ func TestDedupeKeyForRunConfigNonMainIncludesPromptHash(t *testing.T) {
 		t.Fatalf("dedupe keys should differ when prompts differ\nA: %q\nB: %q", keyA, keyB)
 	}
 
-	want := `{"repos":["git@github.com:acme/repo.git"],"baseBranch":"release/2026.04-hotfix","promptHash":"` + promptHashForTest("fix flaky test") + `"}`
+	want := `{"repos":["git@github.com:acme/repo.git"],"baseBranch":"release/2026.04-hotfix","targetSubdir":".","promptHash":"` + promptHashForTest("fix flaky test") + `"}`
 	if keyA != want {
 		t.Fatalf("dedupeKeyForRunConfig() = %q, want %q", keyA, want)
 	}
@@ -110,7 +110,7 @@ func TestDedupeKeyForRunConfigIncludesAgentRuntimeWhenConfigured(t *testing.T) {
 	}
 
 	got := dedupeKeyForRunConfig(cfg)
-	want := `{"repos":["git@github.com:acme/repo.git"],"baseBranch":"main","agentHarness":"claude","agentCommand":"claude-custom","promptHash":"` + promptHashForTest("fix release issue") + `"}`
+	want := `{"repos":["git@github.com:acme/repo.git"],"baseBranch":"main","targetSubdir":".","agentHarness":"claude","agentCommand":"claude-custom","promptHash":"` + promptHashForTest("fix release issue") + `"}`
 	if got != want {
 		t.Fatalf("dedupeKeyForRunConfig() = %q, want %q", got, want)
 	}
@@ -131,6 +131,65 @@ func TestDedupeKeyForRunConfigDiffersByHarness(t *testing.T) {
 	keyClaude := dedupeKeyForRunConfig(claude)
 	if keyBase == keyClaude {
 		t.Fatalf("dedupe keys should differ when agent harness differs\nbase: %q\nclaude: %q", keyBase, keyClaude)
+	}
+}
+
+func TestDedupeKeyForRunConfigNormalizesRepoOrder(t *testing.T) {
+	t.Parallel()
+
+	a := config.Config{
+		Prompt:     "fix release issue",
+		Repos:      []string{"git@github.com:acme/repo-b.git", "git@github.com:acme/repo-a.git"},
+		BaseBranch: "main",
+	}
+	b := config.Config{
+		Prompt:     "fix release issue",
+		Repos:      []string{"git@github.com:acme/repo-a.git", "git@github.com:acme/repo-b.git"},
+		BaseBranch: "main",
+	}
+
+	keyA := dedupeKeyForRunConfig(a)
+	keyB := dedupeKeyForRunConfig(b)
+	if keyA != keyB {
+		t.Fatalf("dedupe keys should match when repo order differs only\nA: %q\nB: %q", keyA, keyB)
+	}
+}
+
+func TestDedupeKeyForRunConfigDiffersByTargetSubdir(t *testing.T) {
+	t.Parallel()
+
+	base := config.Config{
+		Prompt:       "fix release issue",
+		Repos:        []string{"git@github.com:acme/repo.git"},
+		BaseBranch:   "main",
+		TargetSubdir: ".",
+	}
+	otherDir := base
+	otherDir.TargetSubdir = "internal/hub"
+
+	keyBase := dedupeKeyForRunConfig(base)
+	keyOtherDir := dedupeKeyForRunConfig(otherDir)
+	if keyBase == keyOtherDir {
+		t.Fatalf("dedupe keys should differ when targetSubdir differs\nbase: %q\nother: %q", keyBase, keyOtherDir)
+	}
+}
+
+func TestDedupeKeyForRunConfigNormalizesTargetSubdir(t *testing.T) {
+	t.Parallel()
+
+	a := config.Config{
+		Prompt:       "fix release issue",
+		Repos:        []string{"git@github.com:acme/repo.git"},
+		BaseBranch:   "main",
+		TargetSubdir: "internal/hub",
+	}
+	b := a
+	b.TargetSubdir = "internal/hub/./"
+
+	keyA := dedupeKeyForRunConfig(a)
+	keyB := dedupeKeyForRunConfig(b)
+	if keyA != keyB {
+		t.Fatalf("normalized targetSubdir keys differ\na: %q\nb: %q", keyA, keyB)
 	}
 }
 

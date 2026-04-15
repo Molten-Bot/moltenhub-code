@@ -396,6 +396,38 @@ func TestSaveRuntimeConfigHubSettingsClearsStaleBindTokenForAgentTokenFlow(t *te
 	}
 }
 
+func TestSaveRuntimeConfigHubSettingsPreservesConfiguredLogLevel(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(path, []byte(`{"base_url":"https://na.hub.molten.bot/v1","log_level":"debug"}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	if err := SaveRuntimeConfigHubSettings(path, InitConfig{
+		BaseURL:    "https://na.hub.molten.bot/v1",
+		AgentToken: "agent_direct",
+	}, "agent_direct"); err != nil {
+		t.Fatalf("SaveRuntimeConfigHubSettings() error = %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if got["log_level"] != "debug" {
+		t.Fatalf("log_level = %#v, want %q", got["log_level"], "debug")
+	}
+}
+
 func TestReadRuntimeConfigString(t *testing.T) {
 	t.Parallel()
 
@@ -431,5 +463,57 @@ func TestReadRuntimeConfigStringInvalidInputs(t *testing.T) {
 	}
 	if got := ReadRuntimeConfigString(path, "github_token"); got != "" {
 		t.Fatalf("ReadRuntimeConfigString(malformed) = %q, want empty", got)
+	}
+}
+
+func TestLoadRuntimeConfigBackfillsMissingLogLevel(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(path, []byte(`{"base_url":"https://na.hub.molten.bot/v1","agent_token":"agent_saved"}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	got, err := LoadRuntimeConfig(path)
+	if err != nil {
+		t.Fatalf("LoadRuntimeConfig() error = %v", err)
+	}
+	if got.LogLevel != DefaultLogLevel {
+		t.Fatalf("LogLevel = %q, want %q", got.LogLevel, DefaultLogLevel)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if doc["log_level"] != DefaultLogLevel {
+		t.Fatalf("log_level = %#v, want %q", doc["log_level"], DefaultLogLevel)
+	}
+}
+
+func TestLoadRuntimeConfigHonorsConfiguredLogLevel(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(path, []byte(`{"base_url":"https://na.hub.molten.bot/v1","agent_token":"agent_saved","log_level":"debug"}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	got, err := LoadRuntimeConfig(path)
+	if err != nil {
+		t.Fatalf("LoadRuntimeConfig() error = %v", err)
+	}
+	if got.LogLevel != "debug" {
+		t.Fatalf("LogLevel = %q, want %q", got.LogLevel, "debug")
 	}
 }

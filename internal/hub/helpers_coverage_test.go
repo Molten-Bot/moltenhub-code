@@ -21,8 +21,14 @@ func TestFailureFollowUpHelperBranches(t *testing.T) {
 	if ok, reason := shouldQueueFailureFollowUp(dispatch, harness.Result{}); ok || !strings.Contains(reason, "did not include an error") {
 		t.Fatalf("shouldQueueFailureFollowUp(no error) = (%v, %q)", ok, reason)
 	}
-	if ok, reason := shouldQueueFailureFollowUp(SkillDispatch{RequestID: "req-1-failure-review"}, harness.Result{Err: errors.New("boom")}); !ok || reason != "" {
-		t.Fatalf("shouldQueueFailureFollowUp(nested) = (%v, %q), want (true, \"\")", ok, reason)
+	if ok, reason := shouldQueueFailureRerun(dispatch, harness.Result{}); ok || !strings.Contains(reason, "did not include an error") {
+		t.Fatalf("shouldQueueFailureRerun(no error) = (%v, %q)", ok, reason)
+	}
+	if ok, reason := shouldQueueFailureFollowUp(SkillDispatch{RequestID: "req-1-failure-review"}, harness.Result{Err: errors.New("boom")}); ok || reason != "run is already a failure follow-up" {
+		t.Fatalf("shouldQueueFailureFollowUp(nested) = (%v, %q), want (false, %q)", ok, reason, "run is already a failure follow-up")
+	}
+	if ok, reason := shouldQueueFailureRerun(SkillDispatch{RequestID: "req-1-rerun"}, harness.Result{Err: errors.New("boom")}); ok || reason != "run is already a failure rerun" {
+		t.Fatalf("shouldQueueFailureRerun(nested) = (%v, %q), want (false, %q)", ok, reason, "run is already a failure rerun")
 	}
 
 	res := harness.Result{
@@ -42,11 +48,17 @@ func TestFailureFollowUpHelperBranches(t *testing.T) {
 	if got := failureFollowUpRepos(res, config.Config{}); len(got) != 1 || got[0] != config.DefaultRepositoryURL {
 		t.Fatalf("failureFollowUpRepos() = %#v", got)
 	}
-	if got := singleRepoFromResults([]harness.RepoResult{{RepoURL: "a"}, {RepoURL: "b"}}); got != "" {
-		t.Fatalf("singleRepoFromResults(multiple repos) = %q, want empty", got)
-	}
 	if got := failureFollowUpRequestID(""); got != "failure-review" {
 		t.Fatalf("failureFollowUpRequestID(empty) = %q", got)
+	}
+	if got := failureFollowUpRequestID("req-1-failure-review"); got != "req-1-failure-review" {
+		t.Fatalf("failureFollowUpRequestID(existing) = %q", got)
+	}
+	if got := failureRerunRequestID(""); got != "rerun" {
+		t.Fatalf("failureRerunRequestID(empty) = %q", got)
+	}
+	if got := failureRerunRequestID("req-1-rerun"); got != "req-1-rerun" {
+		t.Fatalf("failureRerunRequestID(existing) = %q", got)
 	}
 	if got := joinRepoPRURLs(res.RepoResults); got != "https://github.com/acme/repo/pull/1" {
 		t.Fatalf("joinRepoPRURLs() = %q", got)
@@ -129,6 +141,105 @@ func TestDispatchAndProfileHelperBranches(t *testing.T) {
 	}
 	if got := buildSupportedSkillsMetadata(); len(got) != 3 {
 		t.Fatalf("buildSupportedSkillsMetadata() len = %d, want 3", len(got))
+	}
+}
+
+func TestAPIExtractionHelperBranches(t *testing.T) {
+	t.Parallel()
+
+	if !looksLikeAgentURI(" https://na.hub.molten.bot/agent ") {
+		t.Fatal("looksLikeAgentURI(https) = false, want true")
+	}
+	if looksLikeAgentURI("mailto:test@example.com") {
+		t.Fatal("looksLikeAgentURI(mailto) = true, want false")
+	}
+
+	token := extractTokenFromAny([]any{
+		map[string]any{"value": "ignored"},
+		map[string]any{"data": map[string]any{"access_token": " token-123 "}},
+	})
+	if token != "token-123" {
+		t.Fatalf("extractTokenFromAny(nested array) = %q, want token-123", token)
+	}
+	if got := extractTokenFromAny("not-a-map"); got != "" {
+		t.Fatalf("extractTokenFromAny(non map) = %q, want empty", got)
+	}
+
+	if got := extractAPIBaseFromAny([]any{map[string]any{"payload": map[string]any{"baseUrl": " https://na.hub.molten.bot/v1 "}}}); got != "https://na.hub.molten.bot/v1" {
+		t.Fatalf("extractAPIBaseFromAny(nested) = %q", got)
+	}
+	if got := extractAPIBaseFromAny(map[string]any{"base_url": " "}); got != "" {
+		t.Fatalf("extractAPIBaseFromAny(blank) = %q, want empty", got)
+	}
+
+	if got := extractMetadataFromJSON(nil); len(got) != 0 {
+		t.Fatalf("extractMetadataFromJSON(nil) = %#v, want empty map", got)
+	}
+	if got := extractMetadataFromJSON([]byte("{")); len(got) != 0 {
+		t.Fatalf("extractMetadataFromJSON(invalid) = %#v, want empty map", got)
+	}
+
+	if got := extractAgentProfileFromJSON([]byte("{")); !agentProfileEmpty(got) {
+		t.Fatalf("extractAgentProfileFromJSON(invalid) = %#v, want empty profile", got)
+	}
+	if got := extractAgentProfileFromAny([]any{
+		map[string]any{
+			"handle": "array-agent",
+			"profile": map[string]any{
+				"display_name": "Array Agent",
+			},
+		},
+	}); got.Handle != "array-agent" || got.Profile.DisplayName != "Array Agent" {
+		t.Fatalf("extractAgentProfileFromAny(array) = %#v", got)
+	}
+
+	skills := parseProfileSkills([]string{" code_for_me ", "", "code_review"})
+	if got, want := strings.Join(skills, ","), "code_for_me,code_review"; got != want {
+		t.Fatalf("parseProfileSkills([]string) = %q, want %q", got, want)
+	}
+	skills = parseProfileSkills([]any{
+		"unit-test-coverage",
+		map[string]any{"name": "security-review"},
+		map[string]any{"id": "code-review"},
+		17,
+	})
+	if got, want := strings.Join(skills, ","), "unit-test-coverage,security-review,code-review"; got != want {
+		t.Fatalf("parseProfileSkills([]any) = %q, want %q", got, want)
+	}
+	if got := parseProfileSkills(map[string]any{"name": "unsupported"}); got != nil {
+		t.Fatalf("parseProfileSkills(unsupported) = %#v, want nil", got)
+	}
+
+	if !looksLikeEmojiToken("🔥") {
+		t.Fatal("looksLikeEmojiToken(emoji) = false, want true")
+	}
+	if looksLikeEmojiToken("A🔥") {
+		t.Fatal("looksLikeEmojiToken(alphanumeric) = true, want false")
+	}
+
+	activities := appendActivityEntries([]any{"first", " ", "second"}, "second")
+	if got, want := strings.Join(activities, ","), "first,second"; got != want {
+		t.Fatalf("appendActivityEntries(duplicate tail) = %q, want %q", got, want)
+	}
+	activities = appendActivityEntries("first", "third")
+	if got, want := strings.Join(activities, ","), "first,third"; got != want {
+		t.Fatalf("appendActivityEntries(string source) = %q, want %q", got, want)
+	}
+	if got := appendActivityEntries(nil, " "); got != nil {
+		t.Fatalf("appendActivityEntries(blank entry) = %#v, want nil", got)
+	}
+
+	if got := skillDescription(SkillConfig{DispatchType: "dispatch_only"}); !strings.Contains(got, "dispatch_only") {
+		t.Fatalf("skillDescription(dispatch only) = %q", got)
+	}
+	if got := skillDescription(SkillConfig{ResultType: "result_only"}); !strings.Contains(got, "result_only") {
+		t.Fatalf("skillDescription(result only) = %q", got)
+	}
+	if got := skillDescription(SkillConfig{}); got != runtimeSkillFallback {
+		t.Fatalf("skillDescription(default) = %q, want %q", got, runtimeSkillFallback)
+	}
+	if got := normalizeDescription(" ", " "); got != runtimeSkillFallback {
+		t.Fatalf("normalizeDescription(empty fallback) = %q, want runtime fallback", got)
 	}
 }
 

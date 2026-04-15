@@ -18,6 +18,7 @@ const hubDaemonStartGracePeriod = 1500 * time.Millisecond
 type hubDaemonController struct {
 	parentCtx          context.Context
 	runner             execx.Runner
+	runDaemon          func(context.Context, hub.InitConfig) error
 	logf               func(string, ...any)
 	dispatchController *hub.AdaptiveDispatchController
 	taskLogRoot        string
@@ -142,14 +143,18 @@ func (c *hubDaemonController) Stop(ctx context.Context) error {
 }
 
 func (c *hubDaemonController) run(runCtx context.Context, cfg hub.InitConfig, done chan error) {
-	daemon := hub.NewDaemon(c.runner)
-	daemon.Logf = c.logf
-	daemon.DispatchController = c.dispatchController
-	daemon.TaskLogRoot = c.taskLogRoot
-	daemon.OnDispatchQueued = c.onDispatchQueued
-	daemon.OnDispatchFailed = c.onDispatchFailed
+	runDaemon := c.runDaemon
+	if runDaemon == nil {
+		daemon := hub.NewDaemon(c.runner)
+		daemon.Logf = c.logf
+		daemon.DispatchController = c.dispatchController
+		daemon.TaskLogRoot = c.taskLogRoot
+		daemon.OnDispatchQueued = c.onDispatchQueued
+		daemon.OnDispatchFailed = c.onDispatchFailed
+		runDaemon = daemon.Run
+	}
 
-	err := daemon.Run(runCtx, cfg)
+	err := runDaemon(runCtx, cfg)
 	if runCtx.Err() != nil || errors.Is(err, context.Canceled) {
 		err = nil
 	}

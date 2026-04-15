@@ -4,9 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Molten Hub Code</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap">
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-BY33RFG2WB"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
@@ -43,7 +40,7 @@
                 }
               },
               fontFamily: {
-                sans: ["Instrument Sans", "Segoe UI", "sans-serif"],
+                sans: ["SF Pro", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
                 mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "monospace"]
               }
             }
@@ -104,7 +101,7 @@
               </svg>
             </span>
             <span class="metric-copy">
-              <span class="metric-label text-xs leading-tight">CPU</span>
+              <span class="metric-label metric-label-visible text-xs leading-tight">CPU</span>
               <span id="resource-cpu-text" class="status-value metric-value text-sm leading-tight">--</span>
             </span>
           </span>
@@ -115,7 +112,7 @@
               </svg>
             </span>
             <span class="metric-copy">
-              <span class="metric-label text-xs leading-tight">MEM</span>
+              <span class="metric-label metric-label-visible text-xs leading-tight">MEM</span>
               <span id="resource-mem-text" class="status-value metric-value text-sm leading-tight">--</span>
             </span>
           </span>
@@ -126,7 +123,7 @@
               </svg>
             </span>
             <span class="metric-copy">
-              <span class="metric-label text-xs leading-tight">DISK</span>
+              <span class="metric-label metric-label-visible text-xs leading-tight">I/O</span>
               <span id="resource-metrics-text" class="status-value metric-value text-sm leading-tight">--</span>
               <span id="resource-metrics-unit" class="metric-unit metric-unit-visible text-xs leading-tight">MB/s</span>
             </span>
@@ -137,9 +134,11 @@
 
     <div class="layout min-h-[calc(100vh-130px)] max-[980px]:min-h-0">
       <div class="right-col grid gap-4">
-        <section id="task-panel" class="panel min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))] hidden" aria-hidden="true">
+        <section id="task-panel" class="panel brand-login-card-shell min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]" aria-hidden="false">
           <div class="panel-header flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
-            <span class="panel-section-title">Task View</span>
+            <div class="panel-header-copy">
+              <span class="panel-section-title">Current Work</span>
+            </div>
             <button
               id="task-fullscreen-toggle"
               class="task-fullscreen-toggle"
@@ -157,9 +156,12 @@
           </div>
         </section>
 
-        <section class="panel prompt-wrap min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
+        <section class="panel prompt-wrap brand-login-card-shell min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
           <div class="panel-header prompt-titlebar flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
-            <span id="prompt-panel-title" class="panel-section-title">Prompt</span>
+            <div class="panel-header-copy">
+              <span id="prompt-panel-title" class="panel-section-title">Studio</span>
+              <p id="prompt-panel-copy" class="panel-section-copy">Compose a repository run, start from a library task, or edit the raw JSON payload.</p>
+            </div>
             <button id="prompt-visibility-toggle" class="prompt-visibility-toggle" type="button" aria-pressed="true" aria-label="Minimize Studio panel" title="Minimize Studio panel">▾</button>
           </div>
           <form id="local-prompt-form" class="prompt-form grid gap-2.5 p-3">
@@ -195,6 +197,7 @@
                     <input id="builder-target-subdir" class="prompt-control prompt-input" type="text" value="." spellcheck="false" placeholder=".">
                   </label>
                 </div>
+                <p class="prompt-field-copy">Pick a recent remote or paste any git URL. Keeping branch and directory explicit makes re-runs reproducible.</p>
                 <div class="prompt-grid">
                   <label id="builder-reviewer-history-field" class="prompt-field prompt-field-repo-history">
                     <span class="prompt-label">Reviewer</span>
@@ -216,6 +219,7 @@
                     spellcheck="false"
                     placeholder="Describe the change you want"></textarea>
                 </label>
+                <p class="prompt-field-copy">Use plain language. Paste screenshots directly into the prompt box or the screenshot target below when visual context matters.</p>
               </div>
 
               <div id="prompt-library-panel" class="prompt-panel hidden grid gap-2.5">
@@ -238,6 +242,7 @@
                     <input id="library-target-subdir" class="prompt-control prompt-input" type="text" value="." spellcheck="false" placeholder=".">
                   </label>
                 </div>
+                <p class="prompt-field-copy">Library tasks provide a preset prompt, but they still run against the repository, branch, directory, and reviewers you choose here.</p>
                 <div class="prompt-grid">
                   <label id="library-reviewer-history-field" class="prompt-field prompt-field-repo-history">
                     <span class="prompt-label">Reviewer</span>
@@ -290,7 +295,7 @@
                     class="prompt-action-button prompt-action-clear"
                     type="button"
                     disabled>Clear</button>
-                  <button id="local-prompt-submit" class="prompt-action-button prompt-submit" type="submit">Run</button>
+                  <button id="local-prompt-submit" class="prompt-action-button prompt-submit" type="submit">Queue Task</button>
                 </div>
               </div>
             </div>
@@ -318,7 +323,7 @@
         </section>
         <section id="task-fullscreen-output-panel" class="panel log-wrap task-fullscreen-panel task-fullscreen-output-panel" aria-hidden="false">
           <div class="task-head">
-            <span id="task-fullscreen-head-label" class="min-w-0 flex-1 truncate">Task output</span>
+            <span id="task-fullscreen-head-label" class="task-fullscreen-head-label">Task output</span>
           </div>
           <div id="task-fullscreen-result" class="task-result hidden"></div>
           <pre id="task-fullscreen-terminal" class="term task-scroll"></pre>
@@ -392,7 +397,8 @@
       <div class="flex items-start justify-between gap-4">
         <div>
           <h2 id="hub-setup-title" class="text-[2rem] font-semibold leading-tight text-hub-text">Connect Molten Hub</h2>
-          <p id="hub-setup-message" class="mt-3 max-w-xl text-base leading-7 text-hub-text/85">Save your Molten Hub token, to enable your team.</p>
+          <p id="hub-setup-message" class="mt-3 max-w-xl text-base leading-7 text-hub-text/85">Connect this runtime to Molten Hub.</p>
+          <p id="hub-setup-copy" class="hub-setup-copy">Existing agents use an agent token. New agents use a bind token, then save display name, emoji, and profile details for the selected region.</p>
         </div>
         <button id="hub-setup-close" class="task-fullscreen-close !relative !top-0 !right-0 !flex" type="button" aria-label="Close Molten Hub setup" title="Close Molten Hub setup">
           <span class="task-fullscreen-close-icon" aria-hidden="true">&times;</span>
@@ -422,8 +428,8 @@
         </div>
 
         <label id="hub-setup-token-field" class="prompt-field">
-          <span id="hub-setup-token-label" class="prompt-label">Token</span>
-          <input id="hub-setup-token" class="prompt-control prompt-input w-full font-mono text-[0.84rem]" type="text" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Paste token">
+          <span id="hub-setup-token-label" class="prompt-label">Agent Token</span>
+          <input id="hub-setup-token" class="prompt-control prompt-input w-full font-mono text-[0.84rem]" type="text" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Paste agent token">
         </label>
 
         <div id="hub-setup-new-agent-fields" class="hub-setup-profile-grid hidden">
@@ -435,15 +441,19 @@
             <span class="prompt-label">Display name</span>
             <input id="hub-setup-display-name" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="Molten Builder">
           </label>
-          <label class="prompt-field">
+          <label class="prompt-field hub-setup-profile-emoji">
             <span class="prompt-label">Emoji</span>
             <div id="hub-setup-emoji-picker" class="hub-emoji-picker" data-emoji-picker>
-              <div class="hub-emoji-picker-control">
-                <input id="hub-setup-emoji" class="prompt-control prompt-input hub-emoji-picker-input" type="text" spellcheck="false" placeholder="🔥" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" aria-describedby="hub-setup-emoji-help">
-                <button id="hub-setup-emoji-toggle" class="hub-emoji-picker-toggle" type="button" aria-label="Choose emoji" aria-haspopup="dialog" aria-expanded="false">
-                  <span id="hub-setup-emoji-preview" class="hub-emoji-picker-toggle-preview" aria-hidden="true">😀</span>
-                </button>
-              </div>
+              <input id="hub-setup-emoji" class="hub-emoji-picker-input" type="text" spellcheck="false" placeholder="🔥" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" aria-describedby="hub-setup-emoji-help">
+              <button id="hub-setup-emoji-toggle" class="hub-emoji-picker-toggle" type="button" aria-label="Choose an emoji" aria-haspopup="dialog" aria-expanded="false">
+                <span class="hub-emoji-picker-toggle-main">
+                  <span class="hub-emoji-picker-toggle-chip" aria-hidden="true">
+                    <span id="hub-setup-emoji-preview" class="hub-emoji-picker-toggle-preview" aria-hidden="true">🙂</span>
+                  </span>
+                  <span class="hub-emoji-picker-toggle-text" data-empty-label="Choose an emoji">Choose an emoji</span>
+                </span>
+                <span class="hub-emoji-picker-toggle-chevron" aria-hidden="true">▾</span>
+              </button>
               <div id="hub-setup-emoji-panel" class="hub-emoji-picker-panel hidden" role="dialog" aria-label="Choose emoji" hidden></div>
             </div>
             <span id="hub-setup-emoji-help" class="sr-only">Type or choose one emoji for this agent.</span>
@@ -470,7 +480,7 @@
           </a>
           <div class="hub-setup-actions">
             <button id="hub-setup-connection-toggle" class="hub-setup-connection-toggle prompt-action-button hidden" type="button">Disconnect</button>
-            <button id="hub-setup-submit" class="prompt-action-button prompt-submit" type="submit">Done</button>
+            <button id="hub-setup-submit" class="prompt-action-button prompt-submit" type="submit">Connect Runtime</button>
           </div>
         </div>
       </form>
@@ -479,19 +489,62 @@
 
   <div class="page-bottom-dock" aria-hidden="false">
     <div class="prompt-mode-tabs prompt-mode-tabs-dock" aria-label="Main menu">
-      <a id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true">Prompt</a>
-      <a id="prompt-mode-library" class="prompt-mode-link" href="#studio-library" aria-selected="false">Library</a>
-      <a id="prompt-mode-json" class="prompt-mode-link" href="#studio-json" aria-selected="false">JSON</a>
+      <a id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true" title="Studio">
+        <span class="prompt-mode-link-shell" aria-hidden="true"></span>
+        <span class="prompt-mode-link-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M12 20h9"></path>
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path>
+          </svg>
+        </span>
+        <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
+        <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
+        <span class="prompt-mode-link-tooltip" aria-hidden="true">Studio</span>
+        <span class="sr-only">Studio</span>
+      </a>
+      <a id="prompt-mode-library" class="prompt-mode-link" href="#studio-library" aria-selected="false" title="Library">
+        <span class="prompt-mode-link-shell" aria-hidden="true"></span>
+        <span class="prompt-mode-link-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5V4.5A2.5 2.5 0 0 1 6.5 2Z"></path>
+          </svg>
+        </span>
+        <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
+        <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
+        <span class="prompt-mode-link-tooltip" aria-hidden="true">Library</span>
+        <span class="sr-only">Library</span>
+      </a>
+      <a id="prompt-mode-json" class="prompt-mode-link" href="#studio-json" aria-selected="false" title="JSON">
+        <span class="prompt-mode-link-shell" aria-hidden="true"></span>
+        <span class="prompt-mode-link-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M8.5 5c-1.8 0-2.5 1.3-2.5 3.2v1.3c0 .9-.4 1.5-1.5 1.9 1.1.4 1.5 1 1.5 1.9v1.5c0 1.9.7 3.2 2.5 3.2"></path>
+            <path d="M15.5 5c1.8 0 2.5 1.3 2.5 3.2v1.3c0 .9.4 1.5 1.5 1.9-1.1.4-1.5 1-1.5 1.9v1.5c0 1.9-.7 3.2-2.5 3.2"></path>
+          </svg>
+        </span>
+        <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
+        <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
+        <span class="prompt-mode-link-tooltip" aria-hidden="true">JSON</span>
+        <span class="sr-only">JSON</span>
+      </a>
+      <span class="prompt-mode-divider" aria-hidden="true"></span>
       <a
         id="github-profile-link"
-        class="prompt-mode-link prompt-mode-link-logo prompt-mode-link-logo-divider"
+        class="prompt-mode-link prompt-mode-link-logo"
         href="https://github.com/settings/profile"
         target="_blank"
         rel="noreferrer noopener"
         aria-label="Open your GitHub profile in a new window"
         title="Open your GitHub profile in a new window">
+        <span class="prompt-mode-link-shell" aria-hidden="true"></span>
+        <span class="prompt-mode-link-icon" aria-hidden="true">
+          <img src="/static/logos/github.svg" alt="" aria-hidden="true">
+        </span>
+        <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
+        <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
+        <span class="prompt-mode-link-tooltip" aria-hidden="true">GitHub</span>
         <span class="sr-only">GitHub</span>
-        <img src="/static/logos/github.svg" alt="" aria-hidden="true">
       </a>
       <div id="moltenbot-hub-dock-group" class="hub-dock-group" data-configured="false">
         <a
@@ -502,9 +555,15 @@
           rel="noreferrer noopener"
           aria-label="Open Molten Bot Hub in a new window"
           title="Open Molten Bot Hub in a new window">
+          <span class="prompt-mode-link-shell" aria-hidden="true"></span>
+          <span class="prompt-mode-link-icon" aria-hidden="true">
+            <img src="https://app.molten.bot/logo.svg" alt="" aria-hidden="true">
+          </span>
+          <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
+          <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
+          <span class="prompt-mode-link-tooltip" aria-hidden="true">Molten Hub</span>
           <span class="sr-only">Molten Bot Hub</span>
           <span id="moltenbot-hub-plus" class="hub-dock-plus hidden" aria-hidden="true">+</span>
-          <img src="https://app.molten.bot/logo.svg" alt="" aria-hidden="true">
         </a>
         <button
           id="moltenbot-hub-profile-button"
@@ -513,19 +572,29 @@
           aria-label="Edit agent profile"
           title="Edit agent profile"
           hidden>
+          <span class="prompt-mode-link-shell" aria-hidden="true"></span>
+          <span class="prompt-mode-link-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M10.2 2.4h3.6l.4 2a8 8 0 0 1 1.7.7l1.8-1 2.5 2.5-1 1.8a8 8 0 0 1 .7 1.7l2 .4v3.6l-2 .4a8 8 0 0 1-.7 1.7l1 1.8-2.5 2.5-1.8-1a8 8 0 0 1-1.7.7l-.4 2h-3.6l-.4-2a8 8 0 0 1-1.7-.7l-1.8 1-2.5-2.5 1-1.8a8 8 0 0 1-.7-1.7l-2-.4v-3.6l2-.4a8 8 0 0 1 .7-1.7l-1-1.8L6.3 4l1.8 1a8 8 0 0 1 1.7-.7l.4-2Zm1.8 6a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Z"></path>
+            </svg>
+          </span>
+          <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
+          <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
+          <span class="prompt-mode-link-tooltip" aria-hidden="true">Edit Profile</span>
           <span class="sr-only">Edit agent profile</span>
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M10.2 2.4h3.6l.4 2a8 8 0 0 1 1.7.7l1.8-1 2.5 2.5-1 1.8a8 8 0 0 1 .7 1.7l2 .4v3.6l-2 .4a8 8 0 0 1-.7 1.7l1 1.8-2.5 2.5-1.8-1a8 8 0 0 1-1.7.7l-.4 2h-3.6l-.4-2a8 8 0 0 1-1.7-.7l-1.8 1-2.5-2.5 1-1.8a8 8 0 0 1-.7-1.7l-2-.4v-3.6l2-.4a8 8 0 0 1 .7-1.7l-1-1.8L6.3 4l1.8 1a8 8 0 0 1 1.7-.7l.4-2Zm1.8 6a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Z"></path>
-          </svg>
         </button>
       </div>
+      <span class="prompt-mode-divider" aria-hidden="true"></span>
+      <button id="theme-toggle" class="prompt-mode-link theme-toggle theme-toggle-dock" type="button" aria-label="Switch theme. Currently: Dark" title="Dark">
+        <span class="prompt-mode-link-shell" aria-hidden="true"></span>
+        <span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true"></span>
+        <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
+        <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
+        <span class="prompt-mode-link-tooltip" id="theme-toggle-tooltip" aria-hidden="true">Dark</span>
+        <span id="theme-toggle-label">Dark</span>
+      </button>
     </div>
   </div>
-
-  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch theme. Currently: Dark">
-    <span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true"></span>
-    <span id="theme-toggle-label">Dark</span>
-  </button>
 
   <script>
     const DISMISSED_TASKS_KEY = "hubui.dismissedTaskIds";
@@ -543,12 +612,16 @@
     const LOCAL_PROMPT_STATUS_FADE_MS = 240;
     const LOGO_ROTATION_INTERVAL_MS = 8_000;
     const STREAM_RENDER_INTERVAL_MS = 120;
+    const TASK_ORDER_TRANSITION_DELAY_MS = 2_000;
+    const TASK_ORDER_SYNC_INTERVAL_MS = 4_000;
+    const TASK_REFLOW_TRANSITION_MS = 560;
+    const TASK_REFLOW_TRANSITION_EASING = "cubic-bezier(0.16, 1, 0.3, 1)";
     const TASK_TIMING_REFRESH_INTERVAL_MS = 30_000;
     const MAX_TERMINAL_LINES = 500;
     const HUB_LOGIN_URL = "https://app.molten.bot/signin?target=hub";
     const HUB_DASHBOARD_URL = "https://app.molten.bot/hub";
     const GOOGLE_ANALYTICS_MEASUREMENT_ID = "G-BY33RFG2WB";
-    const COMPLETED_STATUSES = new Set(["ok", "no_changes", "error", "invalid", "duplicate", "stopped"]);
+    const COMPLETED_STATUSES = new Set(["completed", "no_changes", "error", "invalid", "duplicate", "stopped"]);
     const TASK_PROGRESS_STEPS = [
       { id: "received", label: "Task Received", detail: "Dispatch accepted by hub.", icon: "moltenhub" },
       { id: "run", label: "Run Started", detail: "Harness run initialized.", icon: "moltenhub" },
@@ -573,7 +646,7 @@
     const CLAUDE_POST_SUBMIT_VERIFY_INTERVAL_MS = 1200;
     const CLAUDE_POST_SUBMIT_VERIFY_MAX_ATTEMPTS = 25;
     const HUB_SETUP_DIALOG_MODES = ["connect", "profile"];
-    const HUB_PROFILE_DEFAULT_EMOJI = "😀";
+    const HUB_PROFILE_DEFAULT_EMOJI = "🙂";
 
     function normalizeUIConfig(raw) {
       const config = raw && typeof raw === "object" ? raw : {};
@@ -880,11 +953,21 @@
     }
 
     function currentHubSetupTokenLabel() {
-      return state.hubSetup.agentMode === "new" ? "Bind Token" : "Token";
+      return state.hubSetup.agentMode === "new" ? "Bind Token" : "Agent Token";
     }
 
     function currentHubSetupTokenPlaceholder() {
-      return state.hubSetup.agentMode === "new" ? "Paste bind token" : "Paste token";
+      return state.hubSetup.agentMode === "new" ? "Paste bind token" : "Paste agent token";
+    }
+
+    function currentHubSetupSupportingCopy() {
+      if (isHubProfileDialogMode()) {
+        return "Update how this runtime appears in Molten Hub. The handle stays stable; display name, emoji, and profile text can change.";
+      }
+      if (state.hubSetup.agentMode === "new") {
+        return "Paste a bind token to redeem a new agent credential, then save the runtime profile for the selected region.";
+      }
+      return "Paste an existing agent token to reconnect this runtime while preserving the current Molten Hub identity.";
     }
 
     function currentHubSetupAutoSubmitKey() {
@@ -1046,6 +1129,10 @@
       taskControlInFlight: new Set(),
       sparkleTaskIDs: new Set(),
       sparkleTimers: new Map(),
+      taskDisplayOrder: [],
+      taskOrderPendingSince: 0,
+      taskOrderPendingDesired: [],
+      taskOrderLastSyncBucket: Math.floor(Date.now() / TASK_ORDER_SYNC_INTERVAL_MS),
       taskFullscreenOpen: false,
       agentAuthBusy: false,
       agentAuthInteracted: false,
@@ -1100,6 +1187,7 @@
     const promptModeLibrary = document.getElementById("prompt-mode-library");
     const promptModeJSON = document.getElementById("prompt-mode-json");
     const promptPanelTitle = document.getElementById("prompt-panel-title");
+    const promptPanelCopy = document.getElementById("prompt-panel-copy");
     const githubProfileLink = document.getElementById("github-profile-link");
     const moltenBotHubDockGroup = document.getElementById("moltenbot-hub-dock-group");
     const moltenBotHubLink = document.getElementById("moltenbot-hub-link");
@@ -1142,6 +1230,7 @@
     const hubSetupTitle = document.getElementById("hub-setup-title");
     const hubSetupForm = document.getElementById("hub-setup-form");
     const hubSetupMessage = document.getElementById("hub-setup-message");
+    const hubSetupCopy = document.getElementById("hub-setup-copy");
     const hubSetupClose = document.getElementById("hub-setup-close");
     const hubSetupConnectRegionRow = document.getElementById("hub-setup-connect-region-row");
     const hubSetupConnectAgentRow = document.getElementById("hub-setup-connect-agent-row");
@@ -1195,6 +1284,7 @@
     const themeToggleButton = document.getElementById("theme-toggle");
     const themeToggleLabel = document.getElementById("theme-toggle-label");
     const themeToggleIcon = document.getElementById("theme-toggle-icon");
+    const themeToggleTooltip = document.getElementById("theme-toggle-tooltip");
     const hoverSelect = document.getElementById("hover-select");
     let brandLogoRotationTimer = null;
     let brandLogoRotationPhase = 0;
@@ -1278,6 +1368,10 @@
       const currentLabel = themeLabel(currentTheme);
       themeToggleLabel.textContent = currentLabel;
       themeToggleIcon.innerHTML = THEME_ICONS[currentTheme] || "";
+      if (themeToggleTooltip) {
+        themeToggleTooltip.textContent = currentLabel;
+      }
+      themeToggleButton.title = currentLabel;
       themeToggleButton.setAttribute("aria-label", `Switch theme. Currently: ${currentLabel}`);
     }
 
@@ -1624,7 +1718,10 @@
       if (hubSetupMessage) {
         hubSetupMessage.textContent = state.hubSetup.message || (profileEditor
           ? "Update how this runtime appears in Molten Hub."
-          : "Save your Molten Hub token, to enable your team.");
+          : "Connect this runtime to Molten Hub.");
+      }
+      if (hubSetupCopy) {
+        hubSetupCopy.textContent = currentHubSetupSupportingCopy();
       }
       if (hubSetupHandle) {
         hubSetupHandle.value = state.hubSetup.handle || "";
@@ -1688,7 +1785,7 @@
         syncHubTokenValidation();
       }
       if (hubSetupSubmit) {
-        hubSetupSubmit.textContent = profileEditor ? "Save" : "Done";
+        hubSetupSubmit.textContent = profileEditor ? "Save" : (isNew ? "Redeem Token" : "Connect Runtime");
       }
       applyHubDockState();
       renderHubSetupConnectionToggle();
@@ -2928,6 +3025,7 @@
       const domain = typeof conn.hub_domain === "string" ? conn.hub_domain.trim() : "";
       const baseURL = typeof conn.hub_base_url === "string" ? conn.hub_base_url.trim() : "";
       const transport = typeof conn.hub_transport === "string" ? conn.hub_transport.trim() : "";
+      const detail = typeof conn.hub_detail === "string" ? conn.hub_detail.trim() : "";
       const target = domain || baseURL || "hub";
 
       if (transport === "ws") {
@@ -2948,8 +3046,20 @@
         return;
       }
 
+      if (transport === "reachable") {
+        setHubConnection("reachable", detail || `Hub endpoint is live at ${target}. Connecting...`);
+        renderHubSetupConnectionToggle();
+        return;
+      }
+
+      if (transport === "retrying") {
+        setHubConnection("retrying", detail || `Hub endpoint is waking up at ${target}. Retrying ping every 12s.`);
+        renderHubSetupConnectionToggle();
+        return;
+      }
+
       if (domain || baseURL) {
-        setHubConnection("disconnected", `Disconnected from ${target}`);
+        setHubConnection("disconnected", detail || `Disconnected from ${target}`);
         renderHubSetupConnectionToggle();
         return;
       }
@@ -3575,7 +3685,7 @@
 
       const branch = String(libraryBaseBranch.value || "").trim() || "main";
       const payload = {
-        repo,
+        repos: [repo],
         branch,
         targetSubdir: String(libraryTargetSubdir.value || "").trim() || ".",
         libraryTaskName: libraryTaskName,
@@ -3778,7 +3888,18 @@
         case "json":
           return "JSON";
         default:
-          return "Prompt";
+          return "Studio";
+      }
+    }
+
+    function promptModeDescription(mode) {
+      switch (mode) {
+        case "library":
+          return "Start from a saved task recipe, then apply it to the repository, branch, directory, and reviewers above.";
+        case "json":
+          return "Edit the raw payload exactly as the hub receives it, including multi-repo runs and review configuration.";
+        default:
+          return "Compose a repository run, start from a library task, or edit the raw JSON payload.";
       }
     }
 
@@ -3801,6 +3922,9 @@
       promptModeJSON.setAttribute("aria-selected", String(isJSON));
       if (promptPanelTitle) {
         promptPanelTitle.textContent = promptModeTitle(state.promptMode);
+      }
+      if (promptPanelCopy) {
+        promptPanelCopy.textContent = promptModeDescription(state.promptMode);
       }
       promptBuilderPanel.classList.toggle("hidden", !isBuilder);
       promptLibraryPanel.classList.toggle("hidden", !isLibrary);
@@ -4079,9 +4203,18 @@
       return prompt;
     }
 
+    function normalizedTaskStatus(status) {
+      const normalized = String(status || "").trim().toLowerCase();
+      if (normalized === "ok") {
+        return "completed";
+      }
+      return normalized;
+    }
+
     function statusClass(status) {
-      if (!status) return "";
-      return status.replace(/[^a-z_]/g, "");
+      const normalized = normalizedTaskStatus(status);
+      if (!normalized) return "";
+      return normalized.replace(/[^a-z_]/g, "");
     }
 
     function setLocalPromptStatus(kind, text) {
@@ -4124,7 +4257,7 @@
       if (!task) {
         return false;
       }
-      return COMPLETED_STATUSES.has(task.status || "");
+      return COMPLETED_STATUSES.has(normalizedTaskStatus(task.status));
     }
 
     function isTaskClosing(requestID) {
@@ -4186,7 +4319,7 @@
     function syncTaskCompletionSparkles(previousSnapshot, nextSnapshot) {
       const previousStatuses = new Map();
       for (const task of previousSnapshot?.tasks || []) {
-        previousStatuses.set(String(task.request_id || ""), task.status || "");
+        previousStatuses.set(String(task.request_id || ""), normalizedTaskStatus(task.status));
       }
 
       for (const task of nextSnapshot?.tasks || []) {
@@ -4411,12 +4544,12 @@
     }
 
     function taskActivityRank(task) {
-      const status = String(task?.status || "").toLowerCase();
+      const status = normalizedTaskStatus(task?.status);
       if (status === "running") return 0;
       if (status === "pending" || status === "active" || status === "paused") return 1;
       if (status === "error" || status === "invalid" || status === "stopped") return 2;
       if (status === "duplicate") return 3;
-      if (status === "ok" || status === "no_changes") return 4;
+      if (status === "completed" || status === "no_changes") return 4;
       return 5;
     }
 
@@ -4437,6 +4570,148 @@
       return out;
     }
 
+    function taskRequestID(task) {
+      return String(task?.request_id || "").trim();
+    }
+
+    function taskOrderSyncBucket(nowMs) {
+      return Math.floor(nowMs / TASK_ORDER_SYNC_INTERVAL_MS);
+    }
+
+    function sameTaskOrder(left, right) {
+      if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+        return false;
+      }
+      for (let i = 0; i < left.length; i += 1) {
+        if (left[i] !== right[i]) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    function taskListByOrder(order, tasks) {
+      const byID = new Map();
+      for (const task of tasks || []) {
+        const requestID = taskRequestID(task);
+        if (!requestID || byID.has(requestID)) {
+          continue;
+        }
+        byID.set(requestID, task);
+      }
+
+      const ordered = [];
+      for (const requestID of order || []) {
+        const task = byID.get(requestID);
+        if (!task) {
+          continue;
+        }
+        ordered.push(task);
+        byID.delete(requestID);
+      }
+
+      for (const task of tasks || []) {
+        const requestID = taskRequestID(task);
+        if (!requestID || !byID.has(requestID)) {
+          continue;
+        }
+        ordered.push(task);
+        byID.delete(requestID);
+      }
+
+      return ordered;
+    }
+
+    function mergeTaskOrder(currentOrder, desiredOrder) {
+      const desiredSet = new Set(desiredOrder || []);
+      const merged = [];
+      const mergedSet = new Set();
+      for (const requestID of currentOrder || []) {
+        if (!desiredSet.has(requestID) || mergedSet.has(requestID)) {
+          continue;
+        }
+        merged.push(requestID);
+        mergedSet.add(requestID);
+      }
+
+      for (const requestID of desiredOrder || []) {
+        if (mergedSet.has(requestID)) {
+          continue;
+        }
+        // Keep current task cards visually stable while a synced reorder is pending.
+        // New tasks can appear immediately, but existing cards keep their relative order.
+        merged.push(requestID);
+        mergedSet.add(requestID);
+      }
+
+      return merged;
+    }
+
+    function applyTaskOrderCadence(tasks) {
+      const nowMs = Date.now();
+      const syncBucket = taskOrderSyncBucket(nowMs);
+      if (!tasks.length) {
+        state.taskDisplayOrder = [];
+        state.taskOrderPendingSince = 0;
+        state.taskOrderPendingDesired = [];
+        state.taskOrderLastSyncBucket = syncBucket;
+        return [];
+      }
+
+      const desiredOrder = [];
+      const seen = new Set();
+      for (const task of tasks) {
+        const requestID = taskRequestID(task);
+        if (!requestID || seen.has(requestID)) {
+          continue;
+        }
+        seen.add(requestID);
+        desiredOrder.push(requestID);
+      }
+      if (!desiredOrder.length) {
+        state.taskDisplayOrder = [];
+        state.taskOrderPendingSince = 0;
+        state.taskOrderPendingDesired = [];
+        state.taskOrderLastSyncBucket = syncBucket;
+        return [];
+      }
+
+      if (!Array.isArray(state.taskDisplayOrder) || state.taskDisplayOrder.length === 0) {
+        state.taskDisplayOrder = [...desiredOrder];
+        state.taskOrderPendingSince = 0;
+        state.taskOrderPendingDesired = [];
+        state.taskOrderLastSyncBucket = syncBucket;
+        return taskListByOrder(state.taskDisplayOrder, tasks);
+      }
+
+      const currentOrder = mergeTaskOrder(state.taskDisplayOrder, desiredOrder);
+      if (sameTaskOrder(currentOrder, desiredOrder)) {
+        state.taskDisplayOrder = currentOrder;
+        state.taskOrderPendingSince = 0;
+        state.taskOrderPendingDesired = [];
+        return taskListByOrder(currentOrder, tasks);
+      }
+
+      if (!sameTaskOrder(state.taskOrderPendingDesired, desiredOrder)) {
+        state.taskOrderPendingDesired = [...desiredOrder];
+        state.taskOrderPendingSince = nowMs;
+      }
+
+      const delayElapsed = state.taskOrderPendingSince > 0 &&
+        (nowMs - state.taskOrderPendingSince) >= TASK_ORDER_TRANSITION_DELAY_MS;
+      const syncWindowReady = syncBucket > state.taskOrderLastSyncBucket;
+      if (delayElapsed && syncWindowReady) {
+        state.taskDisplayOrder = [...state.taskOrderPendingDesired];
+        state.taskOrderPendingSince = 0;
+        state.taskOrderPendingDesired = [];
+        state.taskOrderLastSyncBucket = syncBucket;
+        return taskListByOrder(state.taskDisplayOrder, tasks);
+      }
+
+      state.taskDisplayOrder = currentOrder;
+      return taskListByOrder(currentOrder, tasks);
+    }
+
     function displayTasks(snapshot) {
       const taskItems = (snapshot.tasks || []).filter((task) => {
         if (!task || !task.request_id) {
@@ -4448,7 +4723,8 @@
         return !isCompletedTask(task);
       });
 
-      return sortTasksByActivity(taskItems);
+      const byActivity = sortTasksByActivity(taskItems);
+      return applyTaskOrderCadence(byActivity);
     }
 
     function fullscreenTasks(snapshot) {
@@ -4564,8 +4840,8 @@
         return;
       }
 
-      const status = task.status || "";
-      if (status !== "ok" && status !== "no_changes" && status !== "error" && status !== "invalid" && status !== "duplicate" && status !== "stopped") {
+      const status = normalizedTaskStatus(task.status);
+      if (status !== "completed" && status !== "no_changes" && status !== "error" && status !== "invalid" && status !== "duplicate" && status !== "stopped") {
         return;
       }
 
@@ -4578,7 +4854,7 @@
       const detail = document.createElement("span");
       detail.className = "task-result-detail";
 
-      if (status === "ok") {
+      if (status === "completed") {
         title.textContent = "Task Success";
         detail.textContent = task.pr_url ? "Pull request created." : "Completed.";
       } else if (status === "no_changes") {
@@ -4631,6 +4907,75 @@
       return false;
     }
 
+    function captureTaskRects(listNode) {
+      const rects = new Map();
+      if (!listNode) {
+        return rects;
+      }
+      for (const node of listNode.querySelectorAll(".task[data-request-id]")) {
+        const requestID = String(node.dataset.requestId || "").trim();
+        if (!requestID) {
+          continue;
+        }
+        rects.set(requestID, node.getBoundingClientRect());
+      }
+      return rects;
+    }
+
+    function animateTaskReflow(listNode, previousRects) {
+      if (!listNode || !(previousRects instanceof Map) || previousRects.size === 0) {
+        return;
+      }
+
+      for (const node of listNode.querySelectorAll(".task[data-request-id]")) {
+        const requestID = String(node.dataset.requestId || "").trim();
+        if (!requestID) {
+          continue;
+        }
+        const previousRect = previousRects.get(requestID);
+        if (!previousRect) {
+          continue;
+        }
+
+        const nextRect = node.getBoundingClientRect();
+        const deltaX = previousRect.left - nextRect.left;
+        const deltaY = previousRect.top - nextRect.top;
+        if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) {
+          continue;
+        }
+
+        const supportsTranslateProperty = typeof node.style.translate === "string";
+        node.style.transition = "none";
+        if (supportsTranslateProperty) {
+          node.style.translate = `${deltaX}px ${deltaY}px`;
+        } else {
+          node.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+        }
+        window.requestAnimationFrame(() => {
+          if (supportsTranslateProperty) {
+            node.style.transition = `translate ${TASK_REFLOW_TRANSITION_MS}ms ${TASK_REFLOW_TRANSITION_EASING}`;
+            node.style.translate = "0 0";
+          } else {
+            node.style.transition = `transform ${TASK_REFLOW_TRANSITION_MS}ms ${TASK_REFLOW_TRANSITION_EASING}`;
+            node.style.transform = "";
+          }
+          const clearTransition = (event) => {
+            if (supportsTranslateProperty && event?.propertyName && event.propertyName !== "translate") {
+              return;
+            }
+            if (!supportsTranslateProperty && event?.propertyName && event.propertyName !== "transform") {
+              return;
+            }
+            node.style.transition = "";
+            if (supportsTranslateProperty) {
+              node.style.translate = "";
+            }
+          };
+          node.addEventListener("transitionend", clearTransition, { once: true });
+        });
+      }
+    }
+
     function taskCollectionRenderSig(tasks, options = {}) {
       const showOutputAction = options.showOutputAction !== false;
       const allowCollapse = options.allowCollapse !== false;
@@ -4656,6 +5001,12 @@
             prURL: String(task?.pr_url || "").trim(),
             canRerun: canRerunTask(task),
             canCopyClone: canCopyTaskCloneCommand(task),
+            controls: {
+              pause: Boolean(task?.controls?.pause),
+              run: Boolean(task?.controls?.run),
+              forceRun: Boolean(task?.controls?.force_run),
+              stop: Boolean(task?.controls?.stop),
+            },
             taskControlBusy: isTaskControlInFlight(requestID),
             closePending: isTaskClosePending(requestID),
           };
@@ -4681,24 +5032,60 @@
         listNode.dataset.pendingRenderSig = renderSig;
         return;
       }
+      const previousTaskRects = captureTaskRects(listNode);
       listNode.dataset.renderSig = renderSig;
       listNode.dataset.pendingRenderSig = "";
       listNode.replaceChildren();
 
       if (!tasks.length) {
-        const empty = document.createElement("div");
-        empty.className = "placeholder";
-        empty.textContent = "No tasks started yet.";
+        const empty = document.createElement("section");
+        empty.className = "task-empty brand-login-card-shell";
+
+        const badge = document.createElement("div");
+        badge.className = "brand-login-badge task-empty-badge";
+        const badgeLogo = document.createElement("img");
+        badgeLogo.className = "brand-login-badge-logo";
+        badgeLogo.src = MOLTENHUB_LOGO_URL;
+        badgeLogo.alt = "";
+        badgeLogo.setAttribute("aria-hidden", "true");
+        badge.appendChild(badgeLogo);
+
+        const eyebrow = document.createElement("span");
+        eyebrow.className = "task-empty-eyebrow brand-label-uppercase";
+        eyebrow.textContent = "Queue Ready";
+
+        const title = document.createElement("h3");
+        title.className = "task-empty-title";
+        title.textContent = "The queue is clear.";
+
+        const copy = document.createElement("p");
+        copy.className = "task-empty-copy";
+        copy.textContent = "Start from Studio, Library, or JSON. New runs will appear here with stage progress, replay controls, local clone actions, and PR links.";
+
+        const stages = document.createElement("div");
+        stages.className = "task-empty-chips";
+        for (const label of ["prepare", "clone", "agent", "finalize"]) {
+          const chip = document.createElement("span");
+          chip.className = "task-empty-chip brand-chip-action";
+          chip.textContent = label;
+          stages.appendChild(chip);
+        }
+
+        empty.append(badge, eyebrow, title, copy, stages);
         listNode.appendChild(empty);
         return;
       }
 
       for (const task of tasks) {
+        const requestID = taskRequestID(task);
         const collapsed = allowCollapse && isMinimizedTask(task);
-        const closing = isTaskClosing(task.request_id);
+        const closing = isTaskClosing(requestID);
         const node = document.createElement("article");
         node.className = "task";
-        if (task.request_id === state.selectedTaskId) {
+        if (requestID) {
+          node.dataset.requestId = requestID;
+        }
+        if (requestID === state.selectedTaskId) {
           node.classList.add("active");
         }
         if (collapsed) {
@@ -4707,7 +5094,7 @@
         if (closing) {
           node.classList.add("task-closing");
         }
-        node.addEventListener("click", () => selectTask(task.request_id));
+        node.addEventListener("click", () => selectTask(requestID));
 
         const top = document.createElement("div");
         top.className = "task-top";
@@ -4722,7 +5109,7 @@
 
         const badge = document.createElement("span");
         badge.className = `badge ${statusClass(task.status)}`;
-        badge.textContent = task.status || "pending";
+        badge.textContent = normalizedTaskStatus(task.status) || "pending";
 
         const topActions = document.createElement("div");
         topActions.className = "task-top-actions";
@@ -4750,19 +5137,19 @@
           outputToggle.title = "Open full screen task output";
           outputToggle.addEventListener("click", (event) => {
             event.stopPropagation();
-            openTaskOutput(task.request_id);
+            openTaskOutput(requestID);
           });
           topActions.appendChild(outputToggle);
         }
 
-        const taskControlBusy = isTaskControlInFlight(task.request_id);
-        if (!isCompletedTask(task)) {
-          const statusLower = String(task.status || "").toLowerCase();
-          const paused = statusLower === "paused";
-          const pending = statusLower === "pending";
-          const canTogglePauseRun = paused || statusLower !== "running";
-
-          if (pending) {
+        const taskControlBusy = isTaskControlInFlight(requestID);
+        const controls = task?.controls || {};
+        const canPause = Boolean(controls.pause);
+        const canRun = Boolean(controls.run);
+        const canForceRun = Boolean(controls.force_run);
+        const canStop = Boolean(controls.stop);
+        if (!isCompletedTask(task) && (canPause || canRun || canForceRun || canStop)) {
+          if (canForceRun) {
             const forceStart = document.createElement("button");
             forceStart.type = "button";
             forceStart.className = "task-control-toggle";
@@ -4772,7 +5159,7 @@
             forceStart.disabled = taskControlBusy;
             forceStart.addEventListener("click", (event) => {
               event.stopPropagation();
-              controlTask(task.request_id, "run", { force: true });
+              controlTask(requestID, "run", { force: true });
             });
             topActions.appendChild(forceStart);
           }
@@ -4780,32 +5167,32 @@
           const pauseRun = document.createElement("button");
           pauseRun.type = "button";
           pauseRun.className = "task-control-toggle";
-          pauseRun.textContent = paused ? "▶" : "||";
-          pauseRun.title = paused
-            ? "Resume this queued task"
-            : canTogglePauseRun
-              ? "Pause this queued task"
-              : "Use Stop to kill a running task";
-          pauseRun.setAttribute("aria-label", paused ? "Run task" : "Pause task");
-          pauseRun.disabled = taskControlBusy || !canTogglePauseRun;
+          pauseRun.textContent = canRun ? "▶" : "||";
+          pauseRun.title = canRun ? "Resume this queued task" : "Pause this queued task";
+          pauseRun.setAttribute("aria-label", canRun ? "Run task" : "Pause task");
+          pauseRun.disabled = taskControlBusy;
           pauseRun.addEventListener("click", (event) => {
             event.stopPropagation();
-            controlTask(task.request_id, paused ? "run" : "pause");
+            controlTask(requestID, canRun ? "run" : "pause");
           });
-          topActions.appendChild(pauseRun);
+          if (canPause || canRun) {
+            topActions.appendChild(pauseRun);
+          }
 
-          const stop = document.createElement("button");
-          stop.type = "button";
-          stop.className = "task-stop";
-          stop.textContent = "■";
-          stop.title = "Kill this task";
-          stop.setAttribute("aria-label", "Stop task");
-          stop.disabled = taskControlBusy;
-          stop.addEventListener("click", (event) => {
-            event.stopPropagation();
-            controlTask(task.request_id, "stop");
-          });
-          topActions.appendChild(stop);
+          if (canStop) {
+            const stop = document.createElement("button");
+            stop.type = "button";
+            stop.className = "task-stop";
+            stop.textContent = "■";
+            stop.title = "Kill this task";
+            stop.setAttribute("aria-label", "Stop task");
+            stop.disabled = taskControlBusy;
+            stop.addEventListener("click", (event) => {
+              event.stopPropagation();
+              controlTask(requestID, "stop");
+            });
+            topActions.appendChild(stop);
+          }
         }
 
         if (canRerunTask(task)) {
@@ -4814,27 +5201,27 @@
           rerun.className = "task-rerun";
           rerun.textContent = "Re-run";
           rerun.title = "Queue this task configuration again";
-          rerun.disabled = state.rerunInFlight.has(task.request_id);
+          rerun.disabled = state.rerunInFlight.has(requestID);
           rerun.addEventListener("click", (event) => {
             event.stopPropagation();
-            rerunTask(task.request_id);
+            rerunTask(requestID);
           });
           topActions.appendChild(rerun);
         }
 
         if (isCompletedTask(task)) {
-          const closePending = isTaskClosePending(task.request_id);
+          const closePending = isTaskClosePending(requestID);
           const close = document.createElement("button");
           close.type = "button";
           close.className = "task-close";
           close.textContent = "X";
-          close.title = "Abandon completed task";
+          close.title = "Close finished task";
           close.setAttribute("aria-label", "Close task");
           close.hidden = closePending;
           close.disabled = closePending;
           close.addEventListener("click", (event) => {
             event.stopPropagation();
-            dismissTask(task.request_id);
+            dismissTask(requestID);
           });
           topActions.appendChild(close);
         }
@@ -4943,6 +5330,7 @@
         }
         listNode.appendChild(node);
       }
+      animateTaskReflow(listNode, previousTaskRects);
     }
 
     function renderTasks(snapshot) {
@@ -4953,11 +5341,12 @@
         document.body.classList.remove("task-fullscreen-open");
       }
       if (rightCol) {
-        rightCol.classList.toggle("task-list-hidden", !hasTasks);
+        rightCol.classList.toggle("task-list-hidden", false);
       }
       if (taskPanel) {
-        taskPanel.classList.toggle("hidden", !hasTasks);
-        taskPanel.setAttribute("aria-hidden", hasTasks ? "false" : "true");
+        taskPanel.classList.toggle("hidden", false);
+        taskPanel.classList.toggle("is-empty", !hasTasks);
+        taskPanel.setAttribute("aria-hidden", "false");
       }
       if (taskFullscreenToggle) {
         taskFullscreenToggle.disabled = !hasTasks;

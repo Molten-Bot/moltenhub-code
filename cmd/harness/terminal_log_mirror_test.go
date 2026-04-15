@@ -40,6 +40,16 @@ func TestTaskLogSubdirForLine(t *testing.T) {
 			line: "dispatch request_id=local-17/abc-00*01 status=start",
 			want: filepath.Join("local", "17-abc", "00-01"),
 		},
+		{
+			name: "ignore_nested_request_id_inside_quoted_text",
+			line: `dispatch request_id=local-1712345678-000123 cmd phase=codex name=codex stream=stderr text="dispatch status=error request_id=req-err-ws err=\"clone failed\""`,
+			want: filepath.Join("local", "1712345678", "000123"),
+		},
+		{
+			name: "do_not_extract_request_id_from_quoted_text_without_outer_id",
+			line: `dispatch cmd phase=codex name=codex stream=stderr text="dispatch status=error request_id=req-err-ws err=\"clone failed\""`,
+			want: fallbackLogSubdir,
+		},
 	}
 
 	for _, tt := range tests {

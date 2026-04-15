@@ -3,13 +3,22 @@ package harness
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/jef/moltenhub-code/internal/agentruntime"
 	"github.com/jef/moltenhub-code/internal/execx"
+	"github.com/jef/moltenhub-code/internal/failurefollowup"
 )
+
+type transientCloneRunner struct{}
+
+func (transientCloneRunner) Run(context.Context, execx.Command) (execx.Result, error) {
+	return execx.Result{Stderr: "connection reset by peer"}, errors.New("clone transient failure")
+}
 
 func TestHarnessStringAndCheckHelpers(t *testing.T) {
 	t.Parallel()
@@ -138,4 +147,141 @@ func TestHarnessContextSleepHelper(t *testing.T) {
 	if err := sleepWithContext(context.Background(), 0); err != nil {
 		t.Fatalf("sleepWithContext(zero) error = %v", err)
 	}
+}
+
+func TestHarnessAdditionalHelperBranches(t *testing.T) {
+	t.Parallel()
+
+	if got := cloneRetryBranchLabel(" \n\t "); got != "default" {
+		t.Fatalf("cloneRetryBranchLabel(blank) = %q, want default", got)
+	}
+	if got := cloneRetryBranchLabel("release/2026.04-hotfix"); got != "release/2026.04-hotfix" {
+		t.Fatalf("cloneRetryBranchLabel(value) = %q, want branch", got)
+	}
+
+	if err := commandErrorWithDetails("prefix", nil, execx.Result{}, 120); err != nil {
+		t.Fatalf("commandErrorWithDetails(nil err) = %v, want nil", err)
+	}
+	withDefaultPrefix := commandErrorWithDetails("", errors.New("boom"), execx.Result{}, 120)
+	if withDefaultPrefix == nil || !strings.Contains(withDefaultPrefix.Error(), "command failed: boom") {
+		t.Fatalf("commandErrorWithDetails(default prefix) = %v", withDefaultPrefix)
+	}
+	withDetail := commandErrorWithDetails("probe", errors.New("boom"), execx.Result{Stderr: "remote denied"}, 120)
+	if withDetail == nil || !strings.Contains(withDetail.Error(), "probe: boom: remote denied") {
+		t.Fatalf("commandErrorWithDetails(detail) = %v", withDetail)
+	}
+
+	if isNothingToCommitResult(execx.Result{}, nil) {
+		t.Fatal("isNothingToCommitResult(nil err) = true, want false")
+	}
+	if !isNothingToCommitResult(execx.Result{Stderr: "nothing added to commit but untracked files present"}, errors.New("exit status 1")) {
+		t.Fatal("isNothingToCommitResult(nothing added marker) = false, want true")
+	}
+
+	if got := nonEmptyOrDefault(" \n ", " fallback "); got != "fallback" {
+		t.Fatalf("nonEmptyOrDefault(fallback) = %q, want fallback", got)
+	}
+	if got := pickFirstNonEmpty(" ", "\n"); got != "" {
+		t.Fatalf("pickFirstNonEmpty(all empty) = %q, want empty", got)
+	}
+	if got := truncateForPrompt("hello", 0); got != "hello" {
+		t.Fatalf("truncateForPrompt(no limit) = %q, want hello", got)
+	}
+	if got := truncateForPrompt(" \n\t ", 10); got != "" {
+		t.Fatalf("truncateForPrompt(blank) = %q, want empty", got)
+	}
+
+	if isNoChecksReported(execx.Result{Stdout: "no checks reported"}, nil) {
+		t.Fatal("isNoChecksReported(nil err) = true, want false")
+	}
+	if isNoRequiredChecksReported(execx.Result{Stdout: "no required checks"}, nil) {
+		t.Fatal("isNoRequiredChecksReported(nil err) = true, want false")
+	}
+	if shouldReconcileChecksAfterFailure(execx.Result{Stdout: "pass/fail"}, nil) {
+		t.Fatal("shouldReconcileChecksAfterFailure(nil err) = true, want false")
+	}
+
+	if url, ok := existingPRURLFromCreateFailure(execx.Result{Stderr: "pull request already exists"}, errors.New("already exists")); ok || url != "" {
+		t.Fatalf("existingPRURLFromCreateFailure(no url) = (%q, %v), want empty,false", url, ok)
+	}
+
+	if got := withCompletionGatePrompt(""); !strings.Contains(got, "Improve this repository in a minimal, production-ready way.") {
+		t.Fatalf("withCompletionGatePrompt(empty) missing default prompt: %q", got)
+	}
+	if got := withCompletionGatePrompt("ship fix"); !strings.Contains(got, failurefollowup.RemoteOperationsInstruction) {
+		t.Fatalf("withCompletionGatePrompt() missing remote-operations guidance: %q", got)
+	}
+
+	cmd := codexCommandWithOptions("/tmp/repo", "ship fix", codexRunOptions{SkipGitRepoCheck: true})
+	if got, want := cmd.Name, "codex"; got != want {
+		t.Fatalf("codexCommandWithOptions().Name = %q, want %q", got, want)
+	}
+	if !slicesContains(cmd.Args, "--skip-git-repo-check") {
+		t.Fatalf("codexCommandWithOptions().Args = %v, want --skip-git-repo-check", cmd.Args)
+	}
+}
+
+func TestHarnessRunCloneWithRetryInterrupted(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	repoDir := filepath.Join(dir, "repo")
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(repoDir) error = %v", err)
+	}
+
+	h := Harness{
+		Runner: transientCloneRunner{},
+		Logf:   func(string, ...any) {},
+		Sleep: func(context.Context, time.Duration) error {
+			return context.Canceled
+		},
+	}
+
+	_, err := h.runCloneWithRetry(
+		context.Background(),
+		"git@github.com:acme/repo.git",
+		"main",
+		repoDir,
+		"repo",
+		execx.Command{Name: "git", Args: []string{"clone"}},
+	)
+	if err == nil || !strings.Contains(err.Error(), "clone retry interrupted") {
+		t.Fatalf("runCloneWithRetry() error = %v, want interrupted retry error", err)
+	}
+}
+
+func TestShouldReplaceCheckSnapshotBranches(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 4, 11, 10, 0, 0, 0, time.UTC)
+	later := now.Add(time.Minute)
+
+	if !shouldReplaceCheckSnapshot(latestCheckState{Time: now, Index: 1}, latestCheckState{Time: later, Index: 0}) {
+		t.Fatal("shouldReplaceCheckSnapshot(newer time) = false, want true")
+	}
+	if shouldReplaceCheckSnapshot(latestCheckState{Time: later, Index: 1}, latestCheckState{Time: now, Index: 2}) {
+		t.Fatal("shouldReplaceCheckSnapshot(older time) = true, want false")
+	}
+	if !shouldReplaceCheckSnapshot(latestCheckState{Time: time.Time{}, Index: 1}, latestCheckState{Time: now, Index: 0}) {
+		t.Fatal("shouldReplaceCheckSnapshot(prev zero time, candidate non-zero) = false, want true")
+	}
+	if shouldReplaceCheckSnapshot(latestCheckState{Time: now, Index: 1}, latestCheckState{Time: time.Time{}, Index: 2}) {
+		t.Fatal("shouldReplaceCheckSnapshot(prev non-zero, candidate zero time) = true, want false")
+	}
+	if shouldReplaceCheckSnapshot(latestCheckState{Time: now, Index: 3}, latestCheckState{Time: now, Index: 2}) {
+		t.Fatal("shouldReplaceCheckSnapshot(equal time lower index) = true, want false")
+	}
+	if !shouldReplaceCheckSnapshot(latestCheckState{Time: now, Index: 1}, latestCheckState{Time: now, Index: 2}) {
+		t.Fatal("shouldReplaceCheckSnapshot(equal time higher index) = false, want true")
+	}
+}
+
+func slicesContains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }

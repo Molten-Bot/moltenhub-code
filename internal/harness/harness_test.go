@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,24 +27,52 @@ type expectedRun struct {
 }
 
 type fakeRunner struct {
-	t     *testing.T
-	exps  []expectedRun
-	calls []execx.Command
+	t                    *testing.T
+	exps                 []expectedRun
+	calls                []execx.Command
+	allowUnorderedClones bool
+	mu                   sync.Mutex
 }
 
 func (f *fakeRunner) Run(_ context.Context, cmd execx.Command) (execx.Result, error) {
 	f.t.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if len(f.exps) == 0 {
 		f.t.Fatalf("unexpected command: %+v", cmd)
 	}
-	exp := f.exps[0]
-	f.exps = f.exps[1:]
-	f.calls = append(f.calls, cmd)
 
-	if exp.cmd.Name != cmd.Name || exp.cmd.Dir != cmd.Dir || !reflect.DeepEqual(exp.cmd.Args, cmd.Args) {
-		f.t.Fatalf("command mismatch\n got:  %+v\n want: %+v", cmd, exp.cmd)
+	matchIndex := -1
+	if commandsEqual(f.exps[0].cmd, cmd) {
+		matchIndex = 0
+	} else if f.allowUnorderedClones && isCloneGitCommand(cmd) {
+		for i, exp := range f.exps {
+			if !isCloneGitCommand(exp.cmd) {
+				continue
+			}
+			if commandsEqual(exp.cmd, cmd) {
+				matchIndex = i
+				break
+			}
+		}
 	}
+
+	if matchIndex < 0 {
+		f.t.Fatalf("command mismatch\n got:  %+v\n want: %+v", cmd, f.exps[0].cmd)
+	}
+
+	exp := f.exps[matchIndex]
+	f.exps = append(f.exps[:matchIndex], f.exps[matchIndex+1:]...)
+	f.calls = append(f.calls, cmd)
 	return exp.res, exp.err
+}
+
+func commandsEqual(a, b execx.Command) bool {
+	return a.Name == b.Name && a.Dir == b.Dir && reflect.DeepEqual(a.Args, b.Args)
+}
+
+func isCloneGitCommand(cmd execx.Command) bool {
+	return cmd.Name == "git" && len(cmd.Args) > 0 && cmd.Args[0] == "clone"
 }
 
 type captureRunner struct {
@@ -80,6 +109,13 @@ func (s *streamCaptureRunner) RunStream(_ context.Context, cmd execx.Command, ha
 		}
 	}
 	return s.res, s.err
+}
+
+type blockingContextRunner struct{}
+
+func (r *blockingContextRunner) Run(ctx context.Context, _ execx.Command) (execx.Result, error) {
+	<-ctx.Done()
+	return execx.Result{}, ctx.Err()
 }
 
 func sampleConfig() config.Config {
@@ -164,7 +200,7 @@ func TestRunHappyPathCreatesPR(t *testing.T) {
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
 	branch := "moltenhub-build-api"
 
-	fake := &fakeRunner{t: t, exps: []expectedRun{
+	fake := &fakeRunner{t: t, allowUnorderedClones: true, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
 		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
 		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
@@ -226,7 +262,7 @@ func TestRunPRCreateAlreadyExistsReusesExistingPR(t *testing.T) {
 		prURL,
 	)
 
-	fake := &fakeRunner{t: t, exps: []expectedRun{
+	fake := &fakeRunner{t: t, allowUnorderedClones: true, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
 		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
 		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
@@ -292,7 +328,9 @@ func TestRunCommitNoOpReturnsNoChanges(t *testing.T) {
 			err: errors.New("exit status 1"),
 		},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## moltenhub-build-api\n"}},
+		{cmd: commitsAheadOfBaseCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "0\n"}},
 		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch)},
+		{cmd: prLookupAnyByHeadCommand(repoDir, branch)},
 	}}
 
 	h := New(fake)
@@ -312,6 +350,63 @@ func TestRunCommitNoOpReturnsNoChanges(t *testing.T) {
 	}
 	if got, want := res.Branch, branch; got != want {
 		t.Fatalf("Branch = %q, want %q", got, want)
+	}
+}
+
+func TestRunCommitNoOpWithExistingLocalCommitPushesAndCreatesPR(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+	prURL := "https://github.com/acme/repo/pull/4242"
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## moltenhub-build-api\n"}},
+		{cmd: commitsAheadOfBaseCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "1\n"}},
+		{cmd: addCommand(repoDir)},
+		{
+			cmd: commitCommand(repoDir, cfg.CommitMessage),
+			res: execx.Result{Stdout: "On branch moltenhub-build-api\nnothing to commit, working tree clean\n"},
+			err: errors.New("exit status 1"),
+		},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## moltenhub-build-api\n"}},
+		{cmd: commitsAheadOfBaseCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "1\n"}},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL)},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.NoChanges {
+		t.Fatal("NoChanges = true, want false")
+	}
+	if got, want := res.PRURL, prURL; got != want {
+		t.Fatalf("PRURL = %q, want %q", got, want)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
 	}
 }
 
@@ -513,6 +608,7 @@ func TestRunWithPromptImagesKeepsArtifactsOutOfRepo(t *testing.T) {
 		})},
 		{cmd: statusCommand(repoDir)},
 		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch)},
+		{cmd: prLookupAnyByHeadCommand(repoDir, branch)},
 	}}
 
 	h := New(fake)
@@ -820,6 +916,7 @@ func TestRunNoChangesSkipsPR(t *testing.T) {
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "\n"}},
 		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch)},
+		{cmd: prLookupAnyByHeadCommand(repoDir, branch)},
 	}}
 
 	h := New(fake)
@@ -870,6 +967,62 @@ func TestRunNoChangesOnMainReportsExistingPR(t *testing.T) {
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "\n"}},
 		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch), res: execx.Result{Stdout: "abc123\trefs/heads/" + branch + "\n"}},
 		{cmd: prLookupByHeadCommand(repoDir, branch), res: execx.Result{Stdout: "[{\"url\":\"" + prURL + "\"}]\n"}},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if !res.NoChanges {
+		t.Fatal("NoChanges = false, want true")
+	}
+	if got, want := res.PRURL, prURL; got != want {
+		t.Fatalf("PRURL = %q, want %q", got, want)
+	}
+	if len(res.RepoResults) != 1 {
+		t.Fatalf("RepoResults length = %d, want 1", len(res.RepoResults))
+	}
+	if got, want := res.RepoResults[0].PRURL, prURL; got != want {
+		t.Fatalf("RepoResults[0].PRURL = %q, want %q", got, want)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunNoChangesReportsMergedPRWhenBranchNoLongerExists(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+	prURL := "https://github.com/acme/repo/pull/123"
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "\n"}},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch), res: execx.Result{Stdout: ""}},
+		{cmd: prLookupAnyByHeadCommand(repoDir, branch), res: execx.Result{Stdout: "[{\"url\":\"" + prURL + "\"}]\n"}},
 	}}
 
 	h := New(fake)
@@ -1351,7 +1504,7 @@ func TestRunMultiRepoCreatesPRsForEachChangedRepo(t *testing.T) {
 	})
 	codexPrompt = withAgentsPrompt(codexPrompt, agentsPath)
 
-	fake := &fakeRunner{t: t, exps: []expectedRun{
+	fake := &fakeRunner{t: t, allowUnorderedClones: true, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
 		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
 		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
@@ -1400,6 +1553,167 @@ func TestRunMultiRepoCreatesPRsForEachChangedRepo(t *testing.T) {
 	}
 }
 
+func TestRunMultiRepoReadOnlySecondaryRepoUnchangedStillSucceeds(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.RepoURL = ""
+	cfg.Repo = ""
+	cfg.Repos = []string{
+		"git@github.com:acme/repo-a.git",
+		"git@github.com:acme/repo-b.git",
+	}
+	cfg.TargetSubdir = "."
+
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	branch := "moltenhub-build-api"
+
+	repoRelA := repoWorkspaceDirName(cfg.Repos[0], 0, len(cfg.Repos))
+	repoRelB := repoWorkspaceDirName(cfg.Repos[1], 1, len(cfg.Repos))
+	repoDirA := filepath.Join(runDir, repoRelA)
+	repoDirB := filepath.Join(runDir, repoRelB)
+	codexPrompt := workspaceCodexPrompt(cfg.Prompt, cfg.TargetSubdir, []repoWorkspace{
+		{URL: cfg.Repos[0], RelDir: repoRelA},
+		{URL: cfg.Repos[1], RelDir: repoRelB},
+	})
+	codexPrompt = withAgentsPrompt(codexPrompt, agentsPath)
+	push403 := execx.Result{
+		Stderr: "remote: Write access to repository not granted.\n" +
+			"fatal: unable to access 'https://github.com/acme/repo-b.git/': The requested URL returned error: 403\n",
+	}
+
+	fake := &fakeRunner{t: t, allowUnorderedClones: true, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneRepoCommand(cfg.Repos[0], cfg.BaseBranch, repoDirA)},
+		{cmd: cloneRepoCommand(cfg.Repos[1], cfg.BaseBranch, repoDirB)},
+		{cmd: branchCommand(repoDirA, branch)},
+		{cmd: branchCommand(repoDirB, branch)},
+		{cmd: pushDryRunCommand(repoDirA, branch)},
+		{cmd: pushDryRunCommand(repoDirB, branch), res: push403, err: errors.New("exit status 128")},
+		{cmd: codexCommandWithOptions(runDir, codexPrompt, codexRunOptions{SkipGitRepoCheck: true})},
+		{cmd: statusCommand(repoDirA), res: execx.Result{Stdout: " M file-a.go\n"}},
+		{cmd: statusCommand(repoDirB), res: execx.Result{Stdout: "\n"}},
+		{cmd: addCommand(repoDirA)},
+		{cmd: commitCommand(repoDirA, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDirA, branch)},
+		{cmd: prCreateCommand(repoDirA, cfg, branch), res: execx.Result{Stdout: "https://github.com/acme/repo-a/pull/10\n"}},
+		{cmd: prChecksCommand(repoDirA, "https://github.com/acme/repo-a/pull/10")},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == repoDirA }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if got, want := len(res.RepoResults), 2; got != want {
+		t.Fatalf("len(RepoResults) = %d, want %d", got, want)
+	}
+	if !res.RepoResults[0].Changed {
+		t.Fatal("RepoResults[0].Changed = false, want true")
+	}
+	if res.RepoResults[1].Changed {
+		t.Fatal("RepoResults[1].Changed = true, want false")
+	}
+	if got := strings.TrimSpace(res.RepoResults[0].PRURL); got == "" {
+		t.Fatalf("RepoResults[0].PRURL = %q, want non-empty", res.RepoResults[0].PRURL)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunMultiRepoReadOnlySecondaryRepoChangedFails(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.RepoURL = ""
+	cfg.Repo = ""
+	cfg.Repos = []string{
+		"git@github.com:acme/repo-a.git",
+		"git@github.com:acme/repo-b.git",
+	}
+	cfg.TargetSubdir = "."
+
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	branch := "moltenhub-build-api"
+
+	repoRelA := repoWorkspaceDirName(cfg.Repos[0], 0, len(cfg.Repos))
+	repoRelB := repoWorkspaceDirName(cfg.Repos[1], 1, len(cfg.Repos))
+	repoDirA := filepath.Join(runDir, repoRelA)
+	repoDirB := filepath.Join(runDir, repoRelB)
+	codexPrompt := workspaceCodexPrompt(cfg.Prompt, cfg.TargetSubdir, []repoWorkspace{
+		{URL: cfg.Repos[0], RelDir: repoRelA},
+		{URL: cfg.Repos[1], RelDir: repoRelB},
+	})
+	codexPrompt = withAgentsPrompt(codexPrompt, agentsPath)
+	push403 := execx.Result{
+		Stderr: "remote: Write access to repository not granted.\n" +
+			"fatal: unable to access 'https://github.com/acme/repo-b.git/': The requested URL returned error: 403\n",
+	}
+
+	fake := &fakeRunner{t: t, allowUnorderedClones: true, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneRepoCommand(cfg.Repos[0], cfg.BaseBranch, repoDirA)},
+		{cmd: cloneRepoCommand(cfg.Repos[1], cfg.BaseBranch, repoDirB)},
+		{cmd: branchCommand(repoDirA, branch)},
+		{cmd: branchCommand(repoDirB, branch)},
+		{cmd: pushDryRunCommand(repoDirA, branch)},
+		{cmd: pushDryRunCommand(repoDirB, branch), res: push403, err: errors.New("exit status 128")},
+		{cmd: codexCommandWithOptions(runDir, codexPrompt, codexRunOptions{SkipGitRepoCheck: true})},
+		{cmd: statusCommand(repoDirA), res: execx.Result{Stdout: " M file-a.go\n"}},
+		{cmd: statusCommand(repoDirB), res: execx.Result{Stdout: " M file-b.go\n"}},
+		{cmd: addCommand(repoDirA)},
+		{cmd: commitCommand(repoDirA, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDirA, branch)},
+		{cmd: prCreateCommand(repoDirA, cfg, branch), res: execx.Result{Stdout: "https://github.com/acme/repo-a/pull/10\n"}},
+		{cmd: prChecksCommand(repoDirA, "https://github.com/acme/repo-a/pull/10")},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == repoDirA }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err == nil {
+		t.Fatal("Run() err = nil, want read-only repo publish failure")
+	}
+	if res.ExitCode != ExitGit {
+		t.Fatalf("ExitCode = %d, want %d", res.ExitCode, ExitGit)
+	}
+	if !strings.Contains(res.Err.Error(), "cannot publish changes for repo") {
+		t.Fatalf("error = %v, want publish failure context", res.Err)
+	}
+	if !strings.Contains(res.Err.Error(), cfg.Repos[1]) {
+		t.Fatalf("error = %v, want repo-b URL context", res.Err)
+	}
+	if !strings.Contains(res.Err.Error(), "verify remote write access") {
+		t.Fatalf("error = %v, want write-access probe detail", res.Err)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
 func TestRunMultiRepoRemediationUsesWorkspaceCodexOptions(t *testing.T) {
 	t.Parallel()
 
@@ -1431,7 +1745,7 @@ func TestRunMultiRepoRemediationUsesWorkspaceCodexOptions(t *testing.T) {
 	checkSummary := "X integration-tests failing"
 	repairPrompt := remediationPromptForRepo(codexPrompt, repoRelA, cfg.Repos[0], prURL, checkSummary, 1, true)
 
-	fake := &fakeRunner{t: t, exps: []expectedRun{
+	fake := &fakeRunner{t: t, allowUnorderedClones: true, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
 		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
 		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
@@ -1472,6 +1786,90 @@ func TestRunMultiRepoRemediationUsesWorkspaceCodexOptions(t *testing.T) {
 	}
 	if len(fake.exps) != 0 {
 		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+type cloneBarrierRunner struct {
+	mu        sync.Mutex
+	cloneSeen int
+	cloneGate chan struct{}
+}
+
+func newCloneBarrierRunner() *cloneBarrierRunner {
+	return &cloneBarrierRunner{
+		cloneGate: make(chan struct{}),
+	}
+}
+
+func (r *cloneBarrierRunner) Run(ctx context.Context, cmd execx.Command) (execx.Result, error) {
+	if isCloneGitCommand(cmd) {
+		r.mu.Lock()
+		r.cloneSeen++
+		if r.cloneSeen == 2 {
+			close(r.cloneGate)
+		}
+		r.mu.Unlock()
+
+		select {
+		case <-r.cloneGate:
+			return execx.Result{}, nil
+		case <-ctx.Done():
+			return execx.Result{}, ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+			return execx.Result{}, errors.New("clone concurrency barrier timed out")
+		}
+	}
+
+	if cmd.Name == "git" && len(cmd.Args) >= 2 && cmd.Args[0] == "switch" && cmd.Args[1] == "-c" {
+		return execx.Result{}, errors.New("stop after clone stage")
+	}
+
+	return execx.Result{}, nil
+}
+
+func (r *cloneBarrierRunner) CloneSeen() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cloneSeen
+}
+
+func TestRunMultiRepoClonesConcurrently(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.RepoURL = ""
+	cfg.Repo = ""
+	cfg.Repos = []string{
+		"git@github.com:acme/repo-a.git",
+		"git@github.com:acme/repo-b.git",
+	}
+	cfg.TargetSubdir = "."
+
+	guid := "cloneconcurrency123"
+	runDir := testRunDir(guid)
+	repoRelA := repoWorkspaceDirName(cfg.Repos[0], 0, len(cfg.Repos))
+	repoDirA := filepath.Join(runDir, repoRelA)
+
+	runner := newCloneBarrierRunner()
+	h := New(runner)
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == repoDirA }
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	res := h.Run(ctx, cfg)
+	if res.Err == nil {
+		t.Fatal("Run() err = nil, want branch-stage stop error")
+	}
+	if res.ExitCode != ExitGit {
+		t.Fatalf("ExitCode = %d, want %d (clone stage should have succeeded)", res.ExitCode, ExitGit)
+	}
+	if strings.Contains(strings.ToLower(res.Err.Error()), "clone concurrency barrier timed out") {
+		t.Fatalf("Run() err = %v, want clone stage to proceed concurrently", res.Err)
+	}
+	if got, want := runner.CloneSeen(), len(cfg.Repos); got != want {
+		t.Fatalf("clone calls observed = %d, want %d", got, want)
 	}
 }
 
@@ -1742,6 +2140,91 @@ func TestRunRepoNotFoundCloneFailsWithoutRetry(t *testing.T) {
 	}
 }
 
+func TestRunRepoNotFoundCloneFallsBackToKnownOwner(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.RepoURL = ""
+	cfg.Repo = ""
+	cfg.Repos = []string{
+		"git@github.com:Molten-Bot/user-portal.git",
+		"git@github.com:moltenbot000/moltenhub-code.git",
+	}
+	cfg.TargetSubdir = "."
+
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	branch := "moltenhub-build-api"
+
+	repoRelA := repoWorkspaceDirName(cfg.Repos[0], 0, len(cfg.Repos))
+	repoRelB := repoWorkspaceDirName(cfg.Repos[1], 1, len(cfg.Repos))
+	repoDirA := filepath.Join(runDir, repoRelA)
+	repoDirB := filepath.Join(runDir, repoRelB)
+	fallbackRepoB := "git@github.com:Molten-Bot/moltenhub-code.git"
+
+	codexPrompt := workspaceCodexPrompt(cfg.Prompt, cfg.TargetSubdir, []repoWorkspace{
+		{URL: cfg.Repos[0], RelDir: repoRelA},
+		{URL: fallbackRepoB, RelDir: repoRelB},
+	})
+	codexPrompt = withAgentsPrompt(codexPrompt, agentsPath)
+
+	fake := &fakeRunner{t: t, allowUnorderedClones: true, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneRepoCommand(cfg.Repos[0], cfg.BaseBranch, repoDirA)},
+		{
+			cmd: cloneRepoCommand(cfg.Repos[1], cfg.BaseBranch, repoDirB),
+			res: execx.Result{Stderr: "remote: Repository not found.\nfatal: repository not found\n"},
+			err: errors.New("clone failed"),
+		},
+		{cmd: cloneRepoCommand(fallbackRepoB, cfg.BaseBranch, repoDirB)},
+		{cmd: branchCommand(repoDirA, branch)},
+		{cmd: branchCommand(repoDirB, branch)},
+		{cmd: pushDryRunCommand(repoDirA, branch)},
+		{cmd: pushDryRunCommand(repoDirB, branch)},
+		{cmd: codexCommandWithOptions(runDir, codexPrompt, codexRunOptions{SkipGitRepoCheck: true})},
+		{cmd: statusCommand(repoDirA), res: execx.Result{Stdout: " M file-a.go\n"}},
+		{cmd: statusCommand(repoDirB), res: execx.Result{Stdout: " M file-b.go\n"}},
+		{cmd: addCommand(repoDirA)},
+		{cmd: commitCommand(repoDirA, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDirA, branch)},
+		{cmd: prCreateCommand(repoDirA, cfg, branch), res: execx.Result{Stdout: "https://github.com/Molten-Bot/user-portal/pull/10\n"}},
+		{cmd: prChecksCommand(repoDirA, "https://github.com/Molten-Bot/user-portal/pull/10")},
+		{cmd: addCommand(repoDirB)},
+		{cmd: commitCommand(repoDirB, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDirB, branch)},
+		{cmd: prCreateCommand(repoDirB, cfg, branch), res: execx.Result{Stdout: "https://github.com/Molten-Bot/moltenhub-code/pull/20\n"}},
+		{cmd: prChecksCommand(repoDirB, "https://github.com/Molten-Bot/moltenhub-code/pull/20")},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == repoDirA }
+	h.Sleep = func(context.Context, time.Duration) error { return nil }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d, want %d", res.ExitCode, ExitSuccess)
+	}
+	if got, want := len(res.RepoResults), 2; got != want {
+		t.Fatalf("len(RepoResults) = %d, want %d", got, want)
+	}
+	if got, want := res.RepoResults[1].RepoURL, fallbackRepoB; got != want {
+		t.Fatalf("RepoResults[1].RepoURL = %q, want %q", got, want)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
 func TestRunMissingNonMoltenhubBaseBranchFailsClone(t *testing.T) {
 	t.Parallel()
 
@@ -1896,6 +2379,12 @@ func TestCommandBuilders(t *testing.T) {
 		t.Fatalf("remote head command unexpected: %+v", remoteHead)
 	}
 
+	commitsAhead := commitsAheadOfBaseCommand(repoDir, "refs/heads/main")
+	wantCommitsAhead := []string{"rev-list", "--count", "main..HEAD"}
+	if commitsAhead.Name != "git" || commitsAhead.Dir != repoDir || !reflect.DeepEqual(commitsAhead.Args, wantCommitsAhead) {
+		t.Fatalf("commits ahead command unexpected: %+v", commitsAhead)
+	}
+
 	if !shouldCreateWorkBranch("main") {
 		t.Fatal("shouldCreateWorkBranch(main) = false, want true")
 	}
@@ -1913,25 +2402,25 @@ func TestCommandBuilders(t *testing.T) {
 	}
 
 	checks := prChecksCommand(repoDir, "https://github.com/acme/repo/pull/42")
-	wantChecks := []string{"pr", "checks", "https://github.com/acme/repo/pull/42", "--watch", "--required", "--interval", "10"}
+	wantChecks := []string{"pr", "checks", "42", "--watch", "--required", "--interval", "10"}
 	if checks.Name != "gh" || checks.Dir != repoDir || !reflect.DeepEqual(checks.Args, wantChecks) {
 		t.Fatalf("pr checks command unexpected: %+v", checks)
 	}
 
 	allChecks := prChecksAnyCommand(repoDir, "https://github.com/acme/repo/pull/42")
-	wantAllChecks := []string{"pr", "checks", "https://github.com/acme/repo/pull/42", "--watch", "--interval", "10"}
+	wantAllChecks := []string{"pr", "checks", "42", "--watch", "--interval", "10"}
 	if allChecks.Name != "gh" || allChecks.Dir != repoDir || !reflect.DeepEqual(allChecks.Args, wantAllChecks) {
 		t.Fatalf("pr checks any command unexpected: %+v", allChecks)
 	}
 
 	jsonChecks := prChecksJSONCommand(repoDir, "https://github.com/acme/repo/pull/42", true)
-	wantJSONChecks := []string{"pr", "checks", "https://github.com/acme/repo/pull/42", "--json", "name,bucket,completedAt,startedAt", "--required"}
+	wantJSONChecks := []string{"pr", "checks", "42", "--json", "name,bucket,completedAt,startedAt", "--required"}
 	if jsonChecks.Name != "gh" || jsonChecks.Dir != repoDir || !reflect.DeepEqual(jsonChecks.Args, wantJSONChecks) {
 		t.Fatalf("pr checks json command unexpected: %+v", jsonChecks)
 	}
 
 	jsonAnyChecks := prChecksJSONCommand(repoDir, "https://github.com/acme/repo/pull/42", false)
-	wantJSONAnyChecks := []string{"pr", "checks", "https://github.com/acme/repo/pull/42", "--json", "name,bucket,completedAt,startedAt"}
+	wantJSONAnyChecks := []string{"pr", "checks", "42", "--json", "name,bucket,completedAt,startedAt"}
 	if jsonAnyChecks.Name != "gh" || jsonAnyChecks.Dir != repoDir || !reflect.DeepEqual(jsonAnyChecks.Args, wantJSONAnyChecks) {
 		t.Fatalf("pr checks any json command unexpected: %+v", jsonAnyChecks)
 	}
@@ -2069,6 +2558,7 @@ func TestRunUsesConfiguredRuntimeCommand(t *testing.T) {
 		{cmd: runtimeCmd},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: ""}},
 		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch)},
+		{cmd: prLookupAnyByHeadCommand(repoDir, branch)},
 	}}
 
 	h := New(fake)
@@ -2319,6 +2809,42 @@ func TestRunCommandStreamRunnerMergesCapturedOutput(t *testing.T) {
 	}
 }
 
+func TestRunCommandSkipsLoggingEmptyStreamLines(t *testing.T) {
+	t.Parallel()
+
+	runner := &streamCaptureRunner{
+		res: execx.Result{},
+		lines: []streamLine{
+			{stream: "stderr", line: ""},
+			{stream: "stderr", line: "ERROR: failed to apply patch"},
+		},
+	}
+
+	var logs []string
+	h := New(runner)
+	h.Logf = func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	if _, err := h.runCommand(
+		context.Background(),
+		"codex",
+		execx.Command{Name: "codex", Args: []string{"exec"}},
+	); err != nil {
+		t.Fatalf("runCommand() error = %v", err)
+	}
+
+	if len(logs) != 1 {
+		t.Fatalf("len(logs) = %d, want 1", len(logs))
+	}
+	if strings.HasSuffix(logs[0], "b64=") {
+		t.Fatalf("log = %q, want non-empty encoded payload", logs[0])
+	}
+	if !strings.Contains(logs[0], "stream=stderr") {
+		t.Fatalf("log = %q, want stderr stream marker", logs[0])
+	}
+}
+
 func TestRunCodexReturnsErrorWhenCodexReportsFailure(t *testing.T) {
 	t.Parallel()
 
@@ -2332,6 +2858,61 @@ func TestRunCodexReturnsErrorWhenCodexReportsFailure(t *testing.T) {
 			res: execx.Result{
 				Stdout: "Failure: I could not start any local repository command.",
 				Stderr: "Error details:\n- Something went wrong",
+			},
+		},
+	}}
+
+	h := New(fake)
+	err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "")
+	if err == nil {
+		t.Fatal("runCodex() error = nil, want codex reported failure error")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "codex reported failure") {
+		t.Fatalf("runCodex() error = %v, want codex reported failure marker", err)
+	}
+}
+
+func TestRunCodexReturnsTimeoutWhenAgentStageRunsTooLong(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	runner := &blockingContextRunner{}
+
+	h := New(runner)
+	h.AgentStageTimeout = 40 * time.Millisecond
+
+	start := time.Now()
+	err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, "investigate timeout", codexRunOptions{}, "")
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("runCodex() error = nil, want timeout error")
+	}
+	if !strings.Contains(err.Error(), "codex timed out after 40ms") {
+		t.Fatalf("runCodex() error = %q, want explicit codex timeout detail", err)
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("runCodex() elapsed = %s, want fast timeout", elapsed)
+	}
+}
+
+func TestRunCodexReturnsErrorWhenCodexReportsStructuredTaskFailure(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "add prompt image to /code page"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stderr: strings.Join([]string{
+					`"summary": "Task failed.",`,
+					`"message": "Task failed. One or more hub snapshot regions failed to refresh.",`,
+					`"error": "One or more hub snapshot regions failed to refresh.",`,
+					`"stack": "Error: One or more hub snapshot regions failed to refresh."`,
+				}, "\n"),
 			},
 		},
 	}}
@@ -2413,18 +2994,139 @@ func TestCodexReportedFailure(t *testing.T) {
 	}
 }
 
-func TestWithCompletionGatePromptIncludesFailureQueueContract(t *testing.T) {
+func TestCodexReportedFailureDetectsStructuredTaskFailurePayload(t *testing.T) {
+	t.Parallel()
+
+	res := execx.Result{
+		Stderr: strings.Join([]string{
+			`"summary": "Task failed.",`,
+			`"message": "Task failed. One or more hub snapshot regions failed to refresh.",`,
+			`"error": "One or more hub snapshot regions failed to refresh.",`,
+			`"stack": "Error: One or more hub snapshot regions failed to refresh."`,
+		}, "\n"),
+	}
+
+	failed, detail := codexReportedFailure(res)
+	if !failed {
+		t.Fatal("codexReportedFailure(structured task failure payload) = false, want true")
+	}
+	if !strings.Contains(detail, `"summary": "Task failed."`) {
+		t.Fatalf("codexReportedFailure(...) detail = %q, want task-failure summary line", detail)
+	}
+}
+
+func TestCodexReportedFailureIgnoresStructuredTaskFailureInNoisyStderr(t *testing.T) {
+	t.Parallel()
+
+	res := execx.Result{
+		Stdout: "- Deferred home hero JS init to load + idle callback.",
+		Stderr: strings.Join([]string{
+			"setTimeout(loadGA, 2000);",
+			`"summary": "Task failed.",`,
+			`"message": "Task failed. One or more hub snapshot regions failed to refresh.",`,
+			`"error": "One or more hub snapshot regions failed to refresh.",`,
+			`"stack": "Error: One or more hub snapshot regions failed to refresh."`,
+			"</script> </body> </html>",
+			"window.setTimeout(() => {",
+			"setTimeout(() => {",
+			"const summary = 'Task failed.';",
+		}, "\n"),
+	}
+
+	if failed, detail := codexReportedFailure(res); failed || detail != "" {
+		t.Fatalf("codexReportedFailure(noisy stderr snippet) = (%v, %q), want (false, \"\")", failed, detail)
+	}
+}
+
+func TestCodexReportedFailureIgnoresCompactStructuredStderrWhenStdoutHasSuccess(t *testing.T) {
+	t.Parallel()
+
+	res := execx.Result{
+		Stdout: "Implemented requested changes.",
+		Stderr: strings.Join([]string{
+			`"summary": "Task failed.",`,
+			`"message": "Task failed. One or more hub snapshot regions failed to refresh.",`,
+			`"error": "One or more hub snapshot regions failed to refresh.",`,
+		}, "\n"),
+	}
+
+	if failed, detail := codexReportedFailure(res); failed || detail != "" {
+		t.Fatalf("codexReportedFailure(compact stderr + success stdout) = (%v, %q), want (false, \"\")", failed, detail)
+	}
+}
+
+func TestCodexReportedFailureIgnoresGoStructStyleFailureSnippets(t *testing.T) {
+	t.Parallel()
+
+	res := execx.Result{
+		Stderr: strings.Join([]string{
+			`Message: "Task failed because the downstream agent did not reply before the timeout.",`,
+			`Error:   err.Error(),`,
+			`Detail:  map[string]any{"timeout": true},`,
+		}, "\n"),
+	}
+
+	if failed, detail := codexReportedFailure(res); failed || detail != "" {
+		t.Fatalf("codexReportedFailure(go struct snippet) = (%v, %q), want (false, \"\")", failed, detail)
+	}
+}
+
+func TestCodexReportedFailureDetectsLowercaseStructuredKeyValuePayload(t *testing.T) {
+	t.Parallel()
+
+	res := execx.Result{
+		Stderr: strings.Join([]string{
+			`message: "Task failed because the downstream agent did not reply before the timeout."`,
+			`error: "task timed out waiting for code_for_me"`,
+		}, "\n"),
+	}
+
+	failed, detail := codexReportedFailure(res)
+	if !failed {
+		t.Fatal("codexReportedFailure(lowercase key-value payload) = false, want true")
+	}
+	if !strings.Contains(detail, `message: "Task failed because the downstream agent did not reply before the timeout."`) {
+		t.Fatalf("codexReportedFailure(...) detail = %q, want message line", detail)
+	}
+}
+
+func TestCodexReportedFailureIgnoresQuotedDispatchLogEcho(t *testing.T) {
+	t.Parallel()
+
+	res := execx.Result{
+		Stderr: strings.Join([]string{
+			`dispatch request_id=local-1775867707-000003 cmd phase=codex name=codex stream=stderr text="\"summary\": \"Task failed.\","`,
+			`dispatch request_id=local-1775867707-000003 cmd phase=codex name=codex stream=stderr text="\"error\": \"One or more hub snapshot regions failed to refresh.\","`,
+		}, "\n"),
+	}
+
+	if failed, detail := codexReportedFailure(res); failed || detail != "" {
+		t.Fatalf("codexReportedFailure(dispatch log echo) = (%v, %q), want (false, \"\")", failed, detail)
+	}
+}
+
+func TestCodexReportedFailureIgnoresGoStructSnippet(t *testing.T) {
+	t.Parallel()
+
+	res := execx.Result{
+		Stderr: strings.Join([]string{
+			`Message: "Task failed while dispatching to a connected agent.",`,
+			`Error:   strings.TrimSpace(message.Error),`,
+		}, "\n"),
+	}
+
+	if failed, detail := codexReportedFailure(res); failed || detail != "" {
+		t.Fatalf("codexReportedFailure(go struct snippet) = (%v, %q), want (false, \"\")", failed, detail)
+	}
+}
+
+func TestWithCompletionGatePromptIncludesAgentRuntimeGuidance(t *testing.T) {
 	t.Parallel()
 
 	got := withCompletionGatePrompt("Build API")
 	wantSnippets := []string{
-		"Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
-		`When failures occur, send a response back to the calling agent that clearly states failure and includes the error details.`,
-		"When a task fails:",
-		"Queue a follow-up task dedicated to reviewing the logs and fixing all underlying issues in this codebase.",
-		"Pass the relevant failing file/folder log path(s) into that follow-up task context.",
-		`{"repos":["git@github.com:Molten-Bot/moltenhub-code.git"],"baseBranch":"main","targetSubdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."}`,
-		"Completion requirements:",
+		"When failures occur, send a response back to the calling agent that clearly states failure and includes the error details.",
+		"Do not stop work just because you cannot create a pull request or watch remote CI/CD from inside this agent runtime.",
 		"If no file changes are required, return a clear no-op result with concrete evidence instead of forcing an empty PR.",
 	}
 	for _, snippet := range wantSnippets {
@@ -2450,6 +3152,72 @@ func TestHasGitHubAuthToken(t *testing.T) {
 	t.Setenv("GH_TOKEN", "ghp_example_from_gh_token")
 	if !hasGitHubAuthToken() {
 		t.Fatal("hasGitHubAuthToken() = false with GH_TOKEN set, want true")
+	}
+}
+
+func TestShouldSetupGitHubAuthForRepos(t *testing.T) {
+	t.Parallel()
+
+	if shouldSetupGitHubAuthForRepos([]string{"git@github.com:acme/repo.git"}) {
+		t.Fatal("shouldSetupGitHubAuthForRepos(ssh github) = true, want false")
+	}
+	if !shouldSetupGitHubAuthForRepos([]string{"https://github.com/acme/repo.git"}) {
+		t.Fatal("shouldSetupGitHubAuthForRepos(https github) = false, want true")
+	}
+	if !shouldSetupGitHubAuthForRepos([]string{" http://github.com/acme/repo.git "}) {
+		t.Fatal("shouldSetupGitHubAuthForRepos(http github) = false, want true")
+	}
+	if shouldSetupGitHubAuthForRepos([]string{"https://gitlab.com/acme/repo.git"}) {
+		t.Fatal("shouldSetupGitHubAuthForRepos(non-github https) = true, want false")
+	}
+}
+
+func TestRunHTTPSGitHubRepoConfiguresGitAuthWithoutEnvToken(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+
+	cfg := sampleConfig()
+	cfg.RepoURL = "https://github.com/acme/repo.git"
+	cfg.Repo = cfg.RepoURL
+	cfg.Repos = []string{cfg.RepoURL}
+
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "httpsauth123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+
+	fake := &fakeRunner{t: t, allowUnorderedClones: true, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "setup-git"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## moltenhub-build-api\n M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: "https://github.com/acme/repo/pull/42\n"}},
+		{cmd: prChecksCommand(repoDir, "https://github.com/acme/repo/pull/42")},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
 	}
 }
 
@@ -2520,6 +3288,20 @@ func TestHasTrackedWorktreeChanges(t *testing.T) {
 	}
 	if hasTrackedWorktreeChanges("\n") {
 		t.Fatal("hasTrackedWorktreeChanges(empty) = true, want false")
+	}
+}
+
+func TestHasAheadCommitsInStatus(t *testing.T) {
+	t.Parallel()
+
+	if !hasAheadCommitsInStatus("## moltenhub-branch...origin/moltenhub-branch [ahead 1]\n") {
+		t.Fatal("hasAheadCommitsInStatus(ahead) = false, want true")
+	}
+	if hasAheadCommitsInStatus("## moltenhub-branch...origin/moltenhub-branch [behind 2]\n") {
+		t.Fatal("hasAheadCommitsInStatus(behind) = true, want false")
+	}
+	if hasAheadCommitsInStatus(" M file.go\n") {
+		t.Fatal("hasAheadCommitsInStatus(no-header) = true, want false")
 	}
 }
 

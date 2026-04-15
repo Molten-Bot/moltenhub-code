@@ -560,8 +560,8 @@ func TestDispatchResultPayloadNoChangesIncludesExistingPRURLs(t *testing.T) {
 	}
 
 	payload := dispatchResultPayload(cfg, dispatch, res)
-	if got := payload["status"]; got != "no_changes" {
-		t.Fatalf("status = %#v, want %q", got, "no_changes")
+	if got := payload["status"]; got != "completed" {
+		t.Fatalf("status = %#v, want %q", got, "completed")
 	}
 	result, ok := payload["result"].(map[string]any)
 	if !ok {
@@ -576,6 +576,97 @@ func TestDispatchResultPayloadNoChangesIncludesExistingPRURLs(t *testing.T) {
 	}
 	if len(prURLs) != 1 || prURLs[0] != "https://github.com/acme/repo-a/pull/10" {
 		t.Fatalf("prUrls = %#v, want [https://github.com/acme/repo-a/pull/10]", prURLs)
+	}
+	if got := payload["message"]; got != "Success: task completed." {
+		t.Fatalf("message = %#v, want %q", got, "Success: task completed.")
+	}
+	if got := result["status"]; got != "completed" {
+		t.Fatalf("result.status = %#v, want %q", got, "completed")
+	}
+	if got := result["message"]; got != "Success: task completed." {
+		t.Fatalf("result.message = %#v, want %q", got, "Success: task completed.")
+	}
+}
+
+func TestDispatchResultPayloadNoChangesWithoutPRIncludesExplicitMessage(t *testing.T) {
+	t.Parallel()
+
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:       "code_for_me",
+			ResultType: "skill_result",
+		},
+	}
+	dispatch := SkillDispatch{
+		RequestID: "req-no-change-no-pr",
+		Skill:     "code_for_me",
+		ReplyTo:   "agent-123",
+	}
+	res := harness.Result{
+		ExitCode:  harness.ExitSuccess,
+		NoChanges: true,
+	}
+
+	payload := dispatchResultPayload(cfg, dispatch, res)
+	if got := payload["status"]; got != "no_changes" {
+		t.Fatalf("status = %#v, want %q", got, "no_changes")
+	}
+	if got := payload["message"]; got != "No changes: task completed without repository changes or pull requests." {
+		t.Fatalf("message = %#v", got)
+	}
+	if got := payload["reply_to"]; got != "agent-123" {
+		t.Fatalf("reply_to = %#v, want %q", got, "agent-123")
+	}
+	result, _ := payload["result"].(map[string]any)
+	if result == nil {
+		t.Fatal("result payload missing")
+	}
+	if got := result["status"]; got != "no_changes" {
+		t.Fatalf("result.status = %#v, want %q", got, "no_changes")
+	}
+	if got := result["message"]; got != "No changes: task completed without repository changes or pull requests." {
+		t.Fatalf("result.message = %#v", got)
+	}
+}
+
+func TestDispatchResultPayloadCompletedIncludesExplicitMessage(t *testing.T) {
+	t.Parallel()
+
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:       "code_for_me",
+			ResultType: "skill_result",
+		},
+	}
+	dispatch := SkillDispatch{
+		RequestID: "req-success",
+		Skill:     "code_for_me",
+		ReplyTo:   "agent-123",
+	}
+	res := harness.Result{
+		ExitCode: harness.ExitSuccess,
+		Branch:   "moltenhub-fix-success-response",
+	}
+
+	payload := dispatchResultPayload(cfg, dispatch, res)
+	if got := payload["status"]; got != "completed" {
+		t.Fatalf("status = %#v, want %q", got, "completed")
+	}
+	if got := payload["message"]; got != "Success: task completed." {
+		t.Fatalf("message = %#v, want %q", got, "Success: task completed.")
+	}
+	if got := payload["reply_to"]; got != "agent-123" {
+		t.Fatalf("reply_to = %#v, want %q", got, "agent-123")
+	}
+	result, _ := payload["result"].(map[string]any)
+	if result == nil {
+		t.Fatal("result payload missing")
+	}
+	if got := result["status"]; got != "completed" {
+		t.Fatalf("result.status = %#v, want %q", got, "completed")
+	}
+	if got := result["message"]; got != "Success: task completed." {
+		t.Fatalf("result.message = %#v, want %q", got, "Success: task completed.")
 	}
 }
 
@@ -658,21 +749,33 @@ func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
 	var (
 		publishRequests int
 		publishedMsgs   []map[string]any
+		offlineReasons  []string
 	)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/openclaw/messages/publish" {
+		switch r.URL.Path {
+		case "/v1/openclaw/messages/publish":
+			defer r.Body.Close()
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode publish body: %v", err)
+			}
+			message, _ := body["message"].(map[string]any)
+			publishRequests++
+			publishedMsgs = append(publishedMsgs, message)
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"ok":true,"result":{"status":"queued"}}`))
+		case "/v1/openclaw/messages/offline":
+			defer r.Body.Close()
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode offline body: %v", err)
+			}
+			offlineReasons = append(offlineReasons, fmt.Sprint(body["reason"]))
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
-		defer r.Body.Close()
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode publish body: %v", err)
-		}
-		message, _ := body["message"].(map[string]any)
-		publishRequests++
-		publishedMsgs = append(publishedMsgs, message)
-		w.WriteHeader(http.StatusAccepted)
-		_, _ = w.Write([]byte(`{"ok":true,"result":{"status":"queued"}}`))
 	}))
 	defer server.Close()
 
@@ -724,17 +827,26 @@ func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
 		t.Fatal("timed out waiting for OnDispatchFailed callback")
 	}
 
-	if publishRequests != 2 {
-		t.Fatalf("publish requests = %d, want 2", publishRequests)
+	if publishRequests != 3 {
+		t.Fatalf("publish requests = %d, want 3", publishRequests)
 	}
 	if got := fmt.Sprint(publishedMsgs[0]["status"]); got != "error" {
 		t.Fatalf("first publish status = %q, want error", got)
 	}
-	if got := fmt.Sprint(publishedMsgs[1]["type"]); got != "skill_request" {
+	if got := fmt.Sprint(publishedMsgs[1]["request_id"]); got != "req-fail-rerun" {
+		t.Fatalf("rerun request_id = %q, want req-fail-rerun", got)
+	}
+	if got := fmt.Sprint(publishedMsgs[2]["type"]); got != "skill_request" {
 		t.Fatalf("follow-up type = %q, want skill_request", got)
 	}
-	if got := fmt.Sprint(publishedMsgs[1]["request_id"]); got != "req-fail-failure-review" {
+	if got := fmt.Sprint(publishedMsgs[2]["request_id"]); got != "req-fail-failure-review" {
 		t.Fatalf("follow-up request_id = %q, want req-fail-failure-review", got)
+	}
+	if got := len(offlineReasons); got != 1 {
+		t.Fatalf("offline requests = %d, want 1", got)
+	}
+	if got := offlineReasons[0]; got != transportOfflineReasonExecutionFailure {
+		t.Fatalf("offline reason = %q, want %q", got, transportOfflineReasonExecutionFailure)
 	}
 }
 
@@ -745,26 +857,42 @@ func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
 		mu             sync.Mutex
 		publishedMsgs  []map[string]any
 		publishRequest int
+		offlineReasons []string
 	)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/openclaw/messages/publish" {
+		switch r.URL.Path {
+		case "/v1/openclaw/messages/publish":
+			defer r.Body.Close()
+
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode publish body: %v", err)
+			}
+			message, _ := body["message"].(map[string]any)
+
+			mu.Lock()
+			publishRequest++
+			publishedMsgs = append(publishedMsgs, message)
+			mu.Unlock()
+
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"ok":true,"result":{"status":"queued"}}`))
+		case "/v1/openclaw/messages/offline":
+			defer r.Body.Close()
+
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode offline body: %v", err)
+			}
+			mu.Lock()
+			offlineReasons = append(offlineReasons, fmt.Sprint(body["reason"]))
+			mu.Unlock()
+
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
-		defer r.Body.Close()
-
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode publish body: %v", err)
-		}
-		message, _ := body["message"].(map[string]any)
-
-		mu.Lock()
-		publishRequest++
-		publishedMsgs = append(publishedMsgs, message)
-		mu.Unlock()
-
-		w.WriteHeader(http.StatusAccepted)
-		_, _ = w.Write([]byte(`{"ok":true,"result":{"status":"queued"}}`))
 	}))
 	defer server.Close()
 
@@ -829,8 +957,8 @@ func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	if publishRequest != 2 {
-		t.Fatalf("publish requests = %d, want 2", publishRequest)
+	if publishRequest != 3 {
+		t.Fatalf("publish requests = %d, want 3", publishRequest)
 	}
 	if got := fmt.Sprint(publishedMsgs[0]["status"]); got != "error" {
 		t.Fatalf("message.status = %v, want error", publishedMsgs[0]["status"])
@@ -841,8 +969,17 @@ func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
 	if got := fmt.Sprint(publishedMsgs[0]["error"]); !strings.Contains(got, "dispatch acquire: dispatch controller is closed") {
 		t.Fatalf("message.error = %q", got)
 	}
-	if got := fmt.Sprint(publishedMsgs[1]["request_id"]); got != "req-closed-controller-failure-review" {
+	if got := fmt.Sprint(publishedMsgs[1]["request_id"]); got != "req-closed-controller-rerun" {
+		t.Fatalf("rerun request_id = %q, want req-closed-controller-rerun", got)
+	}
+	if got := fmt.Sprint(publishedMsgs[2]["request_id"]); got != "req-closed-controller-failure-review" {
 		t.Fatalf("follow-up request_id = %q, want req-closed-controller-failure-review", got)
+	}
+	if got := len(offlineReasons); got != 1 {
+		t.Fatalf("offline requests = %d, want 1", got)
+	}
+	if got := offlineReasons[0]; got != transportOfflineReasonExecutionFailure {
+		t.Fatalf("offline reason = %q, want %q", got, transportOfflineReasonExecutionFailure)
 	}
 }
 
@@ -850,11 +987,16 @@ func TestProcessInboundMessageInvokesOnDispatchFailedForAcquireFailure(t *testin
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/openclaw/messages/publish" {
+		switch r.URL.Path {
+		case "/v1/openclaw/messages/publish":
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"ok":true,"result":{"status":"queued"}}`))
+		case "/v1/openclaw/messages/offline":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
-		w.WriteHeader(http.StatusAccepted)
-		_, _ = w.Write([]byte(`{"ok":true,"result":{"status":"queued"}}`))
 	}))
 	defer server.Close()
 

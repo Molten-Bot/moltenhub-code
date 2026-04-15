@@ -15,10 +15,9 @@ import (
 )
 
 const (
-	defaultMaxEvents             = 600
-	defaultMaxTaskLogs           = 2000
-	defaultOKTaskRetentionWindow = 5 * time.Minute
-	defaultClosedTaskRetention   = 24 * time.Hour
+	defaultMaxEvents           = 600
+	defaultMaxTaskLogs         = 2000
+	defaultClosedTaskRetention = 24 * time.Hour
 )
 
 var (
@@ -30,6 +29,8 @@ const (
 	hubTransportWS           = "ws"
 	hubTransportHTTPLongPoll = "http_long_poll"
 	hubTransportDisconnected = "disconnected"
+	hubTransportReachable    = "reachable"
+	hubTransportRetrying     = "retrying"
 )
 
 // Event is one monitor timeline entry.
@@ -48,26 +49,35 @@ type TaskLog struct {
 	Text   string `json:"text"`
 }
 
+// TaskControls describes which runtime controls are currently supported.
+type TaskControls struct {
+	Pause    bool `json:"pause,omitempty"`
+	Run      bool `json:"run,omitempty"`
+	ForceRun bool `json:"force_run,omitempty"`
+	Stop     bool `json:"stop,omitempty"`
+}
+
 // Task represents one hub dispatch execution state.
 type Task struct {
-	RequestID    string    `json:"request_id"`
-	Prompt       string    `json:"prompt,omitempty"`
-	Skill        string    `json:"skill,omitempty"`
-	Repo         string    `json:"repo,omitempty"`
-	Repos        []string  `json:"repos,omitempty"`
-	BaseBranch   string    `json:"base_branch,omitempty"`
-	Status       string    `json:"status"`
-	Stage        string    `json:"stage,omitempty"`
-	StageStatus  string    `json:"stage_status,omitempty"`
-	ExitCode     int       `json:"exit_code,omitempty"`
-	WorkspaceDir string    `json:"workspace_dir,omitempty"`
-	Branch       string    `json:"branch,omitempty"`
-	PRURL        string    `json:"pr_url,omitempty"`
-	Error        string    `json:"error,omitempty"`
-	StartedAt    string    `json:"started_at"`
-	UpdatedAt    string    `json:"updated_at"`
-	CanRerun     bool      `json:"can_rerun,omitempty"`
-	Logs         []TaskLog `json:"logs"`
+	RequestID    string       `json:"request_id"`
+	Prompt       string       `json:"prompt,omitempty"`
+	Skill        string       `json:"skill,omitempty"`
+	Repo         string       `json:"repo,omitempty"`
+	Repos        []string     `json:"repos,omitempty"`
+	BaseBranch   string       `json:"base_branch,omitempty"`
+	Status       string       `json:"status"`
+	Stage        string       `json:"stage,omitempty"`
+	StageStatus  string       `json:"stage_status,omitempty"`
+	ExitCode     int          `json:"exit_code,omitempty"`
+	WorkspaceDir string       `json:"workspace_dir,omitempty"`
+	Branch       string       `json:"branch,omitempty"`
+	PRURL        string       `json:"pr_url,omitempty"`
+	Error        string       `json:"error,omitempty"`
+	StartedAt    string       `json:"started_at"`
+	UpdatedAt    string       `json:"updated_at"`
+	CanRerun     bool         `json:"can_rerun,omitempty"`
+	Controls     TaskControls `json:"controls,omitempty"`
+	Logs         []TaskLog    `json:"logs"`
 }
 
 // Connection captures current monitor connectivity state.
@@ -76,6 +86,7 @@ type Connection struct {
 	HubTransport string `json:"hub_transport,omitempty"`
 	HubDomain    string `json:"hub_domain,omitempty"`
 	HubBaseURL   string `json:"hub_base_url,omitempty"`
+	HubDetail    string `json:"hub_detail,omitempty"`
 }
 
 // ResourceMetrics captures the current dispatcher sample window values.
@@ -102,7 +113,6 @@ type Broker struct {
 	now        func() time.Time
 	maxEvents  int
 	maxTaskLog int
-	okTaskTTL  time.Duration
 
 	nextEventID int64
 	events      []Event
@@ -116,6 +126,7 @@ type Broker struct {
 	hubTransport string
 	hubBaseURL   string
 	hubDomain    string
+	hubDetail    string
 	resources    ResourceMetrics
 }
 
@@ -145,7 +156,6 @@ func NewBroker() *Broker {
 		now:         time.Now,
 		maxEvents:   defaultMaxEvents,
 		maxTaskLog:  defaultMaxTaskLogs,
-		okTaskTTL:   defaultOKTaskRetentionWindow,
 		tasks:       map[string]*taskState{},
 		closedTasks: map[string]time.Time{},
 		runConfigs:  map[string][]byte{},
@@ -165,6 +175,9 @@ func (b *Broker) IngestLog(line string) {
 
 	now := b.now().UTC()
 	fields := parseKVFields(line)
+	if shouldDropNoisyCommandLine(line, fields) {
+		return
+	}
 	requestID := fields["request_id"]
 
 	b.mu.Lock()
@@ -211,6 +224,7 @@ func (b *Broker) Snapshot() Snapshot {
 			HubTransport: b.hubTransport,
 			HubDomain:    b.hubDomain,
 			HubBaseURL:   b.hubBaseURL,
+			HubDetail:    strings.TrimSpace(b.hubDetail),
 		},
 		Resources: b.resources,
 		Events:    append([]Event(nil), b.events...),
@@ -237,7 +251,7 @@ func (b *Broker) Snapshot() Snapshot {
 			Repo:         t.Repo,
 			Repos:        append([]string(nil), t.Repos...),
 			BaseBranch:   t.BaseBranch,
-			Status:       t.Status,
+			Status:       normalizeTaskTerminalStatus(t.Status),
 			Stage:        t.Stage,
 			StageStatus:  t.StageStatus,
 			ExitCode:     t.ExitCode,
@@ -253,6 +267,51 @@ func (b *Broker) Snapshot() Snapshot {
 	}
 
 	return snapshot
+}
+
+// Task returns a copy of the current task snapshot for one request id.
+func (b *Broker) Task(requestID string) (Task, bool) {
+	if b == nil {
+		return Task{}, false
+	}
+
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return Task{}, false
+	}
+
+	now := b.now().UTC()
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.pruneExpiredTasksLocked(now)
+
+	t, ok := b.tasks[requestID]
+	if !ok || t == nil {
+		return Task{}, false
+	}
+	_, canRerun := b.runConfigs[requestID]
+	return Task{
+		RequestID:    t.RequestID,
+		Prompt:       t.Prompt,
+		Skill:        t.Skill,
+		Repo:         t.Repo,
+		Repos:        append([]string(nil), t.Repos...),
+		BaseBranch:   t.BaseBranch,
+		Status:       normalizeTaskTerminalStatus(t.Status),
+		Stage:        t.Stage,
+		StageStatus:  t.StageStatus,
+		ExitCode:     t.ExitCode,
+		WorkspaceDir: t.WorkspaceDir,
+		Branch:       t.Branch,
+		PRURL:        t.PRURL,
+		Error:        t.Error,
+		StartedAt:    t.StartedAt.UTC().Format(time.RFC3339Nano),
+		UpdatedAt:    t.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		CanRerun:     canRerun,
+		Logs:         append([]TaskLog(nil), t.Logs...),
+	}, true
 }
 
 // RecordTaskRunConfig stores a parsed task run config payload for future reruns.
@@ -395,7 +454,7 @@ func (b *Broker) TaskRunConfig(requestID string) ([]byte, bool) {
 	return append([]byte(nil), runConfigJSON...), true
 }
 
-// CloseTask removes a completed task and its stored rerun config.
+// CloseTask removes a terminal task and its stored rerun config.
 func (b *Broker) CloseTask(requestID string) error {
 	if b == nil {
 		return ErrTaskNotFound
@@ -424,15 +483,6 @@ func (b *Broker) CloseTask(requestID string) error {
 }
 
 func (b *Broker) pruneExpiredTasksLocked(now time.Time) {
-	if b.okTaskTTL > 0 {
-		for requestID, task := range b.tasks {
-			if !b.shouldHideTaskLocked(task, now) {
-				continue
-			}
-			delete(b.tasks, requestID)
-			delete(b.runConfigs, requestID)
-		}
-	}
 	for requestID, closedAt := range b.closedTasks {
 		if now.Sub(closedAt) < defaultClosedTaskRetention {
 			continue
@@ -451,13 +501,6 @@ func (b *Broker) isClosedTaskLocked(requestID string, now time.Time) bool {
 		return false
 	}
 	return true
-}
-
-func (b *Broker) shouldHideTaskLocked(task *taskState, now time.Time) bool {
-	if task == nil || task.Status != "ok" || b.okTaskTTL <= 0 {
-		return false
-	}
-	return !task.UpdatedAt.IsZero() && now.Sub(task.UpdatedAt) >= b.okTaskTTL
 }
 
 // Subscribe returns a change notification channel and cancel function.
@@ -527,17 +570,25 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 		}
 	}
 
-	if strings.HasPrefix(line, "dispatch status=ok") {
-		t.Status = "ok"
+	if isFinalTaskDispatchLine(fields) && strings.HasPrefix(line, "dispatch status=completed") {
+		t.Status = "completed"
 		t.WorkspaceDir = firstNonEmpty(fields["workspace"], fields["workspace_dir"], t.WorkspaceDir)
 		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
 		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
 	}
 
-	if strings.HasPrefix(line, "dispatch status=no_changes") {
+	if isFinalTaskDispatchLine(fields) && strings.HasPrefix(line, "dispatch status=ok") {
+		t.Status = "completed"
+		t.WorkspaceDir = firstNonEmpty(fields["workspace"], fields["workspace_dir"], t.WorkspaceDir)
+		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
+		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
+	}
+
+	if isFinalTaskDispatchLine(fields) && strings.HasPrefix(line, "dispatch status=no_changes") {
 		t.Status = "no_changes"
 		t.WorkspaceDir = firstNonEmpty(fields["workspace"], fields["workspace_dir"], t.WorkspaceDir)
 		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
+		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
 	}
 
 	if strings.HasPrefix(line, "dispatch status=paused") {
@@ -554,7 +605,7 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 		t.StageStatus = firstNonEmpty(fields["status"], "resumed")
 	}
 
-	if strings.HasPrefix(line, "dispatch status=stopped") {
+	if isFinalTaskDispatchLine(fields) && strings.HasPrefix(line, "dispatch status=stopped") {
 		t.Status = "stopped"
 		if code, ok := parseIntField(fields["exit_code"]); ok {
 			t.ExitCode = code
@@ -562,13 +613,13 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 		t.WorkspaceDir = firstNonEmpty(fields["workspace"], fields["workspace_dir"], t.WorkspaceDir)
 		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
 		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
-		t.Error = firstNonEmpty(parseFieldValue(line, "err"), parseFieldValue(line, "error"), t.Error)
+		t.Error = firstNonEmpty(fields["err"], fields["error"], t.Error)
 		if strings.TrimSpace(t.Error) == "" {
 			t.Error = "task stopped by operator"
 		}
 	}
 
-	if strings.HasPrefix(line, "dispatch status=error") {
+	if isFinalTaskDispatchLine(fields) && strings.HasPrefix(line, "dispatch status=error") {
 		t.Status = "error"
 		if code, ok := parseIntField(fields["exit_code"]); ok {
 			t.ExitCode = code
@@ -576,20 +627,20 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 		t.WorkspaceDir = firstNonEmpty(fields["workspace"], fields["workspace_dir"], t.WorkspaceDir)
 		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
 		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
-		t.Error = firstNonEmpty(parseFieldValue(line, "err"), parseFieldValue(line, "error"), t.Error)
+		t.Error = firstNonEmpty(fields["err"], fields["error"], t.Error)
 	}
 
-	if strings.HasPrefix(line, "dispatch status=invalid") {
+	if isFinalTaskDispatchLine(fields) && strings.HasPrefix(line, "dispatch status=invalid") {
 		t.Status = "invalid"
-		t.Error = firstNonEmpty(parseFieldValue(line, "err"), parseFieldValue(line, "error"), t.Error)
+		t.Error = firstNonEmpty(fields["err"], fields["error"], t.Error)
 	}
 
-	if strings.HasPrefix(line, "dispatch status=duplicate") {
+	if isFinalTaskDispatchLine(fields) && strings.HasPrefix(line, "dispatch status=duplicate") {
 		if t.Status == "" || t.Status == "pending" || t.Status == "duplicate" {
 			t.Status = "duplicate"
 			t.Stage = firstNonEmpty(t.Stage, "dispatch")
 			t.StageStatus = firstNonEmpty(fields["state"], t.StageStatus)
-			t.Error = firstNonEmpty(parseFieldValue(line, "err"), parseFieldValue(line, "error"), t.Error)
+			t.Error = firstNonEmpty(fields["err"], fields["error"], t.Error)
 			if t.Error == "" {
 				var details []string
 				if state := strings.TrimSpace(fields["state"]); state != "" {
@@ -619,19 +670,31 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 		}
 		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
 		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
-		t.Error = firstNonEmpty(parseFieldValue(line, "err"), parseFieldValue(line, "error"), t.Error)
+		t.Error = firstNonEmpty(fields["err"], fields["error"], t.Error)
 	}
 
-	if strings.Contains(line, " cmd ") && fields["b64"] != "" {
-		decoded, err := base64.StdEncoding.DecodeString(fields["b64"])
-		if err == nil {
-			b.appendTaskLogLocked(t, TaskLog{
-				Time:   now.Format(time.RFC3339Nano),
-				Stream: firstNonEmpty(fields["stream"], "stdout"),
-				Text:   string(decoded),
-			})
+	if strings.Contains(line, " cmd ") {
+		text := strings.TrimSpace(fields["text"])
+		if text == "" {
+			encoded := strings.TrimSpace(fields["b64"])
+			if encoded == "" {
+				return
+			}
+			decoded, err := base64.StdEncoding.DecodeString(encoded)
+			if err != nil {
+				return
+			}
+			text = strings.TrimSpace(string(decoded))
+		}
+		if text == "" {
 			return
 		}
+		b.appendTaskLogLocked(t, TaskLog{
+			Time:   now.Format(time.RFC3339Nano),
+			Stream: firstNonEmpty(fields["stream"], "stdout"),
+			Text:   text,
+		})
+		return
 	}
 
 	if strings.HasPrefix(line, "dispatch ") {
@@ -645,6 +708,24 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 
 func (b *Broker) appendTaskLogLocked(t *taskState, line TaskLog) {
 	t.Logs = appendCappedTaskLog(t.Logs, b.maxTaskLog, line)
+}
+
+func shouldDropNoisyCommandLine(line string, fields map[string]string) bool {
+	if !strings.Contains(line, " cmd ") {
+		return false
+	}
+	if strings.TrimSpace(fields["text"]) != "" {
+		return false
+	}
+	encoded := strings.TrimSpace(fields["b64"])
+	if encoded == "" {
+		return true
+	}
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return true
+	}
+	return strings.TrimSpace(string(decoded)) == ""
 }
 
 func (b *Broker) updateHubConnectionFromLineLocked(line string, fields map[string]string) {
@@ -661,29 +742,43 @@ func (b *Broker) updateHubConnectionFromLineLocked(line string, fields map[strin
 	switch {
 	case strings.HasPrefix(line, "hub.auth status=ok"):
 		b.hubConnected = true
-		if b.hubTransport == hubTransportDisconnected {
+		b.hubDetail = ""
+		if b.hubTransport == hubTransportDisconnected || b.hubTransport == hubTransportRetrying {
 			b.hubTransport = ""
 		}
 	case strings.HasPrefix(line, "hub.ws status=connected"):
 		b.hubConnected = true
 		b.hubTransport = hubTransportWS
+		b.hubDetail = ""
 	case strings.HasPrefix(line, "hub.transport mode=openclaw_pull"):
 		// Pull mode still means the daemon is connected to MoltenHub transport.
 		b.hubConnected = true
 		b.hubTransport = hubTransportHTTPLongPoll
+		b.hubDetail = ""
 	case strings.HasPrefix(line, "hub.transport mode=openclaw_ws"):
 		b.hubConnected = true
 		b.hubTransport = hubTransportWS
+		b.hubDetail = ""
 	case strings.HasPrefix(line, "hub.connection "):
 		switch strings.ToLower(strings.TrimSpace(fields["status"])) {
 		case "connected", "online", "ok":
 			b.hubConnected = true
-			if b.hubTransport == hubTransportDisconnected {
+			b.hubDetail = strings.TrimSpace(firstNonEmpty(fields["detail"], fields["err"]))
+			if b.hubTransport == hubTransportDisconnected || b.hubTransport == hubTransportRetrying {
 				b.hubTransport = ""
 			}
+		case "reachable":
+			b.hubConnected = false
+			b.hubTransport = hubTransportReachable
+			b.hubDetail = strings.TrimSpace(firstNonEmpty(fields["detail"], fields["err"]))
+		case "retrying":
+			b.hubConnected = false
+			b.hubTransport = hubTransportRetrying
+			b.hubDetail = strings.TrimSpace(firstNonEmpty(fields["detail"], fields["err"]))
 		case "disconnected", "offline", "error":
 			b.hubConnected = false
 			b.hubTransport = hubTransportDisconnected
+			b.hubDetail = strings.TrimSpace(firstNonEmpty(fields["detail"], fields["err"]))
 		}
 	case strings.HasPrefix(line, "hub.ws status=disabled"),
 		strings.HasPrefix(line, "hub.ws status=error"),
@@ -692,6 +787,7 @@ func (b *Broker) updateHubConnectionFromLineLocked(line string, fields map[strin
 		strings.HasPrefix(line, "hub.agent status=offline"):
 		b.hubConnected = false
 		b.hubTransport = hubTransportDisconnected
+		b.hubDetail = strings.TrimSpace(firstNonEmpty(fields["detail"], fields["err"]))
 	}
 }
 
@@ -746,17 +842,64 @@ func parseKVFields(line string) map[string]string {
 		return nil
 	}
 	out := make(map[string]string, 8)
-	for _, field := range strings.Fields(line) {
-		k, v, ok := strings.Cut(field, "=")
-		if !ok {
+	for idx := 0; idx < len(line); {
+		for idx < len(line) && isKVSpace(line[idx]) {
+			idx++
+		}
+		if idx >= len(line) {
+			break
+		}
+
+		keyStart := idx
+		for idx < len(line) && !isKVSpace(line[idx]) && line[idx] != '=' {
+			idx++
+		}
+		if idx >= len(line) || line[idx] != '=' {
+			for idx < len(line) && !isKVSpace(line[idx]) {
+				idx++
+			}
 			continue
 		}
-		out[k] = strings.Trim(v, "\"")
+
+		key := strings.TrimSpace(line[keyStart:idx])
+		idx++
+		if key == "" {
+			continue
+		}
+
+		value, next := parseKVValue(line, idx)
+		out[key] = value
+		idx = next
 	}
 	if len(out) == 0 {
 		return nil
 	}
 	return out
+}
+
+func parseKVValue(line string, idx int) (string, int) {
+	if idx >= len(line) {
+		return "", idx
+	}
+
+	if line[idx] == '"' {
+		if token, ok := parseQuotedToken(line[idx:]); ok {
+			if decoded, err := strconv.Unquote(token); err == nil {
+				return strings.TrimSpace(decoded), idx + len(token)
+			}
+			return strings.TrimSpace(strings.Trim(token, `"`)), idx + len(token)
+		}
+	}
+
+	start := idx
+	for idx < len(line) && !isKVSpace(line[idx]) {
+		idx++
+	}
+	return strings.TrimSpace(line[start:idx]), idx
+}
+
+func isKVSpace(ch byte) bool {
+	return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
 }
 
 func appendCappedEvent(events []Event, max int, entry Event) []Event {
@@ -784,33 +927,15 @@ func appendCappedTaskLog(logs []TaskLog, max int, entry TaskLog) []TaskLog {
 }
 
 func parseFieldValue(line, key string) string {
-	needle := key + "="
-	idx := strings.Index(line, needle)
-	if idx < 0 {
+	key = strings.TrimSpace(key)
+	if key == "" {
 		return ""
 	}
-
-	rest := line[idx+len(needle):]
-	if rest == "" {
+	fields := parseKVFields(line)
+	if len(fields) == 0 {
 		return ""
 	}
-
-	if strings.HasPrefix(rest, "\"") {
-		if token, ok := parseQuotedToken(rest); ok {
-			decoded, err := strconv.Unquote(token)
-			if err == nil {
-				return strings.TrimSpace(decoded)
-			}
-			return strings.TrimSpace(strings.Trim(token, "\""))
-		}
-		return strings.TrimSpace(strings.Trim(rest, "\""))
-	}
-
-	end := strings.IndexAny(rest, " \t")
-	if end < 0 {
-		return strings.TrimSpace(rest)
-	}
-	return strings.TrimSpace(rest[:end])
+	return strings.TrimSpace(fields[key])
 }
 
 func parseQuotedToken(text string) (string, bool) {
@@ -994,10 +1119,23 @@ func errorText(err error) string {
 }
 
 func isCompletedTaskStatus(status string) bool {
-	switch strings.TrimSpace(status) {
-	case "ok", "no_changes", "error", "invalid", "duplicate", "stopped":
+	switch normalizeTaskTerminalStatus(status) {
+	case "completed", "no_changes", "error", "invalid", "duplicate", "stopped":
 		return true
 	default:
 		return false
+	}
+}
+
+func isFinalTaskDispatchLine(fields map[string]string) bool {
+	return strings.TrimSpace(fields["action"]) == ""
+}
+
+func normalizeTaskTerminalStatus(status string) string {
+	switch strings.TrimSpace(status) {
+	case "ok":
+		return "completed"
+	default:
+		return strings.TrimSpace(status)
 	}
 }

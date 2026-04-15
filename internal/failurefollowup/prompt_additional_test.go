@@ -36,6 +36,9 @@ func TestComposePromptUsesExplicitNoPathGuidance(t *testing.T) {
 	if !strings.Contains(got, "\n- use fallback log directory") {
 		t.Fatalf("ComposePrompt() = %q, want no-path guidance bullet", got)
 	}
+	if !strings.Contains(got, OfflineReviewInstruction) {
+		t.Fatalf("ComposePrompt() missing offline review instruction")
+	}
 	if !strings.Contains(got, ExecutionContract) {
 		t.Fatalf("ComposePrompt() missing execution contract")
 	}
@@ -69,6 +72,45 @@ func TestTaskLogPathsReturnsNilWhenTaskLogDirInvalid(t *testing.T) {
 	}
 	if got := TaskLogPaths("/tmp/log", ""); got != nil {
 		t.Fatalf("TaskLogPaths(empty request ID) = %v, want nil", got)
+	}
+}
+
+func TestTaskLogPathsExcludesAggregateLogToAvoidSelfReferentialPrompts(t *testing.T) {
+	t.Parallel()
+
+	root := "/tmp/logs"
+	paths := TaskLogPaths(root, "local-1775613327-000024")
+	aggregate := filepath.Join(root, LogFileName)
+	for _, path := range paths {
+		if path == aggregate {
+			t.Fatalf("TaskLogPaths() should not include aggregate log path %q; got=%v", aggregate, paths)
+		}
+	}
+}
+
+func TestTaskLogPathsOmitsFallbackMainLogsForLocalRequests(t *testing.T) {
+	t.Parallel()
+
+	root := "/tmp/logs"
+	paths := TaskLogPaths(root, "local-1775613327-000024")
+	for _, path := range paths {
+		if strings.Contains(path, filepath.Join(root, FallbackLogSubdir)+string(filepath.Separator)) {
+			t.Fatalf("TaskLogPaths(local request) should exclude fallback main logs: %v", paths)
+		}
+	}
+}
+
+func TestShouldIncludeFallbackTaskLogsByRequestType(t *testing.T) {
+	t.Parallel()
+
+	if !shouldIncludeFallbackTaskLogs("") {
+		t.Fatal("shouldIncludeFallbackTaskLogs(empty request) = false, want true")
+	}
+	if shouldIncludeFallbackTaskLogs("local-1775613327-000024") {
+		t.Fatal("shouldIncludeFallbackTaskLogs(local request) = true, want false")
+	}
+	if !shouldIncludeFallbackTaskLogs("req-1775613327-000024") {
+		t.Fatal("shouldIncludeFallbackTaskLogs(non-local request) = false, want true")
 	}
 }
 

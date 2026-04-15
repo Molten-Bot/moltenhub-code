@@ -39,6 +39,12 @@ func TestHandlerStateEndpointReturnsSnapshot(t *testing.T) {
 	b.IngestLog("dispatch status=start request_id=req-1")
 
 	srv := NewServer("", b)
+	srv.ResolveTaskControls = func(requestID string) TaskControls {
+		if requestID == "req-1" {
+			return TaskControls{Stop: true}
+		}
+		return TaskControls{}
+	}
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -61,6 +67,9 @@ func TestHandlerStateEndpointReturnsSnapshot(t *testing.T) {
 	}
 	if snap.Tasks[0].RequestID != "req-1" {
 		t.Fatalf("request id = %q", snap.Tasks[0].RequestID)
+	}
+	if !snap.Tasks[0].Controls.Stop {
+		t.Fatalf("controls.stop = false, want true")
 	}
 }
 
@@ -183,6 +192,27 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `>Molten Hub Code</div>`) {
 		t.Fatalf("expected index html to render app heading as Molten Hub Code")
 	}
+	if !strings.Contains(markup, `Current Work</span>`) {
+		t.Fatalf("expected index html to render the task panel under a Current Work heading")
+	}
+	if strings.Contains(markup, `Runs move through prepare, clone, agent, and finalize. Re-runs, local clone links, and PRs stay attached here.`) {
+		t.Fatalf("expected index html to remove the old task queue supporting copy")
+	}
+	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title">Studio</span>`) {
+		t.Fatalf("expected index html to label the builder mode as Studio")
+	}
+	if !strings.Contains(markup, `id="prompt-panel-copy"`) || !strings.Contains(markup, `Compose a repository run, start from a library task, or edit the raw JSON payload.`) {
+		t.Fatalf("expected index html to include prompt panel supporting copy")
+	}
+	if strings.Contains(markup, `Compose a repository run with remotes, branch, reviewers, screenshots, and a plain-language task brief.`) {
+		t.Fatalf("expected index html to remove the verbose builder mode description")
+	}
+	if strings.Contains(markup, `Run Studio`) || strings.Contains(markup, `Queue repository work with the same repo, branch, reviewer, and prompt contract the hub executes.`) {
+		t.Fatalf("expected index html to remove the Studio overview hero panel")
+	}
+	if !strings.Contains(markup, `>Queue Task</button>`) {
+		t.Fatalf("expected index html to rename the primary prompt submit action to Queue Task")
+	}
 	if strings.Contains(markup, `id="configured-agent-subtitle"`) || strings.Contains(markup, "Configured agent: Codex") {
 		t.Fatalf("expected index html to remove the configured agent subtitle copy")
 	}
@@ -219,6 +249,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `timing: taskTimingSignature(task),`) {
 		t.Fatalf("expected task collection render signatures to use stable task timing data")
 	}
+	if !strings.Contains(markup, `const controls = task?.controls || {};`) || !strings.Contains(markup, `const canStop = Boolean(controls.stop);`) {
+		t.Fatalf("expected index html to render task controls from backend-provided capabilities")
+	}
 	if !strings.Contains(markup, `update.className = "task-timing-summary";`) {
 		t.Fatalf("expected task timing labels to render into dedicated nodes for in-place refresh")
 	}
@@ -245,6 +278,18 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `id="hub-setup-form"`) {
 		t.Fatalf("expected index html to include hub setup form")
+	}
+	if !strings.Contains(markup, `id="hub-setup-copy"`) || !strings.Contains(markup, `Existing agents use an agent token. New agents use a bind token`) {
+		t.Fatalf("expected index html to include supporting Molten Hub setup guidance")
+	}
+	if !strings.Contains(markup, `id="hub-setup-token-label" class="prompt-label">Agent Token</span>`) {
+		t.Fatalf("expected index html to default the setup token label to Agent Token")
+	}
+	if !strings.Contains(markup, `id="hub-setup-submit" class="prompt-action-button prompt-submit" type="submit">Connect Runtime</button>`) {
+		t.Fatalf("expected index html to use a clearer default hub setup submit label")
+	}
+	if !strings.Contains(markup, `id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true" title="Studio"`) {
+		t.Fatalf("expected index html to relabel the primary dock mode as Studio")
 	}
 	if !strings.Contains(markup, `id="hub-setup-emoji-picker"`) || !strings.Contains(markup, `id="hub-setup-emoji-panel"`) {
 		t.Fatalf("expected index html to include the emoji picker control shell")
@@ -315,8 +360,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `const hubSetupEmojiPicker = window.MoltenEmojiPicker && hubSetupEmojiPickerRoot`) {
 		t.Fatalf("expected index html to initialize the included emoji picker")
 	}
-	if !strings.Contains(markup, `class="prompt-mode-link prompt-mode-link-logo prompt-mode-link-logo-divider"`) {
-		t.Fatalf("expected first dock logo link to use shared icon-link styling with divider")
+	if !strings.Contains(markup, `class="prompt-mode-divider"`) {
+		t.Fatalf("expected dock to include a shared divider between internal and external links")
 	}
 	if !strings.Contains(markup, `class="prompt-mode-link prompt-mode-link-logo"`) {
 		t.Fatalf("expected dock logo links to use shared icon-link styling")
@@ -372,8 +417,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `if (hubSetupClose) hubSetupClose.disabled = state.hubSetupBusy;`) {
 		t.Fatalf("expected index html to lock the setup dialog close control during save")
 	}
-	if !strings.Contains(markup, `hubSetupSubmit.textContent = profileEditor ? "Save" : "Done";`) {
-		t.Fatalf("expected index html to relabel the profile editor submit button to Save")
+	if !strings.Contains(markup, `hubSetupSubmit.textContent = profileEditor ? "Save" : (isNew ? "Redeem Token" : "Connect Runtime");`) {
+		t.Fatalf("expected index html to relabel the hub setup submit button for profile, new-agent, and reconnect flows")
 	}
 	if !strings.Contains(markup, `hubSetupStatus.className = value`) || !strings.Contains(markup, `hub-setup-status submit-status submit-status-inline is-visible`) {
 		t.Fatalf("expected index html to keep the hub setup status line visible when populated")
@@ -539,11 +584,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `if (!state.promptVisible && !Boolean(state.ui?.automaticMode)) {`) {
 		t.Fatalf("expected index html to auto-expand studio when a mode tab is selected")
 	}
-	if !strings.Contains(markup, `id="task-panel" class="panel min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))] hidden" aria-hidden="true"`) {
-		t.Fatalf("expected index html to keep task panel hidden before tasks exist")
+	if !strings.Contains(markup, `id="task-panel" class="panel brand-login-card-shell min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]" aria-hidden="false"`) {
+		t.Fatalf("expected index html to render the task queue panel immediately with the shared glass shell")
 	}
-	if !strings.Contains(markup, `>Task View</span>`) {
-		t.Fatalf("expected index html to render the task panel under a Task View heading")
+	if !strings.Contains(markup, `>Current Work</span>`) {
+		t.Fatalf("expected index html to render the task panel under a Current Work heading")
 	}
 	if !strings.Contains(markup, `id="task-fullscreen-list"`) {
 		t.Fatalf("expected index html to include full screen task list")
@@ -553,6 +598,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `id="task-fullscreen-output-panel"`) {
 		t.Fatalf("expected index html to include full screen output panel wrapper")
+	}
+	if !strings.Contains(markup, `id="task-fullscreen-head-label" class="task-fullscreen-head-label"`) {
+		t.Fatalf("expected full screen task header to render a dedicated wrapping label class")
+	}
+	if strings.Contains(markup, `id="task-fullscreen-head-label" class="min-w-0 flex-1 truncate"`) {
+		t.Fatalf("expected full screen task header to avoid truncating long prompts")
 	}
 	if !strings.Contains(markup, `id="task-fullscreen-terminal"`) {
 		t.Fatalf("expected index html to include full screen terminal output")
@@ -583,6 +634,32 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "function sortTasksByActivity(") {
 		t.Fatalf("expected index html to include activity-based task sorting for list rendering")
+	}
+	if !strings.Contains(markup, "const STREAM_RENDER_INTERVAL_MS = 120;") {
+		t.Fatalf("expected index html to keep stream-driven task transitions responsive at 120ms cadence")
+	}
+	if !strings.Contains(markup, "const TASK_ORDER_TRANSITION_DELAY_MS = 2_000;") || !strings.Contains(markup, "const TASK_ORDER_SYNC_INTERVAL_MS = 4_000;") {
+		t.Fatalf("expected index html to delay and synchronize task reordering transitions")
+	}
+	if !strings.Contains(markup, "taskOrderPendingDesired: [],") {
+		t.Fatalf("expected index html state to track pending desired task order for stable transition delay windows")
+	}
+	if !strings.Contains(markup, "if (!sameTaskOrder(state.taskOrderPendingDesired, desiredOrder)) {") ||
+		!strings.Contains(markup, "state.taskOrderPendingSince = nowMs;") {
+		t.Fatalf("expected index html to reset task reorder delay timing whenever the desired order changes")
+	}
+	if !strings.Contains(markup, "const TASK_REFLOW_TRANSITION_MS = 560;") ||
+		!strings.Contains(markup, "const TASK_REFLOW_TRANSITION_EASING = \"cubic-bezier(0.16, 1, 0.3, 1)\";") {
+		t.Fatalf("expected index html to define smoother task reflow transition parameters")
+	}
+	if !strings.Contains(markup, "translate ${TASK_REFLOW_TRANSITION_MS}ms ${TASK_REFLOW_TRANSITION_EASING}") {
+		t.Fatalf("expected index html to animate task reflow with translate-based transitions for smoother movement")
+	}
+	if !strings.Contains(markup, "function applyTaskOrderCadence(tasks)") {
+		t.Fatalf("expected index html to include cadence-based task order stabilization")
+	}
+	if !strings.Contains(markup, "function animateTaskReflow(listNode, previousRects)") {
+		t.Fatalf("expected index html to animate task reflow transitions")
 	}
 	if strings.Contains(markup, "taskFullscreenBody.classList.toggle(\"task-output-hidden\", !outputVisible);") {
 		t.Fatalf("expected index html to remove full screen output visibility toggling")
@@ -635,13 +712,13 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if strings.Contains(markup, "rightCol.classList.toggle(\"task-output-hidden\", !outputVisible);") {
 		t.Fatalf("expected index html to remove standard layout output hiding")
 	}
-	if !strings.Contains(markup, "rightCol.classList.toggle(\"task-list-hidden\", !hasTasks);") {
-		t.Fatalf("expected index html to collapse the standard layout when there are no tasks")
+	if !strings.Contains(markup, "rightCol.classList.toggle(\"task-list-hidden\", false);") {
+		t.Fatalf("expected index html to keep the standard layout stable even when the queue is empty")
 	}
-	if !strings.Contains(markup, "taskPanel.classList.toggle(\"hidden\", !hasTasks);") {
-		t.Fatalf("expected index html to hide the task panel when there are no tasks")
+	if !strings.Contains(markup, "taskPanel.classList.toggle(\"hidden\", false);") {
+		t.Fatalf("expected index html to keep the task queue panel visible when there are no tasks")
 	}
-	if !strings.Contains(markup, "openTaskOutput(task.request_id);") {
+	if !strings.Contains(markup, "openTaskOutput(requestID);") {
 		t.Fatalf("expected index html to open focused full screen output from the task action")
 	}
 	if strings.Contains(markup, "Output hidden. Click Open Output to view terminal logs.") {
@@ -755,11 +832,20 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "conn.hub_transport") {
 		t.Fatalf("expected index html to read hub transport mode from connection state")
 	}
+	if !strings.Contains(markup, "conn.hub_detail") {
+		t.Fatalf("expected index html to read hub connection detail from connection state")
+	}
 	if !strings.Contains(markup, "Connected via WebSocket") {
 		t.Fatalf("expected index html to include websocket connection copy")
 	}
 	if !strings.Contains(markup, "Connected via HTTP long polling") {
 		t.Fatalf("expected index html to include HTTP long-polling connection copy")
+	}
+	if !strings.Contains(markup, "Hub endpoint is waking up") {
+		t.Fatalf("expected index html to include ping retry connection copy")
+	}
+	if !strings.Contains(markup, "Hub endpoint is live at") {
+		t.Fatalf("expected index html to include ping reachable connection copy")
 	}
 	if !strings.Contains(markup, `const HUB_LOGIN_URL = "https://app.molten.bot/signin?target=hub";`) {
 		t.Fatalf("expected index html to define the molten hub login url for disconnected runtimes")
@@ -794,8 +880,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `aria-label="Minimize Studio panel"`) || !strings.Contains(markup, `title="Minimize Studio panel">▾</button>`) {
 		t.Fatalf("expected index html to initialize the studio toggle as an arrow minimize control")
 	}
-	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title">Prompt</span>`) {
-		t.Fatalf("expected index html to render the prompt panel under a Prompt heading by default")
+	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title">Studio</span>`) {
+		t.Fatalf("expected index html to render the prompt panel under a Studio heading by default")
 	}
 	if !strings.Contains(markup, "library-task-option-prompt") {
 		t.Fatalf("expected index html to include expandable library prompt sections")
@@ -824,8 +910,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function formatCompactMetricNumber(") {
 		t.Fatalf("expected index html to include compact metric formatter")
 	}
-	if !strings.Contains(markup, `class="metric-copy"`) || !strings.Contains(markup, `class="metric-label text-xs leading-tight">CPU</span>`) {
-		t.Fatalf("expected index html to separate compact metric values from hover-revealed labels")
+	if !strings.Contains(markup, `class="metric-copy"`) || !strings.Contains(markup, `class="metric-label metric-label-visible text-xs leading-tight">CPU</span>`) {
+		t.Fatalf("expected index html to render the CPU metric label as visible copy")
+	}
+	if !strings.Contains(markup, `class="metric-label metric-label-visible text-xs leading-tight">MEM</span>`) {
+		t.Fatalf("expected index html to render the memory metric label as visible copy")
+	}
+	if !strings.Contains(markup, `class="metric-label metric-label-visible text-xs leading-tight">I/O</span>`) {
+		t.Fatalf("expected index html to render the I/O metric label as visible copy")
 	}
 	if !strings.Contains(markup, `id="resource-metrics-unit"`) {
 		t.Fatalf("expected index html to include a dedicated disk throughput unit element")
@@ -845,8 +937,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="prompt-mode-builder"`) {
 		t.Fatalf("expected index html to include builder mode toggle")
 	}
-	if !strings.Contains(markup, `id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true">Prompt</a>`) {
-		t.Fatalf("expected index html to render Prompt as the primary dock label")
+	if !strings.Contains(markup, `id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true" title="Studio"`) {
+		t.Fatalf("expected index html to render Studio as the primary dock icon action")
+	}
+	if !strings.Contains(markup, `<span class="prompt-mode-link-tooltip" aria-hidden="true">Studio</span>`) {
+		t.Fatalf("expected index html to expose Studio through dock tooltip text")
 	}
 	if !strings.Contains(markup, `id="prompt-mode-library"`) {
 		t.Fatalf("expected index html to include library mode toggle")
@@ -860,13 +955,13 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `promptPanelTitle.textContent = promptModeTitle(state.promptMode);`) {
 		t.Fatalf("expected index html to update the panel heading when the prompt mode changes")
 	}
-	if !strings.Contains(markup, `class="prompt-mode-link active" href="#studio-builder" aria-selected="true"`) {
+	if !strings.Contains(markup, `id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true"`) {
 		t.Fatalf("expected builder mode to render as an anchor-style control inside the shared segmented dock")
 	}
-	if !strings.Contains(markup, `class="prompt-mode-link" href="#studio-library" aria-selected="false"`) {
+	if !strings.Contains(markup, `id="prompt-mode-library" class="prompt-mode-link" href="#studio-library" aria-selected="false"`) {
 		t.Fatalf("expected library mode to render as an anchor-style control inside the shared segmented dock")
 	}
-	if !strings.Contains(markup, `class="prompt-mode-link" href="#studio-json" aria-selected="false"`) {
+	if !strings.Contains(markup, `id="prompt-mode-json" class="prompt-mode-link" href="#studio-json" aria-selected="false"`) {
 		t.Fatalf("expected json mode to render as an anchor-style control inside the shared segmented dock")
 	}
 	if !strings.Contains(markup, `class="page-bottom-dock"`) || !strings.Contains(markup, `class="prompt-mode-tabs prompt-mode-tabs-dock"`) {
@@ -891,7 +986,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to keep the GitHub dock item screen-reader accessible without visible text")
 	}
 	if strings.Index(markup, `id="task-panel"`) > strings.Index(markup, `class="panel prompt-wrap`) {
-		t.Fatalf("expected index html to render Task View before Studio in the page layout")
+		t.Fatalf("expected index html to render Current Work before Studio in the page layout")
 	}
 	if !strings.Contains(markup, `id="builder-repo-select"`) {
 		t.Fatalf("expected index html to include repo history select")
@@ -933,14 +1028,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if strings.Contains(markup, `prompt-image-chip`) {
 		t.Fatalf("expected index html to remove stacked screenshot chip rendering")
 	}
-	if strings.Contains(markup, ">Screenshots<") {
-		t.Fatalf("expected index html to remove the screenshots title label")
+	if strings.Contains(markup, `class="prompt-hero-chip brand-chip-action">Screenshots</span>`) {
+		t.Fatalf("expected index html to remove the Studio overview hero screenshot chip")
 	}
 	if strings.Contains(markup, "No screenshots attached.") {
 		t.Fatalf("expected index html to hide screenshot empty-state copy until images are attached")
 	}
-	if !strings.Contains(markup, `id="local-prompt-submit"`) || !strings.Contains(markup, `>Run</button>`) {
-		t.Fatalf("expected index html to render the studio submit button with label Run")
+	if !strings.Contains(markup, `id="local-prompt-submit"`) || !strings.Contains(markup, `>Queue Task</button>`) {
+		t.Fatalf("expected index html to render the studio submit button with label Queue Task")
 	}
 	if strings.Contains(markup, "Select a repo, branch, directory, and prompt in Builder mode. You can paste PNG screenshots before submitting.") {
 		t.Fatalf("expected index html to remove the builder mode helper sentence")
@@ -1101,6 +1196,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "const repo = normalizeRepoValue(libraryRepoInput.value) || defaultRepository();") {
 		t.Fatalf("expected index html payload builders to fall back to the configured default repository")
 	}
+	if !strings.Contains(markup, "const payload = {\n        repos: [repo],\n        branch,") {
+		t.Fatalf("expected index html library payload to emit selected repositories through repos[]")
+	}
 	if !strings.Contains(markup, "function dropReposFromHistory(") {
 		t.Fatalf("expected index html to include repo history cleanup helper")
 	}
@@ -1125,8 +1223,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `promptVisibilityToggle.textContent = visible ? "▾" : "▸";`) {
 		t.Fatalf("expected index html to render studio toggle arrow icons for minimize/expand")
 	}
-	if !strings.Contains(markup, `pauseRun.textContent = paused ? "▶" : "||";`) {
-		t.Fatalf("expected index html to render task pause/run icon control")
+	if !strings.Contains(markup, `pauseRun.textContent = canRun ? "▶" : "||";`) {
+		t.Fatalf("expected index html to render task pause/run icon control from backend capabilities")
 	}
 	if !strings.Contains(markup, `forceStart.title = "Force start this queued task now";`) {
 		t.Fatalf("expected index html to render force-start control for pending tasks")
@@ -1357,7 +1455,7 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".hub-emoji-picker-panel") || !strings.Contains(css, ".hub-emoji-picker-grid") {
 		t.Fatalf("expected stylesheet to include emoji picker styles")
 	}
-	if !strings.Contains(css, ".hub-emoji-picker-selected") || !strings.Contains(css, ".hub-emoji-picker-search-icon") {
+	if !strings.Contains(css, ".hub-emoji-picker-panel-header") || !strings.Contains(css, ".hub-emoji-picker-toggle-text") {
 		t.Fatalf("expected stylesheet to include the refreshed emoji picker layout styles")
 	}
 	if !strings.Contains(css, ".panel-header,\n.task-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 8px;\n  padding: 13px 16px;\n  border-bottom: 1px solid var(--surface-header-border);\n  background: var(--surface-header);\n  color: var(--surface-label);") {
@@ -1510,17 +1608,17 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".page-bottom-dock {\n  position: fixed;\n  left: 50%;\n  bottom: max(16px, env(safe-area-inset-bottom));\n  z-index: 61;\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  justify-content: center;") {
 		t.Fatalf("expected stylesheet to align the bottom dock tabs and GitHub profile link on a shared row")
 	}
-	if !strings.Contains(css, ".prompt-mode-link {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;") {
-		t.Fatalf("expected segmented dock links to support icon-and-text spacing within the shared menu")
+	if !strings.Contains(css, ".prompt-mode-link {\n  position: relative;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 40px;\n  height: 40px;") {
+		t.Fatalf("expected segmented dock links to use icon pill sizing within the shared menu")
 	}
-	if !strings.Contains(css, ".prompt-mode-link img {\n  display: block;\n  width: 15px;\n  height: 15px;") {
+	if !strings.Contains(css, ".prompt-mode-link-icon img {\n  display: block;\n  width: 15px;\n  height: 15px;") {
 		t.Fatalf("expected stylesheet to size dock icons for integrated menu items")
 	}
-	if !strings.Contains(css, ".prompt-mode-link-logo {\n  min-width: 40px;\n  padding-inline: 12px;\n}") {
+	if !strings.Contains(css, ".prompt-mode-link-logo {\n  min-width: 40px;\n  padding-inline: 0;\n}") {
 		t.Fatalf("expected stylesheet to keep icon-only dock items balanced with the text tabs")
 	}
-	if !strings.Contains(css, ".prompt-mode-link-logo-divider::before {\n  content: \"\";\n  display: block;\n  width: 1px;\n  height: 18px;") {
-		t.Fatalf("expected stylesheet to visually integrate the leading icon-only dock item into the shared dock instead of a detached pill")
+	if !strings.Contains(css, ".prompt-mode-divider {\n  width: 1px;\n  height: 24px;\n  margin-inline: 4px;") {
+		t.Fatalf("expected stylesheet to visually integrate the leading icon-only dock item into the shared dock with a divider element")
 	}
 	if !strings.Contains(css, ".task-fullscreen {\n  position: fixed;\n  inset: 0;\n  z-index: 80;\n  padding: 0;") {
 		t.Fatalf("expected stylesheet to make full screen task layout use full viewport padding")
@@ -1627,22 +1725,19 @@ func TestHandlerServesStaticEmojiPickerScript(t *testing.T) {
 	if !strings.Contains(body, `hub.ui.emoji.recent`) {
 		t.Fatalf("expected emoji picker script to persist recent emoji selections")
 	}
-	if !strings.Contains(body, `toggle.addEventListener("mousedown", (event) => {`) || !strings.Contains(body, `event.preventDefault();`) {
-		t.Fatalf("expected emoji picker script to preserve toggle activation while preventing input focus conflicts")
-	}
 	if !strings.Contains(body, `function limitGraphemes(value, maxGraphemes)`) || !strings.Contains(body, `Intl.Segmenter`) {
 		t.Fatalf("expected emoji picker script to clamp emoji values by grapheme cluster")
 	}
 	if !strings.Contains(body, `clearButton.addEventListener("click", () => {`) || !strings.Contains(body, `setValue("");`) {
 		t.Fatalf("expected emoji picker script to support clearing the selected emoji")
 	}
-	if !strings.Contains(body, `hub-emoji-picker-selected-text`) || !strings.Contains(body, `Frequently used`) {
-		t.Fatalf("expected emoji picker script to render the refreshed selected state and recent section labels")
+	if !strings.Contains(body, `Pick one emoji`) || !strings.Contains(body, `Frequently used`) {
+		t.Fatalf("expected emoji picker script to render the refreshed panel heading and recent section labels")
 	}
-	if !strings.Contains(body, `document.addEventListener("click", (event) => {`) || !strings.Contains(body, `if (!root.contains(event.target)) {`) {
+	if !strings.Contains(body, `global.addEventListener("mousedown", handleOutsidePointer);`) || !strings.Contains(body, `if (root.contains(target) || panel.contains(target)) {`) {
 		t.Fatalf("expected emoji picker script to close on outside click")
 	}
-	if !strings.Contains(body, `if (event.key === "Escape" && open) {`) || !strings.Contains(body, `setOpen(false);`) {
+	if !strings.Contains(body, `function handleEscape(event) {`) || !strings.Contains(body, `event.key !== "Escape"`) || !strings.Contains(body, `setOpen(false);`) {
 		t.Fatalf("expected emoji picker script to close on Escape")
 	}
 	if !strings.Contains(body, `if (nextDisabled) {`) || !strings.Contains(body, `setOpen(false);`) {
@@ -2035,7 +2130,7 @@ func TestHandlerLibraryRunMethodNotAllowed(t *testing.T) {
 	}
 }
 
-func TestHandlerTaskRerunAccepted(t *testing.T) {
+func TestHandlerTaskRerunAcceptedKeepsOriginalTaskVisible(t *testing.T) {
 	t.Parallel()
 
 	b := NewBroker()
@@ -2043,7 +2138,7 @@ func TestHandlerTaskRerunAccepted(t *testing.T) {
 	payload := `{"repo":"git@github.com:acme/repo.git","baseBranch":"main","targetSubdir":".","prompt":"rerun this"}`
 	b.RecordTaskRunConfig(requestID, []byte(payload))
 	b.IngestLog("dispatch status=start request_id=req-100")
-	b.IngestLog("dispatch status=ok request_id=req-100 workspace=/tmp/run branch=moltenhub-rerun")
+	b.IngestLog("dispatch status=completed request_id=req-100 workspace=/tmp/run branch=moltenhub-rerun")
 
 	var gotBody string
 	var closeCalls []string
@@ -2089,14 +2184,18 @@ func TestHandlerTaskRerunAccepted(t *testing.T) {
 	if gotRerunOf, _ := body["rerun_of"].(string); gotRerunOf != requestID {
 		t.Fatalf("rerun_of = %q, want %q", gotRerunOf, requestID)
 	}
-	if len(closeCalls) != 1 || closeCalls[0] != requestID {
-		t.Fatalf("close calls = %v, want [%s]", closeCalls, requestID)
+	if len(closeCalls) != 0 {
+		t.Fatalf("close calls = %v, want none", closeCalls)
 	}
-	if _, ok := b.TaskRunConfig(requestID); ok {
-		t.Fatalf("TaskRunConfig(%q) found after rerun, want closed", requestID)
+	if _, ok := b.TaskRunConfig(requestID); !ok {
+		t.Fatalf("TaskRunConfig(%q) missing after rerun, want preserved", requestID)
 	}
-	if got := len(b.Snapshot().Tasks); got != 0 {
-		t.Fatalf("len(tasks) after rerun = %d, want 0", got)
+	snap := b.Snapshot()
+	if got := len(snap.Tasks); got != 1 {
+		t.Fatalf("len(tasks) after rerun = %d, want 1", got)
+	}
+	if got, want := snap.Tasks[0].RequestID, requestID; got != want {
+		t.Fatalf("task request_id = %q, want %q", got, want)
 	}
 }
 
@@ -2356,7 +2455,7 @@ func TestHandlerTaskCloseAccepted(t *testing.T) {
 	b := NewBroker()
 	b.RecordTaskRunConfig("req-close", []byte(`{"repo":"x","prompt":"x"}`))
 	b.IngestLog("dispatch status=start request_id=req-close")
-	b.IngestLog("dispatch status=ok request_id=req-close workspace=/tmp/run branch=moltenhub-close")
+	b.IngestLog("dispatch status=completed request_id=req-close workspace=/tmp/run branch=moltenhub-close")
 
 	var closedID string
 	srv := NewServer("", b)
@@ -2659,6 +2758,78 @@ func TestHandlerTaskControlReturnsNotFound(t *testing.T) {
 
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+	}
+}
+
+func TestHandlerTaskControlReturnsUnavailableForExistingUncontrolledTask(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog("dispatch status=start request_id=req-remote")
+
+	srv := NewServer("", b)
+	srv.StopTask = func(_ context.Context, requestID string) error {
+		if requestID != "req-remote" {
+			t.Fatalf("requestID = %q, want %q", requestID, "req-remote")
+		}
+		return ErrTaskNotFound
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/req-remote/stop", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/req-remote/stop error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusConflict)
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got := body["error"]; got != "task stop is unavailable for this task" {
+		t.Fatalf("error = %#v, want unavailable task control message", got)
+	}
+}
+
+func TestHandlerTaskControlReturnsAlreadyStoppedForFinishedTask(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog(`dispatch status=stopped request_id=req-stop-finished err="task was stopped by operator"`)
+
+	srv := NewServer("", b)
+	srv.StopTask = func(_ context.Context, requestID string) error {
+		if requestID != "req-stop-finished" {
+			t.Fatalf("requestID = %q, want %q", requestID, "req-stop-finished")
+		}
+		return ErrTaskNotFound
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/req-stop-finished/stop", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/tasks/req-stop-finished/stop error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusConflict)
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got := body["error"]; got != "task is already stopped" {
+		t.Fatalf("error = %#v, want already stopped message", got)
 	}
 }
 

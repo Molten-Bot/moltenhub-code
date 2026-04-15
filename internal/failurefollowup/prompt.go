@@ -12,24 +12,23 @@ const RequiredPrompt = "Review the failing log paths first, identify every root 
 
 const FollowUpRepositoryURL = config.DefaultRepositoryURL
 
-var ExecutionContract = fmt.Sprintf(`Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.
+const OfflineReviewInstruction = "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours."
+const FailureResponseInstruction = "When failures occur, send a response back to the calling agent that clearly states failure and includes the error details."
+const RemoteOperationsInstruction = "Do not stop work just because you cannot create a pull request or watch remote CI/CD from inside this agent runtime. Finish the repository changes and local validation you can perform; the harness will handle PR creation/update and remote check monitoring afterward."
+const NoOpInstruction = "If no file changes are required, return a clear no-op result with concrete evidence instead of forcing an empty PR."
 
-When failures occur, send a response back to the calling agent that clearly states failure and includes the error details.
+var ExecutionContract = strings.Join([]string{
+	FailureResponseInstruction,
+	RemoteOperationsInstruction,
+	NoOpInstruction,
+}, "\n\n")
 
-When a task fails:
-- Queue a follow-up task dedicated to reviewing the logs and fixing all underlying issues in this codebase.
-- Pass the relevant failing file/folder log path(s) into that follow-up task context.
-- Use this follow-up run config payload shape:
-  {"repos":["%s"],"baseBranch":"main","targetSubdir":".","prompt":"%s"}
-
-Completion requirements:
-- Only create a new branch when starting from 'main'; if you're fixing an existing non-'main' branch, stay on it.
-- Start every new branch and every PR title with 'moltenhub-'.
-- Keep working until there is a PR for your changes and required CI/CD checks are green, unless you can verify the request is already satisfied with no required code/workflow/docs changes.
-- If no file changes are required, return a clear no-op result with concrete evidence instead of forcing an empty PR.
-- If CI/CD fails, continue fixing code/tests/workflows until checks pass.
-- If you changed multiple repositories, ensure each changed repository has its own branch and PR.
-- Optimize for the highest-quality PR you can produce with focused, production-ready changes.`, FollowUpRepositoryURL, RequiredPrompt)
+var FollowUpContract = strings.Join([]string{
+	OfflineReviewInstruction,
+	ExecutionContract,
+	fmt.Sprintf(`Harness-managed follow-up targeting:
+{"repos":["%s"],"baseBranch":"main","targetSubdir":".","prompt":"%s"}`, FollowUpRepositoryURL, RequiredPrompt),
+}, "\n\n")
 
 const (
 	LogFileName           = "terminal.log"
@@ -44,6 +43,9 @@ var nonRemediableRepoAccessMarkers = []string{
 	"could not read username for 'https://github.com'",
 	"doesn't have the rights to pull the code",
 	"doesn't have the rights to push a pr",
+	"refusing to allow an oauth app to create or update workflow",
+	"without workflow scope",
+	"without `workflow` scope",
 }
 
 var nonRemediableFailureMarkers = []string{
@@ -66,6 +68,24 @@ func WithExecutionContract(base string) string {
 		return base
 	}
 	return base + "\n\n" + ExecutionContract
+}
+
+func WithFollowUpContract(base string) string {
+	base = strings.TrimSpace(base)
+	if base == "" {
+		return FollowUpContract
+	}
+	if strings.Contains(base, FollowUpContract) {
+		return base
+	}
+	if !strings.Contains(base, OfflineReviewInstruction) {
+		base += "\n\n" + OfflineReviewInstruction
+	}
+	if !strings.Contains(base, fmt.Sprintf(`{"repos":["%s"],"baseBranch":"main","targetSubdir":".","prompt":"%s"}`, FollowUpRepositoryURL, RequiredPrompt)) {
+		base += "\n\n" + fmt.Sprintf(`Harness-managed follow-up targeting:
+{"repos":["%s"],"baseBranch":"main","targetSubdir":".","prompt":"%s"}`, FollowUpRepositoryURL, RequiredPrompt)
+	}
+	return WithExecutionContract(base)
 }
 
 func ComposePrompt(requiredPrompt string, logPaths, fallbackLogPaths []string, noPathGuidance, contextBlock string) string {
@@ -98,7 +118,7 @@ func ComposePrompt(requiredPrompt string, logPaths, fallbackLogPaths []string, n
 		b.WriteString(contextBlock)
 	}
 
-	return WithExecutionContract(b.String())
+	return WithFollowUpContract(b.String())
 }
 
 func FollowUpTargeting(baseBranch, targetSubdir, currentBranch string) (string, string) {
@@ -106,15 +126,49 @@ func FollowUpTargeting(baseBranch, targetSubdir, currentBranch string) (string, 
 }
 
 func TaskLogPaths(logRoot, requestID string) []string {
+	logRoot = strings.TrimSpace(logRoot)
 	logDir, ok := TaskLogDir(logRoot, requestID)
 	if !ok {
 		return nil
 	}
-	return []string{
-		logDir,
-		filepath.Join(logDir, LegacyTaskLogFileName),
-		filepath.Join(logDir, LogFileName),
+
+	paths := make([]string, 0, 5)
+	seen := make(map[string]struct{}, 5)
+	appendPath := func(path string) {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			return
+		}
+		if _, exists := seen[path]; exists {
+			return
+		}
+		seen[path] = struct{}{}
+		paths = append(paths, path)
 	}
+	appendTaskLogPaths := func(taskDir string, includeDir bool) {
+		if includeDir {
+			appendPath(taskDir)
+		}
+		appendPath(filepath.Join(taskDir, LegacyTaskLogFileName))
+		appendPath(filepath.Join(taskDir, LogFileName))
+	}
+
+	appendTaskLogPaths(logDir, true)
+	if shouldIncludeFallbackTaskLogs(requestID) {
+		appendTaskLogPaths(filepath.Join(logRoot, FallbackLogSubdir), false)
+	}
+
+	return paths
+}
+
+func shouldIncludeFallbackTaskLogs(requestID string) bool {
+	subdir, ok := IdentifierSubdir(requestID)
+	if !ok {
+		return true
+	}
+	subdir = filepath.Clean(subdir)
+	localPrefix := "local" + string(filepath.Separator)
+	return !(subdir == "local" || strings.HasPrefix(subdir, localPrefix))
 }
 
 func TaskLogDir(logRoot, requestID string) (string, bool) {

@@ -6,17 +6,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jef/moltenhub-code/internal/agentruntime"
 	"github.com/jef/moltenhub-code/internal/config"
 	"github.com/jef/moltenhub-code/internal/execx"
 	"github.com/jef/moltenhub-code/internal/failurefollowup"
+	"github.com/jef/moltenhub-code/internal/githubutil"
 	"github.com/jef/moltenhub-code/internal/slug"
 	"github.com/jef/moltenhub-code/internal/workspace"
 )
@@ -49,6 +53,7 @@ const (
 	maxReviewCommentsChars     = 16000
 	maxReviewDiffStatChars     = 12000
 	maxReviewDiffPatchChars    = 30000
+	defaultAgentStageTimeout   = 30 * time.Minute
 )
 
 type logFn func(string, ...any)
@@ -74,12 +79,15 @@ type RepoResult struct {
 }
 
 type repoWorkspace struct {
-	URL     string
-	Dir     string
-	RelDir  string
-	Branch  string
-	PRURL   string
-	Changed bool
+	URL                string
+	Dir                string
+	RelDir             string
+	Branch             string
+	PRURL              string
+	Changed            bool
+	WriteAccessChecked bool
+	WriteAccessAllowed bool
+	WriteAccessErr     error
 }
 
 type codexRunOptions = agentruntime.RunOptions
@@ -92,17 +100,21 @@ type Harness struct {
 	Logf        logFn
 	TargetDirOK func(string) bool
 	Sleep       func(context.Context, time.Duration) error
+	// AgentStageTimeout bounds each agent execution attempt; zero falls back to
+	// the default and negative disables the timeout.
+	AgentStageTimeout time.Duration
 }
 
 // New returns a harness configured with defaults.
 func New(runner execx.Runner) Harness {
 	return Harness{
-		Runner:      runner,
-		Workspace:   workspace.NewManager(),
-		Now:         time.Now,
-		Logf:        func(string, ...any) {},
-		TargetDirOK: pathIsDir,
-		Sleep:       sleepWithContext,
+		Runner:            runner,
+		Workspace:         workspace.NewManager(),
+		Now:               time.Now,
+		Logf:              func(string, ...any) {},
+		TargetDirOK:       pathIsDir,
+		Sleep:             sleepWithContext,
+		AgentStageTimeout: defaultAgentStageTimeout,
 	}
 }
 
@@ -127,6 +139,9 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	if h.Sleep == nil {
 		h.Sleep = sleepWithContext
 	}
+	if h.AgentStageTimeout == 0 {
+		h.AgentStageTimeout = defaultAgentStageTimeout
+	}
 	runtime, err := agentruntime.Resolve(cfg.AgentHarness, cfg.AgentCommand)
 	if err != nil {
 		return h.fail(ExitConfig, "config", err, "")
@@ -145,7 +160,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	if _, err := h.runCommand(ctx, "auth", authCommand()); err != nil {
 		return h.fail(ExitAuth, "auth", err, "")
 	}
-	if hasGitHubAuthToken() {
+	if shouldSetupGitHubAuthForRepos(cfg.RepoList()) || hasGitHubAuthToken() {
 		if _, err := h.runCommand(ctx, "auth", authSetupGitCommand()); err != nil {
 			return h.fail(ExitAuth, "auth", err, "")
 		}
@@ -178,63 +193,17 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	for i, repoURL := range repoURLs {
 		relDir := repoWorkspaceDirName(repoURL, i, len(repoURLs))
 		repoDir := filepath.Join(runDir, relDir)
-		branchForClone := cloneBaseBranch
-		h.logf("stage=clone status=start repo=%s branch=%s repo_dir=%s", repoURL, branchForClone, relDir)
-		cloneRes, cloneErr := h.runCloneWithRetry(
-			ctx,
-			repoURL,
-			branchForClone,
-			repoDir,
-			relDir,
-			cloneRepoCommand(repoURL, branchForClone, repoDir),
-		)
-		if cloneErr != nil {
-			if !shouldFallbackCloneToDefaultBranch(branchForClone, cloneRes, cloneErr) {
-				return h.fail(ExitClone, "clone", cloneErr, runDir)
-			}
-
-			h.logf(
-				"stage=clone status=warn action=fallback_default_branch reason=missing_remote_branch repo=%s branch=%s repo_dir=%s",
-				repoURL,
-				branchForClone,
-				relDir,
-			)
-			if err := os.RemoveAll(repoDir); err != nil {
-				return h.fail(ExitClone, "clone", fmt.Errorf("cleanup failed clone dir %s: %w", repoDir, err), runDir)
-			}
-			if _, err := h.runCloneWithRetry(
-				ctx,
-				repoURL,
-				"",
-				repoDir,
-				relDir,
-				cloneRepoDefaultBranchCommand(repoURL, repoDir),
-			); err != nil {
-				return h.fail(ExitClone, "clone", err, runDir)
-			}
-			cloneBaseBranch = "main"
-			h.logf(
-				"stage=clone status=ok action=fallback_default_branch repo=%s repo_dir=%s resolved_branch=%s",
-				repoURL,
-				relDir,
-				cloneBaseBranch,
-			)
-		} else {
-			h.logf("stage=clone status=ok repo=%s repo_dir=%s", repoURL, relDir)
-		}
-		if !shouldCreateWorkBranch(cloneBaseBranch) {
-			h.logf("stage=clone status=start action=fetch_main repo=%s repo_dir=%s", repoURL, relDir)
-			if _, err := h.runCommand(ctx, "clone", fetchMainBranchCommand(repoDir)); err != nil {
-				return h.fail(ExitClone, "clone", err, runDir)
-			}
-			h.logf("stage=clone status=ok action=fetch_main repo=%s repo_dir=%s", repoURL, relDir)
-		}
 		repos = append(repos, repoWorkspace{
 			URL:    repoURL,
 			Dir:    repoDir,
 			RelDir: relDir,
 		})
 	}
+	effectiveBaseBranch, err := h.cloneRepositories(ctx, repos, cloneBaseBranch)
+	if err != nil {
+		return h.fail(ExitClone, "clone", err, runDir)
+	}
+	cloneBaseBranch = effectiveBaseBranch
 	runCfg.BaseBranch = cloneBaseBranch
 
 	targetDir, err := resolveTargetDir(repos[0].Dir, cfg.TargetSubdir)
@@ -270,8 +239,24 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 	for i := range repos {
 		if err := h.verifyRemoteWriteAccess(ctx, repos[i]); err != nil {
+			if len(repos) > 1 && failurefollowup.NonRemediableRepoAccessReason(err) != "" {
+				repos[i].WriteAccessChecked = true
+				repos[i].WriteAccessAllowed = false
+				repos[i].WriteAccessErr = err
+				h.logf(
+					"stage=git status=warn action=probe_write_access reason=read_only_repo repo=%s repo_dir=%s branch=%s err=%q",
+					repos[i].URL,
+					repos[i].RelDir,
+					repos[i].Branch,
+					err,
+				)
+				continue
+			}
 			return h.fail(ExitGit, "git", err, runDir)
 		}
+		repos[i].WriteAccessChecked = true
+		repos[i].WriteAccessAllowed = true
+		repos[i].WriteAccessErr = nil
 	}
 
 	codexDir := targetDir
@@ -311,7 +296,11 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 			return h.fail(ExitGit, "git", err, runDir)
 		}
 		repos[i].Branch = pickFirstNonEmpty(localBranchFromStatus(statusRes.Stdout), repos[i].Branch)
-		repos[i].Changed = hasTrackedWorktreeChanges(statusRes.Stdout)
+		changed, detectErr := h.repoHasPendingChanges(ctx, repos[i], statusRes.Stdout, runCfg.BaseBranch)
+		if detectErr != nil {
+			return h.fail(ExitGit, "git", detectErr, runDir)
+		}
+		repos[i].Changed = changed
 		h.logf("stage=git status=scan repo=%s repo_dir=%s changed=%t", repos[i].URL, repos[i].RelDir, repos[i].Changed)
 	}
 
@@ -385,6 +374,20 @@ func (h Harness) processChangedRepo(
 	if repo == nil {
 		return ExitConfig, "config", fmt.Errorf("repo workspace is required")
 	}
+	if repo.WriteAccessChecked && !repo.WriteAccessAllowed {
+		if repo.WriteAccessErr != nil {
+			return ExitGit, "git", fmt.Errorf("cannot publish changes for repo %s branch %q: %w", repo.URL, repo.Branch, repo.WriteAccessErr)
+		}
+		return ExitGit, "git", fmt.Errorf("cannot publish changes for repo %s branch %q: remote write access unavailable", repo.URL, repo.Branch)
+	}
+	if !repo.WriteAccessChecked {
+		if err := h.verifyRemoteWriteAccess(ctx, *repo); err != nil {
+			return ExitGit, "git", err
+		}
+		repo.WriteAccessChecked = true
+		repo.WriteAccessAllowed = true
+		repo.WriteAccessErr = nil
+	}
 
 	h.logf("stage=git status=start action=commit repo=%s repo_dir=%s", repo.URL, repo.RelDir)
 	if _, err := h.runCommand(ctx, "git", addCommand(repo.Dir)); err != nil {
@@ -392,7 +395,7 @@ func (h Harness) processChangedRepo(
 	}
 	commitRes, commitErr := h.runCommand(ctx, "git", commitCommand(repo.Dir, cfg.CommitMessage))
 	if commitErr != nil {
-		noChanges, statusErr := h.refreshRepoChangeStateAfterNoOpCommit(ctx, repo, commitRes, commitErr)
+		noChanges, statusErr := h.refreshRepoChangeStateAfterNoOpCommit(ctx, repo, cfg.BaseBranch, commitRes, commitErr)
 		if statusErr != nil {
 			return ExitGit, "git", statusErr
 		}
@@ -400,7 +403,10 @@ func (h Harness) processChangedRepo(
 			h.logf("stage=git status=ok action=commit repo=%s repo_dir=%s reason=no_changes_after_add", repo.URL, repo.RelDir)
 			return ExitSuccess, "git", nil
 		}
-		return ExitGit, "git", commitErr
+		if !isNothingToCommitResult(commitRes, commitErr) {
+			return ExitGit, "git", commitErr
+		}
+		h.logf("stage=git status=ok action=commit repo=%s repo_dir=%s reason=already_committed", repo.URL, repo.RelDir)
 	}
 	if err := h.pushWithSync(ctx, *repo, 0); err != nil {
 		return ExitGit, "git", err
@@ -616,7 +622,7 @@ func (h Harness) processChangedRepo(
 		}
 		commitRes, commitErr := h.runCommand(ctx, "git", commitCommand(repo.Dir, remediationCommitMessage(cfg.CommitMessage, attempt+1)))
 		if commitErr != nil {
-			noChanges, statusErr := h.refreshRepoChangeStateAfterNoOpCommit(ctx, repo, commitRes, commitErr)
+			noChanges, statusErr := h.refreshRepoChangeStateAfterNoOpCommit(ctx, repo, cfg.BaseBranch, commitRes, commitErr)
 			if statusErr != nil {
 				return ExitGit, "git", statusErr
 			}
@@ -629,7 +635,15 @@ func (h Harness) processChangedRepo(
 				)
 				continue
 			}
-			return ExitGit, "git", commitErr
+			if !isNothingToCommitResult(commitRes, commitErr) {
+				return ExitGit, "git", commitErr
+			}
+			h.logf(
+				"stage=git status=ok action=repair_commit attempt=%d repo=%s repo_dir=%s reason=already_committed",
+				attempt+1,
+				repo.URL,
+				repo.RelDir,
+			)
 		}
 		if err := h.pushWithSync(ctx, *repo, attempt+1); err != nil {
 			return ExitGit, "git", err
@@ -722,6 +736,19 @@ func (h Harness) populateNoChangePRURLs(ctx context.Context, repos []repoWorkspa
 			continue
 		}
 		if prURL == "" {
+			prURL, err = h.lookupAnyPRURLByHead(ctx, repos[i])
+			if err != nil {
+				h.logf(
+					"stage=pr status=warn action=lookup_existing reason=fallback_failed repo=%s repo_dir=%s branch=%s err=%q",
+					repos[i].URL,
+					repos[i].RelDir,
+					repos[i].Branch,
+					err,
+				)
+				continue
+			}
+		}
+		if prURL == "" {
 			continue
 		}
 		repos[i].PRURL = prURL
@@ -750,6 +777,22 @@ func (h Harness) lookupOpenPRURLByHead(ctx context.Context, repo repoWorkspace) 
 	}
 
 	lookupRes, err := h.runCommand(ctx, "pr", prLookupByHeadCommand(repo.Dir, branch))
+	if err != nil {
+		return "", err
+	}
+	if prURL := parsePRURLFromLookupOutput(lookupRes.Stdout); prURL != "" {
+		return prURL, nil
+	}
+	return parsePRURLFromLookupOutput(lookupRes.Stderr), nil
+}
+
+func (h Harness) lookupAnyPRURLByHead(ctx context.Context, repo repoWorkspace) (string, error) {
+	branch := normalizeBranchRef(repo.Branch)
+	if branch == "" {
+		return "", nil
+	}
+
+	lookupRes, err := h.runCommand(ctx, "pr", prLookupAnyByHeadCommand(repo.Dir, branch))
 	if err != nil {
 		return "", err
 	}
@@ -789,6 +832,177 @@ func (h Harness) runCloneWithRetry(
 			return res, fmt.Errorf("clone retry interrupted: %w", sleepErr)
 		}
 	}
+}
+
+func (h Harness) cloneRepositories(ctx context.Context, repos []repoWorkspace, baseBranch string) (string, error) {
+	baseBranch = strings.TrimSpace(baseBranch)
+	if baseBranch == "" {
+		baseBranch = "main"
+	}
+	if len(repos) == 0 {
+		return baseBranch, nil
+	}
+	repoURLs := make([]string, 0, len(repos))
+	for _, repo := range repos {
+		repoURLs = append(repoURLs, repo.URL)
+	}
+	repoOwnerHints := repoOwnerFallbackCandidates(repoURLs)
+
+	usedFallback := make([]bool, len(repos))
+	cloneErrors := make([]error, len(repos))
+
+	cloneOne := func(index int) {
+		fellBack, err := h.cloneRepository(ctx, &repos[index], baseBranch, repoOwnerHints)
+		usedFallback[index] = fellBack
+		cloneErrors[index] = err
+	}
+
+	if len(repos) == 1 {
+		cloneOne(0)
+	} else {
+		var wg sync.WaitGroup
+		wg.Add(len(repos))
+		for i := range repos {
+			i := i
+			go func() {
+				defer wg.Done()
+				cloneOne(i)
+			}()
+		}
+		wg.Wait()
+	}
+
+	for _, err := range cloneErrors {
+		if err != nil {
+			return baseBranch, err
+		}
+	}
+
+	effectiveBaseBranch := baseBranch
+	for _, fellBack := range usedFallback {
+		if fellBack {
+			effectiveBaseBranch = "main"
+			break
+		}
+	}
+
+	if !shouldCreateWorkBranch(effectiveBaseBranch) {
+		for _, repo := range repos {
+			h.logf("stage=clone status=start action=fetch_main repo=%s repo_dir=%s", repo.URL, repo.RelDir)
+			if _, err := h.runCommand(ctx, "clone", fetchMainBranchCommand(repo.Dir)); err != nil {
+				return effectiveBaseBranch, err
+			}
+			h.logf("stage=clone status=ok action=fetch_main repo=%s repo_dir=%s", repo.URL, repo.RelDir)
+		}
+	}
+
+	return effectiveBaseBranch, nil
+}
+
+func (h Harness) cloneRepository(ctx context.Context, repo *repoWorkspace, branch string, repoOwnerHints []string) (bool, error) {
+	if repo == nil {
+		return false, fmt.Errorf("repo workspace is required")
+	}
+
+	branch = strings.TrimSpace(branch)
+	if branch == "" {
+		branch = "main"
+	}
+
+	repoURL := repo.URL
+	requestedRepoURL := repoURL
+	h.logf("stage=clone status=start repo=%s branch=%s repo_dir=%s", repoURL, branch, repo.RelDir)
+	cloneRes, cloneErr := h.runCloneWithRetry(
+		ctx,
+		repoURL,
+		branch,
+		repo.Dir,
+		repo.RelDir,
+		cloneRepoCommand(repoURL, branch, repo.Dir),
+	)
+	if cloneErr != nil && isRepoNotFoundCloneError(cloneErr, cloneRes) {
+		if fallbackRepoURL, ok := repoOwnerFallbackURL(repoURL, repoOwnerHints); ok {
+			h.logf(
+				"stage=clone status=warn action=fallback_repo_owner reason=repository_not_found repo=%s fallback_repo=%s branch=%s repo_dir=%s",
+				repoURL,
+				fallbackRepoURL,
+				branch,
+				repo.RelDir,
+			)
+			if err := os.RemoveAll(repo.Dir); err != nil {
+				return false, fmt.Errorf("cleanup failed clone dir %s: %w", repo.Dir, err)
+			}
+			fallbackRes, fallbackErr := h.runCloneWithRetry(
+				ctx,
+				fallbackRepoURL,
+				branch,
+				repo.Dir,
+				repo.RelDir,
+				cloneRepoCommand(fallbackRepoURL, branch, repo.Dir),
+			)
+			if fallbackErr == nil {
+				repo.URL = fallbackRepoURL
+				repoURL = fallbackRepoURL
+				cloneRes = fallbackRes
+				cloneErr = nil
+				h.logf(
+					"stage=clone status=ok action=fallback_repo_owner repo=%s fallback_repo=%s branch=%s repo_dir=%s",
+					requestedRepoURL,
+					fallbackRepoURL,
+					branch,
+					repo.RelDir,
+				)
+			} else {
+				repo.URL = fallbackRepoURL
+				repoURL = fallbackRepoURL
+				cloneRes = fallbackRes
+				cloneErr = fallbackErr
+				h.logf(
+					"stage=clone status=warn action=fallback_repo_owner reason=fallback_failed repo=%s fallback_repo=%s branch=%s repo_dir=%s err=%q",
+					requestedRepoURL,
+					fallbackRepoURL,
+					branch,
+					repo.RelDir,
+					fallbackErr,
+				)
+			}
+		}
+	}
+	if cloneErr == nil {
+		h.logf("stage=clone status=ok repo=%s repo_dir=%s", repoURL, repo.RelDir)
+		return false, nil
+	}
+	if !shouldFallbackCloneToDefaultBranch(branch, cloneRes, cloneErr) {
+		return false, cloneErr
+	}
+
+	h.logf(
+		"stage=clone status=warn action=fallback_default_branch reason=missing_remote_branch repo=%s branch=%s repo_dir=%s",
+		repoURL,
+		branch,
+		repo.RelDir,
+	)
+	if err := os.RemoveAll(repo.Dir); err != nil {
+		return false, fmt.Errorf("cleanup failed clone dir %s: %w", repo.Dir, err)
+	}
+	if _, err := h.runCloneWithRetry(
+		ctx,
+		repoURL,
+		"",
+		repo.Dir,
+		repo.RelDir,
+		cloneRepoDefaultBranchCommand(repoURL, repo.Dir),
+	); err != nil {
+		return false, err
+	}
+
+	h.logf(
+		"stage=clone status=ok action=fallback_default_branch repo=%s repo_dir=%s resolved_branch=%s",
+		repoURL,
+		repo.RelDir,
+		"main",
+	)
+	return true, nil
 }
 
 func cloneRetryBranchLabel(branch string) string {
@@ -839,7 +1053,13 @@ func commandErrorWithDetails(prefix string, err error, res execx.Result, maxChar
 	return fmt.Errorf("%s: %w: %s", prefix, err, detail)
 }
 
-func (h Harness) refreshRepoChangeStateAfterNoOpCommit(ctx context.Context, repo *repoWorkspace, commitRes execx.Result, commitErr error) (bool, error) {
+func (h Harness) refreshRepoChangeStateAfterNoOpCommit(
+	ctx context.Context,
+	repo *repoWorkspace,
+	baseBranch string,
+	commitRes execx.Result,
+	commitErr error,
+) (bool, error) {
 	if repo == nil || !isNothingToCommitResult(commitRes, commitErr) {
 		return false, nil
 	}
@@ -849,8 +1069,66 @@ func (h Harness) refreshRepoChangeStateAfterNoOpCommit(ctx context.Context, repo
 		return false, err
 	}
 	repo.Branch = pickFirstNonEmpty(localBranchFromStatus(statusRes.Stdout), repo.Branch)
-	repo.Changed = hasTrackedWorktreeChanges(statusRes.Stdout)
+	changed, detectErr := h.repoHasPendingChanges(ctx, *repo, statusRes.Stdout, baseBranch)
+	if detectErr != nil {
+		return false, detectErr
+	}
+	repo.Changed = changed
 	return !repo.Changed, nil
+}
+
+func (h Harness) repoHasPendingChanges(
+	ctx context.Context,
+	repo repoWorkspace,
+	statusStdout string,
+	baseBranch string,
+) (bool, error) {
+	if hasTrackedWorktreeChanges(statusStdout) || hasAheadCommitsInStatus(statusStdout) {
+		return true, nil
+	}
+	// `git status --porcelain --branch` should include a branch header.
+	// If it does not, keep legacy behavior and treat this as no changes.
+	if strings.TrimSpace(localBranchFromStatus(statusStdout)) == "" {
+		return false, nil
+	}
+	if !shouldCreateWorkBranch(baseBranch) {
+		return false, nil
+	}
+	commitsAhead, err := h.countCommitsAheadOfBase(ctx, repo, normalizeBranchRef(baseBranch))
+	if err != nil {
+		return false, err
+	}
+	return commitsAhead > 0, nil
+}
+
+func (h Harness) countCommitsAheadOfBase(ctx context.Context, repo repoWorkspace, baseBranch string) (int, error) {
+	baseBranch = normalizeBranchRef(baseBranch)
+	if baseBranch == "" {
+		baseBranch = "main"
+	}
+	res, err := h.runCommand(ctx, "git", commitsAheadOfBaseCommand(repo.Dir, baseBranch))
+	if err != nil {
+		return 0, commandErrorWithDetails(
+			fmt.Sprintf("count commits ahead of base branch %q for repo %s", baseBranch, repo.URL),
+			err,
+			res,
+			maxGitErrorDetailChars,
+		)
+	}
+	countText := strings.TrimSpace(res.Stdout)
+	if countText == "" {
+		return 0, nil
+	}
+	count, parseErr := strconv.Atoi(countText)
+	if parseErr != nil {
+		return 0, fmt.Errorf(
+			"parse commits-ahead count for repo %s branch %q: %w",
+			repo.URL,
+			repo.Branch,
+			parseErr,
+		)
+	}
+	return count, nil
 }
 
 func isNothingToCommitResult(res execx.Result, err error) bool {
@@ -1086,7 +1364,7 @@ func reviewSelector(reviewCfg config.ReviewConfig) string {
 		return fmt.Sprintf("%d", reviewCfg.PRNumber)
 	}
 	if prURL := strings.TrimSpace(reviewCfg.PRURL); prURL != "" {
-		return prURL
+		return githubutil.PullRequestSelector(prURL)
 	}
 	return strings.TrimSpace(reviewCfg.HeadBranch)
 }
@@ -1199,6 +1477,9 @@ func (h Harness) logf(format string, args ...any) {
 
 func (h Harness) runCommand(ctx context.Context, phase string, cmd execx.Command) (execx.Result, error) {
 	onLine := func(stream, line string) {
+		if strings.TrimSpace(line) == "" {
+			return
+		}
 		h.logf("cmd phase=%s name=%s stream=%s b64=%s", phase, cmd.Name, stream, encodeLogLine(line))
 	}
 
@@ -1383,6 +1664,165 @@ func isRepoNotFoundCloneError(err error, res execx.Result) bool {
 		strings.Contains(text, "repository not found") ||
 		strings.Contains(text, "does not appear to be a git repository") ||
 		strings.Contains(text, "repository does not exist")
+}
+
+var gitHubSCPLikeRepoPattern = regexp.MustCompile(`(?i)^((?:[^@:\s/]+@)?github\.com:)([^/\s]+)/([^/\s]+?)(\.git)?$`)
+
+type gitHubRepoRef struct {
+	owner        string
+	name         string
+	hasGitSuffix bool
+	scpPrefix    string
+	urlStyle     bool
+	urlValue     url.URL
+}
+
+func parseGitHubRepoRef(repoURL string) (gitHubRepoRef, bool) {
+	repoURL = strings.TrimSpace(repoURL)
+	if repoURL == "" {
+		return gitHubRepoRef{}, false
+	}
+
+	if matches := gitHubSCPLikeRepoPattern.FindStringSubmatch(repoURL); len(matches) == 5 {
+		owner := strings.TrimSpace(matches[2])
+		name := strings.TrimSpace(matches[3])
+		if owner == "" || name == "" {
+			return gitHubRepoRef{}, false
+		}
+		return gitHubRepoRef{
+			owner:        owner,
+			name:         name,
+			hasGitSuffix: strings.TrimSpace(matches[4]) != "",
+			scpPrefix:    matches[1],
+		}, true
+	}
+
+	parsed, err := url.Parse(repoURL)
+	if err != nil {
+		return gitHubRepoRef{}, false
+	}
+	if !strings.EqualFold(strings.TrimSpace(parsed.Hostname()), "github.com") {
+		return gitHubRepoRef{}, false
+	}
+	path := strings.Trim(parsed.Path, "/")
+	if path == "" {
+		return gitHubRepoRef{}, false
+	}
+	parts := strings.Split(path, "/")
+	if len(parts) < 2 {
+		return gitHubRepoRef{}, false
+	}
+	owner := strings.TrimSpace(parts[0])
+	name := strings.TrimSpace(parts[1])
+	if owner == "" || name == "" {
+		return gitHubRepoRef{}, false
+	}
+	hasGitSuffix := strings.HasSuffix(strings.ToLower(name), ".git")
+	name = strings.TrimSuffix(name, ".git")
+	if name == "" {
+		return gitHubRepoRef{}, false
+	}
+	return gitHubRepoRef{
+		owner:        owner,
+		name:         name,
+		hasGitSuffix: hasGitSuffix,
+		urlStyle:     true,
+		urlValue:     *parsed,
+	}, true
+}
+
+func (r gitHubRepoRef) withOwner(owner string) (string, bool) {
+	owner = strings.TrimSpace(owner)
+	if owner == "" || strings.EqualFold(owner, r.owner) {
+		return "", false
+	}
+	if strings.ContainsAny(owner, " \t\r\n") || strings.Contains(owner, "/") {
+		return "", false
+	}
+
+	repoName := r.name
+	if r.hasGitSuffix {
+		repoName += ".git"
+	}
+	if r.urlStyle {
+		updated := r.urlValue
+		updated.Path = "/" + owner + "/" + repoName
+		updated.RawPath = ""
+		return updated.String(), true
+	}
+	if strings.TrimSpace(r.scpPrefix) == "" {
+		return "", false
+	}
+	return r.scpPrefix + owner + "/" + repoName, true
+}
+
+func repoOwnerFallbackCandidates(repoURLs []string) []string {
+	if len(repoURLs) == 0 {
+		return nil
+	}
+
+	owners := make([]string, 0, len(repoURLs))
+	seen := make(map[string]struct{}, len(repoURLs))
+	appendOwner := func(owner string) {
+		owner = strings.TrimSpace(owner)
+		if owner == "" {
+			return
+		}
+		key := strings.ToLower(owner)
+		if _, exists := seen[key]; exists {
+			return
+		}
+		seen[key] = struct{}{}
+		owners = append(owners, owner)
+	}
+
+	for _, repoURL := range repoURLs {
+		ref, ok := parseGitHubRepoRef(repoURL)
+		if !ok {
+			continue
+		}
+		appendOwner(ref.owner)
+	}
+	return owners
+}
+
+func repoOwnerFallbackURL(repoURL string, ownerHints []string) (string, bool) {
+	ref, ok := parseGitHubRepoRef(repoURL)
+	if !ok {
+		return "", false
+	}
+
+	candidates := make([]string, 0, len(ownerHints)+1)
+	seen := make(map[string]struct{}, len(ownerHints)+2)
+	seen[strings.ToLower(strings.TrimSpace(ref.owner))] = struct{}{}
+	appendCandidate := func(owner string) {
+		owner = strings.TrimSpace(owner)
+		if owner == "" {
+			return
+		}
+		key := strings.ToLower(owner)
+		if _, exists := seen[key]; exists {
+			return
+		}
+		seen[key] = struct{}{}
+		candidates = append(candidates, owner)
+	}
+
+	for _, owner := range ownerHints {
+		appendCandidate(owner)
+	}
+	if defaultRef, ok := parseGitHubRepoRef(config.DefaultRepositoryURL); ok && strings.EqualFold(defaultRef.name, ref.name) {
+		appendCandidate(defaultRef.owner)
+	}
+
+	for _, owner := range candidates {
+		candidateURL, ok := ref.withOwner(owner)
+		if !ok {
+			continue
+		}
+		return candidateURL, true
+	}
+	return "", false
 }
 
 func shouldFallbackCloneToDefaultBranch(baseBranch string, res execx.Result, err error) bool {
@@ -1592,14 +2032,22 @@ func (h Harness) runCodexWithHeartbeat(
 		cmd.Args = overrideCodexSandbox(cmd.Args, sandboxOverride)
 	}
 
+	runCtx := ctx
+	agentStage := runtimeLogStage(runtime)
+	if timeout := h.agentStageTimeout(); timeout > 0 {
+		timeoutErr := fmt.Errorf("%s timed out after %s", agentStage, timeout)
+		timeoutCtx, cancel := context.WithTimeoutCause(ctx, timeout, timeoutErr)
+		defer cancel()
+		runCtx = timeoutCtx
+	}
+
 	type codexRunResult struct {
 		res execx.Result
 		err error
 	}
 	done := make(chan codexRunResult, 1)
-	agentStage := runtimeLogStage(runtime)
 	go func() {
-		runRes, runErr := h.runCommand(ctx, agentStage, cmd)
+		runRes, runErr := h.runCommand(runCtx, agentStage, cmd)
 		done <- codexRunResult{res: runRes, err: runErr}
 	}()
 
@@ -1618,19 +2066,24 @@ func (h Harness) runCodexWithHeartbeat(
 			return run.res, run.err
 		case <-ticker.C:
 			h.logf("stage=%s status=running elapsed_s=%d", agentStage, int(time.Since(start).Seconds()))
-		case <-ctx.Done():
-			run := <-done
-			if run.err == nil {
-				if failed, detail := codexReportedFailure(run.res); failed {
-					return run.res, fmt.Errorf("%s reported failure: %s", agentStage, detail)
-				}
+		case <-runCtx.Done():
+			cause := context.Cause(runCtx)
+			if cause != nil {
+				return execx.Result{}, cause
 			}
-			if run.err != nil {
-				return run.res, run.err
-			}
-			return run.res, ctx.Err()
+			return execx.Result{}, runCtx.Err()
 		}
 	}
+}
+
+func (h Harness) agentStageTimeout() time.Duration {
+	if h.AgentStageTimeout < 0 {
+		return 0
+	}
+	if h.AgentStageTimeout == 0 {
+		return defaultAgentStageTimeout
+	}
+	return h.AgentStageTimeout
 }
 
 func overrideCodexSandbox(args []string, sandbox string) []string {
@@ -1673,22 +2126,148 @@ func shouldRetryCodexWithoutSandbox(res execx.Result, err error) bool {
 }
 
 func codexReportedFailure(res execx.Result) (bool, string) {
-	combined := strings.TrimSpace(strings.Join([]string{res.Stdout, res.Stderr}, "\n"))
-	if combined == "" {
+	if failed, detail := codexReportedFailureInOutput(res.Stdout, true); failed {
+		return true, detail
+	}
+	if failed, detail := codexReportedFailureInOutput(res.Stderr, false); failed {
+		return true, detail
+	}
+
+	// Codex occasionally emits rich diagnostics and code snippets on stderr that
+	// contain task-failure-like JSON keys. Avoid treating those noisy traces as
+	// fatal unless stderr is a compact, failure-shaped payload.
+	if strings.TrimSpace(res.Stdout) == "" {
+		if failed, detail := codexReportedCompactStructuredFailure(res.Stderr); failed {
+			return true, detail
+		}
+	}
+	return false, ""
+}
+
+func codexReportedFailureInOutput(output string, allowStructured bool) (bool, string) {
+	output = strings.TrimSpace(output)
+	if output == "" {
 		return false, ""
 	}
-	lines := splitOutputLines(combined)
+	lines := splitOutputLines(output)
+	var structuredTaskFailureLine string
+	var structuredErrorLine string
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue
 		}
-		if strings.HasPrefix(strings.ToLower(trimmed), "failure:") {
+		lower := strings.ToLower(trimmed)
+		if strings.HasPrefix(lower, "failure:") {
 			return true, trimmed
 		}
+		if strings.HasPrefix(lower, "task failed") {
+			return true, trimmed
+		}
+		if allowStructured && structuredTaskFailureLine == "" && isStructuredTaskFailureLine(trimmed) {
+			structuredTaskFailureLine = trimmed
+			continue
+		}
+		if allowStructured && structuredTaskFailureLine != "" && structuredErrorLine == "" && isStructuredFailureErrorLine(trimmed) {
+			structuredErrorLine = trimmed
+		}
+	}
+
+	// Treat structured JSON-style failure output as fatal only when both a
+	// task-failure marker and an accompanying error/stack line are present.
+	if structuredTaskFailureLine != "" && structuredErrorLine != "" {
+		return true, structuredTaskFailureLine + " " + structuredErrorLine
 	}
 	return false, ""
 }
+
+func codexReportedCompactStructuredFailure(output string) (bool, string) {
+	output = strings.TrimSpace(output)
+	if output == "" {
+		return false, ""
+	}
+	lines := splitOutputLines(output)
+	nonEmpty := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		nonEmpty = append(nonEmpty, trimmed)
+	}
+	if len(nonEmpty) == 0 || len(nonEmpty) > 8 {
+		return false, ""
+	}
+
+	var structuredTaskFailureLine string
+	var structuredErrorLine string
+	for _, line := range nonEmpty {
+		if structuredTaskFailureLine == "" && isStructuredTaskFailureLine(line) {
+			structuredTaskFailureLine = line
+			continue
+		}
+		if structuredTaskFailureLine != "" && structuredErrorLine == "" && isStructuredFailureErrorLine(line) {
+			structuredErrorLine = line
+		}
+	}
+	if structuredTaskFailureLine != "" && structuredErrorLine != "" {
+		return true, structuredTaskFailureLine + " " + structuredErrorLine
+	}
+	return false, ""
+}
+
+func isStructuredTaskFailureLine(raw string) bool {
+	line := strings.TrimSpace(raw)
+	lower := strings.ToLower(line)
+	taskFailedMarker := "task failed"
+	if !strings.Contains(lower, taskFailedMarker) {
+		return false
+	}
+
+	// Structured task-failure payloads arrive as JSON-style/escaped key/value
+	// lines. Keep matching case-insensitive for quoted keys.
+	caseInsensitivePrefixes := []string{
+		`"summary":`,
+		`\"summary\":`,
+		`"message":`,
+		`\"message\":`,
+	}
+	for _, prefix := range caseInsensitivePrefixes {
+		if strings.HasPrefix(lower, prefix) {
+			return true
+		}
+	}
+
+	// For unquoted keys, require lowercase prefixes so Go struct fields
+	// like `Message: "Task failed..."` do not trigger false positives.
+	if strings.HasPrefix(line, "summary:") || strings.HasPrefix(line, "message:") {
+		return true
+	}
+	return false
+}
+
+func isStructuredFailureErrorLine(raw string) bool {
+	line := strings.TrimSpace(raw)
+	lower := strings.ToLower(line)
+	caseInsensitivePrefixes := []string{
+		`"error":`,
+		`\"error\":`,
+		`"stack":`,
+		`\"stack\":`,
+	}
+	for _, prefix := range caseInsensitivePrefixes {
+		if strings.HasPrefix(lower, prefix) {
+			return true
+		}
+	}
+	// For unquoted keys, require lowercase prefixes so Go struct fields
+	// like `Error: err.Error()` do not trigger false positives.
+	if strings.HasPrefix(line, "error:") || strings.HasPrefix(line, "stack:") {
+		return true
+	}
+	return false
+}
+
 func resolveTargetDir(repoDir, targetSubdir string) (string, error) {
 	targetDir := filepath.Join(repoDir, filepath.Clean(targetSubdir))
 	rel, err := filepath.Rel(repoDir, targetDir)
@@ -1784,6 +2363,16 @@ func authSetupGitCommand() execx.Command {
 
 func hasGitHubAuthToken() bool {
 	return strings.TrimSpace(os.Getenv("GH_TOKEN")) != "" || strings.TrimSpace(os.Getenv("GITHUB_TOKEN")) != ""
+}
+
+func shouldSetupGitHubAuthForRepos(repoURLs []string) bool {
+	for _, repoURL := range repoURLs {
+		repoURL = strings.TrimSpace(strings.ToLower(repoURL))
+		if strings.HasPrefix(repoURL, "https://github.com/") || strings.HasPrefix(repoURL, "http://github.com/") {
+			return true
+		}
+	}
+	return false
 }
 
 func cloneCommand(cfg config.Config, repoDir string) execx.Command {
@@ -2016,6 +2605,17 @@ func hasTrackedWorktreeChanges(stdout string) bool {
 	return false
 }
 
+func hasAheadCommitsInStatus(stdout string) bool {
+	for _, line := range strings.Split(stdout, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "## ") {
+			continue
+		}
+		return strings.Contains(line, "[ahead ")
+	}
+	return false
+}
+
 func addCommand(repoDir string) execx.Command {
 	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"add", "-A"}}
 }
@@ -2033,6 +2633,18 @@ func pushDryRunCommand(repoDir, branch string) execx.Command {
 		Dir:  repoDir,
 		Name: "git",
 		Args: []string{"push", "--dry-run", "origin", fmt.Sprintf("HEAD:refs/heads/%s", normalizeBranchRef(branch))},
+	}
+}
+
+func commitsAheadOfBaseCommand(repoDir, baseBranch string) execx.Command {
+	baseBranch = normalizeBranchRef(baseBranch)
+	if baseBranch == "" {
+		baseBranch = "main"
+	}
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "git",
+		Args: []string{"rev-list", "--count", fmt.Sprintf("%s..HEAD", baseBranch)},
 	}
 }
 
@@ -2102,12 +2714,20 @@ func prLookupByHeadCommand(repoDir, branch string) execx.Command {
 	}
 }
 
+func prLookupAnyByHeadCommand(repoDir, branch string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: []string{"pr", "list", "--state", "all", "--head", branch, "--json", "url", "--limit", "1"},
+	}
+}
+
 func prChecksCommand(repoDir, prURL string) execx.Command {
 	return execx.Command{
 		Dir:  repoDir,
 		Name: "gh",
 		Args: []string{
-			"pr", "checks", prURL,
+			"pr", "checks", githubutil.PullRequestSelector(prURL),
 			"--watch",
 			"--required",
 			"--interval", fmt.Sprintf("%d", prChecksWatchIntervalSeconds),
@@ -2120,7 +2740,7 @@ func prChecksAnyCommand(repoDir, prURL string) execx.Command {
 		Dir:  repoDir,
 		Name: "gh",
 		Args: []string{
-			"pr", "checks", prURL,
+			"pr", "checks", githubutil.PullRequestSelector(prURL),
 			"--watch",
 			"--interval", fmt.Sprintf("%d", prChecksWatchIntervalSeconds),
 		},
@@ -2129,7 +2749,7 @@ func prChecksAnyCommand(repoDir, prURL string) execx.Command {
 
 func prChecksJSONCommand(repoDir, prURL string, requiredOnly bool) execx.Command {
 	args := []string{
-		"pr", "checks", prURL,
+		"pr", "checks", githubutil.PullRequestSelector(prURL),
 		"--json", "name,bucket,completedAt,startedAt",
 	}
 	if requiredOnly {

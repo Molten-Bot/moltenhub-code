@@ -7,9 +7,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jef/moltenhub-code/internal/agentruntime"
 	"github.com/jef/moltenhub-code/internal/config"
@@ -181,6 +184,52 @@ func TestHubPingFailureDetail(t *testing.T) {
 	err := errors.New("GET https://na.hub.molten.bot/ping returned status=503")
 	if got := hubPingFailureDetail("base message", err); !strings.Contains(got, "status=503") {
 		t.Fatalf("hubPingFailureDetail(base,err) missing status detail: %q", got)
+	}
+}
+
+func TestStartHubPingRetryLoopSignalsWhenPingRecovers(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var logs []string
+	var attempts int
+	live := startHubPingRetryLoopWithInterval(
+		ctx,
+		"https://na.hub.molten.bot/v1",
+		"https://na.hub.molten.bot/ping",
+		errors.New("GET https://na.hub.molten.bot/ping returned status=503"),
+		5*time.Millisecond,
+		func(format string, args ...any) {
+			logs = append(logs, fmt.Sprintf(format, args...))
+		},
+		func(context.Context, string) (string, error) {
+			attempts++
+			if attempts == 1 {
+				return "", errors.New("GET https://na.hub.molten.bot/ping returned status=503")
+			}
+			return "https://na.hub.molten.bot/ping status=204", nil
+		},
+	)
+
+	select {
+	case <-live:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for hub ping retry loop to report liveness")
+	}
+
+	if attempts != 2 {
+		t.Fatalf("ping attempts = %d, want 2", attempts)
+	}
+	if len(logs) < 2 {
+		t.Fatalf("expected retry logs, got %v", logs)
+	}
+	if !strings.Contains(logs[0], `hub.connection status=retrying`) {
+		t.Fatalf("first log = %q, want retrying status", logs[0])
+	}
+	if !strings.Contains(strings.Join(logs, "\n"), `hub.connection status=reachable`) {
+		t.Fatalf("logs missing reachable status: %v", logs)
 	}
 }
 
@@ -369,6 +418,9 @@ func TestFailureFollowUpPromptDefaultWhenNoPaths(t *testing.T) {
 	if !strings.Contains(got, `When failures occur, send a response back to the calling agent that clearly states failure and includes the error details.`) {
 		t.Fatalf("prompt missing failure response instruction: %q", got)
 	}
+	if !strings.Contains(got, "Do not stop work just because you cannot create a pull request or watch remote CI/CD from inside this agent runtime.") {
+		t.Fatalf("prompt missing remote operations handoff: %q", got)
+	}
 	if !strings.Contains(got, `"repos":["git@github.com:Molten-Bot/moltenhub-code.git"],"baseBranch":"main","targetSubdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."`) {
 		t.Fatalf("prompt missing follow-up payload shape: %q", got)
 	}
@@ -490,11 +542,13 @@ func TestConfigureHubSetupMarksFailingOnboardingStep(t *testing.T) {
 			_, _ = w.Write([]byte(`{"agent_token":"agent_bound"}`))
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
 			agentProfileReads++
-			if agentProfileReads <= 2 {
+			if agentProfileReads <= 1 {
 				_, _ = w.Write([]byte(`{"metadata":{"visibility":"public"}}`))
 				return
 			}
 			http.Error(w, `{"error":"profile unavailable"}`, http.StatusBadGateway)
+		case (r.Method == http.MethodPatch || r.Method == http.MethodPost) && r.URL.Path == "/v1/agents/me/status":
+			_, _ = w.Write([]byte(`{"ok":true}`))
 		case (r.Method == http.MethodPatch || r.Method == http.MethodPost) &&
 			(r.URL.Path == "/v1/agents/me" || r.URL.Path == "/v1/agents/me/metadata"):
 			_, _ = w.Write([]byte(`{"ok":true}`))
@@ -553,6 +607,122 @@ func TestShouldQueueUnexpectedNoChangesFollowUpRequiresMissingPR(t *testing.T) {
 	}
 }
 
+func TestShouldQueueFailureFollowUpSkipsNestedFailureFollowUpSource(t *testing.T) {
+	t.Parallel()
+
+	ok, reason := shouldQueueFailureFollowUp("failure_followup", harness.Result{Err: errors.New("still failing")})
+	if ok {
+		t.Fatal("shouldQueueFailureFollowUp(failure_followup) = true, want false")
+	}
+	if reason != "run is already a failure follow-up" {
+		t.Fatalf("reason = %q, want %q", reason, "run is already a failure follow-up")
+	}
+
+	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{Err: errors.New("clone failed")})
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureFollowUp(local_submit,error) = (%v, %q), want (true, \"\")", ok, reason)
+	}
+
+	ok, reason = shouldQueueFailureFollowUp("hub_dispatch", harness.Result{Err: errors.New("clone failed")})
+	if ok {
+		t.Fatal("shouldQueueFailureFollowUp(hub_dispatch,error) = true, want false")
+	}
+	if reason != "hub dispatch failures are already escalated by hub transport" {
+		t.Fatalf("reason = %q, want %q", reason, "hub dispatch failures are already escalated by hub transport")
+	}
+
+	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{})
+	if ok {
+		t.Fatal("shouldQueueFailureFollowUp(local_submit,nil error) = true, want false")
+	}
+	if reason != "failed task did not include an error" {
+		t.Fatalf("reason = %q, want %q", reason, "failed task did not include an error")
+	}
+}
+
+func TestShouldQueueFailureRerunSkipsNestedFailureRerunSource(t *testing.T) {
+	t.Parallel()
+
+	ok, reason := shouldQueueFailureRerun("rerun", harness.Result{Err: errors.New("still failing")})
+	if ok {
+		t.Fatal("shouldQueueFailureRerun(rerun) = true, want false")
+	}
+	if reason != "run is already a failure rerun" {
+		t.Fatalf("reason = %q, want %q", reason, "run is already a failure rerun")
+	}
+
+	ok, reason = shouldQueueFailureRerun("local_submit", harness.Result{Err: errors.New("clone failed")})
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureRerun(local_submit,error) = (%v, %q), want (true, \"\")", ok, reason)
+	}
+
+	ok, reason = shouldQueueFailureRerun("hub_dispatch", harness.Result{Err: errors.New("clone failed")})
+	if ok {
+		t.Fatal("shouldQueueFailureRerun(hub_dispatch,error) = true, want false")
+	}
+	if reason != "hub dispatch failures are already rerun by hub transport" {
+		t.Fatalf("reason = %q, want %q", reason, "hub dispatch failures are already rerun by hub transport")
+	}
+
+	ok, reason = shouldQueueFailureRerun("failure_followup", harness.Result{Err: errors.New("clone failed")})
+	if ok {
+		t.Fatal("shouldQueueFailureRerun(failure_followup,error) = true, want false")
+	}
+	if reason != "run is already a failure follow-up" {
+		t.Fatalf("reason = %q, want %q", reason, "run is already a failure follow-up")
+	}
+
+	ok, reason = shouldQueueFailureRerun("local_submit", harness.Result{})
+	if ok {
+		t.Fatal("shouldQueueFailureRerun(local_submit,nil error) = true, want false")
+	}
+	if reason != "failed task did not include an error" {
+		t.Fatalf("reason = %q, want %q", reason, "failed task did not include an error")
+	}
+}
+
+func TestEnqueueFailureRerunBypassesDuplicateSuppression(t *testing.T) {
+	t.Parallel()
+
+	runCfg := config.Config{
+		Repo:   "git@github.com:acme/repo.git",
+		Prompt: "fix failing checks",
+	}
+
+	var (
+		gotCfg                  config.Config
+		gotAllowFailureFollowUp bool
+		gotSource               string
+		gotForce                bool
+	)
+
+	requestID, err := enqueueFailureRerun(context.Background(), func(_ context.Context, cfg config.Config, allowFailureFollowUp bool, source string, force bool) (string, error) {
+		gotCfg = cfg
+		gotAllowFailureFollowUp = allowFailureFollowUp
+		gotSource = source
+		gotForce = force
+		return "local-rerun-1", nil
+	}, runCfg)
+	if err != nil {
+		t.Fatalf("enqueueFailureRerun() error = %v", err)
+	}
+	if requestID != "local-rerun-1" {
+		t.Fatalf("requestID = %q, want %q", requestID, "local-rerun-1")
+	}
+	if !reflect.DeepEqual(gotCfg, runCfg) {
+		t.Fatalf("runCfg = %#v, want %#v", gotCfg, runCfg)
+	}
+	if gotAllowFailureFollowUp {
+		t.Fatal("allowFailureFollowUp = true, want false")
+	}
+	if gotSource != "rerun" {
+		t.Fatalf("source = %q, want %q", gotSource, "rerun")
+	}
+	if !gotForce {
+		t.Fatal("force = false, want true")
+	}
+}
+
 func TestShouldEscalateNoChangesFollowUpRequiresFollowUpSourceAndMissingPR(t *testing.T) {
 	t.Parallel()
 
@@ -565,8 +735,11 @@ func TestShouldEscalateNoChangesFollowUpRequiresFollowUpSourceAndMissingPR(t *te
 	}
 
 	ok, reason = shouldEscalateNoChangesFollowUp("no_changes_followup", harness.Result{NoChanges: true})
-	if !ok || reason != "" {
-		t.Fatalf("shouldEscalateNoChangesFollowUp(no_changes_followup,no PR) = (%v, %q), want (true, \"\")", ok, reason)
+	if ok {
+		t.Fatal("shouldEscalateNoChangesFollowUp(no_changes_followup,no PR) = true, want false")
+	}
+	if reason != "no-changes follow-up can complete as a documented no-op" {
+		t.Fatalf("reason = %q, want %q", reason, "no-changes follow-up can complete as a documented no-op")
 	}
 
 	ok, reason = shouldEscalateNoChangesFollowUp("no_changes_followup", harness.Result{
@@ -585,6 +758,15 @@ func TestUnexpectedNoChangesFollowUpRunConfigPreservesTaskTargetingAndAddsContex
 	t.Parallel()
 
 	logRoot := filepath.Join(t.TempDir(), ".log")
+	logDir := filepath.Join(logRoot, "local", "1712345678", "000001")
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		t.Fatalf("mkdir log dir: %v", err)
+	}
+	logPath := filepath.Join(logDir, logFileName)
+	if err := os.WriteFile(logPath, []byte("dispatch status=no_changes\n"), 0o644); err != nil {
+		t.Fatalf("write log file: %v", err)
+	}
+
 	runCfg := config.Config{
 		Repos:        []string{"git@github.com:acme/repo.git"},
 		BaseBranch:   "release/2026.04-hotfix",
@@ -604,13 +786,16 @@ func TestUnexpectedNoChangesFollowUpRunConfigPreservesTaskTargetingAndAddsContex
 	if got, want := cfg.TargetSubdir, "cmd/harness"; got != want {
 		t.Fatalf("TargetSubdir = %q, want %q", got, want)
 	}
-	if got, want := cfg.Repos, []string{config.DefaultRepositoryURL}; len(got) != len(want) || got[0] != want[0] {
+	if got, want := cfg.Repos, []string{"git@github.com:acme/repo.git"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Repos = %v, want %v", got, want)
 	}
 
+	expectedLogDir := filepath.Join(logRoot, followUpTaskLogArchiveSubdir, "local", "1712345678", "000001")
+
 	for _, want := range []string{
 		"Review the previous local task logs first.",
-		filepath.Join(logRoot, "local", "1712345678", "000001"),
+		expectedLogDir,
+		filepath.Join(expectedLogDir, logFileName),
 		"Observed no-change context:",
 		"- request_id=local-1712345678-000001",
 		"- workspace_dir=/tmp/run-123",
@@ -624,9 +809,12 @@ func TestUnexpectedNoChangesFollowUpRunConfigPreservesTaskTargetingAndAddsContex
 			t.Fatalf("Prompt missing %q: %q", want, cfg.Prompt)
 		}
 	}
+	if strings.Contains(cfg.Prompt, filepath.Join(logRoot, logFileName)) {
+		t.Fatalf("Prompt should exclude aggregate terminal log path to avoid recursive follow-up reads: %q", cfg.Prompt)
+	}
 }
 
-func TestUnexpectedNoChangesFollowUpRunConfigReusesObservedNonMainBranch(t *testing.T) {
+func TestUnexpectedNoChangesFollowUpRunConfigKeepsConfiguredMainBranch(t *testing.T) {
 	t.Parallel()
 
 	cfg := unexpectedNoChangesFollowUpRunConfig(
@@ -642,8 +830,115 @@ func TestUnexpectedNoChangesFollowUpRunConfigReusesObservedNonMainBranch(t *test
 		t.TempDir(),
 	)
 
-	if got, want := cfg.BaseBranch, "moltenhub-add-the-emoji-picker-to-the-agent-profil"; got != want {
+	if got, want := cfg.BaseBranch, "main"; got != want {
 		t.Fatalf("BaseBranch = %q, want %q", got, want)
+	}
+}
+
+func TestUnexpectedNoChangesFollowUpRunConfigRetainsOriginalRepoList(t *testing.T) {
+	t.Parallel()
+
+	runCfg := config.Config{
+		Repo: "git@github.com:acme/repo-a.git",
+		Repos: []string{
+			"git@github.com:acme/repo-b.git",
+			"git@github.com:acme/repo-a.git",
+		},
+	}
+	cfg := unexpectedNoChangesFollowUpRunConfig(
+		"local-1712345678-000001",
+		harness.Result{NoChanges: true},
+		runCfg,
+		t.TempDir(),
+	)
+
+	if got, want := cfg.Repos, runCfg.RepoList(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("Repos = %v, want %v", got, want)
+	}
+}
+
+func TestUnexpectedNoChangesFollowUpRunConfigFallsBackToMoltenHubRepoWhenNoOriginalRepo(t *testing.T) {
+	t.Parallel()
+
+	cfg := unexpectedNoChangesFollowUpRunConfig(
+		"local-1712345678-000001",
+		harness.Result{NoChanges: true},
+		config.Config{},
+		t.TempDir(),
+	)
+
+	if got, want := cfg.Repos, []string{config.DefaultRepositoryURL}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Repos = %v, want %v", got, want)
+	}
+}
+
+func TestUnexpectedNoChangesFollowUpRunConfigUsesNoPathGuidanceWhenTaskLogsMissing(t *testing.T) {
+	t.Parallel()
+
+	logRoot := filepath.Join(t.TempDir(), ".log")
+	runCfg := config.Config{
+		Repos:        []string{"git@github.com:acme/repo.git"},
+		BaseBranch:   "main",
+		TargetSubdir: ".",
+		Prompt:       "investigate missing changes",
+	}
+	result := harness.Result{
+		NoChanges: true,
+		Branch:    "main",
+	}
+
+	cfg := unexpectedNoChangesFollowUpRunConfig("local-1712345678-000001", result, runCfg, logRoot)
+	missingLogPath := filepath.Join(logRoot, "local", "1712345678", "000001")
+	if strings.Contains(cfg.Prompt, missingLogPath) {
+		t.Fatalf("Prompt should not include missing log path %q: %q", missingLogPath, cfg.Prompt)
+	}
+	if !strings.Contains(cfg.Prompt, "No local task log path was captured before the task completed without changes.") {
+		t.Fatalf("Prompt missing no-path guidance: %q", cfg.Prompt)
+	}
+}
+
+func TestFollowUpTaskLogPathsArchivesLocalTaskLogs(t *testing.T) {
+	t.Parallel()
+
+	logRoot := filepath.Join(t.TempDir(), ".log")
+	requestID := "local-1712345678-000001"
+	sourceDir := filepath.Join(logRoot, "local", "1712345678", "000001")
+	if err := os.MkdirAll(sourceDir, 0o755); err != nil {
+		t.Fatalf("mkdir source dir: %v", err)
+	}
+
+	legacyContent := []byte("legacy log\n")
+	if err := os.WriteFile(filepath.Join(sourceDir, legacyTaskLogFileName), legacyContent, 0o644); err != nil {
+		t.Fatalf("write legacy log: %v", err)
+	}
+	currentContent := []byte("current log\n")
+	if err := os.WriteFile(filepath.Join(sourceDir, logFileName), currentContent, 0o644); err != nil {
+		t.Fatalf("write current log: %v", err)
+	}
+
+	paths := followUpTaskLogPaths(logRoot, requestID)
+	archiveDir := filepath.Join(logRoot, followUpTaskLogArchiveSubdir, "local", "1712345678", "000001")
+	wantPaths := []string{
+		archiveDir,
+		filepath.Join(archiveDir, legacyTaskLogFileName),
+		filepath.Join(archiveDir, logFileName),
+	}
+	if !reflect.DeepEqual(paths, wantPaths) {
+		t.Fatalf("followUpTaskLogPaths() = %v, want %v", paths, wantPaths)
+	}
+
+	if got, err := os.ReadFile(filepath.Join(archiveDir, legacyTaskLogFileName)); err != nil || string(got) != string(legacyContent) {
+		t.Fatalf("archived legacy log mismatch: content=%q err=%v", string(got), err)
+	}
+	if got, err := os.ReadFile(filepath.Join(archiveDir, logFileName)); err != nil || string(got) != string(currentContent) {
+		t.Fatalf("archived current log mismatch: content=%q err=%v", string(got), err)
+	}
+
+	if err := os.RemoveAll(sourceDir); err != nil {
+		t.Fatalf("remove source dir: %v", err)
+	}
+	if got := existingPaths(paths); !reflect.DeepEqual(got, wantPaths) {
+		t.Fatalf("existingPaths(archived) = %v, want %v", got, wantPaths)
 	}
 }
 
@@ -654,7 +949,7 @@ func TestShouldQueueFailureFollowUpQueuesNoDeltaFailures(t *testing.T) {
 		Err: errors.New("task failed to meet completion requirements because this branch has no delta from `main`; No commits between main and moltenhub-fix"),
 	}
 
-	ok, reason := shouldQueueFailureFollowUp(result)
+	ok, reason := shouldQueueFailureFollowUp("local_submit", result)
 	if !ok {
 		t.Fatalf("shouldQueueFailureFollowUp() = false, want true for no-delta failures (reason=%q)", reason)
 	}
@@ -687,32 +982,39 @@ func TestTaskLogDirAndTaskLogPathsValidateInputs(t *testing.T) {
 func TestShouldQueueFailureFollowUpQueuesFailuresWithErrorDetails(t *testing.T) {
 	t.Parallel()
 
-	ok, reason := shouldQueueFailureFollowUp(harness.Result{
+	ok, reason := shouldQueueFailureFollowUp("local_submit", harness.Result{
 		Err: errors.New("codex: ERROR: Quota exceeded. Check your plan and billing details."),
 	})
 	if !ok || reason != "" {
 		t.Fatalf("shouldQueueFailureFollowUp(quota exceeded) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
-	ok, reason = shouldQueueFailureFollowUp(harness.Result{
+	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{
 		Err: errors.New("codex: unexpected status 401 Unauthorized: Missing bearer or basic authentication in header"),
 	})
 	if !ok || reason != "" {
 		t.Fatalf("shouldQueueFailureFollowUp(auth failure) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
-	ok, reason = shouldQueueFailureFollowUp(harness.Result{
+	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{
 		Err: errors.New("clone: run git [clone ...]: exit status 128"),
 	})
 	if !ok || reason != "" {
 		t.Fatalf("shouldQueueFailureFollowUp(clone failure) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
-	ok, reason = shouldQueueFailureFollowUp(harness.Result{
+	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{
 		Err: errors.New("git: verify remote write access for repo https://github.com/acme/repo.git branch \"moltenhub-fix\": exit status 128: remote: Write access to repository not granted. fatal: unable to access 'https://github.com/acme/repo.git/': The requested URL returned error: 403"),
 	})
 	if !ok || reason != "" {
 		t.Fatalf("shouldQueueFailureFollowUp(repo write access failure) = (%v, %q), want (true, \"\")", ok, reason)
+	}
+
+	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{
+		Err: errors.New("git: run git [push -u origin moltenhub-branch]: exit status 1: remote: refusing to allow an OAuth App to create or update workflow `.github/workflows/docker-release.yml` without `workflow` scope"),
+	})
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureFollowUp(workflow scope failure) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 }
 

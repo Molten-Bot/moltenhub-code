@@ -84,14 +84,8 @@ type piAuthGate struct {
 	runtimeConfigPath string
 	initCfg           hub.InitConfig
 
-	required bool
-	ready    bool
-	state    string
-	message  string
-
-	configureOptions []hubui.AgentAuthOption
-	updatedAt        time.Time
-	validatedAuth    string
+	authState     configurableAgentAuthState
+	validatedAuth string
 }
 
 func newPiAuthGate(runtimeConfigPath string, initCfg hub.InitConfig) *piAuthGate {
@@ -122,12 +116,9 @@ func newPiAuthGateWithRuntime(
 		logf:              logf,
 		runtimeConfigPath: strings.TrimSpace(runtimeConfigPath),
 		initCfg:           initCfg,
-		required:          true,
-		state:             "needs_configure",
-		message:           "Select a PI provider, and supply the token.",
-		configureOptions:  piAgentAuthOptions(),
-		updatedAt:         time.Now().UTC(),
 	}
+	g.authState.setNeedsConfigure("Select a PI provider, and supply the token.")
+	g.authState.configureOptions = piAgentAuthOptions()
 	g.mu.Lock()
 	g.refreshLocked()
 	g.mu.Unlock()
@@ -157,10 +148,7 @@ func (g *piAuthGate) Configure(ctx context.Context, rawInput string) (hubui.Agen
 	canonical, err := normalizePiProviderAuth(rawInput)
 	if err != nil {
 		g.mu.Lock()
-		g.ready = false
-		g.state = "needs_configure"
-		g.message = fmt.Sprintf("PI provider auth is invalid: %v.", err)
-		g.updatedAt = time.Now().UTC()
+		g.authState.setNeedsConfigure(fmt.Sprintf("PI provider auth is invalid: %v.", err))
 		snap := g.snapshotLocked()
 		g.mu.Unlock()
 		return snap, err
@@ -168,10 +156,7 @@ func (g *piAuthGate) Configure(ctx context.Context, rawInput string) (hubui.Agen
 
 	if err := hub.SaveRuntimeConfigPiProviderAuth(g.runtimeConfigPath, g.initCfg, canonical); err != nil {
 		g.mu.Lock()
-		g.ready = false
-		g.state = "needs_configure"
-		g.message = fmt.Sprintf("save pi config.json: %v", err)
-		g.updatedAt = time.Now().UTC()
+		g.authState.setNeedsConfigure(fmt.Sprintf("save pi config.json: %v", err))
 		snap := g.snapshotLocked()
 		g.mu.Unlock()
 		return snap, err
@@ -180,20 +165,14 @@ func (g *piAuthGate) Configure(ctx context.Context, rawInput string) (hubui.Agen
 	auth, err := decodePiProviderAuth(canonical)
 	if err != nil {
 		g.mu.Lock()
-		g.ready = false
-		g.state = "needs_configure"
-		g.message = fmt.Sprintf("PI provider auth is invalid: %v.", err)
-		g.updatedAt = time.Now().UTC()
+		g.authState.setNeedsConfigure(fmt.Sprintf("PI provider auth is invalid: %v.", err))
 		snap := g.snapshotLocked()
 		g.mu.Unlock()
 		return snap, err
 	}
 	if err := os.Setenv(auth.EnvVar, auth.Value); err != nil {
 		g.mu.Lock()
-		g.ready = false
-		g.state = "needs_configure"
-		g.message = fmt.Sprintf("set %s: %v", auth.EnvVar, err)
-		g.updatedAt = time.Now().UTC()
+		g.authState.setNeedsConfigure(fmt.Sprintf("set %s: %v", auth.EnvVar, err))
 		snap := g.snapshotLocked()
 		g.mu.Unlock()
 		return snap, err
@@ -201,10 +180,7 @@ func (g *piAuthGate) Configure(ctx context.Context, rawInput string) (hubui.Agen
 	if !shouldSkipPiProviderProbe(auth.EnvVar) {
 		if err := annotatePiProviderProbeError(g.probe(ctx), auth.EnvVar); err != nil {
 			g.mu.Lock()
-			g.ready = false
-			g.state = "needs_configure"
-			g.message = fmt.Sprintf("launch pi with %s: %v", auth.EnvVar, err)
-			g.updatedAt = time.Now().UTC()
+			g.authState.setNeedsConfigure(fmt.Sprintf("launch pi with %s: %v", auth.EnvVar, err))
 			snap := g.snapshotLocked()
 			g.mu.Unlock()
 			return snap, err
@@ -227,7 +203,7 @@ func (g *piAuthGate) refreshAndSnapshot(ctx context.Context) (hubui.AgentAuthSta
 
 	g.mu.Lock()
 	g.refreshLocked()
-	if g.ready || g.state == "error" || strings.TrimSpace(g.initCfg.PiProviderAuth) == "" {
+	if g.authState.ready || g.authState.state == "error" || strings.TrimSpace(g.initCfg.PiProviderAuth) == "" {
 		snap := g.snapshotLocked()
 		g.mu.Unlock()
 		return snap, nil
@@ -247,10 +223,7 @@ func (g *piAuthGate) refreshAndSnapshot(ctx context.Context) (hubui.AgentAuthSta
 
 	if err := annotatePiProviderProbeError(g.probe(ctx), envVar); err != nil {
 		g.mu.Lock()
-		g.ready = false
-		g.state = "needs_configure"
-		g.message = piProviderValidationStatusMessage(envVar)
-		g.updatedAt = time.Now().UTC()
+		g.authState.setNeedsConfigure(piProviderValidationStatusMessage(envVar))
 		snap := g.snapshotLocked()
 		g.mu.Unlock()
 		return snap, nil
@@ -265,54 +238,40 @@ func (g *piAuthGate) refreshAndSnapshot(ctx context.Context) (hubui.AgentAuthSta
 }
 
 func (g *piAuthGate) refreshLocked() {
-	g.required = true
-	g.ready = false
-	g.state = "needs_configure"
-	g.message = "Select a PI provider, and supply the token."
-	g.configureOptions = piAgentAuthOptions()
-	g.updatedAt = time.Now().UTC()
+	g.authState.setNeedsConfigure("Select a PI provider, and supply the token.")
+	g.authState.configureOptions = piAgentAuthOptions()
 
 	auth, source, err := firstConfiguredPiProviderAuth(g.runtimeConfigPath, g.initCfg)
 	if err != nil {
-		g.state = "error"
-		g.message = fmt.Sprintf("PI provider auth from %s is invalid: %v.", source, err)
+		g.authState.setError(fmt.Sprintf("PI provider auth from %s is invalid: %v.", source, err))
 		return
 	}
 	if auth.EnvVar != "" {
 		if err := os.Setenv(auth.EnvVar, auth.Value); err != nil {
-			g.state = "error"
-			g.message = fmt.Sprintf("set %s: %v", auth.EnvVar, err)
+			g.authState.setError(fmt.Sprintf("set %s: %v", auth.EnvVar, err))
 			return
 		}
 		canonical, err := encodePiProviderAuth(auth)
 		if err != nil {
-			g.state = "error"
-			g.message = fmt.Sprintf("PI provider auth from %s is invalid: %v.", source, err)
+			g.authState.setError(fmt.Sprintf("PI provider auth from %s is invalid: %v.", source, err))
 			return
 		}
 		g.initCfg.PiProviderAuth = canonical
 		if g.validatedAuth == canonical {
-			g.ready = true
-			g.state = "ready"
-			g.message = fmt.Sprintf("PI provider auth is ready via %s.", auth.EnvVar)
+			g.authState.ready = true
+			g.authState.state = "ready"
+			g.authState.message = fmt.Sprintf("PI provider auth is ready via %s.", auth.EnvVar)
 			return
 		}
-		g.message = fmt.Sprintf("PI provider auth is configured via %s. Validating Pi launch.", auth.EnvVar)
+		g.authState.message = fmt.Sprintf("PI provider auth is configured via %s. Validating Pi launch.", auth.EnvVar)
 		return
 	}
 }
 
 func (g *piAuthGate) snapshotLocked() hubui.AgentAuthState {
-	return hubui.AgentAuthState{
-		Harness:              agentruntime.HarnessPi,
-		Required:             g.required,
-		Ready:                g.ready,
-		State:                strings.TrimSpace(g.state),
-		Message:              strings.TrimSpace(g.message),
-		ConfigurePlaceholder: "Paste provider token...",
-		ConfigureOptions:     append([]hubui.AgentAuthOption(nil), g.configureOptions...),
-		UpdatedAt:            g.updatedAt.UTC().Format(time.RFC3339Nano),
-	}
+	state := g.authState.snapshot(agentruntime.HarnessPi)
+	state.ConfigurePlaceholder = "Paste provider token..."
+	return state
 }
 
 func piAgentAuthOptions() []hubui.AgentAuthOption {

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -38,9 +39,33 @@ const hubPingRemoteContinueDetail = "Hub endpoint ping precheck failed; continui
 const hubPingHeadlessNoopDetail = "Hub endpoint ping precheck failed with UI disabled and no Hub credentials configured; startup completed without remote transport."
 const gitHubCLIPackageLabel = "github-cli (gh)"
 const gitHubCLIAuthRecommendation = "Run `gh auth login` (the GitHub CLI binary from the `github-cli` package) or set GH_TOKEN before dispatching tasks."
+const followUpTaskLogArchiveSubdir = "followup"
+const hubSetupLocationsURL = "https://molten.bot/hubs.json"
 
 const hubBootDiagnosticTimeout = 10 * time.Second
 const hubPingDiagnosticTimeout = 5 * time.Second
+const hubPingRetryInterval = 12 * time.Second
+const hubSetupLocationsFetchTimeout = 2 * time.Second
+const hubSetupLocationsCacheTTL = 5 * time.Minute
+
+type hubSetupLocation struct {
+	Display string `json:"display"`
+	Key     string `json:"key"`
+	Domain  string `json:"domain"`
+}
+
+var defaultHubSetupLocations = []hubSetupLocation{
+	{Display: "North America", Key: "na", Domain: "na.hub.molten.bot"},
+	{Display: "Europe", Key: "eu", Domain: "eu.hub.molten.bot"},
+}
+
+var hubSetupLocationsLoader = fetchHubSetupLocations
+
+var hubSetupLocationsCache struct {
+	mu        sync.Mutex
+	locations []hubSetupLocation
+	fetchedAt time.Time
+}
 
 func main() {
 	os.Exit(run())
@@ -115,7 +140,7 @@ func runSingle(args []string) int {
 		return result.ExitCode
 	}
 
-	if result.NoChanges {
+	if result.NoChanges && !resultHasPR(result) {
 		var line strings.Builder
 		line.WriteString(fmt.Sprintf("status=no_changes workspace=%s branch=%s", result.WorkspaceDir, result.Branch))
 		if result.PRURL != "" {
@@ -128,11 +153,11 @@ func runSingle(args []string) int {
 		return harness.ExitSuccess
 	}
 	var line strings.Builder
-	line.WriteString(fmt.Sprintf("status=ok workspace=%s branch=%s", result.WorkspaceDir, result.Branch))
+	line.WriteString(fmt.Sprintf("status=completed workspace=%s branch=%s", result.WorkspaceDir, result.Branch))
 	if result.PRURL != "" {
 		line.WriteString(fmt.Sprintf(" pr_url=%s", result.PRURL))
 	}
-	if prURLs := joinPRURLs(result.RepoResults); prURLs != "" {
+	if prURLs := completedPRURLs(result); prURLs != "" {
 		line.WriteString(fmt.Sprintf(" pr_urls=%s", prURLs))
 	}
 	if changedRepos := countChangedRepos(result.RepoResults); changedRepos > 0 {
@@ -238,11 +263,12 @@ func runHub(args []string) int {
 	defer logger.Close()
 	runner := execx.OSRunner{}
 	monitorBroker := hubui.NewBroker()
-	daemonLogger := func(format string, args ...any) {
-		line := fmt.Sprintf(format, args...)
-		logger.Print(line)
-		monitorBroker.IngestLog(line)
+	logLevel, err := hub.ParseLogLevel(cfg.LogLevel)
+	if err != nil {
+		logLevel = hub.LogLevelInfo
 	}
+	logRouter := newHubLogRouter(logger, monitorBroker, logLevel)
+	daemonLogger := logRouter.Printf
 
 	runtimeCfg, runtimeErr := agentruntime.Resolve(cfg.AgentHarness, cfg.AgentCommand)
 	var authGate agentAuthGate
@@ -264,7 +290,11 @@ func runHub(args []string) int {
 	hubConfigured := hubCredentialsConfigured(cfg, runtimeCfgLoader)
 	bootDiag := runHubBootDiagnosticsWithRuntimeLoaderDetailed(ctx, runner, daemonLogger, cfg, runtimeCfgLoader)
 	forceLocalOnlyMode := shouldRunHubInLocalOnlyMode(bootDiag.PingChecked, bootDiag.PingOK, *uiListen, hubConfigured)
+	var hubPingLive <-chan struct{}
 	if bootDiag.PingChecked && !bootDiag.PingOK {
+		if pingURL, pingURLErr := hubPingURL(cfg.BaseURL); pingURLErr == nil {
+			hubPingLive = startHubPingRetryLoop(ctx, cfg.BaseURL, pingURL, bootDiag.PingErr, daemonLogger, checkHubPing)
+		}
 		if forceLocalOnlyMode {
 			daemonLogger("hub.auth status=local_only detail=%q", hubPingFailureDetail(hubPingLocalOnlyDetail, bootDiag.PingErr))
 		} else {
@@ -281,7 +311,8 @@ func runHub(args []string) int {
 		logRoot = strings.TrimSpace(mirror.rootDir)
 	}
 
-	var queueFailureFollowUp func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config)
+	var queueFailureRerun func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config, source string)
+	var queueFailureFollowUp func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config, source string)
 	var queueUnexpectedNoChangesFollowUp func(requestID string, result harness.Result, runCfg config.Config)
 	var enqueueLocalRun func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string, force bool) (string, error)
 	enqueueLocalRun = func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string, force bool) (string, error) {
@@ -384,11 +415,17 @@ func runHub(args []string) int {
 						}
 						finalState = "error"
 						daemonLogger("dispatch status=error request_id=%s err=%q", requestID, waitErr)
-						if !errors.Is(waitErr, context.Canceled) && allowFailureFollowUp && queueFailureFollowUp != nil {
-							queueFailureFollowUp(requestID, harness.Result{
+						if !errors.Is(waitErr, context.Canceled) && allowFailureFollowUp {
+							failedResult := harness.Result{
 								ExitCode: harness.ExitPreflight,
 								Err:      fmt.Errorf("dispatch wait: %w", waitErr),
-							}, runCfg)
+							}
+							if queueFailureRerun != nil {
+								queueFailureRerun(requestID, failedResult, runCfg, source)
+							}
+							if queueFailureFollowUp != nil {
+								queueFailureFollowUp(requestID, failedResult, runCfg, source)
+							}
 						}
 						return
 					}
@@ -426,11 +463,17 @@ func runHub(args []string) int {
 					}
 					finalState = "error"
 					daemonLogger("dispatch status=error request_id=%s err=%q", requestID, acquireErr)
-					if !errors.Is(acquireErr, context.Canceled) && allowFailureFollowUp && queueFailureFollowUp != nil {
-						queueFailureFollowUp(requestID, harness.Result{
+					if !errors.Is(acquireErr, context.Canceled) && allowFailureFollowUp {
+						failedResult := harness.Result{
 							ExitCode: harness.ExitPreflight,
 							Err:      fmt.Errorf("dispatch acquire: %w", acquireErr),
-						}, runCfg)
+						}
+						if queueFailureRerun != nil {
+							queueFailureRerun(requestID, failedResult, runCfg, source)
+						}
+						if queueFailureFollowUp != nil {
+							queueFailureFollowUp(requestID, failedResult, runCfg, source)
+						}
 					}
 					return
 				}
@@ -452,8 +495,13 @@ func runHub(args []string) int {
 				finalState = outcome.State
 				switch outcome.State {
 				case "error":
-					if allowFailureFollowUp && queueFailureFollowUp != nil {
-						queueFailureFollowUp(requestID, outcome.Result, runCfg)
+					if allowFailureFollowUp {
+						if queueFailureRerun != nil {
+							queueFailureRerun(requestID, outcome.Result, runCfg, source)
+						}
+						if queueFailureFollowUp != nil {
+							queueFailureFollowUp(requestID, outcome.Result, runCfg, source)
+						}
 					}
 				case "no_changes":
 					if source != "no_changes_followup" && queueUnexpectedNoChangesFollowUp != nil {
@@ -465,7 +513,7 @@ func runHub(args []string) int {
 							if escalationResult.Err == nil {
 								escalationResult.Err = fmt.Errorf("no-changes follow-up completed without file changes or a pull request")
 							}
-							queueFailureFollowUp(requestID, escalationResult, runCfg)
+							queueFailureFollowUp(requestID, escalationResult, runCfg, source)
 						}
 					}
 				}
@@ -475,8 +523,33 @@ func runHub(args []string) int {
 
 		return requestID, nil
 	}
-	queueFailureFollowUp = func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config) {
-		if ok, reason := shouldQueueFailureFollowUp(failedResult); !ok {
+	queueFailureRerun = func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config, source string) {
+		if ok, reason := shouldQueueFailureRerun(source, failedResult); !ok {
+			daemonLogger(
+				"dispatch status=warn action=skip_failure_rerun request_id=%s err=%q",
+				failedRequestID,
+				reason,
+			)
+			return
+		}
+
+		rerunRequestID, rerunErr := enqueueFailureRerun(ctx, enqueueLocalRun, failedRunCfg)
+		if rerunErr != nil {
+			daemonLogger(
+				"dispatch status=warn action=queue_failure_rerun request_id=%s err=%q",
+				failedRequestID,
+				rerunErr,
+			)
+			return
+		}
+		daemonLogger(
+			"dispatch status=ok action=queue_failure_rerun request_id=%s rerun_request_id=%s",
+			failedRequestID,
+			rerunRequestID,
+		)
+	}
+	queueFailureFollowUp = func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config, source string) {
+		if ok, reason := shouldQueueFailureFollowUp(source, failedResult); !ok {
 			daemonLogger(
 				"dispatch status=warn action=skip_failure_followup request_id=%s err=%q",
 				failedRequestID,
@@ -556,17 +629,34 @@ func runHub(args []string) int {
 	}
 	hubController.onDispatchFailed = func(requestID string, runCfg config.Config, result harness.Result) {
 		if queueFailureFollowUp != nil {
-			queueFailureFollowUp(requestID, result, runCfg)
+			queueFailureFollowUp(requestID, result, runCfg, "hub_dispatch")
 		}
 	}
 	hubRuntimeReloader := newHubRuntimeConfigReloader(cfg, hubController.Update, hubController.Stop, daemonLogger)
 	go hubRuntimeReloader.Run(ctx, hubRuntimeConfigReloadInterval)
 
 	waitForHubRuntime := func() int {
+		pingLive := hubPingLive
 		for {
 			select {
 			case <-ctx.Done():
 				return harness.ExitSuccess
+			case <-pingLive:
+				pingLive = nil
+				if !hubConfigured {
+					continue
+				}
+				if err := hubController.Update(ctx, cfg); err != nil {
+					if shouldFallbackToLocalOnlyMode(*uiListen, err) {
+						daemonLogger(
+							"hub.auth status=local_only detail=%q",
+							"Remote hub auth failed; continuing in local-only mode. Use the local UI/API to submit tasks.",
+						)
+						continue
+					}
+					writeStderrLine(logger, fmt.Sprintf("error: %v", err))
+					return hubExitCode(err)
+				}
 			case err := <-hubController.Errors():
 				if err == nil {
 					continue
@@ -588,7 +678,7 @@ func runHub(args []string) int {
 		uiServer := hubui.NewServer(*uiListen, monitorBroker)
 		uiServer.AutomaticMode = *uiAutomatic
 		uiServer.ConfiguredHarness = cfg.AgentHarness
-		uiServer.Logf = logger.Printf
+		uiServer.Logf = daemonLogger
 		uiServer.LoadLibraryTasks = func() ([]library.TaskSummary, error) {
 			catalog, err := library.LoadCatalog(library.DefaultDir)
 			if err != nil {
@@ -616,8 +706,8 @@ func runHub(args []string) int {
 				uiServer.ConfigureAgentAuth = authGate.Configure
 			}
 		}
-		uiServer.HubSetupStatus = func(_ context.Context) (hubui.HubSetupState, error) {
-			return currentHubSetupState(cfg), nil
+		uiServer.HubSetupStatus = func(reqCtx context.Context) (hubui.HubSetupState, error) {
+			return currentHubSetupStateWithRemoteProfile(reqCtx, cfg), nil
 		}
 		uiServer.ConfigureHubSetup = func(reqCtx context.Context, req hubui.HubSetupRequest) (hubui.HubSetupState, error) {
 			return configureHubSetup(reqCtx, cfg, req, hubController.Update)
@@ -653,6 +743,7 @@ func runHub(args []string) int {
 			return enqueueLocalRun(reqCtx, runCfg, true, "rerun", force)
 		}
 		uiServer.CloseTask = cleanupTaskLogs
+		uiServer.ResolveTaskControls = localTaskController.Controls
 		uiServer.PauseTask = func(_ context.Context, requestID string) error {
 			if err := localTaskController.Pause(requestID); err != nil {
 				return err
@@ -681,21 +772,21 @@ func runHub(args []string) int {
 			daemonLogger("dispatch status=stopped request_id=%s err=%q", requestID, errTaskStoppedByOperator)
 			return nil
 		}
-		logger.Printf("hub.ui status=ready url=%s", monitorURL(*uiListen))
+		daemonLogger("hub.ui status=ready url=%s", monitorURL(*uiListen))
 		prMonitor := &hubui.PRMergeMonitor{
 			Runner:      runner,
 			Broker:      monitorBroker,
-			Logf:        logger.Printf,
+			Logf:        daemonLogger,
 			CleanupTask: cleanupTaskLogs,
 		}
 		go func() {
 			if err := prMonitor.Run(ctx); err != nil {
-				logger.Printf("hub.ui status=warn event=pr_monitor err=%q", err)
+				daemonLogger("hub.ui status=warn event=pr_monitor err=%q", err)
 			}
 		}()
 		go func() {
 			if err := uiServer.Run(ctx); err != nil {
-				logger.Printf("hub.ui status=error err=%q", err)
+				daemonLogger("hub.ui status=error err=%q", err)
 			}
 		}()
 	}
@@ -720,6 +811,10 @@ func runHub(args []string) int {
 			)
 			return harness.ExitAuth
 		}
+		return waitForHubRuntime()
+	}
+
+	if bootDiag.PingChecked && !bootDiag.PingOK && hubPingLive != nil {
 		return waitForHubRuntime()
 	}
 
@@ -777,6 +872,7 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 			return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("init config error: %w", err)
 		}
 		cfg.RuntimeConfigPath = hub.ResolveRuntimeConfigPath(initPath)
+		cfg.LogLevel = configuredHubLogLevel(cfg.LogLevel, cfg.RuntimeConfigPath)
 		return cfg, harness.ExitSuccess, nil
 	}
 
@@ -793,6 +889,31 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 	return cfg, harness.ExitSuccess, nil
 }
 
+func configuredHubLogLevel(preferred, runtimeConfigPath string) string {
+	level := hub.NormalizeLogLevel(preferred)
+	if level == "" {
+		level = hub.DefaultLogLevel
+	}
+
+	runtimeConfigPath = strings.TrimSpace(runtimeConfigPath)
+	if runtimeConfigPath == "" {
+		return level
+	}
+
+	configured := hub.NormalizeLogLevel(hub.ReadRuntimeConfigString(runtimeConfigPath, "log_level", "logLevel", "LOG_LEVEL"))
+	if configured != "" {
+		return configured
+	}
+
+	if runtimeCfg, err := hub.LoadRuntimeConfig(runtimeConfigPath); err == nil {
+		if configured = hub.NormalizeLogLevel(runtimeCfg.LogLevel); configured != "" {
+			return configured
+		}
+	}
+
+	return level
+}
+
 func defaultHubBootConfig(runtimeConfigPath string) (hub.InitConfig, int, error) {
 	cfg := hub.InitConfig{
 		RuntimeConfigPath: strings.TrimSpace(runtimeConfigPath),
@@ -802,6 +923,115 @@ func defaultHubBootConfig(runtimeConfigPath string) (hub.InitConfig, int, error)
 		return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("init config error: %w", err)
 	}
 	return cfg, harness.ExitSuccess, nil
+}
+
+type hubLogRouter struct {
+	logger *terminalLogger
+	broker *hubui.Broker
+	level  hub.LogLevel
+}
+
+func newHubLogRouter(logger *terminalLogger, broker *hubui.Broker, level hub.LogLevel) hubLogRouter {
+	return hubLogRouter{
+		logger: logger,
+		broker: broker,
+		level:  level,
+	}
+}
+
+func (r hubLogRouter) Printf(format string, args ...any) {
+	r.Log(strings.TrimSpace(fmt.Sprintf(format, args...)))
+}
+
+func (r hubLogRouter) Log(line string) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return
+	}
+
+	if r.broker != nil {
+		r.broker.IngestLog(line)
+	}
+
+	eventLevel := classifyHubLogLine(line)
+	if !r.level.Allows(eventLevel) {
+		if r.logger != nil {
+			// Keep filtered lines in the task mirror for follow-up diagnostics.
+			r.logger.Capture(line)
+		}
+		return
+	}
+
+	if r.logger != nil {
+		r.logger.Print(line)
+	}
+}
+
+func classifyHubLogLine(line string) hub.LogLevel {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return hub.LogLevelInfo
+	}
+
+	lowerLine := strings.ToLower(line)
+	if strings.HasPrefix(lowerLine, "error:") {
+		return hub.LogLevelError
+	}
+	if strings.HasPrefix(lowerLine, "warn:") {
+		return hub.LogLevelWarn
+	}
+	if strings.HasPrefix(line, "debug ") {
+		return hub.LogLevelDebug
+	}
+
+	fields := parseSimpleKVFields(line)
+	status := strings.ToLower(strings.TrimSpace(fields["status"]))
+	switch status {
+	case "error", "failed", "invalid":
+		return hub.LogLevelError
+	case "warn":
+		return hub.LogLevelWarn
+	case "running":
+		return hub.LogLevelDebug
+	}
+
+	if shouldClassifyHubDebugLine(line, lowerLine, fields, status) {
+		return hub.LogLevelDebug
+	}
+
+	return hub.LogLevelInfo
+}
+
+func shouldClassifyHubDebugLine(line, lowerLine string, fields map[string]string, status string) bool {
+	if isDebugCommandLogLine(line, fields) {
+		return true
+	}
+	if strings.TrimSpace(fields["stage"]) != "" {
+		return true
+	}
+	if strings.HasPrefix(lowerLine, "dispatch status=") && isDebugDispatchStatus(status) {
+		return true
+	}
+	return false
+}
+
+func isDebugDispatchStatus(status string) bool {
+	switch strings.TrimSpace(status) {
+	case "start", "ack", "queued", "duplicate", "paused", "resumed", "forced", "running":
+		return true
+	default:
+		return false
+	}
+}
+func isDebugCommandLogLine(line string, fields map[string]string) bool {
+	if len(fields) == 0 {
+		return false
+	}
+	phase := strings.TrimSpace(fields["phase"])
+	if phase == "" {
+		return false
+	}
+	return strings.HasPrefix(line, "cmd ") || strings.Contains(line, " cmd ")
 }
 
 func writeStdoutLine(logger *terminalLogger, line string) {
@@ -883,7 +1113,7 @@ func runLocalDispatch(
 		)
 		return localDispatchOutcome{State: "error", Result: res}
 	}
-	if res.NoChanges {
+	if res.NoChanges && !resultHasPR(res) {
 		logf(
 			"dispatch status=no_changes request_id=%s workspace=%s branch=%s pr_url=%s pr_urls=%s",
 			requestID,
@@ -895,15 +1125,15 @@ func runLocalDispatch(
 		return localDispatchOutcome{State: "no_changes", Result: res}
 	}
 	logf(
-		"dispatch status=ok request_id=%s workspace=%s branch=%s pr_url=%s pr_urls=%s changed_repos=%d",
+		"dispatch status=completed request_id=%s workspace=%s branch=%s pr_url=%s pr_urls=%s changed_repos=%d",
 		requestID,
 		res.WorkspaceDir,
 		res.Branch,
 		res.PRURL,
-		joinPRURLs(res.RepoResults),
+		completedPRURLs(res),
 		countChangedRepos(res.RepoResults),
 	)
-	return localDispatchOutcome{State: "ok", Result: res}
+	return localDispatchOutcome{State: "completed", Result: res}
 }
 
 func failureFollowUpRunConfig(
@@ -912,7 +1142,7 @@ func failureFollowUpRunConfig(
 	failedRunCfg config.Config,
 	logRoot string,
 ) config.Config {
-	logPaths := failurefollowup.TaskLogPaths(logRoot, failedRequestID)
+	logPaths := followUpTaskLogPaths(logRoot, failedRequestID)
 	baseBranch, targetSubdir := failurefollowup.FollowUpTargeting(
 		failedRunCfg.BaseBranch,
 		failedRunCfg.TargetSubdir,
@@ -933,25 +1163,55 @@ func unexpectedNoChangesFollowUpRunConfig(
 	logRoot string,
 ) config.Config {
 	runCfg.ApplyDefaults()
-	logPaths := failurefollowup.TaskLogPaths(logRoot, requestID)
+	logPaths := existingPaths(followUpTaskLogPaths(logRoot, requestID))
 	baseBranch := strings.TrimSpace(runCfg.BaseBranch)
-	resultBranch := strings.TrimSpace(result.Branch)
-	if baseBranch == "main" && resultBranch != "" && resultBranch != "main" {
-		baseBranch = resultBranch
-	}
 	return config.Config{
-		Repos:        failureFollowUpRepos(result, runCfg),
+		Repos:        unexpectedNoChangesFollowUpRepos(runCfg),
 		BaseBranch:   baseBranch,
 		TargetSubdir: runCfg.TargetSubdir,
 		Prompt:       unexpectedNoChangesFollowUpPrompt(logPaths, requestID, result, runCfg),
 	}
 }
 
-func shouldQueueFailureFollowUp(failedResult harness.Result) (bool, string) {
+func shouldQueueFailureFollowUp(source string, failedResult harness.Result) (bool, string) {
+	source = strings.TrimSpace(source)
 	if failedResult.Err == nil {
 		return false, "failed task did not include an error"
 	}
+	if source == "failure_followup" {
+		return false, "run is already a failure follow-up"
+	}
+	if source == "hub_dispatch" {
+		return false, "hub dispatch failures are already escalated by hub transport"
+	}
 	return true, ""
+}
+
+func shouldQueueFailureRerun(source string, failedResult harness.Result) (bool, string) {
+	source = strings.TrimSpace(source)
+	if failedResult.Err == nil {
+		return false, "failed task did not include an error"
+	}
+	switch source {
+	case "failure_followup":
+		return false, "run is already a failure follow-up"
+	case "hub_dispatch":
+		return false, "hub dispatch failures are already rerun by hub transport"
+	case "rerun":
+		return false, "run is already a failure rerun"
+	}
+	return true, ""
+}
+
+type localRunEnqueueFunc func(context.Context, config.Config, bool, string, bool) (string, error)
+
+func enqueueFailureRerun(ctx context.Context, enqueue localRunEnqueueFunc, failedRunCfg config.Config) (string, error) {
+	if enqueue == nil {
+		return "", fmt.Errorf("local run enqueuer is required")
+	}
+	// The failed run still owns the dedupe key until its goroutine unwinds, so
+	// the required one-time rerun must bypass duplicate suppression.
+	return enqueue(ctx, failedRunCfg, false, "rerun", true)
 }
 
 func shouldQueueUnexpectedNoChangesFollowUp(result harness.Result) (bool, string) {
@@ -968,7 +1228,13 @@ func shouldEscalateNoChangesFollowUp(source string, result harness.Result) (bool
 	if strings.TrimSpace(source) != "no_changes_followup" {
 		return false, "run is not a no-changes follow-up"
 	}
-	return shouldQueueUnexpectedNoChangesFollowUp(result)
+	if !result.NoChanges {
+		return false, "follow-up did not complete as no_changes"
+	}
+	if strings.TrimSpace(joinAllPRURLs(result.RepoResults)) != "" || strings.TrimSpace(result.PRURL) != "" {
+		return false, "task already has a pull request"
+	}
+	return false, "no-changes follow-up can complete as a documented no-op"
 }
 
 func failureFollowUpRepos(_ harness.Result, _ config.Config) []string {
@@ -978,22 +1244,12 @@ func failureFollowUpRepos(_ harness.Result, _ config.Config) []string {
 	return nil
 }
 
-func singleRepoFromResults(results []harness.RepoResult) string {
-	var repo string
-	for _, result := range results {
-		candidate := strings.TrimSpace(result.RepoURL)
-		if candidate == "" {
-			continue
-		}
-		if repo == "" {
-			repo = candidate
-			continue
-		}
-		if repo != candidate {
-			return ""
-		}
+func unexpectedNoChangesFollowUpRepos(runCfg config.Config) []string {
+	repos := runCfg.RepoList()
+	if len(repos) > 0 {
+		return repos
 	}
-	return repo
+	return failureFollowUpRepos(harness.Result{}, runCfg)
 }
 
 func unexpectedNoChangesFollowUpPrompt(logPaths []string, requestID string, result harness.Result, runCfg config.Config) string {
@@ -1108,6 +1364,133 @@ func failureFollowUpContextRepos(failedResult harness.Result, failedRunCfg confi
 	return repos
 }
 
+func existingPaths(paths []string) []string {
+	if len(paths) == 0 {
+		return nil
+	}
+
+	existing := make([]string, 0, len(paths))
+	seen := make(map[string]struct{}, len(paths))
+	for _, path := range paths {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		if _, err := os.Stat(path); err != nil {
+			continue
+		}
+		seen[path] = struct{}{}
+		existing = append(existing, path)
+	}
+	if len(existing) == 0 {
+		return nil
+	}
+	return existing
+}
+
+func followUpTaskLogPaths(logRoot, requestID string) []string {
+	paths := taskLogPaths(logRoot, requestID)
+	if _, ok := localTaskLogDir(logRoot, requestID); !ok {
+		return paths
+	}
+
+	archived := archiveLocalTaskLogsForFollowUp(logRoot, requestID)
+	if len(archived) > 0 {
+		return archived
+	}
+	return paths
+}
+
+func archiveLocalTaskLogsForFollowUp(logRoot, requestID string) []string {
+	sourceDir, ok := localTaskLogDir(logRoot, requestID)
+	if !ok {
+		return nil
+	}
+	sourceDir = strings.TrimSpace(sourceDir)
+	if sourceDir == "" {
+		return nil
+	}
+	if stat, err := os.Stat(sourceDir); err != nil || !stat.IsDir() {
+		return nil
+	}
+
+	archiveDir, ok := followUpTaskLogArchiveDir(logRoot, requestID)
+	if !ok {
+		return nil
+	}
+	if err := os.MkdirAll(archiveDir, 0o755); err != nil {
+		return nil
+	}
+
+	paths := []string{archiveDir}
+	for _, fileName := range []string{legacyTaskLogFileName, logFileName} {
+		sourcePath := filepath.Join(sourceDir, fileName)
+		archivePath := filepath.Join(archiveDir, fileName)
+		copied, err := copyFileIfPresent(sourcePath, archivePath)
+		if err != nil || !copied {
+			continue
+		}
+		paths = append(paths, archivePath)
+	}
+	if len(paths) == 1 {
+		return nil
+	}
+	return paths
+}
+
+func copyFileIfPresent(sourcePath, targetPath string) (bool, error) {
+	sourcePath = strings.TrimSpace(sourcePath)
+	targetPath = strings.TrimSpace(targetPath)
+	if sourcePath == "" || targetPath == "" {
+		return false, nil
+	}
+
+	in, err := os.Open(sourcePath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(targetPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, maxLogFileOpenMode)
+	if err != nil {
+		return false, err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return false, err
+	}
+	if err := out.Close(); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func followUpTaskLogArchiveDir(logRoot, requestID string) (string, bool) {
+	logRoot = strings.TrimSpace(logRoot)
+	if logRoot == "" {
+		return "", false
+	}
+	subdir, ok := failurefollowup.IdentifierSubdir(requestID)
+	if !ok {
+		return "", false
+	}
+	subdir = filepath.Clean(subdir)
+	if subdir == "." || subdir == "" || subdir == ".." {
+		return "", false
+	}
+	if filepath.IsAbs(subdir) || strings.HasPrefix(subdir, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+
+	return filepath.Join(logRoot, followUpTaskLogArchiveSubdir, subdir), true
+}
+
 func taskLogPaths(logRoot, requestID string) []string {
 	return failurefollowup.TaskLogPaths(logRoot, requestID)
 }
@@ -1214,6 +1597,20 @@ func joinAllPRURLs(results []harness.RepoResult) string {
 		urls = append(urls, strings.TrimSpace(result.PRURL))
 	}
 	return strings.Join(urls, ",")
+}
+
+func resultHasPR(result harness.Result) bool {
+	if strings.TrimSpace(result.PRURL) != "" {
+		return true
+	}
+	return strings.TrimSpace(joinAllPRURLs(result.RepoResults)) != ""
+}
+
+func completedPRURLs(result harness.Result) string {
+	if result.NoChanges {
+		return joinAllPRURLs(result.RepoResults)
+	}
+	return joinPRURLs(result.RepoResults)
 }
 
 func countChangedRepos(results []harness.RepoResult) int {
@@ -1506,6 +1903,93 @@ func checkHubPing(ctx context.Context, pingURL string) (string, error) {
 	return detail, nil
 }
 
+func startHubPingRetryLoop(
+	ctx context.Context,
+	baseURL string,
+	pingURL string,
+	initialErr error,
+	logf func(string, ...any),
+	pingCheck func(context.Context, string) (string, error),
+) <-chan struct{} {
+	return startHubPingRetryLoopWithInterval(ctx, baseURL, pingURL, initialErr, hubPingRetryInterval, logf, pingCheck)
+}
+
+func startHubPingRetryLoopWithInterval(
+	ctx context.Context,
+	baseURL string,
+	pingURL string,
+	initialErr error,
+	interval time.Duration,
+	logf func(string, ...any),
+	pingCheck func(context.Context, string) (string, error),
+) <-chan struct{} {
+	live := make(chan struct{}, 1)
+	if logf == nil {
+		logf = func(string, ...any) {}
+	}
+	baseURL = strings.TrimSpace(baseURL)
+	pingURL = strings.TrimSpace(pingURL)
+	if interval <= 0 {
+		interval = hubPingRetryInterval
+	}
+	if pingURL == "" {
+		return live
+	}
+	if pingCheck == nil {
+		pingCheck = checkHubPing
+	}
+
+	go func() {
+		logHubPingRetryState(logf, baseURL, interval, initialErr)
+
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+
+			pingCtx, cancel := context.WithTimeout(ctx, hubPingDiagnosticTimeout)
+			detail, err := pingCheck(pingCtx, pingURL)
+			cancel()
+			if err != nil {
+				logHubPingRetryState(logf, baseURL, interval, err)
+				continue
+			}
+
+			logf(
+				"hub.connection status=reachable base_url=%s detail=%q",
+				baseURL,
+				firstNonEmptyString(strings.TrimSpace(detail), "Hub endpoint is live."),
+			)
+			select {
+			case live <- struct{}{}:
+			default:
+			}
+			return
+		}
+	}()
+
+	return live
+}
+
+func logHubPingRetryState(logf func(string, ...any), baseURL string, interval time.Duration, pingErr error) {
+	if logf == nil {
+		return
+	}
+	logf(
+		"hub.connection status=retrying base_url=%s detail=%q",
+		strings.TrimSpace(baseURL),
+		hubPingFailureDetail(
+			fmt.Sprintf("Hub endpoint ping failed; retrying every %s until live.", interval),
+			pingErr,
+		),
+	)
+}
+
 func hubCredentialsConfigured(cfg hub.InitConfig, loadRuntimeConfig runtimeConfigLoader) bool {
 	if strings.TrimSpace(cfg.AgentToken) != "" || strings.TrimSpace(cfg.BindToken) != "" {
 		return true
@@ -1520,6 +2004,139 @@ func hubCredentialsConfigured(cfg hub.InitConfig, loadRuntimeConfig runtimeConfi
 	return strings.TrimSpace(stored.AgentToken) != "" || strings.TrimSpace(stored.BindToken) != ""
 }
 
+func currentHubSetupLocations() []hubSetupLocation {
+	hubSetupLocationsCache.mu.Lock()
+	defer hubSetupLocationsCache.mu.Unlock()
+
+	if len(hubSetupLocationsCache.locations) > 0 && time.Since(hubSetupLocationsCache.fetchedAt) < hubSetupLocationsCacheTTL {
+		return cloneHubSetupLocations(hubSetupLocationsCache.locations)
+	}
+
+	locations := cloneHubSetupLocations(defaultHubSetupLocations)
+	if hubSetupLocationsLoader != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), hubSetupLocationsFetchTimeout)
+		defer cancel()
+		if loaded, err := hubSetupLocationsLoader(ctx); err == nil && len(loaded) > 0 {
+			locations = cloneHubSetupLocations(loaded)
+		}
+	}
+
+	hubSetupLocationsCache.locations = cloneHubSetupLocations(locations)
+	hubSetupLocationsCache.fetchedAt = time.Now()
+	return cloneHubSetupLocations(locations)
+}
+
+func cloneHubSetupLocations(locations []hubSetupLocation) []hubSetupLocation {
+	if len(locations) == 0 {
+		return nil
+	}
+	cloned := make([]hubSetupLocation, 0, len(locations))
+	for _, location := range locations {
+		key := strings.ToLower(strings.TrimSpace(location.Key))
+		domain := normalizeHubSetupLocationDomain(location.Domain)
+		if key == "" || domain == "" {
+			continue
+		}
+		display := strings.TrimSpace(location.Display)
+		if display == "" {
+			display = strings.ToUpper(key)
+		}
+		cloned = append(cloned, hubSetupLocation{
+			Display: display,
+			Key:     key,
+			Domain:  domain,
+		})
+	}
+	return cloned
+}
+
+func fetchHubSetupLocations(ctx context.Context) ([]hubSetupLocation, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, hubSetupLocationsURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build hub locations request: %w", err)
+	}
+
+	resp, err := (&http.Client{Timeout: hubSetupLocationsFetchTimeout}).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch hub locations: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fetch hub locations returned status=%d", resp.StatusCode)
+	}
+
+	var locations []hubSetupLocation
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&locations); err != nil {
+		return nil, fmt.Errorf("decode hub locations: %w", err)
+	}
+	locations = cloneHubSetupLocations(locations)
+	if len(locations) == 0 {
+		return nil, fmt.Errorf("hub locations registry returned no usable locations")
+	}
+	return locations, nil
+}
+
+func normalizeHubSetupLocationDomain(domain string) string {
+	domain = strings.TrimSpace(domain)
+	if domain == "" {
+		return ""
+	}
+	if strings.Contains(domain, "://") {
+		if parsed, err := url.Parse(domain); err == nil {
+			domain = parsed.Host
+		}
+	}
+	domain = strings.TrimSpace(strings.TrimRight(domain, "/"))
+	return strings.ToLower(domain)
+}
+
+func hubSetupLocationByKey(locations []hubSetupLocation, key string) (hubSetupLocation, bool) {
+	key = strings.ToLower(strings.TrimSpace(key))
+	for _, location := range locations {
+		if strings.EqualFold(strings.TrimSpace(location.Key), key) {
+			return location, true
+		}
+	}
+	return hubSetupLocation{}, false
+}
+
+func hubSetupLocationBaseURL(location hubSetupLocation) string {
+	domain := normalizeHubSetupLocationDomain(location.Domain)
+	if domain == "" {
+		return ""
+	}
+	return "https://" + domain + "/v1"
+}
+
+func hubSetupLocationForBaseURL(locations []hubSetupLocation, baseURL string) (hubSetupLocation, bool) {
+	baseURL = strings.TrimSpace(baseURL)
+	if baseURL == "" {
+		return hubSetupLocation{}, false
+	}
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		return hubSetupLocation{}, false
+	}
+	host := strings.ToLower(strings.TrimSpace(parsed.Host))
+	if host == "" {
+		return hubSetupLocation{}, false
+	}
+	for _, location := range locations {
+		if normalizeHubSetupLocationDomain(location.Domain) == host {
+			return location, true
+		}
+	}
+	return hubSetupLocation{}, false
+}
+
+func resetHubSetupLocationsCache() {
+	hubSetupLocationsCache.mu.Lock()
+	defer hubSetupLocationsCache.mu.Unlock()
+	hubSetupLocationsCache.locations = nil
+	hubSetupLocationsCache.fetchedAt = time.Time{}
+}
+
 func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 	state := hubui.HubSetupState{
 		ConnectURL:      "https://app.molten.bot/signin?target=hub",
@@ -1530,20 +2147,36 @@ func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 		Onboarding:      hubui.DefaultHubSetupOnboarding("existing"),
 		OnboardingStage: "bind",
 	}
+	locations := currentHubSetupLocations()
+	state.Region = normalizeHubSetupRegion("")
 
 	activeCfg, err := effectiveHubSetupConfig(cfg)
 	if err != nil {
 		state.Message = fmt.Sprintf("Runtime config load failed: %v", err)
 	}
+	storedCfg, storedFound, storedErr := loadHubSetupRuntimeConfig(cfg.RuntimeConfigPath)
+	if storedErr != nil && state.Message == "" {
+		state.Message = fmt.Sprintf("Runtime config load failed: %v", storedErr)
+	}
 
-	state.Configured = strings.TrimSpace(activeCfg.BindToken) != "" || strings.TrimSpace(activeCfg.AgentToken) != ""
-	state.Region = hubSetupRegionForBaseURL(activeCfg.BaseURL)
+	persistedBindToken := ""
+	persistedAgentToken := ""
+	if storedFound {
+		persistedBindToken = strings.TrimSpace(storedCfg.BindToken)
+		persistedAgentToken = strings.TrimSpace(storedCfg.AgentToken)
+	}
+	state.Configured = persistedBindToken != "" || persistedAgentToken != ""
+	if storedFound && strings.TrimSpace(storedCfg.BaseURL) != "" {
+		state.Region = hubSetupRegionForBaseURLWithLocations(storedCfg.BaseURL, locations)
+	} else {
+		state.Region = hubSetupRegionForBaseURLWithLocations(activeCfg.BaseURL, locations)
+	}
 	state.Handle = strings.TrimSpace(activeCfg.Handle)
 	state.Profile.ProfileText = strings.TrimSpace(activeCfg.Profile.ProfileText)
 	state.Profile.DisplayName = strings.TrimSpace(activeCfg.Profile.DisplayName)
 	state.Profile.Emoji = strings.TrimSpace(activeCfg.Profile.Emoji)
 	if state.Configured {
-		if strings.TrimSpace(activeCfg.BindToken) != "" {
+		if persistedBindToken != "" {
 			state.AgentMode = "new"
 			state.TokenType = "bind"
 		} else {
@@ -1555,19 +2188,93 @@ func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 	return state
 }
 
+func loadHubSetupRuntimeConfig(path string) (hub.InitConfig, bool, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return hub.InitConfig{}, false, nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return hub.InitConfig{}, false, nil
+		}
+		return hub.InitConfig{}, false, fmt.Errorf("read runtime config: %w", err)
+	}
+
+	var runtimeCfg hub.RuntimeConfig
+	if err := json.Unmarshal(data, &runtimeCfg); err != nil {
+		return hub.InitConfig{}, false, fmt.Errorf("parse runtime config: %w", err)
+	}
+
+	runtimeCfg.RuntimeConfigPath = path
+	initCfg := runtimeCfg.Init()
+	initCfg.RuntimeConfigPath = path
+	return initCfg, true, nil
+}
+
+func currentHubSetupStateWithRemoteProfile(ctx context.Context, cfg hub.InitConfig) hubui.HubSetupState {
+	state := currentHubSetupState(cfg)
+	if !hubSetupProfileNeedsRemoteHydration(state) {
+		return state
+	}
+
+	activeCfg, err := effectiveHubSetupConfig(cfg)
+	if err != nil {
+		return state
+	}
+	token := strings.TrimSpace(activeCfg.AgentToken)
+	if token == "" {
+		return state
+	}
+
+	client := hub.NewAPIClient(activeCfg.BaseURL)
+	remoteProfile, err := client.AgentProfile(ctx, token)
+	if err != nil {
+		return state
+	}
+
+	if strings.TrimSpace(remoteProfile.Handle) != "" {
+		state.Handle = strings.TrimSpace(remoteProfile.Handle)
+	}
+	mergedProfile := mergeProfileConfig(
+		remoteProfile.Profile,
+		hub.ProfileConfig{
+			DisplayName: strings.TrimSpace(state.Profile.DisplayName),
+			Emoji:       strings.TrimSpace(state.Profile.Emoji),
+			ProfileText: strings.TrimSpace(state.Profile.ProfileText),
+		},
+	)
+	state.Profile.DisplayName = strings.TrimSpace(mergedProfile.DisplayName)
+	state.Profile.Emoji = strings.TrimSpace(mergedProfile.Emoji)
+	state.Profile.ProfileText = strings.TrimSpace(mergedProfile.ProfileText)
+	return state
+}
+
+func hubSetupProfileNeedsRemoteHydration(state hubui.HubSetupState) bool {
+	if !state.Configured {
+		return false
+	}
+	if strings.TrimSpace(state.Handle) == "" {
+		return true
+	}
+	return strings.TrimSpace(state.Profile.DisplayName) == "" &&
+		strings.TrimSpace(state.Profile.Emoji) == "" &&
+		strings.TrimSpace(state.Profile.ProfileText) == ""
+}
+
 func effectiveHubSetupConfig(cfg hub.InitConfig) (hub.InitConfig, error) {
 	activeCfg := cfg
 	activeCfg.ApplyDefaults()
 
-	runtimeCfg, err := hub.LoadRuntimeConfig(cfg.RuntimeConfigPath)
+	storedCfg, found, err := loadHubSetupRuntimeConfig(cfg.RuntimeConfigPath)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return activeCfg, nil
-		}
 		return activeCfg, err
 	}
+	if !found {
+		return activeCfg, nil
+	}
 
-	storedCfg := runtimeCfg.Init()
 	if strings.TrimSpace(storedCfg.BindToken) == "" {
 		storedCfg.BindToken = strings.TrimSpace(activeCfg.BindToken)
 	}
@@ -1584,9 +2291,7 @@ func effectiveHubSetupConfig(cfg hub.InitConfig) (hub.InitConfig, error) {
 	if strings.TrimSpace(storedCfg.AgentCommand) == "" {
 		storedCfg.AgentCommand = strings.TrimSpace(activeCfg.AgentCommand)
 	}
-	if strings.TrimSpace(runtimeCfg.BindToken) == "" &&
-		strings.TrimSpace(runtimeCfg.AgentToken) == "" &&
-		strings.TrimSpace(activeCfg.BaseURL) != "" {
+	if strings.TrimSpace(storedCfg.BaseURL) == "" && strings.TrimSpace(activeCfg.BaseURL) != "" {
 		storedCfg.BaseURL = strings.TrimSpace(activeCfg.BaseURL)
 	}
 	storedCfg.ApplyDefaults()
@@ -1651,12 +2356,10 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 		finalCfg.BaseURL = baseURL
 	}
 	finalCfg.AgentToken = resolvedToken
-	profileUpdateRequested := useSavedCredentials ||
-		state.AgentMode == "new" ||
-		strings.TrimSpace(req.Handle) != "" ||
-		strings.TrimSpace(req.Profile.ProfileText) != "" ||
-		strings.TrimSpace(req.Profile.DisplayName) != "" ||
-		strings.TrimSpace(req.Profile.Emoji) != ""
+	profileUpdateRequested := strings.TrimSpace(state.Handle) != strings.TrimSpace(activeCfg.Handle) ||
+		strings.TrimSpace(state.Profile.ProfileText) != strings.TrimSpace(activeCfg.Profile.ProfileText) ||
+		strings.TrimSpace(state.Profile.DisplayName) != strings.TrimSpace(activeCfg.Profile.DisplayName) ||
+		strings.TrimSpace(state.Profile.Emoji) != strings.TrimSpace(activeCfg.Profile.Emoji)
 	if profileUpdateRequested {
 		finalCfg.Handle = state.Handle
 		finalCfg.Profile.ProfileText = state.Profile.ProfileText
@@ -1681,16 +2384,16 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 		hubSetupMarkStep(&state, "work_activate", "error", err.Error())
 		return state, fmt.Errorf("load hub profile: %w", err)
 	}
-	if normalizeHubSetupMode(state.AgentMode) == "existing" {
-		if strings.TrimSpace(profile.Handle) != "" {
-			finalCfg.Handle = strings.TrimSpace(profile.Handle)
-		}
-		finalCfg.Profile = mergeProfileConfig(profile.Profile, finalCfg.Profile)
-	} else {
+	if profileUpdateRequested {
 		if strings.TrimSpace(finalCfg.Handle) == "" {
 			finalCfg.Handle = strings.TrimSpace(profile.Handle)
 		}
 		finalCfg.Profile = mergeProfileConfig(finalCfg.Profile, profile.Profile)
+	} else {
+		if strings.TrimSpace(profile.Handle) != "" {
+			finalCfg.Handle = strings.TrimSpace(profile.Handle)
+		}
+		finalCfg.Profile = mergeProfileConfig(profile.Profile, finalCfg.Profile)
 	}
 	finalCfg.ApplyDefaults()
 
@@ -1832,34 +2535,67 @@ func normalizeHubSetupTokenType(tokenType string) string {
 }
 
 func normalizeHubSetupRegion(region string) string {
-	switch strings.ToLower(strings.TrimSpace(region)) {
-	case "eu":
-		return "eu"
-	default:
-		return "na"
+	normalized := strings.ToLower(strings.TrimSpace(region))
+	locations := currentHubSetupLocations()
+	if location, ok := hubSetupLocationByKey(locations, normalized); ok {
+		return location.Key
 	}
+	normalized = hub.NormalizeHubRegion(normalized)
+	if location, ok := hubSetupLocationByKey(locations, normalized); ok {
+		return location.Key
+	}
+	if len(locations) > 0 {
+		return locations[0].Key
+	}
+	return normalized
 }
 
 func hubSetupRegionForBaseURL(baseURL string) string {
-	baseURL = strings.ToLower(strings.TrimSpace(baseURL))
-	switch {
-	case strings.Contains(baseURL, "://eu.hub.molten.bot/"), strings.HasPrefix(baseURL, "https://eu.hub.molten.bot"), strings.HasPrefix(baseURL, "http://eu.hub.molten.bot"):
-		return "eu"
-	default:
-		return "na"
+	return hubSetupRegionForBaseURLWithLocations(baseURL, currentHubSetupLocations())
+}
+
+func hubSetupRegionForBaseURLWithLocations(baseURL string, locations []hubSetupLocation) string {
+	if location, ok := hubSetupLocationForBaseURL(locations, baseURL); ok {
+		return location.Key
 	}
+	return normalizeHubSetupRegion(hub.HubRegionFromBaseURL(baseURL))
 }
 
 func hubSetupBaseURL(baseURL, region string) string {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	locations := currentHubSetupLocations()
 	region = normalizeHubSetupRegion(region)
-	if baseURL == "" || baseURL == "https://na.hub.molten.bot/v1" || baseURL == "https://eu.hub.molten.bot/v1" {
-		if region == "eu" {
-			return "https://eu.hub.molten.bot/v1"
+
+	selected, ok := hubSetupLocationByKey(locations, region)
+	if !ok {
+		if len(locations) > 0 {
+			selected = locations[0]
+			ok = true
 		}
-		return "https://na.hub.molten.bot/v1"
 	}
-	return baseURL
+
+	if baseURL != "" {
+		if _, matched := hubSetupLocationForBaseURL(locations, baseURL); matched {
+			if ok {
+				if selectedBaseURL := hubSetupLocationBaseURL(selected); selectedBaseURL != "" {
+					return selectedBaseURL
+				}
+			}
+			return hub.HubBaseURLForRegion(region)
+		}
+		if hub.AllowNonMoltenHubBaseURL() {
+			if err := hub.ValidateHubBaseURLStrict(baseURL); err != nil {
+				return baseURL
+			}
+		}
+	}
+
+	if ok {
+		if selectedBaseURL := hubSetupLocationBaseURL(selected); selectedBaseURL != "" {
+			return selectedBaseURL
+		}
+	}
+	return hub.HubBaseURLForRegion(region)
 }
 
 func hubSetupTokenTypeForMode(mode string) string {

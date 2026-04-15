@@ -15,6 +15,14 @@ func TestBrokerHelperParsersAndUniqueListMerging(t *testing.T) {
 		t.Fatalf("parseFieldValue(missing) = %q, want empty", got)
 	}
 
+	fields := parseKVFields(`dispatch request_id=local-1712345678-000001 cmd phase=codex text="dispatch status=error request_id=req-err-ws err=\"clone failed\""`)
+	if got, want := fields["request_id"], "local-1712345678-000001"; got != want {
+		t.Fatalf("parseKVFields(request_id) = %q, want %q", got, want)
+	}
+	if got := fields["status"]; got != "" {
+		t.Fatalf("parseKVFields(status) = %q, want empty (nested status should not be parsed)", got)
+	}
+
 	if _, ok := parseQuotedToken("not-quoted"); ok {
 		t.Fatal("parseQuotedToken(non-quoted) ok = true, want false")
 	}

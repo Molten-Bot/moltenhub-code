@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/jef/moltenhub-code/internal/agentruntime"
 	"github.com/jef/moltenhub-code/internal/library"
@@ -31,6 +32,7 @@ const (
 	agentVisibilityValue = "public"
 	gitHubTaskComplete   = "github task complete"
 	maxActivityEntries   = 20
+	maxPullTimeoutMs     = 30000
 )
 
 // PulledOpenClawMessage is one leased inbound message from pull transport.
@@ -154,7 +156,12 @@ func (c *APIClient) bindTokenFlow(ctx context.Context, bindToken string) (string
 		if status/100 == 2 {
 			if token := extractTokenFromJSON(body); token != "" {
 				if apiBase := extractAPIBaseFromJSON(body); apiBase != "" {
-					c.BaseURL = strings.TrimRight(apiBase, "/")
+					canonicalBase, canonicalErr := CanonicalHubBaseURL(apiBase)
+					if canonicalErr != nil {
+						c.logf("hub.auth attempt=%s status=warn action=ignore_api_base err=%q", attempt.name, canonicalErr)
+					} else {
+						c.BaseURL = canonicalBase
+					}
 				}
 				c.logf("hub.auth attempt=%s status=ok credential=exchanged", attempt.name)
 				return token, nil
@@ -175,9 +182,11 @@ func (c *APIClient) bindTokenFlow(ctx context.Context, bindToken string) (string
 
 // SyncProfile applies handle/profile updates.
 func (c APIClient) SyncProfile(ctx context.Context, token string, cfg InitConfig) error {
-	if strings.TrimSpace(token) == "" {
-		return fmt.Errorf("profile sync requires token")
+	normalizedToken, err := requireHubToken(token, "profile sync")
+	if err != nil {
+		return err
 	}
+	token = normalizedToken
 
 	cfg.ApplyDefaults()
 	metadata, err := c.AgentMetadata(ctx, token)
@@ -190,16 +199,11 @@ func (c APIClient) SyncProfile(ctx context.Context, token string, cfg InitConfig
 
 	handle := strings.TrimSpace(cfg.Handle)
 	updateProfile := func(includeHandle bool) (bool, string) {
-		body := map[string]any{
-			"metadata": metadata,
-		}
+		handleValue := ""
 		if includeHandle && handle != "" {
-			body["handle"] = handle
+			handleValue = handle
 		}
-		return c.tryAny(ctx, token, []apiAttempt{
-			{Method: http.MethodPatch, Path: "/agents/me/metadata", Body: body},
-			{Method: http.MethodPatch, Path: "/agents/me", Body: body},
-		})
+		return c.tryAny(ctx, token, agentProfilePatchAttempts(metadata, handleValue))
 	}
 
 	if handle == "" {
@@ -219,25 +223,6 @@ func (c APIClient) SyncProfile(ctx context.Context, token string, cfg InitConfig
 		return nil
 	}
 	return fmt.Errorf("set profile failed: %s; retry_without_handle: %s", trace, retryTrace)
-}
-
-func (c APIClient) syncProfileMetadata(ctx context.Context, token string, cfg InitConfig) error {
-	metadata, err := c.AgentMetadata(ctx, token)
-	if err != nil {
-		return fmt.Errorf("load agent metadata: %w", err)
-	}
-
-	metadata = cloneMetadataMap(metadata)
-	mergeProfileMetadata(metadata, cfg)
-
-	ok, trace := c.tryAny(ctx, token, []apiAttempt{
-		{Method: http.MethodPatch, Path: "/agents/me/metadata", Body: map[string]any{"metadata": metadata}},
-		{Method: http.MethodPatch, Path: "/agents/me", Body: map[string]any{"metadata": metadata}},
-	})
-	if !ok {
-		return fmt.Errorf("sync profile metadata failed: %s", trace)
-	}
-	return nil
 }
 
 func mergeProfileMetadata(metadata map[string]any, cfg InitConfig) {
@@ -265,9 +250,11 @@ func mergeProfileMetadata(metadata map[string]any, cfg InitConfig) {
 
 // UpdateAgentStatus updates the hub-visible lifecycle status for this agent.
 func (c APIClient) UpdateAgentStatus(ctx context.Context, token, status string) error {
-	if strings.TrimSpace(token) == "" {
-		return fmt.Errorf("update agent status requires token")
+	normalizedToken, err := requireHubToken(token, "update agent status")
+	if err != nil {
+		return err
 	}
+	token = normalizedToken
 
 	normalizedStatus, err := normalizeAgentStatus(status)
 	if err != nil {
@@ -291,15 +278,16 @@ func (c APIClient) UpdateAgentStatus(ctx context.Context, token, status string) 
 
 // MarkOpenClawOffline marks this runtime offline for OpenClaw websocket transport.
 func (c APIClient) MarkOpenClawOffline(ctx context.Context, token, sessionKey, reason string) error {
-	if strings.TrimSpace(token) == "" {
-		return fmt.Errorf("mark openclaw offline requires token")
+	normalizedToken, err := requireHubToken(token, "mark openclaw offline")
+	if err != nil {
+		return err
 	}
+	token = normalizedToken
 
 	body := map[string]any{}
 	if strings.TrimSpace(sessionKey) != "" {
 		normalizedSessionKey := strings.TrimSpace(sessionKey)
 		body["session_key"] = normalizedSessionKey
-		body["sessionKey"] = normalizedSessionKey
 	}
 	if strings.TrimSpace(reason) != "" {
 		body["reason"] = strings.TrimSpace(reason)
@@ -317,34 +305,22 @@ func (c APIClient) MarkOpenClawOffline(ctx context.Context, token, sessionKey, r
 
 // RecordGitHubTaskCompleteActivity appends a minimal completion entry to metadata.activities.
 func (c APIClient) RecordGitHubTaskCompleteActivity(ctx context.Context, token string) error {
-	if strings.TrimSpace(token) == "" {
-		return fmt.Errorf("record github task complete activity requires token")
-	}
-
-	metadata, err := c.AgentMetadata(ctx, token)
+	normalizedToken, err := requireHubToken(token, "record github task complete activity")
 	if err != nil {
-		return fmt.Errorf("load agent metadata: %w", err)
+		return err
 	}
-
-	metadata = cloneMetadataMap(metadata)
-	metadata["activities"] = appendActivityEntries(metadata["activities"], gitHubTaskComplete)
-
-	ok, trace := c.tryAny(ctx, token, []apiAttempt{
-		{Method: http.MethodPatch, Path: "/agents/me/metadata", Body: map[string]any{"metadata": metadata}},
-		{Method: http.MethodPatch, Path: "/agents/me", Body: map[string]any{"metadata": metadata}},
+	return c.updateAgentMetadata(ctx, normalizedToken, "record github task complete activity failed", func(metadata map[string]any) {
+		metadata["activities"] = appendActivityEntries(metadata["activities"], gitHubTaskComplete)
 	})
-	if !ok {
-		return fmt.Errorf("record github task complete activity failed: %s", trace)
-	}
-
-	return nil
 }
 
 // AgentMetadata loads the current agent metadata for safe merge-style updates.
 func (c APIClient) AgentMetadata(ctx context.Context, token string) (map[string]any, error) {
-	if strings.TrimSpace(token) == "" {
-		return nil, fmt.Errorf("agent metadata requires token")
+	normalizedToken, err := requireHubToken(token, "agent metadata")
+	if err != nil {
+		return nil, err
 	}
+	token = normalizedToken
 
 	status, body, err := c.doJSON(ctx, http.MethodGet, "/agents/me", token, nil)
 	if err != nil {
@@ -359,9 +335,11 @@ func (c APIClient) AgentMetadata(ctx context.Context, token string) (map[string]
 
 // AgentProfile loads the current agent handle/profile for config persistence.
 func (c APIClient) AgentProfile(ctx context.Context, token string) (AgentProfile, error) {
-	if strings.TrimSpace(token) == "" {
-		return AgentProfile{}, fmt.Errorf("agent profile requires token")
+	normalizedToken, err := requireHubToken(token, "agent profile")
+	if err != nil {
+		return AgentProfile{}, err
 	}
+	token = normalizedToken
 
 	status, body, err := c.doJSON(ctx, http.MethodGet, "/agents/me", token, nil)
 	if err != nil {
@@ -376,25 +354,13 @@ func (c APIClient) AgentProfile(ctx context.Context, token string) (AgentProfile
 
 // RegisterRuntime sends plugin/runtime metadata to hub.
 func (c APIClient) RegisterRuntime(ctx context.Context, token string, cfg InitConfig, libraryTasks []library.TaskSummary) error {
-	if strings.TrimSpace(token) == "" {
-		return fmt.Errorf("register runtime requires token")
-	}
-
-	metadata, err := c.AgentMetadata(ctx, token)
+	normalizedToken, err := requireHubToken(token, "register runtime")
 	if err != nil {
-		return fmt.Errorf("load agent metadata: %w", err)
+		return err
 	}
-	metadata = cloneMetadataMap(metadata)
-	mergeRuntimeRegistrationMetadata(metadata, cfg, libraryTasks)
-
-	ok, trace := c.tryAny(ctx, token, []apiAttempt{
-		{Method: http.MethodPatch, Path: "/agents/me/metadata", Body: map[string]any{"metadata": metadata}},
-		{Method: http.MethodPatch, Path: "/agents/me", Body: map[string]any{"metadata": metadata}},
+	return c.updateAgentMetadata(ctx, normalizedToken, "register runtime failed", func(metadata map[string]any) {
+		mergeRuntimeRegistrationMetadata(metadata, cfg, libraryTasks)
 	})
-	if !ok {
-		return fmt.Errorf("register runtime failed: %s", trace)
-	}
-	return nil
 }
 
 // PublishResult posts a skill result using OpenClaw publish transport.
@@ -428,18 +394,7 @@ func (c APIClient) PublishResult(ctx context.Context, token string, payload map[
 
 // PullOpenClawMessage claims the next OpenClaw envelope using long-poll transport.
 func (c APIClient) PullOpenClawMessage(ctx context.Context, token string, timeoutMs int) (PulledOpenClawMessage, bool, error) {
-	query := ""
-	if timeoutMs < 0 {
-		timeoutMs = 0
-	}
-	if timeoutMs > 30000 {
-		timeoutMs = 30000
-	}
-	if timeoutMs > 0 {
-		query = fmt.Sprintf("?timeout_ms=%d", timeoutMs)
-	}
-
-	status, body, err := c.doJSON(ctx, http.MethodGet, "/openclaw/messages/pull"+query, token, nil)
+	status, body, err := c.doJSON(ctx, http.MethodGet, "/openclaw/messages/pull"+openClawPullQuery(timeoutMs), token, nil)
 	if err != nil {
 		return PulledOpenClawMessage{}, false, err
 	}
@@ -462,32 +417,45 @@ func (c APIClient) PullOpenClawMessage(ctx context.Context, token string, timeou
 
 // AckOpenClawDelivery acknowledges a leased pull delivery.
 func (c APIClient) AckOpenClawDelivery(ctx context.Context, token, deliveryID string) error {
-	deliveryID = strings.TrimSpace(deliveryID)
-	if deliveryID == "" {
-		return fmt.Errorf("delivery id is required")
-	}
-	ok, trace := c.tryAny(ctx, token, []apiAttempt{
-		{Method: http.MethodPost, Path: "/openclaw/messages/ack", Body: map[string]any{"delivery_id": deliveryID}},
-	})
-	if !ok {
-		return fmt.Errorf("ack delivery failed: %s", trace)
-	}
-	return nil
+	return c.updateOpenClawDelivery(ctx, token, deliveryID, "ack", "/openclaw/messages/ack")
 }
 
 // NackOpenClawDelivery releases a leased pull delivery back to the queue.
 func (c APIClient) NackOpenClawDelivery(ctx context.Context, token, deliveryID string) error {
+	return c.updateOpenClawDelivery(ctx, token, deliveryID, "nack", "/openclaw/messages/nack")
+}
+
+func (c APIClient) updateOpenClawDelivery(ctx context.Context, token, deliveryID, action, path string) error {
+	normalizedToken, err := requireHubToken(token, action+" delivery")
+	if err != nil {
+		return err
+	}
+	token = normalizedToken
+
 	deliveryID = strings.TrimSpace(deliveryID)
 	if deliveryID == "" {
 		return fmt.Errorf("delivery id is required")
 	}
 	ok, trace := c.tryAny(ctx, token, []apiAttempt{
-		{Method: http.MethodPost, Path: "/openclaw/messages/nack", Body: map[string]any{"delivery_id": deliveryID}},
+		{Method: http.MethodPost, Path: path, Body: map[string]any{"delivery_id": deliveryID}},
 	})
 	if !ok {
-		return fmt.Errorf("nack delivery failed: %s", trace)
+		return fmt.Errorf("%s delivery failed: %s", action, trace)
 	}
 	return nil
+}
+
+func openClawPullQuery(timeoutMs int) string {
+	switch {
+	case timeoutMs < 0:
+		timeoutMs = 0
+	case timeoutMs > maxPullTimeoutMs:
+		timeoutMs = maxPullTimeoutMs
+	}
+	if timeoutMs == 0 {
+		return ""
+	}
+	return fmt.Sprintf("?timeout_ms=%d", timeoutMs)
 }
 
 // WebsocketURL builds the websocket endpoint from API base URL.
@@ -509,7 +477,6 @@ func WebsocketURL(baseURL, sessionKey string) (string, error) {
 	q := u.Query()
 	if strings.TrimSpace(sessionKey) != "" {
 		q.Set("session_key", sessionKey)
-		q.Set("sessionKey", sessionKey)
 	}
 	u.RawQuery = q.Encode()
 	return u.String(), nil
@@ -591,6 +558,54 @@ func (c APIClient) tryAny(ctx context.Context, token string, attempts []apiAttem
 		traces = append(traces, fmt.Sprintf("%s %s status=%d", attempt.Method, attempt.Path, status))
 	}
 	return false, strings.Join(traces, "; ")
+}
+
+func requireHubToken(token, operation string) (string, error) {
+	normalizedToken := strings.TrimSpace(token)
+	if normalizedToken == "" {
+		return "", fmt.Errorf("%s requires token", strings.TrimSpace(operation))
+	}
+	return normalizedToken, nil
+}
+
+func agentProfilePatchAttempts(metadata map[string]any, handle string) []apiAttempt {
+	body := map[string]any{
+		"metadata": metadata,
+	}
+	if strings.TrimSpace(handle) != "" {
+		body["handle"] = strings.TrimSpace(handle)
+	}
+	return []apiAttempt{
+		{Method: http.MethodPatch, Path: "/agents/me/metadata", Body: body},
+		{Method: http.MethodPatch, Path: "/agents/me", Body: body},
+	}
+}
+
+func metadataPatchAttempts(metadata map[string]any) []apiAttempt {
+	return agentProfilePatchAttempts(metadata, "")
+}
+
+func (c APIClient) updateAgentMetadata(
+	ctx context.Context,
+	token string,
+	applyErrPrefix string,
+	mutate func(map[string]any),
+) error {
+	metadata, err := c.AgentMetadata(ctx, token)
+	if err != nil {
+		return fmt.Errorf("load agent metadata: %w", err)
+	}
+
+	metadata = cloneMetadataMap(metadata)
+	if mutate != nil {
+		mutate(metadata)
+	}
+
+	ok, trace := c.tryAny(ctx, token, metadataPatchAttempts(metadata))
+	if !ok {
+		return fmt.Errorf("%s: %s", applyErrPrefix, trace)
+	}
+	return nil
 }
 
 func (c APIClient) logf(format string, args ...any) {
@@ -740,11 +755,24 @@ func enrichInboundMessageRouting(message, result, root map[string]any) map[strin
 		return message
 	}
 
-	transportMessage := firstNonEmptyMap(
+	transportMessages := []map[string]any{
 		toMap(valueAt(result, "message")),
 		toMap(valueAt(root, "message")),
-	)
-	if len(transportMessage) == 0 {
+		toMap(valueAt(result, "openclaw_message")),
+		toMap(valueAt(root, "openclaw_message")),
+		toMap(valueAt(result, "openclaw_message", "message")),
+		toMap(valueAt(root, "openclaw_message", "message")),
+		toMap(valueAt(result, "delivery", "message")),
+		toMap(valueAt(root, "delivery", "message")),
+	}
+	hasTransportMetadata := false
+	for _, transportMessage := range transportMessages {
+		if len(transportMessage) > 0 {
+			hasTransportMetadata = true
+			break
+		}
+	}
+	if !hasTransportMetadata {
 		return message
 	}
 
@@ -752,10 +780,15 @@ func enrichInboundMessageRouting(message, result, root map[string]any) map[strin
 		if strings.TrimSpace(stringAt(message, key)) != "" {
 			return
 		}
-		for _, candidate := range candidates {
-			if value := stringAt(transportMessage, candidate); value != "" {
-				message[key] = value
-				return
+		for _, transportMessage := range transportMessages {
+			if len(transportMessage) == 0 {
+				continue
+			}
+			for _, candidate := range candidates {
+				if value := stringAt(transportMessage, candidate); value != "" {
+					message[key] = value
+					return
+				}
 			}
 		}
 	}
@@ -818,15 +851,6 @@ func valueAt(root map[string]any, path ...string) any {
 		current = next
 	}
 	return current
-}
-
-func firstNonEmptyMap(values ...map[string]any) map[string]any {
-	for _, value := range values {
-		if len(value) > 0 {
-			return value
-		}
-	}
-	return nil
 }
 
 func looksLikeAgentURI(value string) bool {
@@ -954,12 +978,10 @@ func extractAgentProfileFromAny(v any) AgentProfile {
 			),
 		}
 
-		if nested := toMap(typed["profile"]); len(nested) > 0 {
-			profile.Profile = extractProfileConfig(nested)
-		}
-		if profileConfigEmpty(profile.Profile) {
-			profile.Profile = extractProfileConfig(extractMetadataFromAny(typed))
-		}
+		profile.Profile = mergeProfileConfigFields(
+			extractProfileConfig(toMap(typed["profile"])),
+			extractProfileConfig(extractMetadataFromAny(typed)),
+		)
 		if nested, ok := typed["result"]; ok {
 			merged := mergeAgentProfiles(profile, extractAgentProfileFromAny(nested))
 			if !agentProfileEmpty(merged) {
@@ -990,39 +1012,59 @@ func mergeAgentProfiles(primary, secondary AgentProfile) AgentProfile {
 	if strings.TrimSpace(merged.Handle) == "" {
 		merged.Handle = strings.TrimSpace(secondary.Handle)
 	}
-	if strings.TrimSpace(merged.Profile.DisplayName) == "" {
-		merged.Profile.DisplayName = strings.TrimSpace(secondary.Profile.DisplayName)
-	}
-	if strings.TrimSpace(merged.Profile.Emoji) == "" {
-		merged.Profile.Emoji = strings.TrimSpace(secondary.Profile.Emoji)
-	}
-	if strings.TrimSpace(merged.Profile.ProfileText) == "" {
-		merged.Profile.ProfileText = strings.TrimSpace(secondary.Profile.ProfileText)
-	}
-	if strings.TrimSpace(merged.Profile.LLM) == "" {
-		merged.Profile.LLM = strings.TrimSpace(secondary.Profile.LLM)
-	}
-	if strings.TrimSpace(merged.Profile.Harness) == "" {
-		merged.Profile.Harness = strings.TrimSpace(secondary.Profile.Harness)
-	}
-	if len(merged.Profile.Skills) == 0 && len(secondary.Profile.Skills) > 0 {
-		merged.Profile.Skills = append([]string(nil), secondary.Profile.Skills...)
-	}
+	merged.Profile = mergeProfileConfigFields(merged.Profile, secondary.Profile)
 	return merged
+}
+
+func mergeProfileConfigFields(primary, secondary ProfileConfig) ProfileConfig {
+	if strings.TrimSpace(primary.DisplayName) == "" {
+		primary.DisplayName = strings.TrimSpace(secondary.DisplayName)
+	}
+	if strings.TrimSpace(primary.Emoji) == "" {
+		primary.Emoji = strings.TrimSpace(secondary.Emoji)
+	}
+	if strings.TrimSpace(primary.ProfileText) == "" {
+		primary.ProfileText = strings.TrimSpace(secondary.ProfileText)
+	}
+	if strings.TrimSpace(primary.LLM) == "" {
+		primary.LLM = strings.TrimSpace(secondary.LLM)
+	}
+	if strings.TrimSpace(primary.Harness) == "" {
+		primary.Harness = strings.TrimSpace(secondary.Harness)
+	}
+	if len(primary.Skills) == 0 && len(secondary.Skills) > 0 {
+		primary.Skills = append([]string(nil), secondary.Skills...)
+	}
+	return primary
 }
 
 func extractProfileConfig(raw map[string]any) ProfileConfig {
 	skills := parseProfileSkills(raw["skills"])
+	displayName := firstNonEmpty(
+		stringAt(raw, "display_name"),
+		stringAt(raw, "displayName"),
+		stringAt(raw, "name"),
+	)
+	emoji := firstNonEmpty(
+		stringAt(raw, "emoji"),
+		stringAt(raw, "icon"),
+	)
+	markdown := firstNonEmpty(
+		stringAt(raw, "profile_markdown"),
+		stringAt(raw, "profileMarkdown"),
+		stringAt(raw, "markdown"),
+	)
+	headerEmoji, headerDisplayName := profileHeaderFromMarkdown(markdown)
+	if strings.TrimSpace(emoji) == "" {
+		emoji = strings.TrimSpace(headerEmoji)
+	}
+	if strings.TrimSpace(displayName) == "" {
+		displayName = strings.TrimSpace(headerDisplayName)
+	}
+
 	return ProfileConfig{
-		DisplayName: firstNonEmpty(
-			stringAt(raw, "display_name"),
-			stringAt(raw, "displayName"),
-			stringAt(raw, "name"),
-		),
-		Emoji: firstNonEmpty(
-			stringAt(raw, "emoji"),
-			stringAt(raw, "icon"),
-		),
+		DisplayName: displayName,
+		Emoji:       emoji,
 		ProfileText: extractProfileText(raw),
 		LLM: firstNonEmpty(
 			stringAt(raw, "llm"),
@@ -1077,6 +1119,54 @@ func profileTextFromMarkdown(markdown string) string {
 	}
 
 	return markdown
+}
+
+func profileHeaderFromMarkdown(markdown string) (string, string) {
+	markdown = strings.TrimSpace(markdown)
+	if markdown == "" {
+		return "", ""
+	}
+
+	lines := strings.Split(markdown, "\n")
+	if len(lines) == 0 {
+		return "", ""
+	}
+	header := strings.TrimSpace(lines[0])
+	if !strings.HasPrefix(header, "#") {
+		return "", ""
+	}
+	header = strings.TrimSpace(strings.TrimLeft(header, "#"))
+	if header == "" {
+		return "", ""
+	}
+
+	parts := strings.Fields(header)
+	if len(parts) == 0 {
+		return "", ""
+	}
+	first := strings.TrimSpace(parts[0])
+	if !looksLikeEmojiToken(first) {
+		return "", header
+	}
+
+	displayName := strings.TrimSpace(strings.TrimPrefix(header, first))
+	return first, displayName
+}
+
+func looksLikeEmojiToken(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+
+	hasRune := false
+	for _, r := range value {
+		hasRune = true
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return hasRune
 }
 
 func agentProfileEmpty(profile AgentProfile) bool {

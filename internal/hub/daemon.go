@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -32,10 +33,13 @@ type Daemon struct {
 const wsFallbackWindow = 30 * time.Second
 const dispatchDedupTTL = 2 * time.Hour
 const agentStatusUpdateTimeout = 5 * time.Second
+const failureFollowUpRequestIDSuffix = "-failure-review"
+const failureRerunRequestIDSuffix = "-rerun"
 const failureFollowUpPromptBase = failurefollowup.RequiredPrompt
 const failureFollowUpNoPathGuidance = "No workspace or log path was captured before the failure. Investigate the task history and runtime error details first."
 const failureFollowUpBaseBranch = "main"
 const failureFollowUpTargetSubdir = "."
+const transportOfflineReasonExecutionFailure = "task_execution_failure"
 
 // NewDaemon returns a hub daemon with defaults.
 func NewDaemon(runner execx.Runner) Daemon {
@@ -419,15 +423,7 @@ func (d Daemon) processInboundMessage(
 						}
 					}
 				} else {
-					if ok, reason := shouldQueueFailureFollowUp(dispatch, failRes); !ok {
-						d.logf(
-							"dispatch status=warn action=skip_failure_followup request_id=%s err=%q",
-							dispatch.RequestID,
-							reason,
-						)
-					} else if followUpErr := queueFailureFollowUp(ctx, api, cfg, dispatch, failRes, d.TaskLogRoot); followUpErr != nil {
-						d.logf("dispatch status=follow_up_error request_id=%s err=%q", dispatch.RequestID, followUpErr)
-					}
+					d.handleFailedDispatchAfterPublish(ctx, api, cfg, dispatch, failRes)
 					if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
 						if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
 							d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
@@ -613,15 +609,7 @@ func (d Daemon) handleDispatch(
 		return
 	}
 	if res.Err != nil {
-		if ok, reason := shouldQueueFailureFollowUp(dispatch, res); !ok {
-			d.logf(
-				"dispatch status=warn action=skip_failure_followup request_id=%s err=%q",
-				dispatch.RequestID,
-				reason,
-			)
-		} else if err := queueFailureFollowUp(ctx, api, cfg, dispatch, res, d.TaskLogRoot); err != nil {
-			d.logf("dispatch status=follow_up_error request_id=%s err=%q", dispatch.RequestID, err)
-		}
+		d.handleFailedDispatchAfterPublish(ctx, api, cfg, dispatch, res)
 	}
 	if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
 		if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
@@ -642,7 +630,7 @@ func (d Daemon) handleDispatch(
 		return
 	}
 	d.recordGitHubTaskCompleteActivity(ctx, api, dispatch.RequestID)
-	if res.NoChanges {
+	if res.NoChanges && !resultHasPR(res) {
 		d.logf(
 			"dispatch status=no_changes request_id=%s workspace=%s branch=%s pr_url=%s pr_urls=%s",
 			dispatch.RequestID,
@@ -654,12 +642,12 @@ func (d Daemon) handleDispatch(
 		return
 	}
 	d.logf(
-		"dispatch status=ok request_id=%s workspace=%s branch=%s pr_url=%s pr_urls=%s changed_repos=%d",
+		"dispatch status=completed request_id=%s workspace=%s branch=%s pr_url=%s pr_urls=%s changed_repos=%d",
 		dispatch.RequestID,
 		res.WorkspaceDir,
 		res.Branch,
 		res.PRURL,
-		joinRepoPRURLs(res.RepoResults),
+		completedPRURLs(res),
 		countChangedRepoResults(res.RepoResults),
 	)
 }
@@ -674,17 +662,16 @@ func (d Daemon) recordGitHubTaskCompleteActivity(ctx context.Context, api Molten
 }
 
 func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.Result) map[string]any {
-	status := "ok"
+	status := "completed"
 	if res.Err != nil {
 		status = "error"
-	} else if res.NoChanges {
+	} else if res.NoChanges && !resultHasPR(res) {
 		status = "no_changes"
 	}
+	detailStatus := dispatchResultDetailStatus(status, res)
+	message := dispatchResultMessage(status, res)
 
-	prURLs := joinRepoPRURLs(res.RepoResults)
-	if res.NoChanges {
-		prURLs = joinAllRepoPRURLs(res.RepoResults)
-	}
+	prURLs := completedPRURLs(res)
 
 	result := map[string]any{
 		"exitCode":     res.ExitCode,
@@ -695,6 +682,8 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 		"changedRepos": countChangedRepoResults(res.RepoResults),
 		"repoResults":  repoResultPayloads(res.RepoResults),
 		"noChanges":    res.NoChanges,
+		"status":       detailStatus,
+		"message":      message,
 	}
 	if res.Err != nil {
 		result["error"] = res.Err.Error()
@@ -707,18 +696,15 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 		"status":     status,
 		"failed":     res.Err != nil,
 		"ok":         res.Err == nil,
+		"message":    message,
 		"result":     result,
 	}
 	if res.Err != nil {
 		errText := res.Err.Error()
-		failureMessage := failureResponseMessage(errText)
-		result["status"] = "failed"
-		result["message"] = failureMessage
 		payload["error"] = errText
-		payload["message"] = failureMessage
 		payload["failure"] = map[string]any{
 			"status":  "failed",
-			"message": failureMessage,
+			"message": message,
 			"error":   errText,
 			"details": result,
 		}
@@ -730,6 +716,23 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 	return payload
 }
 
+func dispatchResultDetailStatus(status string, res harness.Result) string {
+	if res.Err != nil || status == "error" {
+		return "failed"
+	}
+	return status
+}
+
+func dispatchResultMessage(status string, res harness.Result) string {
+	if res.Err != nil || status == "error" {
+		return failureResponseMessage(res.Err.Error())
+	}
+	if status == "no_changes" {
+		return "No changes: task completed without repository changes or pull requests."
+	}
+	return "Success: task completed."
+}
+
 func failureResponseMessage(errText string) string {
 	errText = strings.TrimSpace(errText)
 	if errText == "" {
@@ -738,11 +741,80 @@ func failureResponseMessage(errText string) string {
 	return "Failure: task failed. Error details: " + errText
 }
 
+func (d Daemon) handleFailedDispatchAfterPublish(
+	ctx context.Context,
+	api MoltenHubAPI,
+	cfg InitConfig,
+	dispatch SkillDispatch,
+	res harness.Result,
+) {
+	if api == nil {
+		return
+	}
+	if err := api.MarkOpenClawOffline(ctx, cfg.SessionKey, transportOfflineReasonExecutionFailure); err != nil {
+		d.logf("dispatch status=warn action=mark_offline request_id=%s err=%q", dispatch.RequestID, err)
+	}
+	if ok, reason := shouldQueueFailureRerun(dispatch, res); !ok {
+		d.logf(
+			"dispatch status=warn action=skip_failure_rerun request_id=%s err=%q",
+			dispatch.RequestID,
+			reason,
+		)
+	} else if err := queueFailureRerun(ctx, api, cfg, dispatch); err != nil {
+		d.logf("dispatch status=rerun_error request_id=%s err=%q", dispatch.RequestID, err)
+	}
+	if ok, reason := shouldQueueFailureFollowUp(dispatch, res); !ok {
+		d.logf(
+			"dispatch status=warn action=skip_failure_followup request_id=%s err=%q",
+			dispatch.RequestID,
+			reason,
+		)
+	} else if err := queueFailureFollowUp(ctx, api, cfg, dispatch, res, d.TaskLogRoot); err != nil {
+		d.logf("dispatch status=follow_up_error request_id=%s err=%q", dispatch.RequestID, err)
+	}
+}
+
+func shouldQueueFailureRerun(dispatch SkillDispatch, res harness.Result) (bool, string) {
+	if res.Err == nil {
+		return false, "failed task did not include an error"
+	}
+	if isFailureFollowUpRequestID(dispatch.RequestID) {
+		return false, "run is already a failure follow-up"
+	}
+	if isFailureRerunRequestID(dispatch.RequestID) {
+		return false, "run is already a failure rerun"
+	}
+	return true, ""
+}
+
 func shouldQueueFailureFollowUp(dispatch SkillDispatch, res harness.Result) (bool, string) {
 	if res.Err == nil {
 		return false, "failed task did not include an error"
 	}
+	if isFailureFollowUpRequestID(dispatch.RequestID) {
+		return false, "run is already a failure follow-up"
+	}
 	return true, ""
+}
+
+func queueFailureRerun(ctx context.Context, api MoltenHubAPI, cfg InitConfig, dispatch SkillDispatch) error {
+	if api == nil {
+		return fmt.Errorf("moltenhub api client is required")
+	}
+	runConfig, err := dispatchRunConfigPayload(dispatch.Config)
+	if err != nil {
+		return err
+	}
+
+	payload := map[string]any{
+		"type":       firstNonEmpty(cfg.Skill.DispatchType, defaultRuntimeDispatchType),
+		"skill":      firstNonEmpty(cfg.Skill.Name, dispatch.Skill),
+		"request_id": failureRerunRequestID(dispatch.RequestID),
+		"config":     runConfig,
+		"rerun_of":   strings.TrimSpace(dispatch.RequestID),
+	}
+
+	return api.PublishResult(ctx, payload)
 }
 
 func queueFailureFollowUp(ctx context.Context, api MoltenHubAPI, cfg InitConfig, dispatch SkillDispatch, res harness.Result, taskLogRoot string) error {
@@ -771,29 +843,29 @@ func queueFailureFollowUp(ctx context.Context, api MoltenHubAPI, cfg InitConfig,
 	return api.PublishResult(ctx, payload)
 }
 
+func dispatchRunConfigPayload(runCfg config.Config) (map[string]any, error) {
+	runCfg.ApplyDefaults()
+	if err := runCfg.Validate(); err != nil {
+		return nil, fmt.Errorf("normalize run config payload: %w", err)
+	}
+
+	encoded, err := json.Marshal(runCfg)
+	if err != nil {
+		return nil, fmt.Errorf("marshal run config payload: %w", err)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(encoded, &payload); err != nil {
+		return nil, fmt.Errorf("decode run config payload: %w", err)
+	}
+	return payload, nil
+}
+
 func failureFollowUpRepos(_ harness.Result, _ config.Config) []string {
 	if repo := strings.TrimSpace(failurefollowup.FollowUpRepositoryURL); repo != "" {
 		return []string{repo}
 	}
 	return nil
-}
-
-func singleRepoFromResults(results []harness.RepoResult) string {
-	var repo string
-	for _, result := range results {
-		candidate := strings.TrimSpace(result.RepoURL)
-		if candidate == "" {
-			continue
-		}
-		if repo == "" {
-			repo = candidate
-			continue
-		}
-		if repo != candidate {
-			return ""
-		}
-	}
-	return repo
 }
 
 func failureFollowUpPrompt(logRoot string, dispatch SkillDispatch, res harness.Result) string {
@@ -874,7 +946,31 @@ func failureFollowUpRequestID(requestID string) string {
 	if requestID == "" {
 		return "failure-review"
 	}
-	return requestID + "-failure-review"
+	if isFailureFollowUpRequestID(requestID) {
+		return requestID
+	}
+	return requestID + failureFollowUpRequestIDSuffix
+}
+
+func failureRerunRequestID(requestID string) string {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return "rerun"
+	}
+	if isFailureRerunRequestID(requestID) {
+		return requestID
+	}
+	return requestID + failureRerunRequestIDSuffix
+}
+
+func isFailureFollowUpRequestID(requestID string) bool {
+	requestID = strings.TrimSpace(requestID)
+	return strings.HasSuffix(requestID, failureFollowUpRequestIDSuffix)
+}
+
+func isFailureRerunRequestID(requestID string) bool {
+	requestID = strings.TrimSpace(requestID)
+	return strings.HasSuffix(requestID, failureRerunRequestIDSuffix)
 }
 
 func joinRepoPRURLs(results []harness.RepoResult) string {
@@ -908,6 +1004,20 @@ func joinAllRepoPRURLs(results []harness.RepoResult) string {
 		urls = append(urls, url)
 	}
 	return strings.Join(urls, ",")
+}
+
+func resultHasPR(result harness.Result) bool {
+	if strings.TrimSpace(result.PRURL) != "" {
+		return true
+	}
+	return strings.TrimSpace(joinAllRepoPRURLs(result.RepoResults)) != ""
+}
+
+func completedPRURLs(result harness.Result) string {
+	if result.NoChanges {
+		return joinAllRepoPRURLs(result.RepoResults)
+	}
+	return joinRepoPRURLs(result.RepoResults)
 }
 
 func countChangedRepoResults(results []harness.RepoResult) int {

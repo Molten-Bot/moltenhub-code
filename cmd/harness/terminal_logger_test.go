@@ -50,6 +50,19 @@ func TestFormatTerminalLogLineSuppressesLowSignalCodexOutput(t *testing.T) {
 	}
 }
 
+func TestFormatTerminalLogLineDropsEmptyCommandPayloadMarker(t *testing.T) {
+	t.Parallel()
+
+	line := "dispatch request_id=local-1712345678-000007 cmd phase=codex name=codex stream=stderr b64="
+	got, mode := formatTerminalLogLine(line)
+	if mode != terminalLogModeDrop {
+		t.Fatalf("mode = %v, want drop", mode)
+	}
+	if got != "" {
+		t.Fatalf("got %q, want empty output", got)
+	}
+}
+
 func TestFormatTerminalLogLineKeepsImportantCodexOutput(t *testing.T) {
 	t.Parallel()
 
@@ -61,6 +74,123 @@ func TestFormatTerminalLogLineKeepsImportantCodexOutput(t *testing.T) {
 	}
 	if !strings.Contains(got, `text="ERROR: failed to apply patch"`) {
 		t.Fatalf("expected important codex output to be kept: %q", got)
+	}
+}
+
+func TestFormatTerminalLogLineDropsCodexSearchResultNoise(t *testing.T) {
+	t.Parallel()
+
+	line := "cmd phase=codex name=codex stream=stderr b64=" + base64.StdEncoding.EncodeToString([]byte(`internal/hub/daemon_test.go:621: if got := result["message"]; got != "Failure: task failed. Error details: codex: process exited with status 1" {`))
+	got, mode := formatTerminalLogLine(line)
+	if mode != terminalLogModeDrop {
+		t.Fatalf("mode = %v, want drop", mode)
+	}
+	if got != "" {
+		t.Fatalf("got %q, want empty", got)
+	}
+}
+
+func TestFormatTerminalLogLineDropsNestedDispatchLogEchoNoise(t *testing.T) {
+	t.Parallel()
+
+	line := "cmd phase=codex name=codex stream=stderr b64=" + base64.StdEncoding.EncodeToString([]byte(`dispatch request_id=local-1775872065-000001 cmd phase=codex name=codex stream=stderr text="fatal: unable to access 'https://github.com/acme/repo.git/': Could not resolve host: github.com"`))
+	got, mode := formatTerminalLogLine(line)
+	if mode != terminalLogModeDrop {
+		t.Fatalf("mode = %v, want drop", mode)
+	}
+	if got != "" {
+		t.Fatalf("got %q, want empty", got)
+	}
+}
+
+func TestFormatTerminalLogLineDropsNestedDispatchLogEchoFromSearchResults(t *testing.T) {
+	t.Parallel()
+
+	line := "cmd phase=codex name=codex stream=stderr b64=" + base64.StdEncoding.EncodeToString([]byte(`/home/jef/git/moltenbot/local/moltenhub-code/.log/terminal.log:431:dispatch request_id=local-1775872228-000004 cmd phase=codex name=codex stream=stderr text=\"fatal: unable to access 'https://github.com/acme/repo.git/': Could not resolve host: github.com\"`))
+	got, mode := formatTerminalLogLine(line)
+	if mode != terminalLogModeDrop {
+		t.Fatalf("mode = %v, want drop", mode)
+	}
+	if got != "" {
+		t.Fatalf("got %q, want empty", got)
+	}
+}
+
+func TestFormatTerminalLogLineDropsCodexNoiseContainingExceptionally(t *testing.T) {
+	t.Parallel()
+
+	line := "cmd phase=codex name=codex stream=stderr b64=" + base64.StdEncoding.EncodeToString([]byte("- Functions that do one thing exceptionally well"))
+	got, mode := formatTerminalLogLine(line)
+	if mode != terminalLogModeDrop {
+		t.Fatalf("mode = %v, want drop", mode)
+	}
+	if got != "" {
+		t.Fatalf("got %q, want empty", got)
+	}
+}
+
+func TestFormatTerminalLogLineKeepsCodexUnhandledExceptionOutput(t *testing.T) {
+	t.Parallel()
+
+	line := "cmd phase=codex name=codex stream=stderr b64=" + base64.StdEncoding.EncodeToString([]byte(`Exception in thread "main" java.lang.NullPointerException`))
+	got, mode := formatTerminalLogLine(line)
+	if mode != terminalLogModeNormal {
+		t.Fatalf("mode = %v, want normal", mode)
+	}
+	if !strings.Contains(got, "NullPointerException") {
+		t.Fatalf("expected unhandled exception output to be preserved: %q", got)
+	}
+}
+
+func TestFormatTerminalLogLineKeepsCodexCompilerStyleFailure(t *testing.T) {
+	t.Parallel()
+
+	line := "cmd phase=codex name=codex stream=stderr b64=" + base64.StdEncoding.EncodeToString([]byte(`cmd/harness/main.go:10:2: undefined: notARealSymbol`))
+	got, mode := formatTerminalLogLine(line)
+	if mode != terminalLogModeNormal {
+		t.Fatalf("mode = %v, want normal", mode)
+	}
+	if !strings.Contains(got, `undefined: notARealSymbol`) {
+		t.Fatalf("expected compiler-style failure to be kept: %q", got)
+	}
+}
+
+func TestFormatTerminalLogLineDropsNestedHarnessLogLinesFromCodexOutput(t *testing.T) {
+	t.Parallel()
+
+	line := "cmd phase=codex name=codex stream=stderr b64=" + base64.StdEncoding.EncodeToString([]byte(`dispatch request_id=local-1775872076-000002 stage=codex status=running elapsed_s=75`))
+	got, mode := formatTerminalLogLine(line)
+	if mode != terminalLogModeDrop {
+		t.Fatalf("mode = %v, want drop", mode)
+	}
+	if got != "" {
+		t.Fatalf("got %q, want empty", got)
+	}
+}
+
+func TestFormatTerminalLogLineDropsNestedHarnessErrorLinesFromCodexOutput(t *testing.T) {
+	t.Parallel()
+
+	line := "cmd phase=codex name=codex stream=stderr b64=" + base64.StdEncoding.EncodeToString([]byte(`dispatch request_id=local-1775872076-000002 cmd phase=clone name=git stream=stderr text="fatal: Remote branch moltenhub-review missing"`))
+	got, mode := formatTerminalLogLine(line)
+	if mode != terminalLogModeDrop {
+		t.Fatalf("mode = %v, want drop", mode)
+	}
+	if got != "" {
+		t.Fatalf("got %q, want empty", got)
+	}
+}
+
+func TestFormatTerminalLogLineDropsNumberedNestedHarnessErrorLinesFromCodexOutput(t *testing.T) {
+	t.Parallel()
+
+	line := "cmd phase=codex name=codex stream=stderr b64=" + base64.StdEncoding.EncodeToString([]byte(`25:dispatch request_id=local-1775873174-000001 cmd phase=clone name=git stream=stderr text="fatal: Remote branch moltenhub-review-the-previous-local-task-logs-firs not found in upstream origin"`))
+	got, mode := formatTerminalLogLine(line)
+	if mode != terminalLogModeDrop {
+		t.Fatalf("mode = %v, want drop", mode)
+	}
+	if got != "" {
+		t.Fatalf("got %q, want empty", got)
 	}
 }
 

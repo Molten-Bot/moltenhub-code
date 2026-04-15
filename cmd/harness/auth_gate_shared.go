@@ -21,6 +21,51 @@ func readyAgentAuthState() hubui.AgentAuthState {
 	}
 }
 
+type configurableAgentAuthState struct {
+	required             bool
+	ready                bool
+	state                string
+	message              string
+	configureCommand     string
+	configurePlaceholder string
+	configureOptions     []hubui.AgentAuthOption
+	updatedAt            time.Time
+}
+
+func (s *configurableAgentAuthState) touch() {
+	s.updatedAt = time.Now().UTC()
+}
+
+func (s *configurableAgentAuthState) setNeedsConfigure(message string) {
+	s.required = true
+	s.ready = false
+	s.state = "needs_configure"
+	s.message = strings.TrimSpace(message)
+	s.touch()
+}
+
+func (s *configurableAgentAuthState) setError(message string) {
+	s.required = true
+	s.ready = false
+	s.state = "error"
+	s.message = strings.TrimSpace(message)
+	s.touch()
+}
+
+func (s *configurableAgentAuthState) snapshot(harness string) hubui.AgentAuthState {
+	return hubui.AgentAuthState{
+		Harness:              harness,
+		Required:             s.required,
+		Ready:                s.ready,
+		State:                strings.TrimSpace(s.state),
+		Message:              strings.TrimSpace(s.message),
+		ConfigureCommand:     strings.TrimSpace(s.configureCommand),
+		ConfigurePlaceholder: strings.TrimSpace(s.configurePlaceholder),
+		ConfigureOptions:     append([]hubui.AgentAuthOption(nil), s.configureOptions...),
+		UpdatedAt:            s.updatedAt.UTC().Format(time.RFC3339Nano),
+	}
+}
+
 func githubTokenNeedsConfigureState(harness, message string) hubui.AgentAuthState {
 	message = firstNonEmptyString(
 		message,

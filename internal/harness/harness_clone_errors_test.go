@@ -139,3 +139,44 @@ func TestIsRepoNotFoundCloneError(t *testing.T) {
 		})
 	}
 }
+
+func TestRepoOwnerFallbackURL(t *testing.T) {
+	t.Parallel()
+
+	repoURL := "git@github.com:moltenbot000/moltenhub-code.git"
+	hints := repoOwnerFallbackCandidates([]string{
+		"git@github.com:Molten-Bot/user-portal.git",
+		repoURL,
+	})
+
+	got, ok := repoOwnerFallbackURL(repoURL, hints)
+	if !ok {
+		t.Fatal("repoOwnerFallbackURL() ok = false, want true")
+	}
+	if got != "git@github.com:Molten-Bot/moltenhub-code.git" {
+		t.Fatalf("repoOwnerFallbackURL() = %q, want %q", got, "git@github.com:Molten-Bot/moltenhub-code.git")
+	}
+}
+
+func TestRepoOwnerFallbackURLNoCandidate(t *testing.T) {
+	t.Parallel()
+
+	repoURL := "git@github.com:acme/private-repo.git"
+	if got, ok := repoOwnerFallbackURL(repoURL, repoOwnerFallbackCandidates([]string{repoURL})); ok || got != "" {
+		t.Fatalf("repoOwnerFallbackURL() = (%q, %v), want (\"\", false)", got, ok)
+	}
+}
+
+func TestParseGitHubRepoRefSupportsSSHAndHTTPS(t *testing.T) {
+	t.Parallel()
+
+	if ref, ok := parseGitHubRepoRef("git@github.com:Molten-Bot/moltenhub-code.git"); !ok || ref.owner != "Molten-Bot" || ref.name != "moltenhub-code" {
+		t.Fatalf("parseGitHubRepoRef(scp) = (%+v, %v), want owner/name parsed", ref, ok)
+	}
+	if ref, ok := parseGitHubRepoRef("ssh://git@github.com/Molten-Bot/moltenhub-code.git"); !ok || ref.owner != "Molten-Bot" || ref.name != "moltenhub-code" {
+		t.Fatalf("parseGitHubRepoRef(ssh URL) = (%+v, %v), want owner/name parsed", ref, ok)
+	}
+	if ref, ok := parseGitHubRepoRef("https://github.com/Molten-Bot/moltenhub-code.git"); !ok || ref.owner != "Molten-Bot" || ref.name != "moltenhub-code" {
+		t.Fatalf("parseGitHubRepoRef(https URL) = (%+v, %v), want owner/name parsed", ref, ok)
+	}
+}

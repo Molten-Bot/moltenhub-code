@@ -17,8 +17,14 @@ func TestTaskLogDirAndIdentifierValidationBranches(t *testing.T) {
 	}
 
 	paths := TaskLogPaths("/tmp/logs", "one---two")
-	if len(paths) != 3 || paths[0] != filepath.Join("/tmp/logs", "one", "two") {
+	if len(paths) != 5 || paths[0] != filepath.Join("/tmp/logs", "one", "two") {
 		t.Fatalf("TaskLogPaths(collapsed separators) = %#v", paths)
+	}
+	if paths[3] != filepath.Join("/tmp/logs", FallbackLogSubdir, LegacyTaskLogFileName) {
+		t.Fatalf("TaskLogPaths(fallback legacy) = %#v, want fallback legacy path", paths)
+	}
+	if paths[4] != filepath.Join("/tmp/logs", FallbackLogSubdir, LogFileName) {
+		t.Fatalf("TaskLogPaths(fallback current) = %#v, want fallback current path", paths)
 	}
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -20,6 +21,17 @@ import (
 	"github.com/jef/moltenhub-code/internal/hub"
 	"github.com/jef/moltenhub-code/internal/hubui"
 )
+
+func useHubSetupLocationsLoaderForTest(t *testing.T, loader func(context.Context) ([]hubSetupLocation, error)) {
+	t.Helper()
+	previous := hubSetupLocationsLoader
+	resetHubSetupLocationsCache()
+	hubSetupLocationsLoader = loader
+	t.Cleanup(func() {
+		hubSetupLocationsLoader = previous
+		resetHubSetupLocationsCache()
+	})
+}
 
 func TestRunUsageMissingSubcommand(t *testing.T) {
 	orig := os.Args
@@ -156,6 +168,70 @@ func TestLoadHubBootConfigWithMissingInitFlagUsesSiblingRuntimeConfigWhenAvailab
 	}
 	if got, want := cfg.AgentToken, "agent_123"; got != want {
 		t.Fatalf("AgentToken = %q, want %q", got, want)
+	}
+}
+
+func TestLoadHubBootConfigWithInitUsesRuntimeConfigLogLevelWhenPresent(t *testing.T) {
+	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
+
+	tempDir := t.TempDir()
+	initPath := filepath.Join(tempDir, "init.json")
+	runtimeConfigPath := filepath.Join(tempDir, "config.json")
+
+	if err := os.WriteFile(initPath, []byte(`{"base_url":"https://na.hub.molten.bot/v1"}`), 0o600); err != nil {
+		t.Fatalf("write init config: %v", err)
+	}
+	if err := os.WriteFile(runtimeConfigPath, []byte(`{"base_url":"https://na.hub.molten.bot/v1","agent_token":"agent_saved","log_level":"debug"}`), 0o600); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+
+	cfg, exitCode, err := loadHubBootConfig(initPath, "")
+	if err != nil {
+		t.Fatalf("loadHubBootConfig() error = %v", err)
+	}
+	if exitCode != harness.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	}
+	if got, want := cfg.LogLevel, hub.LogLevelDebug.String(); got != want {
+		t.Fatalf("LogLevel = %q, want %q", got, want)
+	}
+}
+
+func TestLoadHubBootConfigWithInitBackfillsMissingRuntimeConfigLogLevel(t *testing.T) {
+	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
+
+	tempDir := t.TempDir()
+	initPath := filepath.Join(tempDir, "init.json")
+	runtimeConfigPath := filepath.Join(tempDir, "config.json")
+
+	if err := os.WriteFile(initPath, []byte(`{"base_url":"https://na.hub.molten.bot/v1"}`), 0o600); err != nil {
+		t.Fatalf("write init config: %v", err)
+	}
+	if err := os.WriteFile(runtimeConfigPath, []byte(`{"base_url":"https://na.hub.molten.bot/v1","agent_token":"agent_saved"}`), 0o600); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+
+	cfg, exitCode, err := loadHubBootConfig(initPath, "")
+	if err != nil {
+		t.Fatalf("loadHubBootConfig() error = %v", err)
+	}
+	if exitCode != harness.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	}
+	if got, want := cfg.LogLevel, hub.DefaultLogLevel; got != want {
+		t.Fatalf("LogLevel = %q, want %q", got, want)
+	}
+
+	data, err := os.ReadFile(runtimeConfigPath)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if got, want := doc["log_level"], any(hub.DefaultLogLevel); got != want {
+		t.Fatalf("config.json log_level = %#v, want %q", got, want)
 	}
 }
 
@@ -396,7 +472,7 @@ func TestFailureFollowUpRunConfigUsesRequiredPayloadShapeAndLogContext(t *testin
 		t.Fatalf("TargetSubdir = %q, want %q", cfg.TargetSubdir, ".")
 	}
 
-	expectedLogDir := filepath.Join(logRoot, "local", "1712345678", "000001")
+	expectedLogDir := filepath.Join(logRoot, followUpTaskLogArchiveSubdir, "local", "1712345678", "000001")
 	if !strings.Contains(cfg.Prompt, expectedLogDir) {
 		t.Fatalf("Prompt missing log dir path %q: %q", expectedLogDir, cfg.Prompt)
 	}
@@ -753,6 +829,176 @@ func TestCurrentHubSetupStateUsesStoredBindTokenAsNewAgentMode(t *testing.T) {
 	}
 }
 
+func TestCurrentHubSetupStateWithRemoteProfileHydratesMissingProfileFromHub(t *testing.T) {
+	t.Parallel()
+
+	const savedToken = "z9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/agents/me" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != savedToken {
+			t.Fatalf("GET /agents/me token = %q, want %q", got, savedToken)
+		}
+		_, _ = w.Write([]byte(`{
+			"ok": true,
+			"result": {
+				"agent": {
+					"handle": "remote-agent",
+					"metadata": {
+						"profile_markdown": "# 🌊 Remote Agent\n\nOwns remote profile hydration."
+					}
+				}
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf(`{
+		"version": "v1",
+		"base_url": %q,
+		"agent_token": %q
+	}`, server.URL+"/v1", savedToken)), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	state := currentHubSetupStateWithRemoteProfile(context.Background(), hub.InitConfig{
+		RuntimeConfigPath: configPath,
+	})
+	if got, want := state.Handle, "remote-agent"; got != want {
+		t.Fatalf("Handle = %q, want %q", got, want)
+	}
+	if got, want := state.Profile.DisplayName, "Remote Agent"; got != want {
+		t.Fatalf("DisplayName = %q, want %q", got, want)
+	}
+	if got, want := state.Profile.Emoji, "🌊"; got != want {
+		t.Fatalf("Emoji = %q, want %q", got, want)
+	}
+	if got, want := state.Profile.ProfileText, "Owns remote profile hydration."; got != want {
+		t.Fatalf("ProfileText = %q, want %q", got, want)
+	}
+}
+
+func TestCurrentHubSetupStateWithRemoteProfileMergesSplitProfileFields(t *testing.T) {
+	t.Parallel()
+
+	const savedToken = "p9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/agents/me" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != savedToken {
+			t.Fatalf("GET /agents/me token = %q, want %q", got, savedToken)
+		}
+		_, _ = w.Write([]byte(`{
+			"ok": true,
+			"result": {
+				"agent": {
+					"handle": "codex-beast",
+					"profile": {
+						"display_name": "Jef's Codex"
+					},
+					"metadata": {
+						"profile_markdown": "# 🦍 Jef's Codex\n\nRunning code updates quickly."
+					}
+				}
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf(`{
+		"version": "v1",
+		"base_url": %q,
+		"agent_token": %q
+	}`, server.URL+"/v1", savedToken)), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	state := currentHubSetupStateWithRemoteProfile(context.Background(), hub.InitConfig{
+		RuntimeConfigPath: configPath,
+	})
+	if got, want := state.Handle, "codex-beast"; got != want {
+		t.Fatalf("Handle = %q, want %q", got, want)
+	}
+	if got, want := state.Profile.DisplayName, "Jef's Codex"; got != want {
+		t.Fatalf("DisplayName = %q, want %q", got, want)
+	}
+	if got, want := state.Profile.Emoji, "🦍"; got != want {
+		t.Fatalf("Emoji = %q, want %q", got, want)
+	}
+	if got, want := state.Profile.ProfileText, "Running code updates quickly."; got != want {
+		t.Fatalf("ProfileText = %q, want %q", got, want)
+	}
+}
+
+func TestCurrentHubSetupStateWithRemoteProfileMergesDirectProfileAndMetadata(t *testing.T) {
+	t.Parallel()
+
+	const savedToken = "q9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/agents/me" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != savedToken {
+			t.Fatalf("GET /agents/me token = %q, want %q", got, savedToken)
+		}
+		_, _ = w.Write([]byte(`{
+			"handle": "codex-beast",
+			"profile": {
+				"display_name": "Jef's Codex",
+				"emoji": "🦍"
+			},
+			"metadata": {
+				"profile": "Running code updates quickly."
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf(`{
+		"version": "v1",
+		"base_url": %q,
+		"agent_token": %q
+	}`, server.URL+"/v1", savedToken)), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	state := currentHubSetupStateWithRemoteProfile(context.Background(), hub.InitConfig{
+		RuntimeConfigPath: configPath,
+	})
+	if got, want := state.Handle, "codex-beast"; got != want {
+		t.Fatalf("Handle = %q, want %q", got, want)
+	}
+	if got, want := state.Profile.DisplayName, "Jef's Codex"; got != want {
+		t.Fatalf("DisplayName = %q, want %q", got, want)
+	}
+	if got, want := state.Profile.Emoji, "🦍"; got != want {
+		t.Fatalf("Emoji = %q, want %q", got, want)
+	}
+	if got, want := state.Profile.ProfileText, "Running code updates quickly."; got != want {
+		t.Fatalf("ProfileText = %q, want %q", got, want)
+	}
+}
+
 func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 	t.Parallel()
 
@@ -964,7 +1210,7 @@ func TestCurrentHubSetupStateDerivesRegionFromRuntimeConfigBaseURL(t *testing.T)
 	}
 }
 
-func TestHubSetupBaseURLUsesSelectedRegionForDefaultHubEndpoints(t *testing.T) {
+func TestHubSetupBaseURLUsesSelectedRegionForHubEndpoints(t *testing.T) {
 	t.Parallel()
 
 	if got, want := hubSetupBaseURL("", "eu"), "https://eu.hub.molten.bot/v1"; got != want {
@@ -978,6 +1224,90 @@ func TestHubSetupBaseURLUsesSelectedRegionForDefaultHubEndpoints(t *testing.T) {
 	}
 	if got, want := hubSetupBaseURL("http://127.0.0.1:7777/v1", "eu"), "http://127.0.0.1:7777/v1"; got != want {
 		t.Fatalf("hubSetupBaseURL(custom, eu) = %q, want %q", got, want)
+	}
+}
+
+func TestHubSetupBaseURLUsesHubRegistryLocations(t *testing.T) {
+	useHubSetupLocationsLoaderForTest(t, func(context.Context) ([]hubSetupLocation, error) {
+		return []hubSetupLocation{
+			{Display: "North America", Key: "na", Domain: "north-america.hub.molten.bot"},
+			{Display: "Europe", Key: "eu", Domain: "europe.hub.molten.bot"},
+		}, nil
+	})
+
+	if got, want := hubSetupBaseURL("", "eu"), "https://europe.hub.molten.bot/v1"; got != want {
+		t.Fatalf("hubSetupBaseURL(empty, eu) = %q, want %q", got, want)
+	}
+	if got, want := hubSetupBaseURL("https://north-america.hub.molten.bot/v1", "eu"), "https://europe.hub.molten.bot/v1"; got != want {
+		t.Fatalf("hubSetupBaseURL(registry default, eu) = %q, want %q", got, want)
+	}
+}
+
+func TestHubSetupRegionForBaseURLUsesHubRegistryLocations(t *testing.T) {
+	useHubSetupLocationsLoaderForTest(t, func(context.Context) ([]hubSetupLocation, error) {
+		return []hubSetupLocation{
+			{Display: "North America", Key: "na", Domain: "north-america.hub.molten.bot"},
+			{Display: "Europe", Key: "eu", Domain: "europe.hub.molten.bot"},
+		}, nil
+	})
+
+	if got, want := hubSetupRegionForBaseURL("https://europe.hub.molten.bot/v1"), "eu"; got != want {
+		t.Fatalf("hubSetupRegionForBaseURL(registry eu) = %q, want %q", got, want)
+	}
+	if got, want := hubSetupRegionForBaseURL("https://north-america.hub.molten.bot/v1"), "na"; got != want {
+		t.Fatalf("hubSetupRegionForBaseURL(registry na) = %q, want %q", got, want)
+	}
+}
+
+func TestHubSetupLocationsFallbackWhenRegistryFails(t *testing.T) {
+	useHubSetupLocationsLoaderForTest(t, func(context.Context) ([]hubSetupLocation, error) {
+		return nil, errors.New("registry unavailable")
+	})
+
+	if got, want := hubSetupBaseURL("", "eu"), "https://eu.hub.molten.bot/v1"; got != want {
+		t.Fatalf("hubSetupBaseURL(fallback, eu) = %q, want %q", got, want)
+	}
+	if got, want := hubSetupRegionForBaseURL("https://na.hub.molten.bot/v1"), "na"; got != want {
+		t.Fatalf("hubSetupRegionForBaseURL(fallback na) = %q, want %q", got, want)
+	}
+}
+
+func TestFetchHubSetupLocationsNormalizesRegistryResponse(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/hubs.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[
+			{"display":"North America","key":"NA","domain":"https://north-america.hub.molten.bot/"},
+			{"display":"Europe","key":"eu","domain":"europe.hub.molten.bot/"}
+		]`))
+	}))
+	defer server.Close()
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/hubs.json", nil)
+	if err != nil {
+		t.Fatalf("NewRequestWithContext() error = %v", err)
+	}
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	var raw []hubSetupLocation
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+	got := cloneHubSetupLocations(raw)
+	want := []hubSetupLocation{
+		{Display: "North America", Key: "na", Domain: "north-america.hub.molten.bot"},
+		{Display: "Europe", Key: "eu", Domain: "europe.hub.molten.bot"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("cloneHubSetupLocations() = %#v, want %#v", got, want)
 	}
 }
 
@@ -1187,6 +1517,159 @@ func TestConfigureHubSetupExistingAgentProfileEditUsesSavedCredentials(t *testin
 	}
 }
 
+func TestConfigureHubSetupSavedCredentialsWithoutProfileChangesSkipsProfileSync(t *testing.T) {
+	t.Parallel()
+
+	const savedToken = "h9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+
+	var (
+		getCalls    int
+		syncCalls   int
+		statusCalls int
+	)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != savedToken {
+			t.Fatalf("%s %s token = %q, want %q", r.Method, r.URL.Path, got, savedToken)
+		}
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
+			getCalls++
+			_, _ = w.Write([]byte(`{"handle":"existing-agent","profile":{"display_name":"Remote Agent","emoji":"🚀","profile":"Loaded from hub"}}`))
+		case r.Method == http.MethodPatch && r.URL.Path == "/v1/agents/me/status":
+			statusCalls++
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case (r.Method == http.MethodPost || r.Method == http.MethodPatch) &&
+			(r.URL.Path == "/v1/agents/me/metadata" || r.URL.Path == "/v1/agents/me"):
+			syncCalls++
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf(`{"base_url":%q,"agent_token":%q}`, server.URL+"/v1", savedToken)), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	state, err := configureHubSetup(context.Background(), hub.InitConfig{
+		BaseURL:           server.URL + "/v1",
+		AgentHarness:      "codex",
+		RuntimeConfigPath: configPath,
+	}, hubui.HubSetupRequest{
+		AgentMode: "existing",
+	}, nil)
+	if err != nil {
+		t.Fatalf("configureHubSetup() error = %v", err)
+	}
+	if syncCalls != 0 {
+		t.Fatalf("profile sync calls = %d, want 0 when no profile changes were requested", syncCalls)
+	}
+	if statusCalls == 0 {
+		t.Fatal("expected online status verification call")
+	}
+	if getCalls < 2 {
+		t.Fatalf("GET /agents/me calls = %d, want at least 2", getCalls)
+	}
+	if got, want := state.Handle, "existing-agent"; got != want {
+		t.Fatalf("Handle = %q, want %q", got, want)
+	}
+	if got, want := state.Profile.DisplayName, "Remote Agent"; got != want {
+		t.Fatalf("DisplayName = %q, want %q", got, want)
+	}
+	if got, want := state.Profile.Emoji, "🚀"; got != want {
+		t.Fatalf("Emoji = %q, want %q", got, want)
+	}
+	if got, want := state.Profile.ProfileText, "Loaded from hub"; got != want {
+		t.Fatalf("ProfileText = %q, want %q", got, want)
+	}
+}
+
+func TestConfigureHubSetupExistingAgentProfileEditKeepsRequestedValuesWhenReadbackStale(t *testing.T) {
+	t.Parallel()
+
+	const savedToken = "i9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+
+	var syncCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != savedToken {
+			t.Fatalf("%s %s token = %q, want %q", r.Method, r.URL.Path, got, savedToken)
+		}
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
+			// Simulate eventual consistency: readback remains stale immediately after PATCH.
+			_, _ = w.Write([]byte(`{"handle":"existing-agent","profile":{"display_name":"Old Name","emoji":"🤖","profile":"Old bio"}}`))
+		case (r.Method == http.MethodPost || r.Method == http.MethodPatch) &&
+			(r.URL.Path == "/v1/agents/me/metadata" || r.URL.Path == "/v1/agents/me"):
+			bodyBytes, _ := io.ReadAll(r.Body)
+			body := string(bodyBytes)
+			if !strings.Contains(body, `"display_name":"Molten Bot"`) {
+				t.Fatalf("profile sync missing updated display_name: %s", body)
+			}
+			if !strings.Contains(body, `"emoji":"⚙️"`) {
+				t.Fatalf("profile sync missing updated emoji: %s", body)
+			}
+			if !strings.Contains(body, `"profile":"Owns hub edits"`) {
+				t.Fatalf("profile sync missing updated profile text: %s", body)
+			}
+			syncCalls++
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case r.Method == http.MethodPatch && r.URL.Path == "/v1/agents/me/status":
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf(`{"base_url":%q,"agent_token":%q,"handle":"existing-agent","profile":{"display_name":"Old Name","emoji":"🤖","profile":"Old bio"}}`, server.URL+"/v1", savedToken)), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	state, err := configureHubSetup(context.Background(), hub.InitConfig{
+		BaseURL:           server.URL + "/v1",
+		AgentHarness:      "codex",
+		RuntimeConfigPath: configPath,
+	}, hubui.HubSetupRequest{
+		AgentMode: "existing",
+		Handle:    "existing-agent",
+		Profile: struct {
+			ProfileText string `json:"profile"`
+			DisplayName string `json:"display_name"`
+			Emoji       string `json:"emoji"`
+		}{
+			ProfileText: "Owns hub edits",
+			DisplayName: "Molten Bot",
+			Emoji:       "⚙️",
+		},
+	}, nil)
+	if err != nil {
+		t.Fatalf("configureHubSetup() error = %v", err)
+	}
+	if syncCalls == 0 {
+		t.Fatal("expected profile sync request")
+	}
+	if got, want := state.Profile.DisplayName, "Molten Bot"; got != want {
+		t.Fatalf("DisplayName = %q, want %q", got, want)
+	}
+	if got, want := state.Profile.Emoji, "⚙️"; got != want {
+		t.Fatalf("Emoji = %q, want %q", got, want)
+	}
+	if got, want := state.Profile.ProfileText, "Owns hub edits"; got != want {
+		t.Fatalf("ProfileText = %q, want %q", got, want)
+	}
+}
+
 func TestConfigureHubSetupExistingAgentLoadsProfileTextFromProfileMarkdown(t *testing.T) {
 	t.Parallel()
 
@@ -1327,7 +1810,7 @@ func TestConnectHubSetupUsesSavedRuntimeConfig(t *testing.T) {
 	}
 }
 
-func TestCurrentHubSetupStatePreservesLiveInitCredentialsWhenRuntimeConfigOmitsTokens(t *testing.T) {
+func TestCurrentHubSetupStateRequiresPersistedCredentialsForConfiguredMode(t *testing.T) {
 	t.Parallel()
 
 	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
@@ -1353,8 +1836,8 @@ func TestCurrentHubSetupStatePreservesLiveInitCredentialsWhenRuntimeConfigOmitsT
 		},
 	})
 
-	if !state.Configured {
-		t.Fatal("Configured = false, want true")
+	if state.Configured {
+		t.Fatal("Configured = true, want false")
 	}
 	if got, want := state.Region, "eu"; got != want {
 		t.Fatalf("Region = %q, want %q", got, want)
@@ -1370,6 +1853,43 @@ func TestCurrentHubSetupStatePreservesLiveInitCredentialsWhenRuntimeConfigOmitsT
 	}
 	if got, want := state.Profile.ProfileText, "Owns connected hub sessions"; got != want {
 		t.Fatalf("ProfileText = %q, want %q", got, want)
+	}
+	if got, want := state.AgentMode, "existing"; got != want {
+		t.Fatalf("AgentMode = %q, want %q", got, want)
+	}
+	if got, want := state.TokenType, "agent"; got != want {
+		t.Fatalf("TokenType = %q, want %q", got, want)
+	}
+}
+
+func TestCurrentHubSetupStateUsesSavedBaseURLForRegionWhenCredentialsAreMissing(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{
+  "version": "v1",
+  "base_url": "https://eu.hub.molten.bot/v1",
+  "timeout_ms": 20000
+}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	state := currentHubSetupState(hub.InitConfig{
+		BaseURL:           "https://na.hub.molten.bot/v1",
+		RuntimeConfigPath: configPath,
+	})
+
+	if state.Configured {
+		t.Fatal("Configured = true, want false")
+	}
+	if got, want := state.Region, "eu"; got != want {
+		t.Fatalf("Region = %q, want %q", got, want)
+	}
+	if got := state.Message; got != "" {
+		t.Fatalf("Message = %q, want empty", got)
 	}
 }
 

@@ -19,7 +19,7 @@ func TestBrokerTracksTaskLifecycleAndCommandOutput(t *testing.T) {
 	b.IngestLog("dispatch status=start request_id=req-42 skill=moltenhub_code_run repo=git@github.com:acme/repo.git repos=git@github.com:acme/repo.git,git@github.com:acme/repo-two.git")
 	b.IngestLog("dispatch request_id=req-42 stage=codex status=start")
 	b.IngestLog("dispatch request_id=req-42 cmd phase=codex name=codex stream=stdout b64=" + base64.StdEncoding.EncodeToString([]byte("thinking...")))
-	b.IngestLog("dispatch status=ok request_id=req-42 workspace=/tmp/run branch=moltenhub-feature pr_url=https://github.com/acme/repo/pull/99")
+	b.IngestLog("dispatch status=completed request_id=req-42 workspace=/tmp/run branch=moltenhub-feature pr_url=https://github.com/acme/repo/pull/99")
 
 	snap := b.Snapshot()
 	if len(snap.Tasks) != 1 {
@@ -29,8 +29,8 @@ func TestBrokerTracksTaskLifecycleAndCommandOutput(t *testing.T) {
 	if task.RequestID != requestID {
 		t.Fatalf("task.RequestID = %q", task.RequestID)
 	}
-	if task.Status != "ok" {
-		t.Fatalf("task.Status = %q, want ok", task.Status)
+	if task.Status != "completed" {
+		t.Fatalf("task.Status = %q, want completed", task.Status)
 	}
 	if task.Stage != "codex" {
 		t.Fatalf("task.Stage = %q, want codex", task.Stage)
@@ -54,6 +54,64 @@ func TestBrokerTracksTaskLifecycleAndCommandOutput(t *testing.T) {
 	}
 	if !foundOutput {
 		t.Fatalf("task logs missing decoded stdout line: %#v", task.Logs)
+	}
+}
+
+func TestBrokerNormalizesLegacyOKTerminalStatusToCompleted(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog("dispatch status=start request_id=req-legacy")
+	b.IngestLog("dispatch status=ok request_id=req-legacy workspace=/tmp/run branch=moltenhub-legacy")
+
+	snap := b.Snapshot()
+	if got, want := len(snap.Tasks), 1; got != want {
+		t.Fatalf("len(tasks) = %d, want %d", got, want)
+	}
+	if got, want := snap.Tasks[0].Status, "completed"; got != want {
+		t.Fatalf("task.Status = %q, want %q", got, want)
+	}
+}
+
+func TestBrokerDropsEmptyCommandPayloadMarkers(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-empty-b64"
+
+	b.IngestLog("dispatch status=start request_id=" + requestID)
+	b.IngestLog("dispatch request_id=req-empty-b64 cmd phase=codex name=codex stream=stderr b64=")
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	if got := len(snap.Tasks[0].Logs); got != 1 {
+		t.Fatalf("len(task logs) = %d, want 1 start meta line only", got)
+	}
+	if got, want := len(snap.Events), 1; got != want {
+		t.Fatalf("len(events) = %d, want %d (drop empty command marker event)", got, want)
+	}
+}
+
+func TestBrokerDropsInvalidCommandPayloadMarkers(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-invalid-b64"
+
+	b.IngestLog("dispatch status=start request_id=" + requestID)
+	b.IngestLog("dispatch request_id=req-invalid-b64 cmd phase=codex name=codex stream=stderr b64=%%%")
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	if got := len(snap.Tasks[0].Logs); got != 1 {
+		t.Fatalf("len(task logs) = %d, want 1 start meta line only", got)
+	}
+	if got, want := len(snap.Events), 1; got != want {
+		t.Fatalf("len(events) = %d, want %d (drop invalid command marker event)", got, want)
 	}
 }
 
@@ -121,6 +179,42 @@ func TestBrokerTracksMoltenHubConnectionTransitions(t *testing.T) {
 	}
 	if snap.Connection.HubDomain != "eu.hub.molten.bot" {
 		t.Fatalf("connection.hub_domain = %q", snap.Connection.HubDomain)
+	}
+}
+
+func TestBrokerTracksMoltenHubPingRetryState(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog(`hub.connection status=retrying base_url=https://na.hub.molten.bot/v1 detail="Hub endpoint ping failed; retrying every 12s until live. Error: GET https://na.hub.molten.bot/ping returned status=503"`)
+
+	snap := b.Snapshot()
+	if snap.Connection.HubConnected {
+		t.Fatal("connection.hub_connected = true during ping retry, want false")
+	}
+	if snap.Connection.HubTransport != hubTransportRetrying {
+		t.Fatalf("connection.hub_transport = %q, want %q", snap.Connection.HubTransport, hubTransportRetrying)
+	}
+	if !strings.Contains(snap.Connection.HubDetail, "retrying every 12s") {
+		t.Fatalf("connection.hub_detail = %q", snap.Connection.HubDetail)
+	}
+
+	b.IngestLog(`hub.connection status=reachable base_url=https://na.hub.molten.bot/v1 detail="https://na.hub.molten.bot/ping status=204"`)
+	snap = b.Snapshot()
+	if snap.Connection.HubTransport != hubTransportReachable {
+		t.Fatalf("connection.hub_transport = %q, want %q", snap.Connection.HubTransport, hubTransportReachable)
+	}
+	if snap.Connection.HubDetail != "https://na.hub.molten.bot/ping status=204" {
+		t.Fatalf("connection.hub_detail = %q", snap.Connection.HubDetail)
+	}
+
+	b.IngestLog("hub.ws status=connected")
+	snap = b.Snapshot()
+	if snap.Connection.HubTransport != hubTransportWS {
+		t.Fatalf("connection.hub_transport = %q after websocket connect, want %q", snap.Connection.HubTransport, hubTransportWS)
+	}
+	if snap.Connection.HubDetail != "" {
+		t.Fatalf("connection.hub_detail = %q after websocket connect, want empty", snap.Connection.HubDetail)
 	}
 }
 
@@ -254,6 +348,30 @@ func TestBrokerParsesStageErrorTextWithEscapedQuotes(t *testing.T) {
 	}
 	if snap.Tasks[0].Error != `decode run config payload: json: unknown field "branch"` {
 		t.Fatalf("error = %q", snap.Tasks[0].Error)
+	}
+}
+
+func TestBrokerIgnoresNestedRequestMetadataInsideQuotedCommandText(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "local-1712345678-000001"
+	b.IngestLog("dispatch status=start request_id=" + requestID)
+	b.IngestLog(`dispatch request_id=local-1712345678-000001 cmd phase=codex name=codex stream=stderr text="dispatch status=error request_id=req-err-ws err=\"clone failed\""`)
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("len(tasks) = %d, want 1", len(snap.Tasks))
+	}
+	task := snap.Tasks[0]
+	if task.RequestID != requestID {
+		t.Fatalf("task.RequestID = %q, want %q", task.RequestID, requestID)
+	}
+	if task.Status != "running" {
+		t.Fatalf("task.Status = %q, want running", task.Status)
+	}
+	if task.Error != "" {
+		t.Fatalf("task.Error = %q, want empty", task.Error)
 	}
 }
 
@@ -413,7 +531,7 @@ func TestBrokerCloseTaskRemovesCompletedTaskAndRunConfig(t *testing.T) {
 	requestID := "req-close"
 	b.RecordTaskRunConfig(requestID, []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"close me"}`))
 	b.IngestLog("dispatch status=start request_id=req-close")
-	b.IngestLog("dispatch status=ok request_id=req-close workspace=/tmp/run branch=moltenhub-close")
+	b.IngestLog("dispatch status=completed request_id=req-close workspace=/tmp/run branch=moltenhub-close")
 
 	if err := b.CloseTask(requestID); err != nil {
 		t.Fatalf("CloseTask() error = %v", err)
@@ -436,7 +554,7 @@ func TestBrokerCloseTaskIgnoresLateCleanupLogs(t *testing.T) {
 	requestID := "req-close-cleanup"
 	b.RecordTaskRunConfig(requestID, []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"close me"}`))
 	b.IngestLog("dispatch status=start request_id=req-close-cleanup")
-	b.IngestLog("dispatch status=ok request_id=req-close-cleanup workspace=/tmp/run branch=moltenhub-close-cleanup")
+	b.IngestLog("dispatch status=completed request_id=req-close-cleanup workspace=/tmp/run branch=moltenhub-close-cleanup")
 
 	if err := b.CloseTask(requestID); err != nil {
 		t.Fatalf("CloseTask() error = %v", err)
@@ -447,6 +565,24 @@ func TestBrokerCloseTaskIgnoresLateCleanupLogs(t *testing.T) {
 	snap := b.Snapshot()
 	if len(snap.Tasks) != 0 {
 		t.Fatalf("len(tasks) after cleanup log = %d, want 0", len(snap.Tasks))
+	}
+}
+
+func TestBrokerIgnoresActionOnlyDispatchStatusForTerminalState(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+
+	b.IngestLog("dispatch status=start request_id=req-follow-up")
+	b.IngestLog(`dispatch status=error request_id=req-follow-up exit_code=50 err="codex failed"`)
+	b.IngestLog("dispatch status=ok action=queue_failure_followup request_id=req-follow-up follow_up_request_id=req-fix")
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("len(tasks) = %d, want 1", len(snap.Tasks))
+	}
+	if got := snap.Tasks[0].Status; got != "error" {
+		t.Fatalf("task.Status = %q, want error", got)
 	}
 }
 
@@ -554,32 +690,31 @@ func TestBrokerCloseTaskAllowsStoppedTasks(t *testing.T) {
 	}
 }
 
-func TestBrokerHidesCompletedOKTasksAfterFiveMinutes(t *testing.T) {
+func TestBrokerKeepsCompletedTasksVisibleUntilClosed(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 4, 6, 12, 0, 0, 0, time.UTC)
 	b := NewBroker()
 	b.now = func() time.Time { return now }
 
+	b.RecordTaskRunConfig("req-ok", []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"keep me visible"}`))
 	b.IngestLog("dispatch status=start request_id=req-ok")
-	b.IngestLog("dispatch status=ok request_id=req-ok workspace=/tmp/run branch=moltenhub-cleanup")
+	b.IngestLog("dispatch status=completed request_id=req-ok workspace=/tmp/run branch=moltenhub-cleanup")
 
 	if got := len(b.Snapshot().Tasks); got != 1 {
 		t.Fatalf("len(tasks) before retention = %d, want 1", got)
 	}
 
-	now = now.Add(4*time.Minute + 59*time.Second)
-	if got := len(b.Snapshot().Tasks); got != 1 {
-		t.Fatalf("len(tasks) before ttl expiry = %d, want 1", got)
-	}
-
-	now = now.Add(1 * time.Second)
+	now = now.Add(10 * time.Minute)
 	snap := b.Snapshot()
-	if got := len(snap.Tasks); got != 0 {
-		t.Fatalf("len(tasks) after ttl expiry = %d, want 0", got)
+	if got := len(snap.Tasks); got != 1 {
+		t.Fatalf("len(tasks) after waiting = %d, want 1", got)
 	}
-	if _, ok := b.TaskRunConfig("req-ok"); ok {
-		t.Fatal("TaskRunConfig() found = true for pruned ok task, want false")
+	if got, want := snap.Tasks[0].Status, "completed"; got != want {
+		t.Fatalf("task.Status = %q, want %q", got, want)
+	}
+	if _, ok := b.TaskRunConfig("req-ok"); !ok {
+		t.Fatal("TaskRunConfig() found = false for visible completed task, want true")
 	}
 }
 

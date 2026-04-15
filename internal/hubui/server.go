@@ -44,6 +44,7 @@ type Server struct {
 	RunTask                 func(context.Context, string) error
 	ForceRunTask            func(context.Context, string) error
 	StopTask                func(context.Context, string) error
+	ResolveTaskControls     func(string) TaskControls
 	LoadLibraryTasks        func() ([]library.TaskSummary, error)
 	AgentAuthStatus         func(context.Context) (AgentAuthState, error)
 	StartAgentAuth          func(context.Context) (AgentAuthState, error)
@@ -58,18 +59,18 @@ type Server struct {
 
 // AgentAuthState describes current runtime agent-auth readiness and device flow hints.
 type AgentAuthState struct {
-	Harness              string `json:"harness,omitempty"`
-	Required             bool   `json:"required"`
-	Ready                bool   `json:"ready"`
-	State                string `json:"state,omitempty"`
-	Message              string `json:"message,omitempty"`
-	AuthURL              string `json:"auth_url,omitempty"`
-	DeviceCode           string `json:"device_code,omitempty"`
-	AcceptsBrowserCode   bool   `json:"accepts_browser_code,omitempty"`
-	ConfigureCommand     string `json:"configure_command,omitempty"`
-	ConfigurePlaceholder string `json:"configure_placeholder,omitempty"`
+	Harness              string            `json:"harness,omitempty"`
+	Required             bool              `json:"required"`
+	Ready                bool              `json:"ready"`
+	State                string            `json:"state,omitempty"`
+	Message              string            `json:"message,omitempty"`
+	AuthURL              string            `json:"auth_url,omitempty"`
+	DeviceCode           string            `json:"device_code,omitempty"`
+	AcceptsBrowserCode   bool              `json:"accepts_browser_code,omitempty"`
+	ConfigureCommand     string            `json:"configure_command,omitempty"`
+	ConfigurePlaceholder string            `json:"configure_placeholder,omitempty"`
 	ConfigureOptions     []AgentAuthOption `json:"configure_options,omitempty"`
-	UpdatedAt            string `json:"updated_at,omitempty"`
+	UpdatedAt            string            `json:"updated_at,omitempty"`
 }
 
 type AgentAuthOption struct {
@@ -314,7 +315,7 @@ func (s Server) handleState(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "monitor broker is unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.Broker.Snapshot())
+	writeJSON(w, http.StatusOK, s.snapshot())
 }
 
 func (s Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
@@ -371,7 +372,7 @@ func (s Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	var snapshotTimerCh <-chan time.Time
 
 	writeSSESnapshot := func() bool {
-		payload, err := json.Marshal(compactStreamSnapshot(s.Broker.Snapshot()))
+		payload, err := json.Marshal(compactStreamSnapshot(s.snapshot()))
 		if err != nil {
 			s.logf("hub.ui status=warn event=marshal_snapshot err=%q", err)
 			return true
@@ -441,6 +442,22 @@ func (s Server) handleStream(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 	}
+}
+
+func (s Server) snapshot() Snapshot {
+	if s.Broker == nil {
+		return Snapshot{}
+	}
+
+	snapshot := s.Broker.Snapshot()
+	if s.ResolveTaskControls == nil {
+		return snapshot
+	}
+
+	for i := range snapshot.Tasks {
+		snapshot.Tasks[i].Controls = s.ResolveTaskControls(snapshot.Tasks[i].RequestID)
+	}
+	return snapshot
 }
 
 func (s Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
@@ -1013,6 +1030,14 @@ func (s Server) handleTaskControlWithMeta(
 	if err := handler(r.Context(), requestID); err != nil {
 		switch {
 		case errors.Is(err, ErrTaskNotFound):
+			statusCode, errText := s.taskControlUnavailableResponse(requestID, action)
+			if statusCode != 0 {
+				writeJSON(w, statusCode, map[string]any{
+					"ok":    false,
+					"error": errText,
+				})
+				return
+			}
 			writeJSON(w, http.StatusNotFound, map[string]any{
 				"ok":    false,
 				"error": "task not found",
@@ -1035,6 +1060,32 @@ func (s Server) handleTaskControlWithMeta(
 		response[key] = value
 	}
 	writeJSON(w, http.StatusOK, response)
+}
+
+func (s Server) taskControlUnavailableResponse(requestID string, action string) (int, string) {
+	if s.Broker == nil {
+		return 0, ""
+	}
+
+	task, ok := s.Broker.Task(requestID)
+	if !ok {
+		return 0, ""
+	}
+
+	switch normalizeTaskTerminalStatus(task.Status) {
+	case "completed", "no_changes", "duplicate":
+		return http.StatusConflict, "task is already completed"
+	case "stopped":
+		return http.StatusConflict, "task is already stopped"
+	case "error", "invalid":
+		return http.StatusConflict, "task is already finished"
+	}
+
+	action = strings.TrimSpace(action)
+	if action == "" {
+		action = "control"
+	}
+	return http.StatusConflict, fmt.Sprintf("task %s is unavailable for this task", action)
 }
 
 func (s Server) handleTaskRerun(w http.ResponseWriter, r *http.Request, requestID string) {
@@ -1095,30 +1146,12 @@ func (s Server) handleTaskRerun(w http.ResponseWriter, r *http.Request, requestI
 		return
 	}
 
-	s.closeTaskAfterRerun(r.Context(), requestID)
-
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"ok":         true,
 		"forced":     force,
 		"request_id": newRequestID,
 		"rerun_of":   requestID,
 	})
-}
-
-func (s Server) closeTaskAfterRerun(ctx context.Context, requestID string) {
-	if s.Broker == nil {
-		return
-	}
-	if err := s.Broker.CloseTask(requestID); err != nil {
-		s.logf("hub.ui status=warn event=task_rerun_close request_id=%s err=%q", requestID, err)
-		return
-	}
-	if s.CloseTask == nil {
-		return
-	}
-	if err := s.CloseTask(ctx, requestID); err != nil {
-		s.logf("hub.ui status=warn event=task_rerun_cleanup request_id=%s err=%q", requestID, err)
-	}
 }
 
 func (s Server) handleTaskClose(w http.ResponseWriter, r *http.Request, requestID string) {

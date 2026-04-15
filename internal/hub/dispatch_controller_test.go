@@ -187,6 +187,60 @@ func TestAdaptiveDispatchControllerScalesDownOnPressure(t *testing.T) {
 	close(releaseReq2)
 }
 
+func TestAdaptiveDispatchControllerQueuedRequestResamplesAndAutoResumes(t *testing.T) {
+	t.Parallel()
+
+	controller := NewAdaptiveDispatchController(DispatcherConfig{
+		MaxParallel:            2,
+		MinParallel:            1,
+		SampleWindow:           1,
+		SampleIntervalMS:       1000,
+		CPUHighWatermark:       85,
+		MemoryHighWatermark:    85,
+		DiskIOHighWatermarkMBs: 100,
+	}, nil)
+	controller.sample = &sequenceSample{
+		values: []resourceSample{
+			{CPUPercent: 92, MemoryPercent: 70},
+			{CPUPercent: 20, MemoryPercent: 35},
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	releaseFirst, err := controller.Acquire(ctx, "req-1")
+	if err != nil {
+		t.Fatalf("Acquire(req-1) error = %v", err)
+	}
+	controller.sampleAndUpdate()
+
+	acquiredReq2 := make(chan struct{}, 1)
+	errCh := make(chan error, 1)
+	releaseReq2 := make(chan struct{})
+	go func() {
+		release, acquireErr := controller.Acquire(ctx, "req-2")
+		if acquireErr != nil {
+			errCh <- acquireErr
+			return
+		}
+		acquiredReq2 <- struct{}{}
+		<-releaseReq2
+		release()
+	}()
+
+	select {
+	case <-acquiredReq2:
+	case err := <-errCh:
+		t.Fatalf("unexpected acquire error: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for queued request to auto-resume after healthy sample")
+	}
+
+	releaseFirst()
+	close(releaseReq2)
+}
+
 func TestAdaptiveDispatchControllerLogsWindowSamplesEvenWhenCapacityIsSteady(t *testing.T) {
 	t.Parallel()
 
@@ -453,7 +507,7 @@ func TestStopUnblocksQueuedAcquireWithClosedError(t *testing.T) {
 	}
 }
 
-func TestComputeAllowedParallelScalesByPressure(t *testing.T) {
+func TestComputeAllowedParallelWaitsWhenCPUThresholdExceeded(t *testing.T) {
 	t.Parallel()
 
 	cfg := DispatcherConfig{
@@ -464,12 +518,51 @@ func TestComputeAllowedParallelScalesByPressure(t *testing.T) {
 		DiskIOHighWatermarkMBs: 100,
 	}
 	avg := resourceSample{
-		CPUPercent:    160,
+		CPUPercent:    86,
 		MemoryPercent: 40,
-		DiskIOMBs:     10,
+		DiskIOMBs:     500,
 	}
-	if got := computeAllowedParallel(cfg, avg); got != 4 {
-		t.Fatalf("computeAllowedParallel() = %d, want 4", got)
+	if got := computeAllowedParallel(cfg, avg, cfg.MaxParallel); got != 1 {
+		t.Fatalf("computeAllowedParallel() = %d, want 1", got)
+	}
+}
+
+func TestComputeAllowedParallelIgnoresDiskIOForConcurrency(t *testing.T) {
+	t.Parallel()
+
+	cfg := DispatcherConfig{
+		MaxParallel:            8,
+		MinParallel:            1,
+		CPUHighWatermark:       85,
+		MemoryHighWatermark:    85,
+		DiskIOHighWatermarkMBs: 1,
+	}
+	avg := resourceSample{
+		CPUPercent:    30,
+		MemoryPercent: 40,
+		DiskIOMBs:     500,
+	}
+	if got := computeAllowedParallel(cfg, avg, cfg.MaxParallel); got != cfg.MaxParallel {
+		t.Fatalf("computeAllowedParallel() = %d, want %d", got, cfg.MaxParallel)
+	}
+}
+
+func TestComputeAllowedParallelUsesHysteresisBetweenResumeAndWaitThresholds(t *testing.T) {
+	t.Parallel()
+
+	cfg := DispatcherConfig{
+		MaxParallel:            4,
+		MinParallel:            1,
+		CPUHighWatermark:       85,
+		MemoryHighWatermark:    85,
+		DiskIOHighWatermarkMBs: 100,
+	}
+
+	if got := computeAllowedParallel(cfg, resourceSample{CPUPercent: 70, MemoryPercent: 60}, cfg.MinParallel); got != cfg.MinParallel {
+		t.Fatalf("computeAllowedParallel(hold throttled) = %d, want %d", got, cfg.MinParallel)
+	}
+	if got := computeAllowedParallel(cfg, resourceSample{CPUPercent: 64, MemoryPercent: 50}, cfg.MinParallel); got != cfg.MaxParallel {
+		t.Fatalf("computeAllowedParallel(resume) = %d, want %d", got, cfg.MaxParallel)
 	}
 }
 

@@ -61,6 +61,9 @@ func TestDecodeCommandLogLineHandlesInvalidAndEmptyPayloads(t *testing.T) {
 	if _, handled, drop := decodeCommandLogLine("cmd phase=clone b64=%%%"); handled || drop {
 		t.Fatal("decodeCommandLogLine(invalid b64) should not be handled")
 	}
+	if _, handled, drop := decodeCommandLogLine("cmd phase=clone b64="); !handled || !drop {
+		t.Fatal("decodeCommandLogLine(empty b64 payload marker) should be dropped")
+	}
 	if _, handled, drop := decodeCommandLogLine("cmd phase=clone b64=IA=="); !handled || !drop {
 		t.Fatal("decodeCommandLogLine(blank decoded payload) should be dropped")
 	}
@@ -96,4 +99,20 @@ func TestWriteSinkLockedWithNilSinkAndNilLogger(t *testing.T) {
 
 	l := newTerminalLogger(io.Discard, false)
 	l.writeSinkLocked("line")
+}
+
+func TestParseSimpleKVFieldsIgnoresNestedKeyValuesInsideQuotedText(t *testing.T) {
+	t.Parallel()
+
+	line := `dispatch request_id=local-1712345678-000123 cmd phase=codex name=codex stream=stderr text="dispatch status=error request_id=req-err-ws err=\"clone failed\""`
+	fields := parseSimpleKVFields(line)
+	if got, want := fields["request_id"], "local-1712345678-000123"; got != want {
+		t.Fatalf("request_id = %q, want %q", got, want)
+	}
+	if got := fields["status"]; got != "" {
+		t.Fatalf("status = %q, want empty (nested value should not be parsed)", got)
+	}
+	if got := fields["text"]; !strings.Contains(got, `request_id=req-err-ws`) {
+		t.Fatalf("text = %q, want nested request_id preserved as text content", got)
+	}
 }

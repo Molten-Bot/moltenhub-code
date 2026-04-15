@@ -47,6 +47,34 @@ func TestPullOpenClawMessageParsesResult(t *testing.T) {
 	}
 }
 
+func TestPullOpenClawMessageTimeoutRespectsOpenAPIBounds(t *testing.T) {
+	t.Parallel()
+
+	var observedQueries []string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		observedQueries = append(observedQueries, r.URL.RawQuery)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer ts.Close()
+
+	client := NewAPIClient(ts.URL + "/v1")
+	for _, timeoutMs := range []int{-1, 0, 5, 35000} {
+		if _, _, err := client.PullOpenClawMessage(context.Background(), "token", timeoutMs); err != nil {
+			t.Fatalf("PullOpenClawMessage(timeoutMs=%d) error = %v", timeoutMs, err)
+		}
+	}
+
+	want := []string{
+		"",
+		"",
+		"timeout_ms=5",
+		"timeout_ms=30000",
+	}
+	if !reflect.DeepEqual(observedQueries, want) {
+		t.Fatalf("pull timeout queries = %#v, want %#v", observedQueries, want)
+	}
+}
+
 func TestPullOpenClawMessageParsesNestedDeliveryAndPrefersOpenClawEnvelope(t *testing.T) {
 	t.Parallel()
 
@@ -162,6 +190,52 @@ func TestExtractInboundOpenClawMessageCopiesReplyRoutingFromTransportMessage(t *
 	}
 	if fromURI := got.Message["from_agent_uri"]; fromURI != "https://na.hub.molten.bot/acme/sender" {
 		t.Fatalf("message.from_agent_uri = %#v", fromURI)
+	}
+}
+
+func TestExtractInboundOpenClawMessageCopiesReplyRoutingFromOpenClawWrapper(t *testing.T) {
+	t.Parallel()
+
+	root := map[string]any{
+		"result": map[string]any{
+			"delivery": map[string]any{
+				"delivery_id": "d-24",
+			},
+			"openclaw_message": map[string]any{
+				"from_agent_uri":  "https://na.hub.molten.bot/acme/wrapper-sender",
+				"from_agent_uuid": "de14de6e-c4f5-4f5c-9d83-fcb87d4d6dc4",
+				"message": map[string]any{
+					"type":  "skill_request",
+					"skill": "code_for_me",
+					"config": map[string]any{
+						"repo":   "git@github.com:acme/repo.git",
+						"prompt": "fix",
+					},
+				},
+			},
+		},
+	}
+
+	got := extractInboundOpenClawMessage(root)
+	if got.DeliveryID != "d-24" {
+		t.Fatalf("DeliveryID = %q", got.DeliveryID)
+	}
+	if replyTo := got.Message["reply_to"]; replyTo != "https://na.hub.molten.bot/acme/wrapper-sender" {
+		t.Fatalf("message.reply_to = %#v", replyTo)
+	}
+	if fromURI := got.Message["from_agent_uri"]; fromURI != "https://na.hub.molten.bot/acme/wrapper-sender" {
+		t.Fatalf("message.from_agent_uri = %#v", fromURI)
+	}
+
+	dispatch, matched, err := ParseSkillDispatch(got.Message, "skill_request", "code_for_me")
+	if err != nil {
+		t.Fatalf("ParseSkillDispatch() error = %v", err)
+	}
+	if !matched {
+		t.Fatal("matched = false, want true")
+	}
+	if got, want := dispatch.ReplyTo, "https://na.hub.molten.bot/acme/wrapper-sender"; got != want {
+		t.Fatalf("dispatch.ReplyTo = %q, want %q", got, want)
 	}
 }
 

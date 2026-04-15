@@ -84,56 +84,44 @@ func (c *AsyncAPIClient) ResolveAgentToken(ctx context.Context, cfg InitConfig) 
 
 // SyncProfile syncs profile metadata for the configured token.
 func (c *AsyncAPIClient) SyncProfile(ctx context.Context, cfg InitConfig) error {
-	token, err := c.requireToken()
-	if err != nil {
-		return err
-	}
-	return c.client.SyncProfile(ctx, token, cfg)
+	return c.withToken(func(token string) error {
+		return c.client.SyncProfile(ctx, token, cfg)
+	})
 }
 
 // UpdateAgentStatus updates agent lifecycle status for the configured token.
 func (c *AsyncAPIClient) UpdateAgentStatus(ctx context.Context, status string) error {
-	token, err := c.requireToken()
-	if err != nil {
-		return err
-	}
-	return c.client.UpdateAgentStatus(ctx, token, status)
+	return c.withToken(func(token string) error {
+		return c.client.UpdateAgentStatus(ctx, token, status)
+	})
 }
 
 // MarkOpenClawOffline marks websocket transport offline for the configured token.
 func (c *AsyncAPIClient) MarkOpenClawOffline(ctx context.Context, sessionKey, reason string) error {
-	token, err := c.requireToken()
-	if err != nil {
-		return err
-	}
-	return c.client.MarkOpenClawOffline(ctx, token, sessionKey, reason)
+	return c.withToken(func(token string) error {
+		return c.client.MarkOpenClawOffline(ctx, token, sessionKey, reason)
+	})
 }
 
 // RecordGitHubTaskCompleteActivity appends a minimal completion activity entry.
 func (c *AsyncAPIClient) RecordGitHubTaskCompleteActivity(ctx context.Context) error {
-	token, err := c.requireToken()
-	if err != nil {
-		return err
-	}
-	return c.client.RecordGitHubTaskCompleteActivity(ctx, token)
+	return c.withToken(func(token string) error {
+		return c.client.RecordGitHubTaskCompleteActivity(ctx, token)
+	})
 }
 
 // RegisterRuntime registers runtime metadata for the configured token.
 func (c *AsyncAPIClient) RegisterRuntime(ctx context.Context, cfg InitConfig, libraryTasks []library.TaskSummary) error {
-	token, err := c.requireToken()
-	if err != nil {
-		return err
-	}
-	return c.client.RegisterRuntime(ctx, token, cfg, libraryTasks)
+	return c.withToken(func(token string) error {
+		return c.client.RegisterRuntime(ctx, token, cfg, libraryTasks)
+	})
 }
 
 // PublishResult publishes a skill result for the configured token.
 func (c *AsyncAPIClient) PublishResult(ctx context.Context, payload map[string]any) error {
-	token, err := c.requireToken()
-	if err != nil {
-		return err
-	}
-	return c.client.PublishResult(ctx, token, payload)
+	return c.withToken(func(token string) error {
+		return c.client.PublishResult(ctx, token, payload)
+	})
 }
 
 // PublishResultAsync publishes a result on a background goroutine.
@@ -145,20 +133,16 @@ func (c *AsyncAPIClient) PublishResultAsync(ctx context.Context, payload map[str
 
 // PullOpenClawMessage pulls one inbound transport envelope.
 func (c *AsyncAPIClient) PullOpenClawMessage(ctx context.Context, timeoutMs int) (PulledOpenClawMessage, bool, error) {
-	token, err := c.requireToken()
-	if err != nil {
-		return PulledOpenClawMessage{}, false, err
-	}
-	return c.client.PullOpenClawMessage(ctx, token, timeoutMs)
+	return c.withTokenMessage(func(token string) (PulledOpenClawMessage, bool, error) {
+		return c.client.PullOpenClawMessage(ctx, token, timeoutMs)
+	})
 }
 
 // AckOpenClawDelivery acknowledges a leased delivery.
 func (c *AsyncAPIClient) AckOpenClawDelivery(ctx context.Context, deliveryID string) error {
-	token, err := c.requireToken()
-	if err != nil {
-		return err
-	}
-	return c.client.AckOpenClawDelivery(ctx, token, deliveryID)
+	return c.withToken(func(token string) error {
+		return c.client.AckOpenClawDelivery(ctx, token, deliveryID)
+	})
 }
 
 // AckOpenClawDeliveryAsync acknowledges a delivery on a background goroutine.
@@ -170,11 +154,9 @@ func (c *AsyncAPIClient) AckOpenClawDeliveryAsync(ctx context.Context, deliveryI
 
 // NackOpenClawDelivery releases a leased delivery back to the queue.
 func (c *AsyncAPIClient) NackOpenClawDelivery(ctx context.Context, deliveryID string) error {
-	token, err := c.requireToken()
-	if err != nil {
-		return err
-	}
-	return c.client.NackOpenClawDelivery(ctx, token, deliveryID)
+	return c.withToken(func(token string) error {
+		return c.client.NackOpenClawDelivery(ctx, token, deliveryID)
+	})
 }
 
 // NackOpenClawDeliveryAsync releases a delivery on a background goroutine.
@@ -196,6 +178,24 @@ func (c *AsyncAPIClient) setToken(token string) {
 	c.tokenMu.Lock()
 	c.token = strings.TrimSpace(token)
 	c.tokenMu.Unlock()
+}
+
+func (c *AsyncAPIClient) withToken(call func(string) error) error {
+	token, err := c.requireToken()
+	if err != nil {
+		return err
+	}
+	return call(token)
+}
+
+func (c *AsyncAPIClient) withTokenMessage(
+	call func(string) (PulledOpenClawMessage, bool, error),
+) (PulledOpenClawMessage, bool, error) {
+	token, err := c.requireToken()
+	if err != nil {
+		return PulledOpenClawMessage{}, false, err
+	}
+	return call(token)
 }
 
 func (c *AsyncAPIClient) runAsync(ctx context.Context, fn func(context.Context) error) <-chan error {

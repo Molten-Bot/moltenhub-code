@@ -24,10 +24,14 @@ type stubMoltenHubAPI struct {
 	pullFn   func(ctx context.Context, timeoutMs int) (PulledOpenClawMessage, bool, error)
 	recordFn func(context.Context) error
 
-	mu        sync.Mutex
-	acked     []string
-	nacked    []string
-	published []map[string]any
+	mu           sync.Mutex
+	acked        []string
+	nacked       []string
+	published    []map[string]any
+	offlineCalls []struct {
+		SessionKey string
+		Reason     string
+	}
 }
 
 func (s *stubMoltenHubAPI) BaseURL() string { return "" }
@@ -40,7 +44,13 @@ func (s *stubMoltenHubAPI) ResolveAgentToken(context.Context, InitConfig) (strin
 }
 func (s *stubMoltenHubAPI) SyncProfile(context.Context, InitConfig) error   { return nil }
 func (s *stubMoltenHubAPI) UpdateAgentStatus(context.Context, string) error { return nil }
-func (s *stubMoltenHubAPI) MarkOpenClawOffline(context.Context, string, string) error {
+func (s *stubMoltenHubAPI) MarkOpenClawOffline(_ context.Context, sessionKey, reason string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.offlineCalls = append(s.offlineCalls, struct {
+		SessionKey string
+		Reason     string
+	}{SessionKey: sessionKey, Reason: reason})
 	return nil
 }
 func (s *stubMoltenHubAPI) RecordGitHubTaskCompleteActivity(ctx context.Context) error {
@@ -245,8 +255,8 @@ func TestProcessInboundMessageDoesNotDedupeDistinctClientMsgIDWithSharedEnvelope
 	api.mu.Lock()
 	defer api.mu.Unlock()
 
-	// Each failing dispatch publishes one failure result plus one follow-up task request.
-	if got, want := len(api.published), 4; got != want {
+	// Each failing dispatch publishes one failure result, one rerun request, and one follow-up task request.
+	if got, want := len(api.published), 6; got != want {
 		t.Fatalf("published payload count = %d, want %d", got, want)
 	}
 	gotRequestIDs := map[string]bool{}
@@ -258,8 +268,10 @@ func TestProcessInboundMessageDoesNotDedupeDistinctClientMsgIDWithSharedEnvelope
 	}
 	for _, expected := range []string{
 		"msg-a",
+		"msg-a-rerun",
 		"msg-a-failure-review",
 		"msg-b",
+		"msg-b-rerun",
 		"msg-b-failure-review",
 	} {
 		if !gotRequestIDs[expected] {
@@ -306,7 +318,7 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 	api.mu.Lock()
 	defer api.mu.Unlock()
 
-	if got, want := len(api.published), 2; got != want {
+	if got, want := len(api.published), 3; got != want {
 		t.Fatalf("published payload count = %d, want %d", got, want)
 	}
 
@@ -318,7 +330,28 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 		t.Fatalf("result payload reply_to = %#v", got)
 	}
 
-	followUpPayload := api.published[1]
+	rerunPayload := api.published[1]
+	if got := rerunPayload["type"]; got != "skill_request" {
+		t.Fatalf("rerun payload type = %#v", got)
+	}
+	if got := rerunPayload["request_id"]; got != "req-follow-up-rerun" {
+		t.Fatalf("rerun request_id = %#v", got)
+	}
+	if got := rerunPayload["rerun_of"]; got != "req-follow-up" {
+		t.Fatalf("rerun rerun_of = %#v", got)
+	}
+	rerunConfig, _ := rerunPayload["config"].(map[string]any)
+	if rerunConfig == nil {
+		t.Fatalf("rerun config missing: %#v", rerunPayload)
+	}
+	if got := rerunConfig["baseBranch"]; got != "release" {
+		t.Fatalf("rerun baseBranch = %#v, want release", got)
+	}
+	if got := rerunConfig["targetSubdir"]; got != "internal/hub" {
+		t.Fatalf("rerun targetSubdir = %#v, want internal/hub", got)
+	}
+
+	followUpPayload := api.published[2]
 	if got := followUpPayload["type"]; got != "skill_request" {
 		t.Fatalf("follow-up payload type = %#v", got)
 	}
@@ -372,10 +405,19 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 		t.Fatalf("follow-up prompt missing original prompt: %q", prompt)
 	}
 	if !strings.Contains(prompt, `Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.`) {
-		t.Fatalf("follow-up prompt missing execution contract: %q", prompt)
+		t.Fatalf("follow-up prompt missing offline review instruction: %q", prompt)
+	}
+	if !strings.Contains(prompt, "Do not stop work just because you cannot create a pull request or watch remote CI/CD from inside this agent runtime.") {
+		t.Fatalf("follow-up prompt missing remote operations handoff: %q", prompt)
 	}
 	if !strings.Contains(prompt, "If no file changes are required, return a clear no-op result with concrete evidence instead of forcing an empty PR.") {
 		t.Fatalf("follow-up prompt missing no-op completion carve-out: %q", prompt)
+	}
+	if got, want := len(api.offlineCalls), 1; got != want {
+		t.Fatalf("offline call count = %d, want %d", got, want)
+	}
+	if got := api.offlineCalls[0].Reason; got != transportOfflineReasonExecutionFailure {
+		t.Fatalf("offline reason = %q, want %q", got, transportOfflineReasonExecutionFailure)
 	}
 }
 
@@ -417,11 +459,11 @@ func TestHandleDispatchQueuesFailureFollowUpWithTaskLogPaths(t *testing.T) {
 	api.mu.Lock()
 	defer api.mu.Unlock()
 
-	if got, want := len(api.published), 2; got != want {
+	if got, want := len(api.published), 3; got != want {
 		t.Fatalf("published payload count = %d, want %d", got, want)
 	}
 
-	followUpPayload := api.published[1]
+	followUpPayload := api.published[2]
 	runConfig, _ := followUpPayload["config"].(map[string]any)
 	if runConfig == nil {
 		t.Fatalf("follow-up config missing: %#v", followUpPayload)
@@ -432,10 +474,15 @@ func TestHandleDispatchQueuesFailureFollowUpWithTaskLogPaths(t *testing.T) {
 		expectedLogDir,
 		filepath.Join(expectedLogDir, "term"),
 		filepath.Join(expectedLogDir, "terminal.log"),
+		filepath.Join(logRoot, "main", "term"),
+		filepath.Join(logRoot, "main", "terminal.log"),
 	} {
 		if !strings.Contains(prompt, path) {
 			t.Fatalf("follow-up prompt missing task log path %q: %q", path, prompt)
 		}
+	}
+	if strings.Contains(prompt, filepath.Join(logRoot, "terminal.log")) {
+		t.Fatalf("follow-up prompt should exclude aggregate terminal log path to avoid recursive reads: %q", prompt)
 	}
 	if strings.Contains(prompt, failureFollowUpNoPathGuidance) {
 		t.Fatalf("follow-up prompt should prefer concrete task log paths when available: %q", prompt)
@@ -526,24 +573,34 @@ func TestHandleDispatchQueuesFailureFollowUpForNoDeltaFailures(t *testing.T) {
 	api.mu.Lock()
 	defer api.mu.Unlock()
 
-	if got, want := len(api.published), 2; got != want {
+	if got, want := len(api.published), 3; got != want {
 		t.Fatalf("published payload count = %d, want %d", got, want)
 	}
 	if got := api.published[0]["status"]; got != "error" {
 		t.Fatalf("result payload status = %#v, want error", got)
 	}
-	if got := api.published[1]["request_id"]; got != "req-no-delta-failure-review" {
+	if got := api.published[2]["request_id"]; got != "req-no-delta-failure-review" {
 		t.Fatalf("follow-up request_id = %#v, want req-no-delta-failure-review", got)
 	}
 }
 
-func TestShouldQueueFailureFollowUpAllowsNestedFailureReviewRequests(t *testing.T) {
+func TestShouldQueueFailureFollowUpSkipsNestedFailureReviewRequests(t *testing.T) {
 	t.Parallel()
 
 	dispatch := SkillDispatch{RequestID: "req-123-failure-review"}
 	ok, reason := shouldQueueFailureFollowUp(dispatch, harness.Result{Err: errors.New("still failing")})
-	if !ok || reason != "" {
-		t.Fatalf("shouldQueueFailureFollowUp() = (%v, %q), want (true, \"\")", ok, reason)
+	if ok || reason != "run is already a failure follow-up" {
+		t.Fatalf("shouldQueueFailureFollowUp() = (%v, %q), want (false, %q)", ok, reason, "run is already a failure follow-up")
+	}
+}
+
+func TestShouldQueueFailureRerunSkipsNestedRerunRequests(t *testing.T) {
+	t.Parallel()
+
+	dispatch := SkillDispatch{RequestID: "req-123-rerun"}
+	ok, reason := shouldQueueFailureRerun(dispatch, harness.Result{Err: errors.New("still failing")})
+	if ok || reason != "run is already a failure rerun" {
+		t.Fatalf("shouldQueueFailureRerun() = (%v, %q), want (false, %q)", ok, reason, "run is already a failure rerun")
 	}
 }
 
@@ -554,8 +611,15 @@ func TestShouldQueueFailureFollowUpQueuesRepoAccessFailures(t *testing.T) {
 	ok, reason := shouldQueueFailureFollowUp(dispatch, harness.Result{
 		Err: errors.New("git: verify remote write access for repo https://github.com/acme/repo.git branch \"moltenhub-fix\": exit status 128: remote: Write access to repository not granted. fatal: unable to access 'https://github.com/acme/repo.git/': The requested URL returned error: 403"),
 	})
-	if !ok {
-		t.Fatalf("shouldQueueFailureFollowUp() = false, want true (reason=%q)", reason)
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureFollowUp(repo access) = (%v, %q), want (true, \"\")", ok, reason)
+	}
+
+	ok, reason = shouldQueueFailureFollowUp(dispatch, harness.Result{
+		Err: errors.New("git: run git [push -u origin moltenhub-branch]: exit status 1: remote: refusing to allow an OAuth App to create or update workflow `.github/workflows/docker-release.yml` without `workflow` scope"),
+	})
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureFollowUp(workflow scope) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 }
 

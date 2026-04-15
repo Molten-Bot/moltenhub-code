@@ -32,13 +32,13 @@ func (s *stubPRMonitorRunner) Commands() []execx.Command {
 	return slices.Clone(s.commands)
 }
 
-func TestPRMergeMonitorRemovesCompletedTaskOncePRMerges(t *testing.T) {
+func TestPRMergeMonitorKeepsMergedTaskVisibleUntilUserClosesIt(t *testing.T) {
 	t.Parallel()
 
 	broker := NewBroker()
 	broker.RecordTaskRunConfig("req-merged", []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"ship it"}`))
 	broker.IngestLog("dispatch status=start request_id=req-merged repo=git@github.com:acme/repo.git")
-	broker.IngestLog("dispatch status=ok request_id=req-merged workspace=/tmp/run branch=moltenhub-ship pr_url=https://github.com/acme/repo/pull/42")
+	broker.IngestLog("dispatch status=completed request_id=req-merged workspace=/tmp/run branch=moltenhub-ship pr_url=https://github.com/acme/repo/pull/42")
 
 	runner := &stubPRMonitorRunner{
 		result: execx.Result{Stdout: `{"state":"MERGED","mergedAt":"2026-04-09T12:00:00Z"}`},
@@ -64,16 +64,13 @@ func TestPRMergeMonitorRemovesCompletedTaskOncePRMerges(t *testing.T) {
 	}()
 
 	waitForHubUITest(t, 300*time.Millisecond, func() bool {
-		return len(broker.Snapshot().Tasks) == 0
+		return len(runner.Commands()) > 0
 	})
 
 	select {
 	case requestID := <-cleanupCalls:
-		if requestID != "req-merged" {
-			t.Fatalf("cleanup requestID = %q, want req-merged", requestID)
-		}
-	case <-time.After(200 * time.Millisecond):
-		t.Fatal("timed out waiting for cleanup callback")
+		t.Fatalf("cleanup requestID = %q, want no automatic cleanup", requestID)
+	case <-time.After(60 * time.Millisecond):
 	}
 
 	cancel()
@@ -86,8 +83,16 @@ func TestPRMergeMonitorRemovesCompletedTaskOncePRMerges(t *testing.T) {
 		t.Fatal("timed out waiting for monitor shutdown")
 	}
 
-	if _, ok := broker.TaskRunConfig("req-merged"); ok {
-		t.Fatal("TaskRunConfig() found = true after merged PR removal, want false")
+	if _, ok := broker.TaskRunConfig("req-merged"); !ok {
+		t.Fatal("TaskRunConfig() found = false after merged PR observation, want true")
+	}
+
+	snap := broker.Snapshot()
+	if got, want := len(snap.Tasks), 1; got != want {
+		t.Fatalf("len(tasks) after merged PR observation = %d, want %d", got, want)
+	}
+	if got, want := snap.Tasks[0].RequestID, "req-merged"; got != want {
+		t.Fatalf("task request_id = %q, want %q", got, want)
 	}
 
 	commands := runner.Commands()
@@ -97,7 +102,7 @@ func TestPRMergeMonitorRemovesCompletedTaskOncePRMerges(t *testing.T) {
 	if got, want := commands[0].Name, "gh"; got != want {
 		t.Fatalf("command name = %q, want %q", got, want)
 	}
-	if got, want := commands[0].Args, []string{"pr", "view", "https://github.com/acme/repo/pull/42", "--json", "state,mergedAt"}; !slices.Equal(got, want) {
+	if got, want := commands[0].Args, []string{"pr", "view", "42", "--json", "state,mergedAt"}; !slices.Equal(got, want) {
 		t.Fatalf("command args = %v, want %v", got, want)
 	}
 }
@@ -107,7 +112,7 @@ func TestPRMergeMonitorKeepsTaskVisibleUntilPRIsMerged(t *testing.T) {
 
 	broker := NewBroker()
 	broker.IngestLog("dispatch status=start request_id=req-open repo=git@github.com:acme/repo.git")
-	broker.IngestLog("dispatch status=ok request_id=req-open workspace=/tmp/run branch=moltenhub-ship pr_url=https://github.com/acme/repo/pull/77")
+	broker.IngestLog("dispatch status=completed request_id=req-open workspace=/tmp/run branch=moltenhub-ship pr_url=https://github.com/acme/repo/pull/77")
 
 	runner := &stubPRMonitorRunner{
 		result: execx.Result{Stdout: `{"state":"OPEN","mergedAt":""}`},
@@ -155,7 +160,7 @@ func TestPRMergeMonitorLogsCheckFailuresAndKeepsTask(t *testing.T) {
 
 	broker := NewBroker()
 	broker.IngestLog("dispatch status=start request_id=req-fail repo=git@github.com:acme/repo.git")
-	broker.IngestLog("dispatch status=ok request_id=req-fail workspace=/tmp/run branch=moltenhub-ship pr_url=https://github.com/acme/repo/pull/99")
+	broker.IngestLog("dispatch status=completed request_id=req-fail workspace=/tmp/run branch=moltenhub-ship pr_url=https://github.com/acme/repo/pull/99")
 
 	runner := &stubPRMonitorRunner{err: errors.New("gh failed")}
 	logs := make(chan string, 8)

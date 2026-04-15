@@ -141,3 +141,92 @@ func TestExtractAgentProfileFromJSONIgnoresHeaderOnlyProfileMarkdown(t *testing.
 		t.Fatalf("ProfileText = %q, want empty for header-only markdown", got)
 	}
 }
+
+func TestExtractAgentProfileFromJSONDerivesProfileHeaderFromMarkdownWhenMetadataCompact(t *testing.T) {
+	t.Parallel()
+
+	profile := extractAgentProfileFromJSON([]byte(`{
+		"ok": true,
+		"result": {
+			"agent": {
+				"handle": "compact-agent",
+				"metadata": {
+					"profile_markdown": "# 🌊 Compact Agent\n\nOwns compact profile payloads."
+				}
+			}
+		}
+	}`))
+
+	if got, want := profile.Handle, "compact-agent"; got != want {
+		t.Fatalf("Handle = %q, want %q", got, want)
+	}
+	if got, want := profile.Profile.DisplayName, "Compact Agent"; got != want {
+		t.Fatalf("DisplayName = %q, want %q", got, want)
+	}
+	if got, want := profile.Profile.Emoji, "🌊"; got != want {
+		t.Fatalf("Emoji = %q, want %q", got, want)
+	}
+	if got, want := profile.Profile.ProfileText, "Owns compact profile payloads."; got != want {
+		t.Fatalf("ProfileText = %q, want %q", got, want)
+	}
+}
+
+func TestExtractAgentProfileFromJSONMergesExplicitProfileWithMetadata(t *testing.T) {
+	t.Parallel()
+
+	profile := extractAgentProfileFromJSON([]byte(`{
+		"ok": true,
+		"result": {
+			"agent": {
+				"handle": "codex-beast",
+				"profile": {
+					"display_name": "Jef's Codex"
+				},
+				"metadata": {
+					"profile_markdown": "# 🦍 Jef's Codex\n\nRunning code updates quickly."
+				}
+			}
+		}
+	}`))
+
+	if got, want := profile.Handle, "codex-beast"; got != want {
+		t.Fatalf("Handle = %q, want %q", got, want)
+	}
+	if got, want := profile.Profile.DisplayName, "Jef's Codex"; got != want {
+		t.Fatalf("DisplayName = %q, want %q", got, want)
+	}
+	if got, want := profile.Profile.Emoji, "🦍"; got != want {
+		t.Fatalf("Emoji = %q, want %q", got, want)
+	}
+	if got, want := profile.Profile.ProfileText, "Running code updates quickly."; got != want {
+		t.Fatalf("ProfileText = %q, want %q", got, want)
+	}
+}
+
+func TestExtractAgentProfileFromJSONMergesDirectProfileAndMetadata(t *testing.T) {
+	t.Parallel()
+
+	profile := extractAgentProfileFromJSON([]byte(`{
+		"handle": "codex-beast",
+		"profile": {
+			"display_name": "Jef's Codex",
+			"emoji": "🦍"
+		},
+		"metadata": {
+			"profile": "Running code updates quickly."
+		}
+	}`))
+
+	if got, want := profile.Handle, "codex-beast"; got != want {
+		t.Fatalf("Handle = %q, want %q", got, want)
+	}
+	if got, want := profile.Profile.DisplayName, "Jef's Codex"; got != want {
+		t.Fatalf("DisplayName = %q, want %q", got, want)
+	}
+	if got, want := profile.Profile.Emoji, "🦍"; got != want {
+		t.Fatalf("Emoji = %q, want %q", got, want)
+	}
+	if got, want := profile.Profile.ProfileText, "Running code updates quickly."; got != want {
+		t.Fatalf("ProfileText = %q, want %q", got, want)
+	}
+}

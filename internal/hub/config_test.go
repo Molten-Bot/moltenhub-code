@@ -42,6 +42,9 @@ func TestLoadInitDefaults(t *testing.T) {
 	if cfg.Skill.ResultType != "skill_result" {
 		t.Fatalf("Skill.ResultType = %q", cfg.Skill.ResultType)
 	}
+	if cfg.LogLevel != DefaultLogLevel {
+		t.Fatalf("LogLevel = %q, want %q", cfg.LogLevel, DefaultLogLevel)
+	}
 	if cfg.Dispatcher.MaxParallel < 1 {
 		t.Fatalf("Dispatcher.MaxParallel = %d, want >= 1", cfg.Dispatcher.MaxParallel)
 	}
@@ -189,6 +192,27 @@ func TestValidateRejectsInvalidDispatcherThresholds(t *testing.T) {
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("expected validation error")
+	}
+}
+
+func TestLoadInitRejectsUnknownLogLevel(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "init.json")
+	data := `{
+  "base_url": "https://na.hub.molten.bot/v1",
+  "agent_token": "agent_live_token",
+  "log_level": "chatty"
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("write init: %v", err)
+	}
+
+	if _, err := LoadInit(path); err == nil {
+		t.Fatal("LoadInit() error = nil, want invalid log_level error")
+	} else if !strings.Contains(err.Error(), "log_level must be one of error, warn, info, debug") {
+		t.Fatalf("LoadInit() error = %v", err)
 	}
 }
 

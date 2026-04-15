@@ -50,6 +50,8 @@ type resourceSample struct {
 	DiskIOMBs     float64
 }
 
+const dispatcherResumeThresholdPercent = 65.0
+
 type resourceSampler interface {
 	Sample() (resourceSample, error)
 }
@@ -155,6 +157,10 @@ func (c *AdaptiveDispatchController) Acquire(ctx context.Context, requestID stri
 			running,
 			allowed,
 		)
+		// Re-sample immediately after queueing so work does not sit idle until the
+		// next background tick when pressure has already dropped back below the
+		// resume threshold.
+		c.sampleAndUpdate()
 	}
 
 	if granted {
@@ -318,7 +324,7 @@ func (c *AdaptiveDispatchController) sampleAndUpdate() {
 	avg := averageResourceSample(c.window)
 
 	prevAllowed := c.allowed
-	nextAllowed := computeAllowedParallel(c.cfg, avg)
+	nextAllowed := computeAllowedParallel(c.cfg, avg, prevAllowed)
 	if nextAllowed < c.cfg.MinParallel {
 		nextAllowed = c.cfg.MinParallel
 	}
@@ -385,34 +391,53 @@ func averageResourceSample(values []resourceSample) resourceSample {
 	return out
 }
 
-func computeAllowedParallel(cfg DispatcherConfig, avg resourceSample) int {
+func computeAllowedParallel(cfg DispatcherConfig, avg resourceSample, prevAllowed int) int {
 	maxParallel := cfg.MaxParallel
 	if maxParallel < 1 {
 		maxParallel = 1
 	}
+	minParallel := cfg.MinParallel
+	if minParallel < 1 {
+		minParallel = 1
+	}
+	if prevAllowed < minParallel {
+		prevAllowed = minParallel
+	}
+	if prevAllowed > maxParallel {
+		prevAllowed = maxParallel
+	}
 
-	pressure := 0.0
-	if avg.CPUPercent > 0 && cfg.CPUHighWatermark > 0 {
-		pressure = maxFloat(pressure, avg.CPUPercent/cfg.CPUHighWatermark)
+	// Disk IO remains visible in the sample window logs, but it does not
+	// participate in concurrency admission because containerized environments
+	// frequently cannot report it reliably enough to gate work.
+	resourceStates := []struct {
+		value float64
+		high  float64
+	}{
+		{value: avg.CPUPercent, high: cfg.CPUHighWatermark},
+		{value: avg.MemoryPercent, high: cfg.MemoryHighWatermark},
 	}
-	if avg.MemoryPercent > 0 && cfg.MemoryHighWatermark > 0 {
-		pressure = maxFloat(pressure, avg.MemoryPercent/cfg.MemoryHighWatermark)
+	availableMetrics := 0
+	allBelowResumeThreshold := true
+	for _, state := range resourceStates {
+		if state.value <= 0 {
+			continue
+		}
+		availableMetrics++
+		if state.high > 0 && state.value > state.high {
+			return minParallel
+		}
+		if state.value >= dispatcherResumeThresholdPercent {
+			allBelowResumeThreshold = false
+		}
 	}
-	if avg.DiskIOMBs > 0 && cfg.DiskIOHighWatermarkMBs > 0 {
-		pressure = maxFloat(pressure, avg.DiskIOMBs/cfg.DiskIOHighWatermarkMBs)
-	}
-
-	if pressure <= 1 || pressure == 0 {
+	if availableMetrics == 0 {
 		return maxParallel
 	}
-	allowed := int(float64(maxParallel) / pressure)
-	if allowed < cfg.MinParallel {
-		return cfg.MinParallel
-	}
-	if allowed > maxParallel {
+	if allBelowResumeThreshold {
 		return maxParallel
 	}
-	return allowed
+	return prevAllowed
 }
 
 func maxFloat(a, b float64) float64 {

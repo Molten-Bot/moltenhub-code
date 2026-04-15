@@ -118,6 +118,14 @@ func (c *localTaskController) ForceRun(requestID string) error {
 	return handle.ForceRun()
 }
 
+func (c *localTaskController) Controls(requestID string) hubui.TaskControls {
+	handle, err := c.handleFor(requestID)
+	if err != nil {
+		return hubui.TaskControls{}
+	}
+	return handle.Controls()
+}
+
 func (h *localTaskHandle) Pause() error {
 	if h == nil {
 		return hubui.ErrTaskNotFound
@@ -209,6 +217,36 @@ func (h *localTaskHandle) ForceRun() error {
 		acquireCancel()
 	}
 	return nil
+}
+
+func (h *localTaskHandle) Controls() hubui.TaskControls {
+	if h == nil {
+		return hubui.TaskControls{}
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.stopped {
+		return hubui.TaskControls{}
+	}
+
+	if h.running {
+		return hubui.TaskControls{Stop: true}
+	}
+
+	if h.paused {
+		return hubui.TaskControls{
+			Run:  true,
+			Stop: true,
+		}
+	}
+
+	return hubui.TaskControls{
+		Pause:    true,
+		ForceRun: true,
+		Stop:     true,
+	}
 }
 
 func (h *localTaskHandle) Stop() bool {
