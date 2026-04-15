@@ -22,6 +22,8 @@ const piAuthProbePrompt = "Reply with OK."
 const openRouterProviderSetupDocURL = "https://raw.githubusercontent.com/Dicklesworthstone/pi_agent_rust/refs/heads/main/docs/provider-openrouter-setup.json"
 const piOfflineProviderEnvVar = "PI_OFFLINE"
 const piOfflineProviderDefaultValue = "1"
+const piProviderConfigureMessage = "Select a PI provider, and supply the token."
+const piExistingLocalAuthReadyMessage = "PI is ready using existing local auth."
 
 type piProviderOption struct {
 	EnvVar      string
@@ -117,7 +119,7 @@ func newPiAuthGateWithRuntime(
 		runtimeConfigPath: strings.TrimSpace(runtimeConfigPath),
 		initCfg:           initCfg,
 	}
-	g.authState.setNeedsConfigure("Select a PI provider, and supply the token.")
+	g.authState.setNeedsConfigure(piProviderConfigureMessage)
 	g.authState.configureOptions = piAgentAuthOptions()
 	g.mu.Lock()
 	g.refreshLocked()
@@ -203,14 +205,33 @@ func (g *piAuthGate) refreshAndSnapshot(ctx context.Context) (hubui.AgentAuthSta
 
 	g.mu.Lock()
 	g.refreshLocked()
-	if g.authState.ready || g.authState.state == "error" || strings.TrimSpace(g.initCfg.PiProviderAuth) == "" {
+	if g.authState.ready || g.authState.state == "error" {
 		snap := g.snapshotLocked()
 		g.mu.Unlock()
 		return snap, nil
 	}
 	canonical := strings.TrimSpace(g.initCfg.PiProviderAuth)
-	envVar := canonicalPiProviderEnvVar(canonical)
 	g.mu.Unlock()
+
+	if canonical == "" {
+		if err := g.probe(ctx); err != nil {
+			g.mu.Lock()
+			g.authState.setNeedsConfigure(piExistingLocalAuthValidationStatusMessage())
+			snap := g.snapshotLocked()
+			g.mu.Unlock()
+			return snap, nil
+		}
+
+		g.mu.Lock()
+		g.authState.ready = true
+		g.authState.state = "ready"
+		g.authState.message = piExistingLocalAuthReadyMessage
+		snap := g.snapshotLocked()
+		g.mu.Unlock()
+		return snap, nil
+	}
+
+	envVar := canonicalPiProviderEnvVar(canonical)
 
 	if shouldSkipPiProviderProbe(envVar) {
 		g.mu.Lock()
@@ -238,7 +259,7 @@ func (g *piAuthGate) refreshAndSnapshot(ctx context.Context) (hubui.AgentAuthSta
 }
 
 func (g *piAuthGate) refreshLocked() {
-	g.authState.setNeedsConfigure("Select a PI provider, and supply the token.")
+	g.authState.setNeedsConfigure(piProviderConfigureMessage)
 	g.authState.configureOptions = piAgentAuthOptions()
 
 	auth, source, err := firstConfiguredPiProviderAuth(g.runtimeConfigPath, g.initCfg)
@@ -389,6 +410,10 @@ func piProviderValidationStatusMessage(envVar string) string {
 		return "PI provider validation failed. Update the provider configuration and try again."
 	}
 	return fmt.Sprintf("PI provider validation failed for %s. Update the provider configuration and try again.", envVar)
+}
+
+func piExistingLocalAuthValidationStatusMessage() string {
+	return "PI did not validate with existing local auth. Select a PI provider, and supply the token."
 }
 
 func validatePiProviderAuthValue(envVar, value string) error {

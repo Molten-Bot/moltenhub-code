@@ -14,9 +14,14 @@ import (
 	"github.com/jef/moltenhub-code/internal/hub"
 )
 
-func TestNewPiAuthGateRequiresConfigureWhenMissingProviderAuth(t *testing.T) {
+func TestNewPiAuthGateRequiresConfigureWhenMissingProviderAuthAndExistingPiProbeFails(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
-	g := newPiAuthGate(filepath.Join(t.TempDir(), ".moltenhub", "config.json"), hub.InitConfig{})
+	runner := &authGateRunnerStub{
+		run: func(context.Context, execx.Command) (execx.Result, error) {
+			return execx.Result{}, errors.New("pi login failed")
+		},
+	}
+	g := newPiAuthGateWithRuntime(runner, "pi", filepath.Join(t.TempDir(), ".moltenhub", "config.json"), hub.InitConfig{}, nil)
 
 	status, err := g.Status(context.Background())
 	if err != nil {
@@ -31,11 +36,14 @@ func TestNewPiAuthGateRequiresConfigureWhenMissingProviderAuth(t *testing.T) {
 	if len(status.ConfigureOptions) == 0 {
 		t.Fatalf("ConfigureOptions = %v, want non-empty", status.ConfigureOptions)
 	}
-	if got, want := status.Message, "Select a PI provider, and supply the token."; got != want {
+	if got, want := status.Message, piExistingLocalAuthValidationStatusMessage(); got != want {
 		t.Fatalf("Message = %q, want %q", got, want)
 	}
 	if got, want := status.ConfigurePlaceholder, "Paste provider token..."; got != want {
 		t.Fatalf("ConfigurePlaceholder = %q, want %q", got, want)
+	}
+	if got := len(runner.calls); got != 1 {
+		t.Fatalf("probe calls = %d, want 1", got)
 	}
 }
 
@@ -50,6 +58,26 @@ func TestNewPiAuthGateReadyWhenEnvironmentAlreadyConfigured(t *testing.T) {
 	}
 	if !status.Ready || status.State != "ready" {
 		t.Fatalf("status = %+v", status)
+	}
+	if got := len(runner.calls); got != 1 {
+		t.Fatalf("probe calls = %d, want 1", got)
+	}
+}
+
+func TestNewPiAuthGateReadyWhenExistingPiAuthAlreadyWorks(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+	runner := &authGateRunnerStub{}
+	g := newPiAuthGateWithRuntime(runner, "pi", filepath.Join(t.TempDir(), ".moltenhub", "config.json"), hub.InitConfig{}, nil)
+
+	status, err := g.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if !status.Ready || status.State != "ready" {
+		t.Fatalf("status = %+v", status)
+	}
+	if got, want := status.Message, piExistingLocalAuthReadyMessage; got != want {
+		t.Fatalf("Message = %q, want %q", got, want)
 	}
 	if got := len(runner.calls); got != 1 {
 		t.Fatalf("probe calls = %d, want 1", got)
