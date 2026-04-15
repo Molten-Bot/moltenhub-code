@@ -50,7 +50,8 @@ The harness owns steps 5 and 6. Agent prompts are limited to repository changes,
 
 - Starts from `main` → creates a new branch
 - Already on a non-`main` branch → reuses that branch
-- Branch names and PR titles are always prefixed with `moltenhub-`
+- Branch names are always prefixed with `moltenhub-`
+- PR titles must not be prefixed with `moltenhub-`
 
 ---
 

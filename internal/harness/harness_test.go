@@ -135,7 +135,7 @@ func sampleConfig() config.Config {
 		TargetSubdir:  "services/api",
 		Prompt:        "Build API",
 		CommitMessage: "feat: automate api",
-		PRTitle:       "moltenhub-feat: automate api",
+		PRTitle:       "feat: automate api",
 		PRBody:        "Automated by MoltenHub Code\n\nOriginal task prompt:\n```text\nBuild API\n```\n\nIf you would like to connect agents together checkout [Molten Bot Hub](https://molten.bot/hub).",
 		Labels:        []string{"automation", ""},
 		Reviewers:     []string{"octocat", ""},

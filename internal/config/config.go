@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	prTitlePrefix        = "moltenhub-"
 	DefaultRepositoryURL = "git@github.com:Molten-Bot/moltenhub-code.git"
 	DefaultResponseMode  = "caveman-full"
 	DisabledResponseMode = "off"
@@ -207,7 +206,7 @@ func (c *Config) ApplyDefaults() {
 	if strings.TrimSpace(c.PRTitle) == "" {
 		c.PRTitle = defaultPRTitle(c.Prompt)
 	} else {
-		c.PRTitle = prefixedPRTitle(c.PRTitle)
+		c.PRTitle = normalizePRTitle(c.PRTitle)
 	}
 	if strings.TrimSpace(c.PRBody) == "" {
 		c.PRBody = defaultPRBody(c.Prompt)
@@ -489,7 +488,7 @@ func defaultPRTitle(prompt string) string {
 	if summary == "" {
 		summary = "Automated update"
 	}
-	return prefixedPRTitle(summary)
+	return normalizePRTitle(summary)
 }
 
 func defaultPRBody(prompt string) string {
@@ -501,15 +500,18 @@ var wsRE = regexp.MustCompile(`\s+`)
 var generatedPRTitleSuffixRE = regexp.MustCompile(`-[0-9]{8}-[0-9]{6}(?:-[0-9a-fA-F]{1,8})?$`)
 var generatedPRPromptBlockRE = regexp.MustCompile(`(?s)(?:^|\n{2,})` + prBodyPromptHeading + "\n```text\n.*?\n```")
 
-func prefixedPRTitle(title string) string {
+func normalizePRTitle(title string) string {
 	title = trimGeneratedPRTitleSuffix(strings.TrimSpace(title))
 	if title == "" {
-		return prTitlePrefix + "Automated update"
+		return "Automated update"
 	}
-	if strings.HasPrefix(strings.ToLower(title), prTitlePrefix) {
-		return title
+	if strings.HasPrefix(strings.ToLower(title), "moltenhub-") {
+		title = strings.TrimSpace(title[len("moltenhub-"):])
 	}
-	return prTitlePrefix + title
+	if title == "" {
+		return "Automated update"
+	}
+	return title
 }
 
 func trimGeneratedPRTitleSuffix(title string) string {

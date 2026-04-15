@@ -546,7 +546,7 @@ func TestValidateRejectsMixedSSHURLStyles(t *testing.T) {
 	}
 }
 
-func TestApplyDefaultsPrefixesDefaultPRTitle(t *testing.T) {
+func TestApplyDefaultsKeepsDefaultPRTitleUnprefixed(t *testing.T) {
 	t.Parallel()
 
 	cfg := Config{
@@ -555,12 +555,12 @@ func TestApplyDefaultsPrefixesDefaultPRTitle(t *testing.T) {
 	}
 	cfg.ApplyDefaults()
 
-	if got, want := cfg.PRTitle, "moltenhub-fix tests"; got != want {
+	if got, want := cfg.PRTitle, "fix tests"; got != want {
 		t.Fatalf("PRTitle = %q, want %q", got, want)
 	}
 }
 
-func TestApplyDefaultsPrefixesCustomPRTitle(t *testing.T) {
+func TestApplyDefaultsKeepsCustomPRTitleUnprefixed(t *testing.T) {
 	t.Parallel()
 
 	cfg := Config{
@@ -570,12 +570,12 @@ func TestApplyDefaultsPrefixesCustomPRTitle(t *testing.T) {
 	}
 	cfg.ApplyDefaults()
 
-	if got, want := cfg.PRTitle, "moltenhub-release cleanup"; got != want {
+	if got, want := cfg.PRTitle, "release cleanup"; got != want {
 		t.Fatalf("PRTitle = %q, want %q", got, want)
 	}
 }
 
-func TestApplyDefaultsKeepsExistingPRTitlePrefix(t *testing.T) {
+func TestApplyDefaultsRemovesExistingPRTitlePrefix(t *testing.T) {
 	t.Parallel()
 
 	cfg := Config{
@@ -585,7 +585,7 @@ func TestApplyDefaultsKeepsExistingPRTitlePrefix(t *testing.T) {
 	}
 	cfg.ApplyDefaults()
 
-	if got, want := cfg.PRTitle, "moltenhub-release cleanup"; got != want {
+	if got, want := cfg.PRTitle, "release cleanup"; got != want {
 		t.Fatalf("PRTitle = %q, want %q", got, want)
 	}
 }
@@ -600,7 +600,7 @@ func TestApplyDefaultsTrimsGeneratedSuffixFromCustomPRTitle(t *testing.T) {
 	}
 	cfg.ApplyDefaults()
 
-	if got, want := cfg.PRTitle, "moltenhub-queue-dedup-needs-to-be-repo-base-branc"; got != want {
+	if got, want := cfg.PRTitle, "queue-dedup-needs-to-be-repo-base-branc"; got != want {
 		t.Fatalf("PRTitle = %q, want %q", got, want)
 	}
 }
@@ -615,7 +615,7 @@ func TestApplyDefaultsTrimsGeneratedSuffixWithShortHashFromCustomPRTitle(t *test
 	}
 	cfg.ApplyDefaults()
 
-	if got, want := cfg.PRTitle, "moltenhub-if-repo-history-is-being-used-the-text-b"; got != want {
+	if got, want := cfg.PRTitle, "if-repo-history-is-being-used-the-text-b"; got != want {
 		t.Fatalf("PRTitle = %q, want %q", got, want)
 	}
 }
@@ -629,7 +629,7 @@ func TestApplyDefaultsTrimsGeneratedSuffixFromDefaultPRTitle(t *testing.T) {
 	}
 	cfg.ApplyDefaults()
 
-	if got, want := cfg.PRTitle, "moltenhub-queue-dedup-needs-to-be-repo-base-branc"; got != want {
+	if got, want := cfg.PRTitle, "queue-dedup-needs-to-be-repo-base-branc"; got != want {
 		t.Fatalf("PRTitle = %q, want %q", got, want)
 	}
 }
@@ -644,7 +644,7 @@ func TestApplyDefaultsTrimsGeneratedSuffixWithoutHashFromCustomPRTitle(t *testin
 	}
 	cfg.ApplyDefaults()
 
-	if got, want := cfg.PRTitle, "moltenhub-release-cleanup"; got != want {
+	if got, want := cfg.PRTitle, "release-cleanup"; got != want {
 		t.Fatalf("PRTitle = %q, want %q", got, want)
 	}
 }

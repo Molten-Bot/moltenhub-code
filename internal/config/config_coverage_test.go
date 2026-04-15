@@ -152,7 +152,7 @@ func TestDefaultMetadataAndStringHelpers(t *testing.T) {
 	if got := defaultCommitMessage(""); got != "chore: automated update" {
 		t.Fatalf("defaultCommitMessage(empty) = %q", got)
 	}
-	if got := defaultPRTitle(""); got != "moltenhub-Automated update" {
+	if got := defaultPRTitle(""); got != "Automated update" {
 		t.Fatalf("defaultPRTitle(empty) = %q", got)
 	}
 	if got := defaultPRBody(""); !strings.Contains(got, prBodyFooter) {
@@ -161,8 +161,8 @@ func TestDefaultMetadataAndStringHelpers(t *testing.T) {
 	if got := defaultPRBody("run the full regression suite"); !strings.Contains(got, "Original task prompt:\n```text\nrun the full regression suite\n```") {
 		t.Fatalf("defaultPRBody(prompt) = %q, want original prompt block", got)
 	}
-	if got := prefixedPRTitle("moltenhub-existing-title"); got != "moltenhub-existing-title" {
-		t.Fatalf("prefixedPRTitle(existing prefix) = %q", got)
+	if got := normalizePRTitle("moltenhub-existing-title"); got != "existing-title" {
+		t.Fatalf("normalizePRTitle(existing prefix) = %q", got)
 	}
 	if got := stripLineComments([]byte("{\"url\":\"https://example.com\"}//note\n")); strings.Contains(string(got), "//note") {
 		t.Fatalf("stripLineComments() retained comment: %q", string(got))

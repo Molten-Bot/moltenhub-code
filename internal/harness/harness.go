@@ -1206,7 +1206,7 @@ func workspaceCodexPrompt(prompt, targetSubdir string, repos []repoWorkspace) st
 	}
 	b.WriteString("- If you modify files in any repository, keep each changed repository on its own branch and PR.\n")
 	b.WriteString("- Only create a new branch when starting from 'main'; if you're fixing an existing non-'main' branch, stay on it.\n")
-	b.WriteString("- Start every new branch name and PR title with 'moltenhub-'.\n")
+	b.WriteString("- Start every new branch name with 'moltenhub-'. Do not prefix PR titles with it.\n")
 	return strings.TrimSpace(b.String())
 }
 
