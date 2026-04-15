@@ -3,6 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        AGENT_HARNESS: pi
+        AGENT_COMMAND: pi
     image: moltenhub-code:local
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     environment:

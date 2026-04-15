@@ -238,6 +238,16 @@ func TestPreflightCommandUsesResolvedCommand(t *testing.T) {
 	}
 }
 
+func TestPreflightCommandUsesVersionForPi(t *testing.T) {
+	t.Parallel()
+
+	rt := Runtime{Harness: HarnessPi, Command: "pi-alt"}
+	cmd := rt.PreflightCommand()
+	if cmd.Name != "pi-alt" || !reflect.DeepEqual(cmd.Args, []string{"--version"}) {
+		t.Fatalf("PreflightCommand() = %+v", cmd)
+	}
+}
+
 func TestBuildCommandRejectsUnsupportedRuntimeHarness(t *testing.T) {
 	t.Parallel()
 

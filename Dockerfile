@@ -1,4 +1,4 @@
-ARG AGENT_HARNESS=codex
+ARG AGENT_HARNESS=pi
 ARG AGENT_NPM_PACKAGE
 ARG AGENT_COMMAND
 
@@ -30,6 +30,7 @@ RUN apk add --no-cache \
         ca-certificates \
         git \
         github-cli \
+        jq \
         openssh-client-default \
         ripgrep \
     && agent_harness="$(printf '%s' "${AGENT_HARNESS}" | tr '[:upper:]' '[:lower:]')" \

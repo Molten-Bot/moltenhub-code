@@ -118,6 +118,15 @@ func (r *blockingContextRunner) Run(ctx context.Context, _ execx.Command) (execx
 	return execx.Result{}, ctx.Err()
 }
 
+type deadlineCaptureRunner struct {
+	hadDeadline bool
+}
+
+func (r *deadlineCaptureRunner) Run(ctx context.Context, _ execx.Command) (execx.Result, error) {
+	_, r.hadDeadline = ctx.Deadline()
+	return execx.Result{}, nil
+}
+
 func sampleConfig() config.Config {
 	return config.Config{
 		Version:       "v1",
@@ -2461,6 +2470,23 @@ func TestPreflightCommandsWithRuntimeUsesConfiguredCLI(t *testing.T) {
 	}
 }
 
+func TestPreflightCommandsWithRuntimeUseVersionForPi(t *testing.T) {
+	t.Parallel()
+
+	runtime, err := agentruntime.Resolve(agentruntime.HarnessPi, "pi-custom")
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+
+	cmds := preflightCommandsWithRuntime(runtime)
+	if got, want := len(cmds), 3; got != want {
+		t.Fatalf("len(preflight commands) = %d, want %d", got, want)
+	}
+	if got := cmds[2]; got.Name != "pi-custom" || !reflect.DeepEqual(got.Args, []string{"--version"}) {
+		t.Fatalf("runtime preflight command = %+v", got)
+	}
+}
+
 func TestAgentCommandWithOptionsUsesConfiguredRuntime(t *testing.T) {
 	t.Parallel()
 
@@ -2896,6 +2922,21 @@ func TestRunCodexReturnsTimeoutWhenAgentStageRunsTooLong(t *testing.T) {
 	}
 }
 
+func TestRunCodexDoesNotApplyDefaultAgentStageTimeout(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	runner := &deadlineCaptureRunner{}
+
+	h := New(runner)
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, "stay pink as long as needed", codexRunOptions{}, ""); err != nil {
+		t.Fatalf("runCodex() error = %v, want nil", err)
+	}
+	if runner.hadDeadline {
+		t.Fatal("runCodex() applied an unexpected default stage deadline")
+	}
+}
+
 func TestRunCodexReturnsErrorWhenCodexReportsStructuredTaskFailure(t *testing.T) {
 	t.Parallel()
 
@@ -3127,7 +3168,8 @@ func TestWithCompletionGatePromptIncludesAgentRuntimeGuidance(t *testing.T) {
 	wantSnippets := []string{
 		"When failures occur, send a response back to the calling agent that clearly states failure and includes the error details.",
 		"Do not stop work just because you cannot create a pull request or watch remote CI/CD from inside this agent runtime.",
-		"If no file changes are required, return a clear no-op result with concrete evidence instead of forcing an empty PR.",
+		"For implementation or repository-change requests, do not stop at analysis.",
+		"Only return a no-op when the task is genuinely review/investigation-only",
 	}
 	for _, snippet := range wantSnippets {
 		if !strings.Contains(got, snippet) {

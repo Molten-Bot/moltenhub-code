@@ -1417,10 +1417,8 @@ func TestHandlerIndexIncludesClaudeBrowserCodeFlow(t *testing.T) {
 		`id="agent-auth-browser-command-primary-copy"`,
 		`id="agent-auth-browser-command-secondary"`,
 		`id="agent-auth-browser-command-secondary-copy"`,
-		`id="agent-auth-configure-option"`,
-		`>Provider</label>`,
-		`class="prompt-control text-[0.95rem]" aria-label="Provider"`,
-		`Paste provider token...`,
+		`cat ~/.pi/agent/auth.json`,
+		`Paste ~/.pi/agent/auth.json contents...`,
 		`agent-auth-configure-input-single-line`,
 		`const useClaudeLogoLink = authHarness(state.agentAuth) === "claude" && authURL !== "" && !useClaudeCommandFlow;`,
 		`const code = claudeBrowserCodeValue();`,
@@ -1753,6 +1751,25 @@ func TestHandlerServesStaticLogoAsset(t *testing.T) {
 
 	srv := NewServer("", NewBroker())
 	req := httptest.NewRequest(http.MethodGet, "/static/logos/codex-cli.svg", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+	if ct := resp.Header().Get("Content-Type"); !strings.Contains(ct, "image/svg+xml") {
+		t.Fatalf("content-type = %q", ct)
+	}
+	if body := resp.Body.String(); !strings.Contains(body, "<svg") {
+		t.Fatalf("expected svg payload, got %q", body)
+	}
+}
+
+func TestHandlerServesStaticPiLogoAsset(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodGet, "/static/logos/pi.svg", nil)
 	resp := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(resp, req)
 

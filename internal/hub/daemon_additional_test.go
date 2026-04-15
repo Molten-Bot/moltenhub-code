@@ -410,7 +410,7 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 	if !strings.Contains(prompt, "Do not stop work just because you cannot create a pull request or watch remote CI/CD from inside this agent runtime.") {
 		t.Fatalf("follow-up prompt missing remote operations handoff: %q", prompt)
 	}
-	if !strings.Contains(prompt, "If no file changes are required, return a clear no-op result with concrete evidence instead of forcing an empty PR.") {
+	if !strings.Contains(prompt, "Only return a no-op when the task is genuinely review/investigation-only") {
 		t.Fatalf("follow-up prompt missing no-op completion carve-out: %q", prompt)
 	}
 	if got, want := len(api.offlineCalls), 1; got != want {

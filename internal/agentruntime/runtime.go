@@ -126,6 +126,9 @@ func (r Runtime) RequirementName() string {
 
 // PreflightCommand returns the command used to verify CLI availability.
 func (r Runtime) PreflightCommand() execx.Command {
+	if normalizeHarness(r.Harness) == HarnessPi {
+		return execx.Command{Name: strings.TrimSpace(r.Command), Args: []string{"--version"}}
+	}
 	return execx.Command{Name: strings.TrimSpace(r.Command), Args: []string{"--help"}}
 }
 

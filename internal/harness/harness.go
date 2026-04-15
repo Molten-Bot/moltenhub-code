@@ -53,7 +53,6 @@ const (
 	maxReviewCommentsChars     = 16000
 	maxReviewDiffStatChars     = 12000
 	maxReviewDiffPatchChars    = 30000
-	defaultAgentStageTimeout   = 30 * time.Minute
 )
 
 type logFn func(string, ...any)
@@ -100,21 +99,20 @@ type Harness struct {
 	Logf        logFn
 	TargetDirOK func(string) bool
 	Sleep       func(context.Context, time.Duration) error
-	// AgentStageTimeout bounds each agent execution attempt; zero falls back to
-	// the default and negative disables the timeout.
+	// AgentStageTimeout bounds each agent execution attempt when positive;
+	// zero or negative disables the timeout.
 	AgentStageTimeout time.Duration
 }
 
 // New returns a harness configured with defaults.
 func New(runner execx.Runner) Harness {
 	return Harness{
-		Runner:            runner,
-		Workspace:         workspace.NewManager(),
-		Now:               time.Now,
-		Logf:              func(string, ...any) {},
-		TargetDirOK:       pathIsDir,
-		Sleep:             sleepWithContext,
-		AgentStageTimeout: defaultAgentStageTimeout,
+		Runner:      runner,
+		Workspace:   workspace.NewManager(),
+		Now:         time.Now,
+		Logf:        func(string, ...any) {},
+		TargetDirOK: pathIsDir,
+		Sleep:       sleepWithContext,
 	}
 }
 
@@ -138,9 +136,6 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 	if h.Sleep == nil {
 		h.Sleep = sleepWithContext
-	}
-	if h.AgentStageTimeout == 0 {
-		h.AgentStageTimeout = defaultAgentStageTimeout
 	}
 	runtime, err := agentruntime.Resolve(cfg.AgentHarness, cfg.AgentCommand)
 	if err != nil {
@@ -2077,11 +2072,8 @@ func (h Harness) runCodexWithHeartbeat(
 }
 
 func (h Harness) agentStageTimeout() time.Duration {
-	if h.AgentStageTimeout < 0 {
+	if h.AgentStageTimeout <= 0 {
 		return 0
-	}
-	if h.AgentStageTimeout == 0 {
-		return defaultAgentStageTimeout
 	}
 	return h.AgentStageTimeout
 }
