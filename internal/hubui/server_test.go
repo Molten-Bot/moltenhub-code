@@ -551,6 +551,33 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "if (open && !displayTasks(state.snapshot).length) {") {
 		t.Fatalf("expected index html to block fullscreen when no tasks exist")
 	}
+	if !strings.Contains(markup, "function setTaskPanelView(view, options = {})") {
+		t.Fatalf("expected index html to include current/history task panel mode switching")
+	}
+	if !strings.Contains(markup, "function historyTasks(snapshot)") || !strings.Contains(markup, "function rememberCompletedTaskHistory(snapshot)") {
+		t.Fatalf("expected index html to include running completed-task history aggregation")
+	}
+	if !strings.Contains(markup, `const TASK_HISTORY_KEY = "hubui.taskHistory.v1";`) {
+		t.Fatalf("expected index html to define a dedicated persisted task history storage key")
+	}
+	if !strings.Contains(markup, "function loadTaskHistory()") || !strings.Contains(markup, "function persistTaskHistory()") {
+		t.Fatalf("expected index html to include load/persist helpers for run history")
+	}
+	if !strings.Contains(markup, "taskHistoryByID: loadTaskHistory(),") {
+		t.Fatalf("expected index html to hydrate task history from local storage on startup")
+	}
+	if !strings.Contains(markup, "const TASK_PROGRESS_VISIBLE = false;") {
+		t.Fatalf("expected index html to disable task progress bar rendering by default")
+	}
+	if !strings.Contains(markup, "if (!TASK_PROGRESS_VISIBLE || !task || isCompletedTask(task)) {") {
+		t.Fatalf("expected index html to skip rendering task progress bars when disabled")
+	}
+	if !strings.Contains(markup, "taskViewToggle.addEventListener(\"click\", () => {") {
+		t.Fatalf("expected index html to wire task history toggle interactions")
+	}
+	if !strings.Contains(markup, "taskPanelTitle.textContent = meta.panelLabel;") || !strings.Contains(markup, "taskFullscreenPanelTitle.textContent = meta.panelLabel;") {
+		t.Fatalf("expected index html to synchronize current/history labels between normal and fullscreen task panels")
+	}
 	if !strings.Contains(markup, `<html lang="en" class="dark">`) {
 		t.Fatalf("expected index html to default to dark theme class")
 	}
@@ -574,6 +601,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `id="task-fullscreen-toggle"`) {
 		t.Fatalf("expected index html to include tasks full screen toggle")
+	}
+	if !strings.Contains(markup, `id="task-view-toggle"`) {
+		t.Fatalf("expected index html to include a task history icon toggle in Current Work header")
+	}
+	if !strings.Contains(markup, `class="task-view-toggle-icon"`) {
+		t.Fatalf("expected index html to render the task history toggle with an icon affordance")
 	}
 	if strings.Contains(markup, `>Full Screen</button>`) {
 		t.Fatalf("expected task fullscreen control to render as an icon instead of button text")
@@ -599,8 +632,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="task-panel" class="panel brand-login-card-shell min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]" aria-hidden="false"`) {
 		t.Fatalf("expected index html to render the task queue panel immediately with the shared glass shell")
 	}
+	if !strings.Contains(markup, `id="task-panel-title" class="panel-section-title">Current Work</span>`) {
+		t.Fatalf("expected index html to render a dedicated task panel title node for current/history switching")
+	}
 	if !strings.Contains(markup, `>Current Work</span>`) {
 		t.Fatalf("expected index html to render the task panel under a Current Work heading")
+	}
+	if !strings.Contains(markup, `id="task-fullscreen-panel-title">Current Work</span>`) {
+		t.Fatalf("expected index html to render a dedicated fullscreen task panel title node for current/history switching")
 	}
 	if !strings.Contains(markup, `id="task-fullscreen-list"`) {
 		t.Fatalf("expected index html to include full screen task list")
@@ -1539,6 +1578,18 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".task-terminal-toggle") {
 		t.Fatalf("expected stylesheet to include terminal output toggle styles")
+	}
+	if !strings.Contains(css, ".task-panel-actions {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n}") {
+		t.Fatalf("expected stylesheet to group task header action icons on the right side")
+	}
+	if !strings.Contains(css, ".task-view-toggle {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 32px;\n  height: 32px;") {
+		t.Fatalf("expected stylesheet to size the task history toggle as a compact icon affordance")
+	}
+	if !strings.Contains(css, ".task-view-toggle-icon") {
+		t.Fatalf("expected stylesheet to include task history icon styles")
+	}
+	if !strings.Contains(css, ".task-view-toggle[aria-pressed=\"true\"]") {
+		t.Fatalf("expected stylesheet to include active-state treatment for task history mode")
 	}
 	if !strings.Contains(css, ".task-fullscreen-toggle") {
 		t.Fatalf("expected stylesheet to include task full screen toggle styles")

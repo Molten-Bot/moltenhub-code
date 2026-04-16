@@ -137,19 +137,35 @@
         <section id="task-panel" class="panel brand-login-card-shell min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]" aria-hidden="false">
           <div class="panel-header flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
             <div class="panel-header-copy">
-              <span class="panel-section-title">Current Work</span>
+              <span id="task-panel-title" class="panel-section-title">Current Work</span>
             </div>
-            <button
-              id="task-fullscreen-toggle"
-              class="task-fullscreen-toggle"
-              type="button"
-              aria-expanded="false"
-              aria-label="Open full screen tasks"
-              title="Open full screen tasks">
-              <svg class="task-fullscreen-toggle-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                <path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"></path>
-              </svg>
-            </button>
+            <div class="task-panel-actions">
+              <button
+                id="task-view-toggle"
+                class="task-view-toggle"
+                type="button"
+                aria-pressed="false"
+                aria-label="Show run history"
+                title="Show run history">
+                <svg class="task-view-toggle-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <path d="M8 3.2a4.8 4.8 0 1 1-4.8 4.8"></path>
+                  <path d="M8 1.8v2"></path>
+                  <path d="M4.4 7.6H2.2v-2"></path>
+                  <path d="M8 5.3v3l2 1.2"></path>
+                </svg>
+              </button>
+              <button
+                id="task-fullscreen-toggle"
+                class="task-fullscreen-toggle"
+                type="button"
+                aria-expanded="false"
+                aria-label="Open full screen tasks"
+                title="Open full screen tasks">
+                <svg class="task-fullscreen-toggle-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"></path>
+                </svg>
+              </button>
+            </div>
           </div>
           <div class="scroll task-scroll h-[calc(100%-48px)] overflow-auto">
             <div id="task-list" class="task-list grid gap-2 p-3"></div>
@@ -314,7 +330,7 @@
       <div id="task-fullscreen-body" class="task-fullscreen-body">
         <section class="panel task-fullscreen-panel task-fullscreen-task-panel">
           <div class="panel-header">
-            <span>Task</span>
+            <span id="task-fullscreen-panel-title">Current Work</span>
           </div>
           <div class="scroll task-scroll">
             <div id="task-fullscreen-list" class="task-list"></div>
@@ -597,6 +613,8 @@
     const REVIEWER_HISTORY_KEY = "hubui.reviewerHistory.v1";
     const PROMPT_MODE_KEY = "hubui.localPromptMode";
     const PROMPT_VISIBILITY_KEY = "hubui.localPromptVisible";
+    const TASK_PANEL_VIEW_KEY = "hubui.taskPanelView";
+    const TASK_HISTORY_KEY = "hubui.taskHistory.v1";
     const THEME_KEY = "hubui.theme";
     const HOVER_MODE_KEY = "hubui.hoverMode";
     const THEME_MODES = ["light", "dark", "night"];
@@ -612,7 +630,9 @@
     const TASK_REFLOW_TRANSITION_MS = 560;
     const TASK_REFLOW_TRANSITION_EASING = "cubic-bezier(0.16, 1, 0.3, 1)";
     const TASK_TIMING_REFRESH_INTERVAL_MS = 30_000;
+    const TASK_HISTORY_LIMIT = Number.POSITIVE_INFINITY;
     const MAX_TERMINAL_LINES = 500;
+    const TASK_PROGRESS_VISIBLE = false;
     const HUB_LOGIN_URL = "https://app.molten.bot/signin?target=hub";
     const HUB_DASHBOARD_URL = "https://app.molten.bot/hub";
     const GOOGLE_ANALYTICS_MEASUREMENT_ID = "G-BY33RFG2WB";
@@ -1084,6 +1104,40 @@
       }
     }
 
+    function loadTaskPanelView() {
+      try {
+        const raw = localStorage.getItem(TASK_PANEL_VIEW_KEY);
+        return raw === "history" ? "history" : "current";
+      } catch (_err) {
+        return "current";
+      }
+    }
+
+    function normalizeTaskPanelView(view) {
+      return String(view || "").trim().toLowerCase() === "history" ? "history" : "current";
+    }
+
+    function loadTaskHistory() {
+      try {
+        const raw = localStorage.getItem(TASK_HISTORY_KEY);
+        if (!raw) return new Map();
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return new Map();
+        const byID = new Map();
+        for (const task of parsed) {
+          const copy = cloneTaskForHistory(task);
+          const requestID = String(copy?.request_id || "").trim();
+          if (!requestID || !isCompletedTask(copy)) {
+            continue;
+          }
+          byID.set(requestID, copy);
+        }
+        return byID;
+      } catch (_err) {
+        return new Map();
+      }
+    }
+
     function loadThemeMode() {
       try {
         const raw = localStorage.getItem(THEME_KEY);
@@ -1116,6 +1170,7 @@
       promptMode: loadPromptMode(),
       selectedLibraryTask: "",
       promptVisible: loadPromptVisibility(),
+      taskPanelView: loadTaskPanelView(),
       promptImages: [],
       rerunInFlight: new Set(),
       closeInFlight: new Set(),
@@ -1128,6 +1183,7 @@
       taskOrderPendingSince: 0,
       taskOrderPendingDesired: [],
       taskOrderLastSyncBucket: Math.floor(Date.now() / TASK_ORDER_SYNC_INTERVAL_MS),
+      taskHistoryByID: loadTaskHistory(),
       taskFullscreenOpen: false,
       agentAuthBusy: false,
       agentAuthInteracted: false,
@@ -1166,10 +1222,13 @@
     const resourceMetricsUnit = document.getElementById("resource-metrics-unit");
     const taskList = document.getElementById("task-list");
     const taskPanel = document.getElementById("task-panel");
+    const taskPanelTitle = document.getElementById("task-panel-title");
+    const taskViewToggle = document.getElementById("task-view-toggle");
     const taskFullscreenToggle = document.getElementById("task-fullscreen-toggle");
     const taskFullscreen = document.getElementById("task-fullscreen");
     const taskFullscreenClose = document.getElementById("task-fullscreen-close");
     const taskFullscreenList = document.getElementById("task-fullscreen-list");
+    const taskFullscreenPanelTitle = document.getElementById("task-fullscreen-panel-title");
     const taskFullscreenHeadLabel = document.getElementById("task-fullscreen-head-label");
     const taskFullscreenResult = document.getElementById("task-fullscreen-result");
     const taskFullscreenTerminal = document.getElementById("task-fullscreen-terminal");
@@ -4327,6 +4386,89 @@
       return isCompletedTask(task);
     }
 
+    function persistTaskPanelView() {
+      try {
+        localStorage.setItem(TASK_PANEL_VIEW_KEY, normalizeTaskPanelView(state.taskPanelView));
+      } catch (_err) {
+        // Ignore localStorage failures.
+      }
+    }
+
+    function persistTaskHistory() {
+      try {
+        if (!(state.taskHistoryByID instanceof Map) || state.taskHistoryByID.size === 0) {
+          localStorage.removeItem(TASK_HISTORY_KEY);
+          return;
+        }
+        const entries = Array.from(state.taskHistoryByID.values())
+          .sort((a, b) => {
+            const updatedDiff = historyTaskUpdatedAt(b) - historyTaskUpdatedAt(a);
+            if (updatedDiff !== 0) {
+              return updatedDiff;
+            }
+            return String(b?.request_id || "").localeCompare(String(a?.request_id || ""));
+          })
+          .map((task) => cloneTaskForHistory(task))
+          .filter((task) => task && task.request_id);
+        localStorage.setItem(TASK_HISTORY_KEY, JSON.stringify(entries));
+      } catch (_err) {
+        // Ignore localStorage failures.
+      }
+    }
+
+    function setTaskPanelView(view, options = {}) {
+      const normalized = normalizeTaskPanelView(view);
+      const persist = options.persist !== false;
+      if (state.taskPanelView === normalized) {
+        applyTaskPanelViewMeta();
+        render(state.snapshot);
+        return;
+      }
+      state.taskPanelView = normalized;
+      if (persist) {
+        persistTaskPanelView();
+      }
+      if (state.taskFullscreenOpen && !displayTasks(state.snapshot).length) {
+        state.taskFullscreenOpen = false;
+        document.body.classList.remove("task-fullscreen-open");
+      }
+      applyTaskPanelViewMeta();
+      render(state.snapshot);
+    }
+
+    function taskViewToggleMeta() {
+      const showingHistory = normalizeTaskPanelView(state.taskPanelView) === "history";
+      return showingHistory
+        ? {
+          panelLabel: "History",
+          toggleLabel: "Show current work",
+          togglePressed: true,
+          analyticsMode: "history",
+        }
+        : {
+          panelLabel: "Current Work",
+          toggleLabel: "Show run history",
+          togglePressed: false,
+          analyticsMode: "current",
+        };
+    }
+
+    function applyTaskPanelViewMeta() {
+      const meta = taskViewToggleMeta();
+      if (taskPanelTitle) {
+        taskPanelTitle.textContent = meta.panelLabel;
+      }
+      if (taskFullscreenPanelTitle) {
+        taskFullscreenPanelTitle.textContent = meta.panelLabel;
+      }
+      if (taskViewToggle) {
+        taskViewToggle.setAttribute("aria-label", meta.toggleLabel);
+        taskViewToggle.setAttribute("title", meta.toggleLabel);
+        taskViewToggle.setAttribute("aria-pressed", meta.togglePressed ? "true" : "false");
+        taskViewToggle.dataset.mode = meta.analyticsMode;
+      }
+    }
+
     function openTaskOutput(requestID) {
       requestID = String(requestID || "").trim();
       if (!requestID) return;
@@ -4700,19 +4842,165 @@
       return taskListByOrder(currentOrder, tasks);
     }
 
-    function displayTasks(snapshot) {
-      const taskItems = (snapshot.tasks || []).filter((task) => {
+    function cloneTaskLogsForHistory(logs) {
+      if (!Array.isArray(logs) || !logs.length) {
+        return [];
+      }
+      const start = Math.max(0, logs.length - MAX_TERMINAL_LINES);
+      const out = [];
+      for (let i = start; i < logs.length; i += 1) {
+        const row = logs[i] || {};
+        out.push({
+          time: String(row.time || ""),
+          stream: String(row.stream || ""),
+          text: String(row.text || ""),
+        });
+      }
+      return out;
+    }
+
+    function historyTaskUpdatedAt(task) {
+      const updated = parseTaskTimestamp(task?.updated_at);
+      if (updated > 0) {
+        return updated;
+      }
+      return parseTaskTimestamp(task?.started_at);
+    }
+
+    function cloneTaskForHistory(task) {
+      if (!task || !task.request_id) {
+        return null;
+      }
+      return {
+        ...task,
+        logs: cloneTaskLogsForHistory(task.logs),
+      };
+    }
+
+    function pruneTaskHistory() {
+      if (
+        !(state.taskHistoryByID instanceof Map) ||
+        !Number.isFinite(TASK_HISTORY_LIMIT) ||
+        TASK_HISTORY_LIMIT < 1 ||
+        state.taskHistoryByID.size <= TASK_HISTORY_LIMIT
+      ) {
+        return false;
+      }
+      const all = Array.from(state.taskHistoryByID.values()).sort((a, b) => {
+        const updatedDiff = historyTaskUpdatedAt(b) - historyTaskUpdatedAt(a);
+        if (updatedDiff !== 0) {
+          return updatedDiff;
+        }
+        return String(b?.request_id || "").localeCompare(String(a?.request_id || ""));
+      });
+      state.taskHistoryByID.clear();
+      for (let i = 0; i < all.length && i < TASK_HISTORY_LIMIT; i += 1) {
+        const task = all[i];
+        const requestID = String(task?.request_id || "").trim();
+        if (!requestID) {
+          continue;
+        }
+        state.taskHistoryByID.set(requestID, task);
+      }
+      return true;
+    }
+
+    function rememberCompletedTaskHistory(snapshot) {
+      let changed = false;
+      if (!(state.taskHistoryByID instanceof Map)) {
+        state.taskHistoryByID = new Map();
+        changed = true;
+      }
+      for (const task of snapshot?.tasks || []) {
+        if (!isCompletedTask(task)) {
+          continue;
+        }
+        const requestID = String(task?.request_id || "").trim();
+        if (!requestID) {
+          continue;
+        }
+        const copy = cloneTaskForHistory(task);
+        if (!copy) {
+          continue;
+        }
+        const existing = state.taskHistoryByID.get(requestID);
+        const existingLogsLength = Array.isArray(existing?.logs) ? existing.logs.length : 0;
+        const nextLogsLength = Array.isArray(copy.logs) ? copy.logs.length : 0;
+        if (
+          existing &&
+          String(existing.updated_at || "") === String(copy.updated_at || "") &&
+          String(existing.status || "") === String(copy.status || "") &&
+          String(existing.error || "") === String(copy.error || "") &&
+          String(existing.pr_url || "") === String(copy.pr_url || "") &&
+          existingLogsLength === nextLogsLength
+        ) {
+          continue;
+        }
+        state.taskHistoryByID.set(requestID, copy);
+        changed = true;
+      }
+      const pruned = pruneTaskHistory();
+      if (changed || pruned) {
+        persistTaskHistory();
+      }
+    }
+
+    function currentTasks(snapshot) {
+      const taskItems = (snapshot?.tasks || []).filter((task) => {
         if (!task || !task.request_id) {
           return false;
-        }
-        if (!state.dismissedTaskIDs.has(task.request_id)) {
-          return true;
         }
         return !isCompletedTask(task);
       });
 
       const byActivity = sortTasksByActivity(taskItems);
       return applyTaskOrderCadence(byActivity);
+    }
+
+    function historyTasks(snapshot) {
+      const liveCompletedIDs = new Set();
+      for (const task of snapshot?.tasks || []) {
+        if (!isCompletedTask(task)) {
+          continue;
+        }
+        const requestID = String(task?.request_id || "").trim();
+        if (!requestID) {
+          continue;
+        }
+        liveCompletedIDs.add(requestID);
+      }
+
+      const out = [];
+      for (const task of state.taskHistoryByID.values()) {
+        const requestID = String(task?.request_id || "").trim();
+        if (!requestID) {
+          continue;
+        }
+        const historyOnly = state.dismissedTaskIDs.has(requestID) || !liveCompletedIDs.has(requestID);
+        out.push({
+          ...task,
+          history_only: historyOnly,
+          can_rerun: historyOnly ? false : Boolean(task?.can_rerun),
+        });
+      }
+
+      out.sort((a, b) => {
+        const updatedDiff = historyTaskUpdatedAt(b) - historyTaskUpdatedAt(a);
+        if (updatedDiff !== 0) return updatedDiff;
+
+        const startedDiff = parseTaskTimestamp(b?.started_at) - parseTaskTimestamp(a?.started_at);
+        if (startedDiff !== 0) return startedDiff;
+
+        return String(b?.request_id || "").localeCompare(String(a?.request_id || ""));
+      });
+      return out;
+    }
+
+    function displayTasks(snapshot) {
+      if (normalizeTaskPanelView(state.taskPanelView) === "history") {
+        return historyTasks(snapshot);
+      }
+      return currentTasks(snapshot);
     }
 
     function fullscreenTasks(snapshot) {
@@ -4756,7 +5044,7 @@
     }
 
     function renderTaskProgress(task) {
-      if (!task || isCompletedTask(task)) {
+      if (!TASK_PROGRESS_VISIBLE || !task || isCompletedTask(task)) {
         return null;
       }
 
@@ -4989,6 +5277,7 @@
             prURL: String(task?.pr_url || "").trim(),
             canRerun: canRerunTask(task),
             canCopyClone: canCopyTaskCloneCommand(task),
+            historyOnly: Boolean(task?.history_only),
             controls: {
               pause: Boolean(task?.controls?.pause),
               run: Boolean(task?.controls?.run),
@@ -5005,6 +5294,9 @@
     function renderTaskCollection(tasks, listNode, countNode, options = {}) {
       const showOutputAction = options.showOutputAction !== false;
       const allowCollapse = options.allowCollapse !== false;
+      const emptyEyebrow = String(options.emptyEyebrow || "Queue Ready");
+      const emptyTitle = String(options.emptyTitle || "Lets get to work!");
+      const emptyCopy = String(options.emptyCopy || "New runs will appear here with their progress, replay controls, local clone actions, and PR links.");
       if (countNode) {
         countNode.textContent = String(tasks.length);
       }
@@ -5040,15 +5332,15 @@
 
         const eyebrow = document.createElement("span");
         eyebrow.className = "task-empty-eyebrow brand-label-uppercase";
-        eyebrow.textContent = "Queue Ready";
+        eyebrow.textContent = emptyEyebrow;
 
         const title = document.createElement("h3");
         title.className = "task-empty-title";
-        title.textContent = "Lets get to work!";
+        title.textContent = emptyTitle;
 
         const copy = document.createElement("p");
         copy.className = "task-empty-copy";
-        copy.textContent = "New runs will appear here with their progress, replay controls, local clone actions, and PR links.";
+        copy.textContent = emptyCopy;
 
         empty.append(badge, eyebrow, title, copy);
         listNode.appendChild(empty);
@@ -5188,7 +5480,7 @@
           topActions.appendChild(rerun);
         }
 
-        if (isCompletedTask(task)) {
+        if (isCompletedTask(task) && !task.history_only) {
           const closePending = isTaskClosePending(requestID);
           const close = document.createElement("button");
           close.type = "button";
@@ -5315,10 +5607,12 @@
     function renderTasks(snapshot) {
       const tasks = displayTasks(snapshot);
       const hasTasks = tasks.length > 0;
+      const showingHistory = normalizeTaskPanelView(state.taskPanelView) === "history";
       if (!hasTasks && state.taskFullscreenOpen) {
         state.taskFullscreenOpen = false;
         document.body.classList.remove("task-fullscreen-open");
       }
+      applyTaskPanelViewMeta();
       if (rightCol) {
         rightCol.classList.toggle("task-list-hidden", false);
       }
@@ -5340,14 +5634,26 @@
         taskFullscreen.classList.toggle("hidden", !state.taskFullscreenOpen);
         taskFullscreen.setAttribute("aria-hidden", state.taskFullscreenOpen ? "false" : "true");
       }
-      renderTaskCollection(tasks, taskList, null);
+      renderTaskCollection(tasks, taskList, null, {
+        emptyEyebrow: showingHistory ? "Run History" : "Queue Ready",
+        emptyTitle: showingHistory ? "No completed tasks yet." : "Lets get to work!",
+        emptyCopy: showingHistory
+          ? "Completed runs stay here so you can reopen links, clone locally, and review outcomes."
+          : "New runs will appear here with their progress, replay controls, local clone actions, and PR links.",
+      });
     }
 
     function renderFullscreenTasks(snapshot) {
       const tasks = fullscreenTasks(snapshot);
+      const showingHistory = normalizeTaskPanelView(state.taskPanelView) === "history";
       renderTaskCollection(tasks, taskFullscreenList, null, {
         showOutputAction: false,
         allowCollapse: false,
+        emptyEyebrow: showingHistory ? "Run History" : "Queue Ready",
+        emptyTitle: showingHistory ? "No completed tasks yet." : "Lets get to work!",
+        emptyCopy: showingHistory
+          ? "Completed runs stay here so you can review outcomes and reopen artifacts."
+          : "New runs will appear here with their progress, replay controls, local clone actions, and PR links.",
       });
     }
 
@@ -5452,6 +5758,7 @@
       const previousSnapshot = state.snapshot;
       state.snapshot = snapshot;
       syncTaskCompletionSparkles(previousSnapshot, snapshot);
+      rememberCompletedTaskHistory(snapshot);
       const observedRepos = [];
       const failedRepoAccessRepos = [];
       for (const task of snapshot.tasks || []) {
@@ -5922,6 +6229,10 @@
       return false;
     };
     promptVisibilityToggle.addEventListener("click", togglePromptVisibility);
+    taskViewToggle.addEventListener("click", () => {
+      const nextView = normalizeTaskPanelView(state.taskPanelView) === "history" ? "current" : "history";
+      setTaskPanelView(nextView);
+    });
     taskFullscreenToggle.addEventListener("click", () => {
       setTaskFullscreen(!state.taskFullscreenOpen);
     });
@@ -6000,6 +6311,7 @@
     initSnowfallBackground();
     setPromptMode(state.promptMode);
     applyPromptVisibility();
+    applyTaskPanelViewMeta();
     renderConfiguredAgent();
     applyAgentAuthGate(state.agentAuth);
     applyHubSetupState(state.hubSetup);

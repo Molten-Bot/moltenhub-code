@@ -695,6 +695,12 @@ textarea {
   min-width: 0;
 }
 
+.task-panel-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .task-fullscreen-head-label {
   min-width: 0;
   flex: 1 1 auto;
@@ -1229,6 +1235,7 @@ body .right-col.prompt-collapsed.task-list-hidden {
 .task-stop:focus-visible,
 .task-output-toggle:focus-visible,
 .task-terminal-toggle:focus-visible,
+.task-view-toggle:focus-visible,
 .task-fullscreen-toggle:focus-visible {
   outline: 2px solid rgba(10, 132, 255, 0.24);
   outline-offset: 2px;
@@ -1433,6 +1440,23 @@ select.prompt-control {
   transition: border-color 0.14s ease, color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease, opacity 0.14s ease;
 }
 
+.task-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-inline-size: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  color: var(--text-soft);
+  background: transparent;
+  box-shadow: none;
+  transition: border-color 0.14s ease, color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease, background-color 0.14s ease;
+}
+
 .task-fullscreen-toggle {
   display: inline-flex;
   width: 32px;
@@ -1445,6 +1469,16 @@ select.prompt-control {
   color: var(--text-soft);
   background: transparent;
   box-shadow: none;
+}
+
+.task-view-toggle-icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .task-fullscreen-toggle-icon {
@@ -1467,6 +1501,20 @@ select.prompt-control {
   color: var(--accent);
   transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
+}
+
+.task-view-toggle:hover,
+.task-view-toggle:focus-visible {
+  border-color: transparent;
+  color: var(--running);
+  background: rgba(10, 132, 255, 0.08);
+  transform: none;
+  box-shadow: none;
+}
+
+.task-view-toggle[aria-pressed="true"] {
+  color: var(--running);
+  background: rgba(10, 132, 255, 0.13);
 }
 
 .task-fullscreen-toggle:hover,
@@ -3448,6 +3496,7 @@ html[data-hover-mode="on"] .prompt-action-button:not(:disabled),
 html[data-hover-mode="on"] .task-rerun:not(:disabled),
 html[data-hover-mode="on"] .task-output-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-terminal-toggle:not(:disabled),
+html[data-hover-mode="on"] .task-view-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-fullscreen-toggle:not(:disabled),
 html[data-hover-mode="on"] .prompt-visibility-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-close:not(:disabled),
@@ -3466,6 +3515,7 @@ html[data-hover-mode="on"] .prompt-action-button:not(:disabled),
 html[data-hover-mode="on"] .task-rerun:not(:disabled),
 html[data-hover-mode="on"] .task-output-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-terminal-toggle:not(:disabled),
+html[data-hover-mode="on"] .task-view-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-fullscreen-toggle:not(:disabled),
 html[data-hover-mode="on"] .prompt-visibility-toggle:not(:disabled) {
   border-color: color-mix(in srgb, var(--running) 36%, var(--border));
@@ -3473,6 +3523,7 @@ html[data-hover-mode="on"] .prompt-visibility-toggle:not(:disabled) {
   box-shadow: var(--shadow-sm);
 }
 
+html[data-hover-mode="on"] .task-view-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-fullscreen-toggle:not(:disabled) {
   border-color: transparent;
   box-shadow: none;
@@ -3487,6 +3538,7 @@ html[data-hover-mode="off"] .prompt-action-button,
 html[data-hover-mode="off"] .task-rerun,
 html[data-hover-mode="off"] .task-output-toggle,
 html[data-hover-mode="off"] .task-terminal-toggle,
+html[data-hover-mode="off"] .task-view-toggle,
 html[data-hover-mode="off"] .task-fullscreen-toggle,
 html[data-hover-mode="off"] .prompt-visibility-toggle {
   transition: none !important;
@@ -3500,6 +3552,7 @@ html[data-hover-mode="off"] .prompt-action-button:hover,
 html[data-hover-mode="off"] .task-rerun:hover,
 html[data-hover-mode="off"] .task-output-toggle:hover,
 html[data-hover-mode="off"] .task-terminal-toggle:hover,
+html[data-hover-mode="off"] .task-view-toggle:hover,
 html[data-hover-mode="off"] .task-fullscreen-toggle:hover,
 html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
   transform: none !important;
