@@ -1729,6 +1729,11 @@ select.prompt-control {
   padding-bottom: 8px;
 }
 
+.task.task-prompt-only {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
 .task-top {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1739,6 +1744,10 @@ select.prompt-control {
 }
 
 .task.task-collapsed .task-top {
+  margin-bottom: 0;
+}
+
+.task.task-prompt-only .task-top {
   margin-bottom: 0;
 }
 
@@ -1852,6 +1861,15 @@ select.prompt-control {
   background: var(--surface-task-button-bg);
   padding: 7px;
   transition: border-color 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+}
+
+.task-pr-link-inline {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 10px;
+  padding: 5px;
 }
 
 .task-copy-link img,

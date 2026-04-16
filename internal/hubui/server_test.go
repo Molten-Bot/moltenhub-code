@@ -552,7 +552,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to block fullscreen when no tasks exist")
 	}
 	if !strings.Contains(markup, "function setTaskPanelView(view, options = {})") {
-		t.Fatalf("expected index html to include current/history task panel mode switching")
+		t.Fatalf("expected index html to include task panel view mode switching")
 	}
 	if !strings.Contains(markup, "function historyTasks(snapshot)") || !strings.Contains(markup, "function rememberCompletedTaskHistory(snapshot)") {
 		t.Fatalf("expected index html to include running completed-task history aggregation")
@@ -573,10 +573,16 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to skip rendering task progress bars when disabled")
 	}
 	if !strings.Contains(markup, "taskViewToggle.addEventListener(\"click\", () => {") {
-		t.Fatalf("expected index html to wire task history toggle interactions")
+		t.Fatalf("expected index html to wire task view toggle interactions")
 	}
-	if !strings.Contains(markup, "taskPanelTitle.textContent = meta.panelLabel;") || !strings.Contains(markup, "taskFullscreenPanelTitle.textContent = meta.panelLabel;") {
-		t.Fatalf("expected index html to synchronize current/history labels between normal and fullscreen task panels")
+	if !strings.Contains(markup, "const nextView = normalizeTaskPanelView(state.taskPanelView) === \"prompt\" ? \"main\" : \"prompt\";") {
+		t.Fatalf("expected index html to toggle between prompt-only and detailed task card views")
+	}
+	if !strings.Contains(markup, `toggleLabel: "Show prompt-only tasks",`) || !strings.Contains(markup, `toggleLabel: "Show detailed tasks",`) {
+		t.Fatalf("expected index html to expose prompt-only and detailed task-view toggle labels")
+	}
+	if !strings.Contains(markup, "taskPanelTitle.textContent = \"Current Work\";") || !strings.Contains(markup, "taskFullscreenPanelTitle.textContent = \"Current Work\";") {
+		t.Fatalf("expected index html to keep task panel labels anchored to Current Work across view states")
 	}
 	if !strings.Contains(markup, `<html lang="en" class="dark">`) {
 		t.Fatalf("expected index html to default to dark theme class")
@@ -603,10 +609,10 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to include tasks full screen toggle")
 	}
 	if !strings.Contains(markup, `id="task-view-toggle"`) {
-		t.Fatalf("expected index html to include a task history icon toggle in Current Work header")
+		t.Fatalf("expected index html to include a task-view icon toggle in Current Work header")
 	}
 	if !strings.Contains(markup, `class="task-view-toggle-icon"`) {
-		t.Fatalf("expected index html to render the task history toggle with an icon affordance")
+		t.Fatalf("expected index html to render the task-view toggle with an icon affordance")
 	}
 	if strings.Contains(markup, `>Full Screen</button>`) {
 		t.Fatalf("expected task fullscreen control to render as an icon instead of button text")
@@ -633,13 +639,13 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to render the task queue panel immediately with the shared glass shell")
 	}
 	if !strings.Contains(markup, `id="task-panel-title" class="panel-section-title">Current Work</span>`) {
-		t.Fatalf("expected index html to render a dedicated task panel title node for current/history switching")
+		t.Fatalf("expected index html to render a dedicated task panel title node for task-view state synchronization")
 	}
 	if !strings.Contains(markup, `>Current Work</span>`) {
 		t.Fatalf("expected index html to render the task panel under a Current Work heading")
 	}
 	if !strings.Contains(markup, `id="task-fullscreen-panel-title">Current Work</span>`) {
-		t.Fatalf("expected index html to render a dedicated fullscreen task panel title node for current/history switching")
+		t.Fatalf("expected index html to render a dedicated fullscreen task panel title node for task-view state synchronization")
 	}
 	if !strings.Contains(markup, `id="task-fullscreen-list"`) {
 		t.Fatalf("expected index html to include full screen task list")
@@ -801,6 +807,18 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "id.title = prompt;") {
 		t.Fatalf("expected index html task title tooltip to contain prompt text only")
+	}
+	if !strings.Contains(markup, "const promptOnly = normalizeTaskPanelView(state.taskPanelView) === \"prompt\";") {
+		t.Fatalf("expected index html to compute a prompt-only task rendering mode")
+	}
+	if !strings.Contains(markup, "node.classList.add(\"task-prompt-only\");") {
+		t.Fatalf("expected index html to apply prompt-only card styling when compact task view is active")
+	}
+	if !strings.Contains(markup, "const showPromptPRLink = isCompletedTask(task) && prURL !== \"\";") {
+		t.Fatalf("expected index html prompt-only mode to gate GitHub links to completed tasks with pull request urls")
+	}
+	if !strings.Contains(markup, "prLink.className = \"task-pr-link task-pr-link-inline\";") {
+		t.Fatalf("expected index html prompt-only mode to render a compact inline GitHub pull-request link affordance")
 	}
 	if !strings.Contains(markup, "const showTaskPRLink = isCompletedTask(task) && prURL !== \"\";") {
 		t.Fatalf("expected index html to gate task PR links to completed tasks with a pull request URL")
@@ -1570,8 +1588,14 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task-top {\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) auto;\n  align-items: center;") {
 		t.Fatalf("expected stylesheet to pin task actions in a dedicated trailing column")
 	}
+	if !strings.Contains(css, ".task.task-prompt-only") {
+		t.Fatalf("expected stylesheet to include dedicated compact prompt-only task card styling")
+	}
 	if !strings.Contains(css, ".task-top-actions {\n  display: flex;\n  align-items: center;\n  justify-content: flex-end;\n  flex-wrap: nowrap;") {
 		t.Fatalf("expected stylesheet to keep task action controls on a single right-aligned row")
+	}
+	if !strings.Contains(css, ".task-pr-link-inline") {
+		t.Fatalf("expected stylesheet to include inline GitHub icon sizing for prompt-only task rows")
 	}
 	if !strings.Contains(css, ".task-output-toggle") {
 		t.Fatalf("expected stylesheet to include task output toggle styles")
@@ -1583,13 +1607,13 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 		t.Fatalf("expected stylesheet to group task header action icons on the right side")
 	}
 	if !strings.Contains(css, ".task-view-toggle {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 32px;\n  height: 32px;") {
-		t.Fatalf("expected stylesheet to size the task history toggle as a compact icon affordance")
+		t.Fatalf("expected stylesheet to size the task-view toggle as a compact icon affordance")
 	}
 	if !strings.Contains(css, ".task-view-toggle-icon") {
-		t.Fatalf("expected stylesheet to include task history icon styles")
+		t.Fatalf("expected stylesheet to include task-view icon styles")
 	}
 	if !strings.Contains(css, ".task-view-toggle[aria-pressed=\"true\"]") {
-		t.Fatalf("expected stylesheet to include active-state treatment for task history mode")
+		t.Fatalf("expected stylesheet to include active-state treatment for prompt-only task mode")
 	}
 	if !strings.Contains(css, ".task-fullscreen-toggle") {
 		t.Fatalf("expected stylesheet to include task full screen toggle styles")
