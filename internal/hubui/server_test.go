@@ -560,6 +560,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "const liveByID = new Map();") || !strings.Contains(markup, "if (!isCompletedTask(task)) {") {
 		t.Fatalf("expected index html history mode to include completed tasks only")
 	}
+	if !strings.Contains(markup, "const TASK_HISTORY_LIMIT = 25;") ||
+		!strings.Contains(markup, "return out.slice(0, TASK_HISTORY_LIMIT);") {
+		t.Fatalf("expected index html history mode to cap visible history at 25 runs")
+	}
+	if !strings.Contains(markup, "return normalizedTaskRunConfig(task) || synthesizedTaskRunConfig(task);") ||
+		!strings.Contains(markup, "rerunTask(requestID, false, task);") {
+		t.Fatalf("expected index html rerun actions to submit prompt context from each task")
+	}
 	if !strings.Contains(markup, `const TASK_HISTORY_KEY = "hubui.taskHistory.v1";`) {
 		t.Fatalf("expected index html to define a dedicated persisted task history storage key")
 	}
