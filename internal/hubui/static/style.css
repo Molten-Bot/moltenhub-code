@@ -701,6 +701,41 @@ textarea {
   gap: 6px;
 }
 
+.task-status-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border-radius: 999px;
+  border: 1px solid rgba(17, 34, 68, 0.12);
+  background: rgba(255, 255, 255, 0.34);
+  padding: 2px;
+}
+
+.task-status-filter-button {
+  border: 0;
+  border-radius: 999px;
+  min-height: 26px;
+  min-width: 0;
+  padding: 0 9px;
+  color: var(--text-soft);
+  background: transparent;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: color 0.12s ease, background-color 0.12s ease;
+}
+
+.task-status-filter-button:hover,
+.task-status-filter-button:focus-visible {
+  color: var(--running);
+}
+
+.task-status-filter-button[aria-pressed="true"] {
+  color: var(--running);
+  background: rgba(10, 132, 255, 0.14);
+}
+
 .task-fullscreen-head-label {
   min-width: 0;
   flex: 1 1 auto;
@@ -1229,6 +1264,7 @@ body .right-col.prompt-collapsed.task-list-hidden {
 .prompt-action-paste:focus-visible,
 .prompt-visibility-toggle:focus-visible,
 .prompt-mode-link:focus-visible,
+.task-status-filter-button:focus-visible,
 .task-close:focus-visible,
 .task-rerun:focus-visible,
 .task-control-toggle:focus-visible,
@@ -3514,6 +3550,7 @@ html[data-hover-mode="on"] .prompt-action-button:not(:disabled),
 html[data-hover-mode="on"] .task-rerun:not(:disabled),
 html[data-hover-mode="on"] .task-output-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-terminal-toggle:not(:disabled),
+html[data-hover-mode="on"] .task-status-filter-button:not(:disabled),
 html[data-hover-mode="on"] .task-view-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-fullscreen-toggle:not(:disabled),
 html[data-hover-mode="on"] .prompt-visibility-toggle:not(:disabled),
@@ -3533,6 +3570,7 @@ html[data-hover-mode="on"] .prompt-action-button:not(:disabled),
 html[data-hover-mode="on"] .task-rerun:not(:disabled),
 html[data-hover-mode="on"] .task-output-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-terminal-toggle:not(:disabled),
+html[data-hover-mode="on"] .task-status-filter-button:not(:disabled),
 html[data-hover-mode="on"] .task-view-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-fullscreen-toggle:not(:disabled),
 html[data-hover-mode="on"] .prompt-visibility-toggle:not(:disabled) {
@@ -3556,6 +3594,7 @@ html[data-hover-mode="off"] .prompt-action-button,
 html[data-hover-mode="off"] .task-rerun,
 html[data-hover-mode="off"] .task-output-toggle,
 html[data-hover-mode="off"] .task-terminal-toggle,
+html[data-hover-mode="off"] .task-status-filter-button,
 html[data-hover-mode="off"] .task-view-toggle,
 html[data-hover-mode="off"] .task-fullscreen-toggle,
 html[data-hover-mode="off"] .prompt-visibility-toggle {
@@ -3570,6 +3609,7 @@ html[data-hover-mode="off"] .prompt-action-button:hover,
 html[data-hover-mode="off"] .task-rerun:hover,
 html[data-hover-mode="off"] .task-output-toggle:hover,
 html[data-hover-mode="off"] .task-terminal-toggle:hover,
+html[data-hover-mode="off"] .task-status-filter-button:hover,
 html[data-hover-mode="off"] .task-view-toggle:hover,
 html[data-hover-mode="off"] .task-fullscreen-toggle:hover,
 html[data-hover-mode="off"] .prompt-visibility-toggle:hover {

@@ -587,6 +587,37 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "taskViewToggle.addEventListener(\"click\", () => {") {
 		t.Fatalf("expected index html to wire task view toggle interactions")
 	}
+	if !strings.Contains(markup, `id="task-filter-running"`) || !strings.Contains(markup, `id="task-filter-completed"`) {
+		t.Fatalf("expected index html to include running and completed task filter controls")
+	}
+	if !strings.Contains(markup, `const TASK_STATUS_FILTER_KEY = "hubui.taskStatusFilter";`) {
+		t.Fatalf("expected index html to define a dedicated persisted task status filter storage key")
+	}
+	if !strings.Contains(markup, "taskStatusFilter: loadTaskStatusFilter(),") {
+		t.Fatalf("expected index html to hydrate task status filter from local storage on startup")
+	}
+	if !strings.Contains(markup, "function setTaskStatusFilter(filter, options = {})") {
+		t.Fatalf("expected index html to include task status filter switching")
+	}
+	if !strings.Contains(markup, "taskFilterRunning.addEventListener(\"click\", () => {") ||
+		!strings.Contains(markup, "taskFilterCompleted.addEventListener(\"click\", () => {") {
+		t.Fatalf("expected index html to wire running/completed task filter interactions")
+	}
+	if !strings.Contains(markup, "setTaskStatusFilter(\"running\");") || !strings.Contains(markup, "setTaskStatusFilter(\"completed\");") {
+		t.Fatalf("expected index html to switch task filter between running and completed")
+	}
+	if !strings.Contains(markup, "function runningTasks(snapshot)") || !strings.Contains(markup, "function completedTasks(snapshot)") {
+		t.Fatalf("expected index html to derive running and completed task lists independently")
+	}
+	if !strings.Contains(markup, "if (filter === \"completed\") {") || !strings.Contains(markup, "return completedTasks(snapshot);") {
+		t.Fatalf("expected index html to route displayTasks through completed task history when requested")
+	}
+	if !strings.Contains(markup, "const statusFilter = normalizeTaskStatusFilter(state.taskStatusFilter);") {
+		t.Fatalf("expected index html to normalize status filter state before applying task panel metadata")
+	}
+	if !strings.Contains(markup, "statusFilter,") {
+		t.Fatalf("expected index html task render signatures to include status filter state")
+	}
 	if !strings.Contains(markup, "const nextView = normalizeTaskPanelView(state.taskPanelView) === \"prompt\" ? \"main\" : \"prompt\";") {
 		t.Fatalf("expected index html to toggle between prompt-only and detailed task card views")
 	}
@@ -1617,6 +1648,12 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".task-panel-actions {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n}") {
 		t.Fatalf("expected stylesheet to group task header action icons on the right side")
+	}
+	if !strings.Contains(css, ".task-status-filter {") || !strings.Contains(css, ".task-status-filter-button") {
+		t.Fatalf("expected stylesheet to include running/completed task status filter pill styles")
+	}
+	if !strings.Contains(css, ".task-status-filter-button[aria-pressed=\"true\"]") {
+		t.Fatalf("expected stylesheet to include active-state treatment for task status filters")
 	}
 	if !strings.Contains(css, ".task-view-toggle {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 32px;\n  height: 32px;") {
 		t.Fatalf("expected stylesheet to size the task-view toggle as a compact icon affordance")

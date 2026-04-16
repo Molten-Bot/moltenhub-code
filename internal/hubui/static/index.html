@@ -140,6 +140,22 @@
               <span id="task-panel-title" class="panel-section-title">Current Work</span>
             </div>
             <div class="task-panel-actions">
+              <div class="task-status-filter" role="group" aria-label="Task status filter">
+                <button
+                  id="task-filter-running"
+                  class="task-status-filter-button"
+                  type="button"
+                  aria-pressed="true"
+                  aria-label="Show running tasks"
+                  title="Show running tasks">Running</button>
+                <button
+                  id="task-filter-completed"
+                  class="task-status-filter-button"
+                  type="button"
+                  aria-pressed="false"
+                  aria-label="Show completed tasks"
+                  title="Show completed tasks">Completed</button>
+              </div>
               <button
                 id="task-view-toggle"
                 class="task-view-toggle"
@@ -614,6 +630,7 @@
     const PROMPT_MODE_KEY = "hubui.localPromptMode";
     const PROMPT_VISIBILITY_KEY = "hubui.localPromptVisible";
     const TASK_PANEL_VIEW_KEY = "hubui.taskPanelView";
+    const TASK_STATUS_FILTER_KEY = "hubui.taskStatusFilter";
     const TASK_HISTORY_KEY = "hubui.taskHistory.v1";
     const THEME_KEY = "hubui.theme";
     const HOVER_MODE_KEY = "hubui.hoverMode";
@@ -1124,6 +1141,22 @@
       return "main";
     }
 
+    function loadTaskStatusFilter() {
+      try {
+        return normalizeTaskStatusFilter(localStorage.getItem(TASK_STATUS_FILTER_KEY));
+      } catch (_err) {
+        return "running";
+      }
+    }
+
+    function normalizeTaskStatusFilter(filter) {
+      const normalized = String(filter || "").trim().toLowerCase();
+      if (normalized === "completed" || normalized === "history") {
+        return "completed";
+      }
+      return "running";
+    }
+
     function loadTaskHistory() {
       try {
         const raw = localStorage.getItem(TASK_HISTORY_KEY);
@@ -1178,6 +1211,7 @@
       selectedLibraryTask: "",
       promptVisible: loadPromptVisibility(),
       taskPanelView: loadTaskPanelView(),
+      taskStatusFilter: loadTaskStatusFilter(),
       promptImages: [],
       rerunInFlight: new Set(),
       closeInFlight: new Set(),
@@ -1230,6 +1264,8 @@
     const taskList = document.getElementById("task-list");
     const taskPanel = document.getElementById("task-panel");
     const taskPanelTitle = document.getElementById("task-panel-title");
+    const taskFilterRunning = document.getElementById("task-filter-running");
+    const taskFilterCompleted = document.getElementById("task-filter-completed");
     const taskViewToggle = document.getElementById("task-view-toggle");
     const taskFullscreenToggle = document.getElementById("task-fullscreen-toggle");
     const taskFullscreen = document.getElementById("task-fullscreen");
@@ -4401,6 +4437,14 @@
       }
     }
 
+    function persistTaskStatusFilter() {
+      try {
+        localStorage.setItem(TASK_STATUS_FILTER_KEY, normalizeTaskStatusFilter(state.taskStatusFilter));
+      } catch (_err) {
+        // Ignore localStorage failures.
+      }
+    }
+
     function persistTaskHistory() {
       try {
         if (!(state.taskHistoryByID instanceof Map) || state.taskHistoryByID.size === 0) {
@@ -4443,6 +4487,26 @@
       render(state.snapshot);
     }
 
+    function setTaskStatusFilter(filter, options = {}) {
+      const normalized = normalizeTaskStatusFilter(filter);
+      const persist = options.persist !== false;
+      if (state.taskStatusFilter === normalized) {
+        applyTaskPanelViewMeta();
+        render(state.snapshot);
+        return;
+      }
+      state.taskStatusFilter = normalized;
+      if (persist) {
+        persistTaskStatusFilter();
+      }
+      if (state.taskFullscreenOpen && !displayTasks(state.snapshot).length) {
+        state.taskFullscreenOpen = false;
+        document.body.classList.remove("task-fullscreen-open");
+      }
+      applyTaskPanelViewMeta();
+      render(state.snapshot);
+    }
+
     function taskViewToggleMeta() {
       const promptOnly = normalizeTaskPanelView(state.taskPanelView) === "prompt";
       return promptOnly
@@ -4465,6 +4529,15 @@
       }
       if (taskFullscreenPanelTitle) {
         taskFullscreenPanelTitle.textContent = "Current Work";
+      }
+      const statusFilter = normalizeTaskStatusFilter(state.taskStatusFilter);
+      if (taskFilterRunning) {
+        const active = statusFilter === "running";
+        taskFilterRunning.setAttribute("aria-pressed", active ? "true" : "false");
+      }
+      if (taskFilterCompleted) {
+        const active = statusFilter === "completed";
+        taskFilterCompleted.setAttribute("aria-pressed", active ? "true" : "false");
       }
       if (taskViewToggle) {
         taskViewToggle.setAttribute("aria-label", meta.toggleLabel);
@@ -5018,8 +5091,22 @@
       return out;
     }
 
+    function runningTasks(snapshot) {
+      const out = currentTasks(snapshot);
+      return out.filter((task) => !isCompletedTask(task));
+    }
+
+    function completedTasks(snapshot) {
+      const out = historyTasks(snapshot);
+      return out.filter((task) => isCompletedTask(task));
+    }
+
     function displayTasks(snapshot) {
-      return currentTasks(snapshot);
+      const filter = normalizeTaskStatusFilter(state.taskStatusFilter);
+      if (filter === "completed") {
+        return completedTasks(snapshot);
+      }
+      return runningTasks(snapshot);
     }
 
     function fullscreenTasks(snapshot) {
@@ -5275,9 +5362,11 @@
       const showOutputAction = options.showOutputAction !== false;
       const allowCollapse = options.allowCollapse !== false;
       const viewMode = normalizeTaskPanelView(state.taskPanelView);
+      const statusFilter = normalizeTaskStatusFilter(state.taskStatusFilter);
       return JSON.stringify({
         selectedTaskId: state.selectedTaskId,
         viewMode,
+        statusFilter,
         showOutputAction,
         allowCollapse,
         tasks: tasks.map((task) => {
@@ -5696,26 +5785,58 @@
         taskFullscreen.classList.toggle("hidden", !state.taskFullscreenOpen);
         taskFullscreen.setAttribute("aria-hidden", state.taskFullscreenOpen ? "false" : "true");
       }
-      renderTaskCollection(tasks, taskList, null, {
-        emptyEyebrow: promptOnly ? "Prompt View" : "Queue Ready",
-        emptyTitle: promptOnly ? "No task prompts yet." : "Lets get to work!",
-        emptyCopy: promptOnly
+      const taskStatusFilter = normalizeTaskStatusFilter(state.taskStatusFilter);
+      const emptyEyebrow = promptOnly
+        ? "Prompt View"
+        : taskStatusFilter === "completed"
+          ? "History"
+          : "Queue Ready";
+      const emptyTitle = taskStatusFilter === "completed"
+        ? "No completed tasks yet."
+        : promptOnly
+          ? "No task prompts yet."
+          : "Lets get to work!";
+      const emptyCopy = taskStatusFilter === "completed"
+        ? (promptOnly
+          ? "Completed task history appears here in compact mode."
+          : "Completed task history appears here with links, logs, and run metadata.")
+        : promptOnly
           ? "Prompt-only view keeps each task compact. Completed runs keep their pull request links."
-          : "New runs will appear here with their progress, replay controls, local clone actions, and PR links.",
+          : "New runs will appear here with their progress, replay controls, local clone actions, and PR links.";
+      renderTaskCollection(tasks, taskList, null, {
+        emptyEyebrow,
+        emptyTitle,
+        emptyCopy,
       });
     }
 
     function renderFullscreenTasks(snapshot) {
       const tasks = fullscreenTasks(snapshot);
       const promptOnly = normalizeTaskPanelView(state.taskPanelView) === "prompt";
+      const taskStatusFilter = normalizeTaskStatusFilter(state.taskStatusFilter);
+      const emptyEyebrow = promptOnly
+        ? "Prompt View"
+        : taskStatusFilter === "completed"
+          ? "History"
+          : "Queue Ready";
+      const emptyTitle = taskStatusFilter === "completed"
+        ? "No completed tasks yet."
+        : promptOnly
+          ? "No task prompts yet."
+          : "Lets get to work!";
+      const emptyCopy = taskStatusFilter === "completed"
+        ? (promptOnly
+          ? "Completed task history appears here in compact mode."
+          : "Completed task history appears here with links, logs, and run metadata.")
+        : promptOnly
+          ? "Prompt-only view keeps each task compact. Completed runs keep their pull request links."
+          : "New runs will appear here with their progress, replay controls, local clone actions, and PR links.";
       renderTaskCollection(tasks, taskFullscreenList, null, {
         showOutputAction: false,
         allowCollapse: false,
-        emptyEyebrow: promptOnly ? "Prompt View" : "Queue Ready",
-        emptyTitle: promptOnly ? "No task prompts yet." : "Lets get to work!",
-        emptyCopy: promptOnly
-          ? "Prompt-only view keeps each task compact. Completed runs keep their pull request links."
-          : "New runs will appear here with their progress, replay controls, local clone actions, and PR links.",
+        emptyEyebrow,
+        emptyTitle,
+        emptyCopy,
       });
     }
 
@@ -6291,6 +6412,12 @@
       return false;
     };
     promptVisibilityToggle.addEventListener("click", togglePromptVisibility);
+    taskFilterRunning.addEventListener("click", () => {
+      setTaskStatusFilter("running");
+    });
+    taskFilterCompleted.addEventListener("click", () => {
+      setTaskStatusFilter("completed");
+    });
     taskViewToggle.addEventListener("click", () => {
       const nextView = normalizeTaskPanelView(state.taskPanelView) === "prompt" ? "main" : "prompt";
       setTaskPanelView(nextView);
