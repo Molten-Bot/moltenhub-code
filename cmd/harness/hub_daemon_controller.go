@@ -16,15 +16,17 @@ import (
 const hubDaemonStartGracePeriod = 1500 * time.Millisecond
 
 type hubDaemonController struct {
-	parentCtx          context.Context
-	runner             execx.Runner
-	runDaemon          func(context.Context, hub.InitConfig) error
-	logf               func(string, ...any)
-	dispatchController *hub.AdaptiveDispatchController
-	taskLogRoot        string
-	onDispatchQueued   func(string, config.Config)
-	onDispatchFailed   func(string, config.Config, harness.Result)
-	startGracePeriod   time.Duration
+	parentCtx           context.Context
+	runner              execx.Runner
+	runDaemon           func(context.Context, hub.InitConfig) error
+	logf                func(string, ...any)
+	dispatchController  *hub.AdaptiveDispatchController
+	taskLogRoot         string
+	onDispatchQueued    func(string, config.Config)
+	onDispatchFailed    func(string, config.Config, harness.Result)
+	registerTaskControl func(string, context.CancelCauseFunc) hub.DispatchTaskControl
+	completeTaskControl func(string)
+	startGracePeriod    time.Duration
 
 	updateMu sync.Mutex
 	stateMu  sync.Mutex
@@ -151,6 +153,8 @@ func (c *hubDaemonController) run(runCtx context.Context, cfg hub.InitConfig, do
 		daemon.TaskLogRoot = c.taskLogRoot
 		daemon.OnDispatchQueued = c.onDispatchQueued
 		daemon.OnDispatchFailed = c.onDispatchFailed
+		daemon.RegisterTaskControl = c.registerTaskControl
+		daemon.CompleteTaskControl = c.completeTaskControl
 		runDaemon = daemon.Run
 	}
 

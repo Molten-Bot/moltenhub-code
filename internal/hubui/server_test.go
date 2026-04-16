@@ -557,6 +557,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function historyTasks(snapshot)") || !strings.Contains(markup, "function rememberCompletedTaskHistory(snapshot)") {
 		t.Fatalf("expected index html to include running completed-task history aggregation")
 	}
+	if !strings.Contains(markup, "const liveByID = new Map();") || !strings.Contains(markup, "for (const task of liveByID.values()) {") {
+		t.Fatalf("expected index html history mode to include live run tasks alongside saved history")
+	}
 	if !strings.Contains(markup, `const TASK_HISTORY_KEY = "hubui.taskHistory.v1";`) {
 		t.Fatalf("expected index html to define a dedicated persisted task history storage key")
 	}
@@ -566,11 +569,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "taskHistoryByID: loadTaskHistory(),") {
 		t.Fatalf("expected index html to hydrate task history from local storage on startup")
 	}
-	if !strings.Contains(markup, "const TASK_PROGRESS_VISIBLE = false;") {
-		t.Fatalf("expected index html to disable task progress bar rendering by default")
+	if !strings.Contains(markup, "const TASK_PROGRESS_VISIBLE = true;") {
+		t.Fatalf("expected index html to keep task progress bar rendering enabled")
 	}
 	if !strings.Contains(markup, "if (!TASK_PROGRESS_VISIBLE || !task || isCompletedTask(task)) {") {
-		t.Fatalf("expected index html to skip rendering task progress bars when disabled")
+		t.Fatalf("expected index html to guard task progress bar rendering by visibility and task status")
 	}
 	if !strings.Contains(markup, "taskViewToggle.addEventListener(\"click\", () => {") {
 		t.Fatalf("expected index html to wire task history toggle interactions")

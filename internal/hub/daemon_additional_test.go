@@ -61,6 +61,22 @@ func (r *blockedRunner) Run(ctx context.Context, _ execx.Command) (execx.Result,
 	return execx.Result{}, r.err
 }
 
+type stubDispatchTaskControl struct {
+	waitErr error
+	stopped bool
+	paused  bool
+	forced  bool
+}
+
+func (s *stubDispatchTaskControl) WaitUntilRunnable(context.Context) error { return s.waitErr }
+func (s *stubDispatchTaskControl) SetAcquireCancel(context.CancelFunc)     {}
+func (s *stubDispatchTaskControl) ClearAcquireCancel(context.CancelFunc)   {}
+func (s *stubDispatchTaskControl) SetRunning(bool)                         {}
+func (s *stubDispatchTaskControl) ConsumeForceAcquire() bool               { return s.forced }
+func (s *stubDispatchTaskControl) HasForceAcquire() bool                   { return s.forced }
+func (s *stubDispatchTaskControl) IsPaused() bool                          { return s.paused }
+func (s *stubDispatchTaskControl) IsStopped() bool                         { return s.stopped }
+
 func (s *stubMoltenHubAPI) BaseURL() string { return "" }
 func (s *stubMoltenHubAPI) Token() string   { return s.token }
 func (s *stubMoltenHubAPI) ResolveAgentToken(context.Context, InitConfig) (string, error) {
@@ -413,6 +429,163 @@ func TestProcessInboundMessageDedupesIdenticalConfigAcrossRequestIDs(t *testing.
 	}
 	if gotRequestIDs["req-b-rerun"] != nil || gotRequestIDs["req-b-failure-review"] != nil {
 		t.Fatalf("duplicate request unexpectedly executed: %#v", gotRequestIDs)
+	}
+}
+
+func TestProcessInboundMessagePublishesStoppedFailureWhenTaskControlStopsDispatch(t *testing.T) {
+	t.Parallel()
+
+	d := NewDaemon(nil)
+	api := &stubMoltenHubAPI{token: "t"}
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:         "code_for_me",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+		Dispatcher: DispatcherConfig{MaxParallel: 1},
+	}
+
+	var (
+		mu                sync.Mutex
+		registeredID      string
+		completedID       string
+		registerCancelSet bool
+	)
+	d.RegisterTaskControl = func(requestID string, cancel context.CancelCauseFunc) DispatchTaskControl {
+		mu.Lock()
+		registeredID = requestID
+		registerCancelSet = cancel != nil
+		mu.Unlock()
+		return &stubDispatchTaskControl{
+			waitErr: errors.New("task was stopped by operator"),
+			stopped: true,
+		}
+	}
+	d.CompleteTaskControl = func(requestID string) {
+		mu.Lock()
+		completedID = requestID
+		mu.Unlock()
+	}
+
+	msg := map[string]any{
+		"type":       "skill_request",
+		"skill":      "code_for_me",
+		"request_id": "req-stop-control",
+		"config": map[string]any{
+			"repo":   "git@github.com:acme/repo.git",
+			"prompt": "stop this task",
+		},
+	}
+
+	var workers sync.WaitGroup
+	d.processInboundMessage(context.Background(), api, cfg, msg, "", "", nil, &workers, nil)
+	workers.Wait()
+
+	mu.Lock()
+	gotRegisteredID := registeredID
+	gotCompletedID := completedID
+	gotCancelSet := registerCancelSet
+	mu.Unlock()
+
+	if gotRegisteredID != "req-stop-control" {
+		t.Fatalf("RegisterTaskControl requestID = %q, want %q", gotRegisteredID, "req-stop-control")
+	}
+	if !gotCancelSet {
+		t.Fatal("RegisterTaskControl cancel = nil, want non-nil")
+	}
+	if gotCompletedID != "req-stop-control" {
+		t.Fatalf("CompleteTaskControl requestID = %q, want %q", gotCompletedID, "req-stop-control")
+	}
+
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	if got, want := len(api.published), 1; got != want {
+		t.Fatalf("published payload count = %d, want %d", got, want)
+	}
+	if got, want := fmt.Sprint(api.published[0]["status"]), "error"; got != want {
+		t.Fatalf("result status = %q, want %q", got, want)
+	}
+	if got := fmt.Sprint(api.published[0]["message"]); !strings.Contains(got, "Failure: task failed. Error details: task was stopped by operator") {
+		t.Fatalf("result message = %q", got)
+	}
+	if got := fmt.Sprint(api.published[0]["error"]); got != "task was stopped by operator" {
+		t.Fatalf("result error = %q, want %q", got, "task was stopped by operator")
+	}
+	if got := len(api.offlineCalls); got != 0 {
+		t.Fatalf("offline calls = %d, want 0 for operator stop", got)
+	}
+}
+
+func TestProcessInboundMessageFallsBackToDeliveryIDForTaskControlRequestID(t *testing.T) {
+	t.Parallel()
+
+	d := NewDaemon(nil)
+	api := &stubMoltenHubAPI{token: "t"}
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:         "code_for_me",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+		Dispatcher: DispatcherConfig{MaxParallel: 1},
+	}
+
+	var (
+		mu           sync.Mutex
+		registeredID string
+		completedID  string
+	)
+	d.RegisterTaskControl = func(requestID string, _ context.CancelCauseFunc) DispatchTaskControl {
+		mu.Lock()
+		registeredID = requestID
+		mu.Unlock()
+		return &stubDispatchTaskControl{
+			waitErr: errors.New("task was stopped by operator"),
+			stopped: true,
+		}
+	}
+	d.CompleteTaskControl = func(requestID string) {
+		mu.Lock()
+		completedID = requestID
+		mu.Unlock()
+	}
+
+	msg := map[string]any{
+		"type":  "skill_request",
+		"skill": "code_for_me",
+		"config": map[string]any{
+			"repo":   "git@github.com:acme/repo.git",
+			"prompt": "stop this task",
+		},
+	}
+
+	var workers sync.WaitGroup
+	d.processInboundMessage(context.Background(), api, cfg, msg, "delivery-fallback", "", nil, &workers, nil)
+	workers.Wait()
+
+	mu.Lock()
+	gotRegisteredID := registeredID
+	gotCompletedID := completedID
+	mu.Unlock()
+
+	if gotRegisteredID != "delivery-fallback" {
+		t.Fatalf("RegisterTaskControl requestID = %q, want %q", gotRegisteredID, "delivery-fallback")
+	}
+	if gotCompletedID != "delivery-fallback" {
+		t.Fatalf("CompleteTaskControl requestID = %q, want %q", gotCompletedID, "delivery-fallback")
+	}
+
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	if got, want := len(api.published), 1; got != want {
+		t.Fatalf("published payload count = %d, want %d", got, want)
+	}
+	if got := fmt.Sprint(api.published[0]["request_id"]); got != "delivery-fallback" {
+		t.Fatalf("result request_id = %q, want %q", got, "delivery-fallback")
+	}
+	if got := fmt.Sprint(api.published[0]["message"]); !strings.Contains(got, "Failure: task failed. Error details: task was stopped by operator") {
+		t.Fatalf("result message = %q", got)
 	}
 }
 
