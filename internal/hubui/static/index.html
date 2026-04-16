@@ -644,7 +644,7 @@
     const TASK_REFLOW_TRANSITION_MS = 560;
     const TASK_REFLOW_TRANSITION_EASING = "cubic-bezier(0.16, 1, 0.3, 1)";
     const TASK_TIMING_REFRESH_INTERVAL_MS = 30_000;
-    const TASK_HISTORY_LIMIT = Number.POSITIVE_INFINITY;
+    const TASK_HISTORY_LIMIT = 25;
     const MAX_TERMINAL_LINES = 500;
     const TASK_PROGRESS_VISIBLE = true;
     const HUB_LOGIN_URL = "https://app.molten.bot/signin?target=hub";
@@ -1168,6 +1168,24 @@
             continue;
           }
           byID.set(requestID, copy);
+        }
+        if (Number.isFinite(TASK_HISTORY_LIMIT) && TASK_HISTORY_LIMIT > 0 && byID.size > TASK_HISTORY_LIMIT) {
+          const limited = Array.from(byID.values()).sort((a, b) => {
+            const updatedDiff = historyTaskUpdatedAt(b) - historyTaskUpdatedAt(a);
+            if (updatedDiff !== 0) {
+              return updatedDiff;
+            }
+            return String(b?.request_id || "").localeCompare(String(a?.request_id || ""));
+          });
+          byID.clear();
+          for (let i = 0; i < limited.length && i < TASK_HISTORY_LIMIT; i += 1) {
+            const task = limited[i];
+            const requestID = String(task?.request_id || "").trim();
+            if (!requestID) {
+              continue;
+            }
+            byID.set(requestID, task);
+          }
         }
         return byID;
       } catch (_err) {
@@ -5094,8 +5112,20 @@
     }
 
     function completedTasks(snapshot) {
-      const out = historyTasks(snapshot);
-      return out.filter((task) => isCompletedTask(task));
+      const out = historyTasks(snapshot).filter((task) => isCompletedTask(task));
+      out.sort((a, b) => {
+        const updatedDiff = historyTaskUpdatedAt(b) - historyTaskUpdatedAt(a);
+        if (updatedDiff !== 0) return updatedDiff;
+
+        const startedDiff = parseTaskTimestamp(b?.started_at) - parseTaskTimestamp(a?.started_at);
+        if (startedDiff !== 0) return startedDiff;
+
+        return String(b?.request_id || "").localeCompare(String(a?.request_id || ""));
+      });
+      if (Number.isFinite(TASK_HISTORY_LIMIT) && TASK_HISTORY_LIMIT > 0 && out.length > TASK_HISTORY_LIMIT) {
+        return out.slice(0, TASK_HISTORY_LIMIT);
+      }
+      return out;
     }
 
     function displayTasks(snapshot) {
