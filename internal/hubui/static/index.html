@@ -4952,29 +4952,15 @@
 
     function currentTasks(snapshot) {
       const taskItems = [];
-      const liveTaskIDs = new Set();
       for (const task of snapshot?.tasks || []) {
         const requestID = String(task?.request_id || "").trim();
         if (!requestID) {
           continue;
         }
-        liveTaskIDs.add(requestID);
         if (state.dismissedTaskIDs.has(requestID) && isCompletedTask(task)) {
           continue;
         }
         taskItems.push(task);
-      }
-
-      for (const task of state.taskHistoryByID.values()) {
-        const requestID = String(task?.request_id || "").trim();
-        if (!requestID || liveTaskIDs.has(requestID) || state.dismissedTaskIDs.has(requestID)) {
-          continue;
-        }
-        taskItems.push({
-          ...task,
-          history_only: true,
-          can_rerun: false,
-        });
       }
 
       const byActivity = sortTasksByActivity(taskItems);

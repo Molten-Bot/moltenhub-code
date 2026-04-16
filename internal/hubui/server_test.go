@@ -557,6 +557,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function historyTasks(snapshot)") || !strings.Contains(markup, "function rememberCompletedTaskHistory(snapshot)") {
 		t.Fatalf("expected index html to include running completed-task history aggregation")
 	}
+	currentTasksStart := strings.Index(markup, "function currentTasks(snapshot) {")
+	historyTasksStart := strings.Index(markup, "function historyTasks(snapshot) {")
+	if currentTasksStart < 0 || historyTasksStart < 0 || historyTasksStart <= currentTasksStart {
+		t.Fatalf("expected index html to include currentTasks and historyTasks definitions in order")
+	}
+	currentTasksBody := markup[currentTasksStart:historyTasksStart]
+	if strings.Contains(currentTasksBody, "for (const task of state.taskHistoryByID.values()) {") {
+		t.Fatalf("expected current work list to exclude persisted history-only tasks")
+	}
 	if !strings.Contains(markup, "const liveByID = new Map();") || !strings.Contains(markup, "for (const task of liveByID.values()) {") {
 		t.Fatalf("expected index html history mode to include live run tasks alongside saved history")
 	}
