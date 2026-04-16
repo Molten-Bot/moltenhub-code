@@ -19,15 +19,29 @@ import (
 	"github.com/jef/moltenhub-code/internal/library"
 )
 
+// DispatchTaskControl exposes per-request runtime controls shared with the UI.
+type DispatchTaskControl interface {
+	WaitUntilRunnable(context.Context) error
+	SetAcquireCancel(context.CancelFunc)
+	ClearAcquireCancel(context.CancelFunc)
+	SetRunning(bool)
+	ConsumeForceAcquire() bool
+	HasForceAcquire() bool
+	IsPaused() bool
+	IsStopped() bool
+}
+
 // Daemon listens for hub skill dispatches and runs harness jobs.
 type Daemon struct {
-	Runner             execx.Runner
-	Logf               func(string, ...any)
-	OnDispatchQueued   func(requestID string, runCfg config.Config)
-	OnDispatchFailed   func(requestID string, runCfg config.Config, result harness.Result)
-	DispatchController *AdaptiveDispatchController
-	ReconnectDelay     time.Duration
-	TaskLogRoot        string
+	Runner              execx.Runner
+	Logf                func(string, ...any)
+	OnDispatchQueued    func(requestID string, runCfg config.Config)
+	OnDispatchFailed    func(requestID string, runCfg config.Config, result harness.Result)
+	RegisterTaskControl func(requestID string, cancel context.CancelCauseFunc) DispatchTaskControl
+	CompleteTaskControl func(requestID string)
+	DispatchController  *AdaptiveDispatchController
+	ReconnectDelay      time.Duration
+	TaskLogRoot         string
 }
 
 const wsFallbackWindow = 30 * time.Second
@@ -370,6 +384,9 @@ func (d Daemon) processInboundMessage(
 	}
 
 	dupKey := dedupeKeyForDispatch(dispatch, messageID, deliveryID)
+	if strings.TrimSpace(dispatch.RequestID) == "" {
+		dispatch.RequestID = strings.TrimSpace(dupKey)
+	}
 	if deduper != nil && dupKey != "" {
 		if accepted, state := deduper.Begin(dupKey); !accepted {
 			d.logf("dispatch status=duplicate request_id=%s state=%s", firstNonEmpty(dispatch.RequestID, dupKey), state)
@@ -399,60 +416,146 @@ func (d Daemon) processInboundMessage(
 		}
 	}
 
-	workers.Add(1)
-	go func(dispatch SkillDispatch, deliveryID, dedupeKey string, ackedEarly bool) {
-		defer workers.Done()
+	runCtx, cancelRun := context.WithCancelCause(ctx)
+	var taskControl DispatchTaskControl
+	if d.RegisterTaskControl != nil {
+		taskControl = d.RegisterTaskControl(dispatch.RequestID, cancelRun)
+	}
 
-		release, acquireErr := dispatchController.Acquire(ctx, dispatch.RequestID)
-		if acquireErr != nil {
-			if !errors.Is(acquireErr, context.Canceled) {
-				failErr := fmt.Errorf("dispatch acquire: %w", acquireErr)
-				failRes := harness.Result{
-					ExitCode: harness.ExitPreflight,
-					Err:      failErr,
-				}
-				if d.OnDispatchFailed != nil {
-					d.OnDispatchFailed(dispatch.RequestID, dispatch.Config, failRes)
-				}
-				payload := dispatchResultPayload(cfg, dispatch, failRes)
-				if err := api.PublishResult(ctx, payload); err != nil {
-					d.logf("dispatch status=publish_error request_id=%s err=%q", dispatch.RequestID, err)
-					if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
-						if nackErr := api.NackOpenClawDelivery(ctx, deliveryID); nackErr != nil {
-							d.logf("dispatch status=nack_error delivery_id=%s err=%q", deliveryID, nackErr)
-						}
-					}
-				} else {
-					d.handleFailedDispatchAfterPublish(ctx, api, cfg, dispatch, failRes)
-					if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
-						if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
-							d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
-						}
-					}
-				}
-				d.logf(
-					"dispatch status=error request_id=%s exit_code=%d workspace=%s branch=%s pr_url=%s err=%q",
-					firstNonEmpty(dispatch.RequestID, dedupeKey),
-					failRes.ExitCode,
-					failRes.WorkspaceDir,
-					failRes.Branch,
-					failRes.PRURL,
-					failRes.Err,
-				)
+	workers.Add(1)
+	go func(
+		dispatch SkillDispatch,
+		deliveryID string,
+		dedupeKey string,
+		ackedEarly bool,
+		runCtx context.Context,
+		cancelRun context.CancelCauseFunc,
+		taskControl DispatchTaskControl,
+	) {
+		defer workers.Done()
+		defer cancelRun(nil)
+		if d.CompleteTaskControl != nil {
+			defer d.CompleteTaskControl(dispatch.RequestID)
+		}
+		if deduper != nil {
+			defer deduper.Done(dedupeKey)
+		}
+
+		publishFailure := func(status, stage string, err error, triggerFollowUps bool) {
+			if err == nil {
+				err = errors.New("unknown error")
 			}
-			if deduper != nil {
-				deduper.Done(dedupeKey)
+			failErr := err
+			if strings.TrimSpace(stage) != "" {
+				failErr = fmt.Errorf("%s: %w", stage, err)
 			}
+			failRes := harness.Result{
+				ExitCode: harness.ExitPreflight,
+				Err:      failErr,
+			}
+			if triggerFollowUps && d.OnDispatchFailed != nil {
+				d.OnDispatchFailed(dispatch.RequestID, dispatch.Config, failRes)
+			}
+			payload := dispatchResultPayload(cfg, dispatch, failRes)
+			if publishErr := api.PublishResult(runCtx, payload); publishErr != nil {
+				d.logf("dispatch status=publish_error request_id=%s err=%q", dispatch.RequestID, publishErr)
+				if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
+					if nackErr := api.NackOpenClawDelivery(runCtx, deliveryID); nackErr != nil {
+						d.logf("dispatch status=nack_error delivery_id=%s err=%q", deliveryID, nackErr)
+					}
+				}
+			} else {
+				if triggerFollowUps {
+					d.handleFailedDispatchAfterPublish(runCtx, api, cfg, dispatch, failRes)
+				}
+				if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
+					if ackErr := api.AckOpenClawDelivery(runCtx, deliveryID); ackErr != nil {
+						d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, ackErr)
+					}
+				}
+			}
+			d.logf(
+				"dispatch status=%s request_id=%s exit_code=%d workspace=%s branch=%s pr_url=%s err=%q",
+				firstNonEmpty(status, "error"),
+				firstNonEmpty(dispatch.RequestID, dedupeKey),
+				failRes.ExitCode,
+				failRes.WorkspaceDir,
+				failRes.Branch,
+				failRes.PRURL,
+				failRes.Err,
+			)
+		}
+
+		for {
+			if taskControl != nil {
+				if waitErr := taskControl.WaitUntilRunnable(runCtx); waitErr != nil {
+					if taskControl.IsStopped() || isStoppedByOperatorErr(context.Cause(runCtx)) {
+						stopErr := context.Cause(runCtx)
+						if stopErr == nil {
+							stopErr = errors.New("task was stopped by operator")
+						}
+						publishFailure("stopped", "", stopErr, false)
+						return
+					}
+					if errors.Is(waitErr, context.Canceled) {
+						return
+					}
+					publishFailure("error", "dispatch wait", waitErr, true)
+					return
+				}
+			}
+
+			acquireCtx, cancelAcquire := context.WithCancel(runCtx)
+			if taskControl != nil {
+				taskControl.SetAcquireCancel(cancelAcquire)
+			}
+			forceAcquire := false
+			if taskControl != nil {
+				forceAcquire = taskControl.ConsumeForceAcquire()
+			}
+			acquire := dispatchController.Acquire
+			if forceAcquire {
+				acquire = dispatchController.AcquireForce
+			}
+			release, acquireErr := acquire(acquireCtx, dispatch.RequestID)
+			if taskControl != nil {
+				taskControl.ClearAcquireCancel(cancelAcquire)
+			}
+			cancelAcquire()
+
+			if acquireErr != nil {
+				if taskControl != nil && taskControl.IsStopped() {
+					stopErr := context.Cause(runCtx)
+					if stopErr == nil {
+						stopErr = errors.New("task was stopped by operator")
+					}
+					publishFailure("stopped", "", stopErr, false)
+					return
+				}
+				if taskControl != nil && taskControl.IsPaused() && errors.Is(acquireErr, context.Canceled) && runCtx.Err() == nil {
+					continue
+				}
+				if taskControl != nil && taskControl.HasForceAcquire() && errors.Is(acquireErr, context.Canceled) && runCtx.Err() == nil {
+					continue
+				}
+				if errors.Is(acquireErr, context.Canceled) {
+					return
+				}
+				publishFailure("error", "dispatch acquire", acquireErr, true)
+				return
+			}
+
+			if taskControl != nil {
+				taskControl.SetRunning(true)
+			}
+			d.handleDispatch(runCtx, api, cfg, dispatch, deliveryID, ackedEarly)
+			if taskControl != nil {
+				taskControl.SetRunning(false)
+			}
+			release()
 			return
 		}
-		defer release()
-		defer func() {
-			if deduper != nil {
-				deduper.Done(dedupeKey)
-			}
-		}()
-		d.handleDispatch(ctx, api, cfg, dispatch, deliveryID, ackedEarly)
-	}(dispatch, deliveryID, dupKey, ackedEarly)
+	}(dispatch, deliveryID, dupKey, ackedEarly, runCtx, cancelRun, taskControl)
 }
 
 func shouldFallbackToPull(err error) bool {
@@ -483,6 +586,13 @@ func isUnauthorizedHubError(err error) bool {
 	return strings.Contains(text, "status=401") ||
 		strings.Contains(text, "status 401") ||
 		strings.Contains(text, "unauthorized")
+}
+
+func isStoppedByOperatorErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(strings.TrimSpace(err.Error())), "stopped by operator")
 }
 
 func dedupeKeyForDispatch(dispatch SkillDispatch, messageID, deliveryID string) string {
@@ -595,7 +705,15 @@ func (d Daemon) handleDispatch(
 	}
 
 	res := h.Run(ctx, dispatch.Config)
-	if res.Err != nil && d.OnDispatchFailed != nil {
+	stoppedByOperator := false
+	if stopErr := context.Cause(ctx); isStoppedByOperatorErr(stopErr) {
+		stoppedByOperator = true
+		if res.ExitCode == harness.ExitSuccess {
+			res.ExitCode = harness.ExitPreflight
+		}
+		res.Err = stopErr
+	}
+	if res.Err != nil && !stoppedByOperator && d.OnDispatchFailed != nil {
 		d.OnDispatchFailed(dispatch.RequestID, dispatch.Config, res)
 	}
 	payload := dispatchResultPayload(cfg, dispatch, res)
@@ -608,7 +726,7 @@ func (d Daemon) handleDispatch(
 		}
 		return
 	}
-	if res.Err != nil {
+	if res.Err != nil && !stoppedByOperator {
 		d.handleFailedDispatchAfterPublish(ctx, api, cfg, dispatch, res)
 	}
 	if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
@@ -618,8 +736,13 @@ func (d Daemon) handleDispatch(
 	}
 
 	if res.Err != nil {
+		status := "error"
+		if stoppedByOperator {
+			status = "stopped"
+		}
 		d.logf(
-			"dispatch status=error request_id=%s exit_code=%d workspace=%s branch=%s pr_url=%s err=%q",
+			"dispatch status=%s request_id=%s exit_code=%d workspace=%s branch=%s pr_url=%s err=%q",
+			status,
 			dispatch.RequestID,
 			res.ExitCode,
 			res.WorkspaceDir,

@@ -321,9 +321,9 @@ func runHub(args []string) int {
 	var queueUnexpectedNoChangesFollowUp func(requestID string, result harness.Result, runCfg config.Config)
 	var queueEscalatedNoChangesFollowUp func(requestID string, result harness.Result, runCfg config.Config)
 	var enqueueLocalRun func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string, force bool) (string, error)
-		enqueueLocalRun = func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string, force bool) (string, error) {
-			if authGate != nil {
-				authState, authErr := authGate.Status(reqCtx)
+	enqueueLocalRun = func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string, force bool) (string, error) {
+		if authGate != nil {
+			authState, authErr := authGate.Status(reqCtx)
 			if authErr != nil {
 				return "", fmt.Errorf("check agent auth status: %w", authErr)
 			}
@@ -333,15 +333,15 @@ func runHub(args []string) int {
 					firstNonEmptyString(authState.Message, "complete agent authorization in the UI"),
 				)
 			}
-			}
+		}
 
-			runCfg = applyDefaultAgentRuntimeConfig(runCfg, cfg)
-			if err := validateRunConfigPromptImages(runCfg); err != nil {
-				return "", err
-			}
-			source = strings.TrimSpace(source)
-			if source == "" {
-				source = localSubmitSource
+		runCfg = applyDefaultAgentRuntimeConfig(runCfg, cfg)
+		if err := validateRunConfigPromptImages(runCfg); err != nil {
+			return "", err
+		}
+		source = strings.TrimSpace(source)
+		if source == "" {
+			source = localSubmitSource
 		}
 
 		dedupeKey := dedupeKeyForRunConfig(runCfg)
@@ -662,6 +662,10 @@ func runHub(args []string) int {
 	hubController.logf = daemonLogger
 	hubController.dispatchController = dispatchController
 	hubController.taskLogRoot = logRoot
+	hubController.registerTaskControl = func(requestID string, cancel context.CancelCauseFunc) hub.DispatchTaskControl {
+		return localTaskController.Register(requestID, cancel)
+	}
+	hubController.completeTaskControl = localTaskController.Complete
 	hubController.onDispatchQueued = func(requestID string, runCfg config.Config) {
 		if runConfigJSON, ok := marshalRunConfigJSON(runCfg); ok {
 			monitorBroker.RecordTaskRunConfig(requestID, runConfigJSON)
