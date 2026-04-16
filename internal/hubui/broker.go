@@ -59,25 +59,26 @@ type TaskControls struct {
 
 // Task represents one hub dispatch execution state.
 type Task struct {
-	RequestID    string       `json:"request_id"`
-	Prompt       string       `json:"prompt,omitempty"`
-	Skill        string       `json:"skill,omitempty"`
-	Repo         string       `json:"repo,omitempty"`
-	Repos        []string     `json:"repos,omitempty"`
-	BaseBranch   string       `json:"base_branch,omitempty"`
-	Status       string       `json:"status"`
-	Stage        string       `json:"stage,omitempty"`
-	StageStatus  string       `json:"stage_status,omitempty"`
-	ExitCode     int          `json:"exit_code,omitempty"`
-	WorkspaceDir string       `json:"workspace_dir,omitempty"`
-	Branch       string       `json:"branch,omitempty"`
-	PRURL        string       `json:"pr_url,omitempty"`
-	Error        string       `json:"error,omitempty"`
-	StartedAt    string       `json:"started_at"`
-	UpdatedAt    string       `json:"updated_at"`
-	CanRerun     bool         `json:"can_rerun,omitempty"`
-	Controls     TaskControls `json:"controls,omitempty"`
-	Logs         []TaskLog    `json:"logs"`
+	RequestID    string          `json:"request_id"`
+	Prompt       string          `json:"prompt,omitempty"`
+	Skill        string          `json:"skill,omitempty"`
+	Repo         string          `json:"repo,omitempty"`
+	Repos        []string        `json:"repos,omitempty"`
+	BaseBranch   string          `json:"base_branch,omitempty"`
+	Status       string          `json:"status"`
+	Stage        string          `json:"stage,omitempty"`
+	StageStatus  string          `json:"stage_status,omitempty"`
+	ExitCode     int             `json:"exit_code,omitempty"`
+	WorkspaceDir string          `json:"workspace_dir,omitempty"`
+	Branch       string          `json:"branch,omitempty"`
+	PRURL        string          `json:"pr_url,omitempty"`
+	Error        string          `json:"error,omitempty"`
+	StartedAt    string          `json:"started_at"`
+	UpdatedAt    string          `json:"updated_at"`
+	CanRerun     bool            `json:"can_rerun,omitempty"`
+	RunConfig    json.RawMessage `json:"run_config,omitempty"`
+	Controls     TaskControls    `json:"controls,omitempty"`
+	Logs         []TaskLog       `json:"logs"`
 }
 
 // Connection captures current monitor connectivity state.
@@ -243,7 +244,7 @@ func (b *Broker) Snapshot() Snapshot {
 
 	snapshot.Tasks = make([]Task, 0, len(tasks))
 	for _, t := range tasks {
-		_, canRerun := b.runConfigs[t.RequestID]
+		runConfigJSON, canRerun := b.runConfigs[t.RequestID]
 		snapshot.Tasks = append(snapshot.Tasks, Task{
 			RequestID:    t.RequestID,
 			Prompt:       t.Prompt,
@@ -262,6 +263,7 @@ func (b *Broker) Snapshot() Snapshot {
 			StartedAt:    t.StartedAt.UTC().Format(time.RFC3339Nano),
 			UpdatedAt:    t.UpdatedAt.UTC().Format(time.RFC3339Nano),
 			CanRerun:     canRerun,
+			RunConfig:    append(json.RawMessage(nil), runConfigJSON...),
 			Logs:         append([]TaskLog(nil), t.Logs...),
 		})
 	}
@@ -291,7 +293,7 @@ func (b *Broker) Task(requestID string) (Task, bool) {
 	if !ok || t == nil {
 		return Task{}, false
 	}
-	_, canRerun := b.runConfigs[requestID]
+	runConfigJSON, canRerun := b.runConfigs[requestID]
 	return Task{
 		RequestID:    t.RequestID,
 		Prompt:       t.Prompt,
@@ -310,6 +312,7 @@ func (b *Broker) Task(requestID string) (Task, bool) {
 		StartedAt:    t.StartedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt:    t.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		CanRerun:     canRerun,
+		RunConfig:    append(json.RawMessage(nil), runConfigJSON...),
 		Logs:         append([]TaskLog(nil), t.Logs...),
 	}, true
 }
@@ -365,7 +368,7 @@ func (b *Broker) RecordRejectedPromptSubmission(runConfigJSON []byte, status str
 		return ""
 	}
 
-	runConfigJSON = bytes.TrimSpace(runConfigJSON)
+	runConfigJSON = canonicalRunConfigJSON(runConfigJSON)
 	status = strings.TrimSpace(status)
 	if status == "" {
 		status = "invalid"
@@ -408,8 +411,29 @@ func (b *Broker) RecordRejectedPromptSubmission(runConfigJSON []byte, status str
 		},
 	}
 	b.tasks[requestID] = t
+	if len(runConfigJSON) > 0 {
+		b.runConfigs[requestID] = append([]byte(nil), runConfigJSON...)
+	}
 	b.notifySubscribersLocked()
 	return requestID
+}
+
+func canonicalRunConfigJSON(runConfigJSON []byte) []byte {
+	runConfigJSON = bytes.TrimSpace(runConfigJSON)
+	if len(runConfigJSON) == 0 {
+		return nil
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(runConfigJSON, &parsed); err != nil || len(parsed) == 0 {
+		return nil
+	}
+
+	encoded, err := json.Marshal(parsed)
+	if err != nil {
+		return nil
+	}
+	return encoded
 }
 
 func (b *Broker) taskBaseBranchLocked(requestID string) string {

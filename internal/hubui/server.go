@@ -286,10 +286,10 @@ func (s Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) injectIndexConfig(data []byte) []byte {
 	type indexConfig struct {
-		AutomaticMode        bool   `json:"automaticMode"`
-		ConfiguredHarness    string `json:"configuredHarness"`
-		ConfiguredAgentLabel string `json:"configuredAgentLabel"`
-		DefaultRepository    string `json:"defaultRepository"`
+		AutomaticMode        bool     `json:"automaticMode"`
+		ConfiguredHarness    string   `json:"configuredHarness"`
+		ConfiguredAgentLabel string   `json:"configuredAgentLabel"`
+		DefaultRepository    string   `json:"defaultRepository"`
 		PromptImageHarnesses []string `json:"promptImageHarnesses"`
 	}
 	cfg, err := json.Marshal(indexConfig{
@@ -1114,11 +1114,23 @@ func (s Server) handleTaskRerun(w http.ResponseWriter, r *http.Request, requestI
 
 	runConfigJSON, ok := s.Broker.TaskRunConfig(requestID)
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]any{
-			"ok":    false,
-			"error": "run config for task is unavailable",
-		})
-		return
+		body, err := io.ReadAll(io.LimitReader(r.Body, maxLocalPromptBodyBytes))
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"ok":    false,
+				"error": fmt.Sprintf("read request body: %v", err),
+			})
+			return
+		}
+		body = bytes.TrimSpace(body)
+		if len(body) == 0 {
+			writeJSON(w, http.StatusNotFound, map[string]any{
+				"ok":    false,
+				"error": "run config for task is unavailable",
+			})
+			return
+		}
+		runConfigJSON = append([]byte(nil), body...)
 	}
 
 	force := parseTruthyQueryParam(r.URL.Query().Get("force"))

@@ -557,8 +557,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function historyTasks(snapshot)") || !strings.Contains(markup, "function rememberCompletedTaskHistory(snapshot)") {
 		t.Fatalf("expected index html to include running completed-task history aggregation")
 	}
-	if !strings.Contains(markup, "const liveByID = new Map();") || !strings.Contains(markup, "for (const task of liveByID.values()) {") {
-		t.Fatalf("expected index html history mode to include live run tasks alongside saved history")
+	if !strings.Contains(markup, "const liveByID = new Map();") || !strings.Contains(markup, "if (!isCompletedTask(task)) {") {
+		t.Fatalf("expected index html history mode to include completed tasks only")
 	}
 	if !strings.Contains(markup, `const TASK_HISTORY_KEY = "hubui.taskHistory.v1";`) {
 		t.Fatalf("expected index html to define a dedicated persisted task history storage key")
@@ -2085,8 +2085,11 @@ func TestHandlerLocalPromptSubmitFailureCreatesVisibleRejectedTask(t *testing.T)
 	if task.Error != "invalid run config: prompt failed checks" {
 		t.Fatalf("task.Error = %q, want detailed failure", task.Error)
 	}
-	if task.CanRerun {
-		t.Fatal("task.CanRerun = true, want false")
+	if !task.CanRerun {
+		t.Fatal("task.CanRerun = false, want true")
+	}
+	if len(task.RunConfig) == 0 || !strings.Contains(string(task.RunConfig), `"prompt":"show this failed prompt"`) {
+		t.Fatalf("task.RunConfig = %q, want preserved prompt config", string(task.RunConfig))
 	}
 }
 
@@ -2486,6 +2489,59 @@ func TestHandlerTaskRerunMissingConfig(t *testing.T) {
 
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+	}
+}
+
+func TestHandlerTaskRerunUsesRequestBodyWhenConfigMissing(t *testing.T) {
+	t.Parallel()
+
+	const payload = `{"repo":"git@github.com:acme/repo.git","baseBranch":"main","targetSubdir":".","prompt":"rerun from history"}`
+
+	var (
+		gotRequestID string
+		gotBody      string
+		gotForce     bool
+	)
+
+	srv := NewServer("", NewBroker())
+	srv.SubmitTaskRerun = func(_ context.Context, rerunOf string, body []byte, force bool) (string, error) {
+		gotRequestID = rerunOf
+		gotBody = string(body)
+		gotForce = force
+		return "local-901", nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tasks/req-history/rerun", "application/json", strings.NewReader(payload))
+	if err != nil {
+		t.Fatalf("POST /api/tasks/req-history/rerun error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusAccepted)
+	}
+	if gotRequestID != "req-history" {
+		t.Fatalf("rerunOf = %q, want %q", gotRequestID, "req-history")
+	}
+	if gotBody != payload {
+		t.Fatalf("submitted body = %q, want %q", gotBody, payload)
+	}
+	if gotForce {
+		t.Fatal("force = true, want false")
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if gotRequestID, _ := body["request_id"].(string); gotRequestID != "local-901" {
+		t.Fatalf("request_id = %q, want %q", gotRequestID, "local-901")
+	}
+	if gotRerunOf, _ := body["rerun_of"].(string); gotRerunOf != "req-history" {
+		t.Fatalf("rerun_of = %q, want %q", gotRerunOf, "req-history")
 	}
 }
 

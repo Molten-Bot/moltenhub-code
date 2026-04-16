@@ -453,6 +453,9 @@ func TestBrokerTaskRunConfigSupportsRerunMetadata(t *testing.T) {
 	if !snap.Tasks[0].CanRerun {
 		t.Fatal("task.CanRerun = false, want true")
 	}
+	if got := string(snap.Tasks[0].RunConfig); got != string(payload) {
+		t.Fatalf("task.RunConfig = %q, want %q", got, string(payload))
+	}
 	if snap.Tasks[0].Prompt != "rerun me" {
 		t.Fatalf("task.Prompt = %q, want %q", snap.Tasks[0].Prompt, "rerun me")
 	}
@@ -800,8 +803,11 @@ func TestBrokerRecordsRejectedPromptSubmission(t *testing.T) {
 	if task.Branch != "main" {
 		t.Fatalf("task.Branch = %q, want main", task.Branch)
 	}
-	if task.CanRerun {
-		t.Fatal("task.CanRerun = true, want false")
+	if !task.CanRerun {
+		t.Fatal("task.CanRerun = false, want true")
+	}
+	if len(task.RunConfig) == 0 || !strings.Contains(string(task.RunConfig), `"prompt":"fix broken prompt"`) {
+		t.Fatalf("task.RunConfig = %q, want preserved prompt config", string(task.RunConfig))
 	}
 	if task.Error != "invalid run config: prompt failed checks" {
 		t.Fatalf("task.Error = %q, want detailed failure", task.Error)

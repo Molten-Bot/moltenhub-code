@@ -630,7 +630,7 @@
     const TASK_REFLOW_TRANSITION_MS = 560;
     const TASK_REFLOW_TRANSITION_EASING = "cubic-bezier(0.16, 1, 0.3, 1)";
     const TASK_TIMING_REFRESH_INTERVAL_MS = 30_000;
-    const TASK_HISTORY_LIMIT = Number.POSITIVE_INFINITY;
+    const TASK_HISTORY_LIMIT = 25;
     const MAX_TERMINAL_LINES = 500;
     const TASK_PROGRESS_VISIBLE = true;
     const HUB_LOGIN_URL = "https://app.molten.bot/signin?target=hub";
@@ -4548,10 +4548,49 @@
       if (!isCompletedTask(task)) {
         return false;
       }
-      return Boolean(task.can_rerun);
+      return Boolean(task.can_rerun || taskRerunPayload(task));
     }
 
-    async function rerunTask(requestID, force = false) {
+    function normalizedTaskRunConfig(task) {
+      if (!task || typeof task !== "object") {
+        return null;
+      }
+      const config = task.run_config;
+      if (!config || typeof config !== "object" || Array.isArray(config)) {
+        return null;
+      }
+      return config;
+    }
+
+    function synthesizedTaskRunConfig(task) {
+      if (!task || typeof task !== "object") {
+        return null;
+      }
+      const prompt = taskPromptText(task);
+      const repos = taskRepoValues(task);
+      if (!prompt || repos.length === 0) {
+        return null;
+      }
+
+      const payload = { prompt };
+      if (repos.length === 1) {
+        payload.repo = repos[0];
+      } else {
+        payload.repos = repos;
+      }
+
+      const baseBranch = String(task.base_branch || task.branch || "").trim();
+      if (baseBranch) {
+        payload.baseBranch = baseBranch;
+      }
+      return payload;
+    }
+
+    function taskRerunPayload(task) {
+      return normalizedTaskRunConfig(task) || synthesizedTaskRunConfig(task);
+    }
+
+    async function rerunTask(requestID, force = false, task = null) {
       if (!requestID || state.rerunInFlight.has(requestID)) {
         return;
       }
@@ -4562,9 +4601,15 @@
 
       try {
         const query = force ? "?force=1" : "";
-        const response = await fetch(`/api/tasks/${encodeURIComponent(requestID)}/rerun${query}`, {
+        const runConfigPayload = taskRerunPayload(task);
+        const requestOptions = {
           method: "POST",
-        });
+        };
+        if (runConfigPayload) {
+          requestOptions.headers = { "Content-Type": "application/json" };
+          requestOptions.body = JSON.stringify(runConfigPayload);
+        }
+        const response = await fetch(`/api/tasks/${encodeURIComponent(requestID)}/rerun${query}`, requestOptions);
 
         let body = null;
         try {
@@ -4580,7 +4625,7 @@
               if (shouldForce) {
                 state.rerunInFlight.delete(requestID);
                 render(state.snapshot);
-                return rerunTask(requestID, true);
+                return rerunTask(requestID, true, task);
               }
             }
             trackAnalyticsEvent("task_rerun_duplicate", { request_id: requestID, forced: force });
@@ -4964,6 +5009,9 @@
         if (!requestID || liveByID.has(requestID)) {
           continue;
         }
+        if (!isCompletedTask(task)) {
+          continue;
+        }
         liveByID.set(requestID, task);
       }
 
@@ -4977,26 +5025,23 @@
         out.push({
           ...task,
           history_only: historyOnly,
-          can_rerun: historyOnly ? false : Boolean(task?.can_rerun),
+          can_rerun: Boolean(task?.can_rerun || task?.run_config),
         });
       }
 
       for (const task of state.taskHistoryByID.values()) {
         const requestID = String(task?.request_id || "").trim();
-        if (!requestID || liveByID.has(requestID)) {
+        if (!requestID || liveByID.has(requestID) || !isCompletedTask(task)) {
           continue;
         }
         out.push({
           ...task,
           history_only: true,
-          can_rerun: false,
+          can_rerun: Boolean(task?.can_rerun || task?.run_config),
         });
       }
 
       out.sort((a, b) => {
-        const rankDiff = taskActivityRank(a) - taskActivityRank(b);
-        if (rankDiff !== 0) return rankDiff;
-
         const updatedDiff = historyTaskUpdatedAt(b) - historyTaskUpdatedAt(a);
         if (updatedDiff !== 0) return updatedDiff;
 
@@ -5005,7 +5050,10 @@
 
         return String(b?.request_id || "").localeCompare(String(a?.request_id || ""));
       });
-      return out;
+      if (!Number.isFinite(TASK_HISTORY_LIMIT) || TASK_HISTORY_LIMIT < 1) {
+        return out;
+      }
+      return out.slice(0, TASK_HISTORY_LIMIT);
     }
 
     function displayTasks(snapshot) {
@@ -5487,7 +5535,7 @@
           rerun.disabled = state.rerunInFlight.has(requestID);
           rerun.addEventListener("click", (event) => {
             event.stopPropagation();
-            rerunTask(requestID);
+            rerunTask(requestID, false, task);
           });
           topActions.appendChild(rerun);
         }
@@ -5617,9 +5665,12 @@
     }
 
     function renderTasks(snapshot) {
-      const tasks = displayTasks(snapshot);
-      const hasTasks = tasks.length > 0;
       const showingHistory = normalizeTaskPanelView(state.taskPanelView) === "history";
+      const visibleTasks = displayTasks(snapshot);
+      const tasks = showingHistory
+        ? visibleTasks.filter((task) => isCompletedTask(task)).slice(0, TASK_HISTORY_LIMIT)
+        : visibleTasks;
+      const hasTasks = tasks.length > 0;
       if (!hasTasks && state.taskFullscreenOpen) {
         state.taskFullscreenOpen = false;
         document.body.classList.remove("task-fullscreen-open");
@@ -5656,8 +5707,11 @@
     }
 
     function renderFullscreenTasks(snapshot) {
-      const tasks = fullscreenTasks(snapshot);
       const showingHistory = normalizeTaskPanelView(state.taskPanelView) === "history";
+      const visibleTasks = fullscreenTasks(snapshot);
+      const tasks = showingHistory
+        ? visibleTasks.filter((task) => isCompletedTask(task)).slice(0, TASK_HISTORY_LIMIT)
+        : visibleTasks;
       renderTaskCollection(tasks, taskFullscreenList, null, {
         showOutputAction: false,
         allowCollapse: false,
