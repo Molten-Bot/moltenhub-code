@@ -632,7 +632,7 @@
     const TASK_TIMING_REFRESH_INTERVAL_MS = 30_000;
     const TASK_HISTORY_LIMIT = Number.POSITIVE_INFINITY;
     const MAX_TERMINAL_LINES = 500;
-    const TASK_PROGRESS_VISIBLE = false;
+    const TASK_PROGRESS_VISIBLE = true;
     const HUB_LOGIN_URL = "https://app.molten.bot/signin?target=hub";
     const HUB_DASHBOARD_URL = "https://app.molten.bot/hub";
     const GOOGLE_ANALYTICS_MEASUREMENT_ID = "G-BY33RFG2WB";
@@ -4982,25 +4982,22 @@
     }
 
     function historyTasks(snapshot) {
-      const liveCompletedIDs = new Set();
+      const liveByID = new Map();
       for (const task of snapshot?.tasks || []) {
-        if (!isCompletedTask(task)) {
-          continue;
-        }
         const requestID = String(task?.request_id || "").trim();
-        if (!requestID) {
+        if (!requestID || liveByID.has(requestID)) {
           continue;
         }
-        liveCompletedIDs.add(requestID);
+        liveByID.set(requestID, task);
       }
 
       const out = [];
-      for (const task of state.taskHistoryByID.values()) {
+      for (const task of liveByID.values()) {
         const requestID = String(task?.request_id || "").trim();
         if (!requestID) {
           continue;
         }
-        const historyOnly = state.dismissedTaskIDs.has(requestID) || !liveCompletedIDs.has(requestID);
+        const historyOnly = state.dismissedTaskIDs.has(requestID);
         out.push({
           ...task,
           history_only: historyOnly,
@@ -5008,7 +5005,22 @@
         });
       }
 
+      for (const task of state.taskHistoryByID.values()) {
+        const requestID = String(task?.request_id || "").trim();
+        if (!requestID || liveByID.has(requestID)) {
+          continue;
+        }
+        out.push({
+          ...task,
+          history_only: true,
+          can_rerun: false,
+        });
+      }
+
       out.sort((a, b) => {
+        const rankDiff = taskActivityRank(a) - taskActivityRank(b);
+        if (rankDiff !== 0) return rankDiff;
+
         const updatedDiff = historyTaskUpdatedAt(b) - historyTaskUpdatedAt(a);
         if (updatedDiff !== 0) return updatedDiff;
 
