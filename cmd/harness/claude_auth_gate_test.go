@@ -253,6 +253,8 @@ func TestClaudeAuthGateConfigureAcceptsCredentialsJSONInPendingState(t *testing.
 	t.Setenv("GH_TOKEN", "ghp_ready")
 	t.Setenv("GITHUB_TOKEN", "ghp_ready")
 	t.Setenv(claudeOAuthTokenEnv, "")
+	claudeConfigDir := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", claudeConfigDir)
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	g := &claudeAuthGate{
@@ -293,6 +295,94 @@ func TestClaudeAuthGateConfigureAcceptsCredentialsJSONInPendingState(t *testing.
 	}
 	if got, want := doc["claude_code_oauth_token"], "sk-ant-oat01-manual-token-123456"; got != want {
 		t.Fatalf("claude_code_oauth_token = %#v, want %q", got, want)
+	}
+
+	credentialsPath := filepath.Join(claudeConfigDir, ".credentials.json")
+	data, err = os.ReadFile(credentialsPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", credentialsPath, err)
+	}
+	if got, want := strings.TrimSpace(string(data)), raw; got != want {
+		t.Fatalf("credentials json = %q, want %q", got, want)
+	}
+}
+
+func TestClaudeAuthGateConfigureAcceptsUnknownCredentialsJSONSchemaInPendingState(t *testing.T) {
+	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GITHUB_TOKEN", "ghp_ready")
+	t.Setenv(claudeOAuthTokenEnv, "")
+	claudeConfigDir := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", claudeConfigDir)
+
+	g := &claudeAuthGate{
+		baseCtx:     context.Background(),
+		required:    true,
+		state:       "pending_browser_login",
+		message:     "auth pending",
+		procRunning: true,
+		initCfg: hub.InitConfig{
+			BaseURL:      "https://na.hub.molten.bot/v1",
+			AgentHarness: agentruntime.HarnessClaude,
+			GitHubToken:  "ghp_ready",
+		},
+		updatedAt: time.Now().UTC(),
+		logf:      func(string, ...any) {},
+	}
+
+	raw := `{"futureSchema":{"oauth":{"tokenEnvelope":{"value":"opaque"}}},"meta":{"version":2}}`
+	status, err := g.Configure(context.Background(), raw)
+	if err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	if !status.Ready {
+		t.Fatalf("status = %+v, want ready", status)
+	}
+	if got := os.Getenv(claudeOAuthTokenEnv); got != "" {
+		t.Fatalf("%s = %q, want empty", claudeOAuthTokenEnv, got)
+	}
+
+	credentialsPath := filepath.Join(claudeConfigDir, ".credentials.json")
+	data, err := os.ReadFile(credentialsPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", credentialsPath, err)
+	}
+	if got, want := strings.TrimSpace(string(data)), raw; got != want {
+		t.Fatalf("credentials json = %q, want %q", got, want)
+	}
+}
+
+func TestClaudeAuthGateConfigureRejectsInvalidCredentialsJSONInPendingState(t *testing.T) {
+	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GITHUB_TOKEN", "ghp_ready")
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+
+	g := &claudeAuthGate{
+		baseCtx:     context.Background(),
+		required:    true,
+		state:       "pending_browser_login",
+		message:     "auth pending",
+		procRunning: true,
+		initCfg: hub.InitConfig{
+			BaseURL:      "https://na.hub.molten.bot/v1",
+			AgentHarness: agentruntime.HarnessClaude,
+			GitHubToken:  "ghp_ready",
+		},
+		updatedAt: time.Now().UTC(),
+		logf:      func(string, ...any) {},
+	}
+
+	status, err := g.Configure(context.Background(), `{"claudeAiOauth":`)
+	if err == nil {
+		t.Fatal("Configure() error = nil, want non-nil")
+	}
+	if got := status.State; got != "pending_browser_login" {
+		t.Fatalf("status.State = %q, want %q", got, "pending_browser_login")
+	}
+	if !strings.Contains(status.Message, "Claude credentials JSON is invalid:") {
+		t.Fatalf("status.Message = %q, want invalid JSON details", status.Message)
+	}
+	if !strings.Contains(err.Error(), "invalid claude credentials json") {
+		t.Fatalf("Configure() error = %q, want invalid claude credentials json", err)
 	}
 }
 
