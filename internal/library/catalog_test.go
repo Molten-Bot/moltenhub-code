@@ -284,7 +284,7 @@ func TestDefaultCatalogIncludesReduceCodebaseCentralizeClassesTask(t *testing.T)
 	}
 }
 
-func TestDefaultCatalogIncludesDeletePromptImagesTask(t *testing.T) {
+func TestDefaultCatalogDoesNotIncludeDeletePromptImagesTask(t *testing.T) {
 	t.Parallel()
 
 	catalog, err := LoadCatalog(DefaultDir)
@@ -292,17 +292,7 @@ func TestDefaultCatalogIncludesDeletePromptImagesTask(t *testing.T) {
 		t.Fatalf("LoadCatalog(%q) error = %v", DefaultDir, err)
 	}
 
-	task, ok := catalog.byName["delete-prompt-images"]
-	if !ok {
-		t.Fatalf("default catalog missing %q task", "delete-prompt-images")
-	}
-	if !strings.Contains(strings.ToLower(task.Prompt), "delete all tracked and untracked files under ./prompt-images/") {
-		t.Fatalf("prompt = %q, want explicit prompt-images cleanup guidance", task.Prompt)
-	}
-	if !strings.Contains(strings.ToLower(task.Prompt), "remove the ./prompt-images directory itself") {
-		t.Fatalf("prompt = %q, want prompt-images directory removal guidance", task.Prompt)
-	}
-	if got, want := task.PRTitle, "moltenhub-delete-prompt-images"; got != want {
-		t.Fatalf("PRTitle = %q, want %q", got, want)
+	if _, ok := catalog.byName["delete-prompt-images"]; ok {
+		t.Fatalf("default catalog unexpectedly includes %q task", "delete-prompt-images")
 	}
 }
