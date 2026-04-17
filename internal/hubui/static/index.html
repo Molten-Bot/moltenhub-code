@@ -380,14 +380,36 @@
         </a>
         <div id="agent-auth-browser-code" class="hidden space-y-2">
           <div id="agent-auth-browser-commands" class="space-y-2">
-            <div class="flex flex-wrap items-center gap-2.5">
-              <div id="agent-auth-browser-command-primary" class="font-mono text-[1rem] tracking-[0.02em] text-hub-text">claude setup-token</div>
-              <button id="agent-auth-browser-command-primary-copy" class="agent-auth-copy rounded-md px-2.5 py-1.5 text-xs font-medium" type="button">Copy</button>
+            <div class="agent-auth-command-box agent-auth-command-box-inline">
+              <code id="agent-auth-browser-command-primary" class="agent-auth-command-text agent-auth-command-text-inline">claude setup-token</code>
+              <button
+                id="agent-auth-browser-command-primary-copy"
+                class="agent-auth-copy agent-auth-command-copy rounded-md p-2"
+                type="button"
+                aria-label="Copy claude setup-token command"
+                title="Copy claude setup-token command">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M9 9h11v11H9z"></path>
+                  <path d="M4 15H3V4h11v1"></path>
+                </svg>
+                <span class="sr-only">Copy claude setup-token command</span>
+              </button>
             </div>
             <div class="text-sm text-hub-text/80">If already signed in, paste credentials output</div>
-            <div class="flex flex-wrap items-center gap-2.5">
-              <div id="agent-auth-browser-command-secondary" class="font-mono text-[0.92rem] tracking-[0.01em] text-hub-text">if [ -f ~/.claude/.credentials.json ]; then cat ~/.claude/.credentials.json; else cat ~/.config/claude/.credentials.json; fi</div>
-              <button id="agent-auth-browser-command-secondary-copy" class="agent-auth-copy rounded-md px-2.5 py-1.5 text-xs font-medium" type="button">Copy</button>
+            <div class="agent-auth-command-box">
+              <code id="agent-auth-browser-command-secondary" class="agent-auth-command-text">if [ -f ~/.claude/.credentials.json ]; then cat ~/.claude/.credentials.json; else cat ~/.config/claude/.credentials.json; fi</code>
+              <button
+                id="agent-auth-browser-command-secondary-copy"
+                class="agent-auth-copy agent-auth-command-copy rounded-md p-2"
+                type="button"
+                aria-label="Copy Claude credentials command"
+                title="Copy Claude credentials command">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M9 9h11v11H9z"></path>
+                  <path d="M4 15H3V4h11v1"></path>
+                </svg>
+                <span class="sr-only">Copy Claude credentials command</span>
+              </button>
             </div>
           </div>
           <textarea
@@ -2670,12 +2692,18 @@
 
     async function copyClaudeBrowserPrimaryCommand() {
       const command = agentAuthBrowserCommandPrimary ? String(agentAuthBrowserCommandPrimary.textContent || "").trim() : "";
-      await copyTextToClipboard(command, agentAuthBrowserCommandPrimaryCopy);
+      await copyTextToClipboard(command, agentAuthBrowserCommandPrimaryCopy, {
+        preserveContents: true,
+        copiedLabel: "Copied claude setup-token command",
+      });
     }
 
     async function copyClaudeBrowserSecondaryCommand() {
       const command = agentAuthBrowserCommandSecondary ? String(agentAuthBrowserCommandSecondary.textContent || "").trim() : "";
-      await copyTextToClipboard(command, agentAuthBrowserCommandSecondaryCopy);
+      await copyTextToClipboard(command, agentAuthBrowserCommandSecondaryCopy, {
+        preserveContents: true,
+        copiedLabel: "Copied Claude credentials command",
+      });
     }
 
     async function copyTextToClipboard(value, buttonNode, options = {}) {

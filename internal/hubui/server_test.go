@@ -1538,8 +1538,12 @@ func TestHandlerIndexIncludesClaudeBrowserCodeFlow(t *testing.T) {
 		`function isClaudeBrowserCodeAwaitingSubmission(auth) {`,
 		`const showBrowserCode = isClaudePendingBrowserLoginState();`,
 		`id="agent-auth-browser-command-primary"`,
+		`class="agent-auth-command-box agent-auth-command-box-inline"`,
+		`aria-label="Copy claude setup-token command"`,
 		`id="agent-auth-browser-command-primary-copy"`,
 		`id="agent-auth-browser-command-secondary"`,
+		`class="agent-auth-command-box"`,
+		`aria-label="Copy Claude credentials command"`,
 		`id="agent-auth-browser-command-secondary-copy"`,
 		`cat ~/.pi/agent/auth.json`,
 		`Paste ~/.pi/agent/auth.json contents...`,
@@ -1585,6 +1589,11 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".theme-toggle") || !strings.Contains(css, ".theme-toggle-icon") {
 		t.Fatalf("expected stylesheet to include theme toggle styles")
+	}
+	if !strings.Contains(css, ".agent-auth-command-box {") ||
+		!strings.Contains(css, ".agent-auth-command-copy svg {") ||
+		!strings.Contains(css, ".agent-auth-command-copy.is-copied {") {
+		t.Fatalf("expected stylesheet to include Claude auth command code-box and icon copy styles")
 	}
 	if strings.Contains(css, ".theme-cycle-button") || strings.Contains(css, ".theme-control-label") || strings.Contains(css, ".theme-cycle-next") {
 		t.Fatalf("expected stylesheet to remove the legacy theme cycle selectors")

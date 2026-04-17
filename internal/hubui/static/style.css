@@ -2658,6 +2658,66 @@ select.prompt-control {
   background: var(--surface-auth-button-hover-bg);
 }
 
+.agent-auth-command-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: rgba(10, 18, 34, 0.32);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.agent-auth-command-box-inline {
+  align-items: center;
+}
+
+.agent-auth-command-text {
+  display: block;
+  flex: 1 1 auto;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.agent-auth-command-text-inline {
+  white-space: nowrap;
+}
+
+.agent-auth-command-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+}
+
+.agent-auth-command-copy svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.agent-auth-command-copy.is-copied {
+  border-color: rgba(34, 197, 94, 0.4);
+  background: rgba(34, 197, 94, 0.12);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.12);
+}
+
 .agent-auth-url {
   color: var(--surface-auth-link);
 }
