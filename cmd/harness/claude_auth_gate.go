@@ -281,6 +281,22 @@ func (g *claudeAuthGate) Verify(ctx context.Context) (hubui.AgentAuthState, erro
 func (g *claudeAuthGate) Configure(_ context.Context, rawInput string) (hubui.AgentAuthState, error) {
 	status, _ := g.Status(context.Background())
 	if status.State == "pending_browser_login" {
+		if credentialsJSON, looksLikeJSON, err := normalizeClaudeCredentialsJSON(rawInput); looksLikeJSON {
+			if err != nil {
+				return g.pendingBrowserLoginFailure(
+					fmt.Sprintf("Claude credentials JSON is invalid: %v", err),
+					fmt.Errorf("invalid claude credentials json: %w", err),
+				)
+			}
+			if err := g.completeWithClaudeCredentialsJSON(credentialsJSON); err != nil {
+				return g.pendingBrowserLoginFailure(
+					fmt.Sprintf("Claude credentials JSON failed to save: %v", err),
+					fmt.Errorf("save claude credentials json: %w", err),
+				)
+			}
+			state, _ := g.Status(context.Background())
+			return state, nil
+		}
 		if token := extractClaudeOAuthTokenFromInput(rawInput); token != "" {
 			g.completeWithClaudeOAuthToken(token)
 			state, _ := g.Status(context.Background())
@@ -390,6 +406,31 @@ func (g *claudeAuthGate) submitBrowserCode(rawInput string) (hubui.AgentAuthStat
 
 func normalizeClaudeBrowserCode(raw string) string {
 	return strings.Join(strings.Fields(strings.TrimSpace(raw)), "")
+}
+
+func normalizeClaudeCredentialsJSON(raw string) (string, bool, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", false, nil
+	}
+	if !strings.HasPrefix(trimmed, "{") {
+		return "", false, nil
+	}
+
+	var parsed map[string]any
+	decoder := json.NewDecoder(strings.NewReader(trimmed))
+	decoder.UseNumber()
+	if err := decoder.Decode(&parsed); err != nil {
+		return "", true, err
+	}
+	if parsed == nil {
+		return "", true, fmt.Errorf("credentials payload must be one JSON object")
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		return "", true, fmt.Errorf("credentials payload must contain only one JSON object")
+	}
+	return trimmed, true, nil
 }
 
 func extractClaudeOAuthTokenFromInput(raw string) string {
@@ -1115,6 +1156,61 @@ func (g *claudeAuthGate) completeWithClaudeOAuthToken(token string) {
 	g.logf("hub.auth status=ok harness=claude action=oauth_token_captured")
 }
 
+func (g *claudeAuthGate) completeWithClaudeCredentialsJSON(raw string) error {
+	if g == nil {
+		return nil
+	}
+
+	credentialsPath, err := saveClaudeCredentialsJSON(raw)
+	if err != nil {
+		return err
+	}
+	if token := extractClaudeOAuthTokenFromInput(raw); token != "" {
+		if err := setClaudeOAuthTokenEnvironment(token); err != nil {
+			g.logf("hub.auth status=warn harness=claude action=save_oauth_token err=%q", err)
+		} else {
+			g.mu.Lock()
+			runtimeConfigPath := g.runtimeConfigPath
+			initCfg := g.initCfg
+			g.mu.Unlock()
+			if runtimeConfigPath != "" {
+				if err := hub.SaveRuntimeConfigClaudeOAuthToken(runtimeConfigPath, initCfg, token); err != nil {
+					g.logf("hub.auth status=warn harness=claude action=persist_oauth_token err=%q", err)
+				}
+			}
+		}
+	}
+
+	var (
+		cancel context.CancelFunc
+		input  io.WriteCloser
+	)
+	g.mu.Lock()
+	cancel = g.procCancel
+	input = g.procInput
+	g.ready = true
+	g.state = "ready"
+	g.message = "Claude Code and GitHub token are ready."
+	g.authURL = ""
+	g.pendingBrowserCode = ""
+	g.browserSubmitAttempts = 0
+	g.awaitingOAuthToken = false
+	g.procRunning = false
+	g.procCancel = nil
+	g.procInput = nil
+	g.updatedAt = time.Now().UTC()
+	g.mu.Unlock()
+
+	if input != nil {
+		_ = input.Close()
+	}
+	if cancel != nil {
+		cancel()
+	}
+	g.logf("hub.auth status=ok harness=claude action=credentials_json_captured path=%q", credentialsPath)
+	return nil
+}
+
 func buildClaudeLoginCommand(ctx context.Context, command string) *exec.Cmd {
 	command = strings.TrimSpace(command)
 	if command == "" {
@@ -1181,6 +1277,40 @@ func setClaudeOAuthTokenEnvironment(token string) error {
 		return fmt.Errorf("claude oauth token is required")
 	}
 	return os.Setenv(claudeOAuthTokenEnv, token)
+}
+
+func saveClaudeCredentialsJSON(raw string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", fmt.Errorf("claude credentials json is required")
+	}
+	candidates := claudeCredentialCandidates()
+	if len(candidates) == 0 {
+		return "", fmt.Errorf("claude credentials path is unavailable")
+	}
+	path := candidates[0]
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return "", fmt.Errorf("create claude credentials dir: %w", err)
+	}
+	if err := os.WriteFile(path, []byte(trimmed+"\n"), 0o600); err != nil {
+		return "", fmt.Errorf("write claude credentials file: %w", err)
+	}
+	return path, nil
+}
+
+func (g *claudeAuthGate) pendingBrowserLoginFailure(message string, err error) (hubui.AgentAuthState, error) {
+	if g == nil {
+		return readyAgentAuthState(), err
+	}
+	g.mu.Lock()
+	if !g.ready {
+		g.state = "pending_browser_login"
+		g.message = strings.TrimSpace(message)
+		g.updatedAt = time.Now().UTC()
+	}
+	snap := g.snapshotLocked()
+	g.mu.Unlock()
+	return snap, err
 }
 func firstClaudeEnabledProvider() string {
 	providers := []struct {
