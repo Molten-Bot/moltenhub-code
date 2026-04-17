@@ -152,6 +152,7 @@
                   <path d="M2.2 2.8v2.9h2.9"></path>
                   <path d="M8 4.8v3.5l2.4 1.4"></path>
                 </svg>
+                <span id="task-history-toggle-plus" class="task-history-toggle-plus hidden" aria-hidden="true">+</span>
               </button>
               <button
                 id="task-view-toggle"
@@ -629,6 +630,7 @@
     const TASK_PANEL_VIEW_KEY = "hubui.taskPanelView";
     const TASK_STATUS_FILTER_KEY = "hubui.taskStatusFilter";
     const TASK_HISTORY_KEY = "hubui.taskHistory.v1";
+    const TASK_HISTORY_UNSEEN_KEY = "hubui.taskHistoryUnseen.v1";
     const THEME_KEY = "hubui.theme";
     const HOVER_MODE_KEY = "hubui.hoverMode";
     const THEME_MODES = ["light", "dark", "night"];
@@ -1193,6 +1195,20 @@
       }
     }
 
+    function loadTaskHistoryUnseenIDs() {
+      try {
+        const raw = localStorage.getItem(TASK_HISTORY_UNSEEN_KEY);
+        if (!raw) return new Set();
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return new Set();
+        return new Set(parsed
+          .map((value) => String(value || "").trim())
+          .filter((value) => value !== ""));
+      } catch (_err) {
+        return new Set();
+      }
+    }
+
     function loadThemeMode() {
       try {
         const raw = localStorage.getItem(THEME_KEY);
@@ -1240,6 +1256,7 @@
       taskOrderPendingDesired: [],
       taskOrderLastSyncBucket: Math.floor(Date.now() / TASK_ORDER_SYNC_INTERVAL_MS),
       taskHistoryByID: loadTaskHistory(),
+      taskHistoryUnseenIDs: loadTaskHistoryUnseenIDs(),
       taskFullscreenOpen: false,
       agentAuthBusy: false,
       agentAuthInteracted: false,
@@ -1280,6 +1297,7 @@
     const taskPanel = document.getElementById("task-panel");
     const taskPanelTitle = document.getElementById("task-panel-title");
     const taskHistoryToggle = document.getElementById("task-history-toggle");
+    const taskHistoryTogglePlus = document.getElementById("task-history-toggle-plus");
     const taskViewToggle = document.getElementById("task-view-toggle");
     const taskFullscreenToggle = document.getElementById("task-fullscreen-toggle");
     const taskFullscreen = document.getElementById("task-fullscreen");
@@ -4434,6 +4452,9 @@
         const previousTask = previousStatuses.get(requestID);
         if (!previousTask || !COMPLETED_STATUSES.has(previousTask)) {
           triggerTaskSparkle(requestID);
+          if (normalizeTaskStatusFilter(state.taskStatusFilter) !== "completed") {
+            rememberTaskHistoryUnseen(requestID);
+          }
         }
       }
     }
@@ -4481,6 +4502,43 @@
       }
     }
 
+    function persistTaskHistoryUnseenIDs() {
+      try {
+        if (!(state.taskHistoryUnseenIDs instanceof Set) || state.taskHistoryUnseenIDs.size === 0) {
+          localStorage.removeItem(TASK_HISTORY_UNSEEN_KEY);
+          return;
+        }
+        localStorage.setItem(TASK_HISTORY_UNSEEN_KEY, JSON.stringify(Array.from(state.taskHistoryUnseenIDs.values())));
+      } catch (_err) {
+        // Ignore localStorage failures.
+      }
+    }
+
+    function clearTaskHistoryUnseen() {
+      if (!(state.taskHistoryUnseenIDs instanceof Set) || state.taskHistoryUnseenIDs.size === 0) {
+        return false;
+      }
+      state.taskHistoryUnseenIDs.clear();
+      persistTaskHistoryUnseenIDs();
+      return true;
+    }
+
+    function rememberTaskHistoryUnseen(requestID) {
+      requestID = String(requestID || "").trim();
+      if (!requestID) {
+        return false;
+      }
+      if (!(state.taskHistoryUnseenIDs instanceof Set)) {
+        state.taskHistoryUnseenIDs = new Set();
+      }
+      if (state.taskHistoryUnseenIDs.has(requestID)) {
+        return false;
+      }
+      state.taskHistoryUnseenIDs.add(requestID);
+      persistTaskHistoryUnseenIDs();
+      return true;
+    }
+
     function setTaskPanelView(view, options = {}) {
       const normalized = normalizeTaskPanelView(view);
       const persist = options.persist !== false;
@@ -4504,12 +4562,19 @@
     function setTaskStatusFilter(filter, options = {}) {
       const normalized = normalizeTaskStatusFilter(filter);
       const persist = options.persist !== false;
+      const shouldClearUnseen = normalized === "completed";
       if (state.taskStatusFilter === normalized) {
+        if (shouldClearUnseen) {
+          clearTaskHistoryUnseen();
+        }
         applyTaskPanelViewMeta();
         render(state.snapshot);
         return;
       }
       state.taskStatusFilter = normalized;
+      if (shouldClearUnseen) {
+        clearTaskHistoryUnseen();
+      }
       if (persist) {
         persistTaskStatusFilter();
       }
@@ -4547,12 +4612,23 @@
       const statusFilter = normalizeTaskStatusFilter(state.taskStatusFilter);
       if (taskHistoryToggle) {
         const showingHistory = statusFilter === "completed";
+        const hasUnseenHistory = !showingHistory &&
+          state.taskHistoryUnseenIDs instanceof Set &&
+          state.taskHistoryUnseenIDs.size > 0;
         const toggleLabel = showingHistory
           ? "Show current running work"
           : "Show completed task history";
         taskHistoryToggle.setAttribute("aria-pressed", showingHistory ? "true" : "false");
         taskHistoryToggle.setAttribute("aria-label", toggleLabel);
         taskHistoryToggle.setAttribute("title", toggleLabel);
+        taskHistoryToggle.classList.toggle("task-history-toggle-unseen", hasUnseenHistory);
+      }
+      if (taskHistoryTogglePlus) {
+        const showingHistory = statusFilter === "completed";
+        const hasUnseenHistory = !showingHistory &&
+          state.taskHistoryUnseenIDs instanceof Set &&
+          state.taskHistoryUnseenIDs.size > 0;
+        taskHistoryTogglePlus.classList.toggle("hidden", !hasUnseenHistory);
       }
       if (taskViewToggle) {
         taskViewToggle.setAttribute("aria-label", meta.toggleLabel);
@@ -6527,6 +6603,9 @@
     initSnowfallBackground();
     setPromptMode(state.promptMode);
     applyPromptVisibility();
+    if (normalizeTaskStatusFilter(state.taskStatusFilter) === "completed") {
+      clearTaskHistoryUnseen();
+    }
     applyTaskPanelViewMeta();
     renderConfiguredAgent();
     applyAgentAuthGate(state.agentAuth);
