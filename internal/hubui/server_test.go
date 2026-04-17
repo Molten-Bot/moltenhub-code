@@ -1441,14 +1441,19 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `trackAnalyticsEvent("prompt_submit_succeeded", { prompt_mode: state.promptMode, request_id: requestID });`) {
 		t.Fatalf("expected index html to track successful prompt submissions")
 	}
+	if !strings.Contains(markup, `localPromptInput.value = normalized.pretty;
+
+      setTaskStatusFilter("running");
+      localPromptSubmit.disabled = true;`) {
+		t.Fatalf("expected index html to switch back to Current Work as soon as Run starts from history view")
+	}
 	if !strings.Contains(markup, `setTaskStatusFilter("running");
             setLocalPromptStatus("warn", duplicateNotice(body));`) {
 		t.Fatalf("expected index html to switch back to Current Work when a duplicate submit resolves to an active task")
 	}
 	if !strings.Contains(markup, `clearSubmittedPromptState();
-        setTaskStatusFilter("running");
         trackAnalyticsEvent("prompt_submit_succeeded", { prompt_mode: state.promptMode, request_id: requestID });`) {
-		t.Fatalf("expected index html to switch back to Current Work after a successful prompt submission")
+		t.Fatalf("expected index html to keep prompt submit success flow after switching back to Current Work")
 	}
 	if !strings.Contains(markup, `trackAnalyticsEvent("task_rerun_duplicate", { request_id: requestID, forced: force });
             setTaskStatusFilter("running");

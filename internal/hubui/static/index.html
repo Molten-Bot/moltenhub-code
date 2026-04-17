@@ -6218,6 +6218,7 @@
       }
       localPromptInput.value = normalized.pretty;
 
+      setTaskStatusFilter("running");
       localPromptSubmit.disabled = true;
       trackAnalyticsEvent("prompt_submit_started", {
         prompt_mode: state.promptMode,
@@ -6259,7 +6260,6 @@
           // Ignore local history extraction failures.
         }
         clearSubmittedPromptState();
-        setTaskStatusFilter("running");
         trackAnalyticsEvent("prompt_submit_succeeded", { prompt_mode: state.promptMode, request_id: requestID });
         setLocalPromptStatus("ok", `Queued request ${requestID}`);
       } catch (err) {
