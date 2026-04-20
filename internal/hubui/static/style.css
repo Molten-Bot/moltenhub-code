@@ -1158,7 +1158,8 @@ body .right-col.prompt-collapsed.task-list-hidden {
   display: flex;
   align-items: flex-end;
   gap: 12px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .prompt-field {
@@ -1885,6 +1886,8 @@ select.prompt-control {
 
 .task-footer .task-top-actions {
   margin-left: auto;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .task-id {
