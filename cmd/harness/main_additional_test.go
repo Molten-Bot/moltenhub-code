@@ -415,7 +415,7 @@ func TestFailureFollowUpPromptDefaultWhenNoPaths(t *testing.T) {
 	if !strings.Contains(got, "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.") {
 		t.Fatalf("prompt missing molten hub integration instruction: %q", got)
 	}
-	if !strings.Contains(got, `When failures occur, send a response back to the calling agent that clearly states failure and includes the error details.`) {
+	if !strings.Contains(got, "When failures occur, send a response back to the calling agent that clearly states failure and includes the error details. Use explicit `Failure:` and `Error details:` fields.") {
 		t.Fatalf("prompt missing failure response instruction: %q", got)
 	}
 	if !strings.Contains(got, "If a repository is not initialized after clone, use only gh CLI/git tools to create and push a main branch, then continue once git state is ready for work.") {

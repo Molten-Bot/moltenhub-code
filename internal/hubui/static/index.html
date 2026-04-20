@@ -141,6 +141,19 @@
             </div>
             <div class="task-panel-actions">
               <button
+                id="task-sound-toggle"
+                class="task-sound-toggle"
+                type="button"
+                aria-pressed="false"
+                aria-label="Mute task sounds"
+                title="Mute task sounds">
+                <svg class="task-sound-toggle-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <path d="M3.2 6.1h2.4l2.8-2.3v8.4L5.6 9.9H3.2z"></path>
+                  <path d="M10.2 5.2a3.5 3.5 0 0 1 0 5.6"></path>
+                  <path d="M11.9 3.8a5.7 5.7 0 0 1 0 8.4"></path>
+                </svg>
+              </button>
+              <button
                 id="task-history-toggle"
                 class="task-history-toggle"
                 type="button"
@@ -675,6 +688,7 @@
     const TASK_STATUS_FILTER_KEY = "hubui.taskStatusFilter";
     const TASK_HISTORY_KEY = "hubui.taskHistory.v1";
     const TASK_HISTORY_UNSEEN_KEY = "hubui.taskHistoryUnseen.v1";
+    const TASK_SOUND_MUTED_KEY = "hubui.taskSoundMuted";
     const THEME_KEY = "hubui.theme";
     const HOVER_MODE_KEY = "hubui.hoverMode";
     const THEME_MODES = ["light", "dark", "night"];
@@ -1253,6 +1267,14 @@
       }
     }
 
+    function loadTaskSoundMuted() {
+      try {
+        return localStorage.getItem(TASK_SOUND_MUTED_KEY) === "true";
+      } catch (_err) {
+        return false;
+      }
+    }
+
     function loadThemeMode() {
       try {
         const raw = localStorage.getItem(THEME_KEY);
@@ -1301,6 +1323,9 @@
       taskOrderLastSyncBucket: Math.floor(Date.now() / TASK_ORDER_SYNC_INTERVAL_MS),
       taskHistoryByID: loadTaskHistory(),
       taskHistoryUnseenIDs: loadTaskHistoryUnseenIDs(),
+      taskSoundMuted: loadTaskSoundMuted(),
+      taskSoundInitialized: false,
+      taskSoundSeenStatuses: new Map(),
       taskFullscreenOpen: false,
       agentAuthBusy: false,
       agentAuthInteracted: false,
@@ -1323,6 +1348,7 @@
     let pendingStreamSnapshotText = "";
     let streamRenderTimer = null;
     let taskTimingRefreshTimer = null;
+    let taskAudioContext = null;
 
     const localConnItem = document.getElementById("local-conn-item");
     const localConnDot = document.getElementById("local-conn-dot");
@@ -1340,6 +1366,7 @@
     const taskList = document.getElementById("task-list");
     const taskPanel = document.getElementById("task-panel");
     const taskPanelTitle = document.getElementById("task-panel-title");
+    const taskSoundToggle = document.getElementById("task-sound-toggle");
     const taskHistoryToggle = document.getElementById("task-history-toggle");
     const taskHistoryTogglePlus = document.getElementById("task-history-toggle-plus");
     const taskViewToggle = document.getElementById("task-view-toggle");
@@ -4615,6 +4642,136 @@
       return true;
     }
 
+    function persistTaskSoundMuted() {
+      try {
+        localStorage.setItem(TASK_SOUND_MUTED_KEY, state.taskSoundMuted ? "true" : "false");
+      } catch (_err) {
+        // Ignore localStorage failures.
+      }
+    }
+
+    function applyTaskSoundToggleMeta() {
+      if (!taskSoundToggle) {
+        return;
+      }
+      const muted = Boolean(state.taskSoundMuted);
+      const label = muted ? "Unmute task sounds" : "Mute task sounds";
+      taskSoundToggle.setAttribute("aria-pressed", muted ? "true" : "false");
+      taskSoundToggle.setAttribute("aria-label", label);
+      taskSoundToggle.setAttribute("title", label);
+      taskSoundToggle.classList.toggle("task-sound-toggle-muted", muted);
+    }
+
+    function ensureTaskAudioContext() {
+      const AudioCtor = window.AudioContext || window.webkitAudioContext;
+      if (typeof AudioCtor !== "function") {
+        return null;
+      }
+      if (!taskAudioContext) {
+        taskAudioContext = new AudioCtor();
+      }
+      if (typeof taskAudioContext.resume === "function" && taskAudioContext.state === "suspended") {
+        taskAudioContext.resume().catch(() => {});
+      }
+      return taskAudioContext;
+    }
+
+    function playTaskTone(segments) {
+      if (state.taskSoundMuted) {
+        return;
+      }
+      const audio = ensureTaskAudioContext();
+      if (!audio) {
+        return;
+      }
+      const startAt = audio.currentTime + 0.01;
+      for (const segment of segments) {
+        if (!segment || !Number.isFinite(segment.frequency) || !Number.isFinite(segment.duration)) {
+          continue;
+        }
+        const offset = Number.isFinite(segment.offset) ? segment.offset : 0;
+        const duration = Math.max(0.02, segment.duration);
+        const gainValue = Number.isFinite(segment.gain) ? segment.gain : 0.035;
+        const started = startAt + Math.max(0, offset);
+        const oscillator = audio.createOscillator();
+        const gain = audio.createGain();
+        oscillator.type = segment.type || "sine";
+        oscillator.frequency.setValueAtTime(segment.frequency, started);
+        gain.gain.setValueAtTime(0.0001, started);
+        gain.gain.linearRampToValueAtTime(gainValue, started + Math.min(0.018, duration / 2));
+        gain.gain.exponentialRampToValueAtTime(0.0001, started + duration);
+        oscillator.connect(gain);
+        gain.connect(audio.destination);
+        oscillator.start(started);
+        oscillator.stop(started + duration + 0.02);
+      }
+    }
+
+    function playTaskSuccessSound() {
+      playTaskTone([
+        { frequency: 659.25, duration: 0.11, offset: 0, type: "triangle", gain: 0.026 },
+        { frequency: 880, duration: 0.14, offset: 0.08, type: "triangle", gain: 0.03 },
+      ]);
+    }
+
+    function playTaskErrorSound() {
+      playTaskTone([
+        { frequency: 329.63, duration: 0.15, offset: 0, type: "sawtooth", gain: 0.022 },
+        { frequency: 246.94, duration: 0.2, offset: 0.06, type: "sawtooth", gain: 0.026 },
+      ]);
+    }
+
+    function taskTerminalSound(task) {
+      const status = normalizedTaskStatus(task?.status);
+      if (status === "completed" || status === "no_changes") {
+        return "success";
+      }
+      if (status === "error" || status === "invalid" || status === "duplicate" || status === "stopped") {
+        return "error";
+      }
+      return "";
+    }
+
+    function syncTaskCompletionSounds(snapshot) {
+      const nextStatuses = new Map();
+      const tasks = Array.isArray(snapshot?.tasks) ? snapshot.tasks : [];
+      for (const task of tasks) {
+        const requestID = String(task?.request_id || "").trim();
+        if (!requestID) {
+          continue;
+        }
+        const status = normalizedTaskStatus(task?.status);
+        nextStatuses.set(requestID, status);
+        if (!state.taskSoundInitialized) {
+          continue;
+        }
+        if (!COMPLETED_STATUSES.has(status)) {
+          continue;
+        }
+        const previousStatus = String(state.taskSoundSeenStatuses.get(requestID) || "").trim();
+        if (previousStatus === status) {
+          continue;
+        }
+        const sound = taskTerminalSound(task);
+        if (sound === "success") {
+          playTaskSuccessSound();
+        } else if (sound === "error") {
+          playTaskErrorSound();
+        }
+      }
+      state.taskSoundSeenStatuses = nextStatuses;
+      state.taskSoundInitialized = true;
+    }
+
+    function toggleTaskSoundMuted() {
+      state.taskSoundMuted = !state.taskSoundMuted;
+      if (!state.taskSoundMuted) {
+        ensureTaskAudioContext();
+      }
+      persistTaskSoundMuted();
+      applyTaskSoundToggleMeta();
+    }
+
     function setTaskPanelView(view, options = {}) {
       const normalized = normalizeTaskPanelView(view);
       const persist = options.persist !== false;
@@ -4685,6 +4842,7 @@
       if (taskFullscreenPanelTitle) {
         taskFullscreenPanelTitle.textContent = "Current Work";
       }
+      applyTaskSoundToggleMeta();
       const statusFilter = normalizeTaskStatusFilter(state.taskStatusFilter);
       if (taskHistoryToggle) {
         const showingHistory = statusFilter === "completed";
@@ -6144,6 +6302,7 @@
       if (!snapshot) return;
       const previousSnapshot = state.snapshot;
       state.snapshot = snapshot;
+      syncTaskCompletionSounds(snapshot);
       syncTaskCompletionSparkles(previousSnapshot, snapshot);
       rememberCompletedTaskHistory(snapshot);
       const observedRepos = [];
@@ -6624,6 +6783,9 @@
         : "completed";
       setTaskStatusFilter(nextFilter);
     });
+    taskSoundToggle.addEventListener("click", () => {
+      toggleTaskSoundMuted();
+    });
     taskViewToggle.addEventListener("click", () => {
       const nextView = normalizeTaskPanelView(state.taskPanelView) === "prompt" ? "main" : "prompt";
       setTaskPanelView(nextView);
@@ -6710,6 +6872,7 @@
       clearTaskHistoryUnseen();
     }
     applyTaskPanelViewMeta();
+    applyTaskSoundToggleMeta();
     renderConfiguredAgent();
     applyAgentAuthGate(state.agentAuth);
     applyHubSetupState(state.hubSetup);

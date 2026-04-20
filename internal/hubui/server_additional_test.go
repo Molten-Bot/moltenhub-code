@@ -1305,3 +1305,79 @@ func TestAuthGateVerifyButtonUsesReadableContrastToken(t *testing.T) {
 		t.Fatalf("expected auth verify button to use the readable foreground token")
 	}
 }
+
+func TestCurrentWorkHeaderIncludesTaskSoundMuteToggle(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.Code)
+	}
+
+	html := resp.Body.String()
+	if !strings.Contains(html, "id=\"task-panel-title\"") || !strings.Contains(html, "Current Work") {
+		t.Fatalf("expected Current Work panel markup")
+	}
+	if !strings.Contains(html, "id=\"task-sound-toggle\"") ||
+		!strings.Contains(html, "aria-label=\"Mute task sounds\"") ||
+		!strings.Contains(html, "title=\"Mute task sounds\"") {
+		t.Fatalf("expected Current Work header to include mute toggle for task sounds")
+	}
+	if !strings.Contains(html, "const TASK_SOUND_MUTED_KEY = \"hubui.taskSoundMuted\";") {
+		t.Fatalf("expected task sound mute preference storage key")
+	}
+	if !strings.Contains(html, "taskSoundMuted: loadTaskSoundMuted(),") {
+		t.Fatalf("expected initial UI state to load task sound mute preference")
+	}
+	if !strings.Contains(html, "function playTaskSuccessSound() {") ||
+		!strings.Contains(html, "frequency: 659.25") ||
+		!strings.Contains(html, "frequency: 880") {
+		t.Fatalf("expected completed work success sound sequence")
+	}
+	if !strings.Contains(html, "function playTaskErrorSound() {") ||
+		!strings.Contains(html, "frequency: 329.63") ||
+		!strings.Contains(html, "frequency: 246.94") {
+		t.Fatalf("expected failed work error sound sequence")
+	}
+	if !strings.Contains(html, "function toggleTaskSoundMuted() {") ||
+		!strings.Contains(html, "persistTaskSoundMuted();") ||
+		!strings.Contains(html, "taskSoundToggle.addEventListener(\"click\", () => {") {
+		t.Fatalf("expected task sound toggle to persist and react to clicks")
+	}
+	if !strings.Contains(html, "function syncTaskCompletionSounds(snapshot) {") ||
+		!strings.Contains(html, "playTaskSuccessSound();") ||
+		!strings.Contains(html, "playTaskErrorSound();") {
+		t.Fatalf("expected task completion updates to trigger success and error sounds")
+	}
+}
+
+func TestTaskSoundToggleStylesShowMutedState(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodGet, "/static/style.css", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.Code)
+	}
+
+	css := resp.Body.String()
+	if !strings.Contains(css, ".task-history-toggle,\n.task-view-toggle,\n.task-sound-toggle {") {
+		t.Fatalf("expected task sound toggle to share Current Work action button styling")
+	}
+	if !strings.Contains(css, ".task-sound-toggle:hover,\n.task-sound-toggle:focus-visible {") {
+		t.Fatalf("expected task sound toggle hover and focus affordances")
+	}
+	if !strings.Contains(css, ".task-sound-toggle[aria-pressed=\"true\"] {") {
+		t.Fatalf("expected task sound toggle pressed styling for muted state")
+	}
+	if !strings.Contains(css, ".task-sound-toggle-muted .task-sound-toggle-icon {\n  opacity: 0.7;\n}") {
+		t.Fatalf("expected muted task sound icon styling")
+	}
+}

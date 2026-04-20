@@ -3552,7 +3552,7 @@ func TestWithCompletionGatePromptIncludesAgentRuntimeGuidance(t *testing.T) {
 
 	got := withCompletionGatePrompt("Build API")
 	wantSnippets := []string{
-		"When failures occur, send a response back to the calling agent that clearly states failure and includes the error details.",
+		"When failures occur, send a response back to the calling agent that clearly states failure and includes the error details. Use explicit `Failure:` and `Error details:` fields.",
 		"If a repository is not initialized after clone, use only gh CLI/git tools to create and push a main branch, then continue once git state is ready for work.",
 		"Do not stop work just because you cannot create a pull request or watch remote CI/CD from inside this agent runtime.",
 		"For implementation or repository-change requests, do not stop at analysis.",

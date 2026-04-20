@@ -26,6 +26,9 @@ func TestWithExecutionContractIncludesFailureResponseInstruction(t *testing.T) {
 	if !strings.Contains(got, FailureResponseInstruction) {
 		t.Fatalf("WithExecutionContract() missing failure response instruction: %q", got)
 	}
+	if !strings.Contains(got, "Use explicit `Failure:` and `Error details:` fields.") {
+		t.Fatalf("WithExecutionContract() missing explicit failure field guidance: %q", got)
+	}
 }
 
 func TestWithExecutionContractIncludesUninitializedRepoInstruction(t *testing.T) {

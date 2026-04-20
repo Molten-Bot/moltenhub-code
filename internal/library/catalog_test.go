@@ -259,7 +259,8 @@ func TestResolveCatalogDirFallsBackToSourceTreeWhenWorkingDirChanges(t *testing.
 }
 
 func TestDefaultCatalogIncludesReduceCodebaseCentralizeClassesTask(t *testing.T) {
-	t.Parallel()
+	t.Setenv(catalogDirEnv, "")
+	t.Setenv(agentsSeedEnv, "")
 
 	catalog, err := LoadCatalog(DefaultDir)
 	if err != nil {
@@ -285,7 +286,8 @@ func TestDefaultCatalogIncludesReduceCodebaseCentralizeClassesTask(t *testing.T)
 }
 
 func TestDefaultCatalogDoesNotIncludeDeletePromptImagesTask(t *testing.T) {
-	t.Parallel()
+	t.Setenv(catalogDirEnv, "")
+	t.Setenv(agentsSeedEnv, "")
 
 	catalog, err := LoadCatalog(DefaultDir)
 	if err != nil {
