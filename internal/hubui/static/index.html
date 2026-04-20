@@ -144,9 +144,9 @@
                 id="task-sound-toggle"
                 class="task-sound-toggle"
                 type="button"
-                aria-pressed="false"
-                aria-label="Mute task sounds"
-                title="Mute task sounds">
+                aria-pressed="true"
+                aria-label="Disable task sounds"
+                title="Disable task sounds">
                 <svg class="task-sound-toggle-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
                   <path d="M3.2 6.1h2.4l2.8-2.3v8.4L5.6 9.9H3.2z"></path>
                   <path d="M10.2 5.2a3.5 3.5 0 0 1 0 5.6"></path>
@@ -4812,8 +4812,9 @@
         return;
       }
       const muted = Boolean(state.taskSoundMuted);
-      const label = muted ? "Unmute task sounds" : "Mute task sounds";
-      taskSoundToggle.setAttribute("aria-pressed", muted ? "true" : "false");
+      const enabled = !muted;
+      const label = enabled ? "Disable task sounds" : "Enable task sounds";
+      taskSoundToggle.setAttribute("aria-pressed", enabled ? "true" : "false");
       taskSoundToggle.setAttribute("aria-label", label);
       taskSoundToggle.setAttribute("title", label);
       taskSoundToggle.classList.toggle("task-sound-toggle-muted", muted);
@@ -4831,6 +4832,16 @@
         taskAudioContext.resume().catch(() => {});
       }
       return taskAudioContext;
+    }
+
+    function primeTaskAudioContextFromInteraction() {
+      if (state.taskSoundMuted) {
+        return;
+      }
+      ensureTaskAudioContext();
+      document.removeEventListener("pointerdown", primeTaskAudioContextFromInteraction, true);
+      document.removeEventListener("keydown", primeTaskAudioContextFromInteraction, true);
+      document.removeEventListener("click", primeTaskAudioContextFromInteraction, true);
     }
 
     function playTaskTone(segments) {
@@ -4866,15 +4877,15 @@
 
     function playTaskSuccessSound() {
       playTaskTone([
-        { frequency: 659.25, duration: 0.11, offset: 0, type: "triangle", gain: 0.026 },
-        { frequency: 880, duration: 0.14, offset: 0.08, type: "triangle", gain: 0.03 },
+        { frequency: 659.25, duration: 0.11, offset: 0, type: "triangle", gain: 0.072 },
+        { frequency: 880, duration: 0.14, offset: 0.08, type: "triangle", gain: 0.084 },
       ]);
     }
 
     function playTaskErrorSound() {
       playTaskTone([
-        { frequency: 329.63, duration: 0.15, offset: 0, type: "sawtooth", gain: 0.022 },
-        { frequency: 246.94, duration: 0.2, offset: 0.06, type: "sawtooth", gain: 0.026 },
+        { frequency: 329.63, duration: 0.15, offset: 0, type: "sawtooth", gain: 0.066 },
+        { frequency: 246.94, duration: 0.2, offset: 0.06, type: "sawtooth", gain: 0.078 },
       ]);
     }
 
@@ -4924,6 +4935,7 @@
       state.taskSoundMuted = !state.taskSoundMuted;
       if (!state.taskSoundMuted) {
         ensureTaskAudioContext();
+        playTaskSuccessSound();
       }
       persistTaskSoundMuted();
       applyTaskSoundToggleMeta();
@@ -6955,6 +6967,9 @@
     taskSoundToggle.addEventListener("click", () => {
       toggleTaskSoundMuted();
     });
+    document.addEventListener("pointerdown", primeTaskAudioContextFromInteraction, true);
+    document.addEventListener("keydown", primeTaskAudioContextFromInteraction, true);
+    document.addEventListener("click", primeTaskAudioContextFromInteraction, true);
     taskViewToggle.addEventListener("click", () => {
       const nextView = normalizeTaskPanelView(state.taskPanelView) === "prompt" ? "main" : "prompt";
       setTaskPanelView(nextView);

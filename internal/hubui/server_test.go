@@ -657,6 +657,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "taskSoundToggle.addEventListener(\"click\", () => {") {
 		t.Fatalf("expected index html to wire task sound toggle interactions")
 	}
+	if !strings.Contains(markup, "document.addEventListener(\"click\", primeTaskAudioContextFromInteraction, true);") {
+		t.Fatalf("expected index html to prime task audio context from click interactions")
+	}
 	if !strings.Contains(markup, "setTaskStatusFilter(nextFilter);") {
 		t.Fatalf("expected index html history toggle to switch task filter between running and completed")
 	}
