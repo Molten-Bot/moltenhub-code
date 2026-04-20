@@ -155,6 +155,18 @@ func TestHarnessRuntimeAndCheckSnapshotHelpers(t *testing.T) {
 	if got := remediationCommitMessage("", 1); got != "chore: automated update (ci remediation 1)" {
 		t.Fatalf("remediationCommitMessage(empty) = %q", got)
 	}
+	if got := workflowDispatchConclusionBucket("completed", "success"); got != "pass" {
+		t.Fatalf("workflowDispatchConclusionBucket(success) = %q, want pass", got)
+	}
+	if got := workflowDispatchConclusionBucket("completed", "skipped"); got != "skipping" {
+		t.Fatalf("workflowDispatchConclusionBucket(skipped) = %q, want skipping", got)
+	}
+	if got := workflowDispatchConclusionBucket("queued", ""); got != "pending" {
+		t.Fatalf("workflowDispatchConclusionBucket(queued) = %q, want pending", got)
+	}
+	if got := workflowDispatchConclusionBucket("completed", "failure"); got != "fail" {
+		t.Fatalf("workflowDispatchConclusionBucket(failure) = %q, want fail", got)
+	}
 }
 
 func TestHarnessContextSleepHelper(t *testing.T) {

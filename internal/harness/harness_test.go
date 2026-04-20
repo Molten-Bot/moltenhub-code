@@ -1391,12 +1391,90 @@ func TestRunNoChecksReportedAfterRetryWindowTriggersRemediation(t *testing.T) {
 		})
 	}
 	exps = append(exps,
+		expectedRun{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: "abcdef123456\n"}},
+		expectedRun{cmd: workflowDispatchRunsCommand(repoDir, branch), res: execx.Result{Stdout: "[]\n"}},
 		expectedRun{cmd: codexCommand(targetDir, remediationPrompt(withAgentsPrompt(cfg.Prompt, agentsPath), prURL, noChecks, 1))},
 		expectedRun{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		expectedRun{cmd: addCommand(repoDir)},
 		expectedRun{cmd: commitCommand(repoDir, remediationCommitMessage(cfg.CommitMessage, 1))},
 		expectedRun{cmd: pushCommand(repoDir, branch)},
 		expectedRun{cmd: prChecksCommand(repoDir, prURL)},
+	)
+
+	fake := &fakeRunner{t: t, exps: exps}
+	sleepCalls := 0
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+	h.Sleep = func(_ context.Context, d time.Duration) error {
+		sleepCalls++
+		if d != prChecksNoReportRetryDelay {
+			t.Fatalf("sleep delay = %s, want %s", d, prChecksNoReportRetryDelay)
+		}
+		return nil
+	}
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if sleepCalls != maxPRChecksNoReportRetries {
+		t.Fatalf("sleepCalls = %d, want %d", sleepCalls, maxPRChecksNoReportRetries)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunNoChecksReportedResolvesFromWorkflowDispatchSnapshot(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+	prURL := "https://github.com/acme/repo/pull/42"
+	noChecks := "no checks reported on the 'moltenhub-build-api' branch"
+
+	exps := []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL), res: execx.Result{Stderr: noChecks + "\n"}, err: errors.New("checks unavailable")},
+		{cmd: workflowDispatchCommand(repoDir, branch)},
+	}
+	for i := 1; i <= maxPRChecksNoReportRetries; i++ {
+		exps = append(exps, expectedRun{
+			cmd: prChecksCommand(repoDir, prURL),
+			res: execx.Result{Stderr: noChecks + "\n"},
+			err: errors.New("checks unavailable"),
+		})
+	}
+	exps = append(exps,
+		expectedRun{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: "deadbeef\n"}},
+		expectedRun{
+			cmd: workflowDispatchRunsCommand(repoDir, branch),
+			res: execx.Result{Stdout: `[{"status":"completed","conclusion":"success","workflowName":"CI","displayTitle":"CI","headSha":"deadbeef"}]`},
+		},
 	)
 
 	fake := &fakeRunner{t: t, exps: exps}
@@ -2524,6 +2602,22 @@ func TestCommandBuilders(t *testing.T) {
 	wantWorkflowDispatch := []string{"workflow", "run", defaultCIWorkflowPath, "--ref", branch}
 	if workflowDispatch.Name != "gh" || workflowDispatch.Dir != repoDir || !reflect.DeepEqual(workflowDispatch.Args, wantWorkflowDispatch) {
 		t.Fatalf("workflow dispatch command unexpected: %+v", workflowDispatch)
+	}
+	headSHA := headCommitSHACommand(repoDir)
+	if headSHA.Name != "git" || headSHA.Dir != repoDir || !reflect.DeepEqual(headSHA.Args, []string{"rev-parse", "HEAD"}) {
+		t.Fatalf("head commit command unexpected: %+v", headSHA)
+	}
+	workflowRuns := workflowDispatchRunsCommand(repoDir, branch)
+	wantWorkflowRuns := []string{
+		"run", "list",
+		"--workflow", defaultCIWorkflowPath,
+		"--branch", branch,
+		"--event", "workflow_dispatch",
+		"--json", "status,conclusion,workflowName,displayTitle,headSha",
+		"--limit", "1",
+	}
+	if workflowRuns.Name != "gh" || workflowRuns.Dir != repoDir || !reflect.DeepEqual(workflowRuns.Args, wantWorkflowRuns) {
+		t.Fatalf("workflow runs command unexpected: %+v", workflowRuns)
 	}
 
 	fetchBranch := fetchBranchCommand(repoDir, branch)
