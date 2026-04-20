@@ -554,6 +554,13 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "terminalNode.dataset.pendingRenderSig = renderSig;") {
 		t.Fatalf("expected index html to defer task output redraws while text is selected")
 	}
+	if !strings.Contains(markup, "function scheduleDeferredSelectionRenderFlush() {") ||
+		!strings.Contains(markup, "deferredSelectionRenderTimer = window.setTimeout(() => {") {
+		t.Fatalf("expected index html to include a timed fallback flush for deferred selection-bound renders")
+	}
+	if !strings.Contains(markup, "scheduleDeferredSelectionRenderFlush();") {
+		t.Fatalf("expected index html to schedule deferred flushes whenever a render is blocked by active selection")
+	}
 	if !strings.Contains(markup, "document.addEventListener(\"selectionchange\", flushDeferredSelectionRenders);") {
 		t.Fatalf("expected index html to flush deferred task renders after text selection clears")
 	}
