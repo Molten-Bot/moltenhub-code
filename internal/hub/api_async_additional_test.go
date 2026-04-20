@@ -58,12 +58,68 @@ func TestAsyncAPIClientRecordGitHubTaskCompleteActivity(t *testing.T) {
 	}
 }
 
+func TestAsyncAPIClientRecordCodingActivityRunning(t *testing.T) {
+	t.Parallel()
+
+	var patchSeen int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got, want := r.Header.Get("Authorization"), "Bearer agent-token"; got != want {
+			t.Fatalf("Authorization = %q, want %q", got, want)
+		}
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"metadata":{"activities":["existing"]}}`))
+		case r.Method == http.MethodPatch && (r.URL.Path == "/v1/agents/me/metadata" || r.URL.Path == "/v1/agents/me"):
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode patch body: %v", err)
+			}
+			meta, _ := body["metadata"].(map[string]any)
+			activities, _ := meta["activities"].([]any)
+			found := false
+			for _, activity := range activities {
+				if strings.TrimSpace(strings.ToLower(activity.(string))) == "coding activity is running" {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Fatalf("patch activities = %#v, expected coding activity running entry", activities)
+			}
+			atomic.StoreInt32(&patchSeen, 1)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := NewAsyncAPIClient(server.URL+"/v1", "agent-token")
+	if err := client.RecordCodingActivityRunning(context.Background()); err != nil {
+		t.Fatalf("RecordCodingActivityRunning() error = %v", err)
+	}
+	if atomic.LoadInt32(&patchSeen) != 1 {
+		t.Fatal("RecordCodingActivityRunning() did not issue metadata patch")
+	}
+}
+
 func TestAsyncAPIClientRecordGitHubTaskCompleteActivityRequiresToken(t *testing.T) {
 	t.Parallel()
 
 	client := NewAsyncAPIClient("https://example.test/v1", "")
 	if err := client.RecordGitHubTaskCompleteActivity(context.Background()); err == nil {
 		t.Fatal("RecordGitHubTaskCompleteActivity() error = nil, want non-nil")
+	}
+}
+
+func TestAsyncAPIClientRecordCodingActivityRunningRequiresToken(t *testing.T) {
+	t.Parallel()
+
+	client := NewAsyncAPIClient("https://example.test/v1", "")
+	if err := client.RecordCodingActivityRunning(context.Background()); err == nil {
+		t.Fatal("RecordCodingActivityRunning() error = nil, want non-nil")
 	}
 }
 
