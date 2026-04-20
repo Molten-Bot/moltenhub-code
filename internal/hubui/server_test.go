@@ -1752,8 +1752,8 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task-panel-actions {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n}") {
 		t.Fatalf("expected stylesheet to group task header action icons on the right side")
 	}
-	if !strings.Contains(css, ".task-history-toggle,\n.task-view-toggle {") {
-		t.Fatalf("expected stylesheet to include compact icon button styles for history and task-view toggles")
+	if !strings.Contains(css, ".task-history-toggle,\n.task-view-toggle,\n.task-sound-toggle {") {
+		t.Fatalf("expected stylesheet to include compact icon button styles for history, task-view, and task-sound toggles")
 	}
 	if !strings.Contains(css, ".task-history-toggle-icon") {
 		t.Fatalf("expected stylesheet to include task-history icon styles")
@@ -1770,8 +1770,8 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task-history-toggle-plus") {
 		t.Fatalf("expected stylesheet to include plus badge styles for unseen completed task history")
 	}
-	if !strings.Contains(css, ".task-view-toggle {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 32px;\n  height: 32px;") {
-		t.Fatalf("expected stylesheet to size the task-view toggle as a compact icon affordance")
+	if !strings.Contains(css, ".task-history-toggle,\n.task-view-toggle,\n.task-sound-toggle {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 32px;\n  height: 32px;") {
+		t.Fatalf("expected stylesheet to size history, task-view, and task-sound toggles as compact icon affordances")
 	}
 	if !strings.Contains(css, ".task-view-toggle-icon") {
 		t.Fatalf("expected stylesheet to include task-view icon styles")

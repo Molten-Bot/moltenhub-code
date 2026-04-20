@@ -11,7 +11,8 @@ import (
 )
 
 func TestCheckedInSkillCatalogMatchesRuntimeCatalog(t *testing.T) {
-	t.Parallel()
+	t.Setenv("HARNESS_LIBRARY_DIR", "")
+	t.Setenv("HARNESS_AGENTS_SEED_PATH", "")
 
 	catalog, err := library.LoadCatalog(library.DefaultDir)
 	if err != nil {
