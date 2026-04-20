@@ -191,10 +191,7 @@ body {
   position: relative;
   overflow-x: hidden;
   color: var(--text);
-  background:
-    var(--body-radial-left),
-    var(--body-radial-right),
-    var(--body-linear);
+  background: pink;
   font-family: var(--font-family);
   transition: color 0.18s ease, background 0.24s ease;
 }
