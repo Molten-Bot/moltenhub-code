@@ -756,6 +756,7 @@
     const TASK_REFLOW_TRANSITION_MS = 560;
     const TASK_REFLOW_TRANSITION_EASING = "cubic-bezier(0.16, 1, 0.3, 1)";
     const TASK_TIMING_REFRESH_INTERVAL_MS = 30_000;
+    const DEFERRED_SELECTION_RENDER_FLUSH_DELAY_MS = 32;
     const TASK_HISTORY_LIMIT = 25;
     const MAX_TERMINAL_LINES = 500;
     const TASK_PROGRESS_VISIBLE = true;
@@ -1400,6 +1401,7 @@
     let pendingStreamSnapshotText = "";
     let streamRenderTimer = null;
     let taskTimingRefreshTimer = null;
+    let deferredSelectionRenderTimer = null;
     let taskAudioContext = null;
 
     const localConnItem = document.getElementById("local-conn-item");
@@ -5959,6 +5961,7 @@
       }
       if (nodeContainsActiveSelection(listNode)) {
         listNode.dataset.pendingRenderSig = renderSig;
+        scheduleDeferredSelectionRenderFlush();
         return;
       }
       const previousTaskRects = captureTaskRects(listNode);
@@ -6401,6 +6404,7 @@
       }
       if (nodeContainsActiveSelection(terminalNode)) {
         terminalNode.dataset.pendingRenderSig = renderSig;
+        scheduleDeferredSelectionRenderFlush();
         return;
       }
       terminalNode.dataset.renderSig = renderSig;
@@ -6441,6 +6445,16 @@
     function renderFullscreenTerminal(snapshot) {
       const tasks = fullscreenTasks(snapshot);
       renderTerminalForTasks(tasks, taskFullscreenHeadLabel, taskFullscreenResult, taskFullscreenTerminal);
+    }
+
+    function scheduleDeferredSelectionRenderFlush() {
+      if (deferredSelectionRenderTimer !== null) {
+        return;
+      }
+      deferredSelectionRenderTimer = window.setTimeout(() => {
+        deferredSelectionRenderTimer = null;
+        flushDeferredSelectionRenders();
+      }, DEFERRED_SELECTION_RENDER_FLUSH_DELAY_MS);
     }
 
     function flushDeferredSelectionRenders() {
