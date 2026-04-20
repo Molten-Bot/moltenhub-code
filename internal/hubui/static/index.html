@@ -2445,6 +2445,13 @@
 
     function updateAgentAuthDoneVisibility() {
       if (!agentAuthVerify) return;
+      const codexFlow = authHarness(state.agentAuth) === "codex";
+      if (codexFlow) {
+        const visible = state.agentAuth.required && !state.agentAuth.ready;
+        agentAuthVerify.classList.toggle("hidden", !visible);
+        agentAuthVerify.disabled = state.agentAuthBusy || state.agentAuthVerifyPending;
+        return;
+      }
       const requiresManualConfigure = isManualConfigureState();
       const hasCodeChallenge = Boolean(state.agentAuth.authURL || state.agentAuth.deviceCode);
       const meetsAuthInteractionRequirement = requiresManualConfigure || (!hasCodeChallenge || state.agentAuthInteracted);
@@ -3142,9 +3149,15 @@
             setLocalPromptStatus("ok", `${currentAgentLabel()} auth is ready.`);
           } else if (auth.state === "needs_device_auth") {
             setAgentAuthVerifyPending(false);
+            if (authHarness(auth) === "codex") {
+              setLocalPromptStatus("warn", "Codex auth is required. Open browser auth, then click Done again.");
+            }
             await startAgentDeviceAuth();
           } else {
             setAgentAuthVerifyPending(false);
+            if (authHarness(auth) === "codex") {
+              setLocalPromptStatus("warn", "Codex auth is still pending. Complete browser auth, then click Done again.");
+            }
           }
         } catch (err) {
           const message = err && err.message ? err.message : "device auth verify failed";

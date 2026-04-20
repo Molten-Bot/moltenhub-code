@@ -1195,8 +1195,16 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	if !strings.Contains(html, "agentAuthVerifyPending: false") {
 		t.Fatalf("expected auth gate state to track pending verification")
 	}
-	if !strings.Contains(html, "requiresManualConfigure || (!hasCodeChallenge || state.agentAuthInteracted)") {
-		t.Fatalf("expected Done button visibility to support URL-only browser auth and code challenge flows")
+	if !strings.Contains(html, "const codexFlow = authHarness(state.agentAuth) === \"codex\";") ||
+		!strings.Contains(html, "agentAuthVerify.disabled = state.agentAuthBusy || state.agentAuthVerifyPending;") {
+		t.Fatalf("expected Done button logic to keep Codex visible and lock it while verification is pending")
+	}
+	if !strings.Contains(html, "const visible = state.agentAuth.required && !state.agentAuth.ready;") {
+		t.Fatalf("expected Codex Done button visibility to remain stable while auth is incomplete")
+	}
+	if !strings.Contains(html, "Codex auth is required. Open browser auth, then click Done again.") ||
+		!strings.Contains(html, "Codex auth is still pending. Complete browser auth, then click Done again.") {
+		t.Fatalf("expected Done verification to emit explicit Codex auth validation feedback")
 	}
 	if !strings.Contains(html, "function setAgentAuthVerifyPending(pending)") {
 		t.Fatalf("expected helper to toggle pending verification state")
