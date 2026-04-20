@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -201,4 +202,86 @@ func TestMarkOpenClawOfflineUsesOfflineEndpoint(t *testing.T) {
 	if calls[0].Body["reason"] != "harness_shutdown" {
 		t.Fatalf("reason = %#v", calls[0].Body["reason"])
 	}
+}
+
+func TestPingAndHealthUseRootEndpoints(t *testing.T) {
+	t.Parallel()
+
+	var (
+		mu    sync.Mutex
+		paths []string
+	)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		paths = append(paths, r.URL.Path)
+		mu.Unlock()
+
+		switch r.URL.Path {
+		case "/ping", "/health":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer ts.Close()
+
+	client := NewAPIClient(ts.URL + "/v1")
+	if err := client.Ping(context.Background()); err != nil {
+		t.Fatalf("Ping() error = %v", err)
+	}
+	if err := client.Health(context.Background()); err != nil {
+		t.Fatalf("Health() error = %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if got, want := len(paths), 2; got != want {
+		t.Fatalf("paths len = %d, want %d", got, want)
+	}
+	if paths[0] != "/ping" {
+		t.Fatalf("first path = %q, want /ping", paths[0])
+	}
+	if paths[1] != "/health" {
+		t.Fatalf("second path = %q, want /health", paths[1])
+	}
+}
+
+func TestPingIncludesStatusAndBodyOnFailure(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/ping" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"message":"moltenhub is starting","status":"starting"}`))
+	}))
+	defer ts.Close()
+
+	client := NewAPIClient(ts.URL + "/v1")
+	err := client.Ping(context.Background())
+	if err == nil {
+		t.Fatal("Ping() error = nil, want non-nil")
+	}
+	if got := err.Error(); got == "" || got == "<nil>" {
+		t.Fatalf("Ping() error = %q, want populated error", got)
+	}
+	if got := err.Error(); !containsAll(got, "/ping status=503", `{"message":"moltenhub is starting","status":"starting"}`) {
+		t.Fatalf("Ping() error = %q, want status and body detail", got)
+	}
+}
+
+func containsAll(text string, parts ...string) bool {
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		if !strings.Contains(text, part) {
+			return false
+		}
+	}
+	return true
 }

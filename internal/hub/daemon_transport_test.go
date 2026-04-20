@@ -1,9 +1,17 @@
 package hub
 
 import (
+	"context"
 	"errors"
 	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/jef/moltenhub-code/internal/execx"
 )
 
 func TestShouldFallbackToPull(t *testing.T) {
@@ -89,4 +97,133 @@ func TestIsUnauthorizedHubError(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDaemonRunRepeatsPingHealthPullBeforeEachWebsocketAttempt(t *testing.T) {
+	t.Parallel()
+
+	var (
+		mu          sync.Mutex
+		events      []string
+		wsAttempts  int
+		secondWS    sync.Once
+		secondWSHit = make(chan struct{})
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		record := func(event string) {
+			mu.Lock()
+			events = append(events, event)
+			mu.Unlock()
+		}
+
+		switch r.URL.Path {
+		case "/ping":
+			record("ping")
+			w.WriteHeader(http.StatusNoContent)
+		case "/health":
+			record("health")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		case "/v1/openclaw/messages/pull":
+			record("pull")
+			w.WriteHeader(http.StatusNoContent)
+		case "/v1/openclaw/messages/ws":
+			record("ws")
+			mu.Lock()
+			wsAttempts++
+			currentAttempts := wsAttempts
+			mu.Unlock()
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"message":"moltenhub is starting","status":"starting"}`))
+			if currentAttempts >= 2 {
+				secondWS.Do(func() { close(secondWSHit) })
+			}
+		case "/v1/agents/me", "/v1/agents/me/status", "/v1/agents/me/metadata":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case "/v1/openclaw/messages/offline":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			if strings.HasPrefix(r.URL.Path, "/v1/agents/me") {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"ok":true}`))
+				return
+			}
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	d := NewDaemon(execx.OSRunner{})
+	d.ReconnectDelay = 10 * time.Millisecond
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	runDone := make(chan error, 1)
+	go func() {
+		runDone <- d.Run(ctx, InitConfig{
+			BaseURL:    server.URL + "/v1",
+			AgentToken: "agent_saved",
+			SessionKey: "main",
+		})
+	}()
+
+	select {
+	case <-secondWSHit:
+		cancel()
+	case <-time.After(3 * time.Second):
+		cancel()
+		t.Fatal("timed out waiting for second websocket attempt")
+	}
+
+	select {
+	case err := <-runDone:
+		if err != nil {
+			t.Fatalf("Daemon.Run() error = %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for daemon shutdown")
+	}
+
+	mu.Lock()
+	gotEvents := append([]string(nil), events...)
+	gotAttempts := wsAttempts
+	mu.Unlock()
+
+	if gotAttempts < 2 {
+		t.Fatalf("websocket attempts = %d, want >= 2", gotAttempts)
+	}
+
+	prevWS := -1
+	for idx, event := range gotEvents {
+		if event != "ws" {
+			continue
+		}
+		window := gotEvents[prevWS+1 : idx]
+		pingIdx := indexOfEvent(window, "ping", 0)
+		healthIdx := indexOfEvent(window, "health", pingIdx+1)
+		pullIdx := indexOfEvent(window, "pull", healthIdx+1)
+		if pingIdx < 0 || healthIdx < 0 || pullIdx < 0 {
+			t.Fatalf("missing ordered prechecks before ws attempt %d, events=%v", idx, gotEvents)
+		}
+		prevWS = idx
+	}
+}
+
+func indexOfEvent(events []string, want string, start int) int {
+	if start < 0 {
+		start = 0
+	}
+	for i := start; i < len(events); i++ {
+		if events[i] == want {
+			return i
+		}
+	}
+	return -1
 }

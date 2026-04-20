@@ -416,6 +416,16 @@ func (c APIClient) PullOpenClawMessage(ctx context.Context, token string, timeou
 	}
 }
 
+// Ping checks hub liveness at /ping.
+func (c APIClient) Ping(ctx context.Context) error {
+	return c.probeRootEndpoint(ctx, "/ping")
+}
+
+// Health checks hub health at /health.
+func (c APIClient) Health(ctx context.Context) error {
+	return c.probeRootEndpoint(ctx, "/health")
+}
+
 // AckOpenClawDelivery acknowledges a leased pull delivery.
 func (c APIClient) AckOpenClawDelivery(ctx context.Context, token, deliveryID string) error {
 	return c.updateOpenClawDelivery(ctx, token, deliveryID, "ack", "/openclaw/messages/ack")
@@ -457,6 +467,56 @@ func openClawPullQuery(timeoutMs int) string {
 		return ""
 	}
 	return fmt.Sprintf("?timeout_ms=%d", timeoutMs)
+}
+
+func (c APIClient) probeRootEndpoint(ctx context.Context, endpoint string) error {
+	target, err := c.rootEndpointURL(endpoint)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json")
+
+	client := c.HTTPClient
+	if client == nil {
+		client = &http.Client{Timeout: 20 * time.Second}
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read body: %w", err)
+	}
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("%s status=%d body=%s", endpoint, resp.StatusCode, truncateBody(body))
+	}
+	return nil
+}
+
+func (c APIClient) rootEndpointURL(endpoint string) (string, error) {
+	u, err := url.Parse(strings.TrimSpace(c.BaseURL))
+	if err != nil {
+		return "", fmt.Errorf("parse base url: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", fmt.Errorf("base url must use http or https")
+	}
+	if strings.TrimSpace(u.Host) == "" {
+		return "", fmt.Errorf("base url host is required")
+	}
+	u.Path = "/" + strings.TrimLeft(strings.TrimSpace(endpoint), "/")
+	u.RawQuery = ""
+	u.Fragment = ""
+	return u.String(), nil
 }
 
 // WebsocketURL builds the websocket endpoint from API base URL.

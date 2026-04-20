@@ -44,7 +44,7 @@ type Daemon struct {
 	TaskLogRoot         string
 }
 
-const wsFallbackWindow = 30 * time.Second
+const wsUpgradePullProbeTimeoutMs = 1000
 const dispatchDedupTTL = 2 * time.Hour
 const agentStatusUpdateTimeout = 5 * time.Second
 const failureFollowUpRequestIDSuffix = "-failure-review"
@@ -194,10 +194,12 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 			return nil
 		}
 
-		if err := d.runWebsocketLoop(ctx, wsURL, api, cfg, dispatchController, &workers, deduper); err == nil {
+		if err := d.tryWebsocketUpgrade(ctx, transport, wsURL, api, cfg, dispatchController, &workers, deduper); err == nil {
 			return nil
 		} else if ctx.Err() != nil {
 			return nil
+		} else if isUnauthorizedHubError(err) {
+			return fmt.Errorf("hub auth: %w", err)
 		} else if !shouldFallbackToPull(err) {
 			d.logf("hub.ws status=disconnected err=%q", err)
 			if !sleepWithContext(ctx, d.ReconnectDelay) {
@@ -209,22 +211,57 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 		}
 
 		d.logf("hub.transport mode=openclaw_pull")
-		fallbackUntil := time.Now().Add(wsFallbackWindow)
-		for time.Now().Before(fallbackUntil) {
-			if ctx.Err() != nil {
-				return nil
+		if err := d.pullOnce(ctx, api, cfg, dispatchController, &workers, deduper, pullTimeoutMs); err != nil {
+			if isUnauthorizedHubError(err) {
+				return fmt.Errorf("hub auth: %w", err)
 			}
-			if err := d.pullOnce(ctx, api, cfg, dispatchController, &workers, deduper, pullTimeoutMs); err != nil {
-				if isUnauthorizedHubError(err) {
-					return fmt.Errorf("hub auth: %w", err)
-				}
-				d.logf("hub.pull status=error err=%q", err)
-				if !sleepWithContext(ctx, d.ReconnectDelay) {
-					return nil
-				}
+			d.logf("hub.pull status=error err=%q", err)
+			if !sleepWithContext(ctx, d.ReconnectDelay) {
+				return nil
 			}
 		}
 	}
+}
+
+func (d Daemon) tryWebsocketUpgrade(
+	ctx context.Context,
+	transport APIClient,
+	wsURL string,
+	api MoltenHubAPI,
+	cfg InitConfig,
+	dispatchController *AdaptiveDispatchController,
+	workers *sync.WaitGroup,
+	deduper *dispatchDeduper,
+) error {
+	if err := transport.Ping(ctx); err != nil {
+		return fmt.Errorf("ping precheck: %w", err)
+	}
+	if err := transport.Health(ctx); err != nil {
+		return fmt.Errorf("health precheck: %w", err)
+	}
+	if err := d.pullProbeOnce(ctx, api, cfg, dispatchController, workers, deduper); err != nil {
+		return fmt.Errorf("pull precheck: %w", err)
+	}
+	return d.runWebsocketLoop(ctx, wsURL, api, cfg, dispatchController, workers, deduper)
+}
+
+func (d Daemon) pullProbeOnce(
+	ctx context.Context,
+	api MoltenHubAPI,
+	cfg InitConfig,
+	dispatchController *AdaptiveDispatchController,
+	workers *sync.WaitGroup,
+	deduper *dispatchDeduper,
+) error {
+	pulled, found, err := api.PullOpenClawMessage(ctx, wsUpgradePullProbeTimeoutMs)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return nil
+	}
+	d.processInboundMessage(ctx, api, cfg, pulled.Message, pulled.DeliveryID, pulled.MessageID, dispatchController, workers, deduper)
+	return nil
 }
 
 func (d Daemon) runPullLoop(
