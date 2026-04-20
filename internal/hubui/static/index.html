@@ -235,19 +235,19 @@
                         disabled><span class="prompt-input-action-icon" aria-hidden="true">&times;</span></button>
                     </span>
                   </label>
-                  <label class="prompt-field prompt-field-target-subdir">
-                    <span class="prompt-label">Directory</span>
-                    <input id="builder-target-subdir" class="prompt-control prompt-input" type="text" value="." spellcheck="false" placeholder=".">
-                  </label>
-                </div>
-                <div class="prompt-grid">
-                  <label id="builder-reviewer-history-field" class="prompt-field prompt-field-repo-history">
+                  <label id="builder-reviewer-history-field" class="prompt-field prompt-field-reviewer-history">
                     <span class="prompt-label">Reviewer</span>
                     <select id="builder-reviewer-select" class="prompt-control">
                       <option value="none">none</option>
                       <option value="">Enter reviewers manually</option>
                     </select>
                   </label>
+                  <label class="prompt-field prompt-field-target-subdir">
+                    <span class="prompt-label">Directory</span>
+                    <input id="builder-target-subdir" class="prompt-control prompt-input" type="text" value="." spellcheck="false" placeholder=".">
+                  </label>
+                </div>
+                <div class="prompt-grid">
                   <label id="builder-reviewer-field" class="prompt-field prompt-field-repository">
                     <input id="builder-reviewer-input" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="octocat, hubot" aria-label="Reviewers">
                   </label>
@@ -279,6 +279,13 @@
                     <span class="prompt-label">Branch</span>
                     <input id="library-base-branch" class="prompt-control prompt-input" type="text" value="main" spellcheck="false" placeholder="main">
                   </label>
+                  <label id="library-reviewer-history-field" class="prompt-field prompt-field-reviewer-history">
+                    <span class="prompt-label">Reviewer</span>
+                    <select id="library-reviewer-select" class="prompt-control">
+                      <option value="none">none</option>
+                      <option value="">Enter reviewers manually</option>
+                    </select>
+                  </label>
                   <label class="prompt-field prompt-field-target-subdir">
                     <span class="prompt-label">Directory</span>
                     <input id="library-target-subdir" class="prompt-control prompt-input" type="text" value="." spellcheck="false" placeholder=".">
@@ -286,13 +293,6 @@
                 </div>
                 <p class="prompt-field-copy">Library tasks provide a preset prompt, but they still run against the repository, branch, directory, and reviewers you choose here.</p>
                 <div class="prompt-grid">
-                  <label id="library-reviewer-history-field" class="prompt-field prompt-field-repo-history">
-                    <span class="prompt-label">Reviewer</span>
-                    <select id="library-reviewer-select" class="prompt-control">
-                      <option value="none">none</option>
-                      <option value="">Enter reviewers manually</option>
-                    </select>
-                  </label>
                   <label id="library-reviewer-field" class="prompt-field prompt-field-repository">
                     <input id="library-reviewer-input" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="octocat, hubot" aria-label="Reviewers">
                   </label>

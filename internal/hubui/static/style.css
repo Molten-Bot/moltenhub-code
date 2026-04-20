@@ -1188,6 +1188,11 @@ body .right-col.prompt-collapsed.task-list-hidden {
   max-width: clamp(180px, 18%, 220px);
 }
 
+.prompt-field-reviewer-history {
+  flex: 0 1 clamp(115px, 13%, 170px);
+  max-width: clamp(130px, 14%, 180px);
+}
+
 .prompt-field-target-subdir {
   flex: 0 1 clamp(75px, 8.5%, 110px);
   max-width: clamp(90px, 9%, 110px);
@@ -2465,6 +2470,7 @@ select.prompt-control {
   .prompt-field-repo-history,
   .prompt-field-repository,
   .prompt-field-base-branch,
+  .prompt-field-reviewer-history,
   .prompt-field-target-subdir {
     flex: 1 1 100%;
     max-width: none;
