@@ -1039,8 +1039,11 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".prompt-field-repository {\n  flex: 1 1 320px;\n  min-width: 280px;\n}") {
 		t.Fatalf("expected repository input to retain enough width beside the history selector")
 	}
-	if !strings.Contains(css, ".prompt-field-target-subdir {\n  flex: 0 1 clamp(75px, 8.5%, 110px);\n  max-width: clamp(90px, 9%, 110px);\n}") {
-		t.Fatalf("expected directory input to use the reduced desktop width")
+	if !strings.Contains(css, ".prompt-field-reviewer-history {\n  flex: 0 1 clamp(170px, 19%, 240px);\n  min-width: 190px;\n  max-width: clamp(190px, 20%, 250px);\n}") {
+		t.Fatalf("expected reviewer selector to keep enough desktop width for select and delete controls")
+	}
+	if !strings.Contains(css, ".prompt-field-target-subdir {\n  flex: 0 1 clamp(110px, 11%, 150px);\n  min-width: 120px;\n  max-width: clamp(120px, 12%, 160px);\n}") {
+		t.Fatalf("expected directory input to keep enough desktop width beside reviewer controls")
 	}
 	if !strings.Contains(css, ".prompt-actions {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  min-width: 0;\n}") {
 		t.Fatalf("expected prompt actions to keep the status between screenshots and the right-aligned buttons")

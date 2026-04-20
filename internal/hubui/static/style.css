@@ -1190,13 +1190,15 @@ body .right-col.prompt-collapsed.task-list-hidden {
 }
 
 .prompt-field-reviewer-history {
-  flex: 0 1 clamp(115px, 13%, 170px);
-  max-width: clamp(130px, 14%, 180px);
+  flex: 0 1 clamp(170px, 19%, 240px);
+  min-width: 190px;
+  max-width: clamp(190px, 20%, 250px);
 }
 
 .prompt-field-target-subdir {
-  flex: 0 1 clamp(75px, 8.5%, 110px);
-  max-width: clamp(90px, 9%, 110px);
+  flex: 0 1 clamp(110px, 11%, 150px);
+  min-width: 120px;
+  max-width: clamp(120px, 12%, 160px);
 }
 
 .prompt-label {
