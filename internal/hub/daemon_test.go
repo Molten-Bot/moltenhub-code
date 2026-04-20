@@ -826,6 +826,12 @@ func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
 	)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/v1/agents/me":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":true,"result":{"agent":{"metadata":{"activities":["started"]}}}}`))
+		case "/v1/agents/me/metadata":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
 		case "/v1/openclaw/messages/publish":
 			defer r.Body.Close()
 			var body map[string]any
@@ -934,6 +940,12 @@ func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
 	)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/v1/agents/me":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":true,"result":{"agent":{"metadata":{"activities":["started"]}}}}`))
+		case "/v1/agents/me/metadata":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
 		case "/v1/openclaw/messages/publish":
 			defer r.Body.Close()
 
@@ -1061,6 +1073,12 @@ func TestProcessInboundMessageInvokesOnDispatchFailedForAcquireFailure(t *testin
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/v1/agents/me":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":true,"result":{"agent":{"metadata":{"activities":["started"]}}}}`))
+		case "/v1/agents/me/metadata":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
 		case "/v1/openclaw/messages/publish":
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"ok":true,"result":{"status":"queued"}}`))

@@ -19,6 +19,7 @@ type MoltenHubAPI interface {
 	SyncProfile(ctx context.Context, cfg InitConfig) error
 	UpdateAgentStatus(ctx context.Context, status string) error
 	MarkOpenClawOffline(ctx context.Context, sessionKey, reason string) error
+	RecordCodingActivityRunning(ctx context.Context) error
 	RecordGitHubTaskCompleteActivity(ctx context.Context) error
 	RegisterRuntime(ctx context.Context, cfg InitConfig, libraryTasks []library.TaskSummary) error
 	PublishResult(ctx context.Context, payload map[string]any) error
@@ -100,6 +101,13 @@ func (c *AsyncAPIClient) UpdateAgentStatus(ctx context.Context, status string) e
 func (c *AsyncAPIClient) MarkOpenClawOffline(ctx context.Context, sessionKey, reason string) error {
 	return c.withToken(func(token string) error {
 		return c.client.MarkOpenClawOffline(ctx, token, sessionKey, reason)
+	})
+}
+
+// RecordCodingActivityRunning appends a generic active-coding activity entry.
+func (c *AsyncAPIClient) RecordCodingActivityRunning(ctx context.Context) error {
+	return c.withToken(func(token string) error {
+		return c.client.RecordCodingActivityRunning(ctx, token)
 	})
 }
 

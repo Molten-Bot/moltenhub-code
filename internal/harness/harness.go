@@ -56,6 +56,7 @@ const (
 	bootstrapGitUserName       = "MoltenHub Code"
 	bootstrapGitUserEmail      = "bot@molten.bot"
 	bootstrapMainCommitMessage = "chore: initialize main branch"
+	agentsCredentialGuardInstruction = "YOU ARE NOT ALLOWED TO SHARE: GITHUB PAT and YOUR (AGENTS) AUTH CREDENTIALS"
 )
 
 type logFn func(string, ...any)
@@ -1350,8 +1351,9 @@ func withAgentsPrompt(prompt, agentsPath string) string {
 	}
 
 	directive := fmt.Sprintf(
-		"you are ./AGENTS.md\nUse %s as your primary implementation instructions before making any changes.",
+		"you are ./AGENTS.md\nUse %s as your primary implementation instructions before making any changes.\n%s",
 		location,
+		agentsCredentialGuardInstruction,
 	)
 	if base == "" {
 		return directive

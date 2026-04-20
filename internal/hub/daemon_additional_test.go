@@ -22,13 +22,15 @@ import (
 type stubMoltenHubAPI struct {
 	token string
 
-	pullFn   func(ctx context.Context, timeoutMs int) (PulledOpenClawMessage, bool, error)
-	recordFn func(context.Context) error
+	pullFn         func(ctx context.Context, timeoutMs int) (PulledOpenClawMessage, bool, error)
+	recordFn       func(context.Context) error
+	recordCodingFn func(context.Context) error
 
 	mu           sync.Mutex
 	acked        []string
 	nacked       []string
 	published    []map[string]any
+	codingEvents int
 	offlineCalls []struct {
 		SessionKey string
 		Reason     string
@@ -94,6 +96,15 @@ func (s *stubMoltenHubAPI) MarkOpenClawOffline(_ context.Context, sessionKey, re
 		SessionKey string
 		Reason     string
 	}{SessionKey: sessionKey, Reason: reason})
+	return nil
+}
+func (s *stubMoltenHubAPI) RecordCodingActivityRunning(ctx context.Context) error {
+	if s.recordCodingFn != nil {
+		return s.recordCodingFn(ctx)
+	}
+	s.mu.Lock()
+	s.codingEvents++
+	s.mu.Unlock()
 	return nil
 }
 func (s *stubMoltenHubAPI) RecordGitHubTaskCompleteActivity(ctx context.Context) error {
@@ -731,6 +742,9 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 	if got := api.offlineCalls[0].Reason; got != transportOfflineReasonExecutionFailure {
 		t.Fatalf("offline reason = %q, want %q", got, transportOfflineReasonExecutionFailure)
 	}
+	if got := api.codingEvents; got != 1 {
+		t.Fatalf("coding activity events = %d, want 1", got)
+	}
 }
 
 func TestHandleDispatchQueuesFailureRerunWithExplicitResponseModeOptOut(t *testing.T) {
@@ -1058,6 +1072,35 @@ func TestRecordGitHubTaskCompleteActivityLogsWarningOnFailure(t *testing.T) {
 		t.Fatalf("log = %q", logs[0])
 	}
 	if !strings.Contains(logs[0], "req-17") {
+		t.Fatalf("log missing request id: %q", logs[0])
+	}
+}
+
+func TestRecordCodingActivityRunningLogsWarningOnFailure(t *testing.T) {
+	t.Parallel()
+
+	var logs []string
+	d := NewDaemon(nil)
+	d.Logf = func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	api := &stubMoltenHubAPI{
+		token: "t",
+		recordCodingFn: func(context.Context) error {
+			return errors.New("metadata rejected")
+		},
+	}
+
+	d.recordCodingActivityRunning(context.Background(), api, "req-18")
+
+	if len(logs) != 1 {
+		t.Fatalf("logs = %d, want 1", len(logs))
+	}
+	if !strings.Contains(logs[0], "action=record_coding_activity_running") {
+		t.Fatalf("log = %q", logs[0])
+	}
+	if !strings.Contains(logs[0], "req-18") {
 		t.Fatalf("log missing request id: %q", logs[0])
 	}
 }

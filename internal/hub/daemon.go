@@ -777,6 +777,7 @@ func (d Daemon) handleDispatch(
 		dispatch.Config.RepoURL,
 		strings.Join(dispatch.Config.RepoList(), ","),
 	)
+	d.recordCodingActivityRunning(ctx, api, dispatch.RequestID)
 	if taskName := strings.TrimSpace(dispatch.Config.LibraryTaskName); taskName != "" {
 		if err := IncrementRuntimeConfigLibraryTaskUsage(cfg.RuntimeConfigPath, cfg, taskName); err != nil {
 			d.logf("library.usage status=warn task=%s request_id=%s err=%q", taskName, dispatch.RequestID, err)
@@ -877,6 +878,15 @@ func (d Daemon) recordGitHubTaskCompleteActivity(ctx context.Context, api Molten
 	}
 	if err := api.RecordGitHubTaskCompleteActivity(ctx); err != nil {
 		d.logf("dispatch status=warn action=record_github_task_complete request_id=%s err=%q", requestID, err)
+	}
+}
+
+func (d Daemon) recordCodingActivityRunning(ctx context.Context, api MoltenHubAPI, requestID string) {
+	if api == nil {
+		return
+	}
+	if err := api.RecordCodingActivityRunning(ctx); err != nil {
+		d.logf("dispatch status=warn action=record_coding_activity_running request_id=%s err=%q", requestID, err)
 	}
 }
 
