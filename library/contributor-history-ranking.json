@@ -1,0 +1,10 @@
+{
+  "contributor-history-ranking": {
+    "displayName": "Contributor History Ranking",
+    "description": "Review full git history, stack-rank contributor impact by change frequency and complexity, and publish docs/contributors.md.",
+    "targetSubdir": ".",
+    "prompt": "Review the full git history of this repository and stack-rank all contributing git user profiles by overall impact. Use an exhaustive commit-level analysis across every reachable branch and tag. Compute at least two explicit signals per contributor: (1) frequency score based on commit count and active timespan, and (2) complexity score based on change-set breadth and depth (for example: files changed, insertions/deletions, directory spread, and refactor-style commits). Document your methodology in the report so rankings are reproducible. Produce or update ./docs/contributors.md with: analysis scope, scoring method, ranked table of contributors with frequency and complexity metrics, key observations, and caveats. Validate findings with git commands before finalizing. If failures occur, return explicit fields to calling agent exactly as: Failure: <short failure summary> and Error details: <concrete command error or blocker>. If cloned repository is not initialized, use only gh CLI and git tools to create and push main branch, then continue once git state is ready. Do not stop work only because PR creation or remote CI/CD watch is unavailable in runtime; finish repository changes and local validation possible in this environment.",
+    "commitMessage": "docs: add contributor ranking report",
+    "prTitle": "moltenhub-contributor-history-ranking"
+  }
+}
