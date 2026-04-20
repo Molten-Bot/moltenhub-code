@@ -77,6 +77,15 @@ func TestHarnessURLCloneAndSandboxHelpers(t *testing.T) {
 	if shouldFallbackCloneToDefaultBranch("release", execx.Result{Stderr: "remote branch release not found"}, errors.New("missing")) {
 		t.Fatal("shouldFallbackCloneToDefaultBranch(non-moltenhub) = true, want false")
 	}
+	if !shouldBootstrapUninitializedMainBranch("main", execx.Result{Stderr: "remote branch main not found"}, errors.New("missing")) {
+		t.Fatal("shouldBootstrapUninitializedMainBranch(main) = false, want true")
+	}
+	if shouldBootstrapUninitializedMainBranch("release", execx.Result{Stderr: "remote branch release not found"}, errors.New("missing")) {
+		t.Fatal("shouldBootstrapUninitializedMainBranch(non-main) = true, want false")
+	}
+	if shouldBootstrapUninitializedMainBranch("main", execx.Result{}, nil) {
+		t.Fatal("shouldBootstrapUninitializedMainBranch(nil err) = true, want false")
+	}
 	if got := overrideCodexSandbox([]string{"exec", "--sandbox", "workspace-write"}, "danger-full-access"); got[2] != "danger-full-access" {
 		t.Fatalf("overrideCodexSandbox() = %#v", got)
 	}
@@ -152,6 +161,18 @@ func TestHarnessRuntimeAndCheckSnapshotHelpers(t *testing.T) {
 	}
 	if got := remediationCommitMessage("", 1); got != "chore: automated update (ci remediation 1)" {
 		t.Fatalf("remediationCommitMessage(empty) = %q", got)
+	}
+	if got := workflowDispatchConclusionBucket("completed", "success"); got != "pass" {
+		t.Fatalf("workflowDispatchConclusionBucket(success) = %q, want pass", got)
+	}
+	if got := workflowDispatchConclusionBucket("completed", "skipped"); got != "skipping" {
+		t.Fatalf("workflowDispatchConclusionBucket(skipped) = %q, want skipping", got)
+	}
+	if got := workflowDispatchConclusionBucket("queued", ""); got != "pending" {
+		t.Fatalf("workflowDispatchConclusionBucket(queued) = %q, want pending", got)
+	}
+	if got := workflowDispatchConclusionBucket("completed", "failure"); got != "fail" {
+		t.Fatalf("workflowDispatchConclusionBucket(failure) = %q, want fail", got)
 	}
 }
 

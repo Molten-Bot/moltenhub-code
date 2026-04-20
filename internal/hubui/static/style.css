@@ -462,8 +462,8 @@ textarea {
   pointer-events: none;
 }
 
-.status-row:hover .status-item-compact,
-.status-row:focus-within .status-item-compact {
+.status-row:hover .status-item-compact-expandable,
+.status-row:focus-within .status-item-compact-expandable {
   width: auto;
   min-width: 42px;
   padding-left: 11px;
@@ -478,8 +478,8 @@ textarea {
   transform: translateX(0);
 }
 
-.status-row:hover .status-item-compact,
-.status-row:focus-within .status-item-compact,
+.status-row:hover .status-item-compact-expandable,
+.status-row:focus-within .status-item-compact-expandable,
 .status-item-compact:focus-visible,
 .status-item-compact:focus-within {
   z-index: 7;

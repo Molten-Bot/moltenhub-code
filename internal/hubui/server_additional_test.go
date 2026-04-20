@@ -1156,7 +1156,7 @@ func TestHeaderStatusStylesStayReadable(t *testing.T) {
 	if !strings.Contains(css, ".header {\n  position: relative;\n  z-index: 5;") {
 		t.Fatalf("expected header to create a higher stacking context above the studio panel")
 	}
-	if !strings.Contains(css, ".status-row:hover .status-item-compact,\n.status-row:focus-within .status-item-compact {\n  width: auto;\n  min-width: 42px;\n  padding-left: 11px;\n  padding-right: 11px;\n  gap: 8px;\n}") {
+	if !strings.Contains(css, ".status-row:hover .status-item-compact-expandable,\n.status-row:focus-within .status-item-compact-expandable {\n  width: auto;\n  min-width: 42px;\n  padding-left: 11px;\n  padding-right: 11px;\n  gap: 8px;\n}") {
 		t.Fatalf("expected connection status pills to slide open when the status row is hovered or focused")
 	}
 	if !strings.Contains(css, ".status-item-metrics {\n  gap: 12px;\n  padding-left: 12px;\n  padding-right: 14px;\n  min-height: 42px;\n  height: 42px;") {
