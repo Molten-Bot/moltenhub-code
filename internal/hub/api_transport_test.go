@@ -468,6 +468,9 @@ func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
 	if got := meta["agent_harness"]; got != "codex" {
 		t.Fatalf("agent_harness = %#v", got)
 	}
+	if got := meta["llm"]; got != "Codex" {
+		t.Fatalf("llm = %#v, want Codex", got)
+	}
 	if gotNames, want := meta["library_task_names"], []any{"security-review", "unit-test-coverage"}; !reflect.DeepEqual(gotNames, want) {
 		t.Fatalf("library_task_names = %#v, want %#v", gotNames, want)
 	}
