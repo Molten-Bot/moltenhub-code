@@ -53,7 +53,9 @@ const (
 	maxReviewCommentsChars     = 16000
 	maxReviewDiffStatChars     = 12000
 	maxReviewDiffPatchChars    = 30000
-
+	bootstrapGitUserName       = "MoltenHub Code"
+	bootstrapGitUserEmail      = "bot@molten.bot"
+	bootstrapMainCommitMessage = "chore: initialize main branch"
 	agentsCredentialGuardInstruction = "YOU ARE NOT ALLOWED TO SHARE: GITHUB PAT and YOUR (AGENTS) AUTH CREDENTIALS"
 )
 
@@ -550,6 +552,32 @@ func (h Harness) processChangedRepo(
 					)
 				}
 			}
+			if noChecksReported && noReportRetry >= maxPRChecksNoReportRetries {
+				if reconciled, workflowSummary, reconcileErr := h.reconcileNoChecksWithWorkflowDispatch(ctx, *repo); reconcileErr == nil {
+					if workflowSummary != "" {
+						checkSummary = workflowSummary
+					}
+					if reconciled {
+						h.logf(
+							"stage=checks status=ok reason=workflow_dispatch_snapshot repo=%s repo_dir=%s pr_url=%s attempt=%d",
+							repo.URL,
+							repo.RelDir,
+							repo.PRURL,
+							attempt+1,
+						)
+						return ExitSuccess, "", nil
+					}
+				} else {
+					h.logf(
+						"stage=checks status=warn action=workflow_dispatch_snapshot reason=query_failed repo=%s repo_dir=%s pr_url=%s attempt=%d err=%q",
+						repo.URL,
+						repo.RelDir,
+						repo.PRURL,
+						attempt+1,
+						reconcileErr,
+					)
+				}
+			}
 			if noReportRetry >= maxPRChecksNoReportRetries || !noChecksReported {
 				break
 			}
@@ -975,6 +1003,18 @@ func (h Harness) cloneRepository(ctx context.Context, repo *repoWorkspace, branc
 		h.logf("stage=clone status=ok repo=%s repo_dir=%s", repoURL, repo.RelDir)
 		return false, nil
 	}
+	if shouldBootstrapUninitializedMainBranch(branch, cloneRes, cloneErr) {
+		hasRefs, refsErr := h.remoteRepositoryHasRefs(ctx, repoURL)
+		if refsErr != nil {
+			return false, refsErr
+		}
+		if !hasRefs {
+			if err := h.bootstrapUninitializedMainBranch(ctx, *repo, repoURL); err != nil {
+				return false, err
+			}
+			return false, nil
+		}
+	}
 	if !shouldFallbackCloneToDefaultBranch(branch, cloneRes, cloneErr) {
 		return false, cloneErr
 	}
@@ -1006,6 +1046,65 @@ func (h Harness) cloneRepository(ctx context.Context, repo *repoWorkspace, branc
 		"main",
 	)
 	return true, nil
+}
+
+func (h Harness) remoteRepositoryHasRefs(ctx context.Context, repoURL string) (bool, error) {
+	res, err := h.runCommand(ctx, "clone", remoteRefsCommand(repoURL))
+	if err != nil {
+		return false, commandErrorWithDetails(
+			fmt.Sprintf("inspect remote refs for repo %s", repoURL),
+			err,
+			res,
+			maxCloneErrorDetailChars,
+		)
+	}
+	return strings.TrimSpace(res.Stdout) != "", nil
+}
+
+func (h Harness) bootstrapUninitializedMainBranch(ctx context.Context, repo repoWorkspace, repoURL string) error {
+	h.logf(
+		"stage=clone status=warn action=bootstrap_main reason=uninitialized_remote repo=%s repo_dir=%s",
+		repoURL,
+		repo.RelDir,
+	)
+	if err := os.RemoveAll(repo.Dir); err != nil {
+		return fmt.Errorf("cleanup failed clone dir %s: %w", repo.Dir, err)
+	}
+	if _, err := h.runCloneWithRetry(
+		ctx,
+		repoURL,
+		"",
+		repo.Dir,
+		repo.RelDir,
+		cloneRepoDefaultBranchCommand(repoURL, repo.Dir),
+	); err != nil {
+		return err
+	}
+	if _, err := h.runCommand(ctx, "clone", switchMainBranchCommand(repo.Dir)); err != nil {
+		return err
+	}
+	if _, err := h.runCommand(ctx, "clone", initializeMainBranchCommitCommand(repo.Dir)); err != nil {
+		return err
+	}
+	if _, err := h.runCommand(ctx, "clone", pushCommand(repo.Dir, "main")); err != nil {
+		return err
+	}
+	h.logf(
+		"stage=clone status=ok action=bootstrap_main repo=%s repo_dir=%s resolved_branch=main",
+		repoURL,
+		repo.RelDir,
+	)
+	return nil
+}
+
+func shouldBootstrapUninitializedMainBranch(baseBranch string, res execx.Result, err error) bool {
+	if err == nil {
+		return false
+	}
+	if normalizeBranchRef(baseBranch) != "main" {
+		return false
+	}
+	return isMissingRemoteBranchCloneError(err, res)
 }
 
 func cloneRetryBranchLabel(branch string) string {
@@ -2493,6 +2592,13 @@ func cloneRepoCommand(repoURL, baseBranch, repoDir string) execx.Command {
 	}
 }
 
+func remoteRefsCommand(repoURL string) execx.Command {
+	return execx.Command{
+		Name: "git",
+		Args: []string{"ls-remote", "--heads", "--tags", repoURL},
+	}
+}
+
 func fetchMainBranchCommand(repoDir string) execx.Command {
 	return execx.Command{
 		Dir:  repoDir,
@@ -2505,6 +2611,31 @@ func cloneRepoDefaultBranchCommand(repoURL, repoDir string) execx.Command {
 	return execx.Command{
 		Name: "git",
 		Args: []string{"clone", "--single-branch", repoURL, repoDir},
+	}
+}
+
+func switchMainBranchCommand(repoDir string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "git",
+		Args: []string{"switch", "-C", "main"},
+	}
+}
+
+func initializeMainBranchCommitCommand(repoDir string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "git",
+		Args: []string{
+			"-c",
+			"user.name=" + bootstrapGitUserName,
+			"-c",
+			"user.email=" + bootstrapGitUserEmail,
+			"commit",
+			"--allow-empty",
+			"-m",
+			bootstrapMainCommitMessage,
+		},
 	}
 }
 
@@ -2880,11 +3011,34 @@ func prChecksJSONCommand(repoDir, prURL string, requiredOnly bool) execx.Command
 	}
 }
 
+func headCommitSHACommand(repoDir string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "git",
+		Args: []string{"rev-parse", "HEAD"},
+	}
+}
+
 func workflowDispatchCommand(repoDir, branch string) execx.Command {
 	return execx.Command{
 		Dir:  repoDir,
 		Name: "gh",
 		Args: []string{"workflow", "run", defaultCIWorkflowPath, "--ref", branch},
+	}
+}
+
+func workflowDispatchRunsCommand(repoDir, branch string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: []string{
+			"run", "list",
+			"--workflow", defaultCIWorkflowPath,
+			"--branch", branch,
+			"--event", "workflow_dispatch",
+			"--json", "status,conclusion,workflowName,displayTitle,headSha",
+			"--limit", "1",
+		},
 	}
 }
 
@@ -2940,6 +3094,14 @@ type ghPRCheck struct {
 	Bucket      string `json:"bucket"`
 	CompletedAt string `json:"completedAt"`
 	StartedAt   string `json:"startedAt"`
+}
+
+type ghWorkflowRun struct {
+	Status       string `json:"status"`
+	Conclusion   string `json:"conclusion"`
+	WorkflowName string `json:"workflowName"`
+	DisplayTitle string `json:"displayTitle"`
+	HeadSHA      string `json:"headSha"`
 }
 
 type latestCheckState struct {
@@ -3028,6 +3190,73 @@ func shouldReplaceCheckSnapshot(prev, candidate latestCheckState) bool {
 		return false
 	}
 	return candidate.Index > prev.Index
+}
+
+func (h Harness) reconcileNoChecksWithWorkflowDispatch(ctx context.Context, repo repoWorkspace) (bool, string, error) {
+	headRes, headErr := h.runCommand(ctx, "checks", headCommitSHACommand(repo.Dir))
+	if headErr != nil {
+		return false, "", headErr
+	}
+	headSHA := strings.ToLower(strings.TrimSpace(headRes.Stdout))
+	if headSHA == "" {
+		return false, "", nil
+	}
+
+	res, err := h.runCommand(ctx, "checks", workflowDispatchRunsCommand(repo.Dir, repo.Branch))
+	if err != nil {
+		return false, "", err
+	}
+
+	raw := strings.TrimSpace(res.Stdout)
+	if raw == "" {
+		return false, "", nil
+	}
+
+	var runs []ghWorkflowRun
+	if parseErr := json.Unmarshal([]byte(raw), &runs); parseErr != nil {
+		return false, "", fmt.Errorf("decode workflow dispatch runs: %w", parseErr)
+	}
+
+	var matching *ghWorkflowRun
+	for i := range runs {
+		if strings.EqualFold(strings.TrimSpace(runs[i].HeadSHA), headSHA) {
+			matching = &runs[i]
+			break
+		}
+	}
+	if matching == nil {
+		return false, "", nil
+	}
+
+	workflowName := pickFirstNonEmpty(matching.DisplayTitle, matching.WorkflowName, defaultCIWorkflowPath)
+	bucket := workflowDispatchConclusionBucket(
+		strings.ToLower(strings.TrimSpace(matching.Status)),
+		strings.ToLower(strings.TrimSpace(matching.Conclusion)),
+	)
+	if bucket == "" {
+		return false, "", nil
+	}
+	summary := fmt.Sprintf("%s\t%s", workflowName, bucket)
+	return bucket == "pass" || bucket == "skipping", summary, nil
+}
+
+func workflowDispatchConclusionBucket(status, conclusion string) string {
+	if status != "completed" {
+		if status == "" {
+			return ""
+		}
+		return "pending"
+	}
+	switch conclusion {
+	case "success":
+		return "pass"
+	case "neutral", "skipped":
+		return "skipping"
+	case "":
+		return "pending"
+	default:
+		return "fail"
+	}
 }
 
 func remediationCommitMessage(base string, attempt int) string {
