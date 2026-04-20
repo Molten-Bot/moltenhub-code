@@ -98,6 +98,9 @@ func TestSyncProfileUsesAgentMetadataPayload(t *testing.T) {
 	if got := metadata["agent_harness"]; got != "codex" {
 		t.Fatalf("metadata.agent_harness = %#v", got)
 	}
+	if got := metadata["llm"]; got != "Codex" {
+		t.Fatalf("metadata.llm = %#v", got)
+	}
 	if got := metadata["harness"]; got != runtimeIdentifier+"@v1" {
 		t.Fatalf("metadata.harness = %#v", got)
 	}
@@ -257,5 +260,16 @@ func TestSyncProfileRetriesWithoutHandleWhenHandleUpdateFails(t *testing.T) {
 	}
 	if calls[3].Path != "/v1/agents/me/metadata" {
 		t.Fatalf("final retry path = %q, want /v1/agents/me/metadata", calls[3].Path)
+	}
+	metadataRaw, ok := calls[3].Body["metadata"]
+	if !ok {
+		t.Fatalf("final retry request missing metadata wrapper: %#v", calls[3].Body)
+	}
+	metadata, ok := metadataRaw.(map[string]any)
+	if !ok {
+		t.Fatalf("final retry metadata type = %T, want map[string]any", metadataRaw)
+	}
+	if got := metadata["llm"]; got != "Claude" {
+		t.Fatalf("metadata.llm = %#v, want Claude", got)
 	}
 }

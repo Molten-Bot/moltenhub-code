@@ -1305,6 +1305,7 @@ func buildAgentMetadata(cfg InitConfig) map[string]any {
 		"harness":             runtimeIdentifier + "@v1",
 		"agent_harness":       harness,
 		"agent_harness_label": agentruntime.DisplayName(harness),
+		"llm":                 agentruntime.DisplayName(harness),
 	}
 
 	if strings.TrimSpace(cfg.Profile.DisplayName) != "" {
