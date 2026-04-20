@@ -31,6 +31,7 @@ const (
 	runtimeSkillFallback = "Executes MoltenHub Code tasks."
 	agentVisibilityKey   = "visibility"
 	agentVisibilityValue = "public"
+	codingActivityRun    = "coding activity is running"
 	gitHubTaskComplete   = "github task complete"
 	maxActivityEntries   = 20
 	maxPullTimeoutMs     = 30000
@@ -312,6 +313,17 @@ func (c APIClient) RecordGitHubTaskCompleteActivity(ctx context.Context, token s
 	}
 	return c.updateAgentMetadata(ctx, normalizedToken, "record github task complete activity failed", func(metadata map[string]any) {
 		metadata["activities"] = appendActivityEntries(metadata["activities"], gitHubTaskComplete)
+	})
+}
+
+// RecordCodingActivityRunning appends a generic active-coding entry to metadata.activities.
+func (c APIClient) RecordCodingActivityRunning(ctx context.Context, token string) error {
+	normalizedToken, err := requireHubToken(token, "record coding activity running")
+	if err != nil {
+		return err
+	}
+	return c.updateAgentMetadata(ctx, normalizedToken, "record coding activity running failed", func(metadata map[string]any) {
+		metadata["activities"] = appendActivityEntries(metadata["activities"], codingActivityRun)
 	})
 }
 
