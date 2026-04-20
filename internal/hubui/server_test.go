@@ -1274,6 +1274,16 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `id="library-reviewer-input" class="prompt-control prompt-input"`) {
 		t.Fatalf("expected index html to include reviewer history and manual entry controls for prompt and library modes")
 	}
+	if !strings.Contains(markup, `id="builder-repo-delete"`) ||
+		!strings.Contains(markup, `id="library-repo-delete"`) ||
+		!strings.Contains(markup, `id="builder-reviewer-delete"`) ||
+		!strings.Contains(markup, `id="library-reviewer-delete"`) ||
+		!strings.Contains(markup, `class="prompt-history-delete"`) {
+		t.Fatalf("expected index html to include delete actions for repo and reviewer history selects")
+	}
+	if !strings.Contains(markup, `class="prompt-select-action-wrap"`) {
+		t.Fatalf("expected index html to wrap history selects and delete actions in a shared inline layout")
+	}
 	if !strings.Contains(markup, `id="builder-base-branch-clear"`) {
 		t.Fatalf("expected index html to include branch clear action")
 	}
@@ -1389,6 +1399,19 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "function dropReposFromHistory(") {
 		t.Fatalf("expected index html to include repo history cleanup helper")
+	}
+	if !strings.Contains(markup, "function dropReviewersFromHistory(") {
+		t.Fatalf("expected index html to include reviewer history cleanup helper")
+	}
+	if !strings.Contains(markup, "function removeSelectedRepoFromHistory(") ||
+		!strings.Contains(markup, "function removeSelectedReviewerFromHistory(") {
+		t.Fatalf("expected index html to include handlers that remove selected repo and reviewer history values")
+	}
+	if !strings.Contains(markup, "builderRepoDelete.addEventListener(\"click\", () => {") ||
+		!strings.Contains(markup, "libraryRepoDelete.addEventListener(\"click\", () => {") ||
+		!strings.Contains(markup, "builderReviewerDelete.addEventListener(\"click\", () => {") ||
+		!strings.Contains(markup, "libraryReviewerDelete.addEventListener(\"click\", () => {") {
+		t.Fatalf("expected index html to wire repo and reviewer delete buttons")
 	}
 	if !strings.Contains(markup, "function isCloneMissingRepoError(") {
 		t.Fatalf("expected index html to include clone failure repo cleanup matcher")
@@ -1674,6 +1697,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".hub-emoji-picker-panel") || !strings.Contains(css, ".hub-emoji-picker-body") {
 		t.Fatalf("expected stylesheet to include emoji picker styles")
+	}
+	if !strings.Contains(css, ".prompt-select-action-wrap") || !strings.Contains(css, ".prompt-history-delete") {
+		t.Fatalf("expected stylesheet to include inline delete controls for repository and reviewer history selects")
 	}
 	if !strings.Contains(css, ".hub-emoji-picker-panel-header") || !strings.Contains(css, ".hub-emoji-picker-toggle-text") || !strings.Contains(css, ".hub-emoji-mart") {
 		t.Fatalf("expected stylesheet to include the refreshed emoji picker layout styles")

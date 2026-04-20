@@ -213,9 +213,22 @@
                 <div class="prompt-grid">
                   <label id="builder-repo-history-field" class="prompt-field prompt-field-repo-history">
                     <span class="prompt-label">Repository</span>
-                    <select id="builder-repo-select" class="prompt-control">
-                      <option value="">Enter repo manually</option>
-                    </select>
+                    <span class="prompt-select-action-wrap">
+                      <select id="builder-repo-select" class="prompt-control">
+                        <option value="">Enter repo manually</option>
+                      </select>
+                      <button
+                        id="builder-repo-delete"
+                        class="prompt-history-delete"
+                        type="button"
+                        aria-label="Remove selected repository from history"
+                        title="Select saved repository to remove"
+                        disabled>
+                        <svg class="prompt-history-delete-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                          <path d="M3 4.5h10M6.2 4.5v-1A1.5 1.5 0 0 1 7.7 2h.6a1.5 1.5 0 0 1 1.5 1.5v1M4.3 4.5l.5 8.3a1 1 0 0 0 1 .9h4.4a1 1 0 0 0 1-.9l.5-8.3M6.6 7v4.4M9.4 7v4.4"></path>
+                        </svg>
+                      </button>
+                    </span>
                   </label>
                   <label id="builder-repo-field" class="prompt-field prompt-field-repository">
                     <input id="builder-repo-input" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="git@github.com:org/repo.git" aria-label="Repository">
@@ -237,10 +250,23 @@
                   </label>
                   <label id="builder-reviewer-history-field" class="prompt-field prompt-field-reviewer-history">
                     <span class="prompt-label">Reviewer</span>
-                    <select id="builder-reviewer-select" class="prompt-control">
-                      <option value="none">none</option>
-                      <option value="">Enter reviewers manually</option>
-                    </select>
+                    <span class="prompt-select-action-wrap">
+                      <select id="builder-reviewer-select" class="prompt-control">
+                        <option value="none">none</option>
+                        <option value="">Enter reviewers manually</option>
+                      </select>
+                      <button
+                        id="builder-reviewer-delete"
+                        class="prompt-history-delete"
+                        type="button"
+                        aria-label="Remove selected reviewer from history"
+                        title="Select saved reviewer to remove"
+                        disabled>
+                        <svg class="prompt-history-delete-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                          <path d="M3 4.5h10M6.2 4.5v-1A1.5 1.5 0 0 1 7.7 2h.6a1.5 1.5 0 0 1 1.5 1.5v1M4.3 4.5l.5 8.3a1 1 0 0 0 1 .9h4.4a1 1 0 0 0 1-.9l.5-8.3M6.6 7v4.4M9.4 7v4.4"></path>
+                        </svg>
+                      </button>
+                    </span>
                   </label>
                   <label class="prompt-field prompt-field-target-subdir">
                     <span class="prompt-label">Directory</span>
@@ -268,9 +294,22 @@
                 <div class="prompt-grid">
                   <label id="library-repo-history-field" class="prompt-field prompt-field-repo-history">
                     <span class="prompt-label">Repository</span>
-                    <select id="library-repo-select" class="prompt-control">
-                      <option value="">Enter repo manually</option>
-                    </select>
+                    <span class="prompt-select-action-wrap">
+                      <select id="library-repo-select" class="prompt-control">
+                        <option value="">Enter repo manually</option>
+                      </select>
+                      <button
+                        id="library-repo-delete"
+                        class="prompt-history-delete"
+                        type="button"
+                        aria-label="Remove selected repository from history"
+                        title="Select saved repository to remove"
+                        disabled>
+                        <svg class="prompt-history-delete-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                          <path d="M3 4.5h10M6.2 4.5v-1A1.5 1.5 0 0 1 7.7 2h.6a1.5 1.5 0 0 1 1.5 1.5v1M4.3 4.5l.5 8.3a1 1 0 0 0 1 .9h4.4a1 1 0 0 0 1-.9l.5-8.3M6.6 7v4.4M9.4 7v4.4"></path>
+                        </svg>
+                      </button>
+                    </span>
                   </label>
                   <label id="library-repo-field" class="prompt-field prompt-field-repository">
                     <input id="library-repo-input" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="git@github.com:org/repo.git" aria-label="Repository">
@@ -281,10 +320,23 @@
                   </label>
                   <label id="library-reviewer-history-field" class="prompt-field prompt-field-reviewer-history">
                     <span class="prompt-label">Reviewer</span>
-                    <select id="library-reviewer-select" class="prompt-control">
-                      <option value="none">none</option>
-                      <option value="">Enter reviewers manually</option>
-                    </select>
+                    <span class="prompt-select-action-wrap">
+                      <select id="library-reviewer-select" class="prompt-control">
+                        <option value="none">none</option>
+                        <option value="">Enter reviewers manually</option>
+                      </select>
+                      <button
+                        id="library-reviewer-delete"
+                        class="prompt-history-delete"
+                        type="button"
+                        aria-label="Remove selected reviewer from history"
+                        title="Select saved reviewer to remove"
+                        disabled>
+                        <svg class="prompt-history-delete-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                          <path d="M3 4.5h10M6.2 4.5v-1A1.5 1.5 0 0 1 7.7 2h.6a1.5 1.5 0 0 1 1.5 1.5v1M4.3 4.5l.5 8.3a1 1 0 0 0 1 .9h4.4a1 1 0 0 0 1-.9l.5-8.3M6.6 7v4.4M9.4 7v4.4"></path>
+                        </svg>
+                      </button>
+                    </span>
                   </label>
                   <label class="prompt-field prompt-field-target-subdir">
                     <span class="prompt-label">Directory</span>
@@ -1397,6 +1449,7 @@
     const promptLibraryPanel = document.getElementById("prompt-library-panel");
     const promptRawPanel = document.getElementById("prompt-raw-panel");
     const builderRepoSelect = document.getElementById("builder-repo-select");
+    const builderRepoDelete = document.getElementById("builder-repo-delete");
     const builderRepoHistoryField = document.getElementById("builder-repo-history-field");
     const builderRepositoryField = document.getElementById("builder-repo-field");
     const builderRepoInput = document.getElementById("builder-repo-input");
@@ -1404,6 +1457,7 @@
     const builderBaseBranchClear = document.getElementById("builder-base-branch-clear");
     const builderTargetSubdir = document.getElementById("builder-target-subdir");
     const builderReviewerSelect = document.getElementById("builder-reviewer-select");
+    const builderReviewerDelete = document.getElementById("builder-reviewer-delete");
     const builderReviewerHistoryField = document.getElementById("builder-reviewer-history-field");
     const builderReviewerField = document.getElementById("builder-reviewer-field");
     const builderReviewerInput = document.getElementById("builder-reviewer-input");
@@ -1412,12 +1466,14 @@
     const builderImagePasteTargetWrap = builderImagePasteTarget ? builderImagePasteTarget.parentElement : null;
     const builderImagesClear = document.getElementById("builder-images-clear");
     const libraryRepoSelect = document.getElementById("library-repo-select");
+    const libraryRepoDelete = document.getElementById("library-repo-delete");
     const libraryRepoHistoryField = document.getElementById("library-repo-history-field");
     const libraryRepositoryField = document.getElementById("library-repo-field");
     const libraryRepoInput = document.getElementById("library-repo-input");
     const libraryBaseBranch = document.getElementById("library-base-branch");
     const libraryTargetSubdir = document.getElementById("library-target-subdir");
     const libraryReviewerSelect = document.getElementById("library-reviewer-select");
+    const libraryReviewerDelete = document.getElementById("library-reviewer-delete");
     const libraryReviewerHistoryField = document.getElementById("library-reviewer-history-field");
     const libraryReviewerField = document.getElementById("library-reviewer-field");
     const libraryReviewerInput = document.getElementById("library-reviewer-input");
@@ -3701,6 +3757,20 @@
       renderRepoHistoryOptions();
     }
 
+    function dropReviewersFromHistory(reviewers) {
+      const blocked = new Set(dedupeReviewerValues(reviewers));
+      if (!blocked.size) return;
+
+      const filtered = state.reviewerHistory.filter((reviewer) => !blocked.has(reviewer));
+      if (filtered.length === state.reviewerHistory.length) {
+        return;
+      }
+
+      state.reviewerHistory = filtered;
+      persistReviewerHistory();
+      renderReviewerHistoryOptions();
+    }
+
     function rememberReviewers(reviewers) {
       const unique = dedupeReviewerValues([...(reviewers || []), ...state.reviewerHistory]);
       if (unique.length === state.reviewerHistory.length && unique.every((value, index) => value === state.reviewerHistory[index])) {
@@ -3842,6 +3912,91 @@
     function syncReviewerFieldVisibility() {
       syncRepositoryVisibility(builderReviewerSelect, builderReviewerField);
       syncRepositoryVisibility(libraryReviewerSelect, libraryReviewerField);
+    }
+
+    function canDeleteRepoSelection(select) {
+      const value = normalizeRepoValue(select?.value);
+      return value !== "" && state.repoHistory.includes(value);
+    }
+
+    function canDeleteReviewerSelection(select) {
+      const value = normalizeReviewerValue(select?.value);
+      return value !== "" && state.reviewerHistory.includes(value);
+    }
+
+    function syncHistoryDeleteButton(button, enabled, readyTitle, disabledTitle) {
+      if (!button) return;
+      button.disabled = !enabled;
+      button.setAttribute("aria-disabled", String(!enabled));
+      button.title = enabled ? readyTitle : disabledTitle;
+    }
+
+    function syncRepoDeleteButtons() {
+      syncHistoryDeleteButton(
+        builderRepoDelete,
+        canDeleteRepoSelection(builderRepoSelect),
+        "Remove selected repository from history",
+        "Select saved repository to remove",
+      );
+      syncHistoryDeleteButton(
+        libraryRepoDelete,
+        canDeleteRepoSelection(libraryRepoSelect),
+        "Remove selected repository from history",
+        "Select saved repository to remove",
+      );
+    }
+
+    function syncReviewerDeleteButtons() {
+      syncHistoryDeleteButton(
+        builderReviewerDelete,
+        canDeleteReviewerSelection(builderReviewerSelect),
+        "Remove selected reviewer from history",
+        "Select saved reviewer to remove",
+      );
+      syncHistoryDeleteButton(
+        libraryReviewerDelete,
+        canDeleteReviewerSelection(libraryReviewerSelect),
+        "Remove selected reviewer from history",
+        "Select saved reviewer to remove",
+      );
+    }
+
+    function removeSelectedRepoFromHistory(select) {
+      const selected = normalizeRepoValue(select?.value);
+      if (!selected) {
+        syncRepoDeleteButtons();
+        return;
+      }
+
+      const nextRepo = state.repoHistory.filter((repo) => repo !== selected)[0] || "";
+      dropReposFromHistory([selected]);
+      const builderValue = normalizeRepoValue(builderRepoInput.value);
+      const libraryValue = normalizeRepoValue(libraryRepoInput.value);
+      if (builderValue === selected || builderValue === "") {
+        builderRepoInput.value = nextRepo;
+      }
+      if (libraryValue === selected || libraryValue === "") {
+        libraryRepoInput.value = nextRepo;
+      }
+      renderRepoHistoryOptions();
+    }
+
+    function removeSelectedReviewerFromHistory(select) {
+      const selected = normalizeReviewerValue(select?.value);
+      if (!selected) {
+        syncReviewerDeleteButtons();
+        return;
+      }
+
+      const nextReviewer = state.reviewerHistory.filter((reviewer) => reviewer !== selected)[0] || "";
+      dropReviewersFromHistory([selected]);
+      if (normalizeReviewerValue(builderReviewerInput.value) === selected) {
+        builderReviewerInput.value = nextReviewer;
+      }
+      if (normalizeReviewerValue(libraryReviewerInput.value) === selected) {
+        libraryReviewerInput.value = nextReviewer;
+      }
+      renderReviewerHistoryOptions();
     }
 
     function displayRepoLabel(repo) {
@@ -4034,6 +4189,7 @@
       }
 
       syncRepositoryFieldVisibility();
+      syncRepoDeleteButtons();
     }
 
     function renderRepoHistoryOptions() {
@@ -4092,6 +4248,7 @@
       }
 
       syncReviewerFieldVisibility();
+      syncReviewerDeleteButtons();
     }
 
     function renderReviewerHistoryOptions() {
@@ -6495,6 +6652,9 @@
       }
       renderRepoHistoryOptions();
     });
+    builderRepoDelete.addEventListener("click", () => {
+      removeSelectedRepoFromHistory(builderRepoSelect);
+    });
 
     libraryRepoSelect.addEventListener("change", () => {
       const value = normalizeRepoValue(libraryRepoSelect.value);
@@ -6503,6 +6663,9 @@
         builderRepoInput.value = value;
       }
       renderRepoHistoryOptions();
+    });
+    libraryRepoDelete.addEventListener("click", () => {
+      removeSelectedRepoFromHistory(libraryRepoSelect);
     });
 
     builderReviewerSelect.addEventListener("change", () => {
@@ -6521,6 +6684,9 @@
       }
       renderReviewerHistoryOptions();
     });
+    builderReviewerDelete.addEventListener("click", () => {
+      removeSelectedReviewerFromHistory(builderReviewerSelect);
+    });
 
     libraryReviewerSelect.addEventListener("change", () => {
       const rawValue = String(libraryReviewerSelect.value || "").trim();
@@ -6537,6 +6703,9 @@
         builderReviewerInput.value = value;
       }
       renderReviewerHistoryOptions();
+    });
+    libraryReviewerDelete.addEventListener("click", () => {
+      removeSelectedReviewerFromHistory(libraryReviewerSelect);
     });
 
     builderRepoInput.addEventListener("input", () => {
