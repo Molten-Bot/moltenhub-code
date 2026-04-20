@@ -461,6 +461,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function dismissTask(") {
 		t.Fatalf("expected index html to include dismissTask handler")
 	}
+	if !strings.Contains(markup, "function renderTaskCloseButton(task, requestID)") {
+		t.Fatalf("expected index html to include shared task close button renderer")
+	}
+	if !strings.Contains(markup, `close.title = historyOnly ? "Remove task from history view" : "Close finished task";`) {
+		t.Fatalf("expected index html to label close actions for both history-only and live completed tasks")
+	}
 	if !strings.Contains(markup, "const CLOSE_TASK_FADE_MS = 2000;") {
 		t.Fatalf("expected index html to include close task fade timing")
 	}
@@ -902,6 +908,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "prLink.className = \"task-pr-link task-pr-link-inline\";") {
 		t.Fatalf("expected index html prompt-only mode to render a compact inline GitHub pull-request link affordance")
+	}
+	if !strings.Contains(markup, "const closeAction = renderTaskCloseButton(task, requestID);") {
+		t.Fatalf("expected index html prompt-only mode to include completed-task close actions")
+	}
+	if !strings.Contains(markup, "completeTaskDismissal(requestID);") || !strings.Contains(markup, "Removed task ${requestID} from history") {
+		t.Fatalf("expected index html to clear history-only tasks locally when close is clicked")
 	}
 	if !strings.Contains(markup, "const showTaskPRLink = isCompletedTask(task) && prURL !== \"\";") {
 		t.Fatalf("expected index html to gate task PR links to completed tasks with a pull request URL")

@@ -4786,6 +4786,37 @@
       }
     }
 
+    function renderTaskCloseButton(task, requestID) {
+      if (!isCompletedTask(task)) {
+        return null;
+      }
+      requestID = String(requestID || "").trim();
+      if (!requestID) {
+        return null;
+      }
+
+      const historyOnly = Boolean(task?.history_only);
+      const closePending = !historyOnly && isTaskClosePending(requestID);
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "task-close";
+      close.textContent = "X";
+      close.title = historyOnly ? "Remove task from history view" : "Close finished task";
+      close.setAttribute("aria-label", historyOnly ? "Remove task from history" : "Close task");
+      close.hidden = closePending;
+      close.disabled = closePending;
+      close.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (historyOnly) {
+          completeTaskDismissal(requestID);
+          setLocalPromptStatus("ok", `Removed task ${requestID} from history`);
+          return;
+        }
+        dismissTask(requestID);
+      });
+      return close;
+    }
+
     function canRerunTask(task) {
       if (!task) {
         return false;
@@ -5683,6 +5714,11 @@
 
           const promptActions = document.createElement("div");
           promptActions.className = "task-top-actions";
+          const closeAction = renderTaskCloseButton(task, requestID);
+          if (closeAction) {
+            promptActions.appendChild(closeAction);
+          }
+
           const showPromptPRLink = isCompletedTask(task) && prURL !== "";
           if (showPromptPRLink) {
             const prLink = document.createElement("a");
@@ -5811,20 +5847,8 @@
           topActions.appendChild(rerun);
         }
 
-        if (isCompletedTask(task) && !task.history_only) {
-          const closePending = isTaskClosePending(requestID);
-          const close = document.createElement("button");
-          close.type = "button";
-          close.className = "task-close";
-          close.textContent = "X";
-          close.title = "Close finished task";
-          close.setAttribute("aria-label", "Close task");
-          close.hidden = closePending;
-          close.disabled = closePending;
-          close.addEventListener("click", (event) => {
-            event.stopPropagation();
-            dismissTask(requestID);
-          });
+        const close = renderTaskCloseButton(task, requestID);
+        if (close) {
           topActions.appendChild(close);
         }
 
