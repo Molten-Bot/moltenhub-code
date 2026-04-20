@@ -1323,8 +1323,8 @@ func TestCurrentWorkHeaderIncludesTaskSoundMuteToggle(t *testing.T) {
 		t.Fatalf("expected Current Work panel markup")
 	}
 	if !strings.Contains(html, "id=\"task-sound-toggle\"") ||
-		!strings.Contains(html, "aria-label=\"Mute task sounds\"") ||
-		!strings.Contains(html, "title=\"Mute task sounds\"") {
+		!strings.Contains(html, "aria-label=\"Disable task sounds\"") ||
+		!strings.Contains(html, "title=\"Disable task sounds\"") {
 		t.Fatalf("expected Current Work header to include mute toggle for task sounds")
 	}
 	if !strings.Contains(html, "const TASK_SOUND_MUTED_KEY = \"hubui.taskSoundMuted\";") {
@@ -1348,10 +1348,17 @@ func TestCurrentWorkHeaderIncludesTaskSoundMuteToggle(t *testing.T) {
 		!strings.Contains(html, "taskSoundToggle.addEventListener(\"click\", () => {") {
 		t.Fatalf("expected task sound toggle to persist and react to clicks")
 	}
+	if !strings.Contains(html, "if (!state.taskSoundMuted) {\n        ensureTaskAudioContext();\n        playTaskSuccessSound();\n      }") {
+		t.Fatalf("expected enabling task sounds to play a confirmation chirp")
+	}
 	if !strings.Contains(html, "function syncTaskCompletionSounds(snapshot) {") ||
 		!strings.Contains(html, "playTaskSuccessSound();") ||
 		!strings.Contains(html, "playTaskErrorSound();") {
 		t.Fatalf("expected task completion updates to trigger success and error sounds")
+	}
+	if !strings.Contains(html, "document.addEventListener(\"click\", primeTaskAudioContextFromInteraction, true);") ||
+		!strings.Contains(html, "document.removeEventListener(\"click\", primeTaskAudioContextFromInteraction, true);") {
+		t.Fatalf("expected click interactions to prime task audio context across browsers")
 	}
 }
 
@@ -1375,7 +1382,7 @@ func TestTaskSoundToggleStylesShowMutedState(t *testing.T) {
 		t.Fatalf("expected task sound toggle hover and focus affordances")
 	}
 	if !strings.Contains(css, ".task-sound-toggle[aria-pressed=\"true\"] {") {
-		t.Fatalf("expected task sound toggle pressed styling for muted state")
+		t.Fatalf("expected task sound toggle pressed styling for enabled state")
 	}
 	if !strings.Contains(css, ".task-sound-toggle-muted .task-sound-toggle-icon {\n  opacity: 0.7;\n}") {
 		t.Fatalf("expected muted task sound icon styling")
