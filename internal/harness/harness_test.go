@@ -2886,6 +2886,43 @@ func TestRunCodexStagesAgentsPromptWithinTargetDir(t *testing.T) {
 	}
 }
 
+func TestRunCodexUsesExistingTargetAgentsPromptFile(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	targetAgentsPath := filepath.Join(targetDir, "AGENTS.md")
+	const existingAgentsContent = "repo-local instructions"
+	if err := os.WriteFile(targetAgentsPath, []byte(existingAgentsContent), 0o644); err != nil {
+		t.Fatalf("write target agents file: %v", err)
+	}
+
+	sourcePath := filepath.Join(t.TempDir(), "AGENTS.md")
+	if err := os.WriteFile(sourcePath, []byte("seeded instructions"), 0o644); err != nil {
+		t.Fatalf("write source agents file: %v", err)
+	}
+
+	runner := &captureRunner{}
+	h := New(runner)
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, "ship fix", codexRunOptions{}, sourcePath, ""); err != nil {
+		t.Fatalf("runCodex() error = %v", err)
+	}
+
+	if !strings.Contains(runner.cmd.Stdin, "Use ./AGENTS.md as your primary implementation instructions before making any changes.") {
+		t.Fatalf("captured prompt missing target AGENTS directive: %q", runner.cmd.Stdin)
+	}
+	if !strings.Contains(runner.cmd.Stdin, agentsCredentialGuardInstruction) {
+		t.Fatalf("captured prompt missing credential guard instruction: %q", runner.cmd.Stdin)
+	}
+
+	data, err := os.ReadFile(targetAgentsPath)
+	if err != nil {
+		t.Fatalf("read target agents file: %v", err)
+	}
+	if got, want := string(data), existingAgentsContent; got != want {
+		t.Fatalf("target AGENTS content = %q, want %q", got, want)
+	}
+}
+
 func TestRunCodexInjectsResponseModePrompt(t *testing.T) {
 	t.Parallel()
 

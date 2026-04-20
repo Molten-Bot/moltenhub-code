@@ -98,6 +98,13 @@ func TestHarnessFilesystemAndPromptHelpers(t *testing.T) {
 	if got := promptPathForCodex("/tmp/repo", "/outside/AGENTS.md"); got != "/outside/AGENTS.md" {
 		t.Fatalf("promptPathForCodex(outside target) = %q", got)
 	}
+	withAgents := withAgentsPrompt("ship fix", "/tmp/repo/AGENTS.md")
+	if !strings.Contains(withAgents, "Use /tmp/repo/AGENTS.md as your primary implementation instructions before making any changes.") {
+		t.Fatalf("withAgentsPrompt(path) missing AGENTS directive: %q", withAgents)
+	}
+	if !strings.Contains(withAgents, agentsCredentialGuardInstruction) {
+		t.Fatalf("withAgentsPrompt(path) missing credential guard instruction: %q", withAgents)
+	}
 	if _, err := resolveTargetDir("/tmp/repo", "../escape"); err == nil {
 		t.Fatal("resolveTargetDir(escape) error = nil, want non-nil")
 	}

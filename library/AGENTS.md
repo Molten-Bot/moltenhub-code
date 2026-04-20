@@ -49,6 +49,7 @@ You are working inside an existing repository. Solve the user's actual problem w
 - Large speculative refactors unrelated to the request.
 - Workarounds that hide a deeper inconsistency you can safely correct.
 - Assuming every repository shares the same language, architecture, or style preferences.
+- YOU ARE NOT ALLOWED TO SHARE: GITHUB PAT and YOUR (AGENTS) AUTH CREDENTIALS.
 
 ## Done Checklist
 
