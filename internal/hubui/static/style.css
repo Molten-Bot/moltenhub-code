@@ -1208,6 +1208,19 @@ body .right-col.prompt-collapsed.task-list-hidden {
   width: 100%;
 }
 
+.prompt-select-action-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.prompt-select-action-wrap .prompt-control {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
 .prompt-control,
 .prompt-text,
 .prompt-action-paste {
@@ -1300,6 +1313,48 @@ select.prompt-control {
 
 .prompt-input-action:disabled {
   opacity: 0.45;
+}
+
+.prompt-history-delete {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--surface-control-border);
+  border-radius: 11px;
+  background: var(--surface-control-bg);
+  color: var(--surface-action-muted);
+  box-shadow: var(--surface-control-shadow);
+  padding: 0;
+  transition: border-color 0.12s ease, background-color 0.12s ease, color 0.12s ease;
+}
+
+.prompt-history-delete-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.prompt-history-delete-icon path {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.35;
+}
+
+.prompt-history-delete:hover:not(:disabled),
+.prompt-history-delete:focus-visible:not(:disabled) {
+  border-color: color-mix(in srgb, var(--surface-danger) 36%, var(--surface-control-border));
+  background: color-mix(in srgb, var(--surface-danger) 12%, var(--surface-control-bg));
+  color: var(--surface-danger);
+  outline: none;
+}
+
+.prompt-history-delete:disabled {
+  opacity: 0.46;
 }
 
 select.prompt-control {
