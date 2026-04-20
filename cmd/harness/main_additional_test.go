@@ -418,6 +418,9 @@ func TestFailureFollowUpPromptDefaultWhenNoPaths(t *testing.T) {
 	if !strings.Contains(got, "When failures occur, send a response back to the calling agent that clearly states failure and includes the error details. Use explicit `Failure:` and `Error details:` fields.") {
 		t.Fatalf("prompt missing failure response instruction: %q", got)
 	}
+	if !strings.Contains(got, "If a repository is not initialized after clone, use only gh CLI/git tools to create and push a main branch, then continue once git state is ready for work.") {
+		t.Fatalf("prompt missing uninitialized-repo instruction: %q", got)
+	}
 	if !strings.Contains(got, "Do not stop work just because you cannot create a pull request or watch remote CI/CD from inside this agent runtime.") {
 		t.Fatalf("prompt missing remote operations handoff: %q", got)
 	}

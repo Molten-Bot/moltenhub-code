@@ -31,6 +31,15 @@ func TestWithExecutionContractIncludesFailureResponseInstruction(t *testing.T) {
 	}
 }
 
+func TestWithExecutionContractIncludesUninitializedRepoInstruction(t *testing.T) {
+	t.Parallel()
+
+	got := WithExecutionContract("Base prompt")
+	if !strings.Contains(got, UninitializedRepoInstruction) {
+		t.Fatalf("WithExecutionContract() missing uninitialized-repo instruction: %q", got)
+	}
+}
+
 func TestWithExecutionContractIncludesRemoteOperationsHandoff(t *testing.T) {
 	t.Parallel()
 
@@ -64,6 +73,7 @@ func TestComposePromptUsesFallbackPathsAndContract(t *testing.T) {
 		"Observed failure context:",
 		OfflineReviewInstruction,
 		FailureResponseInstruction,
+		UninitializedRepoInstruction,
 		RemoteOperationsInstruction,
 		ActionableChangeInstruction,
 		NoOpInstruction,

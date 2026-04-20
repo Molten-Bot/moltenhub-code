@@ -1391,12 +1391,90 @@ func TestRunNoChecksReportedAfterRetryWindowTriggersRemediation(t *testing.T) {
 		})
 	}
 	exps = append(exps,
+		expectedRun{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: "abcdef123456\n"}},
+		expectedRun{cmd: workflowDispatchRunsCommand(repoDir, branch), res: execx.Result{Stdout: "[]\n"}},
 		expectedRun{cmd: codexCommand(targetDir, remediationPrompt(withAgentsPrompt(cfg.Prompt, agentsPath), prURL, noChecks, 1))},
 		expectedRun{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		expectedRun{cmd: addCommand(repoDir)},
 		expectedRun{cmd: commitCommand(repoDir, remediationCommitMessage(cfg.CommitMessage, 1))},
 		expectedRun{cmd: pushCommand(repoDir, branch)},
 		expectedRun{cmd: prChecksCommand(repoDir, prURL)},
+	)
+
+	fake := &fakeRunner{t: t, exps: exps}
+	sleepCalls := 0
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+	h.Sleep = func(_ context.Context, d time.Duration) error {
+		sleepCalls++
+		if d != prChecksNoReportRetryDelay {
+			t.Fatalf("sleep delay = %s, want %s", d, prChecksNoReportRetryDelay)
+		}
+		return nil
+	}
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if sleepCalls != maxPRChecksNoReportRetries {
+		t.Fatalf("sleepCalls = %d, want %d", sleepCalls, maxPRChecksNoReportRetries)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunNoChecksReportedResolvesFromWorkflowDispatchSnapshot(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+	prURL := "https://github.com/acme/repo/pull/42"
+	noChecks := "no checks reported on the 'moltenhub-build-api' branch"
+
+	exps := []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL), res: execx.Result{Stderr: noChecks + "\n"}, err: errors.New("checks unavailable")},
+		{cmd: workflowDispatchCommand(repoDir, branch)},
+	}
+	for i := 1; i <= maxPRChecksNoReportRetries; i++ {
+		exps = append(exps, expectedRun{
+			cmd: prChecksCommand(repoDir, prURL),
+			res: execx.Result{Stderr: noChecks + "\n"},
+			err: errors.New("checks unavailable"),
+		})
+	}
+	exps = append(exps,
+		expectedRun{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: "deadbeef\n"}},
+		expectedRun{
+			cmd: workflowDispatchRunsCommand(repoDir, branch),
+			res: execx.Result{Stdout: `[{"status":"completed","conclusion":"success","workflowName":"CI","displayTitle":"CI","headSha":"deadbeef"}]`},
+		},
 	)
 
 	fake := &fakeRunner{t: t, exps: exps}
@@ -2054,6 +2132,69 @@ func TestRunMissingMoltenhubBaseBranchFallsBackToDefaultAndCreatesNewBranch(t *t
 	}
 }
 
+func TestRunMissingMainBaseBranchBootstrapsUninitializedRepository(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 6, 19, 53, 52, 0, time.UTC)
+	guid := "9ded650b29c70708825082be50fbf433"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+	prURL := "https://github.com/acme/repo/pull/113"
+
+	cloneMissingMain := execx.Result{
+		Stderr: "warning: Could not find remote branch main to clone.\n" +
+			"fatal: Remote branch main not found in upstream origin\n",
+	}
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneRepoCommand(cfg.RepoURL, cfg.BaseBranch, repoDir), res: cloneMissingMain, err: errors.New("clone failed")},
+		{cmd: remoteRefsCommand(cfg.RepoURL), res: execx.Result{Stdout: ""}},
+		{cmd: cloneRepoDefaultBranchCommand(cfg.RepoURL, repoDir)},
+		{cmd: switchMainBranchCommand(repoDir)},
+		{cmd: initializeMainBranchCommitCommand(repoDir)},
+		{cmd: pushCommand(repoDir, "main")},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL)},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if got, want := res.Branch, branch; got != want {
+		t.Fatalf("Branch = %q, want %q", got, want)
+	}
+	if got, want := res.PRURL, prURL; got != want {
+		t.Fatalf("PRURL = %q, want %q", got, want)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
 func TestRunCloneRetriesTransientFailureThenSucceeds(t *testing.T) {
 	t.Parallel()
 
@@ -2294,6 +2435,28 @@ func TestCommandBuilders(t *testing.T) {
 	if cloneDefault.Name != "git" || !reflect.DeepEqual(cloneDefault.Args, []string{"clone", "--single-branch", cfg.RepoURL, repoDir}) {
 		t.Fatalf("clone default command unexpected: %+v", cloneDefault)
 	}
+	remoteRefs := remoteRefsCommand(cfg.RepoURL)
+	if remoteRefs.Name != "git" || !reflect.DeepEqual(remoteRefs.Args, []string{"ls-remote", "--heads", "--tags", cfg.RepoURL}) {
+		t.Fatalf("remote refs command unexpected: %+v", remoteRefs)
+	}
+	switchMain := switchMainBranchCommand(repoDir)
+	if switchMain.Name != "git" || switchMain.Dir != repoDir || !reflect.DeepEqual(switchMain.Args, []string{"switch", "-C", "main"}) {
+		t.Fatalf("switch main command unexpected: %+v", switchMain)
+	}
+	initMain := initializeMainBranchCommitCommand(repoDir)
+	wantInitMain := []string{
+		"-c",
+		"user.name=MoltenHub Code",
+		"-c",
+		"user.email=bot@molten.bot",
+		"commit",
+		"--allow-empty",
+		"-m",
+		"chore: initialize main branch",
+	}
+	if initMain.Name != "git" || initMain.Dir != repoDir || !reflect.DeepEqual(initMain.Args, wantInitMain) {
+		t.Fatalf("initialize main branch command unexpected: %+v", initMain)
+	}
 	authStatus := authCommand()
 	if authStatus.Name != "gh" || !reflect.DeepEqual(authStatus.Args, []string{"auth", "status"}) {
 		t.Fatalf("auth status command unexpected: %+v", authStatus)
@@ -2439,6 +2602,22 @@ func TestCommandBuilders(t *testing.T) {
 	wantWorkflowDispatch := []string{"workflow", "run", defaultCIWorkflowPath, "--ref", branch}
 	if workflowDispatch.Name != "gh" || workflowDispatch.Dir != repoDir || !reflect.DeepEqual(workflowDispatch.Args, wantWorkflowDispatch) {
 		t.Fatalf("workflow dispatch command unexpected: %+v", workflowDispatch)
+	}
+	headSHA := headCommitSHACommand(repoDir)
+	if headSHA.Name != "git" || headSHA.Dir != repoDir || !reflect.DeepEqual(headSHA.Args, []string{"rev-parse", "HEAD"}) {
+		t.Fatalf("head commit command unexpected: %+v", headSHA)
+	}
+	workflowRuns := workflowDispatchRunsCommand(repoDir, branch)
+	wantWorkflowRuns := []string{
+		"run", "list",
+		"--workflow", defaultCIWorkflowPath,
+		"--branch", branch,
+		"--event", "workflow_dispatch",
+		"--json", "status,conclusion,workflowName,displayTitle,headSha",
+		"--limit", "1",
+	}
+	if workflowRuns.Name != "gh" || workflowRuns.Dir != repoDir || !reflect.DeepEqual(workflowRuns.Args, wantWorkflowRuns) {
+		t.Fatalf("workflow runs command unexpected: %+v", workflowRuns)
 	}
 
 	fetchBranch := fetchBranchCommand(repoDir, branch)
@@ -3374,6 +3553,7 @@ func TestWithCompletionGatePromptIncludesAgentRuntimeGuidance(t *testing.T) {
 	got := withCompletionGatePrompt("Build API")
 	wantSnippets := []string{
 		"When failures occur, send a response back to the calling agent that clearly states failure and includes the error details. Use explicit `Failure:` and `Error details:` fields.",
+		"If a repository is not initialized after clone, use only gh CLI/git tools to create and push a main branch, then continue once git state is ready for work.",
 		"Do not stop work just because you cannot create a pull request or watch remote CI/CD from inside this agent runtime.",
 		"For implementation or repository-change requests, do not stop at analysis.",
 		"Only return a no-op when the task is genuinely review/investigation-only",
