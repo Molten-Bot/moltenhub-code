@@ -879,12 +879,20 @@ func (h Harness) cloneRepositories(ctx context.Context, repos []repoWorkspace, b
 		}
 	}
 
-	effectiveBaseBranch := baseBranch
-	for _, fellBack := range usedFallback {
-		if fellBack {
-			effectiveBaseBranch = "main"
-			break
+	effectiveBaseBranch := normalizeBranchRef(baseBranch)
+	if effectiveBaseBranch == "" {
+		effectiveBaseBranch = "main"
+	}
+	for index, fellBack := range usedFallback {
+		if !fellBack {
+			continue
 		}
+		resolved := normalizeBranchRef(repos[index].Branch)
+		if resolved == "" {
+			continue
+		}
+		effectiveBaseBranch = resolved
+		break
 	}
 
 	if !shouldCreateWorkBranch(effectiveBaseBranch) {
@@ -970,6 +978,7 @@ func (h Harness) cloneRepository(ctx context.Context, repo *repoWorkspace, branc
 		}
 	}
 	if cloneErr == nil {
+		repo.Branch = branch
 		h.logf("stage=clone status=ok repo=%s repo_dir=%s", repoURL, repo.RelDir)
 		return false, nil
 	}
@@ -997,11 +1006,25 @@ func (h Harness) cloneRepository(ctx context.Context, repo *repoWorkspace, branc
 		return false, err
 	}
 
+	resolvedBranch := branch
+	statusRes, statusErr := h.runCommand(ctx, "clone", statusCommand(repo.Dir))
+	if statusErr != nil {
+		h.logf(
+			"stage=clone status=warn action=fallback_default_branch reason=detect_resolved_branch_failed repo=%s repo_dir=%s err=%q",
+			repoURL,
+			repo.RelDir,
+			statusErr,
+		)
+	} else if detected := normalizeBranchRef(localBranchFromStatus(statusRes.Stdout)); detected != "" {
+		resolvedBranch = detected
+	}
+	repo.Branch = resolvedBranch
+
 	h.logf(
 		"stage=clone status=ok action=fallback_default_branch repo=%s repo_dir=%s resolved_branch=%s",
 		repoURL,
 		repo.RelDir,
-		"main",
+		resolvedBranch,
 	)
 	return true, nil
 }
@@ -1831,6 +1854,9 @@ func shouldFallbackCloneToDefaultBranch(baseBranch string, res execx.Result, err
 		return false
 	}
 	normalized := normalizeBranchRef(baseBranch)
+	if normalized == "main" {
+		return isMissingRemoteBranchCloneError(err, res)
+	}
 	if !strings.HasPrefix(normalized, "moltenhub-") {
 		return false
 	}
@@ -2506,7 +2532,8 @@ func cloneRepoDefaultBranchCommand(repoURL, repoDir string) execx.Command {
 }
 
 func shouldCreateWorkBranch(baseBranch string) bool {
-	return normalizeBranchRef(baseBranch) == "main"
+	normalized := normalizeBranchRef(baseBranch)
+	return normalized == "main" || normalized == "master"
 }
 
 func normalizeBranchRef(branch string) string {
