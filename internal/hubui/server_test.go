@@ -1065,6 +1065,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `class="metric-copy"`) || !strings.Contains(markup, `class="metric-label metric-label-visible text-xs leading-tight">CPU</span>`) {
 		t.Fatalf("expected index html to render the CPU metric label as visible copy")
 	}
+	if !strings.Contains(markup, `id="local-conn-item" class="status-item status-item-compact status-item-compact-expandable`) {
+		t.Fatalf("expected local connection pill to remain the only expandable compact pill")
+	}
+	if !strings.Contains(markup, `id="hub-conn-item" class="status-item status-item-compact status-item-compact-expandable`) {
+		t.Fatalf("expected hub connection pill to remain the only expandable compact pill")
+	}
 	if !strings.Contains(markup, `class="metric-label metric-label-visible text-xs leading-tight">MEM</span>`) {
 		t.Fatalf("expected index html to render the memory metric label as visible copy")
 	}
