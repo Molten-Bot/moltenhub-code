@@ -4476,6 +4476,13 @@
       clearClosingTaskTimer(requestID);
       state.closingTaskIDs.delete(requestID);
       state.dismissedTaskIDs.add(requestID);
+      if (state.taskHistoryByID instanceof Map) {
+        state.taskHistoryByID.delete(requestID);
+        persistTaskHistory();
+      }
+      if (state.taskHistoryUnseenIDs instanceof Set && state.taskHistoryUnseenIDs.delete(requestID)) {
+        persistTaskHistoryUnseenIDs();
+      }
       persistDismissedTaskIDs();
       if (state.selectedTaskId === requestID) {
         state.selectedTaskId = "";
@@ -5156,7 +5163,7 @@
           continue;
         }
         const requestID = String(task?.request_id || "").trim();
-        if (!requestID) {
+        if (!requestID || state.dismissedTaskIDs.has(requestID)) {
           continue;
         }
         const copy = cloneTaskForHistory(task);
@@ -5215,20 +5222,19 @@
       const out = [];
       for (const task of liveByID.values()) {
         const requestID = String(task?.request_id || "").trim();
-        if (!requestID) {
+        if (!requestID || state.dismissedTaskIDs.has(requestID)) {
           continue;
         }
-        const historyOnly = state.dismissedTaskIDs.has(requestID);
         out.push({
           ...task,
-          history_only: historyOnly,
-          can_rerun: historyOnly ? false : Boolean(task?.can_rerun),
+          history_only: false,
+          can_rerun: Boolean(task?.can_rerun),
         });
       }
 
       for (const task of state.taskHistoryByID.values()) {
         const requestID = String(task?.request_id || "").trim();
-        if (!requestID || liveByID.has(requestID)) {
+        if (!requestID || liveByID.has(requestID) || state.dismissedTaskIDs.has(requestID)) {
           continue;
         }
         out.push({

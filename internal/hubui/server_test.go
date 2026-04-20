@@ -476,6 +476,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "completeTaskDismissal(requestID)") {
 		t.Fatalf("expected index html to include delayed task dismissal helper")
 	}
+	if !strings.Contains(markup, "state.taskHistoryByID.delete(requestID);") {
+		t.Fatalf("expected index html to remove dismissed tasks from persisted completed history")
+	}
+	if !strings.Contains(markup, "state.taskHistoryUnseenIDs instanceof Set && state.taskHistoryUnseenIDs.delete(requestID)") {
+		t.Fatalf("expected index html to clear unseen completed history state for dismissed tasks")
+	}
 	if !strings.Contains(markup, "function rerunTask(") {
 		t.Fatalf("expected index html to include rerunTask handler")
 	}
@@ -568,6 +574,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "const liveByID = new Map();") || !strings.Contains(markup, "for (const task of liveByID.values()) {") {
 		t.Fatalf("expected index html history mode to include live run tasks alongside saved history")
+	}
+	if !strings.Contains(markup, "if (!requestID || state.dismissedTaskIDs.has(requestID)) {") {
+		t.Fatalf("expected index html to skip dismissed completed tasks while rebuilding history")
+	}
+	if !strings.Contains(markup, "if (!requestID || liveByID.has(requestID) || state.dismissedTaskIDs.has(requestID)) {") {
+		t.Fatalf("expected index html history mode to exclude dismissed tasks from persisted history output")
 	}
 	if !strings.Contains(markup, `const TASK_HISTORY_KEY = "hubui.taskHistory.v1";`) {
 		t.Fatalf("expected index html to define a dedicated persisted task history storage key")
