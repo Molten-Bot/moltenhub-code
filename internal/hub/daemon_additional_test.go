@@ -1028,6 +1028,9 @@ func TestFailureFollowUpPromptIncludesWorkspaceAndTargetPath(t *testing.T) {
 	if !strings.Contains(prompt, `When failures occur, send a response back to the calling agent that clearly states failure and includes the error details.`) {
 		t.Fatalf("prompt missing response contract: %q", prompt)
 	}
+	if !strings.Contains(prompt, "If a repository is not initialized after clone, use only gh CLI/git tools to create and push a main branch, then continue once git state is ready for work.") {
+		t.Fatalf("prompt missing uninitialized-repo instruction: %q", prompt)
+	}
 }
 
 func TestRecordGitHubTaskCompleteActivityLogsWarningOnFailure(t *testing.T) {

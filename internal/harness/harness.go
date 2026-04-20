@@ -53,6 +53,9 @@ const (
 	maxReviewCommentsChars     = 16000
 	maxReviewDiffStatChars     = 12000
 	maxReviewDiffPatchChars    = 30000
+	bootstrapGitUserName       = "MoltenHub Code"
+	bootstrapGitUserEmail      = "bot@molten.bot"
+	bootstrapMainCommitMessage = "chore: initialize main branch"
 )
 
 type logFn func(string, ...any)
@@ -973,6 +976,18 @@ func (h Harness) cloneRepository(ctx context.Context, repo *repoWorkspace, branc
 		h.logf("stage=clone status=ok repo=%s repo_dir=%s", repoURL, repo.RelDir)
 		return false, nil
 	}
+	if shouldBootstrapUninitializedMainBranch(branch, cloneRes, cloneErr) {
+		hasRefs, refsErr := h.remoteRepositoryHasRefs(ctx, repoURL)
+		if refsErr != nil {
+			return false, refsErr
+		}
+		if !hasRefs {
+			if err := h.bootstrapUninitializedMainBranch(ctx, *repo, repoURL); err != nil {
+				return false, err
+			}
+			return false, nil
+		}
+	}
 	if !shouldFallbackCloneToDefaultBranch(branch, cloneRes, cloneErr) {
 		return false, cloneErr
 	}
@@ -1004,6 +1019,65 @@ func (h Harness) cloneRepository(ctx context.Context, repo *repoWorkspace, branc
 		"main",
 	)
 	return true, nil
+}
+
+func (h Harness) remoteRepositoryHasRefs(ctx context.Context, repoURL string) (bool, error) {
+	res, err := h.runCommand(ctx, "clone", remoteRefsCommand(repoURL))
+	if err != nil {
+		return false, commandErrorWithDetails(
+			fmt.Sprintf("inspect remote refs for repo %s", repoURL),
+			err,
+			res,
+			maxCloneErrorDetailChars,
+		)
+	}
+	return strings.TrimSpace(res.Stdout) != "", nil
+}
+
+func (h Harness) bootstrapUninitializedMainBranch(ctx context.Context, repo repoWorkspace, repoURL string) error {
+	h.logf(
+		"stage=clone status=warn action=bootstrap_main reason=uninitialized_remote repo=%s repo_dir=%s",
+		repoURL,
+		repo.RelDir,
+	)
+	if err := os.RemoveAll(repo.Dir); err != nil {
+		return fmt.Errorf("cleanup failed clone dir %s: %w", repo.Dir, err)
+	}
+	if _, err := h.runCloneWithRetry(
+		ctx,
+		repoURL,
+		"",
+		repo.Dir,
+		repo.RelDir,
+		cloneRepoDefaultBranchCommand(repoURL, repo.Dir),
+	); err != nil {
+		return err
+	}
+	if _, err := h.runCommand(ctx, "clone", switchMainBranchCommand(repo.Dir)); err != nil {
+		return err
+	}
+	if _, err := h.runCommand(ctx, "clone", initializeMainBranchCommitCommand(repo.Dir)); err != nil {
+		return err
+	}
+	if _, err := h.runCommand(ctx, "clone", pushCommand(repo.Dir, "main")); err != nil {
+		return err
+	}
+	h.logf(
+		"stage=clone status=ok action=bootstrap_main repo=%s repo_dir=%s resolved_branch=main",
+		repoURL,
+		repo.RelDir,
+	)
+	return nil
+}
+
+func shouldBootstrapUninitializedMainBranch(baseBranch string, res execx.Result, err error) bool {
+	if err == nil {
+		return false
+	}
+	if normalizeBranchRef(baseBranch) != "main" {
+		return false
+	}
+	return isMissingRemoteBranchCloneError(err, res)
 }
 
 func cloneRetryBranchLabel(branch string) string {
@@ -2490,6 +2564,13 @@ func cloneRepoCommand(repoURL, baseBranch, repoDir string) execx.Command {
 	}
 }
 
+func remoteRefsCommand(repoURL string) execx.Command {
+	return execx.Command{
+		Name: "git",
+		Args: []string{"ls-remote", "--heads", "--tags", repoURL},
+	}
+}
+
 func fetchMainBranchCommand(repoDir string) execx.Command {
 	return execx.Command{
 		Dir:  repoDir,
@@ -2502,6 +2583,31 @@ func cloneRepoDefaultBranchCommand(repoURL, repoDir string) execx.Command {
 	return execx.Command{
 		Name: "git",
 		Args: []string{"clone", "--single-branch", repoURL, repoDir},
+	}
+}
+
+func switchMainBranchCommand(repoDir string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "git",
+		Args: []string{"switch", "-C", "main"},
+	}
+}
+
+func initializeMainBranchCommitCommand(repoDir string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "git",
+		Args: []string{
+			"-c",
+			"user.name=" + bootstrapGitUserName,
+			"-c",
+			"user.email=" + bootstrapGitUserEmail,
+			"commit",
+			"--allow-empty",
+			"-m",
+			bootstrapMainCommitMessage,
+		},
 	}
 }
 

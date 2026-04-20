@@ -77,6 +77,15 @@ func TestHarnessURLCloneAndSandboxHelpers(t *testing.T) {
 	if shouldFallbackCloneToDefaultBranch("release", execx.Result{Stderr: "remote branch release not found"}, errors.New("missing")) {
 		t.Fatal("shouldFallbackCloneToDefaultBranch(non-moltenhub) = true, want false")
 	}
+	if !shouldBootstrapUninitializedMainBranch("main", execx.Result{Stderr: "remote branch main not found"}, errors.New("missing")) {
+		t.Fatal("shouldBootstrapUninitializedMainBranch(main) = false, want true")
+	}
+	if shouldBootstrapUninitializedMainBranch("release", execx.Result{Stderr: "remote branch release not found"}, errors.New("missing")) {
+		t.Fatal("shouldBootstrapUninitializedMainBranch(non-main) = true, want false")
+	}
+	if shouldBootstrapUninitializedMainBranch("main", execx.Result{}, nil) {
+		t.Fatal("shouldBootstrapUninitializedMainBranch(nil err) = true, want false")
+	}
 	if got := overrideCodexSandbox([]string{"exec", "--sandbox", "workspace-write"}, "danger-full-access"); got[2] != "danger-full-access" {
 		t.Fatalf("overrideCodexSandbox() = %#v", got)
 	}
