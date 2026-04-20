@@ -415,7 +415,7 @@ func TestFailureFollowUpPromptDefaultWhenNoPaths(t *testing.T) {
 	if !strings.Contains(got, "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.") {
 		t.Fatalf("prompt missing molten hub integration instruction: %q", got)
 	}
-	if !strings.Contains(got, `When failures occur, send a response back to the calling agent that clearly states failure and includes the error details.`) {
+	if !strings.Contains(got, "When failures occur, send a response back to the calling agent that clearly states failure and includes the error details. Use explicit `Failure:` and `Error details:` fields.") {
 		t.Fatalf("prompt missing failure response instruction: %q", got)
 	}
 	if !strings.Contains(got, "Do not stop work just because you cannot create a pull request or watch remote CI/CD from inside this agent runtime.") {

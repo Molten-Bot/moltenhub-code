@@ -13,7 +13,7 @@ const RequiredPrompt = "Review the failing log paths first, identify every root 
 const FollowUpRepositoryURL = config.DefaultRepositoryURL
 
 const OfflineReviewInstruction = "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours."
-const FailureResponseInstruction = "When failures occur, send a response back to the calling agent that clearly states failure and includes the error details."
+const FailureResponseInstruction = "When failures occur, send a response back to the calling agent that clearly states failure and includes the error details. Use explicit `Failure:` and `Error details:` fields."
 const RemoteOperationsInstruction = "Do not stop work just because you cannot create a pull request or watch remote CI/CD from inside this agent runtime. Finish the repository changes and local validation you can perform; the harness will handle PR creation/update and remote check monitoring afterward."
 const ActionableChangeInstruction = "For implementation or repository-change requests, do not stop at analysis. Produce the smallest correct repository diff that satisfies the request unless you can cite concrete file evidence that the requested outcome already exists."
 const NoOpInstruction = "Only return a no-op when the task is genuinely review/investigation-only or you can cite concrete repository evidence that no file changes are required. Do not force an empty PR."

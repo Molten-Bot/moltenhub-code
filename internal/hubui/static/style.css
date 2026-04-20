@@ -698,6 +698,7 @@ textarea {
 .task-panel-actions {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
@@ -1229,6 +1230,7 @@ body .right-col.prompt-collapsed.task-list-hidden {
 .prompt-action-paste:focus-visible,
 .prompt-visibility-toggle:focus-visible,
 .prompt-mode-link:focus-visible,
+.task-sound-toggle:focus-visible,
 .task-history-toggle:focus-visible,
 .task-close:focus-visible,
 .task-rerun:focus-visible,
@@ -1442,7 +1444,8 @@ select.prompt-control {
 }
 
 .task-history-toggle,
-.task-view-toggle {
+.task-view-toggle,
+.task-sound-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1478,7 +1481,8 @@ select.prompt-control {
 }
 
 .task-history-toggle-icon,
-.task-view-toggle-icon {
+.task-view-toggle-icon,
+.task-sound-toggle-icon {
   width: 16px;
   height: 16px;
   fill: none;
@@ -1513,7 +1517,9 @@ select.prompt-control {
 .task-history-toggle:hover,
 .task-history-toggle:focus-visible,
 .task-view-toggle:hover,
-.task-view-toggle:focus-visible {
+.task-view-toggle:focus-visible,
+.task-sound-toggle:hover,
+.task-sound-toggle:focus-visible {
   border-color: transparent;
   color: var(--running);
   background: rgba(10, 132, 255, 0.08);
@@ -1522,9 +1528,14 @@ select.prompt-control {
 }
 
 .task-history-toggle[aria-pressed="true"],
-.task-view-toggle[aria-pressed="true"] {
+.task-view-toggle[aria-pressed="true"],
+.task-sound-toggle[aria-pressed="true"] {
   color: var(--running);
   background: rgba(10, 132, 255, 0.13);
+}
+
+.task-sound-toggle-muted .task-sound-toggle-icon {
+  opacity: 0.7;
 }
 
 .task-history-toggle-unseen {
@@ -3611,6 +3622,7 @@ html[data-hover-mode="on"] .prompt-action-button:not(:disabled),
 html[data-hover-mode="on"] .task-rerun:not(:disabled),
 html[data-hover-mode="on"] .task-output-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-terminal-toggle:not(:disabled),
+html[data-hover-mode="on"] .task-sound-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-history-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-view-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-fullscreen-toggle:not(:disabled),
@@ -3631,6 +3643,7 @@ html[data-hover-mode="on"] .prompt-action-button:not(:disabled),
 html[data-hover-mode="on"] .task-rerun:not(:disabled),
 html[data-hover-mode="on"] .task-output-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-terminal-toggle:not(:disabled),
+html[data-hover-mode="on"] .task-sound-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-history-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-view-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-fullscreen-toggle:not(:disabled),
@@ -3640,6 +3653,7 @@ html[data-hover-mode="on"] .prompt-visibility-toggle:not(:disabled) {
   box-shadow: var(--shadow-sm);
 }
 
+html[data-hover-mode="on"] .task-sound-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-history-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-view-toggle:not(:disabled),
 html[data-hover-mode="on"] .task-fullscreen-toggle:not(:disabled) {
@@ -3656,6 +3670,7 @@ html[data-hover-mode="off"] .prompt-action-button,
 html[data-hover-mode="off"] .task-rerun,
 html[data-hover-mode="off"] .task-output-toggle,
 html[data-hover-mode="off"] .task-terminal-toggle,
+html[data-hover-mode="off"] .task-sound-toggle,
 html[data-hover-mode="off"] .task-history-toggle,
 html[data-hover-mode="off"] .task-view-toggle,
 html[data-hover-mode="off"] .task-fullscreen-toggle,
@@ -3671,6 +3686,7 @@ html[data-hover-mode="off"] .prompt-action-button:hover,
 html[data-hover-mode="off"] .task-rerun:hover,
 html[data-hover-mode="off"] .task-output-toggle:hover,
 html[data-hover-mode="off"] .task-terminal-toggle:hover,
+html[data-hover-mode="off"] .task-sound-toggle:hover,
 html[data-hover-mode="off"] .task-history-toggle:hover,
 html[data-hover-mode="off"] .task-view-toggle:hover,
 html[data-hover-mode="off"] .task-fullscreen-toggle:hover,

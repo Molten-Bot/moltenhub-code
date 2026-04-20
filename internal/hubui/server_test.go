@@ -611,11 +611,17 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="task-history-toggle-plus" class="task-history-toggle-plus hidden"`) {
 		t.Fatalf("expected index html to include hidden plus badge for unseen completed task history")
 	}
+	if !strings.Contains(markup, `id="task-sound-toggle"`) {
+		t.Fatalf("expected index html to include task sound mute toggle in Current Work header")
+	}
 	if !strings.Contains(markup, `const TASK_STATUS_FILTER_KEY = "hubui.taskStatusFilter";`) {
 		t.Fatalf("expected index html to define a dedicated persisted task status filter storage key")
 	}
 	if !strings.Contains(markup, `const TASK_HISTORY_UNSEEN_KEY = "hubui.taskHistoryUnseen.v1";`) {
 		t.Fatalf("expected index html to define a dedicated unseen completed-task history storage key")
+	}
+	if !strings.Contains(markup, `const TASK_SOUND_MUTED_KEY = "hubui.taskSoundMuted";`) {
+		t.Fatalf("expected index html to define a dedicated persisted task sound mute storage key")
 	}
 	if !strings.Contains(markup, "taskStatusFilter: loadTaskStatusFilter(),") {
 		t.Fatalf("expected index html to hydrate task status filter from local storage on startup")
@@ -623,15 +629,27 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "taskHistoryUnseenIDs: loadTaskHistoryUnseenIDs(),") {
 		t.Fatalf("expected index html to hydrate unseen completed task history ids from local storage on startup")
 	}
+	if !strings.Contains(markup, "taskSoundMuted: loadTaskSoundMuted(),") {
+		t.Fatalf("expected index html to hydrate task sound mute state from local storage on startup")
+	}
 	if !strings.Contains(markup, "function setTaskStatusFilter(filter, options = {})") {
 		t.Fatalf("expected index html to include task status filter switching")
 	}
 	if !strings.Contains(markup, "function rememberTaskHistoryUnseen(requestID)") || !strings.Contains(markup, "function clearTaskHistoryUnseen()") {
 		t.Fatalf("expected index html to include unseen completed-task history tracking helpers")
 	}
+	if !strings.Contains(markup, "function syncTaskCompletionSounds(snapshot)") {
+		t.Fatalf("expected index html to include task completion sound transition tracking")
+	}
+	if !strings.Contains(markup, "function playTaskSuccessSound()") || !strings.Contains(markup, "function playTaskErrorSound()") {
+		t.Fatalf("expected index html to define distinct success and error task sounds")
+	}
 	if !strings.Contains(markup, "taskHistoryToggle.addEventListener(\"click\", () => {") ||
 		!strings.Contains(markup, "const nextFilter = normalizeTaskStatusFilter(state.taskStatusFilter) === \"completed\"") {
 		t.Fatalf("expected index html to wire history icon toggle interactions for running/completed task views")
+	}
+	if !strings.Contains(markup, "taskSoundToggle.addEventListener(\"click\", () => {") {
+		t.Fatalf("expected index html to wire task sound toggle interactions")
 	}
 	if !strings.Contains(markup, "setTaskStatusFilter(nextFilter);") {
 		t.Fatalf("expected index html history toggle to switch task filter between running and completed")
