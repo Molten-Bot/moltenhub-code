@@ -1205,6 +1205,9 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	if !strings.Contains(html, "const visible = state.agentAuth.required && !state.agentAuth.ready;") {
 		t.Fatalf("expected Codex Done button visibility to remain stable while auth is incomplete")
 	}
+	if !strings.Contains(html, "const meetsAuthInteractionRequirement = isClaudePending || requiresManualConfigure || (!hasCodeChallenge || state.agentAuthInteracted);") {
+		t.Fatalf("expected Claude browser-login flow to keep Done visible for validation retries")
+	}
 	if !strings.Contains(html, "Codex auth is required. Open browser auth, then click Done again.") ||
 		!strings.Contains(html, "Codex auth is still pending. Complete browser auth, then click Done again.") {
 		t.Fatalf("expected Done verification to emit explicit Codex auth validation feedback")
@@ -1238,6 +1241,10 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	}
 	if !strings.Contains(html, "id=\"agent-auth-configure\"") {
 		t.Fatalf("expected auggie configure panel markup")
+	}
+	if !strings.Contains(html, `id="agent-auth-device-code-row" class="agent-auth-command-box agent-auth-command-box-inline hidden"`) ||
+		!strings.Contains(html, `agentAuthDeviceCodeRow.classList.toggle("hidden", !state.agentAuth.deviceCode);`) {
+		t.Fatalf("expected empty device-code command row to stay hidden until a device code exists")
 	}
 	if !strings.Contains(html, "class=\"agent-auth-shell flex min-h-[220px] w-full max-w-xl flex-col\"") {
 		t.Fatalf("expected auth gate content to render inside a theme-aware auth shell")
