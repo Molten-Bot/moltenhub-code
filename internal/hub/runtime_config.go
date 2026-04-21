@@ -160,9 +160,6 @@ func SaveRuntimeConfigHubSettings(path string, initCfg InitConfig, resolvedAgent
 	}
 
 	initCfg.ApplyDefaults()
-	if strings.TrimSpace(initCfg.AgentHarness) == "" {
-		return fmt.Errorf(unboundAgentRuntimeErrorMessage)
-	}
 	resolvedAgentToken = strings.TrimSpace(resolvedAgentToken)
 	if resolvedAgentToken == "" && strings.TrimSpace(initCfg.BindToken) == "" {
 		return fmt.Errorf("runtime config requires agent_token or bind_token")
