@@ -3444,6 +3444,69 @@ func TestCodexReportedFailure(t *testing.T) {
 	}
 }
 
+func TestCodexReportedFailureDetectsCompactStderrFailure(t *testing.T) {
+	t.Parallel()
+
+	res := execx.Result{
+		Stderr: strings.Join([]string{
+			"Failure: I could not update repository files.",
+			"Error details: permission denied writing /tmp/worktree",
+		}, "\n"),
+	}
+
+	if failed, detail := codexReportedFailure(res); !failed || !strings.HasPrefix(detail, "Failure:") {
+		t.Fatalf("codexReportedFailure(compact stderr failure) = (%v, %q), want (true, \"Failure:...\")", failed, detail)
+	}
+}
+
+func TestCodexReportedFailureIgnoresFailureMarkerInsideNoisyStderr(t *testing.T) {
+	t.Parallel()
+
+	res := execx.Result{
+		Stdout: "Refactor complete. Shared logic centralized. Validation passed.",
+		Stderr: strings.Join([]string{
+			"OpenAI Codex v0.122.0",
+			"workdir: /tmp/repo",
+			"model: gpt-5.3-codex",
+			"user",
+			"Observed failure context:",
+			"Failure: focused tests failed on compile due duplicated helper after refactor.",
+			"Error details: duplicate helper function in internal/app/service.go",
+			"codex",
+			"tokens used",
+		}, "\n"),
+	}
+
+	if failed, detail := codexReportedFailure(res); failed || detail != "" {
+		t.Fatalf("codexReportedFailure(noisy stderr failure marker) = (%v, %q), want (false, \"\")", failed, detail)
+	}
+}
+
+func TestCodexReportedFailureIgnoresInterimFailureMarkerInNoisyStdout(t *testing.T) {
+	t.Parallel()
+
+	res := execx.Result{
+		Stdout: strings.Join([]string{
+			"Scanning repository and preparing focused tests.",
+			"Found compile break and started fix.",
+			"Failure: focused tests failed on compile due duplicated helper after refactor.",
+			"Error details: internal/app/service.go:1905:6: connectedAgentSkills redeclared in this block",
+			"apply patch",
+			"patch: completed",
+			"go test ./internal/app ./internal/web",
+			"ok   \tgithub.com/moltenbot000/moltenhub-dispatch/internal/app",
+			"ok   \tgithub.com/moltenbot000/moltenhub-dispatch/internal/web",
+			"go test ./...",
+			"ok   \tgithub.com/moltenbot000/moltenhub-dispatch/internal/hub",
+			"Refactor complete. Tests pass.",
+		}, "\n"),
+	}
+
+	if failed, detail := codexReportedFailure(res); failed || detail != "" {
+		t.Fatalf("codexReportedFailure(interim stdout failure marker) = (%v, %q), want (false, \"\")", failed, detail)
+	}
+}
+
 func TestCodexReportedFailureIgnoresNarrativeTaskFailedPhrasing(t *testing.T) {
 	t.Parallel()
 
@@ -3456,6 +3519,27 @@ func TestCodexReportedFailureIgnoresNarrativeTaskFailedPhrasing(t *testing.T) {
 
 	if failed, detail := codexReportedFailure(res); failed || detail != "" {
 		t.Fatalf("codexReportedFailure(narrative task failed phrasing) = (%v, %q), want (false, \"\")", failed, detail)
+	}
+}
+
+func TestCodexReportedFailureDetectsTerminalFailureInNoisyStdout(t *testing.T) {
+	t.Parallel()
+
+	res := execx.Result{
+		Stdout: strings.Join([]string{
+			"Scanning repository and preparing focused tests.",
+			"apply patch",
+			"patch: completed",
+			"go test ./internal/app ./internal/web",
+			"internal/app/service.go:1905:6: connectedAgentSkills redeclared in this block",
+			"FAIL\tgithub.com/moltenbot000/moltenhub-dispatch/internal/app [build failed]",
+			"Failure: focused tests failed on compile due duplicated helper after refactor.",
+			"Error details: internal/app/service.go:1905:6: connectedAgentSkills redeclared in this block",
+		}, "\n"),
+	}
+
+	if failed, detail := codexReportedFailure(res); !failed || !strings.HasPrefix(detail, "Failure:") {
+		t.Fatalf("codexReportedFailure(terminal stdout failure marker) = (%v, %q), want (true, \"Failure:...\")", failed, detail)
 	}
 }
 

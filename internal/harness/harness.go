@@ -2251,7 +2251,7 @@ func codexReportedFailure(res execx.Result) (bool, string) {
 	if failed, detail := codexReportedFailureInOutput(res.Stdout, true); failed {
 		return true, detail
 	}
-	if failed, detail := codexReportedFailureInOutput(res.Stderr, false); failed {
+	if failed, detail := codexReportedCompactPlainFailure(res.Stderr); failed {
 		return true, detail
 	}
 
@@ -2261,6 +2261,32 @@ func codexReportedFailure(res execx.Result) (bool, string) {
 	if strings.TrimSpace(res.Stdout) == "" {
 		if failed, detail := codexReportedCompactStructuredFailure(res.Stderr); failed {
 			return true, detail
+		}
+	}
+	return false, ""
+}
+
+func codexReportedCompactPlainFailure(output string) (bool, string) {
+	output = strings.TrimSpace(output)
+	if output == "" {
+		return false, ""
+	}
+	lines := splitOutputLines(output)
+	nonEmpty := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		nonEmpty = append(nonEmpty, trimmed)
+	}
+	if len(nonEmpty) == 0 || len(nonEmpty) > 8 {
+		return false, ""
+	}
+	for _, line := range nonEmpty {
+		lower := strings.ToLower(line)
+		if strings.HasPrefix(lower, "failure:") || strings.HasPrefix(lower, "task failed") {
+			return true, line
 		}
 	}
 	return false, ""
@@ -2388,13 +2414,30 @@ func codexReportedFailureInOutput(output string, allowStructured bool) (bool, st
 		return false, ""
 	}
 	lines := splitOutputLines(output)
-	var structuredTaskFailureLine string
-	var structuredErrorLine string
+	nonEmpty := make([]string, 0, len(lines))
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue
 		}
+		nonEmpty = append(nonEmpty, trimmed)
+	}
+	if len(nonEmpty) == 0 {
+		return false, ""
+	}
+
+	// Codex stdout often contains long tool transcripts. To avoid stale
+	// mid-run "Failure:" progress updates causing false failures, only
+	// treat terminal output lines as authoritative failure markers.
+	const terminalFailureWindow = 8
+	start := 0
+	if len(nonEmpty) > terminalFailureWindow {
+		start = len(nonEmpty) - terminalFailureWindow
+	}
+
+	var structuredTaskFailureLine string
+	var structuredErrorLine string
+	for _, trimmed := range nonEmpty[start:] {
 		lower := strings.ToLower(trimmed)
 		if strings.HasPrefix(lower, "failure:") {
 			return true, trimmed
