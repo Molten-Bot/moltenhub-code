@@ -229,8 +229,11 @@ func TestClaudeAuthGateConfigurePersistsGitHubTokenAndEnvironment(t *testing.T) 
 	if err != nil {
 		t.Fatalf("Configure() error = %v", err)
 	}
-	if status.State == "needs_configure" {
-		t.Fatalf("status = %+v", status)
+	if got, want := status.State, "needs_configure"; got != want {
+		t.Fatalf("State = %q, want %q (Claude credentials are configured separately)", got, want)
+	}
+	if got, want := status.ConfigureCommand, claudeCredentialsConfigureCommand; got != want {
+		t.Fatalf("ConfigureCommand = %q, want %q", got, want)
 	}
 	if got, want := os.Getenv("GH_TOKEN"), "ghp_saved_token"; got != want {
 		t.Fatalf("GH_TOKEN = %q, want %q", got, want)
