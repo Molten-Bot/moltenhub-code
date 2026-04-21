@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jef/moltenhub-code/internal/agentruntime"
+	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
 )
 
 func TestRuntimeConfigInitCarriesRuntimeConfigPath(t *testing.T) {

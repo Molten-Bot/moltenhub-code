@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jef/moltenhub-code/internal/agentruntime"
-	"github.com/jef/moltenhub-code/internal/execx"
-	"github.com/jef/moltenhub-code/internal/hub"
+	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
+	"github.com/Molten-Bot/moltenhub-code/internal/execx"
+	"github.com/Molten-Bot/moltenhub-code/internal/hub"
 )
 
 func TestNewPiAuthGateRequiresConfigureWhenExistingPiProbeFails(t *testing.T) {

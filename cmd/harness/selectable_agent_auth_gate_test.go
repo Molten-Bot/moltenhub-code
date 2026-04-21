@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jef/moltenhub-code/internal/hub"
+	"github.com/Molten-Bot/moltenhub-code/internal/hub"
 )
 
 func TestSelectableAgentAuthGateStatusRequiresGitHubTokenWhenUnbound(t *testing.T) {

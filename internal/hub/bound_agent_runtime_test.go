@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jef/moltenhub-code/internal/config"
+	"github.com/Molten-Bot/moltenhub-code/internal/config"
 )
 
 func TestBoundAgentRuntimeRequiresConfiguredHarness(t *testing.T) {

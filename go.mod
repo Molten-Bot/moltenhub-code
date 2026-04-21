@@ -1,3 +1,3 @@
-module github.com/jef/moltenhub-code
+module github.com/Molten-Bot/moltenhub-code
 
 go 1.26.1

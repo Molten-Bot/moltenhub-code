@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jef/moltenhub-code/internal/hub"
+	"github.com/Molten-Bot/moltenhub-code/internal/hub"
 )
 
 func TestFirstConfiguredGitHubTokenPrefersRuntimeConfig(t *testing.T) {
@@ -63,4 +63,3 @@ func TestFirstConfiguredGitHubTokenFallsBackToGHAndGITHUBEnv(t *testing.T) {
 		t.Fatalf("firstConfiguredGitHubToken() source = %q, want %q", source, want)
 	}
 }
-

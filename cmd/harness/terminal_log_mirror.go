@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/jef/moltenhub-code/internal/failurefollowup"
+	"github.com/Molten-Bot/moltenhub-code/internal/failurefollowup"
 )
 
 const (
