@@ -3284,6 +3284,29 @@ func TestRunCodexReturnsErrorWhenCodexFailureOnlyHasStderrDetail(t *testing.T) {
 	}
 }
 
+func TestRunCodexAllowsValidationToolingMissingFailure(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "refresh seo metadata"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: Could not run automated test suite in this runtime.",
+				Stderr: "Error details: `sh: 1: vitest: not found`",
+			},
+		},
+	}}
+
+	h := New(fake)
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
+		t.Fatalf("runCodex() error = %v, want nil for validation-tooling gap", err)
+	}
+}
+
 func TestRunCodexReturnsTimeoutWhenAgentStageRunsTooLong(t *testing.T) {
 	t.Parallel()
 
@@ -3553,6 +3576,7 @@ func TestWithCompletionGatePromptIncludesAgentRuntimeGuidance(t *testing.T) {
 	got := withCompletionGatePrompt("Build API")
 	wantSnippets := []string{
 		"When failures occur, send a response back to the calling agent that clearly states failure and includes the error details. Use explicit `Failure:` and `Error details:` fields.",
+		"If local test or validation tooling is unavailable in this runtime (for example `command not found`), do not fail solely for that.",
 		"If a repository is not initialized after clone, use only gh CLI/git tools to create and push a main branch, then continue once git state is ready for work.",
 		"Do not stop work just because you cannot create a pull request or watch remote CI/CD from inside this agent runtime.",
 		"For implementation or repository-change requests, do not stop at analysis.",

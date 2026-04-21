@@ -31,6 +31,15 @@ func TestWithExecutionContractIncludesFailureResponseInstruction(t *testing.T) {
 	}
 }
 
+func TestWithExecutionContractIncludesValidationToolingInstruction(t *testing.T) {
+	t.Parallel()
+
+	got := WithExecutionContract("Base prompt")
+	if !strings.Contains(got, ValidationToolingInstruction) {
+		t.Fatalf("WithExecutionContract() missing validation-tooling instruction: %q", got)
+	}
+}
+
 func TestWithExecutionContractIncludesUninitializedRepoInstruction(t *testing.T) {
 	t.Parallel()
 
@@ -73,6 +82,7 @@ func TestComposePromptUsesFallbackPathsAndContract(t *testing.T) {
 		"Observed failure context:",
 		OfflineReviewInstruction,
 		FailureResponseInstruction,
+		ValidationToolingInstruction,
 		UninitializedRepoInstruction,
 		RemoteOperationsInstruction,
 		ActionableChangeInstruction,

@@ -2177,6 +2177,14 @@ func (h Harness) runCodexWithHeartbeat(
 			if run.err == nil {
 				if failed, detail := codexReportedFailure(run.res); failed {
 					detail = codexFailureDetailWithErrorDetails(run.res, detail)
+					if isNonFatalValidationToolingFailure(detail, run.res) {
+						h.logf(
+							"stage=%s status=warn action=validation_tooling_unavailable detail=%q",
+							agentStage,
+							detail,
+						)
+						return run.res, nil
+					}
 					return run.res, fmt.Errorf("%s reported failure: %s", agentStage, detail)
 				}
 			}
@@ -2276,6 +2284,30 @@ func codexFailureDetailWithErrorDetails(res execx.Result, failureDetail string) 
 		return detail
 	}
 	return strings.TrimSpace(detail + " " + errorDetail)
+}
+
+func isNonFatalValidationToolingFailure(detail string, res execx.Result) bool {
+	text := strings.ToLower(strings.TrimSpace(strings.Join([]string{
+		detail,
+		res.Stdout,
+		res.Stderr,
+	}, "\n")))
+	if text == "" {
+		return false
+	}
+
+	testSuiteUnavailable := strings.Contains(text, "could not run automated test suite") ||
+		strings.Contains(text, "could not run automated tests") ||
+		strings.Contains(text, "unable to run automated test suite")
+	if !testSuiteUnavailable {
+		return false
+	}
+
+	missingTooling := strings.Contains(text, "command not found") ||
+		strings.Contains(text, ": not found") ||
+		strings.Contains(text, "enoent") ||
+		strings.Contains(text, "cannot find module")
+	return missingTooling
 }
 
 func codexExtractErrorDetail(output string) string {
