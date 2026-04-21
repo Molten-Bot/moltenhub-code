@@ -916,7 +916,19 @@ func (h Harness) prepareForkFallbackPublishWorkflow(ctx context.Context, repo *r
 		return err
 	}
 	if err := h.verifyRemoteWriteAccessOnRemote(ctx, *repo, publishRemoteFork, "workflow"); err != nil {
-		return err
+		if !hasGitHubAuthToken() || !isGitHubSSHRemoteURL(forkURL) {
+			return err
+		}
+		httpsForkURL, httpsForkURLOk := ref.withHTTPSOwner(viewerLogin)
+		if !httpsForkURLOk {
+			return err
+		}
+		if setErr := h.ensureForkRemoteConfigured(ctx, *repo, httpsForkURL); setErr != nil {
+			return setErr
+		}
+		if verifyErr := h.verifyRemoteWriteAccessOnRemote(ctx, *repo, publishRemoteFork, "workflow"); verifyErr != nil {
+			return verifyErr
+		}
 	}
 
 	repo.PushRemote = publishRemoteFork
@@ -973,7 +985,19 @@ func isForkAlreadyExistsError(res execx.Result, err error) bool {
 		return false
 	}
 	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
-	return strings.Contains(text, "already exists")
+	markers := []string{
+		"already exists",
+		"already have a fork",
+		"already has a fork",
+		"already forking",
+		"already forked",
+	}
+	for _, marker := range markers {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func isNoSuchRemoteError(res execx.Result, err error) bool {
@@ -2128,6 +2152,11 @@ func parseGitHubRepoRef(repoURL string) (gitHubRepoRef, bool) {
 	}, true
 }
 
+func isGitHubSSHRemoteURL(rawURL string) bool {
+	rawURL = strings.ToLower(strings.TrimSpace(rawURL))
+	return strings.HasPrefix(rawURL, "git@github.com:") || strings.HasPrefix(rawURL, "ssh://git@github.com/")
+}
+
 func (r gitHubRepoRef) withOwner(owner string) (string, bool) {
 	owner = strings.TrimSpace(owner)
 	if owner == "" || strings.EqualFold(owner, r.owner) {
@@ -2151,6 +2180,22 @@ func (r gitHubRepoRef) withOwner(owner string) (string, bool) {
 		return "", false
 	}
 	return r.scpPrefix + owner + "/" + repoName, true
+}
+
+func (r gitHubRepoRef) withHTTPSOwner(owner string) (string, bool) {
+	owner = strings.TrimSpace(owner)
+	if owner == "" || strings.EqualFold(owner, r.owner) {
+		return "", false
+	}
+	if strings.ContainsAny(owner, " \t\r\n") || strings.Contains(owner, "/") {
+		return "", false
+	}
+
+	repoName := r.name
+	if r.hasGitSuffix {
+		repoName += ".git"
+	}
+	return fmt.Sprintf("https://github.com/%s/%s", owner, repoName), true
 }
 
 func repoOwnerFallbackCandidates(repoURLs []string) []string {

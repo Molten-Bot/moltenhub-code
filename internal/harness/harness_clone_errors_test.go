@@ -180,3 +180,29 @@ func TestParseGitHubRepoRefSupportsSSHAndHTTPS(t *testing.T) {
 		t.Fatalf("parseGitHubRepoRef(https URL) = (%+v, %v), want owner/name parsed", ref, ok)
 	}
 }
+
+func TestGitHubRepoRefWithHTTPSOwner(t *testing.T) {
+	t.Parallel()
+
+	ref, ok := parseGitHubRepoRef("git@github.com:Molten-Bot/moltenhub-code.git")
+	if !ok {
+		t.Fatal("parseGitHubRepoRef(scp) = false, want true")
+	}
+	got, ok := ref.withHTTPSOwner("octocat")
+	if !ok {
+		t.Fatal("withHTTPSOwner() ok = false, want true")
+	}
+	if got != "https://github.com/octocat/moltenhub-code.git" {
+		t.Fatalf("withHTTPSOwner() = %q, want %q", got, "https://github.com/octocat/moltenhub-code.git")
+	}
+}
+
+func TestIsForkAlreadyExistsErrorRecognizesAlreadyHaveFork(t *testing.T) {
+	t.Parallel()
+
+	err := errors.New("exit status 1")
+	res := execx.Result{Stderr: "You already have a fork of acme/repo."}
+	if !isForkAlreadyExistsError(res, err) {
+		t.Fatal("isForkAlreadyExistsError(already have a fork) = false, want true")
+	}
+}
