@@ -4815,10 +4815,14 @@
 
       return detail.includes("write access to repository not granted") ||
         detail.includes("requested url returned error: 403") ||
+        detail.includes(".git denied to") ||
         detail.includes("authentication failed") ||
         detail.includes("could not read username for 'https://github.com'") ||
         detail.includes("doesn't have the rights to pull the code") ||
-        detail.includes("doesn't have the rights to push a pr");
+        detail.includes("doesn't have the rights to push a pr") ||
+        (detail.includes("permission to ") &&
+          detail.includes(" denied to ") &&
+          detail.includes("could not read from remote repository"));
     }
 
     function formatTaskRepos(task) {

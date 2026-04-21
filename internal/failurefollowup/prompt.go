@@ -45,6 +45,7 @@ const (
 var nonRemediableRepoAccessMarkers = []string{
 	"write access to repository not granted",
 	"requested url returned error: 403",
+	".git denied to",
 	"authentication failed",
 	"could not read username for 'https://github.com'",
 	"doesn't have the rights to pull the code",
@@ -53,6 +54,8 @@ var nonRemediableRepoAccessMarkers = []string{
 	"without workflow scope",
 	"without `workflow` scope",
 }
+
+const githubSSHPermissionDeniedReason = "permission to repository denied"
 
 var nonRemediableFailureMarkers = []string{
 	"quota exceeded",
@@ -267,6 +270,11 @@ func NonRemediableRepoAccessReason(err error) string {
 		if strings.Contains(text, marker) {
 			return marker
 		}
+	}
+	if strings.Contains(text, "permission to ") &&
+		strings.Contains(text, " denied to ") &&
+		strings.Contains(text, "could not read from remote repository") {
+		return githubSSHPermissionDeniedReason
 	}
 	return ""
 }
