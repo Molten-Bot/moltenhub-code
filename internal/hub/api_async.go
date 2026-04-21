@@ -19,6 +19,7 @@ type MoltenHubAPI interface {
 	SyncProfile(ctx context.Context, cfg InitConfig) error
 	UpdateAgentStatus(ctx context.Context, status string) error
 	MarkOpenClawOffline(ctx context.Context, sessionKey, reason string) error
+	RecordActivity(ctx context.Context, activity string) error
 	RecordCodingActivityRunning(ctx context.Context) error
 	RecordGitHubTaskCompleteActivity(ctx context.Context) error
 	RegisterRuntime(ctx context.Context, cfg InitConfig, libraryTasks []library.TaskSummary) error
@@ -101,6 +102,13 @@ func (c *AsyncAPIClient) UpdateAgentStatus(ctx context.Context, status string) e
 func (c *AsyncAPIClient) MarkOpenClawOffline(ctx context.Context, sessionKey, reason string) error {
 	return c.withToken(func(token string) error {
 		return c.client.MarkOpenClawOffline(ctx, token, sessionKey, reason)
+	})
+}
+
+// RecordActivity appends a custom activity entry to metadata.activities.
+func (c *AsyncAPIClient) RecordActivity(ctx context.Context, activity string) error {
+	return c.withToken(func(token string) error {
+		return c.client.RecordActivity(ctx, token, activity)
 	})
 }
 

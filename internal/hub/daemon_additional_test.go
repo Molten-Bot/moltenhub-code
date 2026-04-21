@@ -22,14 +22,16 @@ import (
 type stubMoltenHubAPI struct {
 	token string
 
-	pullFn         func(ctx context.Context, timeoutMs int) (PulledOpenClawMessage, bool, error)
-	recordFn       func(context.Context) error
-	recordCodingFn func(context.Context) error
+	pullFn           func(ctx context.Context, timeoutMs int) (PulledOpenClawMessage, bool, error)
+	recordFn         func(context.Context) error
+	recordCodingFn   func(context.Context) error
+	recordActivityFn func(context.Context, string) error
 
 	mu           sync.Mutex
 	acked        []string
 	nacked       []string
 	published    []map[string]any
+	activities   []string
 	codingEvents int
 	offlineCalls []struct {
 		SessionKey string
@@ -96,6 +98,15 @@ func (s *stubMoltenHubAPI) MarkOpenClawOffline(_ context.Context, sessionKey, re
 		SessionKey string
 		Reason     string
 	}{SessionKey: sessionKey, Reason: reason})
+	return nil
+}
+func (s *stubMoltenHubAPI) RecordActivity(ctx context.Context, activity string) error {
+	if s.recordActivityFn != nil {
+		return s.recordActivityFn(ctx, activity)
+	}
+	s.mu.Lock()
+	s.activities = append(s.activities, normalizeActivityEntry(activity))
+	s.mu.Unlock()
 	return nil
 }
 func (s *stubMoltenHubAPI) RecordCodingActivityRunning(ctx context.Context) error {
@@ -747,6 +758,54 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 	}
 }
 
+func TestHandleDispatchLibraryTaskUsesDedicatedActivitySignal(t *testing.T) {
+	t.Parallel()
+
+	d := NewDaemon(failingRunner{err: errors.New("runner exploded")})
+	api := &stubMoltenHubAPI{token: "t"}
+	cfg := InitConfig{
+		RuntimeConfigPath: filepath.Join(t.TempDir(), "runtime.json"),
+		Skill: SkillConfig{
+			Name:         "code_for_me",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+	}
+
+	runCfg := config.Config{
+		Repo:            "git@github.com:acme/repo.git",
+		BaseBranch:      "release",
+		LibraryTaskName: "  unit-test-coverage ",
+	}
+	runCfg.ApplyDefaults()
+
+	d.handleDispatch(
+		context.Background(),
+		api,
+		cfg,
+		SkillDispatch{
+			RequestID: "req-library-activity",
+			Skill:     "library_task",
+			Config:    runCfg,
+		},
+		"",
+		false,
+	)
+
+	api.mu.Lock()
+	defer api.mu.Unlock()
+
+	if got, want := api.codingEvents, 0; got != want {
+		t.Fatalf("coding events = %d, want %d when library task activity path is used", got, want)
+	}
+	if got, want := len(api.activities), 1; got != want {
+		t.Fatalf("activity count = %d, want %d", got, want)
+	}
+	if got, want := api.activities[0], "working on library task: unit-test-coverage"; got != want {
+		t.Fatalf("library task activity = %q, want %q", got, want)
+	}
+}
+
 func TestHandleDispatchQueuesFailureRerunWithExplicitResponseModeOptOut(t *testing.T) {
 	t.Parallel()
 
@@ -1102,6 +1161,49 @@ func TestRecordCodingActivityRunningLogsWarningOnFailure(t *testing.T) {
 	}
 	if !strings.Contains(logs[0], "req-18") {
 		t.Fatalf("log missing request id: %q", logs[0])
+	}
+}
+
+func TestRecordActivityLogsWarningOnFailure(t *testing.T) {
+	t.Parallel()
+
+	var logs []string
+	d := NewDaemon(nil)
+	d.Logf = func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	api := &stubMoltenHubAPI{
+		token: "t",
+		recordActivityFn: func(context.Context, string) error {
+			return errors.New("metadata rejected")
+		},
+	}
+
+	d.recordActivity(context.Background(), api, "req-19", "working on library task: code-review", "record_library_task_activity_running")
+
+	if len(logs) != 1 {
+		t.Fatalf("logs = %d, want 1", len(logs))
+	}
+	if !strings.Contains(logs[0], "action=record_library_task_activity_running") {
+		t.Fatalf("log = %q", logs[0])
+	}
+	if !strings.Contains(logs[0], "req-19") {
+		t.Fatalf("log missing request id: %q", logs[0])
+	}
+}
+
+func TestLibraryTaskActivityBuilders(t *testing.T) {
+	t.Parallel()
+
+	if got, want := libraryTaskStartActivity("  security-review  "), "working on library task: security-review"; got != want {
+		t.Fatalf("libraryTaskStartActivity() = %q, want %q", got, want)
+	}
+	if got, want := libraryTaskCompleteActivity("unit-test-coverage"), "completed library task: unit-test-coverage"; got != want {
+		t.Fatalf("libraryTaskCompleteActivity() = %q, want %q", got, want)
+	}
+	if got := libraryTaskStartActivity("   "); got != "" {
+		t.Fatalf("libraryTaskStartActivity(blank) = %q, want empty", got)
 	}
 }
 

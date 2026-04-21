@@ -597,6 +597,77 @@ func TestRecordGitHubTaskCompleteActivityMergesExistingMetadata(t *testing.T) {
 	}
 }
 
+func TestRecordActivityMergesExistingMetadata(t *testing.T) {
+	t.Parallel()
+
+	type captured struct {
+		Method string
+		Path   string
+		Body   map[string]any
+	}
+	var calls []captured
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+
+		switch r.URL.Path {
+		case "/v1/agents/me":
+			calls = append(calls, captured{Method: r.Method, Path: r.URL.Path})
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":true,"result":{"agent":{"metadata":{"display_name":"MoltenHub Code","activities":["started"],"visibility":"public"}}}}`))
+		case "/v1/agents/me/metadata":
+			data, _ := io.ReadAll(r.Body)
+			var body map[string]any
+			_ = json.Unmarshal(data, &body)
+			calls = append(calls, captured{Method: r.Method, Path: r.URL.Path, Body: body})
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer ts.Close()
+
+	client := NewAPIClient(ts.URL + "/v1")
+	if err := client.RecordActivity(context.Background(), "token", "working on  library task:   code-review"); err != nil {
+		t.Fatalf("RecordActivity() error = %v", err)
+	}
+
+	if len(calls) != 2 {
+		t.Fatalf("calls = %d, want 2", len(calls))
+	}
+	if calls[0].Method != http.MethodGet || calls[0].Path != "/v1/agents/me" {
+		t.Fatalf("first call = %#v", calls[0])
+	}
+	if calls[1].Method != http.MethodPatch || calls[1].Path != "/v1/agents/me/metadata" {
+		t.Fatalf("second call = %#v", calls[1])
+	}
+
+	meta, _ := calls[1].Body["metadata"].(map[string]any)
+	if meta == nil {
+		t.Fatalf("metadata wrapper missing: %#v", calls[1].Body)
+	}
+	activities, ok := meta["activities"].([]any)
+	if !ok {
+		t.Fatalf("activities = %#v", meta["activities"])
+	}
+	if got, want := len(activities), 2; got != want {
+		t.Fatalf("len(activities) = %d, want %d", got, want)
+	}
+	if activities[0] != "started" || activities[1] != "working on library task: code-review" {
+		t.Fatalf("activities = %#v", activities)
+	}
+}
+
+func TestRecordActivityRequiresNonEmptyText(t *testing.T) {
+	t.Parallel()
+
+	client := NewAPIClient("https://example.test/v1")
+	if err := client.RecordActivity(context.Background(), "token", "   "); err == nil {
+		t.Fatal("RecordActivity() error = nil, want non-nil")
+	}
+}
+
 func TestRecordCodingActivityRunningMergesExistingMetadata(t *testing.T) {
 	t.Parallel()
 

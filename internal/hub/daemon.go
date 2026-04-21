@@ -54,6 +54,8 @@ const failureFollowUpNoPathGuidance = "No workspace or log path was captured bef
 const failureFollowUpBaseBranch = "main"
 const failureFollowUpTargetSubdir = "."
 const transportOfflineReasonExecutionFailure = "task_execution_failure"
+const libraryTaskActivityStartPrefix = "working on library task: "
+const libraryTaskActivityCompletePrefix = "completed library task: "
 
 // NewDaemon returns a hub daemon with defaults.
 func NewDaemon(runner execx.Runner) Daemon {
@@ -777,7 +779,11 @@ func (d Daemon) handleDispatch(
 		dispatch.Config.RepoURL,
 		strings.Join(dispatch.Config.RepoList(), ","),
 	)
-	d.recordCodingActivityRunning(ctx, api, dispatch.RequestID)
+	if activity := libraryTaskStartActivity(dispatch.Config.LibraryTaskName); activity != "" {
+		d.recordActivity(ctx, api, dispatch.RequestID, activity, "record_library_task_activity_running")
+	} else {
+		d.recordCodingActivityRunning(ctx, api, dispatch.RequestID)
+	}
 	if taskName := strings.TrimSpace(dispatch.Config.LibraryTaskName); taskName != "" {
 		if err := IncrementRuntimeConfigLibraryTaskUsage(cfg.RuntimeConfigPath, cfg, taskName); err != nil {
 			d.logf("library.usage status=warn task=%s request_id=%s err=%q", taskName, dispatch.RequestID, err)
@@ -848,7 +854,11 @@ func (d Daemon) handleDispatch(
 		)
 		return "error"
 	}
-	d.recordGitHubTaskCompleteActivity(ctx, api, dispatch.RequestID)
+	if activity := libraryTaskCompleteActivity(dispatch.Config.LibraryTaskName); activity != "" {
+		d.recordActivity(ctx, api, dispatch.RequestID, activity, "record_library_task_complete")
+	} else {
+		d.recordGitHubTaskCompleteActivity(ctx, api, dispatch.RequestID)
+	}
 	if res.NoChanges && !resultHasPR(res) {
 		d.logf(
 			"dispatch status=no_changes request_id=%s workspace=%s branch=%s pr_url=%s pr_urls=%s",
@@ -872,6 +882,15 @@ func (d Daemon) handleDispatch(
 	return "completed"
 }
 
+func (d Daemon) recordActivity(ctx context.Context, api MoltenHubAPI, requestID, activity, action string) {
+	if api == nil {
+		return
+	}
+	if err := api.RecordActivity(ctx, activity); err != nil {
+		d.logf("dispatch status=warn action=%s request_id=%s err=%q", action, requestID, err)
+	}
+}
+
 func (d Daemon) recordGitHubTaskCompleteActivity(ctx context.Context, api MoltenHubAPI, requestID string) {
 	if api == nil {
 		return
@@ -888,6 +907,22 @@ func (d Daemon) recordCodingActivityRunning(ctx context.Context, api MoltenHubAP
 	if err := api.RecordCodingActivityRunning(ctx); err != nil {
 		d.logf("dispatch status=warn action=record_coding_activity_running request_id=%s err=%q", requestID, err)
 	}
+}
+
+func libraryTaskStartActivity(taskName string) string {
+	return buildLibraryTaskActivity(libraryTaskActivityStartPrefix, taskName)
+}
+
+func libraryTaskCompleteActivity(taskName string) string {
+	return buildLibraryTaskActivity(libraryTaskActivityCompletePrefix, taskName)
+}
+
+func buildLibraryTaskActivity(prefix, taskName string) string {
+	normalizedTaskName := normalizeActivityEntry(taskName)
+	if normalizedTaskName == "" {
+		return ""
+	}
+	return prefix + normalizedTaskName
 }
 
 func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.Result) map[string]any {
