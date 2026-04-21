@@ -2983,7 +2983,7 @@ func TestCommandBuilders(t *testing.T) {
 		t.Fatalf("gh repo view command unexpected: %+v", ghRepoView)
 	}
 	ghFork := ghRepoForkCommand(repoDir, "acme/repo")
-	if ghFork.Name != "gh" || ghFork.Dir != repoDir || !reflect.DeepEqual(ghFork.Args, []string{"repo", "fork", "acme/repo", "--clone=false", "--remote=false"}) {
+	if ghFork.Name != "gh" || ghFork.Dir != repoDir || !reflect.DeepEqual(ghFork.Args, []string{"repo", "fork", "acme/repo"}) {
 		t.Fatalf("gh repo fork command unexpected: %+v", ghFork)
 	}
 	remoteAdd := gitRemoteAddCommand(repoDir, "fork", "git@github.com:octocat/repo.git")
