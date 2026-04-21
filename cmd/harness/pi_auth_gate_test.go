@@ -284,6 +284,44 @@ func TestPiAuthGateConfigureProviderAcceptsPiOKOutputDespiteProbeExitError(t *te
 	}
 }
 
+func TestPiAuthGateConfigureRejectsGitHubTokenInPiAuthJSONField(t *testing.T) {
+	clearPiAuthTestEnv(t)
+	t.Setenv("HOME", t.TempDir())
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	runner := &authGateRunnerStub{
+		run: func(context.Context, execx.Command) (execx.Result, error) {
+			t.Fatal("probe should not run when GitHub token is pasted into PI auth.json field")
+			return execx.Result{}, nil
+		},
+	}
+	g := newPiAuthGateWithRuntime(runner, "pi", path, hub.InitConfig{}, nil)
+
+	token := "ghp_wrong_field_token"
+	status, err := g.Configure(context.Background(), token)
+	if err == nil {
+		t.Fatal("Configure() error = nil, want non-nil")
+	}
+	if !strings.Contains(err.Error(), "Failure: PI auth configure rejected.") {
+		t.Fatalf("Configure() error = %q, want explicit failure field", err)
+	}
+	if !strings.Contains(err.Error(), "Error details:") {
+		t.Fatalf("Configure() error = %q, want error details field", err)
+	}
+	if strings.Contains(err.Error(), token) {
+		t.Fatalf("Configure() error leaked token: %q", err)
+	}
+	if status.Ready || status.State != "needs_configure" {
+		t.Fatalf("status = %+v", status)
+	}
+	if !strings.Contains(status.Message, "GitHub token was pasted into the PI auth.json field") {
+		t.Fatalf("status.Message = %q, want wrong-field guidance", status.Message)
+	}
+	if _, readErr := os.ReadFile(path); !os.IsNotExist(readErr) {
+		t.Fatalf("runtime config read error = %v, want not exist", readErr)
+	}
+}
+
 func TestPiProbeResultHasOKAcceptsNoisyAgentOutput(t *testing.T) {
 	res := execx.Result{
 		Stdout: "assistant: OK\n",

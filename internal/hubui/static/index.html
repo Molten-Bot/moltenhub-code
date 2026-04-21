@@ -3139,10 +3139,24 @@
       return token;
     }
 
+    function isLikelyGitHubTokenValue(raw) {
+      return /^(gh[pousr]_|github_pat_)\S+$/i.test(String(raw || "").trim());
+    }
+
+    function clearAgentAuthConfigureInputIfSensitive() {
+      if (!agentAuthConfigureInput) return;
+      if (isLikelyGitHubTokenValue(agentAuthConfigureInput.value)) {
+        agentAuthConfigureInput.value = "";
+      }
+    }
+
     function normalizePiAuthJSONPayload(raw) {
       const value = String(raw || "").trim();
       if (!value) {
         throw new Error("Paste ~/.pi/agent/auth.json first.");
+      }
+      if (isLikelyGitHubTokenValue(value)) {
+        throw new Error("GitHub token does not belong in PI auth JSON. Paste ~/.pi/agent/auth.json instead.");
       }
       return value;
     }
@@ -3280,6 +3294,7 @@
         normalizedSessionAuth = normalizeAuggieSessionAuthPayload(agentAuthConfigureInput ? agentAuthConfigureInput.value : "");
       } catch (err) {
         const message = err && err.message ? err.message : "Invalid Auggie session auth payload.";
+        clearAgentAuthConfigureInputIfSensitive();
         setAuggieConfigureError(message);
         return;
       }
@@ -3303,6 +3318,7 @@
       } catch (err) {
         const message = err && err.message ? err.message : "Auggie auth configure failed.";
         setAgentAuthVerifyPending(false);
+        clearAgentAuthConfigureInputIfSensitive();
         setAuggieConfigureError(message);
         setLocalPromptStatus("error", `${currentAgentLabel()} configure failed: ${message}`);
       } finally {
@@ -3351,6 +3367,7 @@
       } catch (err) {
         const message = err && err.message ? err.message : "GitHub token configure failed.";
         setAgentAuthVerifyPending(false);
+        clearAgentAuthConfigureInputIfSensitive();
         setAuggieConfigureError(message);
         setLocalPromptStatus("error", `${currentAgentLabel()} configure failed: ${message}`);
       } finally {
@@ -3365,6 +3382,7 @@
         authJSON = normalizePiAuthJSONPayload(agentAuthConfigureInput ? agentAuthConfigureInput.value : "");
       } catch (err) {
         const message = err && err.message ? err.message : "Invalid Pi auth JSON.";
+        clearAgentAuthConfigureInputIfSensitive();
         setAuggieConfigureError(message);
         return;
       }
@@ -3388,6 +3406,7 @@
       } catch (err) {
         const message = err && err.message ? err.message : "PI auth configure failed.";
         setAgentAuthVerifyPending(false);
+        clearAgentAuthConfigureInputIfSensitive();
         setAuggieConfigureError(message);
         setLocalPromptStatus("error", `${currentAgentLabel()} configure failed: ${message}`);
       } finally {
