@@ -1573,6 +1573,29 @@ select.prompt-control {
   stroke-linejoin: round;
 }
 
+.task-action-icon {
+  width: 13px;
+  height: 13px;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.45;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.task-icon-button {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .prompt-action-button:hover,
 .task-rerun:hover,
 .task-output-toggle:hover,
@@ -2041,6 +2064,21 @@ select.prompt-control {
   background: var(--surface-badge-default);
 }
 
+.badge-icon {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.badge-icon .task-action-icon {
+  width: 12px;
+  height: 12px;
+}
+
 .badge.running,
 .badge.active {
   background: var(--running);
@@ -2071,12 +2109,34 @@ select.prompt-control {
   background: var(--bad);
 }
 
+.task-icons-idle-spin .task-icon-rotatable {
+  animation: taskIconIdleSpin 16s linear infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
 .task-sparklet {
   position: relative;
   width: 18px;
   height: 18px;
   flex: 0 0 18px;
   pointer-events: none;
+}
+
+@keyframes taskIconIdleSpin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-icons-idle-spin .task-icon-rotatable {
+    animation: none;
+  }
 }
 
 .task-sparklet-particle {

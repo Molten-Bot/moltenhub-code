@@ -751,6 +751,8 @@
     const TASK_REFLOW_TRANSITION_MS = 560;
     const TASK_REFLOW_TRANSITION_EASING = "cubic-bezier(0.16, 1, 0.3, 1)";
     const TASK_TIMING_REFRESH_INTERVAL_MS = 30_000;
+    const TASK_ICON_IDLE_SPIN_MS = 16_000;
+    const TASK_ICON_IDLE_REFRESH_MS = 1_000;
     const DEFERRED_SELECTION_RENDER_FLUSH_DELAY_MS = 32;
     const TASK_HISTORY_LIMIT = 25;
     const MAX_TERMINAL_LINES = 500;
@@ -789,6 +791,7 @@
     const TASK_PR_LINK_SIZE_PX = "34px";
     const TASK_PR_LOGO_SIZE = 20;
     const CLAUDE_AUTH_LOGO_URL = "/static/logos/claude-code.svg";
+    const SVG_NS = "http://www.w3.org/2000/svg";
     const CLAUDE_POST_SUBMIT_VERIFY_INTERVAL_MS = 1200;
     const CLAUDE_POST_SUBMIT_VERIFY_MAX_ATTEMPTS = 25;
     const HUB_SETUP_DIALOG_MODES = ["connect", "profile"];
@@ -919,6 +922,64 @@
         return taskAgentLogoURL(task);
       }
       return "";
+    }
+
+    function createTaskActionIcon(type) {
+      const svg = document.createElementNS(SVG_NS, "svg");
+      svg.className = "task-action-icon task-icon-rotatable";
+      svg.setAttribute("viewBox", "0 0 16 16");
+      svg.setAttribute("aria-hidden", "true");
+      svg.setAttribute("focusable", "false");
+
+      if (String(type || "").trim().toLowerCase() === "terminal") {
+        appendTaskIconPath(svg, "M2.25 3.25h11.5v8.5H2.25z");
+        appendTaskIconPath(svg, "M4.5 6.1L6.5 8 4.5 9.9");
+        appendTaskIconPath(svg, "M7.7 9.6h3.8");
+        appendTaskIconPath(svg, "M6.3 13h3.4");
+        return svg;
+      }
+
+      appendTaskIconCircle(svg, 8, 8, 2.15);
+      appendTaskIconPath(svg, "M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6");
+      appendTaskIconPath(svg, "M3.3 3.3l1.1 1.1M11.6 11.6l1.1 1.1M12.7 3.3l-1.1 1.1M4.4 11.6l-1.1 1.1");
+      return svg;
+    }
+
+    function appendTaskIconPath(svg, d) {
+      const path = document.createElementNS(SVG_NS, "path");
+      path.setAttribute("d", d);
+      svg.appendChild(path);
+    }
+
+    function appendTaskIconCircle(svg, cx, cy, r) {
+      const circle = document.createElementNS(SVG_NS, "circle");
+      circle.setAttribute("cx", String(cx));
+      circle.setAttribute("cy", String(cy));
+      circle.setAttribute("r", String(r));
+      svg.appendChild(circle);
+    }
+
+    function renderTaskStatusBadge(task) {
+      const status = normalizedTaskStatus(task?.status) || "pending";
+      const badge = document.createElement("span");
+      badge.className = `badge ${statusClass(status)}`;
+
+      if (status === "running" || status === "active") {
+        badge.classList.add("badge-icon", "badge-running-icon");
+        badge.title = "Running: agent is actively working this task.";
+        badge.setAttribute("aria-label", "Running: agent is actively working this task.");
+        badge.appendChild(createTaskActionIcon("gear"));
+        const hiddenLabel = document.createElement("span");
+        hiddenLabel.className = "sr-only";
+        hiddenLabel.textContent = status;
+        badge.appendChild(hiddenLabel);
+        return badge;
+      }
+
+      badge.textContent = status;
+      badge.title = `Status: ${status}.`;
+      badge.setAttribute("aria-label", `Status: ${status}.`);
+      return badge;
     }
 
     function currentAgentLabel() {
@@ -1402,6 +1463,8 @@
       closingTaskIDs: new Set(),
       closingTaskTimers: new Map(),
       taskControlInFlight: new Set(),
+      taskIconStateSignatures: new Map(),
+      taskIconStateChangedAt: new Map(),
       sparkleTaskIDs: new Set(),
       sparkleTimers: new Map(),
       taskDisplayOrder: [],
@@ -5607,6 +5670,96 @@
       return String(task?.request_id || "").trim();
     }
 
+    function taskIconStateSignature(task) {
+      const status = normalizedTaskStatus(task?.status) || "pending";
+      const stage = String(task?.stage || "").trim().toLowerCase();
+      const controls = task?.controls || {};
+      return [
+        status,
+        stage,
+        Boolean(controls.pause),
+        Boolean(controls.run),
+        Boolean(controls.force_run),
+        Boolean(controls.stop),
+      ].join("|");
+    }
+
+    function syncTaskIconStateMemory(tasks) {
+      const nowMs = Date.now();
+      const seen = new Set();
+      for (const task of tasks || []) {
+        const requestID = taskRequestID(task);
+        if (!requestID) {
+          continue;
+        }
+        seen.add(requestID);
+
+        const nextSignature = taskIconStateSignature(task);
+        const previousSignature = state.taskIconStateSignatures.get(requestID);
+        if (previousSignature !== nextSignature) {
+          state.taskIconStateSignatures.set(requestID, nextSignature);
+          state.taskIconStateChangedAt.set(requestID, nowMs);
+          continue;
+        }
+        if (!state.taskIconStateChangedAt.has(requestID)) {
+          state.taskIconStateChangedAt.set(requestID, nowMs);
+        }
+      }
+
+      for (const requestID of Array.from(state.taskIconStateSignatures.keys())) {
+        if (seen.has(requestID)) {
+          continue;
+        }
+        state.taskIconStateSignatures.delete(requestID);
+        state.taskIconStateChangedAt.delete(requestID);
+      }
+    }
+
+    function taskIconsShouldIdleSpin(task, nowMs = Date.now()) {
+      const requestID = taskRequestID(task);
+      if (!requestID) {
+        return false;
+      }
+      const status = normalizedTaskStatus(task?.status);
+      if (status !== "running" && status !== "active") {
+        return false;
+      }
+      const changedAtMs = Number(state.taskIconStateChangedAt.get(requestID) || 0);
+      if (!Number.isFinite(changedAtMs) || changedAtMs <= 0) {
+        return false;
+      }
+      return nowMs - changedAtMs >= TASK_ICON_IDLE_SPIN_MS;
+    }
+
+    function applyTaskIdleSpinClasses(listNode, tasks) {
+      if (!listNode) {
+        return;
+      }
+      const tasksByID = new Map();
+      for (const task of tasks || []) {
+        const requestID = taskRequestID(task);
+        if (!requestID || tasksByID.has(requestID)) {
+          continue;
+        }
+        tasksByID.set(requestID, task);
+      }
+
+      const nowMs = Date.now();
+      for (const node of listNode.querySelectorAll(".task[data-request-id]")) {
+        const requestID = String(node.dataset.requestId || "").trim();
+        const task = tasksByID.get(requestID);
+        node.classList.toggle("task-icons-idle-spin", Boolean(task) && taskIconsShouldIdleSpin(task, nowMs));
+      }
+    }
+
+    function refreshTaskIdleSpinClasses() {
+      if (!state.snapshot) {
+        return;
+      }
+      applyTaskIdleSpinClasses(taskList, displayTasks(state.snapshot));
+      applyTaskIdleSpinClasses(taskFullscreenList, fullscreenTasks(state.snapshot));
+    }
+
     function taskOrderSyncBucket(nowMs) {
       return Math.floor(nowMs / TASK_ORDER_SYNC_INTERVAL_MS);
     }
@@ -6254,6 +6407,7 @@
       }
       const renderSig = taskCollectionRenderSig(tasks, options);
       if (listNode.dataset.renderSig === renderSig) {
+        applyTaskIdleSpinClasses(listNode, tasks);
         listNode.dataset.pendingRenderSig = "";
         return;
       }
@@ -6328,9 +6482,7 @@
           id.title = prompt;
         }
 
-        const badge = document.createElement("span");
-        badge.className = `badge ${statusClass(task.status)}`;
-        badge.textContent = normalizedTaskStatus(task.status) || "pending";
+        const badge = renderTaskStatusBadge(task);
 
         const topActions = document.createElement("div");
         topActions.className = "task-top-actions";
@@ -6398,9 +6550,14 @@
         if (showOutputAction) {
           const outputToggle = document.createElement("button");
           outputToggle.type = "button";
-          outputToggle.className = "task-output-toggle";
-          outputToggle.textContent = "Output";
-          outputToggle.title = "Open full screen task output";
+          outputToggle.className = "task-output-toggle task-icon-button";
+          outputToggle.title = "Open task output terminal.";
+          outputToggle.setAttribute("aria-label", "Open task output terminal.");
+          outputToggle.appendChild(createTaskActionIcon("terminal"));
+          const outputLabel = document.createElement("span");
+          outputLabel.className = "sr-only";
+          outputLabel.textContent = "Output";
+          outputToggle.appendChild(outputLabel);
           outputToggle.addEventListener("click", (event) => {
             event.stopPropagation();
             openTaskOutput(requestID);
@@ -6585,6 +6742,7 @@
         listNode.appendChild(node);
       }
       animateTaskReflow(listNode, previousTaskRects);
+      applyTaskIdleSpinClasses(listNode, tasks);
     }
 
     function renderTasks(snapshot) {
@@ -6797,6 +6955,7 @@
       }
       dropReposFromHistory(failedRepoAccessRepos);
       rememberRepos(observedRepos);
+      syncTaskIconStateMemory(snapshot.tasks || []);
       renderHubConnection(snapshot);
       renderResourceMetrics(snapshot);
       renderTasks(snapshot);
@@ -7359,6 +7518,7 @@
     libraryTargetSubdir.value = builderTargetSubdir.value;
     libraryReviewerInput.value = builderReviewerInput.value;
     scheduleTaskTimingRefresh();
+    window.setInterval(refreshTaskIdleSpinClasses, TASK_ICON_IDLE_REFRESH_MS);
     renderRepoHistoryOptions();
     renderReviewerHistoryOptions();
     renderLibraryTaskOptions();
