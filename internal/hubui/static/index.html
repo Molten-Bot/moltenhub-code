@@ -2406,11 +2406,15 @@
     }
 
     function shouldAutoSubmitClaudeBrowserCode(code) {
-      return String(code || "").trim().length >= 20;
+      const value = String(code || "").trim();
+      if (isClaudeCredentialsJSONPayload(value) || isLikelyClaudeOAuthTokenPayload(value)) {
+        return true;
+      }
+      return value.length >= 20;
     }
 
     function scheduleClaudeBrowserCodeAutoSubmit() {
-      if (!isClaudeBrowserCodeState()) {
+      if (!isClaudePendingBrowserLoginState()) {
         clearAgentAuthAutoSubmitTimer();
         return;
       }
@@ -2615,7 +2619,7 @@
       if (gateState !== "pending_browser_login") {
         return false;
       }
-      return String(current?.authURL || "").trim() !== "";
+      return true;
     }
 
     function isClaudeBrowserCodeState(auth) {
@@ -2651,6 +2655,24 @@
         return liveValue;
       }
       return normalizeClaudeBrowserCode(state.agentAuthBrowserCode || "");
+    }
+
+    function isClaudeCredentialsJSONPayload(raw) {
+      const trimmed = String(raw || "").trim();
+      if (!trimmed.startsWith("{")) {
+        return false;
+      }
+      try {
+        const parsed = JSON.parse(trimmed);
+        return Boolean(parsed) && typeof parsed === "object" && !Array.isArray(parsed);
+      } catch (_err) {
+        return false;
+      }
+    }
+
+    function isLikelyClaudeOAuthTokenPayload(raw) {
+      const trimmed = String(raw || "").trim();
+      return (trimmed.startsWith("sk-ant-") || trimmed.startsWith("sk-")) && !/\s|#/.test(trimmed);
     }
 
     function setAuggieConfigureError(message) {
@@ -2843,7 +2865,7 @@
       }
       renderAgentHarnessSelection(state.agentAuth);
 
-      const hasChallenge = Boolean(state.agentAuth.authURL || state.agentAuth.deviceCode) &&
+      const hasChallenge = (Boolean(state.agentAuth.authURL || state.agentAuth.deviceCode) || isClaudePendingBrowserLoginState(state.agentAuth)) &&
         !requiresManualConfigure &&
         !needsHarnessSelection;
       if (agentAuthDetails) {

@@ -1272,6 +1272,14 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	if !strings.Contains(html, "function isClaudeBrowserCodeState(auth)") {
 		t.Fatalf("expected auth gate to detect Claude browser-code submission state")
 	}
+	if strings.Contains(html, `return String(current?.authURL || "").trim() !== "";`) {
+		t.Fatalf("expected Claude pending browser login UI to accept credentials JSON before an auth URL is captured")
+	}
+	if !strings.Contains(html, "function isClaudeCredentialsJSONPayload(raw)") ||
+		!strings.Contains(html, "function isLikelyClaudeOAuthTokenPayload(raw)") ||
+		!strings.Contains(html, "if (!isClaudePendingBrowserLoginState()) {") {
+		t.Fatalf("expected Claude credentials JSON/token input to enable pending-login submission without a browser URL")
+	}
 	if strings.Contains(html, "(!requiresClaudeBrowserCode || hasClaudeBrowserCode)") {
 		t.Fatalf("expected Done button visibility to allow verify flows even when Claude browser code is not pasted")
 	}
