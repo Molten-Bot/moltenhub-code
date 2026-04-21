@@ -278,3 +278,34 @@ func TestAsyncAPIClientTokenBoundMethods(t *testing.T) {
 		}
 	}
 }
+
+func TestAsyncAPIClientResolveAgentTokenPropagatesError(t *testing.T) {
+	t.Parallel()
+
+	client := NewAsyncAPIClient("https://example.test/v1", "existing-token")
+	if _, err := client.ResolveAgentToken(context.Background(), InitConfig{}); err == nil {
+		t.Fatal("ResolveAgentToken() error = nil, want non-nil")
+	}
+	if got, want := client.Token(), "existing-token"; got != want {
+		t.Fatalf("Token() = %q, want unchanged %q", got, want)
+	}
+}
+
+func TestAsyncAPIClientPullOpenClawMessageRequiresToken(t *testing.T) {
+	t.Parallel()
+
+	client := NewAsyncAPIClient("https://example.test/v1", "")
+	msg, ok, err := client.PullOpenClawMessage(context.Background(), 500)
+	if err == nil {
+		t.Fatal("PullOpenClawMessage() error = nil, want non-nil")
+	}
+	if ok {
+		t.Fatalf("PullOpenClawMessage() ok = %v, want false", ok)
+	}
+	if msg.DeliveryID != "" || msg.MessageID != "" || msg.Message != nil {
+		t.Fatalf("PullOpenClawMessage() message = %#v, want zero value fields", msg)
+	}
+	if got := err.Error(); !strings.Contains(got, "moltenhub api token is required") {
+		t.Fatalf("PullOpenClawMessage() error = %q", got)
+	}
+}

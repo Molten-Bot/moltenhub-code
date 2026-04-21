@@ -100,3 +100,18 @@ func TestApplyBoundAgentRuntimeAllowsMatchingOverrides(t *testing.T) {
 		t.Fatalf("AgentCommand = %q, want %q", got, want)
 	}
 }
+
+func TestApplyBoundAgentRuntimeReturnsResolveErrorForUnknownBoundHarness(t *testing.T) {
+	t.Parallel()
+
+	_, err := ApplyBoundAgentRuntime(
+		config.Config{},
+		InitConfig{AgentHarness: "unknown-harness"},
+	)
+	if err == nil {
+		t.Fatal("ApplyBoundAgentRuntime() error = nil, want non-nil")
+	}
+	if got := strings.ToLower(err.Error()); !strings.Contains(got, "unsupported") {
+		t.Fatalf("ApplyBoundAgentRuntime() error = %q, want unsupported harness detail", err.Error())
+	}
+}

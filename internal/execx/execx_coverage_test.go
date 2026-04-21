@@ -64,3 +64,28 @@ func TestLineEmitterFlushWithNoHandlerAndNoPending(t *testing.T) {
 	w.pending.Reset()
 	w.Flush()
 }
+
+func TestLineEmitterFlushTrimsTrailingCarriageReturn(t *testing.T) {
+	t.Parallel()
+
+	var gotStream, gotLine string
+	w := &lineEmitter{
+		stream: "stdout",
+		handler: func(stream, line string) {
+			gotStream = stream
+			gotLine = line
+		},
+	}
+	w.pending.WriteString("line-with-cr\r")
+	w.Flush()
+
+	if got, want := gotStream, "stdout"; got != want {
+		t.Fatalf("stream = %q, want %q", got, want)
+	}
+	if got, want := gotLine, "line-with-cr"; got != want {
+		t.Fatalf("line = %q, want %q", got, want)
+	}
+	if got := w.pending.Len(); got != 0 {
+		t.Fatalf("pending len = %d, want 0", got)
+	}
+}

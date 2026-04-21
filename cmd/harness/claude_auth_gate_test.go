@@ -215,7 +215,20 @@ exit 1
 	}
 }
 
+func clearClaudeCredentialSignals(t *testing.T) {
+	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("CLAUDE_CODE_USE_BEDROCK", "")
+	t.Setenv("CLAUDE_CODE_USE_VERTEX", "")
+	t.Setenv("CLAUDE_CODE_USE_FOUNDRY", "")
+	t.Setenv(claudeOAuthTokenEnv, "")
+}
+
 func TestClaudeAuthGateConfigurePersistsGitHubTokenAndEnvironment(t *testing.T) {
+	clearClaudeCredentialSignals(t)
 	t.Setenv("GH_TOKEN", "")
 	t.Setenv("GITHUB_TOKEN", "")
 
@@ -256,6 +269,7 @@ func TestClaudeAuthGateConfigurePersistsGitHubTokenAndEnvironment(t *testing.T) 
 }
 
 func TestClaudeAuthGateConfigureAcceptsCredentialsJSONInConfigureState(t *testing.T) {
+	clearClaudeCredentialSignals(t)
 	t.Setenv("GH_TOKEN", "ghp_ready")
 	t.Setenv("GITHUB_TOKEN", "ghp_ready")
 	t.Setenv(claudeOAuthTokenEnv, "")
@@ -313,6 +327,7 @@ func TestClaudeAuthGateConfigureAcceptsCredentialsJSONInConfigureState(t *testin
 }
 
 func TestClaudeAuthGateConfigureAcceptsUnknownCredentialsJSONSchemaInConfigureState(t *testing.T) {
+	clearClaudeCredentialSignals(t)
 	t.Setenv("GH_TOKEN", "ghp_ready")
 	t.Setenv("GITHUB_TOKEN", "ghp_ready")
 	t.Setenv(claudeOAuthTokenEnv, "")
@@ -320,10 +335,10 @@ func TestClaudeAuthGateConfigureAcceptsUnknownCredentialsJSONSchemaInConfigureSt
 	t.Setenv("CLAUDE_CONFIG_DIR", claudeConfigDir)
 
 	g := &claudeAuthGate{
-		baseCtx:     context.Background(),
-		required:    true,
-		state:       "needs_configure",
-		message:     "auth pending",
+		baseCtx:  context.Background(),
+		required: true,
+		state:    "needs_configure",
+		message:  "auth pending",
 		initCfg: hub.InitConfig{
 			BaseURL:      "https://na.hub.molten.bot/v1",
 			AgentHarness: agentruntime.HarnessClaude,
@@ -356,15 +371,16 @@ func TestClaudeAuthGateConfigureAcceptsUnknownCredentialsJSONSchemaInConfigureSt
 }
 
 func TestClaudeAuthGateConfigureRejectsInvalidCredentialsJSONInConfigureState(t *testing.T) {
+	clearClaudeCredentialSignals(t)
 	t.Setenv("GH_TOKEN", "ghp_ready")
 	t.Setenv("GITHUB_TOKEN", "ghp_ready")
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 
 	g := &claudeAuthGate{
-		baseCtx:     context.Background(),
-		required:    true,
-		state:       "needs_configure",
-		message:     "auth pending",
+		baseCtx:  context.Background(),
+		required: true,
+		state:    "needs_configure",
+		message:  "auth pending",
 		initCfg: hub.InitConfig{
 			BaseURL:      "https://na.hub.molten.bot/v1",
 			AgentHarness: agentruntime.HarnessClaude,
