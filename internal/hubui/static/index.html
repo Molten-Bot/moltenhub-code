@@ -437,7 +437,7 @@
       </div>
 
       <div id="agent-auth-details" class="mt-5 hidden space-y-3">
-        <div class="agent-auth-command-box agent-auth-command-box-inline">
+        <div id="agent-auth-device-code-row" class="agent-auth-command-box agent-auth-command-box-inline hidden">
           <code id="agent-auth-code" class="agent-auth-command-text agent-auth-command-text-inline font-mono text-[1.15rem] tracking-[0.22em] text-hub-text"></code>
           <button
             id="agent-auth-copy"
@@ -1566,6 +1566,7 @@
     const agentAuthURL = document.getElementById("agent-auth-url");
     const agentAuthURLLogo = document.getElementById("agent-auth-url-logo");
     const agentAuthURLText = document.getElementById("agent-auth-url-text");
+    const agentAuthDeviceCodeRow = document.getElementById("agent-auth-device-code-row");
     const agentAuthCode = document.getElementById("agent-auth-code");
     const agentAuthCopy = document.getElementById("agent-auth-copy");
     const agentAuthBrowserCode = document.getElementById("agent-auth-browser-code");
@@ -2687,8 +2688,8 @@
       }
       const requiresManualConfigure = isManualConfigureState();
       const hasCodeChallenge = Boolean(state.agentAuth.authURL || state.agentAuth.deviceCode);
-      const meetsAuthInteractionRequirement = requiresManualConfigure || (!hasCodeChallenge || state.agentAuthInteracted);
       const isClaudePending = isClaudePendingBrowserLoginState();
+      const meetsAuthInteractionRequirement = isClaudePending || requiresManualConfigure || (!hasCodeChallenge || state.agentAuthInteracted);
       const visible = state.agentAuth.required &&
         !state.agentAuth.ready &&
         meetsAuthInteractionRequirement &&
@@ -2882,6 +2883,9 @@
       if (agentAuthCode) {
         agentAuthCode.textContent = state.agentAuth.deviceCode || "";
         agentAuthCode.classList.toggle("hidden", !state.agentAuth.deviceCode);
+      }
+      if (agentAuthDeviceCodeRow) {
+        agentAuthDeviceCodeRow.classList.toggle("hidden", !state.agentAuth.deviceCode);
       }
       if (agentAuthCopy) {
         agentAuthCopy.classList.toggle("hidden", !state.agentAuth.deviceCode);
@@ -7058,6 +7062,7 @@
     }
     if (agentAuthBrowserCodeInput) {
       agentAuthBrowserCodeInput.addEventListener("input", () => {
+        markAgentAuthInteraction();
         state.agentAuthBrowserCode = normalizeClaudeBrowserCode(agentAuthBrowserCodeInput.value || "");
         if (state.agentAuthBrowserCode !== state.agentAuthLastAutoSubmittedCode) {
           state.agentAuthLastAutoSubmittedCode = "";
@@ -7068,6 +7073,7 @@
       });
       agentAuthBrowserCodeInput.addEventListener("paste", () => {
         window.setTimeout(() => {
+          markAgentAuthInteraction();
           state.agentAuthBrowserCode = normalizeClaudeBrowserCode(agentAuthBrowserCodeInput.value || "");
           if (state.agentAuthBrowserCode !== state.agentAuthLastAutoSubmittedCode) {
             state.agentAuthLastAutoSubmittedCode = "";
