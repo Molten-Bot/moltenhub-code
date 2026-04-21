@@ -291,7 +291,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="hub-setup-form"`) {
 		t.Fatalf("expected index html to include hub setup form")
 	}
-	if !strings.Contains(markup, `id="hub-setup-copy"`) || !strings.Contains(markup, `Existing agents use an agent token. New agents use a bind token`) {
+	if !strings.Contains(markup, `id="hub-setup-copy"`) || !strings.Contains(markup, `Agent tokens start with t_; bind tokens start with b_`) {
 		t.Fatalf("expected index html to include supporting Molten Hub setup guidance")
 	}
 	if !strings.Contains(markup, `id="hub-setup-token-label" class="prompt-label">Agent Token</span>`) {
@@ -324,8 +324,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="hub-setup-region-na-toggle"`) || !strings.Contains(markup, `id="hub-setup-region-eu-toggle"`) {
 		t.Fatalf("expected index html to include hub setup region toggles")
 	}
-	if strings.Index(markup, `<span class="prompt-label">Region</span>`) > strings.Index(markup, `<span class="prompt-label">Agent</span>`) {
-		t.Fatalf("expected index html to render the Region row before the Agent row")
+	if strings.Contains(markup, `id="hub-setup-connect-agent-row"`) || strings.Contains(markup, `data-agent-mode=`) {
+		t.Fatalf("expected index html to remove the manual agent mode controls")
 	}
 	if strings.Contains(markup, `id="hub-setup-bind-toggle"`) || strings.Contains(markup, `id="hub-setup-agent-toggle"`) {
 		t.Fatalf("expected index html to remove the separate hub setup token type toggles")
@@ -431,6 +431,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `hubSetupSubmit.textContent = profileEditor ? "Save" : (isNew ? "Redeem Token" : "Connect Runtime");`) {
 		t.Fatalf("expected index html to relabel the hub setup submit button for profile, new-agent, and reconnect flows")
+	}
+	if !strings.Contains(markup, `function hubSetupModeForToken(token, fallback = state.hubSetup.agentMode)`) ||
+		!strings.Contains(markup, `trimmed.startsWith("b_")`) ||
+		!strings.Contains(markup, `trimmed.startsWith("t_")`) {
+		t.Fatalf("expected index html to infer new/existing agent mode from token prefix")
 	}
 	if !strings.Contains(markup, `hubSetupStatus.className = value`) || !strings.Contains(markup, `hub-setup-status submit-status submit-status-inline is-visible`) {
 		t.Fatalf("expected index html to keep the hub setup status line visible when populated")
@@ -1700,7 +1705,7 @@ func TestHandlerIndexIncludesClaudeBrowserCodeFlow(t *testing.T) {
 		`aria-label="Copy device code"`,
 		`id="agent-auth-browser-command-primary"`,
 		`class="agent-auth-command-box agent-auth-command-box-inline"`,
-		`aria-label="Copy claude setup-token command"`,
+		`aria-label="Copy Claude credentials command"`,
 		`id="agent-auth-browser-command-primary-copy"`,
 		`id="agent-auth-browser-command-secondary"`,
 		`class="agent-auth-command-box"`,
@@ -1711,6 +1716,8 @@ func TestHandlerIndexIncludesClaudeBrowserCodeFlow(t *testing.T) {
 		`cat ~/.pi/agent/auth.json`,
 		`Paste ~/.pi/agent/auth.json contents...`,
 		`agent-auth-configure-input-single-line`,
+		`function clearAgentAuthConfigureInputIfSensitive()`,
+		`GitHub token does not belong in PI auth JSON`,
 		`const useClaudeLogoLink = authHarness(state.agentAuth) === "claude" && authURL !== "" && !useClaudeCommandFlow;`,
 		`const code = claudeBrowserCodeValue();`,
 		`agentAuthURL.addEventListener("click", markAgentAuthInteraction);`,
@@ -1786,6 +1793,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".agent-auth-shell {\n  padding: clamp(24px, 3vw, 32px);\n  border: 1px solid var(--surface-auth-panel-border);\n  border-radius: 24px;\n  background: var(--surface-auth-panel-bg);\n  box-shadow: var(--surface-auth-panel-shadow);\n}") {
 		t.Fatalf("expected stylesheet to render onboarding content inside a readable auth panel")
+	}
+	if !strings.Contains(css, ".agent-auth-github-shell {\n  max-width: calc(46ch + clamp(48px, 6vw, 64px) + 2px);\n}") {
+		t.Fatalf("expected stylesheet to narrow the GitHub token setup shell around the token input")
 	}
 	if !strings.Contains(css, "--surface-auth-panel-bg:") || !strings.Contains(css, "--surface-auth-panel-border:") || !strings.Contains(css, "--surface-auth-panel-shadow:") {
 		t.Fatalf("expected stylesheet to define theme-aware auth panel surface tokens")

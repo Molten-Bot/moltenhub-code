@@ -590,6 +590,15 @@ func isLikelyPiProviderAuthInput(rawInput string) bool {
 }
 
 func (g *piAuthGate) configurePiAuthJSON(ctx context.Context, rawInput string) (hubui.AgentAuthState, error) {
+	if isLikelyGitHubToken(rawInput) {
+		err := fmt.Errorf("Failure: PI auth configure rejected. Error details: GitHub token was pasted into the PI auth.json field; paste %s instead", piAuthFileRelativePath)
+		g.mu.Lock()
+		applyPiConfigureUIState(&g.authState, "GitHub token was pasted into the PI auth.json field. No PI auth was saved. Paste `~/.pi/agent/auth.json` instead.")
+		snap := g.snapshotLocked()
+		g.mu.Unlock()
+		return snap, err
+	}
+
 	canonical, err := normalizePiAuthJSON(rawInput)
 	if err != nil {
 		g.mu.Lock()

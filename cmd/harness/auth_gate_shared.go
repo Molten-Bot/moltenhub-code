@@ -133,6 +133,16 @@ func setGitHubTokenEnvironment(token string) error {
 	return nil
 }
 
+func isLikelyGitHubToken(value string) bool {
+	value = strings.TrimSpace(value)
+	for _, prefix := range []string{"ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_"} {
+		if strings.HasPrefix(value, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func githubTokenRequirementState(harness, runtimeConfigPath string, initCfg hub.InitConfig) (bool, hubui.AgentAuthState) {
 	githubToken, _ := firstConfiguredGitHubToken(runtimeConfigPath, initCfg)
 	if strings.TrimSpace(githubToken) == "" {

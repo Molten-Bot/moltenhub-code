@@ -1976,7 +1976,7 @@ func maybeStartAgentAuth(ctx context.Context, runtime agentruntime.Runtime, gate
 		return
 	}
 	switch strings.TrimSpace(status.State) {
-	case "needs_configure", "pending_browser_login":
+	case "needs_configure", "needs_browser_login", "pending_browser_login":
 		return
 	}
 	if strings.TrimSpace(status.AuthURL) != "" {
@@ -2470,7 +2470,8 @@ func effectiveHubSetupConfig(cfg hub.InitConfig) (hub.InitConfig, error) {
 
 func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSetupRequest, applyLive func(context.Context, hub.InitConfig) error) (hubui.HubSetupState, error) {
 	state := currentHubSetupState(cfg)
-	state.AgentMode = normalizeHubSetupMode(req.AgentMode)
+	token := strings.TrimSpace(req.Token)
+	state.AgentMode = hubSetupModeForToken(token, req.AgentMode)
 	state.TokenType = hubSetupTokenTypeForMode(state.AgentMode)
 	state.Region = normalizeHubSetupRegion(req.Region)
 	state.Handle = strings.TrimSpace(req.Handle)
@@ -2483,8 +2484,6 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 		hubSetupMarkStep(&state, "bind", "error", err.Error())
 		return state, err
 	}
-
-	token := strings.TrimSpace(req.Token)
 
 	activeCfg, err := effectiveHubSetupConfig(cfg)
 	if err != nil {
@@ -2705,6 +2704,18 @@ func normalizeHubSetupTokenType(tokenType string) string {
 		return "agent"
 	default:
 		return "bind"
+	}
+}
+
+func hubSetupModeForToken(token, fallbackMode string) string {
+	token = strings.ToLower(strings.TrimSpace(token))
+	switch {
+	case strings.HasPrefix(token, "b_"):
+		return "new"
+	case strings.HasPrefix(token, "t_"):
+		return "existing"
+	default:
+		return normalizeHubSetupMode(fallbackMode)
 	}
 }
 
