@@ -184,6 +184,36 @@ func configureGitHubToken(
 	return token, hubui.AgentAuthState{}, nil
 }
 
+func configureGitHubTokenAndApply(
+	ctx context.Context,
+	harness, runtimeConfigPath string,
+	initCfg hub.InitConfig,
+	runner execx.Runner,
+	rawInput string,
+	onFailure func(hubui.AgentAuthState, error) (hubui.AgentAuthState, error),
+	onSuccess func(string) (hubui.AgentAuthState, error),
+) (hubui.AgentAuthState, error) {
+	token, failureState, err := configureGitHubToken(
+		ctx,
+		harness,
+		runtimeConfigPath,
+		initCfg,
+		runner,
+		rawInput,
+		githubTokenPasteConfigureMessage,
+	)
+	if err != nil {
+		if onFailure != nil {
+			return onFailure(failureState, err)
+		}
+		return failureState, err
+	}
+	if onSuccess == nil {
+		return hubui.AgentAuthState{}, nil
+	}
+	return onSuccess(token)
+}
+
 func validateGitHubToken(ctx context.Context, runner execx.Runner, token string) error {
 	token = strings.TrimSpace(token)
 	if token == "" {

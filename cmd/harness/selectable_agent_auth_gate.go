@@ -69,58 +69,37 @@ func newSelectableAgentAuthGate(
 }
 
 func (g *selectableAgentAuthGate) Status(ctx context.Context) (hubui.AgentAuthState, error) {
-	activeCfg, err := g.activeConfig()
-	if err != nil {
-		state := g.errorState(fmt.Sprintf("load runtime config: %v", err))
-		return state, err
-	}
-
-	if runtime, ok, state := g.selectionState(activeCfg); !ok {
-		return state, nil
-	} else {
-		delegate, err := g.resolveDelegate(runtime, activeCfg)
-		if err != nil {
-			state := g.errorState(fmt.Sprintf("configure agent auth: %v", err))
-			return state, err
-		}
-		return delegate.Status(ctx)
-	}
+	return g.runDelegateAction(ctx, agentAuthGate.Status)
 }
 
 func (g *selectableAgentAuthGate) StartDeviceAuth(ctx context.Context) (hubui.AgentAuthState, error) {
-	activeCfg, err := g.activeConfig()
-	if err != nil {
-		state := g.errorState(fmt.Sprintf("load runtime config: %v", err))
-		return state, err
-	}
-	if runtime, ok, state := g.selectionState(activeCfg); !ok {
-		return state, nil
-	} else {
-		delegate, err := g.resolveDelegate(runtime, activeCfg)
-		if err != nil {
-			state := g.errorState(fmt.Sprintf("configure agent auth: %v", err))
-			return state, err
-		}
-		return delegate.StartDeviceAuth(ctx)
-	}
+	return g.runDelegateAction(ctx, agentAuthGate.StartDeviceAuth)
 }
 
 func (g *selectableAgentAuthGate) Verify(ctx context.Context) (hubui.AgentAuthState, error) {
+	return g.runDelegateAction(ctx, agentAuthGate.Verify)
+}
+
+func (g *selectableAgentAuthGate) runDelegateAction(
+	ctx context.Context,
+	action func(agentAuthGate, context.Context) (hubui.AgentAuthState, error),
+) (hubui.AgentAuthState, error) {
 	activeCfg, err := g.activeConfig()
 	if err != nil {
 		state := g.errorState(fmt.Sprintf("load runtime config: %v", err))
 		return state, err
 	}
-	if runtime, ok, state := g.selectionState(activeCfg); !ok {
+	runtime, ok, state := g.selectionState(activeCfg)
+	if !ok {
 		return state, nil
-	} else {
-		delegate, err := g.resolveDelegate(runtime, activeCfg)
-		if err != nil {
-			state := g.errorState(fmt.Sprintf("configure agent auth: %v", err))
-			return state, err
-		}
-		return delegate.Verify(ctx)
 	}
+
+	delegate, err := g.resolveDelegate(runtime, activeCfg)
+	if err != nil {
+		state := g.errorState(fmt.Sprintf("configure agent auth: %v", err))
+		return state, err
+	}
+	return action(delegate, ctx)
 }
 
 func (g *selectableAgentAuthGate) Configure(ctx context.Context, rawInput string) (hubui.AgentAuthState, error) {
@@ -133,22 +112,21 @@ func (g *selectableAgentAuthGate) Configure(ctx context.Context, rawInput string
 	runtime, selectionLocked, selectionState := g.selectionState(activeCfg)
 	if !selectionLocked {
 		if selectionState.State == "needs_configure" {
-			token, failureState, tokenErr := configureGitHubToken(
+			return configureGitHubTokenAndApply(
 				ctx,
 				"",
 				g.runtimeConfigPath,
 				activeCfg,
 				g.runner,
 				rawInput,
-				"GitHub token is required.",
+				nil,
+				func(token string) (hubui.AgentAuthState, error) {
+					g.mu.Lock()
+					g.initCfg.GitHubToken = token
+					g.mu.Unlock()
+					return g.Status(ctx)
+				},
 			)
-			if tokenErr != nil {
-				return failureState, tokenErr
-			}
-			g.mu.Lock()
-			g.initCfg.GitHubToken = token
-			g.mu.Unlock()
-			return g.Status(ctx)
 		}
 
 		selectedHarness := strings.ToLower(strings.TrimSpace(rawInput))

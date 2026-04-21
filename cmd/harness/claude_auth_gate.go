@@ -331,25 +331,22 @@ func (g *claudeAuthGate) Configure(ctx context.Context, rawInput string) (hubui.
 	runner := g.runner
 	g.mu.Unlock()
 
-	token, failureState, err := configureGitHubToken(
+	return configureGitHubTokenAndApply(
 		ctx,
 		agentruntime.HarnessClaude,
 		runtimeConfigPath,
 		initCfg,
 		runner,
 		rawInput,
-		githubTokenPasteConfigureMessage,
+		nil,
+		func(token string) (hubui.AgentAuthState, error) {
+			g.mu.Lock()
+			g.initCfg.GitHubToken = token
+			g.mu.Unlock()
+			state, _ := g.Status(context.Background())
+			return state, nil
+		},
 	)
-	if err != nil {
-		return failureState, err
-	}
-
-	g.mu.Lock()
-	g.initCfg.GitHubToken = token
-	g.mu.Unlock()
-
-	state, _ := g.Status(context.Background())
-	return state, nil
 }
 
 func (g *claudeAuthGate) submitBrowserCode(rawInput string) (hubui.AgentAuthState, error) {
