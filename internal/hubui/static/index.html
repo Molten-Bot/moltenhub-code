@@ -101,7 +101,7 @@
               </svg>
             </span>
             <span class="metric-copy">
-              <span class="metric-label metric-label-visible text-xs leading-tight">CPU</span>
+              <span class="metric-label text-xs leading-tight">CPU</span>
               <span id="resource-cpu-text" class="status-value metric-value text-sm leading-tight">--</span>
             </span>
           </span>
@@ -112,7 +112,7 @@
               </svg>
             </span>
             <span class="metric-copy">
-              <span class="metric-label metric-label-visible text-xs leading-tight">MEM</span>
+              <span class="metric-label text-xs leading-tight">MEM</span>
               <span id="resource-mem-text" class="status-value metric-value text-sm leading-tight">--</span>
             </span>
           </span>
@@ -123,9 +123,9 @@
               </svg>
             </span>
             <span class="metric-copy">
-              <span class="metric-label metric-label-visible text-xs leading-tight">I/O</span>
+              <span class="metric-label text-xs leading-tight">I/O</span>
               <span id="resource-metrics-text" class="status-value metric-value text-sm leading-tight">--</span>
-              <span id="resource-metrics-unit" class="metric-unit metric-unit-visible text-xs leading-tight">MB/s</span>
+              <span id="resource-metrics-unit" class="metric-unit text-xs leading-tight">MB/s</span>
             </span>
           </span>
         </div>
@@ -3387,7 +3387,7 @@
     function metricSeverityClass(value) {
       if (!Number.isFinite(value) || value < 0) return "metric-icon-neutral";
       if (value < 65) return "metric-icon-good";
-      if (value < 85) return "metric-icon-warn";
+      if (value <= 85) return "metric-icon-warn";
       return "metric-icon-bad";
     }
 
@@ -3415,7 +3415,7 @@
       }
       setMetricIcon(resourceCPUIcon, cpu);
       setMetricIcon(resourceMemIcon, mem);
-      setMetricIcon(resourceDiskIcon, NaN);
+      setMetricIcon(resourceDiskIcon, disk);
     }
 
     function renderResourceMetrics(snapshot) {

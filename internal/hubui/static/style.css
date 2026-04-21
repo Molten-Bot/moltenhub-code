@@ -560,6 +560,7 @@ textarea {
 }
 
 .metric-label,
+.metric-value,
 .metric-unit {
   display: inline-block;
   max-width: 0;
@@ -572,10 +573,12 @@ textarea {
 }
 
 .status-row:hover .metric-label,
+.status-row:hover .metric-value,
 .status-row:hover .metric-unit,
 .status-row:focus-within .metric-label,
+.status-row:focus-within .metric-value,
 .status-row:focus-within .metric-unit {
-  max-width: 56px;
+  max-width: 64px;
   opacity: 1;
   transform: translateX(0);
 }
@@ -587,21 +590,6 @@ textarea {
 
 .status-row:hover .metric-unit,
 .status-row:focus-within .metric-unit {
-  margin-left: 3px;
-}
-
-.metric-label-visible {
-  max-width: 56px;
-  opacity: 1;
-  overflow: visible;
-  transform: translateX(0);
-}
-
-.metric-unit-visible {
-  max-width: 56px;
-  opacity: 1;
-  overflow: visible;
-  transform: translateX(0);
   margin-left: 3px;
 }
 

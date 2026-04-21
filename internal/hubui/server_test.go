@@ -1102,8 +1102,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function formatCompactMetricNumber(") {
 		t.Fatalf("expected index html to include compact metric formatter")
 	}
-	if !strings.Contains(markup, `class="metric-copy"`) || !strings.Contains(markup, `class="metric-label metric-label-visible text-xs leading-tight">CPU</span>`) {
-		t.Fatalf("expected index html to render the CPU metric label as visible copy")
+	if !strings.Contains(markup, `class="metric-copy"`) || !strings.Contains(markup, `class="metric-label text-xs leading-tight">CPU</span>`) {
+		t.Fatalf("expected index html to render the CPU metric label inside the metrics copy wrapper")
 	}
 	if !strings.Contains(markup, `id="local-conn-item" class="status-item status-item-compact status-item-compact-expandable`) {
 		t.Fatalf("expected local connection pill to remain the only expandable compact pill")
@@ -1111,17 +1111,20 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="hub-conn-item" class="status-item status-item-compact status-item-compact-expandable`) {
 		t.Fatalf("expected hub connection pill to remain the only expandable compact pill")
 	}
-	if !strings.Contains(markup, `class="metric-label metric-label-visible text-xs leading-tight">MEM</span>`) {
-		t.Fatalf("expected index html to render the memory metric label as visible copy")
+	if !strings.Contains(markup, `class="metric-label text-xs leading-tight">MEM</span>`) {
+		t.Fatalf("expected index html to render the memory metric label inside the metrics copy wrapper")
 	}
-	if !strings.Contains(markup, `class="metric-label metric-label-visible text-xs leading-tight">I/O</span>`) {
-		t.Fatalf("expected index html to render the I/O metric label as visible copy")
+	if !strings.Contains(markup, `class="metric-label text-xs leading-tight">I/O</span>`) {
+		t.Fatalf("expected index html to render the I/O metric label inside the metrics copy wrapper")
 	}
 	if !strings.Contains(markup, `id="resource-metrics-unit"`) {
 		t.Fatalf("expected index html to include a dedicated disk throughput unit element")
 	}
-	if !strings.Contains(markup, `class="metric-unit metric-unit-visible text-xs leading-tight">MB/s</span>`) {
+	if !strings.Contains(markup, `class="metric-unit text-xs leading-tight">MB/s</span>`) {
 		t.Fatalf("expected index html to initialize the disk throughput unit as MB/s")
+	}
+	if strings.Contains(markup, "metric-label-visible") || strings.Contains(markup, "metric-unit-visible") {
+		t.Fatalf("expected index html to keep metric labels and units hidden until the status row is hovered")
 	}
 	if !strings.Contains(markup, "function formatDiskThroughput(") {
 		t.Fatalf("expected index html to include a disk throughput formatter")
@@ -1131,6 +1134,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "resourceMetricsUnit.textContent = diskThroughput.unit;") {
 		t.Fatalf("expected index html to update the rendered disk throughput unit dynamically")
+	}
+	if !strings.Contains(markup, "if (value <= 85) return \"metric-icon-warn\";") {
+		t.Fatalf("expected index html to keep 85%% usage in the warning icon range")
+	}
+	if !strings.Contains(markup, "setMetricIcon(resourceDiskIcon, disk);") {
+		t.Fatalf("expected index html to color the I/O icon using the same metric severity thresholds")
+	}
+	if strings.Contains(markup, "setMetricIcon(resourceDiskIcon, NaN);") {
+		t.Fatalf("expected index html to stop forcing the I/O icon to neutral")
 	}
 	if !strings.Contains(markup, `id="prompt-mode-builder"`) {
 		t.Fatalf("expected index html to include builder mode toggle")
