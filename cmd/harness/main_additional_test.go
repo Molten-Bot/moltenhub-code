@@ -233,7 +233,7 @@ func TestStartHubPingRetryLoopSignalsWhenPingRecovers(t *testing.T) {
 	}
 }
 
-func TestMaybeStartAgentAuthSkipsClaudeLoginWhenBrowserAuthIsNeeded(t *testing.T) {
+func TestMaybeStartAgentAuthStartsClaudeLoginWhenBrowserAuthIsNeeded(t *testing.T) {
 	t.Parallel()
 
 	gate := &stubAgentAuthGate{
@@ -260,22 +260,28 @@ func TestMaybeStartAgentAuthSkipsClaudeLoginWhenBrowserAuthIsNeeded(t *testing.T
 		},
 	)
 
-	if got, want := gate.startCalls, 0; got != want {
+	if got, want := gate.startCalls, 1; got != want {
 		t.Fatalf("startCalls = %d, want %d", got, want)
 	}
-	if got := strings.Join(logs, "\n"); strings.Contains(got, "action=start_device_auth") {
-		t.Fatalf("logs include start marker: %q", got)
+	if got := strings.Join(logs, "\n"); !strings.Contains(got, "status=start harness=claude action=start_device_auth state=pending_browser_login") {
+		t.Fatalf("logs missing start marker: %q", got)
 	}
 }
 
-func TestMaybeStartAgentAuthSkipsWhenClaudeNeedsManualConfigure(t *testing.T) {
+func TestMaybeStartAgentAuthStartsWhenClaudeCredentialsNeedConfigure(t *testing.T) {
 	t.Parallel()
 
 	gate := &stubAgentAuthGate{
 		statusState: hubui.AgentAuthState{
+			Required:         true,
+			Ready:            false,
+			State:            "needs_configure",
+			ConfigureCommand: claudeCredentialsConfigureCommand,
+		},
+		startState: hubui.AgentAuthState{
 			Required: true,
 			Ready:    false,
-			State:    "needs_configure",
+			State:    "pending_browser_login",
 		},
 	}
 
@@ -286,8 +292,32 @@ func TestMaybeStartAgentAuthSkipsWhenClaudeNeedsManualConfigure(t *testing.T) {
 		func(string, ...any) {},
 	)
 
-	if got := gate.startCalls; got != 0 {
-		t.Fatalf("startCalls = %d, want 0", got)
+	if got, want := gate.startCalls, 1; got != want {
+		t.Fatalf("startCalls = %d, want %d", got, want)
+	}
+}
+
+func TestMaybeStartAgentAuthSkipsWhenClaudeNeedsGitHubTokenConfigure(t *testing.T) {
+	t.Parallel()
+
+	gate := &stubAgentAuthGate{
+		statusState: hubui.AgentAuthState{
+			Required:         true,
+			Ready:            false,
+			State:            "needs_configure",
+			ConfigureCommand: claudeGitHubConfigureCommand,
+		},
+	}
+
+	maybeStartAgentAuth(
+		context.Background(),
+		agentruntime.Runtime{Harness: agentruntime.HarnessClaude, Command: "claude"},
+		gate,
+		func(string, ...any) {},
+	)
+
+	if got, want := gate.startCalls, 0; got != want {
+		t.Fatalf("startCalls = %d, want %d", got, want)
 	}
 }
 
