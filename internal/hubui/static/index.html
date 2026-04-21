@@ -463,21 +463,21 @@
         <div id="agent-auth-browser-code" class="hidden space-y-2">
           <div id="agent-auth-browser-commands" class="space-y-2">
             <div class="agent-auth-command-box agent-auth-command-box-inline">
-              <code id="agent-auth-browser-command-primary" class="agent-auth-command-text agent-auth-command-text-inline">claude setup-token</code>
+              <code id="agent-auth-browser-command-primary" class="agent-auth-command-text agent-auth-command-text-inline">cat ~/.claude/.credentials.json</code>
               <button
                 id="agent-auth-browser-command-primary-copy"
                 class="agent-auth-copy agent-auth-command-copy rounded-md p-2"
                 type="button"
-                aria-label="Copy claude setup-token command"
-                title="Copy claude setup-token command">
+                aria-label="Copy Claude credentials command"
+                title="Copy Claude credentials command">
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <path d="M9 9h11v11H9z"></path>
                   <path d="M4 15H3V4h11v1"></path>
                 </svg>
-                <span class="sr-only">Copy claude setup-token command</span>
+                <span class="sr-only">Copy Claude credentials command</span>
               </button>
             </div>
-            <div class="text-sm text-hub-text/80">If already signed in, paste credentials output</div>
+            <div class="text-sm text-hub-text/80">If credentials use config directory, paste this output</div>
             <div class="agent-auth-command-box">
               <code id="agent-auth-browser-command-secondary" class="agent-auth-command-text">if [ -f ~/.claude/.credentials.json ]; then cat ~/.claude/.credentials.json; else cat ~/.config/claude/.credentials.json; fi</code>
               <button
@@ -537,7 +537,7 @@
         <div>
           <h2 id="hub-setup-title" class="text-[2rem] font-semibold leading-tight text-hub-text">Connect Molten Hub</h2>
           <p id="hub-setup-message" class="mt-3 max-w-xl text-base leading-7 text-hub-text/85">Connect this runtime to Molten Hub.</p>
-          <p id="hub-setup-copy" class="hub-setup-copy">Existing agents use an agent token. New agents use a bind token, then save display name, emoji, and profile details for the selected region.</p>
+          <p id="hub-setup-copy" class="hub-setup-copy">Paste a Molten Hub token. Agent tokens start with t_; bind tokens start with b_ and show profile setup fields.</p>
         </div>
         <button id="hub-setup-close" class="task-fullscreen-close !relative !top-0 !right-0 !flex" type="button" aria-label="Close Molten Hub setup" title="Close Molten Hub setup">
           <span class="task-fullscreen-close-icon" aria-hidden="true">&times;</span>
@@ -556,19 +556,9 @@
           </div>
         </div>
 
-        <div id="hub-setup-connect-agent-row" class="hub-setup-toggle-row">
-          <div class="hub-setup-toggle-heading">
-            <span class="prompt-label">Agent</span>
-          </div>
-          <div class="hub-setup-toggle-group" role="tablist" aria-label="Agent">
-            <button id="hub-setup-existing-toggle" class="hub-setup-toggle active" type="button" data-agent-mode="existing" aria-pressed="true">Existing</button>
-            <button id="hub-setup-new-toggle" class="hub-setup-toggle" type="button" data-agent-mode="new" aria-pressed="false">New</button>
-          </div>
-        </div>
-
         <label id="hub-setup-token-field" class="prompt-field">
           <span id="hub-setup-token-label" class="prompt-label">Agent Token</span>
-          <input id="hub-setup-token" class="prompt-control prompt-input w-full font-mono text-[0.84rem]" type="text" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Paste agent token">
+          <input id="hub-setup-token" class="prompt-control prompt-input w-full font-mono text-[0.84rem]" type="text" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Paste agent token or bind token">
         </label>
 
         <div id="hub-setup-new-agent-fields" class="hub-setup-profile-grid hidden">
@@ -1051,6 +1041,13 @@
       };
     }
 
+    function hubSetupModeForToken(token, fallback = state.hubSetup.agentMode) {
+      const trimmed = String(token || "").trim().toLowerCase();
+      if (trimmed.startsWith("b_")) return "new";
+      if (trimmed.startsWith("t_")) return "existing";
+      return normalizeHubSetup({ agent_mode: fallback }).agentMode === "new" ? "new" : "existing";
+    }
+
     function defaultHubSetupOnboarding(agentMode) {
       const isNew = String(agentMode || "").trim() === "new";
       return [
@@ -1135,7 +1132,7 @@
     }
 
     function currentHubSetupTokenPlaceholder() {
-      return state.hubSetup.agentMode === "new" ? "Paste bind token" : "Paste agent token";
+      return "Paste agent token or bind token";
     }
 
     function currentHubSetupSupportingCopy() {
@@ -1143,9 +1140,9 @@
         return "Update how this runtime appears in Molten Hub. The handle stays stable; display name, emoji, and profile text can change.";
       }
       if (state.hubSetup.agentMode === "new") {
-        return "Paste a bind token to redeem a new agent credential, then save the runtime profile for the selected region.";
+        return "Bind token detected. Save handle, display name, emoji, and profile details for the selected region.";
       }
-      return "Paste an existing agent token to reconnect this runtime while preserving the current Molten Hub identity.";
+      return "Agent token detected. Connect this runtime while preserving the current Molten Hub identity.";
     }
 
     function currentHubSetupAutoSubmitKey() {
@@ -1539,9 +1536,6 @@
     const hubSetupCopy = document.getElementById("hub-setup-copy");
     const hubSetupClose = document.getElementById("hub-setup-close");
     const hubSetupConnectRegionRow = document.getElementById("hub-setup-connect-region-row");
-    const hubSetupConnectAgentRow = document.getElementById("hub-setup-connect-agent-row");
-    const hubSetupExistingToggle = document.getElementById("hub-setup-existing-toggle");
-    const hubSetupNewToggle = document.getElementById("hub-setup-new-toggle");
     const hubSetupRegionNAToggle = document.getElementById("hub-setup-region-na-toggle");
     const hubSetupRegionEUToggle = document.getElementById("hub-setup-region-eu-toggle");
     const hubSetupTokenField = document.getElementById("hub-setup-token-field");
@@ -1935,8 +1929,6 @@
     function setHubSetupBusy(busy) {
       state.hubSetupBusy = Boolean(busy);
       if (hubSetupForm) hubSetupForm.setAttribute("aria-busy", state.hubSetupBusy ? "true" : "false");
-      if (hubSetupExistingToggle) hubSetupExistingToggle.disabled = state.hubSetupBusy;
-      if (hubSetupNewToggle) hubSetupNewToggle.disabled = state.hubSetupBusy;
       if (hubSetupRegionNAToggle) hubSetupRegionNAToggle.disabled = state.hubSetupBusy;
       if (hubSetupRegionEUToggle) hubSetupRegionEUToggle.disabled = state.hubSetupBusy;
       if (hubSetupClose) hubSetupClose.disabled = state.hubSetupBusy;
@@ -2056,14 +2048,6 @@
       }
 
       const isNew = state.hubSetup.agentMode === "new";
-      if (hubSetupExistingToggle) {
-        hubSetupExistingToggle.classList.toggle("active", !isNew);
-        hubSetupExistingToggle.setAttribute("aria-pressed", String(!isNew));
-      }
-      if (hubSetupNewToggle) {
-        hubSetupNewToggle.classList.toggle("active", isNew);
-        hubSetupNewToggle.setAttribute("aria-pressed", String(isNew));
-      }
       if (hubSetupRegionNAToggle) {
         const selected = state.hubSetup.region !== "eu";
         hubSetupRegionNAToggle.classList.toggle("active", selected);
@@ -2079,9 +2063,6 @@
       }
       if (hubSetupConnectRegionRow) {
         hubSetupConnectRegionRow.classList.toggle("hidden", profileEditor);
-      }
-      if (hubSetupConnectAgentRow) {
-        hubSetupConnectAgentRow.classList.toggle("hidden", profileEditor);
       }
       if (hubSetupTokenField) {
         hubSetupTokenField.classList.toggle("hidden", profileEditor);
@@ -2136,7 +2117,10 @@
     }
 
     function currentHubSetupPayload() {
-      const isNew = state.hubSetup.agentMode === "new";
+      const inferredMode = isHubProfileDialogMode()
+        ? state.hubSetup.agentMode
+        : hubSetupModeForToken(hubSetupToken?.value, state.hubSetup.agentMode);
+      const isNew = inferredMode === "new";
       return {
         agent_mode: isNew ? "new" : "existing",
         token_type: isNew ? "bind" : "agent",
@@ -2490,8 +2474,14 @@
 
     function isClaudeGitHubConfigureState(auth) {
       const current = auth && typeof auth === "object" ? auth : state.agentAuth;
-      const harness = authHarness(current);
-      return isManualConfigureState(current) && (harness === "claude" || isGitHubTokenConfigureState(current));
+      return isManualConfigureState(current) && isGitHubTokenConfigureState(current);
+    }
+
+    function isClaudeCredentialsConfigureState(auth) {
+      const current = auth && typeof auth === "object" ? auth : state.agentAuth;
+      return authHarness(current) === "claude" &&
+        isManualConfigureState(current) &&
+        !isGitHubTokenConfigureState(current);
     }
 
     function isGitHubTokenConfigureState(auth) {
@@ -2805,6 +2795,7 @@
       const needsHarnessSelection = isHarnessSelectionState(state.agentAuth);
       const needsAuggieConfigure = isAuggieConfigureState(state.agentAuth);
       const needsClaudeGitHubConfigure = isClaudeGitHubConfigureState(state.agentAuth);
+      const needsClaudeCredentialsConfigure = isClaudeCredentialsConfigureState(state.agentAuth);
 
       if (state.agentAuthChallengeKey !== challengeKey) {
         state.agentAuthChallengeKey = challengeKey;
@@ -2855,6 +2846,8 @@
           agentAuthTitle.textContent = "Setup Pi";
         } else if (needsClaudeGitHubConfigure) {
           agentAuthTitle.textContent = "Setup GitHub";
+        } else if (needsClaudeCredentialsConfigure) {
+          agentAuthTitle.textContent = "Setup Claude";
         } else if (requiresManualConfigure) {
           agentAuthTitle.textContent = `${currentAgentLabel()} Configure`;
         } else if (currentAgentLabel() === "Claude Code") {
@@ -2947,6 +2940,8 @@
       if (agentAuthConfigureLabel) {
         if (needsClaudeGitHubConfigure) {
           agentAuthConfigureLabel.textContent = "Paste GitHub token";
+        } else if (needsClaudeCredentialsConfigure) {
+          agentAuthConfigureLabel.textContent = "Paste Claude credentials";
         } else if (needsPiConfigure) {
           agentAuthConfigureLabel.textContent = "Paste ~/.pi/agent/auth.json";
         } else {
@@ -2957,9 +2952,11 @@
       if (agentAuthConfigureInput) {
         const fallbackPlaceholder = needsAuggieConfigure
           ? '{"accessToken":"XXX","tenantURL":"https://YYY/","scopes":["email"]}'
-          : needsPiConfigure
-            ? "Paste ~/.pi/agent/auth.json contents..."
-            : "ghp_xxx";
+          : needsClaudeCredentialsConfigure
+            ? "Paste ~/.claude/.credentials.json contents or CLAUDE_CODE_OAUTH_TOKEN..."
+            : needsPiConfigure
+              ? "Paste ~/.pi/agent/auth.json contents..."
+              : "ghp_xxx";
         const placeholder = state.agentAuth.configurePlaceholder || fallbackPlaceholder;
         agentAuthConfigureInput.placeholder = placeholder;
         agentAuthConfigureInput.classList.toggle("agent-auth-configure-input-github", needsClaudeGitHubConfigure);
@@ -3027,7 +3024,7 @@
       const command = agentAuthBrowserCommandPrimary ? String(agentAuthBrowserCommandPrimary.textContent || "").trim() : "";
       await copyTextToClipboard(command, agentAuthBrowserCommandPrimaryCopy, {
         preserveContents: true,
-        copiedLabel: "Copied claude setup-token command",
+        copiedLabel: "Copied Claude credentials command",
       });
     }
 
@@ -3186,13 +3183,6 @@
         throw new Error("GitHub token does not belong in PI auth JSON. Paste ~/.pi/agent/auth.json instead.");
       }
       return value;
-    }
-
-    function shouldAutoStartClaudeSetupAfterGitHubConfigure(auth) {
-      const current = auth && typeof auth === "object" ? auth : state.agentAuth;
-      const harness = authHarness(current);
-      const gateState = String(current?.state || "").trim().toLowerCase();
-      return harness === "claude" && !current?.ready && gateState === "needs_browser_login";
     }
 
     async function requestAgentAuth(path, method, requestBody) {
@@ -3367,19 +3357,9 @@
       setAgentAuthVerifyPending(true);
       setAgentAuthBusy(true);
       try {
-        const configuredAuth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
+        const auth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
           github_token: token,
         });
-        let auth = configuredAuth;
-        if (shouldAutoStartClaudeSetupAfterGitHubConfigure(configuredAuth)) {
-          try {
-            auth = await requestAgentAuth("/api/agent-auth/start-device", "POST");
-          } catch (startErr) {
-            applyAgentAuthGate(configuredAuth);
-            const detail = startErr && startErr.message ? startErr.message : "Claude setup start failed.";
-            throw new Error(`GitHub token saved, but failed to start Claude setup: ${detail}`);
-          }
-        }
         applyAgentAuthGate(auth);
         await loadGitHubProfileLink();
         if (auth.ready) {
@@ -3395,6 +3375,40 @@
         const message = err && err.message ? err.message : "GitHub token configure failed.";
         setAgentAuthVerifyPending(false);
         clearAgentAuthConfigureInputIfSensitive();
+        setAuggieConfigureError(message);
+        setLocalPromptStatus("error", `${currentAgentLabel()} configure failed: ${message}`);
+      } finally {
+        setAgentAuthBusy(false);
+      }
+    }
+
+    async function configureClaudeCredentials() {
+      setAuggieConfigureError("");
+      const credentials = agentAuthConfigureInput ? String(agentAuthConfigureInput.value || "").trim() : "";
+      if (!credentials) {
+        setAuggieConfigureError("Paste Claude credentials first.");
+        return;
+      }
+
+      setAgentAuthVerifyPending(true);
+      setAgentAuthBusy(true);
+      try {
+        const auth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
+          value: credentials,
+        });
+        applyAgentAuthGate(auth);
+        if (auth.ready) {
+          setAuggieConfigureError("");
+          if (agentAuthConfigureInput) {
+            agentAuthConfigureInput.value = "";
+          }
+          setLocalPromptStatus("ok", `${currentAgentLabel()} auth is ready.`);
+        } else {
+          setAgentAuthVerifyPending(false);
+        }
+      } catch (err) {
+        const message = err && err.message ? err.message : "Claude credentials configure failed.";
+        setAgentAuthVerifyPending(false);
         setAuggieConfigureError(message);
         setLocalPromptStatus("error", `${currentAgentLabel()} configure failed: ${message}`);
       } finally {
@@ -3457,6 +3471,10 @@
         }
         if (isClaudeGitHubConfigureState()) {
           await configureClaudeGitHubToken();
+          return;
+        }
+        if (isClaudeCredentialsConfigureState()) {
+          await configureClaudeCredentials();
           return;
         }
         if (isClaudePendingBrowserLoginState()) {
@@ -7175,20 +7193,6 @@
         setHubSetupStatus("", "");
       });
     }
-    if (hubSetupExistingToggle) {
-      hubSetupExistingToggle.addEventListener("click", () => {
-        state.hubSetupLastAutoSubmitKey = "";
-        applyHubSetupState(currentHubSetupDraft({ agentMode: "existing" }));
-        scheduleHubSetupAutoSubmit();
-      });
-    }
-    if (hubSetupNewToggle) {
-      hubSetupNewToggle.addEventListener("click", () => {
-        state.hubSetupLastAutoSubmitKey = "";
-        applyHubSetupState(currentHubSetupDraft({ agentMode: "new" }));
-        clearHubSetupAutoSubmitTimer();
-      });
-    }
     if (hubSetupRegionNAToggle) {
       hubSetupRegionNAToggle.addEventListener("click", () => {
         state.hubSetupLastAutoSubmitKey = "";
@@ -7213,7 +7217,16 @@
       hubSetupForm.addEventListener("submit", submitHubSetup);
     }
     if (hubSetupToken) {
+      const syncHubSetupModeFromToken = () => {
+        const inferredMode = hubSetupModeForToken(hubSetupToken.value, state.hubSetup.agentMode);
+        if (inferredMode !== state.hubSetup.agentMode) {
+          applyHubSetupState(currentHubSetupDraft({ agentMode: inferredMode }));
+        } else {
+          applyHubSetupState(currentHubSetupDraft());
+        }
+      };
       hubSetupToken.addEventListener("input", () => {
+        syncHubSetupModeFromToken();
         if (currentHubSetupAutoSubmitKey() !== state.hubSetupLastAutoSubmitKey) {
           state.hubSetupLastAutoSubmitKey = "";
         }
@@ -7225,6 +7238,7 @@
       });
       hubSetupToken.addEventListener("paste", () => {
         window.setTimeout(() => {
+          syncHubSetupModeFromToken();
           if (currentHubSetupAutoSubmitKey() !== state.hubSetupLastAutoSubmitKey) {
             state.hubSetupLastAutoSubmitKey = "";
           }

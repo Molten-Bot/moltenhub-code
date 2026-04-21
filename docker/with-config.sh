@@ -61,7 +61,7 @@ resolve_hub_bootstrap_base_url() {
     hub_base_url_from_region "${hub_region}"
 }
 
-is_hub_config_json() {
+hub_config_status() {
     file_path="$1"
     if [ ! -f "${file_path}" ]; then
         return 1
@@ -129,7 +129,24 @@ try {
     "timeoutMs",
   ];
   const isHubConfig = hubKeys.some((key) => Object.prototype.hasOwnProperty.call(cfg, key));
-  process.exit(isHubConfig ? 0 : 1);
+  if (!isHubConfig) {
+    process.exit(1);
+  }
+  const rawBaseURL = typeof cfg.base_url === "string" ? cfg.base_url : (typeof cfg.baseUrl === "string" ? cfg.baseUrl : "");
+  const baseURL = rawBaseURL.trim();
+  if (baseURL !== "") {
+    try {
+      const parsed = new URL(baseURL);
+      const host = parsed.hostname.toLowerCase();
+      const path = parsed.pathname.replace(/\/+$/, "");
+      if (parsed.protocol !== "https:" || parsed.port !== "" || !host.endsWith(".hub.molten.bot") || host.split(".").length !== 4 || path !== "/v1") {
+        process.exit(2);
+      }
+    } catch (_) {
+      process.exit(2);
+    }
+  }
+  process.exit(0);
 } catch (_) {
   process.exit(1);
 }
@@ -161,10 +178,16 @@ try_run_hub_from_env() {
 }
 
 if [ -f "${run_config_path}" ]; then
-    if is_hub_config_json "${run_config_path}"; then
+    if hub_config_status "${run_config_path}"; then
         exec_hub --config "${run_config_path}"
+    else
+        hub_status=$?
+        if [ "${hub_status}" = "2" ]; then
+            echo "invalid hub config at ${run_config_path}; skipping persisted hub config" >&2
+        else
+            exec harness run --config "${run_config_path}"
+        fi
     fi
-    exec harness run --config "${run_config_path}"
 fi
 
 if [ -f "${init_config_path}" ]; then

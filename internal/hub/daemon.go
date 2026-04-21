@@ -125,9 +125,10 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	d.logf("hub.connection status=configured base_url=%s", cfg.BaseURL)
 	d.logf("hub.auth status=ok")
 	if err := SaveRuntimeConfigHubSettings(runtimeCfgPath, cfg, token); err != nil {
-		return fmt.Errorf("hub runtime config: %w", err)
+		d.logf("hub.runtime_config status=warn action=save err=%q", err)
+	} else {
+		d.logf("hub.runtime_config status=saved path=%s", runtimeCfgPath)
 	}
-	d.logf("hub.runtime_config status=saved path=%s", runtimeCfgPath)
 
 	libraryCatalog, libraryErr := library.LoadCatalog(library.DefaultDir)
 	orderedLibrarySummaries := []library.TaskSummary{}
@@ -988,6 +989,8 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 	}
 	if res.Err != nil {
 		result["error"] = res.Err.Error()
+		result["Failure"] = "task failed"
+		result["Error details"] = res.Err.Error()
 	}
 
 	payload := map[string]any{
@@ -1003,11 +1006,15 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 	if res.Err != nil {
 		errText := res.Err.Error()
 		payload["error"] = errText
+		payload["Failure"] = "task failed"
+		payload["Error details"] = errText
 		payload["failure"] = map[string]any{
-			"status":  "failed",
-			"message": message,
-			"error":   errText,
-			"details": result,
+			"status":        "failed",
+			"message":       message,
+			"error":         errText,
+			"Failure":       "task failed",
+			"Error details": errText,
+			"details":       result,
 		}
 	}
 	if dispatch.ReplyTo != "" {

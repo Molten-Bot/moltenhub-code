@@ -2626,7 +2626,9 @@ func isNonFatalValidationToolingFailure(detail string, res execx.Result) bool {
 
 	testSuiteUnavailable := strings.Contains(text, "could not run automated test suite") ||
 		strings.Contains(text, "could not run automated tests") ||
-		strings.Contains(text, "unable to run automated test suite")
+		strings.Contains(text, "unable to run automated test suite") ||
+		strings.Contains(text, "validation unavailable in runtime") ||
+		strings.Contains(text, "validation tooling unavailable")
 	if !testSuiteUnavailable {
 		return false
 	}

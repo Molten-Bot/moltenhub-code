@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -103,7 +104,8 @@ func TestSaveRuntimeConfigDefaultsSessionKey(t *testing.T) {
 	path := filepath.Join(dir, "moltenhub", "config.json")
 
 	err := SaveRuntimeConfig(path, InitConfig{
-		BaseURL: "https://na.hub.molten.bot/v1",
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		AgentHarness: "codex",
 	}, "agent_123")
 	if err != nil {
 		t.Fatalf("SaveRuntimeConfig() error = %v", err)
@@ -129,11 +131,46 @@ func TestSaveRuntimeConfigDefaultsBaseURLAndRequiresToken(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "moltenhub", "config.json")
 
-	if err := SaveRuntimeConfig(path, InitConfig{}, "agent_123"); err != nil {
+	if err := SaveRuntimeConfig(path, InitConfig{AgentHarness: "codex"}, "agent_123"); err != nil {
 		t.Fatalf("SaveRuntimeConfig() with default base URL error = %v", err)
 	}
-	if err := SaveRuntimeConfig(path, InitConfig{BaseURL: "https://na.hub.molten.bot/v1"}, ""); err == nil {
+	if err := SaveRuntimeConfig(path, InitConfig{BaseURL: "https://na.hub.molten.bot/v1", AgentHarness: "codex"}, ""); err == nil {
 		t.Fatal("expected error for empty token")
+	}
+}
+
+func TestSaveRuntimeConfigRejectsUnboundAgent(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "moltenhub", "config.json")
+	err := SaveRuntimeConfig(path, InitConfig{BaseURL: "https://na.hub.molten.bot/v1"}, "agent_123")
+	if err == nil {
+		t.Fatal("SaveRuntimeConfig() error = nil, want non-nil")
+	}
+	if got := err.Error(); got != unboundAgentRuntimeErrorMessage {
+		t.Fatalf("SaveRuntimeConfig() error = %q, want %q", got, unboundAgentRuntimeErrorMessage)
+	}
+	if _, statErr := os.Stat(path); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("config file stat error = %v, want not exist", statErr)
+	}
+}
+
+func TestSaveRuntimeConfigRejectsNonHubPersistedBaseURL(t *testing.T) {
+	t.Setenv(allowNonMoltenHubBaseURLEnvName, "1")
+
+	path := filepath.Join(t.TempDir(), "moltenhub", "config.json")
+	err := SaveRuntimeConfig(path, InitConfig{
+		BaseURL:      "http://127.0.0.1:41099/v1",
+		AgentHarness: "codex",
+	}, "agent_123")
+	if err == nil {
+		t.Fatal("SaveRuntimeConfig() error = nil, want non-nil")
+	}
+	if got := err.Error(); !strings.Contains(got, "base_url must use https") {
+		t.Fatalf("SaveRuntimeConfig() error = %q, want https base_url error", got)
+	}
+	if _, statErr := os.Stat(path); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("config file stat error = %v, want not exist", statErr)
 	}
 }
 
@@ -303,8 +340,9 @@ func TestSaveRuntimeConfigPreservesLibraryTaskUsage(t *testing.T) {
 	}
 
 	if err := SaveRuntimeConfig(path, InitConfig{
-		BaseURL:    "https://na.hub.molten.bot/v1",
-		SessionKey: "main",
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		AgentHarness: "codex",
+		SessionKey:   "main",
 	}, "agent_123"); err != nil {
 		t.Fatalf("SaveRuntimeConfig() error = %v", err)
 	}
