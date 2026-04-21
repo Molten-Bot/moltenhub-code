@@ -93,8 +93,8 @@
           <span id="hub-conn-dot" class="dot"></span>
           <span id="hub-conn-text" class="status-tooltip text-xs leading-tight">Molten Hub: Waiting for hub status...</span>
         </div>
-        <div class="status-item status-item-metrics flex h-10 min-h-[40px] items-center rounded-full border border-hub-border bg-hub-panel/75 px-3 py-1">
-          <span class="metric-chip">
+        <div id="resource-metrics-item" class="status-item status-item-metrics flex h-10 min-h-[40px] items-center rounded-full border border-hub-border bg-hub-panel/75 px-3 py-1" hidden>
+          <span id="resource-cpu-chip" class="metric-chip" hidden>
             <span id="resource-cpu-icon" class="metric-icon metric-icon-neutral" aria-hidden="true">
               <svg viewBox="0 0 24 24" focusable="false">
                 <path d="M7 3h2v2h6V3h2v2h2a2 2 0 0 1 2 2v2h-2V7H5v2H3V7a2 2 0 0 1 2-2h2V3Zm12 12h2v2a2 2 0 0 1-2 2h-2v2h-2v-2H9v2H7v-2H5a2 2 0 0 1-2-2v-2h2v2h14v-2Zm-14-3h14V9H5v3Zm5-2h4v2h-4v-2Z"></path>
@@ -105,7 +105,7 @@
               <span id="resource-cpu-text" class="status-value metric-value text-sm leading-tight">--</span>
             </span>
           </span>
-          <span class="metric-chip">
+          <span id="resource-mem-chip" class="metric-chip" hidden>
             <span id="resource-mem-icon" class="metric-icon metric-icon-neutral" aria-hidden="true">
               <svg viewBox="0 0 24 24" focusable="false">
                 <path d="M4 7h16a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-1v2h-2v-2H7v2H5v-2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Zm0 2v6h16V9H4Zm2 1h2v4H6v-4Zm4 0h2v4h-2v-4Zm4 0h2v4h-2v-4Zm4 0h2v4h-2v-4Z"></path>
@@ -116,7 +116,7 @@
               <span id="resource-mem-text" class="status-value metric-value text-sm leading-tight">--</span>
             </span>
           </span>
-          <span class="metric-chip">
+          <span id="resource-disk-chip" class="metric-chip" hidden>
             <span id="resource-disk-icon" class="metric-icon metric-icon-neutral" aria-hidden="true">
               <svg viewBox="0 0 24 24" focusable="false">
                 <path d="M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 2v12h14V6H5Zm2 2h10v2H7V8Zm0 4h10v4H7v-4Zm2 1.5v1h2v-1H9Z"></path>
@@ -1393,6 +1393,11 @@
       hubSetupDialogMode: "connect",
       hubSetupAutoSubmitTimer: 0,
       hubSetupLastAutoSubmitKey: "",
+      resourceMetricVisible: {
+        cpu: false,
+        mem: false,
+        disk: false,
+      },
     };
     let agentAuthRefreshTimer = null;
     let agentAuthAutoSubmitTimer = null;
@@ -1411,6 +1416,10 @@
     const hubConnItem = document.getElementById("hub-conn-item");
     const hubConnDot = document.getElementById("hub-conn-dot");
     const hubConnText = document.getElementById("hub-conn-text");
+    const resourceMetricsItem = document.getElementById("resource-metrics-item");
+    const resourceCPUChip = document.getElementById("resource-cpu-chip");
+    const resourceMemChip = document.getElementById("resource-mem-chip");
+    const resourceDiskChip = document.getElementById("resource-disk-chip");
     const resourceCPUIcon = document.getElementById("resource-cpu-icon");
     const resourceCPUText = document.getElementById("resource-cpu-text");
     const resourceMemIcon = document.getElementById("resource-mem-icon");
@@ -3398,6 +3407,31 @@
       iconNode.classList.add(metricSeverityClass(value));
     }
 
+    function markMetricVisible(metric, value) {
+      if (!state.resourceMetricVisible || typeof state.resourceMetricVisible !== "object") {
+        return Number.isFinite(value) && value > 0;
+      }
+      if (Number.isFinite(value) && value > 0) {
+        state.resourceMetricVisible[metric] = true;
+      }
+      return state.resourceMetricVisible[metric] === true;
+    }
+
+    function setMetricChipVisibility(showCPU, showMem, showDisk) {
+      if (resourceCPUChip) {
+        resourceCPUChip.hidden = !showCPU;
+      }
+      if (resourceMemChip) {
+        resourceMemChip.hidden = !showMem;
+      }
+      if (resourceDiskChip) {
+        resourceDiskChip.hidden = !showDisk;
+      }
+      if (resourceMetricsItem) {
+        resourceMetricsItem.hidden = !(showCPU || showMem || showDisk);
+      }
+    }
+
     function setMetricText(cpu, mem, disk) {
       if (resourceCPUText) {
         resourceCPUText.textContent = formatCompactMetricNumber(cpu, "%");
@@ -3424,18 +3458,25 @@
         ? snapshot.resources
         : null;
       if (!resources) {
+        const showCPU = Boolean(state.resourceMetricVisible && state.resourceMetricVisible.cpu);
+        const showMem = Boolean(state.resourceMetricVisible && state.resourceMetricVisible.mem);
+        const showDisk = Boolean(state.resourceMetricVisible && state.resourceMetricVisible.disk);
+        setMetricChipVisibility(showCPU, showMem, showDisk);
         setMetricText(NaN, NaN, NaN);
         return;
       }
 
-      const cpu = Number(resources.cpu_percent);
-      const mem = Number(resources.memory_percent);
-      const disk = Number(resources.disk_io_mb_s);
-      if (!Number.isFinite(cpu) && !Number.isFinite(mem) && !Number.isFinite(disk)) {
-        setMetricText(NaN, NaN, NaN);
-        return;
-      }
-      setMetricText(cpu, mem, disk);
+      const cpuRaw = Number(resources.cpu_percent);
+      const memRaw = Number(resources.memory_percent);
+      const diskRaw = Number(resources.disk_io_mb_s);
+      const cpu = Number.isFinite(cpuRaw) ? cpuRaw : 0;
+      const mem = Number.isFinite(memRaw) ? memRaw : 0;
+      const disk = Number.isFinite(diskRaw) ? diskRaw : 0;
+      const showCPU = markMetricVisible("cpu", cpu);
+      const showMem = markMetricVisible("mem", mem);
+      const showDisk = markMetricVisible("disk", disk);
+      setMetricChipVisibility(showCPU, showMem, showDisk);
+      setMetricText(showCPU ? cpu : NaN, showMem ? mem : NaN, showDisk ? disk : NaN);
     }
 
     function escapeLiteralNewlinesInJSONStrings(raw) {

@@ -66,6 +66,7 @@ type defaultResourceSampler struct {
 
 	diskSamplingConfigured bool
 	diskSamplingEnabled    bool
+	diskZeroTotalSamples   int
 }
 
 // NewAdaptiveDispatchController returns a queue-aware, adaptive dispatcher.
@@ -505,6 +506,16 @@ func (s *defaultResourceSampler) sampleLinux() (resourceSample, error) {
 		if err != nil {
 			return resourceSample{}, err
 		}
+		if shouldDisableLinuxDiskSamplingForZeroTotals(diskTotalBytes, s.diskZeroTotalSamples) {
+			s.diskSamplingEnabled = false
+			s.haveDisk = false
+			return sample, nil
+		}
+		if diskTotalBytes == 0 {
+			s.diskZeroTotalSamples++
+		} else {
+			s.diskZeroTotalSamples = 0
+		}
 		now := time.Now()
 		if s.haveDisk {
 			if elapsed := now.Sub(s.lastDiskTS).Seconds(); elapsed > 0 {
@@ -730,6 +741,13 @@ func shouldDisableLinuxDiskSampling(containerEnv string, markerFileExists bool, 
 		return true
 	}
 	return containsContainerCGroupMarker(cgroupSnapshot)
+}
+
+func shouldDisableLinuxDiskSamplingForZeroTotals(diskTotalBytes uint64, zeroTotalSamples int) bool {
+	if diskTotalBytes > 0 {
+		return false
+	}
+	return zeroTotalSamples >= 1
 }
 
 func linuxContainerMarkerFileExists() bool {

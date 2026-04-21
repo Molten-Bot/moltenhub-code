@@ -1087,6 +1087,19 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="resource-metrics-text"`) {
 		t.Fatalf("expected index html to include resource metrics indicator")
 	}
+	if !strings.Contains(markup, `id="resource-metrics-item"`) {
+		t.Fatalf("expected index html to include a dedicated metrics pill wrapper")
+	}
+	if !strings.Contains(markup, `id="resource-cpu-chip"`) ||
+		!strings.Contains(markup, `id="resource-mem-chip"`) ||
+		!strings.Contains(markup, `id="resource-disk-chip"`) {
+		t.Fatalf("expected index html to include dedicated cpu/mem/io metric chip wrappers")
+	}
+	if !strings.Contains(markup, `id="resource-cpu-chip" class="metric-chip" hidden`) ||
+		!strings.Contains(markup, `id="resource-mem-chip" class="metric-chip" hidden`) ||
+		!strings.Contains(markup, `id="resource-disk-chip" class="metric-chip" hidden`) {
+		t.Fatalf("expected index html to initialize metric chips hidden until valid samples are observed")
+	}
 	if strings.Contains(markup, `text-slate-200`) {
 		t.Fatalf("expected index html to remove hardcoded dark text utilities from studio and status surfaces")
 	}
@@ -1098,6 +1111,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "function renderResourceMetrics(") {
 		t.Fatalf("expected index html to include renderResourceMetrics handler")
+	}
+	if !strings.Contains(markup, "function markMetricVisible(") || !strings.Contains(markup, "function setMetricChipVisibility(") {
+		t.Fatalf("expected index html to include session-sticky metric visibility helpers")
+	}
+	if !strings.Contains(markup, "resourceMetricsItem.hidden = !(showCPU || showMem || showDisk);") {
+		t.Fatalf("expected index html to hide the full metrics pill when no metric has valid samples")
+	}
+	if !strings.Contains(markup, "const showDisk = markMetricVisible(\"disk\", disk);") {
+		t.Fatalf("expected index html to keep I/O metric hidden until a non-zero sample arrives")
 	}
 	if !strings.Contains(markup, "function formatCompactMetricNumber(") {
 		t.Fatalf("expected index html to include compact metric formatter")
