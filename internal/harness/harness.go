@@ -3521,7 +3521,7 @@ func ghRepoForkCommand(repoDir, repo string) execx.Command {
 	return execx.Command{
 		Dir:  repoDir,
 		Name: "gh",
-		Args: []string{"repo", "fork", strings.TrimSpace(repo), "--clone=false", "--remote=false"},
+		Args: []string{"repo", "fork", strings.TrimSpace(repo)},
 	}
 }
 
