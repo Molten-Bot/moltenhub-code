@@ -134,9 +134,11 @@ func (g *selectableAgentAuthGate) Configure(ctx context.Context, rawInput string
 	if !selectionLocked {
 		if selectionState.State == "needs_configure" {
 			token, failureState, tokenErr := configureGitHubToken(
+				ctx,
 				"",
 				g.runtimeConfigPath,
 				activeCfg,
+				g.runner,
 				rawInput,
 				"GitHub token is required.",
 			)

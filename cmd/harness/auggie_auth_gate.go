@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
+	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
 	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
 )
@@ -22,6 +23,8 @@ const (
 
 type auggieAuthGate struct {
 	mu sync.Mutex
+
+	runner execx.Runner
 
 	runtimeConfigPath string
 	initCfg           hub.InitConfig
@@ -36,7 +39,12 @@ type auggieSessionAuth struct {
 }
 
 func newAuggieAuthGate(runtimeConfigPath string, initCfg hub.InitConfig) *auggieAuthGate {
+	return newAuggieAuthGateWithRunner(nil, runtimeConfigPath, initCfg)
+}
+
+func newAuggieAuthGateWithRunner(runner execx.Runner, runtimeConfigPath string, initCfg hub.InitConfig) *auggieAuthGate {
 	g := &auggieAuthGate{
+		runner:            runner,
 		runtimeConfigPath: strings.TrimSpace(runtimeConfigPath),
 		initCfg:           initCfg,
 	}
@@ -69,7 +77,7 @@ func (g *auggieAuthGate) Verify(_ context.Context) (hubui.AgentAuthState, error)
 	return g.refreshAndSnapshot()
 }
 
-func (g *auggieAuthGate) Configure(_ context.Context, rawInput string) (hubui.AgentAuthState, error) {
+func (g *auggieAuthGate) Configure(ctx context.Context, rawInput string) (hubui.AgentAuthState, error) {
 	if g == nil {
 		return readyAgentAuthState(), nil
 	}
@@ -84,14 +92,17 @@ func (g *auggieAuthGate) Configure(_ context.Context, rawInput string) (hubui.Ag
 	configureCommand := strings.TrimSpace(g.authState.configureCommand)
 	initCfg := g.initCfg
 	runtimeConfigPath := g.runtimeConfigPath
+	runner := g.runner
 	g.mu.Unlock()
 
 	if configureCommand == claudeGitHubConfigureCommand {
 		requiredMessage := "GitHub token is required."
 		token, state, err := configureGitHubToken(
+			ctx,
 			agentruntime.HarnessAuggie,
 			runtimeConfigPath,
 			initCfg,
+			runner,
 			rawInput,
 			requiredMessage,
 		)

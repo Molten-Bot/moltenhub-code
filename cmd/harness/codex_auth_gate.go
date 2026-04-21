@@ -352,7 +352,7 @@ func (g *codexAuthGate) Verify(ctx context.Context) (hubui.AgentAuthState, error
 	return g.snapshotLocked(), nil
 }
 
-func (g *codexAuthGate) Configure(_ context.Context, rawInput string) (hubui.AgentAuthState, error) {
+func (g *codexAuthGate) Configure(ctx context.Context, rawInput string) (hubui.AgentAuthState, error) {
 	if g == nil {
 		return readyAgentAuthState(), nil
 	}
@@ -360,12 +360,15 @@ func (g *codexAuthGate) Configure(_ context.Context, rawInput string) (hubui.Age
 	g.mu.Lock()
 	runtimeConfigPath := g.runtimeConfigPath
 	initCfg := g.initCfg
+	runner := g.runner
 	g.mu.Unlock()
 
 	token, failureState, err := configureGitHubToken(
+		ctx,
 		agentruntime.HarnessCodex,
 		runtimeConfigPath,
 		initCfg,
+		runner,
 		rawInput,
 		githubTokenPasteConfigureMessage,
 	)

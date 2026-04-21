@@ -1,18 +1,25 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
 	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
 )
 
 const githubTokenPasteConfigureMessage = "GitHub token is required."
+const githubTokenValidationTimeout = 12 * time.Second
+
+var githubTokenValidationMu sync.Mutex
 
 func readyAgentAuthState() hubui.AgentAuthState {
 	return hubui.AgentAuthState{
@@ -97,17 +104,17 @@ func githubTokenNeedsConfigureState(harness, message string) hubui.AgentAuthStat
 }
 
 func firstConfiguredGitHubToken(runtimeConfigPath string, initCfg hub.InitConfig) (value string, source string) {
+	if persisted := hub.ReadRuntimeConfigString(runtimeConfigPath, "github_token", "githubToken", "GITHUB_TOKEN"); persisted != "" {
+		return persisted, "runtime config"
+	}
+	if init := strings.TrimSpace(initCfg.GitHubToken); init != "" {
+		return init, "init config"
+	}
 	if env := strings.TrimSpace(os.Getenv("GH_TOKEN")); env != "" {
 		return env, "environment"
 	}
 	if env := strings.TrimSpace(os.Getenv("GITHUB_TOKEN")); env != "" {
 		return env, "environment"
-	}
-	if init := strings.TrimSpace(initCfg.GitHubToken); init != "" {
-		return init, "init config"
-	}
-	if persisted := hub.ReadRuntimeConfigString(runtimeConfigPath, "github_token", "githubToken", "GITHUB_TOKEN"); persisted != "" {
-		return persisted, "runtime config"
 	}
 	return "", ""
 }
@@ -138,8 +145,10 @@ func githubTokenRequirementState(harness, runtimeConfigPath string, initCfg hub.
 }
 
 func configureGitHubToken(
+	ctx context.Context,
 	harness, runtimeConfigPath string,
 	initCfg hub.InitConfig,
+	runner execx.Runner,
 	rawInput, requiredMessage string,
 ) (string, hubui.AgentAuthState, error) {
 	token := strings.TrimSpace(rawInput)
@@ -147,6 +156,10 @@ func configureGitHubToken(
 	if token == "" {
 		state := githubTokenNeedsConfigureState(harness, requiredMessage)
 		return "", state, fmt.Errorf("github token is required")
+	}
+	if err := validateGitHubToken(ctx, runner, token); err != nil {
+		state := githubTokenNeedsConfigureState(harness, err.Error())
+		return "", state, err
 	}
 
 	if err := hub.SaveRuntimeConfigGitHubToken(runtimeConfigPath, initCfg, token); err != nil {
@@ -159,6 +172,79 @@ func configureGitHubToken(
 	}
 
 	return token, hubui.AgentAuthState{}, nil
+}
+
+func validateGitHubToken(ctx context.Context, runner execx.Runner, token string) error {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return fmt.Errorf("github token is required")
+	}
+	if runner == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, githubTokenValidationTimeout)
+	defer cancel()
+
+	if err := withTemporaryGitHubTokenEnvironment(token, func() error {
+		_, runErr := runner.Run(probeCtx, execx.Command{Name: "gh", Args: []string{"auth", "status"}})
+		return runErr
+	}); err != nil {
+		return fmt.Errorf("validate github token: %w", err)
+	}
+	return nil
+}
+
+func withTemporaryGitHubTokenEnvironment(token string, run func() error) error {
+	if run == nil {
+		return nil
+	}
+
+	githubTokenValidationMu.Lock()
+	defer githubTokenValidationMu.Unlock()
+
+	previousGH, hadGH := os.LookupEnv("GH_TOKEN")
+	previousGitHub, hadGitHub := os.LookupEnv("GITHUB_TOKEN")
+
+	restore := func() error {
+		var restoreErr error
+		if hadGH {
+			restoreErr = errors.Join(restoreErr, os.Setenv("GH_TOKEN", previousGH))
+		} else {
+			restoreErr = errors.Join(restoreErr, os.Unsetenv("GH_TOKEN"))
+		}
+		if hadGitHub {
+			restoreErr = errors.Join(restoreErr, os.Setenv("GITHUB_TOKEN", previousGitHub))
+		} else {
+			restoreErr = errors.Join(restoreErr, os.Unsetenv("GITHUB_TOKEN"))
+		}
+		return restoreErr
+	}
+
+	if err := os.Setenv("GH_TOKEN", token); err != nil {
+		return fmt.Errorf("set temporary GH_TOKEN: %w", err)
+	}
+	if err := os.Setenv("GITHUB_TOKEN", token); err != nil {
+		if restoreErr := restore(); restoreErr != nil {
+			return fmt.Errorf("set temporary GITHUB_TOKEN: %v (restore env failed: %v)", err, restoreErr)
+		}
+		return fmt.Errorf("set temporary GITHUB_TOKEN: %w", err)
+	}
+
+	runErr := run()
+	restoreErr := restore()
+	if runErr != nil && restoreErr != nil {
+		return fmt.Errorf("%v (restore env failed: %v)", runErr, restoreErr)
+	}
+	if runErr != nil {
+		return runErr
+	}
+	if restoreErr != nil {
+		return fmt.Errorf("restore github token env: %w", restoreErr)
+	}
+	return nil
 }
 
 func firstNonEmptyString(values ...string) string {
