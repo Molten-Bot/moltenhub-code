@@ -19,8 +19,18 @@ func BoundAgentRuntime(initCfg InitConfig) (agentruntime.Runtime, error) {
 	return agentruntime.Resolve(harness, strings.TrimSpace(initCfg.AgentCommand))
 }
 
-// ApplyBoundAgentRuntime enforces single-agent binding for one run request.
+func hasBoundAgentRuntime(initCfg InitConfig) bool {
+	return strings.TrimSpace(initCfg.AgentHarness) != ""
+}
+
+// ApplyBoundAgentRuntime enforces single-agent binding for one run request when
+// this runtime already has a bound agent harness. If the runtime is still
+// unbound, the request config is passed through unchanged.
 func ApplyBoundAgentRuntime(runCfg config.Config, initCfg InitConfig) (config.Config, error) {
+	if !hasBoundAgentRuntime(initCfg) {
+		return runCfg, nil
+	}
+
 	runtime, err := BoundAgentRuntime(initCfg)
 	if err != nil {
 		return runCfg, err

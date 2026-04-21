@@ -34,6 +34,25 @@ func TestApplyBoundAgentRuntimeAppliesConfiguredDefaults(t *testing.T) {
 	}
 }
 
+func TestApplyBoundAgentRuntimeAllowsUnboundRuntime(t *testing.T) {
+	t.Parallel()
+
+	input := config.Config{
+		AgentHarness: "codex",
+		AgentCommand: "codex",
+	}
+	runCfg, err := ApplyBoundAgentRuntime(input, InitConfig{})
+	if err != nil {
+		t.Fatalf("ApplyBoundAgentRuntime() error = %v", err)
+	}
+	if got, want := runCfg.AgentHarness, input.AgentHarness; got != want {
+		t.Fatalf("AgentHarness = %q, want %q", got, want)
+	}
+	if got, want := runCfg.AgentCommand, input.AgentCommand; got != want {
+		t.Fatalf("AgentCommand = %q, want %q", got, want)
+	}
+}
+
 func TestApplyBoundAgentRuntimeRejectsConflictingHarnessOverride(t *testing.T) {
 	t.Parallel()
 
