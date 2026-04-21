@@ -1249,6 +1249,10 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	if !strings.Contains(html, "class=\"agent-auth-shell flex min-h-[220px] w-full max-w-xl flex-col\"") {
 		t.Fatalf("expected auth gate content to render inside a theme-aware auth shell")
 	}
+	if !strings.Contains(html, `id="agent-auth-shell"`) ||
+		!strings.Contains(html, `agentAuthShell.classList.toggle("agent-auth-github-shell", needsClaudeGitHubConfigure);`) {
+		t.Fatalf("expected GitHub token setup to use a narrower auth shell")
+	}
 	if !strings.Contains(html, "normalizeAuggieSessionAuthPayload") {
 		t.Fatalf("expected auggie configure JSON schema validator")
 	}
