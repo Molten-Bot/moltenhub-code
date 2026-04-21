@@ -40,22 +40,22 @@ const (
 	maxPRCheckRemediationAttempts = 3
 	prChecksWatchIntervalSeconds  = 10
 	// Allow up to ~3 minutes for newly-created PR checks to appear before remediation.
-	maxPRChecksNoReportRetries = 18
-	prChecksNoReportRetryDelay = 10 * time.Second
-	maxCheckSummaryChars       = 4000
-	defaultCIWorkflowPath      = ".github/workflows/ci.yml"
-	maxPushSyncAttempts        = 3
-	maxCloneAttempts           = 3
-	cloneRetryDelay            = 2 * time.Second
-	maxCloneErrorDetailChars   = 500
-	maxGitErrorDetailChars     = 500
-	maxReviewMetadataChars     = 12000
-	maxReviewCommentsChars     = 16000
-	maxReviewDiffStatChars     = 12000
-	maxReviewDiffPatchChars    = 30000
-	bootstrapGitUserName       = "MoltenHub Code"
-	bootstrapGitUserEmail      = "bot@molten.bot"
-	bootstrapMainCommitMessage = "chore: initialize main branch"
+	maxPRChecksNoReportRetries       = 18
+	prChecksNoReportRetryDelay       = 10 * time.Second
+	maxCheckSummaryChars             = 4000
+	defaultCIWorkflowPath            = ".github/workflows/ci.yml"
+	maxPushSyncAttempts              = 3
+	maxCloneAttempts                 = 3
+	cloneRetryDelay                  = 2 * time.Second
+	maxCloneErrorDetailChars         = 500
+	maxGitErrorDetailChars           = 500
+	maxReviewMetadataChars           = 12000
+	maxReviewCommentsChars           = 16000
+	maxReviewDiffStatChars           = 12000
+	maxReviewDiffPatchChars          = 30000
+	bootstrapGitUserName             = "MoltenHub Code"
+	bootstrapGitUserEmail            = "bot@molten.bot"
+	bootstrapMainCommitMessage       = "chore: initialize main branch"
 	agentsCredentialGuardInstruction = "YOU ARE NOT ALLOWED TO SHARE: GITHUB PAT and YOUR (AGENTS) AUTH CREDENTIALS"
 )
 
@@ -2185,6 +2185,14 @@ func (h Harness) runCodexWithHeartbeat(
 						)
 						return run.res, nil
 					}
+					if isRecoveredTransientRegistryLookupFailure(detail, run.res) {
+						h.logf(
+							"stage=%s status=warn action=recovered_transient_registry_lookup detail=%q",
+							agentStage,
+							detail,
+						)
+						return run.res, nil
+					}
 					return run.res, fmt.Errorf("%s reported failure: %s", agentStage, detail)
 				}
 			}
@@ -2334,6 +2342,39 @@ func isNonFatalValidationToolingFailure(detail string, res execx.Result) bool {
 		strings.Contains(text, "enoent") ||
 		strings.Contains(text, "cannot find module")
 	return missingTooling
+}
+
+func isRecoveredTransientRegistryLookupFailure(detail string, res execx.Result) bool {
+	text := strings.ToLower(strings.TrimSpace(strings.Join([]string{
+		detail,
+		res.Stdout,
+		res.Stderr,
+	}, "\n")))
+	if text == "" {
+		return false
+	}
+	if !strings.Contains(text, "one registry query command failed") {
+		return false
+	}
+	if !strings.Contains(text, "retry succeeded") {
+		return false
+	}
+
+	transientMarkers := []string{
+		"eai_again",
+		"getaddrinfo",
+		"transient dns/network",
+		"temporary failure in name resolution",
+		"network is unreachable",
+		"etimedout",
+		"econnreset",
+	}
+	for _, marker := range transientMarkers {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func codexExtractErrorDetail(output string) string {
