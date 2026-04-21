@@ -106,6 +106,20 @@ func TestShouldDisableLinuxDiskSampling(t *testing.T) {
 	}
 }
 
+func TestShouldDisableLinuxDiskSamplingForZeroTotals(t *testing.T) {
+	t.Parallel()
+
+	if shouldDisableLinuxDiskSamplingForZeroTotals(1024, 99) {
+		t.Fatal("shouldDisableLinuxDiskSamplingForZeroTotals(non-zero totals) = true, want false")
+	}
+	if shouldDisableLinuxDiskSamplingForZeroTotals(0, 0) {
+		t.Fatal("shouldDisableLinuxDiskSamplingForZeroTotals(first zero total) = true, want false")
+	}
+	if !shouldDisableLinuxDiskSamplingForZeroTotals(0, 1) {
+		t.Fatal("shouldDisableLinuxDiskSamplingForZeroTotals(repeated zero totals) = false, want true")
+	}
+}
+
 func TestContainsContainerCGroupMarker(t *testing.T) {
 	t.Parallel()
 
