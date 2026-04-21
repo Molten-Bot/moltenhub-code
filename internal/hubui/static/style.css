@@ -671,6 +671,7 @@ textarea {
 .panel {
   border-radius: 22px;
   overflow: hidden;
+  min-width: 0;
 }
 
 .panel-header,
@@ -1155,10 +1156,10 @@ body .right-col.prompt-collapsed.task-list-hidden {
 }
 
 .prompt-grid {
-  display: flex;
-  align-items: flex-end;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  align-items: end;
   gap: 12px;
-  flex-wrap: wrap;
   min-width: 0;
 }
 
@@ -1199,6 +1200,11 @@ body .right-col.prompt-collapsed.task-list-hidden {
   flex: 0 1 clamp(110px, 11%, 150px);
   min-width: 120px;
   max-width: clamp(120px, 12%, 160px);
+}
+
+.prompt-grid > .prompt-field {
+  min-width: 0;
+  max-width: none;
 }
 
 .prompt-label {
@@ -2524,17 +2530,7 @@ select.prompt-control {
   }
 
   .prompt-grid {
-    flex-wrap: wrap;
-  }
-
-  .prompt-field-repo-history,
-  .prompt-field-repository,
-  .prompt-field-base-branch,
-  .prompt-field-reviewer-history,
-  .prompt-field-target-subdir {
-    flex: 1 1 100%;
-    max-width: none;
-    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
   }
 
 }
