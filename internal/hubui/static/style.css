@@ -2190,6 +2190,7 @@ select.prompt-control {
   height: 9px;
   display: block;
   object-fit: contain;
+  filter: brightness(0) saturate(100%);
   pointer-events: none;
 }
 
@@ -2214,7 +2215,8 @@ select.prompt-control {
 
 .task-progress-step.current.has-icon {
   background: #fff;
-  border-color: rgba(10, 132, 255, 0.58);
+  border-color: rgba(0, 0, 0, 0.7);
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.14);
 }
 
 .task-progress-step.current .task-progress-step-icon {
