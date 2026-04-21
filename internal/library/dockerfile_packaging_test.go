@@ -28,8 +28,11 @@ func TestRuntimeDockerfileCopiesFullLibraryCatalog(t *testing.T) {
 	if !strings.Contains(content, "COPY library /opt/moltenhub/library") {
 		t.Fatalf("%s does not copy the full library directory into the runtime image", dockerfilePath)
 	}
-	if !strings.Contains(content, "COPY library /workspace/library") {
-		t.Fatalf("%s does not copy the full library directory into /workspace/library for hub runtime loading", dockerfilePath)
+	if !containsAny(content,
+		"COPY library /workspace/library",
+		"ln -s /opt/moltenhub/library /workspace/library",
+	) {
+		t.Fatalf("%s does not make the full library directory available at /workspace/library for hub runtime loading", dockerfilePath)
 	}
 	if strings.Contains(content, "COPY library/AGENTS.md /opt/moltenhub/library/AGENTS.md") {
 		t.Fatalf("%s still only copies library/AGENTS.md into the runtime image", dockerfilePath)
@@ -56,8 +59,11 @@ func TestRuntimeDockerfileCopiesSkillsCatalog(t *testing.T) {
 	if !strings.Contains(content, "COPY skills /opt/moltenhub/skills") {
 		t.Fatalf("%s does not copy the full skills directory into the runtime image", dockerfilePath)
 	}
-	if !strings.Contains(content, "COPY skills /workspace/skills") {
-		t.Fatalf("%s does not copy the full skills directory into /workspace/skills for hub runtime inspection", dockerfilePath)
+	if !containsAny(content,
+		"COPY skills /workspace/skills",
+		"ln -s /opt/moltenhub/skills /workspace/skills",
+	) {
+		t.Fatalf("%s does not make the full skills directory available at /workspace/skills for hub runtime inspection", dockerfilePath)
 	}
 }
 
@@ -80,6 +86,15 @@ func TestRuntimeDockerfileInstallsRipgrep(t *testing.T) {
 	if !strings.Contains(string(data), "ripgrep") {
 		t.Fatalf("%s does not install ripgrep in the runtime image", dockerfilePath)
 	}
+}
+
+func containsAny(content string, want ...string) bool {
+	for _, candidate := range want {
+		if strings.Contains(content, candidate) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestRuntimeDockerfileUsesAlpineBaseImages(t *testing.T) {
