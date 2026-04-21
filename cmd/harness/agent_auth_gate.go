@@ -35,9 +35,16 @@ func newConcreteAgentAuthGate(
 			logf,
 		)
 	case agentruntime.HarnessClaude:
-		return newClaudeAuthGateWithContextAndConfig(ctx, runtime.Command, initCfg.RuntimeConfigPath, initCfg, logf)
+		return newClaudeAuthGateWithContextAndConfigAndRunner(
+			ctx,
+			runner,
+			runtime.Command,
+			initCfg.RuntimeConfigPath,
+			initCfg,
+			logf,
+		)
 	case agentruntime.HarnessAuggie:
-		return newAuggieAuthGate(initCfg.RuntimeConfigPath, initCfg)
+		return newAuggieAuthGateWithRunner(runner, initCfg.RuntimeConfigPath, initCfg)
 	case agentruntime.HarnessPi:
 		return newPiAuthGateWithRuntime(runner, runtime.Command, initCfg.RuntimeConfigPath, initCfg, logf)
 	default:
