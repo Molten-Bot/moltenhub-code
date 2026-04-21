@@ -930,24 +930,57 @@
       svg.setAttribute("viewBox", "0 0 16 16");
       svg.setAttribute("aria-hidden", "true");
       svg.setAttribute("focusable", "false");
+      const iconType = String(type || "").trim().toLowerCase();
 
-      if (String(type || "").trim().toLowerCase() === "terminal") {
+      if (iconType === "terminal") {
         appendTaskIconPath(svg, "M2.25 3.25h11.5v8.5H2.25z");
-        appendTaskIconPath(svg, "M4.5 6.1L6.5 8 4.5 9.9");
-        appendTaskIconPath(svg, "M7.7 9.6h3.8");
-        appendTaskIconPath(svg, "M6.3 13h3.4");
+        appendTaskIconPath(svg, "M4.15 6.05 6.55 8 4.15 9.95");
+        appendTaskIconPath(svg, "M7.7 10h3.95");
         return svg;
       }
 
-      appendTaskIconCircle(svg, 8, 8, 2.15);
+      if (iconType === "play") {
+        appendTaskIconPath(svg, "M5.1 4.45L11.15 8 5.1 11.55Z", { fill: "currentColor", stroke: "none" });
+        return svg;
+      }
+
+      if (iconType === "pause") {
+        appendTaskIconPath(svg, "M5.8 4.45v7.1M10.2 4.45v7.1");
+        return svg;
+      }
+
+      if (iconType === "stop") {
+        appendTaskIconPath(svg, "M5 5h6v6H5z");
+        return svg;
+      }
+
+      if (iconType === "gear" || iconType === "") {
+        appendTaskIconPath(
+          svg,
+          "M8 1.6a.85.85 0 0 1 .82.6l.2.67c.39.1.76.25 1.1.45l.59-.35a.85.85 0 0 1 .99.13l1.15 1.15a.85.85 0 0 1 .13.99l-.35.59c.2.34.35.71.45 1.1l.67.2a.85.85 0 0 1 .6.82v1.64a.85.85 0 0 1-.6.82l-.67.2a4.4 4.4 0 0 1-.45 1.1l.35.59a.85.85 0 0 1-.13.99l-1.15 1.15a.85.85 0 0 1-.99.13l-.59-.35c-.34.2-.71.35-1.1.45l-.2.67a.85.85 0 0 1-.82.6H7.2a.85.85 0 0 1-.82-.6l-.2-.67a4.4 4.4 0 0 1-1.1-.45l-.59.35a.85.85 0 0 1-.99-.13l-1.15-1.15a.85.85 0 0 1-.13-.99l.35-.59a4.4 4.4 0 0 1-.45-1.1l-.67-.2a.85.85 0 0 1-.6-.82V7.2a.85.85 0 0 1 .6-.82l.67-.2c.1-.39.25-.76.45-1.1l-.35-.59a.85.85 0 0 1 .13-.99l1.15-1.15a.85.85 0 0 1 .99-.13l.59.35c.34-.2.71-.35 1.1-.45l.2-.67a.85.85 0 0 1 .82-.6Zm0 4.7a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4Z",
+          { fill: "currentColor", stroke: "none" },
+        );
+        return svg;
+      }
+
+      appendTaskIconCircle(svg, 8, 8, 4.4);
+      appendTaskIconCircle(svg, 8, 8, 2.2);
       appendTaskIconPath(svg, "M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6");
       appendTaskIconPath(svg, "M3.3 3.3l1.1 1.1M11.6 11.6l1.1 1.1M12.7 3.3l-1.1 1.1M4.4 11.6l-1.1 1.1");
       return svg;
     }
 
-    function appendTaskIconPath(svg, d) {
+    function appendTaskIconPath(svg, d, options = {}) {
       const path = document.createElementNS(SVG_NS, "path");
       path.setAttribute("d", d);
+      if (options && typeof options === "object") {
+        if (Object.prototype.hasOwnProperty.call(options, "fill")) {
+          path.setAttribute("fill", String(options.fill));
+        }
+        if (Object.prototype.hasOwnProperty.call(options, "stroke")) {
+          path.setAttribute("stroke", String(options.stroke));
+        }
+      }
       svg.appendChild(path);
     }
 
@@ -966,8 +999,8 @@
 
       if (status === "running" || status === "active") {
         badge.classList.add("badge-icon", "badge-running-icon");
-        badge.title = "Running: agent is actively working this task.";
-        badge.setAttribute("aria-label", "Running: agent is actively working this task.");
+        badge.title = "Running: task is actively executing.";
+        badge.setAttribute("aria-label", "Running: task is actively executing.");
         badge.appendChild(createTaskActionIcon("gear"));
         const hiddenLabel = document.createElement("span");
         hiddenLabel.className = "sr-only";
@@ -6551,8 +6584,8 @@
           const outputToggle = document.createElement("button");
           outputToggle.type = "button";
           outputToggle.className = "task-output-toggle task-icon-button";
-          outputToggle.title = "Open task output terminal.";
-          outputToggle.setAttribute("aria-label", "Open task output terminal.");
+          outputToggle.title = "Open task output terminal logs.";
+          outputToggle.setAttribute("aria-label", "Open task output terminal logs.");
           outputToggle.appendChild(createTaskActionIcon("terminal"));
           const outputLabel = document.createElement("span");
           outputLabel.className = "sr-only";
@@ -6575,10 +6608,14 @@
           if (canForceRun) {
             const forceStart = document.createElement("button");
             forceStart.type = "button";
-            forceStart.className = "task-control-toggle";
-            forceStart.textContent = "▶";
+            forceStart.className = "task-control-toggle task-icon-button";
             forceStart.title = "Force start this queued task now";
             forceStart.setAttribute("aria-label", "Force start task");
+            forceStart.appendChild(createTaskActionIcon("play"));
+            const forceStartLabel = document.createElement("span");
+            forceStartLabel.className = "sr-only";
+            forceStartLabel.textContent = "Force start";
+            forceStart.appendChild(forceStartLabel);
             forceStart.disabled = taskControlBusy;
             forceStart.addEventListener("click", (event) => {
               event.stopPropagation();
@@ -6589,10 +6626,14 @@
 
           const pauseRun = document.createElement("button");
           pauseRun.type = "button";
-          pauseRun.className = "task-control-toggle";
-          pauseRun.textContent = canRun ? "▶" : "||";
+          pauseRun.className = "task-control-toggle task-icon-button";
           pauseRun.title = canRun ? "Resume this queued task" : "Pause this queued task";
           pauseRun.setAttribute("aria-label", canRun ? "Run task" : "Pause task");
+          pauseRun.appendChild(createTaskActionIcon(canRun ? "play" : "pause"));
+          const pauseRunLabel = document.createElement("span");
+          pauseRunLabel.className = "sr-only";
+          pauseRunLabel.textContent = canRun ? "Run" : "Pause";
+          pauseRun.appendChild(pauseRunLabel);
           pauseRun.disabled = taskControlBusy;
           pauseRun.addEventListener("click", (event) => {
             event.stopPropagation();
@@ -6605,10 +6646,14 @@
           if (canStop) {
             const stop = document.createElement("button");
             stop.type = "button";
-            stop.className = "task-stop";
-            stop.textContent = "■";
-            stop.title = "Kill this task";
+            stop.className = "task-stop task-icon-button";
+            stop.title = "Stop this task";
             stop.setAttribute("aria-label", "Stop task");
+            stop.appendChild(createTaskActionIcon("stop"));
+            const stopLabel = document.createElement("span");
+            stopLabel.className = "sr-only";
+            stopLabel.textContent = "Stop";
+            stop.appendChild(stopLabel);
             stop.disabled = taskControlBusy;
             stop.addEventListener("click", (event) => {
               event.stopPropagation();
