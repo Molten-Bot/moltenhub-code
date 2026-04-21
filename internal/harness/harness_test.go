@@ -3307,6 +3307,56 @@ func TestRunCodexAllowsValidationToolingMissingFailure(t *testing.T) {
 	}
 }
 
+func TestRunCodexAllowsRecoveredTransientRegistryLookupFailure(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "update OPENCLAW_VERSION"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: One registry query command failed during extra metadata check.",
+				Stderr: "Error details: `npm error code EAI_AGAIN`, `getaddrinfo EAI_AGAIN registry.npmjs.org` (transient DNS/network), then retry succeeded.",
+			},
+		},
+	}}
+
+	h := New(fake)
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
+		t.Fatalf("runCodex() error = %v, want nil for recovered transient registry lookup failure", err)
+	}
+}
+
+func TestRunCodexReturnsErrorWhenTransientRegistryLookupDidNotRecover(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "update OPENCLAW_VERSION"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: One registry query command failed during extra metadata check.",
+				Stderr: "Error details: `npm error code EAI_AGAIN`, `getaddrinfo EAI_AGAIN registry.npmjs.org` (transient DNS/network).",
+			},
+		},
+	}}
+
+	h := New(fake)
+	err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", "")
+	if err == nil {
+		t.Fatal("runCodex() error = nil, want codex reported failure when transient registry lookup did not recover")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "codex reported failure") {
+		t.Fatalf("runCodex() error = %v, want codex reported failure marker", err)
+	}
+}
+
 func TestRunCodexReturnsTimeoutWhenAgentStageRunsTooLong(t *testing.T) {
 	t.Parallel()
 
