@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jef/moltenhub-code/internal/hub"
-	"github.com/jef/moltenhub-code/internal/hubui"
+	"github.com/Molten-Bot/moltenhub-code/internal/hub"
+	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
 )
 
 const githubTokenPasteConfigureMessage = "GitHub token is required."

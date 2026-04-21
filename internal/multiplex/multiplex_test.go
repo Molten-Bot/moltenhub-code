@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jef/moltenhub-code/internal/config"
-	"github.com/jef/moltenhub-code/internal/harness"
+	"github.com/Molten-Bot/moltenhub-code/internal/config"
+	"github.com/Molten-Bot/moltenhub-code/internal/harness"
 )
 
 func TestRunTracksStatusesFromHarnessLogs(t *testing.T) {

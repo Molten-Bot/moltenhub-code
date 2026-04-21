@@ -9,9 +9,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/jef/moltenhub-code/internal/agentruntime"
-	"github.com/jef/moltenhub-code/internal/hub"
-	"github.com/jef/moltenhub-code/internal/hubui"
+	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
+	"github.com/Molten-Bot/moltenhub-code/internal/hub"
+	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
 )
 
 const (

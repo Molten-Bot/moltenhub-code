@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jef/moltenhub-code/internal/hub"
+	"github.com/Molten-Bot/moltenhub-code/internal/hub"
 )
 
 const hubRuntimeConfigReloadInterval = 2 * time.Second

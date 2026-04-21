@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jef/moltenhub-code/internal/hub"
+	"github.com/Molten-Bot/moltenhub-code/internal/hub"
 )
 
 func TestLoadPersistedAuggieSessionAuthHandlesAliasesAndInvalidData(t *testing.T) {

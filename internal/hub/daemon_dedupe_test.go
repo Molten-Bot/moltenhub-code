@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jef/moltenhub-code/internal/config"
+	"github.com/Molten-Bot/moltenhub-code/internal/config"
 )
 
 func TestDispatchDeduperBeginDone(t *testing.T) {

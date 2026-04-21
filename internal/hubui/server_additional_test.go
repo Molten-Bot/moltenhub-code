@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jef/moltenhub-code/internal/library"
+	"github.com/Molten-Bot/moltenhub-code/internal/library"
 )
 
 func TestHandleHubSetupStatusAndConfigure(t *testing.T) {

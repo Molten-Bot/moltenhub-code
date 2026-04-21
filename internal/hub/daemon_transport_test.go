@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jef/moltenhub-code/internal/execx"
+	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 )
 
 func TestShouldFallbackToPull(t *testing.T) {

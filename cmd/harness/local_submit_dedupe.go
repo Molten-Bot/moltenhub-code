@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jef/moltenhub-code/internal/config"
+	"github.com/Molten-Bot/moltenhub-code/internal/config"
 )
 
 const localSubmissionDedupTTL = 2 * time.Hour

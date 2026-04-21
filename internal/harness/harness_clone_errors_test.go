@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jef/moltenhub-code/internal/execx"
+	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 )
 
 func TestCloneErrorWithDetails(t *testing.T) {

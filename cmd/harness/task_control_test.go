@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jef/moltenhub-code/internal/hubui"
+	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
 )
 
 func TestLocalTaskControllerPauseAndRun(t *testing.T) {
