@@ -136,8 +136,14 @@ func SaveRuntimeConfig(path string, initCfg InitConfig, token string) error {
 	cfg.AgentToken = token
 	cfg.LibraryTaskUsage = ReadRuntimeConfigLibraryTaskUsage(path)
 	cfg.ApplyDefaults()
+	if strings.TrimSpace(cfg.AgentHarness) == "" {
+		return fmt.Errorf(unboundAgentRuntimeErrorMessage)
+	}
 	if strings.TrimSpace(cfg.AgentToken) == "" && strings.TrimSpace(cfg.BindToken) == "" {
 		return fmt.Errorf("runtime config requires agent_token or bind_token")
+	}
+	if err := ValidatePersistedHubBaseURL(cfg.BaseURL); err != nil {
+		return err
 	}
 	if err := cfg.Validate(); err != nil {
 		return err
@@ -160,9 +166,15 @@ func SaveRuntimeConfigHubSettings(path string, initCfg InitConfig, resolvedAgent
 	}
 
 	initCfg.ApplyDefaults()
+	if strings.TrimSpace(initCfg.AgentHarness) == "" {
+		return fmt.Errorf(unboundAgentRuntimeErrorMessage)
+	}
 	resolvedAgentToken = strings.TrimSpace(resolvedAgentToken)
 	if resolvedAgentToken == "" && strings.TrimSpace(initCfg.BindToken) == "" {
 		return fmt.Errorf("runtime config requires agent_token or bind_token")
+	}
+	if err := ValidatePersistedHubBaseURL(initCfg.BaseURL); err != nil {
+		return err
 	}
 
 	doc, err := loadRuntimeConfigDoc(path, initCfg)

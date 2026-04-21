@@ -2,6 +2,7 @@ package hub
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -340,9 +341,10 @@ func TestSaveRuntimeConfigHubSettingsMergesHubFieldsWithoutDroppingExtras(t *tes
 	}
 
 	err := SaveRuntimeConfigHubSettings(path, InitConfig{
-		BaseURL:   "https://na.hub.molten.bot/v1",
-		BindToken: "bind_saved",
-		Handle:    "molten-builder",
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		BindToken:    "bind_saved",
+		AgentHarness: "codex",
+		Handle:       "molten-builder",
 		Profile: ProfileConfig{
 			ProfileText: "Builds things",
 			DisplayName: "Molten Builder",
@@ -405,8 +407,9 @@ func TestSaveRuntimeConfigHubSettingsClearsStaleBindTokenForAgentTokenFlow(t *te
 	}
 
 	err := SaveRuntimeConfigHubSettings(path, InitConfig{
-		BaseURL:    "https://na.hub.molten.bot/v1",
-		AgentToken: "agent_direct",
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		AgentToken:   "agent_direct",
+		AgentHarness: "codex",
 	}, "agent_direct")
 	if err != nil {
 		t.Fatalf("SaveRuntimeConfigHubSettings() error = %v", err)
@@ -441,8 +444,9 @@ func TestSaveRuntimeConfigHubSettingsPreservesConfiguredLogLevel(t *testing.T) {
 	}
 
 	if err := SaveRuntimeConfigHubSettings(path, InitConfig{
-		BaseURL:    "https://na.hub.molten.bot/v1",
-		AgentToken: "agent_direct",
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		AgentToken:   "agent_direct",
+		AgentHarness: "codex",
 	}, "agent_direct"); err != nil {
 		t.Fatalf("SaveRuntimeConfigHubSettings() error = %v", err)
 	}
@@ -458,6 +462,26 @@ func TestSaveRuntimeConfigHubSettingsPreservesConfiguredLogLevel(t *testing.T) {
 	}
 	if got["log_level"] != "debug" {
 		t.Fatalf("log_level = %#v, want %q", got["log_level"], "debug")
+	}
+}
+
+func TestSaveRuntimeConfigHubSettingsRejectsUnboundAgentWithoutWriting(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+
+	err := SaveRuntimeConfigHubSettings(path, InitConfig{
+		BaseURL:    "https://na.hub.molten.bot/v1",
+		AgentToken: "agent_direct",
+	}, "agent_direct")
+	if err == nil {
+		t.Fatal("SaveRuntimeConfigHubSettings() error = nil, want non-nil")
+	}
+	if got := err.Error(); got != unboundAgentRuntimeErrorMessage {
+		t.Fatalf("SaveRuntimeConfigHubSettings() error = %q, want %q", got, unboundAgentRuntimeErrorMessage)
+	}
+	if _, statErr := os.Stat(path); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("config file stat error = %v, want not exist", statErr)
 	}
 }
 

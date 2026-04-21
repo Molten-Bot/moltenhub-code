@@ -893,16 +893,7 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 	}
 
 	if configPath != "" {
-		runtimeCfg, err := hub.LoadRuntimeConfig(configPath)
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				return defaultHubBootConfig(configPath)
-			}
-			return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("runtime config error: %w", err)
-		}
-		cfg := runtimeCfg.Init()
-		cfg.RuntimeConfigPath = runtimeCfg.RuntimeConfigPath
-		return cfg, harness.ExitSuccess, nil
+		return loadHubBootRuntimeConfigOrDefault(configPath)
 	}
 
 	if initPath != "" {
@@ -916,10 +907,7 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 					cfg.RuntimeConfigPath = runtimeCfg.RuntimeConfigPath
 					return cfg, harness.ExitSuccess, nil
 				}
-				if errors.Is(runtimeErr, os.ErrNotExist) {
-					return defaultHubBootConfig(runtimePath)
-				}
-				return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("runtime config error: %w", runtimeErr)
+				return loadHubBootRuntimeConfigOrDefault(runtimePath)
 			}
 			return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("init config error: %w", err)
 		}
@@ -928,12 +916,17 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 		return cfg, harness.ExitSuccess, nil
 	}
 
-	runtimeCfg, err := hub.LoadRuntimeConfig("")
+	return loadHubBootRuntimeConfigOrDefault("")
+}
+
+func loadHubBootRuntimeConfigOrDefault(path string) (hub.InitConfig, int, error) {
+	runtimeCfg, err := hub.LoadRuntimeConfig(path)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return defaultHubBootConfig(hub.ResolveRuntimeConfigPath(""))
+		resolvedPath := strings.TrimSpace(path)
+		if resolvedPath == "" {
+			resolvedPath = hub.ResolveRuntimeConfigPath("")
 		}
-		return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("runtime config error: %w", err)
+		return defaultHubBootConfig(resolvedPath)
 	}
 
 	cfg := runtimeCfg.Init()
@@ -2518,6 +2511,9 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 			activeCfg.AgentToken = token
 		}
 	}
+	if strings.TrimSpace(activeCfg.AgentHarness) == "" {
+		return bindError(fmt.Errorf("agent harness is not configured; complete agent selection in the UI"))
+	}
 
 	client := hub.NewAPIClient(activeCfg.BaseURL)
 	resolvedToken, err := client.ResolveAgentToken(ctx, activeCfg)
@@ -2532,6 +2528,7 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 	if baseURL := strings.TrimRight(strings.TrimSpace(client.BaseURL), "/"); baseURL != "" {
 		finalCfg.BaseURL = baseURL
 	}
+	finalCfg.BaseURL = hubSetupPersistedBaseURL(finalCfg.BaseURL, state.Region)
 	finalCfg.AgentToken = resolvedToken
 	profileUpdateRequested := strings.TrimSpace(state.Handle) != strings.TrimSpace(activeCfg.Handle) ||
 		strings.TrimSpace(state.Profile.ProfileText) != strings.TrimSpace(activeCfg.Profile.ProfileText) ||
@@ -2771,6 +2768,24 @@ func hubSetupBaseURL(baseURL, region string) string {
 		if selectedBaseURL := hubSetupLocationBaseURL(selected); selectedBaseURL != "" {
 			return selectedBaseURL
 		}
+	}
+	return hub.HubBaseURLForRegion(region)
+}
+
+func hubSetupPersistedBaseURL(baseURL, region string) string {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	locations := currentHubSetupLocations()
+	if location, ok := hubSetupLocationForBaseURL(locations, baseURL); ok {
+		if selectedBaseURL := hubSetupLocationBaseURL(location); selectedBaseURL != "" {
+			return selectedBaseURL
+		}
+	}
+	selected, ok := hubSetupLocationByKey(locations, region)
+	if !ok {
+		selected, _ = hubSetupLocationByKey(locations, hub.HubRegionFromBaseURL(baseURL))
+	}
+	if selectedBaseURL := hubSetupLocationBaseURL(selected); selectedBaseURL != "" {
+		return selectedBaseURL
 	}
 	return hub.HubBaseURLForRegion(region)
 }
