@@ -29,6 +29,7 @@ const piAuthConfigureCommand = "cat ~/.pi/agent/auth.json"
 const piAuthConfigurePlaceholder = "Paste ~/.pi/agent/auth.json contents..."
 const piAuthConfigureMessage = "Run `pi`, then `/login` on your computer. After Pi works locally, paste `~/.pi/agent/auth.json` here. MoltenHub will store it, write it to `$HOME/.pi/agent/auth.json`, and validate it."
 const piAuthInvalidPrefix = "PI auth.json is invalid"
+const piAuthValidationFailureMessage = "PI auth.json did not validate. Refresh `~/.pi/agent/auth.json` from a working local Pi login, paste it here, and try again."
 const piAuthConfiguredMessage = "PI auth.json is configured."
 const piAuthReadyMessage = "PI auth is ready via ~/.pi/agent/auth.json."
 const piExistingLocalAuthReadyMessage = "PI is ready using existing local auth."
@@ -210,6 +211,14 @@ func (g *piAuthGate) refreshAndSnapshot(ctx context.Context) (hubui.AgentAuthSta
 	g.mu.Unlock()
 
 	if canonicalAuthJSON != "" {
+		if err := g.probe(ctx); err != nil {
+			g.mu.Lock()
+			applyPiConfigureUIState(&g.authState, piAuthValidationFailureMessage)
+			snap := g.snapshotLocked()
+			g.mu.Unlock()
+			return snap, nil
+		}
+
 		g.mu.Lock()
 		g.validatedAuth = validatedPiAuthStateKey("json", canonicalAuthJSON)
 		g.refreshLocked()
@@ -604,6 +613,14 @@ func (g *piAuthGate) configurePiAuthJSON(ctx context.Context, rawInput string) (
 		g.mu.Unlock()
 		return snap, err
 	}
+	if err := g.probe(ctx); err != nil {
+		g.mu.Lock()
+		applyPiConfigureUIState(&g.authState, fmt.Sprintf("launch pi with %s: %v", piAuthFileRelativePath, err))
+		snap := g.snapshotLocked()
+		g.mu.Unlock()
+		return snap, err
+	}
+
 	g.mu.Lock()
 	g.initCfg.PiAuthJSON = canonical
 	g.validatedAuth = validatedPiAuthStateKey("json", canonical)

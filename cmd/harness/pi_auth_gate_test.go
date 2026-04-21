@@ -210,8 +210,34 @@ func TestPiAuthGateConfigurePersistsPiAuthJSONAndWritesAuthFile(t *testing.T) {
 	if got, want := string(written), expected; got != want {
 		t.Fatalf("auth.json = %q, want %q", got, want)
 	}
-	if got := len(runner.calls); got != 0 {
-		t.Fatalf("probe calls = %d, want 0", got)
+	if got := len(runner.calls); got != 1 {
+		t.Fatalf("probe calls = %d, want 1", got)
+	}
+}
+
+func TestPiAuthGateConfigurePiAuthJSONAcceptsOKOutputDespiteProbeExitError(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GITHUB_TOKEN", "")
+	t.Setenv("HOME", t.TempDir())
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	runner := &authGateRunnerStub{
+		run: func(context.Context, execx.Command) (execx.Result, error) {
+			return execx.Result{
+				Stdout: "OK\n",
+				Stderr: "No API key for provider: openai-codex\n",
+			}, errors.New("run pi [--print --mode text --no-session Reply with OK.]: exit status 1")
+		},
+	}
+	g := newPiAuthGateWithRuntime(runner, "pi", path, hub.InitConfig{}, nil)
+
+	status, err := g.Configure(context.Background(), `{"provider":"demo","token":"saved"}`)
+	if err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	if !status.Ready || status.State != "ready" {
+		t.Fatalf("status = %+v", status)
 	}
 }
 
