@@ -1502,8 +1502,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `const PROMPT_VISIBILITY_KEY = "hubui.localPromptVisible";`) {
 		t.Fatalf("expected index html to persist prompt visibility preference")
 	}
-	if !strings.Contains(markup, "configuredAgentGorillaSubtitle.textContent = `${label} is now a 600LB Gorilla!`;") {
-		t.Fatalf("expected index html to render dynamic gorilla subtitle copy")
+	if !strings.Contains(markup, "configuredAgentGorillaSubtitle.textContent = label === \"Agent\"") ||
+		!strings.Contains(markup, ": `${label} is now a 600LB Gorilla!`;") {
+		t.Fatalf("expected index html to render dynamic configured agent subtitle copy")
 	}
 	if !strings.Contains(markup, "function handlePromptImagePaste(") {
 		t.Fatalf("expected index html to include screenshot paste handler")

@@ -2824,7 +2824,6 @@ select.prompt-control {
 }
 
 .agent-auth-harness-option:disabled {
-  cursor: not-allowed;
   transform: none;
 }
 

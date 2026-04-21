@@ -311,7 +311,7 @@ func (s Server) injectIndexConfig(data []byte) []byte {
 
 	return bytes.Replace(
 		data,
-		[]byte(`window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"codex","configuredAgentLabel":"Codex","defaultRepository":"git@github.com:Molten-Bot/moltenhub-code.git","promptImageHarnesses":["codex","pi"]};`),
+		[]byte(`window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"","configuredAgentLabel":"","defaultRepository":"git@github.com:Molten-Bot/moltenhub-code.git","promptImageHarnesses":["codex","pi"]};`),
 		[]byte("window.__HUB_UI_CONFIG__ = "+string(cfg)+";"),
 		1,
 	)
