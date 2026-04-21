@@ -171,6 +171,24 @@ func TestNonRemediableRepoAccessReasonDetectsAgentRepoRightsFailures(t *testing.
 	}
 }
 
+func TestNonRemediableRepoAccessReasonDetectsGitHubSSHPermissionDenied(t *testing.T) {
+	t.Parallel()
+
+	err := errors.New("ERROR: Permission to JuliusBrussee/caveman.git denied to octocat.\nfatal: Could not read from remote repository.")
+	if got := NonRemediableRepoAccessReason(err); got != ".git denied to" {
+		t.Fatalf("NonRemediableRepoAccessReason() = %q", got)
+	}
+}
+
+func TestNonRemediableRepoAccessReasonDetectsGitHubSSHPermissionDeniedWithoutDotGit(t *testing.T) {
+	t.Parallel()
+
+	err := errors.New("ERROR: Permission to JuliusBrussee/caveman denied to octocat.\nfatal: Could not read from remote repository.")
+	if got := NonRemediableRepoAccessReason(err); got != githubSSHPermissionDeniedReason {
+		t.Fatalf("NonRemediableRepoAccessReason() = %q", got)
+	}
+}
+
 func TestNonRemediableRepoAccessReasonDetectsWorkflowScopeRejection(t *testing.T) {
 	t.Parallel()
 
