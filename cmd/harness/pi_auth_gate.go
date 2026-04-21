@@ -760,10 +760,28 @@ func (g *piAuthGate) probe(ctx context.Context) error {
 func piProbeResultHasOK(res execx.Result) bool {
 	for _, text := range []string{res.Stdout, res.Stderr} {
 		for _, line := range strings.Split(normalizeOutputNewlines(text), "\n") {
-			if strings.TrimSpace(line) == "OK" {
+			if piProbeLineHasOK(line) {
 				return true
 			}
 		}
+	}
+	return false
+}
+
+func piProbeLineHasOK(line string) bool {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return false
+	}
+
+	normalized := strings.Trim(line, " \t\"'`.,;!")
+	if strings.EqualFold(normalized, "OK") {
+		return true
+	}
+
+	if idx := strings.LastIndex(line, ":"); idx >= 0 {
+		tail := strings.Trim(line[idx+1:], " \t\"'`.,;!")
+		return strings.EqualFold(tail, "OK")
 	}
 	return false
 }

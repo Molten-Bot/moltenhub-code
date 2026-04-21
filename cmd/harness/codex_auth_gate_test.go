@@ -25,7 +25,7 @@ type authGateRunnerStub struct {
 func (s *authGateRunnerStub) Run(ctx context.Context, cmd execx.Command) (execx.Result, error) {
 	s.calls = append(s.calls, cmd)
 	if s.run == nil {
-		return execx.Result{Stdout: "OK\n"}, nil
+		return execx.Result{}, nil
 	}
 	return s.run(ctx, cmd)
 }

@@ -14,8 +14,25 @@ import (
 	"github.com/jef/moltenhub-code/internal/hub"
 )
 
+func clearPiAuthTestEnv(t *testing.T) {
+	t.Helper()
+	for _, option := range piProviderOptions {
+		t.Setenv(option.EnvVar, "")
+	}
+	t.Setenv("PI_AUTH_JSON", "")
+	t.Setenv("PI_PROVIDER_AUTH", "")
+}
+
+func piOKAuthGateRunner() *authGateRunnerStub {
+	return &authGateRunnerStub{
+		run: func(context.Context, execx.Command) (execx.Result, error) {
+			return execx.Result{Stdout: "OK\n"}, nil
+		},
+	}
+}
+
 func TestNewPiAuthGateRequiresConfigureWhenExistingPiProbeFails(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
+	clearPiAuthTestEnv(t)
 	runner := &authGateRunnerStub{
 		run: func(context.Context, execx.Command) (execx.Result, error) {
 			return execx.Result{}, errors.New("pi login failed")
@@ -51,10 +68,11 @@ func TestNewPiAuthGateRequiresConfigureWhenExistingPiProbeFails(t *testing.T) {
 }
 
 func TestNewPiAuthGateReadyWhenEnvironmentAlreadyConfigured(t *testing.T) {
+	clearPiAuthTestEnv(t)
 	t.Setenv("OPENAI_API_KEY", "sk-env")
 	t.Setenv("GH_TOKEN", "ghp_ready")
 	t.Setenv("GITHUB_TOKEN", "")
-	runner := &authGateRunnerStub{}
+	runner := piOKAuthGateRunner()
 	g := newPiAuthGateWithRuntime(runner, "pi", filepath.Join(t.TempDir(), ".moltenhub", "config.json"), hub.InitConfig{}, nil)
 
 	status, err := g.Status(context.Background())
@@ -70,10 +88,10 @@ func TestNewPiAuthGateReadyWhenEnvironmentAlreadyConfigured(t *testing.T) {
 }
 
 func TestNewPiAuthGateRequiresGitHubConfigureWhenExistingPiAuthAlreadyWorks(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
+	clearPiAuthTestEnv(t)
 	t.Setenv("GH_TOKEN", "")
 	t.Setenv("GITHUB_TOKEN", "")
-	runner := &authGateRunnerStub{}
+	runner := piOKAuthGateRunner()
 	g := newPiAuthGateWithRuntime(runner, "pi", filepath.Join(t.TempDir(), ".moltenhub", "config.json"), hub.InitConfig{}, nil)
 
 	status, err := g.Status(context.Background())
@@ -98,10 +116,10 @@ func TestNewPiAuthGateRequiresGitHubConfigureWhenExistingPiAuthAlreadyWorks(t *t
 }
 
 func TestNewPiAuthGateReadyWhenExistingPiAuthAndGitHubTokenAlreadyWork(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
+	clearPiAuthTestEnv(t)
 	t.Setenv("GH_TOKEN", "ghp_ready")
 	t.Setenv("GITHUB_TOKEN", "")
-	runner := &authGateRunnerStub{}
+	runner := piOKAuthGateRunner()
 	g := newPiAuthGateWithRuntime(runner, "pi", filepath.Join(t.TempDir(), ".moltenhub", "config.json"), hub.InitConfig{}, nil)
 
 	status, err := g.Status(context.Background())
@@ -120,12 +138,12 @@ func TestNewPiAuthGateReadyWhenExistingPiAuthAndGitHubTokenAlreadyWork(t *testin
 }
 
 func TestPiAuthGateConfigurePersistsRuntimeConfigAndEnvironment(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
+	clearPiAuthTestEnv(t)
 	t.Setenv("GH_TOKEN", "ghp_ready")
 	t.Setenv("GITHUB_TOKEN", "")
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
-	runner := &authGateRunnerStub{}
+	runner := piOKAuthGateRunner()
 	g := newPiAuthGateWithRuntime(runner, "pi", path, hub.InitConfig{
 		BaseURL:      "https://na.hub.molten.bot/v1",
 		AgentToken:   "agent_token",
@@ -166,14 +184,14 @@ func TestPiAuthGateConfigurePersistsRuntimeConfigAndEnvironment(t *testing.T) {
 }
 
 func TestPiAuthGateConfigurePersistsPiAuthJSONAndWritesAuthFile(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
+	clearPiAuthTestEnv(t)
 	t.Setenv("GH_TOKEN", "ghp_ready")
 	t.Setenv("GITHUB_TOKEN", "")
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
-	runner := &authGateRunnerStub{}
+	runner := piOKAuthGateRunner()
 	g := newPiAuthGateWithRuntime(runner, "pi", path, hub.InitConfig{}, nil)
 
 	input := `{"provider":"demo","token":"saved"}`
@@ -216,7 +234,7 @@ func TestPiAuthGateConfigurePersistsPiAuthJSONAndWritesAuthFile(t *testing.T) {
 }
 
 func TestPiAuthGateConfigurePiAuthJSONAcceptsOKOutputDespiteProbeExitError(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
+	clearPiAuthTestEnv(t)
 	t.Setenv("GH_TOKEN", "ghp_ready")
 	t.Setenv("GITHUB_TOKEN", "")
 	t.Setenv("HOME", t.TempDir())
@@ -242,7 +260,7 @@ func TestPiAuthGateConfigurePiAuthJSONAcceptsOKOutputDespiteProbeExitError(t *te
 }
 
 func TestPiAuthGateConfigureProviderAcceptsPiOKOutputDespiteProbeExitError(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
+	clearPiAuthTestEnv(t)
 	t.Setenv("GH_TOKEN", "ghp_ready")
 	t.Setenv("GITHUB_TOKEN", "")
 
@@ -266,8 +284,25 @@ func TestPiAuthGateConfigureProviderAcceptsPiOKOutputDespiteProbeExitError(t *te
 	}
 }
 
+func TestPiProbeResultHasOKAcceptsNoisyAgentOutput(t *testing.T) {
+	res := execx.Result{
+		Stdout: "assistant: OK\n",
+		Stderr: "No API key for provider: openai-codex\n",
+	}
+	if !piProbeResultHasOK(res) {
+		t.Fatal("piProbeResultHasOK() = false, want true")
+	}
+}
+
+func TestPiProbeResultHasOKRejectsSubstringOnly(t *testing.T) {
+	res := execx.Result{Stderr: "No API key for provider: openai-codex\nstatus=ok\n"}
+	if piProbeResultHasOK(res) {
+		t.Fatal("piProbeResultHasOK() = true, want false")
+	}
+}
+
 func TestPiAuthGateConfigureProviderProbeFailureIncludesExplicitFailureFields(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
+	clearPiAuthTestEnv(t)
 	t.Setenv("GH_TOKEN", "ghp_ready")
 	t.Setenv("GITHUB_TOKEN", "")
 
@@ -295,6 +330,7 @@ func TestPiAuthGateConfigureProviderProbeFailureIncludesExplicitFailureFields(t 
 }
 
 func TestPiAuthGateConfigureRejectsUnsupportedEnvVar(t *testing.T) {
+	clearPiAuthTestEnv(t)
 	g := newPiAuthGate(filepath.Join(t.TempDir(), ".moltenhub", "config.json"), hub.InitConfig{})
 
 	if _, err := g.Configure(context.Background(), `{"env_var":"UNSUPPORTED_ENV","value":"x"}`); err == nil {
@@ -303,7 +339,7 @@ func TestPiAuthGateConfigureRejectsUnsupportedEnvVar(t *testing.T) {
 }
 
 func TestPiAuthGateConfigureOfflineModeAllowsEmptyTokenWithoutProbe(t *testing.T) {
-	t.Setenv("PI_OFFLINE", "")
+	clearPiAuthTestEnv(t)
 	t.Setenv("GH_TOKEN", "ghp_ready")
 	t.Setenv("GITHUB_TOKEN", "")
 
@@ -350,13 +386,13 @@ func TestPiAuthGateConfigureOfflineModeAllowsEmptyTokenWithoutProbe(t *testing.T
 }
 
 func TestPiAuthGateConfigureTransitionsToGitHubConfigureWhenTokenMissing(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
+	clearPiAuthTestEnv(t)
 	t.Setenv("GH_TOKEN", "")
 	t.Setenv("GITHUB_TOKEN", "")
 	t.Setenv("HOME", t.TempDir())
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
-	runner := &authGateRunnerStub{}
+	runner := piOKAuthGateRunner()
 	g := newPiAuthGateWithRuntime(runner, "pi", path, hub.InitConfig{
 		BaseURL:      "https://na.hub.molten.bot/v1",
 		AgentToken:   "agent_token",
@@ -379,13 +415,13 @@ func TestPiAuthGateConfigureTransitionsToGitHubConfigureWhenTokenMissing(t *test
 }
 
 func TestPiAuthGateConfigureAcceptsGitHubTokenWhenRequired(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
+	clearPiAuthTestEnv(t)
 	t.Setenv("GH_TOKEN", "")
 	t.Setenv("GITHUB_TOKEN", "")
 	t.Setenv("HOME", t.TempDir())
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
-	runner := &authGateRunnerStub{}
+	runner := piOKAuthGateRunner()
 	g := newPiAuthGateWithRuntime(runner, "pi", path, hub.InitConfig{
 		BaseURL:      "https://na.hub.molten.bot/v1",
 		AgentToken:   "agent_token",
@@ -429,7 +465,7 @@ func TestPiAuthGateConfigureAcceptsGitHubTokenWhenRequired(t *testing.T) {
 }
 
 func TestPiAuthGateStatusMasksProbeLaunchDetails(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
+	clearPiAuthTestEnv(t)
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	runner := &authGateRunnerStub{
@@ -459,7 +495,7 @@ func TestPiAuthGateStatusMasksProbeLaunchDetails(t *testing.T) {
 }
 
 func TestPiAuthGateConfigureReturnsLaunchFailureDetails(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
+	clearPiAuthTestEnv(t)
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	runner := &authGateRunnerStub{
@@ -517,7 +553,7 @@ func TestPiAgentAuthOptionsAreSortedAlphabeticallyByLabel(t *testing.T) {
 }
 
 func TestPiAuthGateConfigureOpenRouterPATFailureIncludesActionableGuidance(t *testing.T) {
-	t.Setenv("OPENROUTER_API_KEY", "")
+	clearPiAuthTestEnv(t)
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	runner := &authGateRunnerStub{
@@ -555,7 +591,7 @@ func TestPiAuthGateConfigureOpenRouterPATFailureIncludesActionableGuidance(t *te
 }
 
 func TestPiAuthGateConfigureRejectsOpenRouterPersonalAccessTokenBeforeProbe(t *testing.T) {
-	t.Setenv("OPENROUTER_API_KEY", "")
+	clearPiAuthTestEnv(t)
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	runner := &authGateRunnerStub{
