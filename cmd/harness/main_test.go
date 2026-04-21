@@ -256,6 +256,34 @@ func TestLoadHubBootConfigWithMissingConfigFlagFallsBackToRuntimeDefaults(t *tes
 	}
 }
 
+func TestLoadHubBootConfigWithInvalidConfigFlagFallsBackToRuntimeDefaults(t *testing.T) {
+	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
+	t.Setenv("HARNESS_ALLOW_NON_MOLTEN_HUB_BASE_URL", "")
+
+	tempDir := t.TempDir()
+	runtimeConfigPath := filepath.Join(tempDir, "config.json")
+	if err := os.WriteFile(runtimeConfigPath, []byte(`{"base_url":"http://127.0.0.1:41099/v1","agent_token":"agent_saved"}`), 0o600); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+
+	cfg, exitCode, err := loadHubBootConfig("", runtimeConfigPath)
+	if err != nil {
+		t.Fatalf("loadHubBootConfig() error = %v", err)
+	}
+	if exitCode != harness.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	}
+	if got, want := cfg.BaseURL, "https://na.hub.molten.bot/v1"; got != want {
+		t.Fatalf("BaseURL = %q, want %q", got, want)
+	}
+	if got, want := cfg.RuntimeConfigPath, runtimeConfigPath; got != want {
+		t.Fatalf("RuntimeConfigPath = %q, want %q", got, want)
+	}
+	if cfg.AgentToken != "" {
+		t.Fatalf("AgentToken = %q, want empty", cfg.AgentToken)
+	}
+}
+
 func TestLoadHubBootConfigUsesDefaultRuntimeConfigWhenFlagsOmitted(t *testing.T) {
 	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
 
@@ -1220,7 +1248,7 @@ func TestHubSetupBaseURLUsesSelectedRegionForHubEndpoints(t *testing.T) {
 	if got, want := hubSetupBaseURL("https://eu.hub.molten.bot/v1", "na"), "https://na.hub.molten.bot/v1"; got != want {
 		t.Fatalf("hubSetupBaseURL(eu, na) = %q, want %q", got, want)
 	}
-	if got, want := hubSetupBaseURL("http://127.0.0.1:7777/v1", "eu"), "http://127.0.0.1:7777/v1"; got != want {
+	if got, want := hubSetupBaseURL("http://127.0.0.1:7777/v1", "eu"), "https://eu.hub.molten.bot/v1"; got != want {
 		t.Fatalf("hubSetupBaseURL(custom, eu) = %q, want %q", got, want)
 	}
 }
