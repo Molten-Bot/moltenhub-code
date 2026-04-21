@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -49,6 +51,17 @@ func (s *configurableAgentAuthState) setError(message string) {
 	s.ready = false
 	s.state = "error"
 	s.message = strings.TrimSpace(message)
+	s.touch()
+}
+
+func (s *configurableAgentAuthState) applySnapshot(snapshot hubui.AgentAuthState) {
+	s.required = snapshot.Required
+	s.ready = snapshot.Ready
+	s.state = strings.TrimSpace(snapshot.State)
+	s.message = strings.TrimSpace(snapshot.Message)
+	s.configureCommand = strings.TrimSpace(snapshot.ConfigureCommand)
+	s.configurePlaceholder = strings.TrimSpace(snapshot.ConfigurePlaceholder)
+	s.configureOptions = append([]hubui.AgentAuthOption(nil), snapshot.ConfigureOptions...)
 	s.touch()
 }
 
@@ -156,4 +169,20 @@ func firstNonEmptyString(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func decodeJSONStrict(raw string, dst any) error {
+	dec := json.NewDecoder(strings.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
+		return err
+	}
+	var trailing any
+	if err := dec.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("unexpected trailing JSON data")
+		}
+		return err
+	}
+	return nil
 }
