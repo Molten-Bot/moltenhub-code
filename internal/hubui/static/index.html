@@ -13,7 +13,7 @@
     window.gtag("config", "G-BY33RFG2WB");
   </script>
   <script>
-    window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"codex","configuredAgentLabel":"Codex","defaultRepository":"git@github.com:Molten-Bot/moltenhub-code.git","promptImageHarnesses":["codex","pi"]};
+    window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"","configuredAgentLabel":"","defaultRepository":"git@github.com:Molten-Bot/moltenhub-code.git","promptImageHarnesses":["codex","pi"]};
   </script>
   <script>
     (function configureTailwindRuntime() {
@@ -432,6 +432,10 @@
       <h2 id="agent-auth-title" class="text-[2rem] font-semibold leading-tight text-hub-text">Authorize Agent to get started</h2>
       <p id="agent-auth-message" class="mt-3 max-w-lg text-base leading-7 text-hub-text/85"></p>
 
+      <div id="agent-auth-harness-picker" class="mt-5 hidden space-y-3">
+        <div id="agent-auth-harness-grid" class="agent-auth-harness-grid" role="group" aria-label="Select an agent"></div>
+      </div>
+
       <div id="agent-auth-details" class="mt-5 hidden space-y-3">
         <div class="agent-auth-command-box agent-auth-command-box-inline">
           <code id="agent-auth-code" class="agent-auth-command-text agent-auth-command-text-inline font-mono text-[1.15rem] tracking-[0.22em] text-hub-text"></code>
@@ -795,8 +799,8 @@
       const config = raw && typeof raw === "object" ? raw : {};
       return {
         automaticMode: Boolean(config.automaticMode),
-        configuredHarness: String(config.configuredHarness || "").trim() || "codex",
-        configuredAgentLabel: String(config.configuredAgentLabel || "").trim() || "Codex",
+        configuredHarness: String(config.configuredHarness || "").trim(),
+        configuredAgentLabel: String(config.configuredAgentLabel || "").trim(),
         defaultRepository: normalizeRepoValue(config.defaultRepository || "") || "git@github.com:Molten-Bot/moltenhub-code.git",
       };
     }
@@ -836,12 +840,20 @@
       }
     }
 
-    function configuredAgentLabel() {
-      return String(state.ui.configuredAgentLabel || "Codex").trim() || "Codex";
+    function configuredHarnessName() {
+      const authHarnessValue = String(state.agentAuth?.harness || "").trim().toLowerCase();
+      if (authHarnessValue) {
+        return authHarnessValue;
+      }
+      return String(state.ui.configuredHarness || "").trim().toLowerCase();
     }
 
-    function configuredHarnessName() {
-      return String(state.ui.configuredHarness || "").trim().toLowerCase();
+    function configuredAgentLabel() {
+      const harness = configuredHarnessName();
+      if (harness) {
+        return agentAuthLabel(harness);
+      }
+      return String(state.ui.configuredAgentLabel || "").trim() || "Agent";
     }
 
     function defaultRepository() {
@@ -1170,6 +1182,7 @@
       if (normalized === "codex") return "Codex";
       if (normalized === "claude") return "Claude Code";
       if (normalized === "auggie") return "Auggie";
+      if (normalized === "pi") return "Pi";
       return "Agent";
     }
 
@@ -1388,6 +1401,7 @@
       agentAuthBrowserCode: "",
       agentAuthLastAutoSubmittedCode: "",
       agentAuthURLLogoBroken: false,
+      agentHarnessSelectionPending: "",
       hubSetupBusy: false,
       hubSetupOpen: false,
       hubSetupDialogMode: "connect",
@@ -1524,6 +1538,8 @@
     const configuredAgentGorillaSubtitle = document.getElementById("configured-agent-gorilla-subtitle");
     const agentAuthTitle = document.getElementById("agent-auth-title");
     const agentAuthMessage = document.getElementById("agent-auth-message");
+    const agentAuthHarnessPicker = document.getElementById("agent-auth-harness-picker");
+    const agentAuthHarnessGrid = document.getElementById("agent-auth-harness-grid");
     const agentAuthDetails = document.getElementById("agent-auth-details");
     const agentAuthURL = document.getElementById("agent-auth-url");
     const agentAuthURLLogo = document.getElementById("agent-auth-url-logo");
@@ -2420,6 +2436,13 @@
       if (agentAuthVerify) {
         agentAuthVerify.disabled = state.agentAuthBusy;
       }
+      if (agentAuthHarnessGrid) {
+        const harnessButtons = agentAuthHarnessGrid.querySelectorAll("button[data-agent-harness]");
+        for (const button of harnessButtons) {
+          button.disabled = state.agentAuthBusy;
+          button.classList.toggle("is-pending", String(button.getAttribute("data-agent-harness") || "").trim().toLowerCase() === state.agentHarnessSelectionPending);
+        }
+      }
       if (localPromptSubmit) {
         localPromptSubmit.disabled = state.agentAuthBusy || (state.agentAuth.required && !state.agentAuth.ready);
       }
@@ -2459,6 +2482,79 @@
       const current = auth && typeof auth === "object" ? auth : state.agentAuth;
       const gateState = String(current?.state || "").trim().toLowerCase();
       return gateState === "needs_configure";
+    }
+
+    function isHarnessSelectionState(auth) {
+      const current = auth && typeof auth === "object" ? auth : state.agentAuth;
+      const gateState = String(current?.state || "").trim().toLowerCase();
+      return gateState === "needs_harness_selection";
+    }
+
+    function isSupportedHarnessSelectionValue(value) {
+      const normalized = String(value || "").trim().toLowerCase();
+      return normalized === "codex" || normalized === "claude" || normalized === "auggie" || normalized === "pi";
+    }
+
+    function selectionHarnessOptions(auth) {
+      const current = auth && typeof auth === "object" ? auth : state.agentAuth;
+      const options = Array.isArray(current?.configureOptions) ? current.configureOptions : [];
+      return options
+        .map((option) => ({
+          value: String(option?.value || "").trim().toLowerCase(),
+          label: String(option?.label || "").trim(),
+          description: String(option?.description || "").trim(),
+        }))
+        .filter((option) => isSupportedHarnessSelectionValue(option.value));
+    }
+
+    function renderAgentHarnessSelection(auth) {
+      const needsSelection = isHarnessSelectionState(auth);
+      if (agentAuthHarnessPicker) {
+        agentAuthHarnessPicker.classList.toggle("hidden", !needsSelection);
+      }
+      if (!agentAuthHarnessGrid) {
+        return;
+      }
+      if (!needsSelection) {
+        if (agentAuthHarnessGrid.innerHTML !== "") {
+          agentAuthHarnessGrid.innerHTML = "";
+        }
+        return;
+      }
+
+      const options = selectionHarnessOptions(auth);
+      const pendingHarness = String(state.agentHarnessSelectionPending || "").trim().toLowerCase();
+      const currentHarness = authHarness(auth);
+
+      if (!options.length) {
+        agentAuthHarnessGrid.innerHTML = `<div class="agent-auth-harness-empty">No agents are available for this runtime.</div>`;
+        return;
+      }
+
+      agentAuthHarnessGrid.innerHTML = options.map((option) => {
+        const label = option.label || agentAuthLabel(option.value);
+        const description = option.description || `Bind runtime to ${label}.`;
+        const logoURL = AGENT_LOGO_URLS[option.value] || resolveAgentLogoURL(option.value) || "";
+        const isSelected = pendingHarness === option.value || (pendingHarness === "" && currentHarness === option.value);
+        const isPending = pendingHarness !== "" && pendingHarness === option.value;
+        const selectedClass = isSelected ? " is-selected" : "";
+        const pendingClass = isPending ? " is-pending" : "";
+        return `
+          <button
+            type="button"
+            class="agent-auth-harness-option${selectedClass}${pendingClass}"
+            data-agent-harness="${escapeHTML(option.value)}"
+            aria-pressed="${isSelected ? "true" : "false"}"
+            aria-label="Select ${escapeHTML(label)}"
+            ${state.agentAuthBusy ? "disabled" : ""}>
+            <span class="agent-auth-harness-logo-wrap" aria-hidden="true">
+              <img class="agent-auth-harness-logo" src="${escapeHTML(logoURL)}" alt="">
+            </span>
+            <span class="agent-auth-harness-label">${escapeHTML(label)}</span>
+            <span class="agent-auth-harness-description">${escapeHTML(description)}</span>
+          </button>
+        `;
+      }).join("");
     }
 
     function authHarness(auth) {
@@ -2540,6 +2636,10 @@
 
     function updateAgentAuthDoneVisibility() {
       if (!agentAuthVerify) return;
+      if (isHarnessSelectionState(state.agentAuth)) {
+        agentAuthVerify.classList.add("hidden");
+        return;
+      }
       const codexFlow = authHarness(state.agentAuth) === "codex";
       if (codexFlow) {
         const visible = state.agentAuth.required && !state.agentAuth.ready;
@@ -2619,7 +2719,9 @@
       }
       syncBrandLogoRotation();
       if (configuredAgentGorillaSubtitle) {
-        configuredAgentGorillaSubtitle.textContent = `${label} is now a 600LB Gorilla!`;
+        configuredAgentGorillaSubtitle.textContent = label === "Agent"
+          ? "Select your agent to get started."
+          : `${label} is now a 600LB Gorilla!`;
       }
     }
 
@@ -2632,8 +2734,12 @@
       state.agentAuth = normalizeAgentAuth(auth);
       renderConfiguredAgent();
       const gateVisible = state.agentAuth.required && !state.agentAuth.ready;
-      const challengeKey = `${state.agentAuth.state}|${state.agentAuth.deviceCode}|${state.agentAuth.authURL}`;
+      const selectionOptionsKey = state.agentAuth.configureOptions
+        .map((option) => `${option.value}:${option.label}`)
+        .join(",");
+      const challengeKey = `${state.agentAuth.state}|${state.agentAuth.deviceCode}|${state.agentAuth.authURL}|${selectionOptionsKey}`;
       const requiresManualConfigure = isManualConfigureState(state.agentAuth);
+      const needsHarnessSelection = isHarnessSelectionState(state.agentAuth);
       const needsAuggieConfigure = isAuggieConfigureState(state.agentAuth);
       const needsClaudeGitHubConfigure = isClaudeGitHubConfigureState(state.agentAuth);
 
@@ -2647,6 +2753,7 @@
           agentAuthBrowserCodeInput.value = "";
         }
         setAgentAuthBrowserCodeError("");
+        state.agentHarnessSelectionPending = "";
       }
       if (!gateVisible) {
         state.agentAuthVerifyPending = false;
@@ -2658,6 +2765,9 @@
           agentAuthBrowserCodeInput.value = "";
         }
         setAgentAuthBrowserCodeError("");
+      }
+      if (!needsHarnessSelection) {
+        state.agentHarnessSelectionPending = "";
       }
       if (!isClaudeBrowserCodeState(state.agentAuth)) {
         clearAgentAuthAutoSubmitTimer();
@@ -2671,7 +2781,9 @@
         agentAuthGate.classList.toggle("flex", gateVisible);
       }
       if (agentAuthTitle) {
-        if (needsAuggieConfigure) {
+        if (needsHarnessSelection) {
+          agentAuthTitle.textContent = "Select Agent";
+        } else if (needsAuggieConfigure) {
           agentAuthTitle.textContent = "Setup Auggie";
         } else if (isPiConfigureState(state.agentAuth)) {
           agentAuthTitle.textContent = "Setup Pi";
@@ -2686,11 +2798,15 @@
         }
       }
       if (agentAuthMessage) {
-        agentAuthMessage.textContent = state.agentAuth.message || "";
-        agentAuthMessage.classList.toggle("hidden", !state.agentAuth.message);
+        const message = state.agentAuth.message || (needsHarnessSelection ? "Choose one logo to bind this runtime." : "");
+        agentAuthMessage.textContent = message;
+        agentAuthMessage.classList.toggle("hidden", !message);
       }
+      renderAgentHarnessSelection(state.agentAuth);
 
-      const hasChallenge = Boolean(state.agentAuth.authURL || state.agentAuth.deviceCode) && !requiresManualConfigure;
+      const hasChallenge = Boolean(state.agentAuth.authURL || state.agentAuth.deviceCode) &&
+        !requiresManualConfigure &&
+        !needsHarnessSelection;
       if (agentAuthDetails) {
         agentAuthDetails.classList.toggle("hidden", !hasChallenge);
       }
@@ -2733,7 +2849,7 @@
         agentAuthCopy.classList.toggle("hidden", !state.agentAuth.deviceCode);
       }
       if (agentAuthConfigure) {
-        agentAuthConfigure.classList.toggle("hidden", !requiresManualConfigure);
+        agentAuthConfigure.classList.toggle("hidden", !requiresManualConfigure || needsHarnessSelection);
       }
       const needsPiConfigure = isPiConfigureState(state.agentAuth);
       const hasPiConfigureOptions = needsPiConfigure &&
@@ -3040,6 +3156,33 @@
         const message = err && err.message ? err.message : "device auth start failed";
         setLocalPromptStatus("error", `${currentAgentLabel()} auth start failed: ${message}`);
         return;
+      } finally {
+        setAgentAuthBusy(false);
+      }
+    }
+
+    async function configureAgentHarnessSelection(value) {
+      const harness = String(value || "").trim().toLowerCase();
+      if (!isSupportedHarnessSelectionValue(harness)) {
+        setLocalPromptStatus("error", "Select an agent to continue.");
+        return;
+      }
+      if (state.agentAuthBusy || !isHarnessSelectionState(state.agentAuth)) {
+        return;
+      }
+
+      setAuggieConfigureError("");
+      state.agentHarnessSelectionPending = harness;
+      renderAgentHarnessSelection(state.agentAuth);
+      setAgentAuthBusy(true);
+      try {
+        const auth = await requestAgentAuth("/api/agent-auth/configure", "POST", { value: harness });
+        applyAgentAuthGate(auth);
+      } catch (err) {
+        const message = err && err.message ? err.message : "Agent selection failed.";
+        state.agentHarnessSelectionPending = "";
+        renderAgentHarnessSelection(state.agentAuth);
+        setLocalPromptStatus("error", `Agent selection failed: ${message}`);
       } finally {
         setAgentAuthBusy(false);
       }
@@ -6861,6 +7004,18 @@
     if (agentAuthConfigureOption) {
       agentAuthConfigureOption.addEventListener("change", () => {
         setAuggieConfigureError("");
+      });
+    }
+    if (agentAuthHarnessGrid) {
+      agentAuthHarnessGrid.addEventListener("click", (event) => {
+        const target = event.target && typeof event.target.closest === "function"
+          ? event.target.closest("button[data-agent-harness]")
+          : null;
+        if (!target || target.disabled) {
+          return;
+        }
+        markAgentAuthInteraction();
+        void configureAgentHarnessSelection(target.getAttribute("data-agent-harness"));
       });
     }
     if (agentAuthBrowserCodeInput) {

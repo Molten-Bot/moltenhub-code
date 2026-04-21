@@ -10,12 +10,14 @@ For more information, see [molten.bot/code](https://molten.bot/code).
 
 ### Docker Images
 
-| Harness | npm Package | cmd |
+| Tag | Included agent CLIs | cmd |
 |---------|------------|------------|
-| `codex` | `@openai/codex@latest` | docker run -p 7777:7777 moltenai/moltenhub-code:latest-codex |
-| `claude` | `@anthropic-ai/claude-code@latest` | docker run -p 7777:7777 moltenai/moltenhub-code:latest-claude |
-| `auggie` | `@augmentcode/auggie@latest` | docker run -p 7777:7777 moltenai/moltenhub-code:latest-auggie |
-| `pi` | `@mariozechner/pi-coding-agent@latest` | docker run -p 7777:7777 moltenai/moltenhub-code:latest-pi |
+| `latest` | `@openai/codex@latest`, `@anthropic-ai/claude-code@latest`, `@augmentcode/auggie@latest`, `@mariozechner/pi-coding-agent@latest` | docker run -p 7777:7777 moltenai/moltenhub-code:latest |
+
+First run behavior:
+- If `agent_harness` is already persisted in `.moltenhub/config.json`, that agent stays bound.
+- If no harness is configured yet, onboarding captures GitHub token first, then asks you to click an agent logo to bind this runtime.
+- Optional runtime env overrides remain supported: `HARNESS_AGENT_HARNESS`, `HARNESS_AGENT_COMMAND`.
 
 ### Local
 
@@ -126,7 +128,7 @@ mkdir -p ./.moltenhub
 docker run --rm -p 7777:7777 \
   -e HOME=/tmp \
   -v "$PWD/.moltenhub:/workspace/config" \
-  moltenhub-code:latest-claude
+  moltenhub-code:latest
 ```
 
 ## Testing

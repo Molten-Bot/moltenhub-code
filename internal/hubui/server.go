@@ -286,16 +286,21 @@ func (s Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) injectIndexConfig(data []byte) []byte {
 	type indexConfig struct {
-		AutomaticMode        bool   `json:"automaticMode"`
-		ConfiguredHarness    string `json:"configuredHarness"`
-		ConfiguredAgentLabel string `json:"configuredAgentLabel"`
-		DefaultRepository    string `json:"defaultRepository"`
+		AutomaticMode        bool     `json:"automaticMode"`
+		ConfiguredHarness    string   `json:"configuredHarness"`
+		ConfiguredAgentLabel string   `json:"configuredAgentLabel"`
+		DefaultRepository    string   `json:"defaultRepository"`
 		PromptImageHarnesses []string `json:"promptImageHarnesses"`
+	}
+	configuredHarness := strings.TrimSpace(s.ConfiguredHarness)
+	configuredAgentLabel := ""
+	if configuredHarness != "" {
+		configuredAgentLabel = agentruntime.DisplayName(configuredHarness)
 	}
 	cfg, err := json.Marshal(indexConfig{
 		AutomaticMode:        s.AutomaticMode,
-		ConfiguredHarness:    strings.TrimSpace(s.ConfiguredHarness),
-		ConfiguredAgentLabel: agentruntime.DisplayName(s.ConfiguredHarness),
+		ConfiguredHarness:    configuredHarness,
+		ConfiguredAgentLabel: configuredAgentLabel,
 		DefaultRepository:    config.DefaultRepositoryURL,
 		PromptImageHarnesses: agentruntime.SupportedPromptImageHarnesses(),
 	})
@@ -306,7 +311,7 @@ func (s Server) injectIndexConfig(data []byte) []byte {
 
 	return bytes.Replace(
 		data,
-		[]byte(`window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"codex","configuredAgentLabel":"Codex","defaultRepository":"git@github.com:Molten-Bot/moltenhub-code.git","promptImageHarnesses":["codex","pi"]};`),
+		[]byte(`window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"","configuredAgentLabel":"","defaultRepository":"git@github.com:Molten-Bot/moltenhub-code.git","promptImageHarnesses":["codex","pi"]};`),
 		[]byte("window.__HUB_UI_CONFIG__ = "+string(cfg)+";"),
 		1,
 	)

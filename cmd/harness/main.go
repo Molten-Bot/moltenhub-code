@@ -335,7 +335,15 @@ func runHub(args []string) int {
 			}
 		}
 
-		runCfg = applyDefaultAgentRuntimeConfig(runCfg, cfg)
+		activeCfg, err := effectiveHubSetupConfig(cfg)
+		if err != nil {
+			return "", fmt.Errorf("load runtime config: %w", err)
+		}
+		runCfg = applyDefaultAgentRuntimeConfig(runCfg, activeCfg)
+		runCfg, err = hub.ApplyBoundAgentRuntime(runCfg, activeCfg)
+		if err != nil {
+			return "", err
+		}
 		if err := validateRunConfigPromptImages(runCfg); err != nil {
 			return "", err
 		}

@@ -2766,6 +2766,98 @@ select.prompt-control {
     box-shadow 0.18s ease;
 }
 
+.agent-auth-harness-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.agent-auth-harness-empty {
+  padding: 14px 16px;
+  border: 1px solid var(--surface-auth-panel-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-auth-panel-bg) 85%, transparent);
+  color: var(--text-soft);
+  font-size: 0.84rem;
+}
+
+.agent-auth-harness-option {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  background: var(--glass-bg);
+  box-shadow: var(--glass-shadow);
+  text-align: left;
+  color: var(--text);
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.agent-auth-harness-option:hover,
+.agent-auth-harness-option:focus-visible {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--running) 38%, var(--glass-border));
+  background: color-mix(in srgb, var(--glass-bg) 72%, var(--surface-auth-panel-bg));
+}
+
+.agent-auth-harness-option:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--running) 26%, transparent);
+  outline-offset: 2px;
+}
+
+.agent-auth-harness-option.is-selected {
+  border-color: color-mix(in srgb, var(--running) 44%, var(--glass-border));
+  box-shadow:
+    0 10px 22px rgba(0, 0, 0, 0.12),
+    0 0 0 1px color-mix(in srgb, var(--running) 26%, transparent) inset;
+}
+
+.agent-auth-harness-option.is-pending {
+  opacity: 0.72;
+}
+
+.agent-auth-harness-option:disabled {
+  transform: none;
+}
+
+.agent-auth-harness-logo-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  border: 1px solid var(--glass-icon-border);
+  border-radius: 14px;
+  background: var(--glass-icon-bg);
+  box-shadow: var(--glass-icon-shadow);
+}
+
+.agent-auth-harness-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  filter: var(--agent-logo-filter);
+}
+
+.agent-auth-harness-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.agent-auth-harness-description {
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
 .agent-auth-copy {
   border: 1px solid var(--surface-auth-button-border);
   background: var(--surface-auth-button-bg);
@@ -2895,6 +2987,12 @@ select.prompt-control {
   border-color: color-mix(in srgb, var(--running) 60%, transparent);
   box-shadow: var(--surface-auth-verify-hover-shadow);
   transform: translateY(-1px);
+}
+
+@media (max-width: 640px) {
+  .agent-auth-harness-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .hub-setup-shell {

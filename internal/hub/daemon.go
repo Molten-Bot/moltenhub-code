@@ -772,6 +772,43 @@ func (d Daemon) handleDispatch(
 	deliveryID string,
 	ackedEarly bool,
 ) string {
+	boundRunCfg, bindErr := ApplyBoundAgentRuntime(dispatch.Config, cfg)
+	if bindErr != nil {
+		failRes := harness.Result{
+			ExitCode: harness.ExitConfig,
+			Err:      fmt.Errorf("apply bound agent runtime: %w", bindErr),
+		}
+		if d.OnDispatchFailed != nil {
+			d.OnDispatchFailed(dispatch.RequestID, dispatch.Config, failRes)
+		}
+		payload := dispatchResultPayload(cfg, dispatch, failRes)
+		if err := api.PublishResult(ctx, payload); err != nil {
+			d.logf("dispatch status=publish_error request_id=%s err=%q", dispatch.RequestID, err)
+			if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
+				if nackErr := api.NackOpenClawDelivery(ctx, deliveryID); nackErr != nil {
+					d.logf("dispatch status=nack_error delivery_id=%s err=%q", deliveryID, nackErr)
+				}
+			}
+			return "error"
+		}
+		if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
+			if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
+				d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
+			}
+		}
+		d.logf(
+			"dispatch status=error request_id=%s exit_code=%d workspace=%s branch=%s pr_url=%s err=%q",
+			dispatch.RequestID,
+			failRes.ExitCode,
+			failRes.WorkspaceDir,
+			failRes.Branch,
+			failRes.PRURL,
+			failRes.Err,
+		)
+		return "error"
+	}
+	dispatch.Config = boundRunCfg
+
 	d.logf(
 		"dispatch status=start request_id=%s skill=%s repo=%s repos=%s",
 		dispatch.RequestID,

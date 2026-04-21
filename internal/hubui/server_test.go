@@ -1502,8 +1502,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `const PROMPT_VISIBILITY_KEY = "hubui.localPromptVisible";`) {
 		t.Fatalf("expected index html to persist prompt visibility preference")
 	}
-	if !strings.Contains(markup, "configuredAgentGorillaSubtitle.textContent = `${label} is now a 600LB Gorilla!`;") {
-		t.Fatalf("expected index html to render dynamic gorilla subtitle copy")
+	if !strings.Contains(markup, "configuredAgentGorillaSubtitle.textContent = label === \"Agent\"") ||
+		!strings.Contains(markup, ": `${label} is now a 600LB Gorilla!`;") {
+		t.Fatalf("expected index html to render dynamic configured agent subtitle copy")
 	}
 	if !strings.Contains(markup, "function handlePromptImagePaste(") {
 		t.Fatalf("expected index html to include screenshot paste handler")
@@ -1538,7 +1539,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "clearSubmittedPromptState();") {
 		t.Fatalf("expected index html to clear the submitted prompt state after a successful queue")
 	}
-	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"","configuredAgentLabel":"Codex","defaultRepository":"`+config.DefaultRepositoryURL+`","promptImageHarnesses":["codex","pi"]};`) {
+	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"","configuredAgentLabel":"","defaultRepository":"`+config.DefaultRepositoryURL+`","promptImageHarnesses":["codex","pi"]};`) {
 		t.Fatalf("expected index html to include default UI config")
 	}
 	if !strings.Contains(markup, `id="theme-toggle"`) || !strings.Contains(markup, `function nextThemeMode(theme)`) {
@@ -1623,7 +1624,7 @@ func TestHandlerIndexInjectsAutomaticModeConfig(t *testing.T) {
 	}
 
 	markup := resp.Body.String()
-	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":true,"configuredHarness":"","configuredAgentLabel":"Codex","defaultRepository":"`+config.DefaultRepositoryURL+`","promptImageHarnesses":["codex","pi"]};`) {
+	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":true,"configuredHarness":"","configuredAgentLabel":"","defaultRepository":"`+config.DefaultRepositoryURL+`","promptImageHarnesses":["codex","pi"]};`) {
 		t.Fatalf("expected automatic mode UI config, got %q", markup)
 	}
 }
