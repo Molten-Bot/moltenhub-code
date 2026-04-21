@@ -428,7 +428,7 @@
   </div>
 
   <div id="agent-auth-gate" class="agent-auth-gate fixed inset-0 z-[95] hidden items-center justify-center p-4 backdrop-blur-sm" aria-live="polite">
-    <div class="agent-auth-shell flex min-h-[220px] w-full max-w-xl flex-col">
+    <div id="agent-auth-shell" class="agent-auth-shell flex min-h-[220px] w-full max-w-xl flex-col">
       <h2 id="agent-auth-title" class="text-[2rem] font-semibold leading-tight text-hub-text">Authorize Agent to get started</h2>
       <p id="agent-auth-message" class="mt-3 max-w-lg text-base leading-7 text-hub-text/85"></p>
 
@@ -1530,6 +1530,7 @@
     const promptWrap = document.querySelector(".prompt-wrap");
     const promptVisibilityToggle = document.getElementById("prompt-visibility-toggle");
     const agentAuthGate = document.getElementById("agent-auth-gate");
+    const agentAuthShell = document.getElementById("agent-auth-shell");
     const hubSetupGate = document.getElementById("hub-setup-gate");
     const hubSetupTitle = document.getElementById("hub-setup-title");
     const hubSetupForm = document.getElementById("hub-setup-form");
@@ -2818,6 +2819,9 @@
       if (agentAuthGate) {
         agentAuthGate.classList.toggle("hidden", !gateVisible);
         agentAuthGate.classList.toggle("flex", gateVisible);
+      }
+      if (agentAuthShell) {
+        agentAuthShell.classList.toggle("agent-auth-github-shell", needsClaudeGitHubConfigure);
       }
       if (agentAuthTitle) {
         if (needsHarnessSelection) {
