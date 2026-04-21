@@ -2469,9 +2469,12 @@ func effectiveHubSetupConfig(cfg hub.InitConfig) (hub.InitConfig, error) {
 func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSetupRequest, applyLive func(context.Context, hub.InitConfig) error) (hubui.HubSetupState, error) {
 	state := currentHubSetupState(cfg)
 	token := strings.TrimSpace(req.Token)
+	requestedRegion := strings.TrimSpace(req.Region)
 	state.AgentMode = hubSetupModeForToken(token, req.AgentMode)
 	state.TokenType = hubSetupTokenTypeForMode(state.AgentMode)
-	state.Region = normalizeHubSetupRegion(req.Region)
+	if requestedRegion != "" {
+		state.Region = normalizeHubSetupRegion(requestedRegion)
+	}
 	state.Handle = strings.TrimSpace(req.Handle)
 	state.Profile.ProfileText = strings.TrimSpace(req.Profile.ProfileText)
 	state.Profile.DisplayName = strings.TrimSpace(req.Profile.DisplayName)
@@ -2487,7 +2490,9 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 	if err != nil {
 		return bindError(fmt.Errorf("load runtime config: %w", err))
 	}
-	activeCfg.BaseURL = hubSetupBaseURL(activeCfg.BaseURL, state.Region)
+	if requestedRegion != "" {
+		activeCfg.BaseURL = hubSetupBaseURL(activeCfg.BaseURL, state.Region)
+	}
 
 	useSavedCredentials := token == ""
 	if !useSavedCredentials {
