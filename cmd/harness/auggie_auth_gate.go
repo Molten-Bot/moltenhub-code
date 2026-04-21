@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"strings"
@@ -41,9 +40,7 @@ func newAuggieAuthGate(runtimeConfigPath string, initCfg hub.InitConfig) *auggie
 		runtimeConfigPath: strings.TrimSpace(runtimeConfigPath),
 		initCfg:           initCfg,
 	}
-	g.authState.setNeedsConfigure("")
-	g.authState.configureCommand = auggieConfigureCommand
-	g.authState.configurePlaceholder = auggieConfigurePlaceholderValue
+	applyAuggieConfigureUIState(&g.authState, "")
 
 	g.mu.Lock()
 	g.refreshLocked()
@@ -55,33 +52,21 @@ func (g *auggieAuthGate) Status(_ context.Context) (hubui.AgentAuthState, error)
 	if g == nil {
 		return readyAgentAuthState(), nil
 	}
-
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.refreshLocked()
-	return g.snapshotLocked(), nil
+	return g.refreshAndSnapshot()
 }
 
 func (g *auggieAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthState, error) {
 	if g == nil {
 		return readyAgentAuthState(), nil
 	}
-
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.refreshLocked()
-	return g.snapshotLocked(), nil
+	return g.refreshAndSnapshot()
 }
 
 func (g *auggieAuthGate) Verify(_ context.Context) (hubui.AgentAuthState, error) {
 	if g == nil {
 		return readyAgentAuthState(), nil
 	}
-
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.refreshLocked()
-	return g.snapshotLocked(), nil
+	return g.refreshAndSnapshot()
 }
 
 func (g *auggieAuthGate) Configure(_ context.Context, rawInput string) (hubui.AgentAuthState, error) {
@@ -112,9 +97,7 @@ func (g *auggieAuthGate) Configure(_ context.Context, rawInput string) (hubui.Ag
 		)
 		if err != nil {
 			g.mu.Lock()
-			g.authState.setNeedsConfigure(state.Message)
-			g.authState.configureCommand = state.ConfigureCommand
-			g.authState.configurePlaceholder = state.ConfigurePlaceholder
+			g.authState.applySnapshot(state)
 			snap := g.snapshotLocked()
 			g.mu.Unlock()
 			return snap, err
@@ -131,27 +114,21 @@ func (g *auggieAuthGate) Configure(_ context.Context, rawInput string) (hubui.Ag
 	canonical, err := normalizeAuggieSessionAuth(rawInput)
 	if err != nil {
 		g.mu.Lock()
-		g.authState.setNeedsConfigure(fmt.Sprintf("Auggie session auth is invalid: %v.", err))
-		g.authState.configureCommand = auggieConfigureCommand
-		g.authState.configurePlaceholder = auggieConfigurePlaceholderValue
+		applyAuggieConfigureUIState(&g.authState, fmt.Sprintf("Auggie session auth is invalid: %v.", err))
 		snap := g.snapshotLocked()
 		g.mu.Unlock()
 		return snap, err
 	}
 	if err := hub.SaveRuntimeConfigAuggieAuth(runtimeConfigPath, initCfg, canonical); err != nil {
 		g.mu.Lock()
-		g.authState.setNeedsConfigure(fmt.Sprintf("save auggie config.json: %v", err))
-		g.authState.configureCommand = auggieConfigureCommand
-		g.authState.configurePlaceholder = auggieConfigurePlaceholderValue
+		applyAuggieConfigureUIState(&g.authState, fmt.Sprintf("save auggie config.json: %v", err))
 		snap := g.snapshotLocked()
 		g.mu.Unlock()
 		return snap, err
 	}
 	if err := os.Setenv(auggieSessionAuthEnv, canonical); err != nil {
 		g.mu.Lock()
-		g.authState.setNeedsConfigure(fmt.Sprintf("set %s: %v", auggieSessionAuthEnv, err))
-		g.authState.configureCommand = auggieConfigureCommand
-		g.authState.configurePlaceholder = auggieConfigurePlaceholderValue
+		applyAuggieConfigureUIState(&g.authState, fmt.Sprintf("set %s: %v", auggieSessionAuthEnv, err))
 		snap := g.snapshotLocked()
 		g.mu.Unlock()
 		return snap, err
@@ -170,9 +147,7 @@ func (g *auggieAuthGate) refreshLocked() {
 		return
 	}
 
-	g.authState.setNeedsConfigure("")
-	g.authState.configureCommand = auggieConfigureCommand
-	g.authState.configurePlaceholder = auggieConfigurePlaceholderValue
+	applyAuggieConfigureUIState(&g.authState, "")
 
 	configuredSessionAuth, source := firstConfiguredAuggieSessionAuth(g.runtimeConfigPath, g.initCfg)
 	if configuredSessionAuth == "" {
@@ -217,6 +192,19 @@ func (g *auggieAuthGate) refreshLocked() {
 
 func (g *auggieAuthGate) snapshotLocked() hubui.AgentAuthState {
 	return g.authState.snapshot(agentruntime.HarnessAuggie)
+}
+
+func (g *auggieAuthGate) refreshAndSnapshot() (hubui.AgentAuthState, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.refreshLocked()
+	return g.snapshotLocked(), nil
+}
+
+func applyAuggieConfigureUIState(state *configurableAgentAuthState, message string) {
+	state.setNeedsConfigure(message)
+	state.configureCommand = auggieConfigureCommand
+	state.configurePlaceholder = auggieConfigurePlaceholderValue
 }
 
 func firstConfiguredAuggieSessionAuth(runtimeConfigPath string, initCfg hub.InitConfig) (value string, source string) {
@@ -299,20 +287,4 @@ func decodeAuggieSessionAuth(rawInput string) (auggieSessionAuth, error) {
 	}
 
 	return auggieSessionAuth{}, fmt.Errorf("expected JSON object with accessToken, tenantURL, and scopes")
-}
-
-func decodeJSONStrict(raw string, dst any) error {
-	dec := json.NewDecoder(strings.NewReader(raw))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(dst); err != nil {
-		return err
-	}
-	var trailing any
-	if err := dec.Decode(&trailing); err != io.EOF {
-		if err == nil {
-			return fmt.Errorf("unexpected trailing JSON data")
-		}
-		return err
-	}
-	return nil
 }
