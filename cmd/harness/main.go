@@ -1983,7 +1983,7 @@ func maybeStartAgentAuth(ctx context.Context, runtime agentruntime.Runtime, gate
 		return
 	}
 	switch strings.TrimSpace(status.State) {
-	case "needs_configure", "pending_browser_login":
+	case "needs_configure", "needs_browser_login", "pending_browser_login":
 		return
 	}
 	if strings.TrimSpace(status.AuthURL) != "" {
