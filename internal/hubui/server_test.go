@@ -291,7 +291,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="hub-setup-form"`) {
 		t.Fatalf("expected index html to include hub setup form")
 	}
-	if !strings.Contains(markup, `id="hub-setup-copy"`) || !strings.Contains(markup, `Existing agents use an agent token. New agents use a bind token`) {
+	if !strings.Contains(markup, `id="hub-setup-copy"`) || !strings.Contains(markup, `Agent tokens start with t_; bind tokens start with b_`) {
 		t.Fatalf("expected index html to include supporting Molten Hub setup guidance")
 	}
 	if !strings.Contains(markup, `id="hub-setup-token-label" class="prompt-label">Agent Token</span>`) {
@@ -324,8 +324,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="hub-setup-region-na-toggle"`) || !strings.Contains(markup, `id="hub-setup-region-eu-toggle"`) {
 		t.Fatalf("expected index html to include hub setup region toggles")
 	}
-	if strings.Index(markup, `<span class="prompt-label">Region</span>`) > strings.Index(markup, `<span class="prompt-label">Agent</span>`) {
-		t.Fatalf("expected index html to render the Region row before the Agent row")
+	if strings.Contains(markup, `id="hub-setup-connect-agent-row"`) || strings.Contains(markup, `data-agent-mode=`) {
+		t.Fatalf("expected index html to remove the manual agent mode controls")
 	}
 	if strings.Contains(markup, `id="hub-setup-bind-toggle"`) || strings.Contains(markup, `id="hub-setup-agent-toggle"`) {
 		t.Fatalf("expected index html to remove the separate hub setup token type toggles")
@@ -431,6 +431,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `hubSetupSubmit.textContent = profileEditor ? "Save" : (isNew ? "Redeem Token" : "Connect Runtime");`) {
 		t.Fatalf("expected index html to relabel the hub setup submit button for profile, new-agent, and reconnect flows")
+	}
+	if !strings.Contains(markup, `function hubSetupModeForToken(token, fallback = state.hubSetup.agentMode)`) ||
+		!strings.Contains(markup, `trimmed.startsWith("b_")`) ||
+		!strings.Contains(markup, `trimmed.startsWith("t_")`) {
+		t.Fatalf("expected index html to infer new/existing agent mode from token prefix")
 	}
 	if !strings.Contains(markup, `hubSetupStatus.className = value`) || !strings.Contains(markup, `hub-setup-status submit-status submit-status-inline is-visible`) {
 		t.Fatalf("expected index html to keep the hub setup status line visible when populated")
