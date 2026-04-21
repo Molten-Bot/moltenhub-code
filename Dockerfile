@@ -21,10 +21,11 @@ FROM node:25.8.1-alpine3.23 AS runtime
 ARG AGENT_HARNESS
 ARG AGENT_NPM_PACKAGE
 ARG AGENT_COMMAND
-ENV GIT_TERMINAL_PROMPT=0
-ENV HARNESS_AGENT_HARNESS=${AGENT_HARNESS}
-ENV HARNESS_AGENT_COMMAND=${AGENT_COMMAND}
-ENV HARNESS_AGENTS_SEED_PATH=/opt/moltenhub/library/AGENTS.md
+ENV GIT_TERMINAL_PROMPT=0 \
+    HARNESS_AGENT_HARNESS=${AGENT_HARNESS} \
+    HARNESS_AGENT_COMMAND=${AGENT_COMMAND} \
+    HARNESS_AGENTS_SEED_PATH=/opt/moltenhub/library/AGENTS.md \
+    PATH="/usr/local/go/bin:${PATH}"
 
 RUN apk add --no-cache \
         ca-certificates \
@@ -45,20 +46,19 @@ RUN apk add --no-cache \
         esac; \
       fi \
     && npm install --global "${agent_pkg}" \
-    && npm cache clean --force
-
-RUN mkdir -p /workspace/config \
+    && npm cache clean --force \
+    && mkdir -p /workspace/config \
     && chown -R node:node /workspace
 WORKDIR /workspace
 
-COPY --from=build /out/harness /usr/local/bin/harness
+COPY --from=build --chmod=755 /out/harness /usr/local/bin/harness
+COPY --from=build /usr/local/go /usr/local/go
 COPY library /opt/moltenhub/library
-COPY library /workspace/library
 COPY skills /opt/moltenhub/skills
-COPY skills /workspace/skills
-COPY docker/entrypoint.sh /usr/local/bin/entrypoint
-COPY docker/with-config.sh /usr/local/bin/with-config
-RUN chmod +x /usr/local/bin/harness /usr/local/bin/entrypoint /usr/local/bin/with-config
+COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/entrypoint
+COPY --chmod=755 docker/with-config.sh /usr/local/bin/with-config
+RUN ln -s /opt/moltenhub/library /workspace/library \
+    && ln -s /opt/moltenhub/skills /workspace/skills
 
 VOLUME ["/workspace/config"]
 
