@@ -145,12 +145,13 @@
                 class="task-sound-toggle"
                 type="button"
                 aria-pressed="true"
-                aria-label="Disable task sounds"
-                title="Disable task sounds">
+                aria-label="Mute task sounds"
+                title="Mute">
                 <svg class="task-sound-toggle-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
                   <path d="M3.2 6.1h2.4l2.8-2.3v8.4L5.6 9.9H3.2z"></path>
-                  <path d="M10.2 5.2a3.5 3.5 0 0 1 0 5.6"></path>
-                  <path d="M11.9 3.8a5.7 5.7 0 0 1 0 8.4"></path>
+                  <path class="task-sound-toggle-wave" d="M10.2 5.2a3.5 3.5 0 0 1 0 5.6"></path>
+                  <path class="task-sound-toggle-wave" d="M11.9 3.8a5.7 5.7 0 0 1 0 8.4"></path>
+                  <path class="task-sound-toggle-muted-slash" d="M2.5 2.7l11 10.6"></path>
                 </svg>
               </button>
               <button
@@ -4815,10 +4816,11 @@
       }
       const muted = Boolean(state.taskSoundMuted);
       const enabled = !muted;
-      const label = enabled ? "Disable task sounds" : "Enable task sounds";
+      const ariaLabel = enabled ? "Mute task sounds" : "Enable task sounds";
+      const hoverLabel = enabled ? "Mute" : "Sounds";
       taskSoundToggle.setAttribute("aria-pressed", enabled ? "true" : "false");
-      taskSoundToggle.setAttribute("aria-label", label);
-      taskSoundToggle.setAttribute("title", label);
+      taskSoundToggle.setAttribute("aria-label", ariaLabel);
+      taskSoundToggle.setAttribute("title", hoverLabel);
       taskSoundToggle.classList.toggle("task-sound-toggle-muted", muted);
     }
 
