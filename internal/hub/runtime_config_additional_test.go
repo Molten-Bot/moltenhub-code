@@ -2,6 +2,7 @@ package hub
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -99,7 +100,8 @@ func TestSaveAndLoadRuntimeConfigUseDefaultResolvedPath(t *testing.T) {
 	t.Setenv(runtimeConfigPathEnv, envPath)
 
 	if err := SaveRuntimeConfig("", InitConfig{
-		BaseURL: "https://na.hub.molten.bot/v1",
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		AgentHarness: "codex",
 	}, "agent-token"); err != nil {
 		t.Fatalf("SaveRuntimeConfig(default path) error = %v", err)
 	}
@@ -461,6 +463,26 @@ func TestSaveRuntimeConfigHubSettingsPreservesConfiguredLogLevel(t *testing.T) {
 	}
 	if got["log_level"] != "debug" {
 		t.Fatalf("log_level = %#v, want %q", got["log_level"], "debug")
+	}
+}
+
+func TestSaveRuntimeConfigHubSettingsRejectsUnboundAgentWithoutWriting(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+
+	err := SaveRuntimeConfigHubSettings(path, InitConfig{
+		BaseURL:    "https://na.hub.molten.bot/v1",
+		AgentToken: "agent_direct",
+	}, "agent_direct")
+	if err == nil {
+		t.Fatal("SaveRuntimeConfigHubSettings() error = nil, want non-nil")
+	}
+	if got := err.Error(); got != unboundAgentRuntimeErrorMessage {
+		t.Fatalf("SaveRuntimeConfigHubSettings() error = %q, want %q", got, unboundAgentRuntimeErrorMessage)
+	}
+	if _, statErr := os.Stat(path); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("config file stat error = %v, want not exist", statErr)
 	}
 }
 

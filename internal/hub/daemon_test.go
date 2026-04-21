@@ -123,8 +123,9 @@ func TestLoadStoredRuntimeConfigReadsPrimaryPath(t *testing.T) {
 	primaryPath := filepath.Join(root, ".moltenhub", "config.json")
 
 	if err := SaveRuntimeConfig(primaryPath, InitConfig{
-		BaseURL:    "https://na.hub.molten.bot/v1",
-		SessionKey: "main",
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		AgentHarness: "codex",
+		SessionKey:   "main",
 	}, "agent_primary"); err != nil {
 		t.Fatalf("SaveRuntimeConfig(primary) error = %v", err)
 	}
@@ -196,13 +197,18 @@ func TestDaemonRunUsesStoredRuntimeConfigBaseURLWhenInitBaseURLOmitted(t *testin
 	defer server.Close()
 	base = server.URL + "/v1"
 
-	if err := SaveRuntimeConfig("", InitConfig{
-		BaseURL:    base,
-		SessionKey: "main",
-	}, token); err != nil {
-		t.Fatalf("SaveRuntimeConfig() error = %v", err)
-	}
 	runtimeCfgPath := defaultRuntimeConfigPath()
+	if err := os.MkdirAll(filepath.Dir(runtimeCfgPath), 0o755); err != nil {
+		t.Fatalf("mkdir runtime config dir: %v", err)
+	}
+	runtimeCfgJSON := fmt.Sprintf(
+		`{"baseUrl":%q,"token":%q,"agent_harness":"codex","sessionKey":"main"}`,
+		base,
+		token,
+	)
+	if err := os.WriteFile(runtimeCfgPath, []byte(runtimeCfgJSON), 0o600); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
 	cfgData, err := os.ReadFile(runtimeCfgPath)
 	if err != nil {
 		t.Fatalf("read runtime config: %v", err)
@@ -336,7 +342,7 @@ func TestDaemonRunUsesStoredRuntimeConfigPullTimeout(t *testing.T) {
 		t.Fatalf("mkdir runtime config dir: %v", err)
 	}
 	runtimeCfgJSON := fmt.Sprintf(
-		`{"baseUrl":%q,"token":"agent_saved","sessionKey":"main","timeoutMs":%d}`,
+		`{"baseUrl":%q,"token":"agent_saved","agent_harness":"codex","sessionKey":"main","timeoutMs":%d}`,
 		server.URL+"/v1",
 		pullTimeoutMs,
 	)

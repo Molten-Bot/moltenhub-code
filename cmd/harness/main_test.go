@@ -378,6 +378,33 @@ func TestLoadHubBootConfigWithoutFlagsAllowsDefaultRuntimeConfigWithoutCredentia
 	}
 }
 
+func TestLoadHubBootConfigWithBadRuntimeConfigFallsBackToDefaults(t *testing.T) {
+	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
+	t.Setenv("HARNESS_ALLOW_NON_MOLTEN_HUB_BASE_URL", "")
+
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(configPath, []byte(`{"base_url":"http://127.0.0.1:41099/v1","agent_token":"agent_saved"}`), 0o600); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+
+	cfg, exitCode, err := loadHubBootConfig("", configPath)
+	if err != nil {
+		t.Fatalf("loadHubBootConfig() error = %v", err)
+	}
+	if exitCode != harness.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	}
+	if got, want := cfg.BaseURL, "https://na.hub.molten.bot/v1"; got != want {
+		t.Fatalf("BaseURL = %q, want %q", got, want)
+	}
+	if got := cfg.AgentToken; got != "" {
+		t.Fatalf("AgentToken = %q, want empty", got)
+	}
+	if got, want := cfg.RuntimeConfigPath, configPath; got != want {
+		t.Fatalf("RuntimeConfigPath = %q, want %q", got, want)
+	}
+}
+
 func TestMonitorURL(t *testing.T) {
 	t.Parallel()
 
@@ -1269,6 +1296,19 @@ func TestHubSetupBaseURLUsesHubRegistryLocations(t *testing.T) {
 	}
 }
 
+func TestHubSetupPersistedBaseURLUsesHubRegistryDomain(t *testing.T) {
+	useHubSetupLocationsLoaderForTest(t, func(context.Context) ([]hubSetupLocation, error) {
+		return []hubSetupLocation{
+			{Display: "North America", Key: "na", Domain: "north-america.hub.molten.bot"},
+			{Display: "Europe", Key: "eu", Domain: "europe.hub.molten.bot"},
+		}, nil
+	})
+
+	if got, want := hubSetupPersistedBaseURL("http://127.0.0.1:41099/v1", "eu"), "https://europe.hub.molten.bot/v1"; got != want {
+		t.Fatalf("hubSetupPersistedBaseURL(loopback, eu) = %q, want %q", got, want)
+	}
+}
+
 func TestHubSetupRegionForBaseURLUsesHubRegistryLocations(t *testing.T) {
 	useHubSetupLocationsLoaderForTest(t, func(context.Context) ([]hubSetupLocation, error) {
 		return []hubSetupLocation{
@@ -1357,6 +1397,30 @@ func TestConfigureHubSetupRejectsShortToken(t *testing.T) {
 	}
 }
 
+func TestConfigureHubSetupRejectsUnboundAgentWithoutWritingConfig(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	state, err := configureHubSetup(context.Background(), hub.InitConfig{
+		RuntimeConfigPath: configPath,
+	}, hubui.HubSetupRequest{
+		AgentMode: "existing",
+		Token:     "c9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs",
+	}, nil)
+	if err == nil {
+		t.Fatal("configureHubSetup() error = nil, want non-nil")
+	}
+	if got := err.Error(); got != "agent harness is not configured; complete agent selection in the UI" {
+		t.Fatalf("configureHubSetup() error = %q, want unbound agent error", got)
+	}
+	if state.Configured {
+		t.Fatal("Configured = true, want false")
+	}
+	if _, statErr := os.Stat(configPath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("config file stat error = %v, want not exist", statErr)
+	}
+}
+
 func TestConfigureHubSetupExistingAgentIgnoresStatusUpdateFailuresDuringVerification(t *testing.T) {
 	t.Parallel()
 
@@ -1391,6 +1455,7 @@ func TestConfigureHubSetupExistingAgentIgnoresStatusUpdateFailuresDuringVerifica
 	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	state, err := configureHubSetup(context.Background(), hub.InitConfig{
 		BaseURL:           server.URL + "/v1",
+		AgentHarness:      "codex",
 		RuntimeConfigPath: configPath,
 	}, hubui.HubSetupRequest{
 		AgentMode: "existing",
@@ -1436,6 +1501,7 @@ func TestConfigureHubSetupExistingAgentReturnsLoginVerificationFailure(t *testin
 
 	state, err := configureHubSetup(context.Background(), hub.InitConfig{
 		BaseURL:           server.URL + "/v1",
+		AgentHarness:      "codex",
 		RuntimeConfigPath: filepath.Join(t.TempDir(), ".moltenhub", "config.json"),
 	}, hubui.HubSetupRequest{
 		AgentMode: "existing",

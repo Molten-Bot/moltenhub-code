@@ -54,6 +54,18 @@ func TestCanonicalHubBaseURLAllowsCustomURLWithOverride(t *testing.T) {
 	}
 }
 
+func TestValidatePersistedHubBaseURLRejectsLoopbackEvenWithOverride(t *testing.T) {
+	t.Setenv(allowNonMoltenHubBaseURLEnvName, "1")
+
+	err := ValidatePersistedHubBaseURL("http://127.0.0.1:8080/v1")
+	if err == nil {
+		t.Fatal("ValidatePersistedHubBaseURL(loopback) error = nil, want non-nil")
+	}
+	if !strings.Contains(err.Error(), "https") {
+		t.Fatalf("ValidatePersistedHubBaseURL(loopback) err = %q, want https detail", err.Error())
+	}
+}
+
 func TestHubBaseURLForRegion(t *testing.T) {
 	t.Parallel()
 

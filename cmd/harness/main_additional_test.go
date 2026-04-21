@@ -520,6 +520,7 @@ func TestConfigureHubSetupTracksCompletedOnboardingSteps(t *testing.T) {
 
 	state, err := configureHubSetup(context.Background(), hub.InitConfig{
 		BaseURL:           server.URL + "/v1",
+		AgentHarness:      "codex",
 		RuntimeConfigPath: filepath.Join(t.TempDir(), ".moltenhub", "config.json"),
 	}, hubui.HubSetupRequest{
 		AgentMode: "new",
@@ -593,6 +594,7 @@ func TestConfigureHubSetupMarksFailingOnboardingStep(t *testing.T) {
 
 	state, err := configureHubSetup(context.Background(), hub.InitConfig{
 		BaseURL:           server.URL + "/v1",
+		AgentHarness:      "codex",
 		RuntimeConfigPath: filepath.Join(t.TempDir(), ".moltenhub", "config.json"),
 	}, hubui.HubSetupRequest{
 		AgentMode: "new",
