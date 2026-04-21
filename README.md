@@ -42,11 +42,15 @@ Each run follows this sequence:
 1. Verifies required tooling and auth (`git`, `gh`, selected agent CLI)
 2. Creates an isolated workspace
 3. Clones target repo(s) and checks out `baseBranch`
-4. Runs the configured agent in `targetSubdir` (or workspace root for multi-repo runs)
-5. Opens or updates PRs for any changed repos
-6. Waits for required checks
+4. Prepares publish workflow per repo before agent execution:
+   - Probes direct write access
+   - For public GitHub repos with denied direct access, creates/uses a fork and validates push access there
+   - Fails the run early if no publishable path can be prepared
+5. Runs the configured agent in `targetSubdir` (or workspace root for multi-repo runs)
+6. Opens or updates PRs for any changed repos
+7. Waits for required checks
 
-The harness owns steps 5 and 6. Agent prompts are limited to repository changes, local validation, and clear failure/no-op reporting so tasks do not fail just because remote GitHub or CI access is unavailable inside the agent runtime.
+The harness owns steps 4, 6, and 7. Agent prompts are limited to repository changes, local validation, and clear failure/no-op reporting so tasks do not fail just because remote GitHub or CI access is unavailable inside the agent runtime.
 
 **Branch & PR rules:**
 

@@ -860,6 +860,7 @@ func TestRunRemoteWriteAccessFailureStopsBeforeCodex(t *testing.T) {
 	t.Parallel()
 
 	cfg := sampleConfig()
+	cfg.RepoURL = "git@gitlab.com:acme/repo.git"
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
 	runDir := testRunDir(guid)
@@ -892,11 +893,217 @@ func TestRunRemoteWriteAccessFailureStopsBeforeCodex(t *testing.T) {
 	if res.ExitCode != ExitGit {
 		t.Fatalf("ExitCode = %d, want %d", res.ExitCode, ExitGit)
 	}
-	if !strings.Contains(res.Err.Error(), "verify remote write access") {
-		t.Fatalf("error = %v, want write-access context", res.Err)
+	if !strings.Contains(res.Err.Error(), "prepare fork fallback for repo") {
+		t.Fatalf("error = %v, want fork-fallback context", res.Err)
+	}
+	if !strings.Contains(res.Err.Error(), "non-GitHub repo") {
+		t.Fatalf("error = %v, want non-GitHub context", res.Err)
 	}
 	if !strings.Contains(res.Err.Error(), "Write access to repository not granted") {
 		t.Fatalf("error = %v, want remote error detail", res.Err)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestPreparePublishWorkflowDirectWriteReady(t *testing.T) {
+	t.Parallel()
+
+	repoDir := "/tmp/repo"
+	branch := "moltenhub-build-api"
+	repo := repoWorkspace{
+		URL:    "git@github.com:acme/repo.git",
+		Dir:    repoDir,
+		RelDir: "repo",
+		Branch: branch,
+	}
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: pushDryRunCommand(repoDir, branch)},
+	}}
+
+	h := New(fake)
+	if err := h.preparePublishWorkflow(context.Background(), &repo); err != nil {
+		t.Fatalf("preparePublishWorkflow() err = %v", err)
+	}
+	if !repo.WriteAccessChecked || !repo.WriteAccessAllowed {
+		t.Fatalf("write access flags = checked:%t allowed:%t, want checked+allowed", repo.WriteAccessChecked, repo.WriteAccessAllowed)
+	}
+	if repo.WriteAccessErr != nil {
+		t.Fatalf("WriteAccessErr = %v, want nil", repo.WriteAccessErr)
+	}
+	if got, want := repo.PushRemote, publishRemoteOrigin; got != want {
+		t.Fatalf("PushRemote = %q, want %q", got, want)
+	}
+	if got, want := repo.PublishStrategy, publishStrategyDirect; got != want {
+		t.Fatalf("PublishStrategy = %q, want %q", got, want)
+	}
+	if got, want := repo.PRHeadRef, branch; got != want {
+		t.Fatalf("PRHeadRef = %q, want %q", got, want)
+	}
+	if got := repo.PRTargetRepo; got != "" {
+		t.Fatalf("PRTargetRepo = %q, want empty", got)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunPublicGitHubDeniedDirectAccessUsesForkFallback(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+	push403 := execx.Result{
+		Stderr: "remote: Write access to repository not granted.\n" +
+			"fatal: unable to access 'https://github.com/acme/repo.git/': The requested URL returned error: 403\n",
+	}
+	prURL := "https://github.com/acme/repo/pull/42"
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch), res: push403, err: errors.New("exit status 128")},
+		{cmd: ghRepoViewVisibilityCommand(repoDir, "acme/repo"), res: execx.Result{Stdout: `{"isPrivate":false,"nameWithOwner":"acme/repo"}`}},
+		{cmd: ghViewerLoginCommand(repoDir), res: execx.Result{Stdout: `{"login":"octocat"}`}},
+		{cmd: ghRepoForkCommand(repoDir, "acme/repo")},
+		{cmd: gitRemoteSetURLCommand(repoDir, publishRemoteFork, "git@github.com:octocat/repo.git"), res: execx.Result{Stderr: "error: No such remote 'fork'\n"}, err: errors.New("exit status 2")},
+		{cmd: gitRemoteAddCommand(repoDir, publishRemoteFork, "git@github.com:octocat/repo.git")},
+		{cmd: pushDryRunToRemoteCommand(repoDir, publishRemoteFork, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## moltenhub-build-api\n M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushToRemoteCommand(repoDir, publishRemoteFork, branch)},
+		{cmd: prCreateWithOptionsCommand(repoDir, cfg, cfg.BaseBranch, "octocat:"+branch, "acme/repo"), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL)},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d, want %d", res.ExitCode, ExitSuccess)
+	}
+	if got, want := res.PRURL, prURL; got != want {
+		t.Fatalf("PRURL = %q, want %q", got, want)
+	}
+	if got, want := res.RepoResults[0].Branch, branch; got != want {
+		t.Fatalf("RepoResults[0].Branch = %q, want %q", got, want)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestPreparePublishWorkflowForkAlreadyExistsIsIdempotent(t *testing.T) {
+	t.Parallel()
+
+	repoDir := "/tmp/repo"
+	branch := "moltenhub-build-api"
+	repo := repoWorkspace{
+		URL:    "git@github.com:acme/repo.git",
+		Dir:    repoDir,
+		RelDir: "repo",
+		Branch: branch,
+	}
+	push403 := execx.Result{
+		Stderr: "remote: Write access to repository not granted.\n" +
+			"fatal: unable to access 'https://github.com/acme/repo.git/': The requested URL returned error: 403\n",
+	}
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: pushDryRunCommand(repoDir, branch), res: push403, err: errors.New("exit status 128")},
+		{cmd: ghRepoViewVisibilityCommand(repoDir, "acme/repo"), res: execx.Result{Stdout: `{"isPrivate":false,"nameWithOwner":"acme/repo"}`}},
+		{cmd: ghViewerLoginCommand(repoDir), res: execx.Result{Stdout: `{"login":"octocat"}`}},
+		{cmd: ghRepoForkCommand(repoDir, "acme/repo"), res: execx.Result{Stderr: "a fork already exists"}, err: errors.New("exit status 1")},
+		{cmd: gitRemoteSetURLCommand(repoDir, publishRemoteFork, "git@github.com:octocat/repo.git")},
+		{cmd: pushDryRunToRemoteCommand(repoDir, publishRemoteFork, branch)},
+	}}
+
+	h := New(fake)
+	if err := h.preparePublishWorkflow(context.Background(), &repo); err != nil {
+		t.Fatalf("preparePublishWorkflow() err = %v", err)
+	}
+	if got, want := repo.PushRemote, publishRemoteFork; got != want {
+		t.Fatalf("PushRemote = %q, want %q", got, want)
+	}
+	if got, want := repo.PublishStrategy, publishStrategyForkFallback; got != want {
+		t.Fatalf("PublishStrategy = %q, want %q", got, want)
+	}
+	if got, want := repo.PRHeadRef, "octocat:"+branch; got != want {
+		t.Fatalf("PRHeadRef = %q, want %q", got, want)
+	}
+	if got, want := repo.PRTargetRepo, "acme/repo"; got != want {
+		t.Fatalf("PRTargetRepo = %q, want %q", got, want)
+	}
+	if !repo.WriteAccessChecked || !repo.WriteAccessAllowed {
+		t.Fatalf("write access flags = checked:%t allowed:%t, want checked+allowed", repo.WriteAccessChecked, repo.WriteAccessAllowed)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunPrivateGitHubDeniedDirectAccessFailsBeforeCodex(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+	push403 := execx.Result{
+		Stderr: "remote: Write access to repository not granted.\n" +
+			"fatal: unable to access 'https://github.com/acme/repo.git/': The requested URL returned error: 403\n",
+	}
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch), res: push403, err: errors.New("exit status 128")},
+		{cmd: ghRepoViewVisibilityCommand(repoDir, "acme/repo"), res: execx.Result{Stdout: `{"isPrivate":true,"nameWithOwner":"acme/repo"}`}},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if res.ExitCode != ExitGit {
+		t.Fatalf("ExitCode = %d, want %d", res.ExitCode, ExitGit)
+	}
+	if !strings.Contains(res.Err.Error(), "private") {
+		t.Fatalf("error = %v, want private repo context", res.Err)
+	}
+	if strings.Contains(res.Err.Error(), "codex") {
+		t.Fatalf("error = %v, want failure before agent stage", res.Err)
 	}
 	if len(fake.exps) != 0 {
 		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
@@ -1641,7 +1848,7 @@ func TestRunMultiRepoCreatesPRsForEachChangedRepo(t *testing.T) {
 	}
 }
 
-func TestRunMultiRepoReadOnlySecondaryRepoUnchangedStillSucceeds(t *testing.T) {
+func TestRunMultiRepoMixedDirectAndForkFallbackResolvesBeforeAgent(t *testing.T) {
 	t.Parallel()
 
 	cfg := sampleConfig()
@@ -1672,6 +1879,8 @@ func TestRunMultiRepoReadOnlySecondaryRepoUnchangedStillSucceeds(t *testing.T) {
 		Stderr: "remote: Write access to repository not granted.\n" +
 			"fatal: unable to access 'https://github.com/acme/repo-b.git/': The requested URL returned error: 403\n",
 	}
+	prURLA := "https://github.com/acme/repo-a/pull/10"
+	prURLB := "https://github.com/acme/repo-b/pull/20"
 
 	fake := &fakeRunner{t: t, allowUnorderedClones: true, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
@@ -1684,14 +1893,25 @@ func TestRunMultiRepoReadOnlySecondaryRepoUnchangedStillSucceeds(t *testing.T) {
 		{cmd: branchCommand(repoDirB, branch)},
 		{cmd: pushDryRunCommand(repoDirA, branch)},
 		{cmd: pushDryRunCommand(repoDirB, branch), res: push403, err: errors.New("exit status 128")},
+		{cmd: ghRepoViewVisibilityCommand(repoDirB, "acme/repo-b"), res: execx.Result{Stdout: `{"isPrivate":false,"nameWithOwner":"acme/repo-b"}`}},
+		{cmd: ghViewerLoginCommand(repoDirB), res: execx.Result{Stdout: `{"login":"octocat"}`}},
+		{cmd: ghRepoForkCommand(repoDirB, "acme/repo-b")},
+		{cmd: gitRemoteSetURLCommand(repoDirB, publishRemoteFork, "git@github.com:octocat/repo-b.git"), res: execx.Result{Stderr: "error: No such remote 'fork'\n"}, err: errors.New("exit status 2")},
+		{cmd: gitRemoteAddCommand(repoDirB, publishRemoteFork, "git@github.com:octocat/repo-b.git")},
+		{cmd: pushDryRunToRemoteCommand(repoDirB, publishRemoteFork, branch)},
 		{cmd: codexCommandWithOptions(runDir, codexPrompt, codexRunOptions{SkipGitRepoCheck: true})},
 		{cmd: statusCommand(repoDirA), res: execx.Result{Stdout: " M file-a.go\n"}},
-		{cmd: statusCommand(repoDirB), res: execx.Result{Stdout: "\n"}},
+		{cmd: statusCommand(repoDirB), res: execx.Result{Stdout: " M file-b.go\n"}},
 		{cmd: addCommand(repoDirA)},
 		{cmd: commitCommand(repoDirA, cfg.CommitMessage)},
 		{cmd: pushCommand(repoDirA, branch)},
-		{cmd: prCreateCommand(repoDirA, cfg, branch), res: execx.Result{Stdout: "https://github.com/acme/repo-a/pull/10\n"}},
-		{cmd: prChecksCommand(repoDirA, "https://github.com/acme/repo-a/pull/10")},
+		{cmd: prCreateCommand(repoDirA, cfg, branch), res: execx.Result{Stdout: prURLA + "\n"}},
+		{cmd: prChecksCommand(repoDirA, prURLA)},
+		{cmd: addCommand(repoDirB)},
+		{cmd: commitCommand(repoDirB, cfg.CommitMessage)},
+		{cmd: pushToRemoteCommand(repoDirB, publishRemoteFork, branch)},
+		{cmd: prCreateWithOptionsCommand(repoDirB, cfg, cfg.BaseBranch, "octocat:"+branch, "acme/repo-b"), res: execx.Result{Stdout: prURLB + "\n"}},
+		{cmd: prChecksCommand(repoDirB, prURLB)},
 	}}
 
 	h := New(fake)
@@ -1709,21 +1929,18 @@ func TestRunMultiRepoReadOnlySecondaryRepoUnchangedStillSucceeds(t *testing.T) {
 	if got, want := len(res.RepoResults), 2; got != want {
 		t.Fatalf("len(RepoResults) = %d, want %d", got, want)
 	}
-	if !res.RepoResults[0].Changed {
-		t.Fatal("RepoResults[0].Changed = false, want true")
+	if got, want := res.RepoResults[0].PRURL, prURLA; got != want {
+		t.Fatalf("RepoResults[0].PRURL = %q, want %q", got, want)
 	}
-	if res.RepoResults[1].Changed {
-		t.Fatal("RepoResults[1].Changed = true, want false")
-	}
-	if got := strings.TrimSpace(res.RepoResults[0].PRURL); got == "" {
-		t.Fatalf("RepoResults[0].PRURL = %q, want non-empty", res.RepoResults[0].PRURL)
+	if got, want := res.RepoResults[1].PRURL, prURLB; got != want {
+		t.Fatalf("RepoResults[1].PRURL = %q, want %q", got, want)
 	}
 	if len(fake.exps) != 0 {
 		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
 	}
 }
 
-func TestRunMultiRepoReadOnlySecondaryRepoChangedFails(t *testing.T) {
+func TestRunMultiRepoUnresolvedWorkflowFailsBeforeAgent(t *testing.T) {
 	t.Parallel()
 
 	cfg := sampleConfig()
@@ -1738,18 +1955,12 @@ func TestRunMultiRepoReadOnlySecondaryRepoChangedFails(t *testing.T) {
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
 	runDir := testRunDir(guid)
-	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	branch := "moltenhub-build-api"
 
 	repoRelA := repoWorkspaceDirName(cfg.Repos[0], 0, len(cfg.Repos))
 	repoRelB := repoWorkspaceDirName(cfg.Repos[1], 1, len(cfg.Repos))
 	repoDirA := filepath.Join(runDir, repoRelA)
 	repoDirB := filepath.Join(runDir, repoRelB)
-	codexPrompt := workspaceCodexPrompt(cfg.Prompt, cfg.TargetSubdir, []repoWorkspace{
-		{URL: cfg.Repos[0], RelDir: repoRelA},
-		{URL: cfg.Repos[1], RelDir: repoRelB},
-	})
-	codexPrompt = withAgentsPrompt(codexPrompt, agentsPath)
 	push403 := execx.Result{
 		Stderr: "remote: Write access to repository not granted.\n" +
 			"fatal: unable to access 'https://github.com/acme/repo-b.git/': The requested URL returned error: 403\n",
@@ -1766,14 +1977,7 @@ func TestRunMultiRepoReadOnlySecondaryRepoChangedFails(t *testing.T) {
 		{cmd: branchCommand(repoDirB, branch)},
 		{cmd: pushDryRunCommand(repoDirA, branch)},
 		{cmd: pushDryRunCommand(repoDirB, branch), res: push403, err: errors.New("exit status 128")},
-		{cmd: codexCommandWithOptions(runDir, codexPrompt, codexRunOptions{SkipGitRepoCheck: true})},
-		{cmd: statusCommand(repoDirA), res: execx.Result{Stdout: " M file-a.go\n"}},
-		{cmd: statusCommand(repoDirB), res: execx.Result{Stdout: " M file-b.go\n"}},
-		{cmd: addCommand(repoDirA)},
-		{cmd: commitCommand(repoDirA, cfg.CommitMessage)},
-		{cmd: pushCommand(repoDirA, branch)},
-		{cmd: prCreateCommand(repoDirA, cfg, branch), res: execx.Result{Stdout: "https://github.com/acme/repo-a/pull/10\n"}},
-		{cmd: prChecksCommand(repoDirA, "https://github.com/acme/repo-a/pull/10")},
+		{cmd: ghRepoViewVisibilityCommand(repoDirB, "acme/repo-b"), res: execx.Result{Stdout: `{"isPrivate":true,"nameWithOwner":"acme/repo-b"}`}},
 	}}
 
 	h := New(fake)
@@ -1783,19 +1987,16 @@ func TestRunMultiRepoReadOnlySecondaryRepoChangedFails(t *testing.T) {
 
 	res := h.Run(context.Background(), cfg)
 	if res.Err == nil {
-		t.Fatal("Run() err = nil, want read-only repo publish failure")
+		t.Fatal("Run() err = nil, want pre-agent workflow failure")
 	}
 	if res.ExitCode != ExitGit {
 		t.Fatalf("ExitCode = %d, want %d", res.ExitCode, ExitGit)
 	}
-	if !strings.Contains(res.Err.Error(), "cannot publish changes for repo") {
-		t.Fatalf("error = %v, want publish failure context", res.Err)
+	if !strings.Contains(res.Err.Error(), "workflow:") {
+		t.Fatalf("error = %v, want workflow-stage failure", res.Err)
 	}
-	if !strings.Contains(res.Err.Error(), cfg.Repos[1]) {
-		t.Fatalf("error = %v, want repo-b URL context", res.Err)
-	}
-	if !strings.Contains(res.Err.Error(), "verify remote write access") {
-		t.Fatalf("error = %v, want write-access probe detail", res.Err)
+	if !strings.Contains(res.Err.Error(), "private") {
+		t.Fatalf("error = %v, want private repo context", res.Err)
 	}
 	if len(fake.exps) != 0 {
 		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
@@ -2545,11 +2746,21 @@ func TestCommandBuilders(t *testing.T) {
 	if prLookup.Name != "gh" || prLookup.Dir != repoDir || !reflect.DeepEqual(prLookup.Args, wantLookup) {
 		t.Fatalf("pr lookup command unexpected: %+v", prLookup)
 	}
+	prLookupWithRepo := prLookupByHeadWithRepoCommand(repoDir, "octocat:"+branch, "acme/repo")
+	wantLookupWithRepo := []string{"pr", "list", "--state", "open", "--head", "octocat:" + branch, "--json", "url", "--limit", "1", "--repo", "acme/repo"}
+	if prLookupWithRepo.Name != "gh" || prLookupWithRepo.Dir != repoDir || !reflect.DeepEqual(prLookupWithRepo.Args, wantLookupWithRepo) {
+		t.Fatalf("pr lookup with repo command unexpected: %+v", prLookupWithRepo)
+	}
 
 	remoteHead := remoteBranchExistsOnOriginCommand(repoDir, branch)
 	wantRemoteHead := []string{"ls-remote", "--heads", "origin", branch}
 	if remoteHead.Name != "git" || remoteHead.Dir != repoDir || !reflect.DeepEqual(remoteHead.Args, wantRemoteHead) {
 		t.Fatalf("remote head command unexpected: %+v", remoteHead)
+	}
+	remoteForkHead := remoteBranchExistsOnRemoteCommand(repoDir, "fork", branch)
+	wantRemoteForkHead := []string{"ls-remote", "--heads", "fork", branch}
+	if remoteForkHead.Name != "git" || remoteForkHead.Dir != repoDir || !reflect.DeepEqual(remoteForkHead.Args, wantRemoteForkHead) {
+		t.Fatalf("remote fork head command unexpected: %+v", remoteForkHead)
 	}
 
 	commitsAhead := commitsAheadOfBaseCommand(repoDir, "refs/heads/main")
@@ -2625,6 +2836,11 @@ func TestCommandBuilders(t *testing.T) {
 	if fetchBranch.Name != "git" || fetchBranch.Dir != repoDir || !reflect.DeepEqual(fetchBranch.Args, wantFetchBranch) {
 		t.Fatalf("fetch branch command unexpected: %+v", fetchBranch)
 	}
+	fetchForkBranch := fetchBranchFromRemoteCommand(repoDir, "fork", branch)
+	wantFetchForkBranch := []string{"fetch", "fork", branch}
+	if fetchForkBranch.Name != "git" || fetchForkBranch.Dir != repoDir || !reflect.DeepEqual(fetchForkBranch.Args, wantFetchForkBranch) {
+		t.Fatalf("fetch fork branch command unexpected: %+v", fetchForkBranch)
+	}
 
 	mergeFetchedBranch := mergeFetchedBranchCommand(repoDir)
 	wantMergeFetchedBranch := []string{"merge", "--no-edit", "FETCH_HEAD"}
@@ -2636,6 +2852,40 @@ func TestCommandBuilders(t *testing.T) {
 	wantPushDryRun := []string{"push", "--dry-run", "origin", "HEAD:refs/heads/" + branch}
 	if pushDryRun.Name != "git" || pushDryRun.Dir != repoDir || !reflect.DeepEqual(pushDryRun.Args, wantPushDryRun) {
 		t.Fatalf("push dry-run command unexpected: %+v", pushDryRun)
+	}
+	pushForkDryRun := pushDryRunToRemoteCommand(repoDir, "fork", branch)
+	wantPushForkDryRun := []string{"push", "--dry-run", "fork", "HEAD:refs/heads/" + branch}
+	if pushForkDryRun.Name != "git" || pushForkDryRun.Dir != repoDir || !reflect.DeepEqual(pushForkDryRun.Args, wantPushForkDryRun) {
+		t.Fatalf("push fork dry-run command unexpected: %+v", pushForkDryRun)
+	}
+	pushFork := pushToRemoteCommand(repoDir, "fork", branch)
+	wantPushFork := []string{"push", "-u", "fork", branch}
+	if pushFork.Name != "git" || pushFork.Dir != repoDir || !reflect.DeepEqual(pushFork.Args, wantPushFork) {
+		t.Fatalf("push fork command unexpected: %+v", pushFork)
+	}
+	prWithRepo := prCreateWithOptionsCommand(repoDir, cfg, "main", "octocat:"+branch, "acme/repo")
+	if !containsSequence(prWithRepo.Args, []string{"--repo", "acme/repo"}) {
+		t.Fatalf("pr create with repo args missing --repo: %v", prWithRepo.Args)
+	}
+	ghViewer := ghViewerLoginCommand(repoDir)
+	if ghViewer.Name != "gh" || ghViewer.Dir != repoDir || !reflect.DeepEqual(ghViewer.Args, []string{"api", "user"}) {
+		t.Fatalf("gh viewer command unexpected: %+v", ghViewer)
+	}
+	ghRepoView := ghRepoViewVisibilityCommand(repoDir, "acme/repo")
+	if ghRepoView.Name != "gh" || ghRepoView.Dir != repoDir || !reflect.DeepEqual(ghRepoView.Args, []string{"repo", "view", "acme/repo", "--json", "isPrivate,nameWithOwner"}) {
+		t.Fatalf("gh repo view command unexpected: %+v", ghRepoView)
+	}
+	ghFork := ghRepoForkCommand(repoDir, "acme/repo")
+	if ghFork.Name != "gh" || ghFork.Dir != repoDir || !reflect.DeepEqual(ghFork.Args, []string{"repo", "fork", "acme/repo", "--clone=false", "--remote=false"}) {
+		t.Fatalf("gh repo fork command unexpected: %+v", ghFork)
+	}
+	remoteAdd := gitRemoteAddCommand(repoDir, "fork", "git@github.com:octocat/repo.git")
+	if remoteAdd.Name != "git" || remoteAdd.Dir != repoDir || !reflect.DeepEqual(remoteAdd.Args, []string{"remote", "add", "fork", "git@github.com:octocat/repo.git"}) {
+		t.Fatalf("git remote add command unexpected: %+v", remoteAdd)
+	}
+	remoteSetURL := gitRemoteSetURLCommand(repoDir, "fork", "git@github.com:octocat/repo.git")
+	if remoteSetURL.Name != "git" || remoteSetURL.Dir != repoDir || !reflect.DeepEqual(remoteSetURL.Args, []string{"remote", "set-url", "fork", "git@github.com:octocat/repo.git"}) {
+		t.Fatalf("git remote set-url command unexpected: %+v", remoteSetURL)
 	}
 }
 

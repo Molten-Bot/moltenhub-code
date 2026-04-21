@@ -764,6 +764,7 @@
       { id: "run", label: "Run Started", detail: "Harness run initialized.", icon: "moltenhub" },
       { id: "prepare", label: "Prepare", detail: "Preflight, auth, and workspace setup.", icon: "moltenhub" },
       { id: "clone", label: "Git Clone", detail: "Repository clone and branch setup.", icon: "github" },
+      { id: "workflow", label: "GitHub Prep", detail: "Publish strategy and fork fallback setup.", icon: "github" },
       { id: "agent", label: "Agent", detail: "Agent execution in progress.", icon: "agent" },
       { id: "finalize", label: "Finalize", detail: "Commit, PR, and checks.", icon: "github" },
     ];
@@ -5961,6 +5962,8 @@
         index = Math.max(index, 2);
       } else if (stage === "clone") {
         index = Math.max(index, 3);
+      } else if (stage === "workflow") {
+        index = Math.max(index, 4);
       } else if (
         stage === "codex" ||
         stage === "claude" ||
@@ -5969,9 +5972,9 @@
         stage === "augment" ||
         stage === "agent"
       ) {
-        index = Math.max(index, 4);
-      } else if (stage === "git" || stage === "pr" || stage === "checks" || stage === "finalize") {
         index = Math.max(index, 5);
+      } else if (stage === "git" || stage === "pr" || stage === "checks" || stage === "finalize") {
+        index = Math.max(index, 6);
       }
 
       const max = TASK_PROGRESS_STEPS.length - 1;

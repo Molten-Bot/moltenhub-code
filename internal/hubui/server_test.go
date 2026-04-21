@@ -195,6 +195,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `Current Work</span>`) {
 		t.Fatalf("expected index html to render the task panel under a Current Work heading")
 	}
+	if !strings.Contains(markup, `{ id: "workflow", label: "GitHub Prep", detail: "Publish strategy and fork fallback setup.", icon: "github" },`) {
+		t.Fatalf("expected index html to include the GitHub Prep workflow progress step")
+	}
+	if !strings.Contains(markup, `} else if (stage === "workflow") {`) {
+		t.Fatalf("expected index html to map stage=workflow into task progress rendering")
+	}
 	if strings.Contains(markup, `Runs move through prepare, clone, agent, and finalize. Re-runs, local clone links, and PRs stay attached here.`) {
 		t.Fatalf("expected index html to remove the old task queue supporting copy")
 	}

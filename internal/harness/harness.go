@@ -57,6 +57,10 @@ const (
 	bootstrapGitUserEmail            = "bot@molten.bot"
 	bootstrapMainCommitMessage       = "chore: initialize main branch"
 	agentsCredentialGuardInstruction = "YOU ARE NOT ALLOWED TO SHARE: GITHUB PAT and YOUR (AGENTS) AUTH CREDENTIALS"
+	publishRemoteOrigin              = "origin"
+	publishRemoteFork                = "fork"
+	publishStrategyDirect            = "direct"
+	publishStrategyForkFallback      = "fork-fallback"
 )
 
 type logFn func(string, ...any)
@@ -87,10 +91,15 @@ type repoWorkspace struct {
 	RelDir             string
 	Branch             string
 	PRURL              string
+	PRHeadRef          string
+	PRHeadOwner        string
+	PRTargetRepo       string
 	Changed            bool
 	WriteAccessChecked bool
 	WriteAccessAllowed bool
 	WriteAccessErr     error
+	PushRemote         string
+	PublishStrategy    string
 }
 
 type codexRunOptions = agentruntime.RunOptions
@@ -196,9 +205,11 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		relDir := repoWorkspaceDirName(repoURL, i, len(repoURLs))
 		repoDir := filepath.Join(runDir, relDir)
 		repos = append(repos, repoWorkspace{
-			URL:    repoURL,
-			Dir:    repoDir,
-			RelDir: relDir,
+			URL:             repoURL,
+			Dir:             repoDir,
+			RelDir:          relDir,
+			PushRemote:      publishRemoteOrigin,
+			PublishStrategy: publishStrategyDirect,
 		})
 	}
 	effectiveBaseBranch, err := h.cloneRepositories(ctx, repos, cloneBaseBranch)
@@ -240,25 +251,9 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		h.logf("stage=git status=ok action=branch branch=%s repo=%s repo_dir=%s", branch, repos[i].URL, repos[i].RelDir)
 	}
 	for i := range repos {
-		if err := h.verifyRemoteWriteAccess(ctx, repos[i]); err != nil {
-			if len(repos) > 1 && failurefollowup.NonRemediableRepoAccessReason(err) != "" {
-				repos[i].WriteAccessChecked = true
-				repos[i].WriteAccessAllowed = false
-				repos[i].WriteAccessErr = err
-				h.logf(
-					"stage=git status=warn action=probe_write_access reason=read_only_repo repo=%s repo_dir=%s branch=%s err=%q",
-					repos[i].URL,
-					repos[i].RelDir,
-					repos[i].Branch,
-					err,
-				)
-				continue
-			}
-			return h.fail(ExitGit, "git", err, runDir)
+		if err := h.preparePublishWorkflow(ctx, &repos[i]); err != nil {
+			return h.fail(ExitGit, "workflow", err, runDir)
 		}
-		repos[i].WriteAccessChecked = true
-		repos[i].WriteAccessAllowed = true
-		repos[i].WriteAccessErr = nil
 	}
 
 	codexDir := targetDir
@@ -298,6 +293,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 			return h.fail(ExitGit, "git", err, runDir)
 		}
 		repos[i].Branch = pickFirstNonEmpty(localBranchFromStatus(statusRes.Stdout), repos[i].Branch)
+		syncRepoPublishHeadRef(&repos[i])
 		changed, detectErr := h.repoHasPendingChanges(ctx, repos[i], statusRes.Stdout, runCfg.BaseBranch)
 		if detectErr != nil {
 			return h.fail(ExitGit, "git", detectErr, runDir)
@@ -383,12 +379,9 @@ func (h Harness) processChangedRepo(
 		return ExitGit, "git", fmt.Errorf("cannot publish changes for repo %s branch %q: remote write access unavailable", repo.URL, repo.Branch)
 	}
 	if !repo.WriteAccessChecked {
-		if err := h.verifyRemoteWriteAccess(ctx, *repo); err != nil {
-			return ExitGit, "git", err
+		if err := h.preparePublishWorkflow(ctx, repo); err != nil {
+			return ExitGit, "workflow", err
 		}
-		repo.WriteAccessChecked = true
-		repo.WriteAccessAllowed = true
-		repo.WriteAccessErr = nil
 	}
 
 	h.logf("stage=git status=start action=commit repo=%s repo_dir=%s", repo.URL, repo.RelDir)
@@ -417,6 +410,8 @@ func (h Harness) processChangedRepo(
 
 	h.logf("stage=pr status=start repo=%s repo_dir=%s", repo.URL, repo.RelDir)
 	createWorkBranch := shouldCreateWorkBranch(cfg.BaseBranch)
+	headRef := repoPRHeadRef(*repo)
+	targetRepo := repoPRTargetRepo(*repo)
 	if !createWorkBranch {
 		prURL, err := h.lookupOpenPRURLByHead(ctx, *repo)
 		if err != nil {
@@ -431,9 +426,9 @@ func (h Harness) processChangedRepo(
 			err   error
 		)
 		if createWorkBranch {
-			prRes, err = h.runCommand(ctx, "pr", prCreateCommand(repo.Dir, cfg, repo.Branch))
+			prRes, err = h.runCommand(ctx, "pr", prCreateWithOptionsCommand(repo.Dir, cfg, cfg.BaseBranch, headRef, targetRepo))
 		} else {
-			prRes, err = h.runCommand(ctx, "pr", prCreateWithoutBaseCommand(repo.Dir, cfg, repo.Branch))
+			prRes, err = h.runCommand(ctx, "pr", prCreateWithoutBaseWithOptionsCommand(repo.Dir, cfg, headRef, targetRepo))
 		}
 		if err != nil {
 			if existingPRURL, ok := existingPRURLFromCreateFailure(prRes, err); ok {
@@ -681,8 +676,9 @@ func (h Harness) processChangedRepo(
 }
 
 func (h Harness) pushWithSync(ctx context.Context, repo repoWorkspace, remediationAttempt int) error {
+	pushRemote := repoPushRemote(repo)
 	for pushAttempt := 1; pushAttempt <= maxPushSyncAttempts; pushAttempt++ {
-		res, err := h.runCommand(ctx, "git", pushCommand(repo.Dir, repo.Branch))
+		res, err := h.runCommand(ctx, "git", pushToRemoteCommand(repo.Dir, pushRemote, repo.Branch))
 		if err == nil {
 			return nil
 		}
@@ -709,48 +705,314 @@ func (h Harness) pushWithSync(ctx context.Context, repo repoWorkspace, remediati
 				maxPushSyncAttempts-1,
 			)
 		}
-		if _, syncErr := h.runCommand(ctx, "git", fetchBranchCommand(repo.Dir, repo.Branch)); syncErr != nil {
-			return fmt.Errorf("sync branch %q before push retry: %w", repo.Branch, syncErr)
+		if _, syncErr := h.runCommand(ctx, "git", fetchBranchFromRemoteCommand(repo.Dir, pushRemote, repo.Branch)); syncErr != nil {
+			return fmt.Errorf("sync branch %q on remote %q before push retry: %w", repo.Branch, pushRemote, syncErr)
 		}
 		if _, syncErr := h.runCommand(ctx, "git", mergeFetchedBranchCommand(repo.Dir)); syncErr != nil {
-			return fmt.Errorf("sync branch %q before push retry: %w", repo.Branch, syncErr)
+			return fmt.Errorf("sync branch %q on remote %q before push retry: %w", repo.Branch, pushRemote, syncErr)
 		}
 	}
-	return fmt.Errorf("push retries exhausted for branch %q", repo.Branch)
+	return fmt.Errorf("push retries exhausted for branch %q on remote %q", repo.Branch, pushRemote)
 }
 
 func (h Harness) verifyRemoteWriteAccess(ctx context.Context, repo repoWorkspace) error {
+	return h.verifyRemoteWriteAccessOnRemote(ctx, repo, publishRemoteOrigin, "git")
+}
+
+func (h Harness) verifyRemoteWriteAccessOnRemote(ctx context.Context, repo repoWorkspace, remote, stage string) error {
+	remote = strings.TrimSpace(remote)
+	if remote == "" {
+		remote = publishRemoteOrigin
+	}
+	stage = strings.TrimSpace(stage)
+	if stage == "" {
+		stage = "git"
+	}
 	h.logf(
-		"stage=git status=start action=probe_write_access repo=%s repo_dir=%s branch=%s",
+		"stage=%s status=start action=probe_write_access repo=%s repo_dir=%s branch=%s remote=%s",
+		stage,
 		repo.URL,
 		repo.RelDir,
 		repo.Branch,
+		remote,
 	)
-	res, err := h.runCommand(ctx, "git", pushDryRunCommand(repo.Dir, repo.Branch))
+	res, err := h.runCommand(ctx, "git", pushDryRunToRemoteCommand(repo.Dir, remote, repo.Branch))
 	if err != nil {
 		if isNonFastForwardPush(res, err) {
 			h.logf(
-				"stage=git status=ok action=probe_write_access reason=non_fast_forward repo=%s repo_dir=%s branch=%s",
+				"stage=%s status=ok action=probe_write_access reason=non_fast_forward repo=%s repo_dir=%s branch=%s remote=%s",
+				stage,
 				repo.URL,
 				repo.RelDir,
 				repo.Branch,
+				remote,
 			)
 			return nil
 		}
 		return commandErrorWithDetails(
-			fmt.Sprintf("verify remote write access for repo %s branch %q", repo.URL, repo.Branch),
+			fmt.Sprintf("verify remote write access for repo %s branch %q on remote %q", repo.URL, repo.Branch, remote),
 			err,
 			res,
 			maxGitErrorDetailChars,
 		)
 	}
 	h.logf(
-		"stage=git status=ok action=probe_write_access repo=%s repo_dir=%s branch=%s",
+		"stage=%s status=ok action=probe_write_access repo=%s repo_dir=%s branch=%s remote=%s",
+		stage,
+		repo.URL,
+		repo.RelDir,
+		repo.Branch,
+		remote,
+	)
+	return nil
+}
+
+func (h Harness) preparePublishWorkflow(ctx context.Context, repo *repoWorkspace) error {
+	if repo == nil {
+		return fmt.Errorf("repo workspace is required")
+	}
+
+	branch := normalizeBranchRef(repo.Branch)
+	if branch == "" {
+		return fmt.Errorf("prepare publish workflow for repo %s: branch is required", repo.URL)
+	}
+
+	repo.PushRemote = publishRemoteOrigin
+	repo.PublishStrategy = publishStrategyDirect
+	repo.PRHeadRef = branch
+	repo.PRHeadOwner = ""
+	repo.PRTargetRepo = ""
+
+	h.logf(
+		"stage=workflow status=start action=prepare_publish repo=%s repo_dir=%s branch=%s",
 		repo.URL,
 		repo.RelDir,
 		repo.Branch,
 	)
+
+	if err := h.verifyRemoteWriteAccessOnRemote(ctx, *repo, publishRemoteOrigin, "workflow"); err == nil {
+		repo.WriteAccessChecked = true
+		repo.WriteAccessAllowed = true
+		repo.WriteAccessErr = nil
+		h.logf(
+			"stage=workflow status=ok action=prepare_publish repo=%s repo_dir=%s branch=%s strategy=%s remote=%s",
+			repo.URL,
+			repo.RelDir,
+			repo.Branch,
+			repo.PublishStrategy,
+			repo.PushRemote,
+		)
+		return nil
+	} else {
+		repo.WriteAccessChecked = true
+		repo.WriteAccessAllowed = false
+		repo.WriteAccessErr = err
+		if failurefollowup.NonRemediableRepoAccessReason(err) == "" {
+			return err
+		}
+		h.logf(
+			"stage=workflow status=warn action=prepare_publish reason=direct_write_unavailable repo=%s repo_dir=%s branch=%s err=%q",
+			repo.URL,
+			repo.RelDir,
+			repo.Branch,
+			err,
+		)
+		if fallbackErr := h.prepareForkFallbackPublishWorkflow(ctx, repo); fallbackErr != nil {
+			return fmt.Errorf(
+				"prepare fork fallback for repo %s after direct write denial: %w",
+				repo.URL,
+				errors.Join(err, fallbackErr),
+			)
+		}
+		repo.WriteAccessChecked = true
+		repo.WriteAccessAllowed = true
+		repo.WriteAccessErr = nil
+		h.logf(
+			"stage=workflow status=ok action=prepare_publish repo=%s repo_dir=%s branch=%s strategy=%s remote=%s head=%s target_repo=%s",
+			repo.URL,
+			repo.RelDir,
+			repo.Branch,
+			repo.PublishStrategy,
+			repo.PushRemote,
+			repo.PRHeadRef,
+			repo.PRTargetRepo,
+		)
+		return nil
+	}
+}
+
+type ghViewerProfile struct {
+	Login string `json:"login"`
+}
+
+type ghRepoVisibility struct {
+	IsPrivate     bool   `json:"isPrivate"`
+	NameWithOwner string `json:"nameWithOwner"`
+}
+
+func (h Harness) prepareForkFallbackPublishWorkflow(ctx context.Context, repo *repoWorkspace) error {
+	if repo == nil {
+		return fmt.Errorf("repo workspace is required")
+	}
+	ref, ok := parseGitHubRepoRef(repo.URL)
+	if !ok {
+		return fmt.Errorf("cannot prepare fork fallback for non-GitHub repo %s", repo.URL)
+	}
+	upstreamRepo := fmt.Sprintf("%s/%s", ref.owner, ref.name)
+
+	repoViewRes, repoViewErr := h.runCommand(ctx, "workflow", ghRepoViewVisibilityCommand(repo.Dir, upstreamRepo))
+	if repoViewErr != nil {
+		return commandErrorWithDetails(
+			fmt.Sprintf("inspect upstream repository visibility for %s", upstreamRepo),
+			repoViewErr,
+			repoViewRes,
+			maxGitErrorDetailChars,
+		)
+	}
+	repoView, parseViewErr := parseGitHubRepoVisibility(repoViewRes.Stdout)
+	if parseViewErr != nil {
+		return fmt.Errorf("decode github repository visibility for %s: %w", upstreamRepo, parseViewErr)
+	}
+	resolvedUpstreamRepo := strings.TrimSpace(repoView.NameWithOwner)
+	if resolvedUpstreamRepo == "" {
+		resolvedUpstreamRepo = upstreamRepo
+	}
+	if repoView.IsPrivate {
+		return fmt.Errorf("repository %s is private; automatic fork fallback supports only public repositories", resolvedUpstreamRepo)
+	}
+
+	viewerRes, viewerErr := h.runCommand(ctx, "workflow", ghViewerLoginCommand(repo.Dir))
+	if viewerErr != nil {
+		return commandErrorWithDetails(
+			"resolve authenticated github login",
+			viewerErr,
+			viewerRes,
+			maxGitErrorDetailChars,
+		)
+	}
+	viewerLogin, parseViewerErr := parseGitHubViewerLogin(viewerRes.Stdout)
+	if parseViewerErr != nil {
+		return fmt.Errorf("decode authenticated github login: %w", parseViewerErr)
+	}
+	if viewerLogin == "" {
+		return fmt.Errorf("decode authenticated github login: missing login")
+	}
+
+	forkRes, forkErr := h.runCommand(ctx, "workflow", ghRepoForkCommand(repo.Dir, resolvedUpstreamRepo))
+	if forkErr != nil && !isForkAlreadyExistsError(forkRes, forkErr) {
+		return commandErrorWithDetails(
+			fmt.Sprintf("create or reuse fork for %s", resolvedUpstreamRepo),
+			forkErr,
+			forkRes,
+			maxGitErrorDetailChars,
+		)
+	}
+
+	forkURL, forkURLOk := ref.withOwner(viewerLogin)
+	if !forkURLOk {
+		return fmt.Errorf("compute fork remote url for repo %s and viewer %s", repo.URL, viewerLogin)
+	}
+	if err := h.ensureForkRemoteConfigured(ctx, *repo, forkURL); err != nil {
+		return err
+	}
+	if err := h.verifyRemoteWriteAccessOnRemote(ctx, *repo, publishRemoteFork, "workflow"); err != nil {
+		return err
+	}
+
+	repo.PushRemote = publishRemoteFork
+	repo.PublishStrategy = publishStrategyForkFallback
+	repo.PRHeadOwner = viewerLogin
+	repo.PRHeadRef = fmt.Sprintf("%s:%s", viewerLogin, normalizeBranchRef(repo.Branch))
+	repo.PRTargetRepo = resolvedUpstreamRepo
 	return nil
+}
+
+func (h Harness) ensureForkRemoteConfigured(ctx context.Context, repo repoWorkspace, forkURL string) error {
+	setRes, setErr := h.runCommand(ctx, "workflow", gitRemoteSetURLCommand(repo.Dir, publishRemoteFork, forkURL))
+	if setErr == nil {
+		return nil
+	}
+	if !isNoSuchRemoteError(setRes, setErr) {
+		return commandErrorWithDetails(
+			fmt.Sprintf("set remote %q url for repo %s", publishRemoteFork, repo.URL),
+			setErr,
+			setRes,
+			maxGitErrorDetailChars,
+		)
+	}
+	addRes, addErr := h.runCommand(ctx, "workflow", gitRemoteAddCommand(repo.Dir, publishRemoteFork, forkURL))
+	if addErr != nil {
+		return commandErrorWithDetails(
+			fmt.Sprintf("add remote %q url for repo %s", publishRemoteFork, repo.URL),
+			addErr,
+			addRes,
+			maxGitErrorDetailChars,
+		)
+	}
+	return nil
+}
+
+func parseGitHubViewerLogin(raw string) (string, error) {
+	var profile ghViewerProfile
+	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &profile); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(profile.Login), nil
+}
+
+func parseGitHubRepoVisibility(raw string) (ghRepoVisibility, error) {
+	var repo ghRepoVisibility
+	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &repo); err != nil {
+		return ghRepoVisibility{}, err
+	}
+	return repo, nil
+}
+
+func isForkAlreadyExistsError(res execx.Result, err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
+	return strings.Contains(text, "already exists")
+}
+
+func isNoSuchRemoteError(res execx.Result, err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
+	return strings.Contains(text, "no such remote")
+}
+
+func repoPushRemote(repo repoWorkspace) string {
+	if remote := strings.TrimSpace(repo.PushRemote); remote != "" {
+		return remote
+	}
+	return publishRemoteOrigin
+}
+
+func repoPRHeadRef(repo repoWorkspace) string {
+	if owner := strings.TrimSpace(repo.PRHeadOwner); owner != "" {
+		branch := normalizeBranchRef(repo.Branch)
+		if branch != "" {
+			return fmt.Sprintf("%s:%s", owner, branch)
+		}
+	}
+	if head := strings.TrimSpace(repo.PRHeadRef); head != "" {
+		if idx := strings.Index(head, ":"); idx > 0 {
+			owner := strings.TrimSpace(head[:idx])
+			branch := normalizeBranchRef(repo.Branch)
+			if owner != "" && branch != "" {
+				return fmt.Sprintf("%s:%s", owner, branch)
+			}
+		}
+		return head
+	}
+	return normalizeBranchRef(repo.Branch)
+}
+
+func repoPRTargetRepo(repo repoWorkspace) string {
+	return strings.TrimSpace(repo.PRTargetRepo)
 }
 
 func (h Harness) populateNoChangePRURLs(ctx context.Context, repos []repoWorkspace) {
@@ -794,20 +1056,25 @@ func (h Harness) populateNoChangePRURLs(ctx context.Context, repos []repoWorkspa
 }
 
 func (h Harness) lookupOpenPRURLByHead(ctx context.Context, repo repoWorkspace) (string, error) {
+	headRef := repoPRHeadRef(repo)
+	if headRef == "" {
+		return "", nil
+	}
 	branch := normalizeBranchRef(repo.Branch)
 	if branch == "" {
 		return "", nil
 	}
 
-	remoteRes, remoteErr := h.runCommand(ctx, "git", remoteBranchExistsOnOriginCommand(repo.Dir, branch))
+	pushRemote := repoPushRemote(repo)
+	remoteRes, remoteErr := h.runCommand(ctx, "git", remoteBranchExistsOnRemoteCommand(repo.Dir, pushRemote, branch))
 	if remoteErr != nil {
-		return "", fmt.Errorf("verify remote branch %q for repo %s: %w", branch, repo.URL, remoteErr)
+		return "", fmt.Errorf("verify remote branch %q for repo %s on remote %q: %w", branch, repo.URL, pushRemote, remoteErr)
 	}
 	if !hasRemoteBranch(remoteRes) {
 		return "", nil
 	}
 
-	lookupRes, err := h.runCommand(ctx, "pr", prLookupByHeadCommand(repo.Dir, branch))
+	lookupRes, err := h.runCommand(ctx, "pr", prLookupByHeadWithRepoCommand(repo.Dir, headRef, repoPRTargetRepo(repo)))
 	if err != nil {
 		return "", err
 	}
@@ -818,12 +1085,12 @@ func (h Harness) lookupOpenPRURLByHead(ctx context.Context, repo repoWorkspace) 
 }
 
 func (h Harness) lookupAnyPRURLByHead(ctx context.Context, repo repoWorkspace) (string, error) {
-	branch := normalizeBranchRef(repo.Branch)
-	if branch == "" {
+	headRef := repoPRHeadRef(repo)
+	if headRef == "" {
 		return "", nil
 	}
 
-	lookupRes, err := h.runCommand(ctx, "pr", prLookupAnyByHeadCommand(repo.Dir, branch))
+	lookupRes, err := h.runCommand(ctx, "pr", prLookupAnyByHeadWithRepoCommand(repo.Dir, headRef, repoPRTargetRepo(repo)))
 	if err != nil {
 		return "", err
 	}
@@ -1171,12 +1438,39 @@ func (h Harness) refreshRepoChangeStateAfterNoOpCommit(
 		return false, err
 	}
 	repo.Branch = pickFirstNonEmpty(localBranchFromStatus(statusRes.Stdout), repo.Branch)
+	syncRepoPublishHeadRef(repo)
 	changed, detectErr := h.repoHasPendingChanges(ctx, *repo, statusRes.Stdout, baseBranch)
 	if detectErr != nil {
 		return false, detectErr
 	}
 	repo.Changed = changed
 	return !repo.Changed, nil
+}
+
+func syncRepoPublishHeadRef(repo *repoWorkspace) {
+	if repo == nil {
+		return
+	}
+	branch := normalizeBranchRef(repo.Branch)
+	if branch == "" {
+		return
+	}
+	if owner := strings.TrimSpace(repo.PRHeadOwner); owner != "" {
+		repo.PRHeadRef = fmt.Sprintf("%s:%s", owner, branch)
+		return
+	}
+	if strings.EqualFold(strings.TrimSpace(repo.PublishStrategy), publishStrategyForkFallback) {
+		head := strings.TrimSpace(repo.PRHeadRef)
+		if idx := strings.Index(head, ":"); idx > 0 {
+			owner := strings.TrimSpace(head[:idx])
+			if owner != "" {
+				repo.PRHeadOwner = owner
+				repo.PRHeadRef = fmt.Sprintf("%s:%s", owner, branch)
+				return
+			}
+		}
+	}
+	repo.PRHeadRef = branch
 }
 
 func (h Harness) repoHasPendingChanges(
@@ -2985,14 +3279,24 @@ func commitCommand(repoDir, msg string) execx.Command {
 }
 
 func pushCommand(repoDir, branch string) execx.Command {
-	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"push", "-u", "origin", branch}}
+	return pushToRemoteCommand(repoDir, publishRemoteOrigin, branch)
+}
+
+func pushToRemoteCommand(repoDir, remote, branch string) execx.Command {
+	remote = normalizeGitRemoteName(remote)
+	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"push", "-u", remote, branch}}
 }
 
 func pushDryRunCommand(repoDir, branch string) execx.Command {
+	return pushDryRunToRemoteCommand(repoDir, publishRemoteOrigin, branch)
+}
+
+func pushDryRunToRemoteCommand(repoDir, remote, branch string) execx.Command {
+	remote = normalizeGitRemoteName(remote)
 	return execx.Command{
 		Dir:  repoDir,
 		Name: "git",
-		Args: []string{"push", "--dry-run", "origin", fmt.Sprintf("HEAD:refs/heads/%s", normalizeBranchRef(branch))},
+		Args: []string{"push", "--dry-run", remote, fmt.Sprintf("HEAD:refs/heads/%s", normalizeBranchRef(branch))},
 	}
 }
 
@@ -3009,11 +3313,42 @@ func commitsAheadOfBaseCommand(repoDir, baseBranch string) execx.Command {
 }
 
 func fetchBranchCommand(repoDir, branch string) execx.Command {
-	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"fetch", "origin", branch}}
+	return fetchBranchFromRemoteCommand(repoDir, publishRemoteOrigin, branch)
+}
+
+func fetchBranchFromRemoteCommand(repoDir, remote, branch string) execx.Command {
+	remote = normalizeGitRemoteName(remote)
+	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"fetch", remote, branch}}
 }
 
 func mergeFetchedBranchCommand(repoDir string) execx.Command {
 	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"merge", "--no-edit", "FETCH_HEAD"}}
+}
+
+func gitRemoteAddCommand(repoDir, remote, remoteURL string) execx.Command {
+	remote = normalizeGitRemoteName(remote)
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "git",
+		Args: []string{"remote", "add", remote, remoteURL},
+	}
+}
+
+func gitRemoteSetURLCommand(repoDir, remote, remoteURL string) execx.Command {
+	remote = normalizeGitRemoteName(remote)
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "git",
+		Args: []string{"remote", "set-url", remote, remoteURL},
+	}
+}
+
+func normalizeGitRemoteName(remote string) string {
+	remote = strings.TrimSpace(remote)
+	if remote == "" {
+		return publishRemoteOrigin
+	}
+	return remote
 }
 
 func appendPRReviewers(args []string, reviewers []string) []string {
@@ -3028,12 +3363,19 @@ func appendPRReviewers(args []string, reviewers []string) []string {
 }
 
 func prCreateCommand(repoDir string, cfg config.Config, branch string) execx.Command {
+	return prCreateWithOptionsCommand(repoDir, cfg, cfg.BaseBranch, branch, "")
+}
+
+func prCreateWithOptionsCommand(repoDir string, cfg config.Config, baseBranch, headRef, repo string) execx.Command {
 	args := []string{
 		"pr", "create",
-		"--base", cfg.BaseBranch,
-		"--head", branch,
+		"--base", baseBranch,
+		"--head", headRef,
 		"--title", cfg.PRTitle,
 		"--body", cfg.PRBody,
+	}
+	if strings.TrimSpace(repo) != "" {
+		args = append(args, "--repo", strings.TrimSpace(repo))
 	}
 	for _, label := range cfg.Labels {
 		if strings.TrimSpace(label) == "" {
@@ -3046,11 +3388,18 @@ func prCreateCommand(repoDir string, cfg config.Config, branch string) execx.Com
 }
 
 func prCreateWithoutBaseCommand(repoDir string, cfg config.Config, branch string) execx.Command {
+	return prCreateWithoutBaseWithOptionsCommand(repoDir, cfg, branch, "")
+}
+
+func prCreateWithoutBaseWithOptionsCommand(repoDir string, cfg config.Config, headRef, repo string) execx.Command {
 	args := []string{
 		"pr", "create",
-		"--head", branch,
+		"--head", headRef,
 		"--title", cfg.PRTitle,
 		"--body", cfg.PRBody,
+	}
+	if strings.TrimSpace(repo) != "" {
+		args = append(args, "--repo", strings.TrimSpace(repo))
 	}
 	for _, label := range cfg.Labels {
 		if strings.TrimSpace(label) == "" {
@@ -3063,26 +3412,71 @@ func prCreateWithoutBaseCommand(repoDir string, cfg config.Config, branch string
 }
 
 func remoteBranchExistsOnOriginCommand(repoDir, branch string) execx.Command {
+	return remoteBranchExistsOnRemoteCommand(repoDir, publishRemoteOrigin, branch)
+}
+
+func remoteBranchExistsOnRemoteCommand(repoDir, remote, branch string) execx.Command {
+	remote = normalizeGitRemoteName(remote)
 	return execx.Command{
 		Dir:  repoDir,
 		Name: "git",
-		Args: []string{"ls-remote", "--heads", "origin", normalizeBranchRef(branch)},
+		Args: []string{"ls-remote", "--heads", remote, normalizeBranchRef(branch)},
 	}
 }
 
 func prLookupByHeadCommand(repoDir, branch string) execx.Command {
+	return prLookupByHeadWithRepoCommand(repoDir, branch, "")
+}
+
+func prLookupByHeadWithRepoCommand(repoDir, headRef, repo string) execx.Command {
+	args := []string{"pr", "list", "--state", "open", "--head", headRef, "--json", "url", "--limit", "1"}
+	if strings.TrimSpace(repo) != "" {
+		args = append(args, "--repo", strings.TrimSpace(repo))
+	}
 	return execx.Command{
 		Dir:  repoDir,
 		Name: "gh",
-		Args: []string{"pr", "list", "--state", "open", "--head", branch, "--json", "url", "--limit", "1"},
+		Args: args,
 	}
 }
 
 func prLookupAnyByHeadCommand(repoDir, branch string) execx.Command {
+	return prLookupAnyByHeadWithRepoCommand(repoDir, branch, "")
+}
+
+func prLookupAnyByHeadWithRepoCommand(repoDir, headRef, repo string) execx.Command {
+	args := []string{"pr", "list", "--state", "all", "--head", headRef, "--json", "url", "--limit", "1"}
+	if strings.TrimSpace(repo) != "" {
+		args = append(args, "--repo", strings.TrimSpace(repo))
+	}
 	return execx.Command{
 		Dir:  repoDir,
 		Name: "gh",
-		Args: []string{"pr", "list", "--state", "all", "--head", branch, "--json", "url", "--limit", "1"},
+		Args: args,
+	}
+}
+
+func ghViewerLoginCommand(repoDir string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: []string{"api", "user"},
+	}
+}
+
+func ghRepoViewVisibilityCommand(repoDir, repo string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: []string{"repo", "view", strings.TrimSpace(repo), "--json", "isPrivate,nameWithOwner"},
+	}
+}
+
+func ghRepoForkCommand(repoDir, repo string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: []string{"repo", "fork", strings.TrimSpace(repo), "--clone=false", "--remote=false"},
 	}
 }
 
