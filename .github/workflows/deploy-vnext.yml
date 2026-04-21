@@ -38,30 +38,10 @@ jobs:
         run: go test ./...
 
   publish:
-    name: Publish vnext Docker image (${{ matrix.harness }})
+    name: Publish vnext Docker image
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - harness: codex
-            npm_package: '@openai/codex@latest'
-            tag_suffix: codex
-            publish_default_tags: 'true'
-          - harness: claude
-            npm_package: '@anthropic-ai/claude-code@latest'
-            tag_suffix: claude
-            publish_default_tags: 'false'
-          - harness: auggie
-            npm_package: '@augmentcode/auggie@latest'
-            tag_suffix: auggie
-            publish_default_tags: 'false'
-          - harness: pi
-            npm_package: '@mariozechner/pi-coding-agent@latest'
-            tag_suffix: pi
-            publish_default_tags: 'false'
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -82,10 +62,7 @@ jobs:
       - name: Compute tags
         id: tags
         run: |
-          TAGS="moltenai/moltenhub-code:vnext-${{ matrix.tag_suffix }},moltenai/moltenhub-code:${{ steps.version.outputs.tag }}-${{ matrix.tag_suffix }}"
-          if [ "${{ matrix.publish_default_tags }}" = "true" ]; then
-            TAGS="${TAGS},moltenai/moltenhub-code:vnext,moltenai/moltenhub-code:${{ steps.version.outputs.tag }}"
-          fi
+          TAGS="moltenai/moltenhub-code:vnext,moltenai/moltenhub-code:${{ steps.version.outputs.tag }}"
           echo "value=${TAGS}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
@@ -94,8 +71,5 @@ jobs:
           context: .
           push: true
           tags: ${{ steps.tags.outputs.value }}
-          build-args: |
-            AGENT_HARNESS=${{ matrix.harness }}
-            AGENT_NPM_PACKAGE=${{ matrix.npm_package }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

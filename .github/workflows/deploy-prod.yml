@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       source_tag:
-        description: Docker tag to promote to latest-* release tags
+        description: Docker tag to promote to latest
         required: true
         default: vnext
         type: string
@@ -17,26 +17,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  promote-harness-variants:
-    name: Promote image to latest-${{ matrix.harness }}
+  promote:
+    name: Promote image to latest
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - harness: codex
-            source_suffix: ""
-            publish_default_tag: "true"
-          - harness: claude
-            source_suffix: "-claude"
-            publish_default_tag: "false"
-          - harness: auggie
-            source_suffix: "-auggie"
-            publish_default_tag: "false"
-          - harness: pi
-            source_suffix: "-pi"
-            publish_default_tag: "false"
     steps:
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -49,11 +33,6 @@ jobs:
 
       - name: Promote existing image
         run: |
-          TAG_ARGS="--tag moltenai/moltenhub-code:latest-${{ matrix.harness }}"
-          if [ "${{ matrix.publish_default_tag }}" = "true" ]; then
-            TAG_ARGS="${TAG_ARGS} --tag moltenai/moltenhub-code:latest"
-          fi
-
           docker buildx imagetools create \
-            ${TAG_ARGS} \
-            moltenai/moltenhub-code:${{ github.event.inputs.source_tag }}${{ matrix.source_suffix }}
+            --tag moltenai/moltenhub-code:latest \
+            moltenai/moltenhub-code:${{ github.event.inputs.source_tag }}

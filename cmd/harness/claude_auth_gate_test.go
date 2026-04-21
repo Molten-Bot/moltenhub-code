@@ -967,19 +967,22 @@ func TestClaudeAuthHelpers(t *testing.T) {
 func TestAgentAuthGateFactorySelectsSupportedHarnesses(t *testing.T) {
 	t.Parallel()
 
-	if gate := newAgentAuthGate(context.Background(), nil, agentruntime.Runtime{Harness: agentruntime.HarnessCodex, Command: "codex"}, hub.InitConfig{}, nil); gate == nil {
-		t.Fatal("newAgentAuthGate(codex) = nil")
+	if gate := newConcreteAgentAuthGate(context.Background(), nil, agentruntime.Runtime{Harness: agentruntime.HarnessCodex, Command: "codex"}, hub.InitConfig{}, nil); gate == nil {
+		t.Fatal("newConcreteAgentAuthGate(codex) = nil")
 	}
-	if gate := newAgentAuthGate(context.Background(), nil, agentruntime.Runtime{Harness: agentruntime.HarnessClaude, Command: "claude"}, hub.InitConfig{}, nil); gate == nil {
-		t.Fatal("newAgentAuthGate(claude) = nil")
+	if gate := newConcreteAgentAuthGate(context.Background(), nil, agentruntime.Runtime{Harness: agentruntime.HarnessClaude, Command: "claude"}, hub.InitConfig{}, nil); gate == nil {
+		t.Fatal("newConcreteAgentAuthGate(claude) = nil")
 	}
-	if gate := newAgentAuthGate(context.Background(), nil, agentruntime.Runtime{Harness: agentruntime.HarnessAuggie, Command: "auggie"}, hub.InitConfig{}, nil); gate == nil {
-		t.Fatal("newAgentAuthGate(auggie) = nil")
+	if gate := newConcreteAgentAuthGate(context.Background(), nil, agentruntime.Runtime{Harness: agentruntime.HarnessAuggie, Command: "auggie"}, hub.InitConfig{}, nil); gate == nil {
+		t.Fatal("newConcreteAgentAuthGate(auggie) = nil")
 	}
-	if gate := newAgentAuthGate(context.Background(), nil, agentruntime.Runtime{Harness: agentruntime.HarnessPi, Command: "pi"}, hub.InitConfig{}, nil); gate == nil {
-		t.Fatal("newAgentAuthGate(pi) = nil")
+	if gate := newConcreteAgentAuthGate(context.Background(), nil, agentruntime.Runtime{Harness: agentruntime.HarnessPi, Command: "pi"}, hub.InitConfig{}, nil); gate == nil {
+		t.Fatal("newConcreteAgentAuthGate(pi) = nil")
 	}
-	if gate := newAgentAuthGate(context.Background(), nil, agentruntime.Runtime{Harness: "unknown"}, hub.InitConfig{}, nil); gate != nil {
-		t.Fatalf("newAgentAuthGate(unknown) = %#v, want nil", gate)
+	if gate := newConcreteAgentAuthGate(context.Background(), nil, agentruntime.Runtime{Harness: "unknown"}, hub.InitConfig{}, nil); gate != nil {
+		t.Fatalf("newConcreteAgentAuthGate(unknown) = %#v, want nil", gate)
+	}
+	if gate := newAgentAuthGate(context.Background(), nil, agentruntime.Runtime{Harness: "unknown"}, hub.InitConfig{}, nil); gate == nil {
+		t.Fatal("newAgentAuthGate(unknown) = nil, want selectable wrapper")
 	}
 }

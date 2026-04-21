@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/jef/moltenhub-code/internal/agentruntime"
 )
 
 const (
@@ -254,6 +256,57 @@ func SaveRuntimeConfigGitHubToken(path string, initCfg InitConfig, gitHubToken s
 		"github token is required",
 		"github_token",
 	)
+}
+
+// SaveRuntimeConfigAgentRuntime persists agent_harness/agent_command to the
+// runtime config while preserving other configuration fields. Once configured,
+// switching to a different harness or command through this API is rejected.
+func SaveRuntimeConfigAgentRuntime(path string, initCfg InitConfig, harness, command string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		path = defaultRuntimeConfigPath()
+	}
+
+	runtime, err := agentruntime.Resolve(harness, command)
+	if err != nil {
+		return err
+	}
+
+	doc, err := loadRuntimeConfigDoc(path, initCfg)
+	if err != nil {
+		return err
+	}
+
+	existingHarness := strings.ToLower(docStringValue(doc["agent_harness"]))
+	if existingHarness == "" {
+		existingHarness = strings.ToLower(docStringValue(doc["agentHarness"]))
+	}
+	existingCommand := docStringValue(doc["agent_command"])
+	if existingCommand == "" {
+		existingCommand = docStringValue(doc["agentCommand"])
+	}
+
+	if existingHarness != "" && existingHarness != runtime.Harness {
+		return fmt.Errorf("agent harness is already configured as %q", existingHarness)
+	}
+	if existingHarness != "" && existingCommand != "" && existingCommand != runtime.Command {
+		return fmt.Errorf(
+			"agent command is already configured as %q for harness %q",
+			existingCommand,
+			existingHarness,
+		)
+	}
+
+	doc["agent_harness"] = runtime.Harness
+	doc["agent_command"] = runtime.Command
+	ensureRuntimeConfigLogLevel(doc, initCfg.LogLevel)
+
+	encoded, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode runtime config: %w", err)
+	}
+	encoded = append(encoded, '\n')
+	return writeRuntimeConfigFile(path, encoded)
 }
 
 // ReadRuntimeConfigString returns the first non-empty string for the provided

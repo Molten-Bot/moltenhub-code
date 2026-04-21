@@ -1,7 +1,3 @@
-ARG AGENT_HARNESS=codex
-ARG AGENT_NPM_PACKAGE
-ARG AGENT_COMMAND
-
 FROM golang:1.26.1-alpine3.23 AS build
 WORKDIR /src
 ARG TARGETOS=linux
@@ -18,12 +14,9 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go build -trimpath -ldflags="-s -w" -o /out/harness ./cmd/harness
 
 FROM node:25.8.1-alpine3.23 AS runtime
-ARG AGENT_HARNESS
-ARG AGENT_NPM_PACKAGE
-ARG AGENT_COMMAND
 ENV GIT_TERMINAL_PROMPT=0 \
-    HARNESS_AGENT_HARNESS=${AGENT_HARNESS} \
-    HARNESS_AGENT_COMMAND=${AGENT_COMMAND} \
+    HARNESS_AGENT_HARNESS="" \
+    HARNESS_AGENT_COMMAND="" \
     HARNESS_AGENTS_SEED_PATH=/opt/moltenhub/library/AGENTS.md \
     PATH="/usr/local/go/bin:${PATH}"
 
@@ -34,18 +27,11 @@ RUN apk add --no-cache \
         jq \
         openssh-client-default \
         ripgrep \
-    && agent_harness="$(printf '%s' "${AGENT_HARNESS}" | tr '[:upper:]' '[:lower:]')" \
-    && agent_pkg="${AGENT_NPM_PACKAGE}" \
-    && if [ -z "${agent_pkg}" ]; then \
-        case "${agent_harness}" in \
-          codex) agent_pkg='@openai/codex@latest' ;; \
-          claude) agent_pkg='@anthropic-ai/claude-code@latest' ;; \
-          auggie) agent_pkg='@augmentcode/auggie@latest' ;; \
-          pi) agent_pkg='@mariozechner/pi-coding-agent@latest' ;; \
-          *) echo "unsupported AGENT_HARNESS: ${AGENT_HARNESS}" >&2; exit 2 ;; \
-        esac; \
-      fi \
-    && npm install --global "${agent_pkg}" \
+    && npm install --global \
+      @openai/codex@latest \
+      @anthropic-ai/claude-code@latest \
+      @augmentcode/auggie@latest \
+      @mariozechner/pi-coding-agent@latest \
     && npm cache clean --force \
     && mkdir -p /workspace/config \
     && chown -R node:node /workspace

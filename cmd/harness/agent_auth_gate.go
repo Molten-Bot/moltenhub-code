@@ -16,7 +16,7 @@ type agentAuthGate interface {
 	Configure(context.Context, string) (hubui.AgentAuthState, error)
 }
 
-func newAgentAuthGate(
+func newConcreteAgentAuthGate(
 	ctx context.Context,
 	runner execx.Runner,
 	runtime agentruntime.Runtime,
@@ -43,4 +43,14 @@ func newAgentAuthGate(
 	default:
 		return nil
 	}
+}
+
+func newAgentAuthGate(
+	ctx context.Context,
+	runner execx.Runner,
+	_ agentruntime.Runtime,
+	initCfg hub.InitConfig,
+	logf func(string, ...any),
+) agentAuthGate {
+	return newSelectableAgentAuthGate(ctx, runner, initCfg, logf)
 }

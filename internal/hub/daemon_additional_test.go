@@ -768,6 +768,56 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 	}
 }
 
+func TestHandleDispatchRejectsRunConfigAgentHarnessOverride(t *testing.T) {
+	t.Parallel()
+
+	d := NewDaemon(failingRunner{err: errors.New("runner should not be called")})
+	api := &stubMoltenHubAPI{token: "t"}
+	cfg := InitConfig{
+		AgentHarness: "claude",
+		Skill: SkillConfig{
+			Name:         "code_for_me",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+	}
+
+	runCfg := config.Config{
+		Repo:         "git@github.com:acme/repo.git",
+		BaseBranch:   "main",
+		TargetSubdir: ".",
+		Prompt:       "fix failing checks",
+		AgentHarness: "codex",
+	}
+	runCfg.ApplyDefaults()
+
+	finalState := d.handleDispatch(
+		context.Background(),
+		api,
+		cfg,
+		SkillDispatch{
+			RequestID: "req-bound-runtime-override",
+			Skill:     "code_for_me",
+			Config:    runCfg,
+		},
+		"",
+		false,
+	)
+	if finalState != "error" {
+		t.Fatalf("handleDispatch() final state = %q, want error", finalState)
+	}
+
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	if got, want := len(api.published), 1; got != want {
+		t.Fatalf("published payload count = %d, want %d", got, want)
+	}
+	message := fmt.Sprint(api.published[0]["message"])
+	if !strings.Contains(message, "conflicts with bound agent") {
+		t.Fatalf("result message = %q, want bound-runtime conflict details", message)
+	}
+}
+
 func TestHandleDispatchLibraryTaskUsesDedicatedActivitySignal(t *testing.T) {
 	t.Parallel()
 
