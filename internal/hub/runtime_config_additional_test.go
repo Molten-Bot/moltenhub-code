@@ -100,7 +100,8 @@ func TestSaveAndLoadRuntimeConfigUseDefaultResolvedPath(t *testing.T) {
 	t.Setenv(runtimeConfigPathEnv, envPath)
 
 	if err := SaveRuntimeConfig("", InitConfig{
-		BaseURL: "https://na.hub.molten.bot/v1",
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		AgentHarness: "codex",
 	}, "agent-token"); err != nil {
 		t.Fatalf("SaveRuntimeConfig(default path) error = %v", err)
 	}
