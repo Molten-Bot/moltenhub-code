@@ -15,6 +15,7 @@ type SkillDispatch struct {
 	RequestID string
 	Skill     string
 	ReplyTo   string
+	RouteTo   string
 	Config    config.Config
 }
 
@@ -80,6 +81,20 @@ func ParseSkillDispatch(msg map[string]any, expectedType, expectedSkill string) 
 			stringAtPath(msg, "data", "deliveryId"),
 		),
 		Skill: firstNonEmpty(skillName, strings.TrimSpace(expectedSkill)),
+		RouteTo: firstNonEmpty(
+			stringAt(msg, "to"),
+			stringAt(msg, "to_agent_uri"),
+			stringAt(msg, "to_agent_uuid"),
+			stringAt(msg, "to_agent_id"),
+			stringAtPath(msg, "payload", "to"),
+			stringAtPath(msg, "payload", "to_agent_uri"),
+			stringAtPath(msg, "payload", "to_agent_uuid"),
+			stringAtPath(msg, "payload", "to_agent_id"),
+			stringAtPath(msg, "data", "to"),
+			stringAtPath(msg, "data", "to_agent_uri"),
+			stringAtPath(msg, "data", "to_agent_uuid"),
+			stringAtPath(msg, "data", "to_agent_id"),
+		),
 		ReplyTo: firstNonEmpty(
 			stringAt(msg, "reply_to"),
 			stringAt(msg, "replyTo"),
@@ -111,10 +126,13 @@ func ParseSkillDispatch(msg map[string]any, expectedType, expectedSkill string) 
 			stringAtPath(msg, "data", "from_agent_id"),
 			stringAt(msg, "to_agent_uri"),
 			stringAt(msg, "to_agent_uuid"),
+			stringAt(msg, "to_agent_id"),
 			stringAtPath(msg, "payload", "to_agent_uri"),
 			stringAtPath(msg, "payload", "to_agent_uuid"),
+			stringAtPath(msg, "payload", "to_agent_id"),
 			stringAtPath(msg, "data", "to_agent_uri"),
 			stringAtPath(msg, "data", "to_agent_uuid"),
+			stringAtPath(msg, "data", "to_agent_id"),
 		),
 	}
 

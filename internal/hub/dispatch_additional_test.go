@@ -145,6 +145,9 @@ func TestParseSkillDispatchPrefersSenderRoutingOverRecipientTarget(t *testing.T)
 	if got, want := dispatch.ReplyTo, "https://na.hub.molten.bot/acme/caller"; got != want {
 		t.Fatalf("ReplyTo = %q, want %q", got, want)
 	}
+	if got, want := dispatch.RouteTo, "receiver-agent"; got != want {
+		t.Fatalf("RouteTo = %q, want %q", got, want)
+	}
 }
 
 func TestParseSkillDispatchFallsBackToRecipientTargetWhenSenderMissing(t *testing.T) {
@@ -170,6 +173,9 @@ func TestParseSkillDispatchFallsBackToRecipientTargetWhenSenderMissing(t *testin
 	}
 	if got, want := dispatch.ReplyTo, "caller-agent-uuid"; got != want {
 		t.Fatalf("ReplyTo = %q, want %q", got, want)
+	}
+	if got, want := dispatch.RouteTo, "caller-agent-uuid"; got != want {
+		t.Fatalf("RouteTo = %q, want %q", got, want)
 	}
 }
 
