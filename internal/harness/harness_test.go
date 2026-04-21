@@ -3507,6 +3507,21 @@ func TestCodexReportedFailureIgnoresInterimFailureMarkerInNoisyStdout(t *testing
 	}
 }
 
+func TestCodexReportedFailureIgnoresNarrativeTaskFailedPhrasing(t *testing.T) {
+	t.Parallel()
+
+	res := execx.Result{
+		Stdout: strings.Join([]string{
+			"Task failed previously because ci tooling was unavailable in runtime.",
+			"Applied remediation and added unit tests for library task flow.",
+		}, "\n"),
+	}
+
+	if failed, detail := codexReportedFailure(res); failed || detail != "" {
+		t.Fatalf("codexReportedFailure(narrative task failed phrasing) = (%v, %q), want (false, \"\")", failed, detail)
+	}
+}
+
 func TestCodexReportedFailureDetectsTerminalFailureInNoisyStdout(t *testing.T) {
 	t.Parallel()
 

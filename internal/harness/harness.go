@@ -2442,9 +2442,6 @@ func codexReportedFailureInOutput(output string, allowStructured bool) (bool, st
 		if strings.HasPrefix(lower, "failure:") {
 			return true, trimmed
 		}
-		if strings.HasPrefix(lower, "task failed") {
-			return true, trimmed
-		}
 		if allowStructured && structuredTaskFailureLine == "" && isStructuredTaskFailureLine(trimmed) {
 			structuredTaskFailureLine = trimmed
 			continue
