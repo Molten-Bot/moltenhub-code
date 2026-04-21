@@ -1242,6 +1242,9 @@ func shouldQueueFailureRerun(source string, failedResult harness.Result) (bool, 
 	if errors.Is(failedResult.Err, agentruntime.ErrPromptImagesUnsupported) {
 		return false, "prompt images are unsupported for the configured harness"
 	}
+	if reason := strings.TrimSpace(failurefollowup.NonRemediableFailureReason(failedResult.Err)); reason != "" {
+		return false, fmt.Sprintf("failure is non-remediable: %s", reason)
+	}
 	switch source {
 	case failureFollowUpSource, noChangesEscalationSource:
 		return false, "run is already a failure follow-up"

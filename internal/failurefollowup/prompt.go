@@ -61,6 +61,7 @@ var nonRemediableFailureMarkers = []string{
 	"invalid api key",
 	"invalid_authentication",
 	"authentication error",
+	"target ui source missing",
 }
 
 func WithExecutionContract(base string) string {

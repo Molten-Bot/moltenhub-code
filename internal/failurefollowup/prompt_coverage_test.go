@@ -45,6 +45,9 @@ func TestNonRemediableFailureReasonRecognizesQuotaAndAllowsNoDelta(t *testing.T)
 	if got := NonRemediableFailureReason(errors.New("codex: ERROR: Quota exceeded. Check your plan and billing details.")); got != "quota exceeded" {
 		t.Fatalf("NonRemediableFailureReason(quota) = %q, want %q", got, "quota exceeded")
 	}
+	if got := NonRemediableFailureReason(errors.New("Failure: Cannot fix Studio wide-layout issue in current repo. Target UI source missing.")); got != "target ui source missing" {
+		t.Fatalf("NonRemediableFailureReason(target missing) = %q, want %q", got, "target ui source missing")
+	}
 	if got := NonRemediableFailureReason(errors.New("task failed because this branch has no delta from `main`; No commits between main and moltenhub-fix")); got != "" {
 		t.Fatalf("NonRemediableFailureReason(no delta) = %q, want empty", got)
 	}

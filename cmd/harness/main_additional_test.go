@@ -700,6 +700,30 @@ func TestShouldQueueFailureRerunSkipsNestedFailureRerunSource(t *testing.T) {
 	}
 }
 
+func TestShouldQueueFailureRerunSkipsNonRemediableFailures(t *testing.T) {
+	t.Parallel()
+
+	ok, reason := shouldQueueFailureRerun(localSubmitSource, harness.Result{
+		Err: errors.New("Failure: Cannot fix Studio wide-layout issue in current repo. Target UI source missing."),
+	})
+	if ok {
+		t.Fatal("shouldQueueFailureRerun(local_submit,non-remediable) = true, want false")
+	}
+	if reason != "failure is non-remediable: target ui source missing" {
+		t.Fatalf("reason = %q, want %q", reason, "failure is non-remediable: target ui source missing")
+	}
+
+	ok, reason = shouldQueueFailureRerun(localSubmitSource, harness.Result{
+		Err: errors.New("codex: ERROR: quota exceeded for this account"),
+	})
+	if ok {
+		t.Fatal("shouldQueueFailureRerun(local_submit,quota) = true, want false")
+	}
+	if reason != "failure is non-remediable: quota exceeded" {
+		t.Fatalf("reason = %q, want %q", reason, "failure is non-remediable: quota exceeded")
+	}
+}
+
 func TestEnqueueFailureRerunBypassesDuplicateSuppression(t *testing.T) {
 	t.Parallel()
 
