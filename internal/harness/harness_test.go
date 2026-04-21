@@ -1111,6 +1111,63 @@ func TestPreparePublishWorkflowGitHubSSHPermissionDeniedUsesForkFallback(t *test
 	}
 }
 
+func TestPreparePublishWorkflowForkFallbackSwitchesToHTTPSWhenSSHForkProbeFailsWithToken(t *testing.T) {
+	t.Setenv("GH_TOKEN", "ghp_example")
+	t.Setenv("GITHUB_TOKEN", "")
+
+	repoDir := "/tmp/repo"
+	branch := "moltenhub-build-api"
+	repo := repoWorkspace{
+		URL:    "git@github.com:acme/repo.git",
+		Dir:    repoDir,
+		RelDir: "repo",
+		Branch: branch,
+	}
+	push403 := execx.Result{
+		Stderr: "remote: Write access to repository not granted.\n" +
+			"fatal: unable to access 'https://github.com/acme/repo.git/': The requested URL returned error: 403\n",
+	}
+	sshAuthFailure := execx.Result{
+		Stderr: "git@github.com: Permission denied (publickey).\n" +
+			"fatal: Could not read from remote repository.\n",
+	}
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: pushDryRunCommand(repoDir, branch), res: push403, err: errors.New("exit status 128")},
+		{cmd: ghRepoViewVisibilityCommand(repoDir, "acme/repo"), res: execx.Result{Stdout: `{"isPrivate":false,"nameWithOwner":"acme/repo"}`}},
+		{cmd: ghViewerLoginCommand(repoDir), res: execx.Result{Stdout: `{"login":"octocat"}`}},
+		{cmd: ghRepoForkCommand(repoDir, "acme/repo")},
+		{cmd: gitRemoteSetURLCommand(repoDir, publishRemoteFork, "git@github.com:octocat/repo.git"), res: execx.Result{Stderr: "error: No such remote 'fork'\n"}, err: errors.New("exit status 2")},
+		{cmd: gitRemoteAddCommand(repoDir, publishRemoteFork, "git@github.com:octocat/repo.git")},
+		{cmd: pushDryRunToRemoteCommand(repoDir, publishRemoteFork, branch), res: sshAuthFailure, err: errors.New("exit status 128")},
+		{cmd: gitRemoteSetURLCommand(repoDir, publishRemoteFork, "https://github.com/octocat/repo.git")},
+		{cmd: pushDryRunToRemoteCommand(repoDir, publishRemoteFork, branch)},
+	}}
+
+	h := New(fake)
+	if err := h.preparePublishWorkflow(context.Background(), &repo); err != nil {
+		t.Fatalf("preparePublishWorkflow() err = %v", err)
+	}
+	if got, want := repo.PushRemote, publishRemoteFork; got != want {
+		t.Fatalf("PushRemote = %q, want %q", got, want)
+	}
+	if got, want := repo.PublishStrategy, publishStrategyForkFallback; got != want {
+		t.Fatalf("PublishStrategy = %q, want %q", got, want)
+	}
+	if got, want := repo.PRHeadRef, "octocat:"+branch; got != want {
+		t.Fatalf("PRHeadRef = %q, want %q", got, want)
+	}
+	if got, want := repo.PRTargetRepo, "acme/repo"; got != want {
+		t.Fatalf("PRTargetRepo = %q, want %q", got, want)
+	}
+	if !repo.WriteAccessChecked || !repo.WriteAccessAllowed {
+		t.Fatalf("write access flags = checked:%t allowed:%t, want checked+allowed", repo.WriteAccessChecked, repo.WriteAccessAllowed)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
 func TestRunPrivateGitHubDeniedDirectAccessFailsBeforeCodex(t *testing.T) {
 	t.Parallel()
 
