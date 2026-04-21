@@ -134,3 +134,5 @@ docker run --rm -p 7777:7777 \
 ```bash
 go test ./...
 ```
+
+Runtime images include the Go SDK so agents can run Go tooling inside the container (for example `go test ./...` during remediation/debug tasks).

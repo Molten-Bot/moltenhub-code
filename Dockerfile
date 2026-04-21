@@ -52,6 +52,8 @@ RUN mkdir -p /workspace/config \
 WORKDIR /workspace
 
 COPY --from=build /out/harness /usr/local/bin/harness
+COPY --from=build /usr/local/go /usr/local/go
+ENV PATH="/usr/local/go/bin:${PATH}"
 COPY library /opt/moltenhub/library
 COPY library /workspace/library
 COPY skills /opt/moltenhub/skills
