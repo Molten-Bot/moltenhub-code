@@ -307,23 +307,26 @@ func (c APIClient) MarkOpenClawOffline(ctx context.Context, token, sessionKey, r
 
 // RecordGitHubTaskCompleteActivity appends a minimal completion entry to metadata.activities.
 func (c APIClient) RecordGitHubTaskCompleteActivity(ctx context.Context, token string) error {
-	normalizedToken, err := requireHubToken(token, "record github task complete activity")
-	if err != nil {
-		return err
-	}
-	return c.updateAgentMetadata(ctx, normalizedToken, "record github task complete activity failed", func(metadata map[string]any) {
-		metadata["activities"] = appendActivityEntries(metadata["activities"], gitHubTaskComplete)
-	})
+	return c.RecordActivity(ctx, token, gitHubTaskComplete)
 }
 
 // RecordCodingActivityRunning appends a generic active-coding entry to metadata.activities.
 func (c APIClient) RecordCodingActivityRunning(ctx context.Context, token string) error {
-	normalizedToken, err := requireHubToken(token, "record coding activity running")
+	return c.RecordActivity(ctx, token, codingActivityRun)
+}
+
+// RecordActivity appends a custom activity entry to metadata.activities.
+func (c APIClient) RecordActivity(ctx context.Context, token, activity string) error {
+	normalizedToken, err := requireHubToken(token, "record activity")
 	if err != nil {
 		return err
 	}
-	return c.updateAgentMetadata(ctx, normalizedToken, "record coding activity running failed", func(metadata map[string]any) {
-		metadata["activities"] = appendActivityEntries(metadata["activities"], codingActivityRun)
+	normalizedActivity := normalizeActivityEntry(activity)
+	if normalizedActivity == "" {
+		return fmt.Errorf("record activity requires non-empty text")
+	}
+	return c.updateAgentMetadata(ctx, normalizedToken, "record activity failed", func(metadata map[string]any) {
+		metadata["activities"] = appendActivityEntries(metadata["activities"], normalizedActivity)
 	})
 }
 
@@ -1476,14 +1479,14 @@ func cloneMetadataMap(src map[string]any) map[string]any {
 }
 
 func appendActivityEntries(raw any, entry string) []string {
-	entry = strings.TrimSpace(entry)
+	entry = normalizeActivityEntry(entry)
 	if entry == "" {
 		return nil
 	}
 
 	activities := make([]string, 0, maxActivityEntries)
 	appendValue := func(value string) {
-		value = strings.TrimSpace(value)
+		value = normalizeActivityEntry(value)
 		if value == "" {
 			return
 		}
@@ -1512,6 +1515,14 @@ func appendActivityEntries(raw any, entry string) []string {
 		activities = append([]string(nil), activities[len(activities)-maxActivityEntries:]...)
 	}
 	return activities
+}
+
+func normalizeActivityEntry(entry string) string {
+	parts := strings.Fields(strings.TrimSpace(entry))
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, " ")
 }
 
 func normalizeAgentType(raw any) string {
