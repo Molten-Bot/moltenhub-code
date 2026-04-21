@@ -120,6 +120,86 @@ func TestExtractConfigValueAndLooksLikeRunConfigMap(t *testing.T) {
 	}
 }
 
+func TestExtractConfigValueAcceptsNestedConfigWrappers(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		msg  map[string]any
+	}{
+		{
+			name: "input.config",
+			msg: map[string]any{
+				"input": map[string]any{
+					"config": map[string]any{
+						"repo":   "git@github.com:acme/repo.git",
+						"prompt": "ship fix",
+					},
+				},
+			},
+		},
+		{
+			name: "input.input",
+			msg: map[string]any{
+				"input": map[string]any{
+					"input": map[string]any{
+						"repo":   "git@github.com:acme/repo.git",
+						"prompt": "ship fix",
+					},
+				},
+			},
+		},
+		{
+			name: "payload.input.config",
+			msg: map[string]any{
+				"payload": map[string]any{
+					"input": map[string]any{
+						"config": map[string]any{
+							"repo":   "git@github.com:acme/repo.git",
+							"prompt": "ship fix",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "data.input.config",
+			msg: map[string]any{
+				"data": map[string]any{
+					"input": map[string]any{
+						"config": map[string]any{
+							"repo":   "git@github.com:acme/repo.git",
+							"prompt": "ship fix",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			value, ok := extractConfigValue(tc.msg)
+			if !ok {
+				t.Fatalf("extractConfigValue(%s) ok = false, want true", tc.name)
+			}
+			cfgMap, mapOK := value.(map[string]any)
+			if !mapOK {
+				t.Fatalf("extractConfigValue(%s) value type = %T, want map[string]any", tc.name, value)
+			}
+			if got := stringAt(cfgMap, "repo"); got != "git@github.com:acme/repo.git" {
+				t.Fatalf("extractConfigValue(%s) repo = %q", tc.name, got)
+			}
+			if got := stringAt(cfgMap, "prompt"); got != "ship fix" {
+				t.Fatalf("extractConfigValue(%s) prompt = %q", tc.name, got)
+			}
+		})
+	}
+}
+
 func TestParseSkillDispatchPrefersSenderRoutingOverRecipientTarget(t *testing.T) {
 	t.Parallel()
 
@@ -204,6 +284,97 @@ func TestParseSkillDispatchAcceptsJSONStringPayload(t *testing.T) {
 	}
 	if got, want := dispatch.Config.Prompt, "ship the fix"; got != want {
 		t.Fatalf("Prompt = %q, want %q", got, want)
+	}
+}
+
+func TestParseSkillDispatchAcceptsNestedConfigWrappers(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		msg  map[string]any
+	}{
+		{
+			name: "input.config",
+			msg: map[string]any{
+				"type":       "skill_request",
+				"skill":      "code_for_me",
+				"request_id": "req-input-config",
+				"input": map[string]any{
+					"config": map[string]any{
+						"repo":   "git@github.com:acme/repo.git",
+						"prompt": "ship input-config fix",
+					},
+				},
+			},
+		},
+		{
+			name: "input.input",
+			msg: map[string]any{
+				"type":       "skill_request",
+				"skill":      "code_for_me",
+				"request_id": "req-input-input",
+				"input": map[string]any{
+					"input": map[string]any{
+						"repo":   "git@github.com:acme/repo.git",
+						"prompt": "ship input-input fix",
+					},
+				},
+			},
+		},
+		{
+			name: "payload.input.config",
+			msg: map[string]any{
+				"type":       "skill_request",
+				"skill":      "code_for_me",
+				"request_id": "req-payload-input-config",
+				"payload": map[string]any{
+					"input": map[string]any{
+						"config": map[string]any{
+							"repo":   "git@github.com:acme/repo.git",
+							"prompt": "ship payload-input-config fix",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "payload.input.input",
+			msg: map[string]any{
+				"type":       "skill_request",
+				"skill":      "code_for_me",
+				"request_id": "req-payload-input-input",
+				"payload": map[string]any{
+					"input": map[string]any{
+						"input": map[string]any{
+							"repo":   "git@github.com:acme/repo.git",
+							"prompt": "ship payload-input-input fix",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			dispatch, matched, err := ParseSkillDispatch(tc.msg, "skill_request", "code_for_me")
+			if err != nil {
+				t.Fatalf("ParseSkillDispatch(%s) error = %v", tc.name, err)
+			}
+			if !matched {
+				t.Fatalf("ParseSkillDispatch(%s) matched = false, want true", tc.name)
+			}
+			if got := dispatch.Config.RepoURL; got != "git@github.com:acme/repo.git" {
+				t.Fatalf("ParseSkillDispatch(%s) RepoURL = %q", tc.name, got)
+			}
+			if got := strings.TrimSpace(dispatch.Config.Prompt); got == "" {
+				t.Fatalf("ParseSkillDispatch(%s) Prompt is empty", tc.name)
+			}
+		})
 	}
 }
 

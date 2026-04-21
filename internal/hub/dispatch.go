@@ -257,10 +257,16 @@ func applySkillSpecificRunConfigDefaults(parsed map[string]any, skillName string
 func extractConfigValue(msg map[string]any) (any, bool) {
 	paths := [][]string{
 		{"config"},
+		{"input", "config"},
+		{"input", "input"},
 		{"input"},
 		{"payload", "config"},
+		{"payload", "input", "config"},
+		{"payload", "input", "input"},
 		{"payload", "input"},
 		{"data", "config"},
+		{"data", "input", "config"},
+		{"data", "input", "input"},
 		{"data", "input"},
 		{"payload"},
 		{"data"},
@@ -314,10 +320,16 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 		},
 		"accepted_payload_paths": []string{
 			"config",
+			"input.config",
+			"input.input",
 			"input",
 			"payload.config",
+			"payload.input.config",
+			"payload.input.input",
 			"payload.input",
 			"data.config",
+			"data.input.config",
+			"data.input.input",
 			"data.input",
 		},
 		"run_config_schema": map[string]any{
