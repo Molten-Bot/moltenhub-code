@@ -2769,7 +2769,7 @@ select.prompt-control {
 }
 
 .agent-auth-github-shell {
-  max-width: calc(46ch + clamp(48px, 6vw, 64px) + 2px);
+  max-width: calc(46ch + 2px);
 }
 
 .agent-auth-harness-grid {

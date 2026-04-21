@@ -48,6 +48,27 @@ func TestWithConfigScriptUsesHubConfigWhenConfigJSONMatchesHubSchema(t *testing.
 	}
 }
 
+func TestWithConfigScriptSkipsInvalidHubConfig(t *testing.T) {
+	env := newWithConfigTestEnv(t)
+	configPath := filepath.Join(env.configDir, "config.json")
+	if err := os.WriteFile(configPath, []byte(`{"base_url":"http://127.0.0.1:41099/v1","agent_token":"tok"}`), 0o644); err != nil {
+		t.Fatalf("write hub config: %v", err)
+	}
+
+	output, err := runWithConfigScript(t, env, nil)
+	if err != nil {
+		t.Fatalf("with-config error: %v\noutput: %s", err, output)
+	}
+
+	args := readFileTrimmed(t, env.argsPath)
+	if got, want := args, "hub --ui-listen :7777"; got != want {
+		t.Fatalf("harness args = %q, want %q", got, want)
+	}
+	if !strings.Contains(output, "invalid hub config") {
+		t.Fatalf("output missing invalid hub config warning:\n%s", output)
+	}
+}
+
 func TestWithConfigScriptFallsBackToInitConfig(t *testing.T) {
 	env := newWithConfigTestEnv(t)
 	initPath := filepath.Join(env.configDir, "init.json")
