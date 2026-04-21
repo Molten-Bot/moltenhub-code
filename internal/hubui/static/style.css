@@ -1156,11 +1156,12 @@ body .right-col.prompt-collapsed.task-list-hidden {
 }
 
 .prompt-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
-  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
   gap: 12px;
   min-width: 0;
+  width: 100%;
 }
 
 .prompt-field {
@@ -1178,6 +1179,7 @@ body .right-col.prompt-collapsed.task-list-hidden {
 
 .prompt-field-repo-history {
   flex: 0 1 clamp(240px, 28%, 340px);
+  min-width: 220px;
 }
 
 .prompt-field-repository {
@@ -1187,6 +1189,7 @@ body .right-col.prompt-collapsed.task-list-hidden {
 
 .prompt-field-base-branch {
   flex: 0 1 clamp(150px, 17%, 220px);
+  min-width: 150px;
   max-width: clamp(180px, 18%, 220px);
 }
 
@@ -1220,6 +1223,7 @@ body .right-col.prompt-collapsed.task-list-hidden {
   display: flex;
   align-items: center;
   width: 100%;
+  min-width: 0;
 }
 
 .prompt-select-action-wrap {
@@ -1227,6 +1231,7 @@ body .right-col.prompt-collapsed.task-list-hidden {
   align-items: center;
   gap: 8px;
   width: 100%;
+  min-width: 0;
 }
 
 .prompt-select-action-wrap .prompt-control {
@@ -1279,6 +1284,7 @@ select.prompt-control {
 }
 
 .prompt-input-action-wrap .prompt-input {
+  min-width: 0;
   padding-right: 14px;
 }
 
@@ -2529,8 +2535,19 @@ select.prompt-control {
     padding: 16px;
   }
 
-  .prompt-grid {
-    grid-template-columns: minmax(0, 1fr);
+  .prompt-grid > .prompt-field {
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .prompt-field-repository,
+  .prompt-field-repo-history,
+  .prompt-field-base-branch,
+  .prompt-field-reviewer-history,
+  .prompt-field-target-subdir {
+    min-width: 0;
+    max-width: none;
   }
 
 }
