@@ -785,6 +785,14 @@
       augment: "/static/logos/augment.svg",
       pi: "/static/logos/pi.svg",
     });
+    const AGENT_COLOR_LOGO_HARNESSES = new Set(["codex", "claude", "auggie", "augment"]);
+    const AGENT_HARNESS_SELECTION_ORDER = Object.freeze(["claude", "codex", "pi", "auggie"]);
+    const AGENT_HARNESS_SELECTION_PRIORITY = Object.freeze(
+      AGENT_HARNESS_SELECTION_ORDER.reduce((priority, harness, index) => {
+        priority[harness] = index;
+        return priority;
+      }, {}),
+    );
     const MOLTENHUB_LOGO_URL = "/static/logo.svg";
     const GITHUB_LOGO_URL = "/static/logos/github.svg";
     const TERMINAL_LOGO_URL = "https://molten.bot/logos/terminal.svg";
@@ -885,6 +893,20 @@
       if (/\bpi\b/.test(label)) return AGENT_LOGO_URLS.pi;
       if (label.includes("codex")) return AGENT_LOGO_URLS.codex;
       return "";
+    }
+
+    function isColorAgentLogo(harnessLabel) {
+      const label = String(harnessLabel || "").trim().toLowerCase();
+      if (!label) {
+        return false;
+      }
+      if (AGENT_COLOR_LOGO_HARNESSES.has(label)) {
+        return true;
+      }
+      if (label.includes("claude")) return true;
+      if (label.includes("auggie") || label.includes("augment")) return true;
+      if (label.includes("codex")) return true;
+      return false;
     }
 
     function taskAgentLogoURL(task) {
@@ -2496,16 +2518,31 @@
       return normalized === "codex" || normalized === "claude" || normalized === "auggie" || normalized === "pi";
     }
 
+    function harnessSelectionPriority(value) {
+      const normalized = String(value || "").trim().toLowerCase();
+      const canonical = normalized === "augment" ? "auggie" : normalized;
+      const priority = AGENT_HARNESS_SELECTION_PRIORITY[canonical];
+      return Number.isFinite(priority) ? priority : Number.MAX_SAFE_INTEGER;
+    }
+
     function selectionHarnessOptions(auth) {
       const current = auth && typeof auth === "object" ? auth : state.agentAuth;
       const options = Array.isArray(current?.configureOptions) ? current.configureOptions : [];
-      return options
+      const normalized = options
         .map((option) => ({
           value: String(option?.value || "").trim().toLowerCase(),
           label: String(option?.label || "").trim(),
           description: String(option?.description || "").trim(),
         }))
         .filter((option) => isSupportedHarnessSelectionValue(option.value));
+      normalized.sort((left, right) => {
+        const priorityDiff = harnessSelectionPriority(left.value) - harnessSelectionPriority(right.value);
+        if (priorityDiff !== 0) {
+          return priorityDiff;
+        }
+        return left.label.localeCompare(right.label);
+      });
+      return normalized;
     }
 
     function renderAgentHarnessSelection(auth) {
@@ -2536,6 +2573,7 @@
         const label = option.label || agentAuthLabel(option.value);
         const description = option.description || `Bind runtime to ${label}.`;
         const logoURL = AGENT_LOGO_URLS[option.value] || resolveAgentLogoURL(option.value) || "";
+        const colorLogo = isColorAgentLogo(option.value);
         const isSelected = pendingHarness === option.value || (pendingHarness === "" && currentHarness === option.value);
         const isPending = pendingHarness !== "" && pendingHarness === option.value;
         const selectedClass = isSelected ? " is-selected" : "";
@@ -2549,7 +2587,7 @@
             aria-label="Select ${escapeHTML(label)}"
             ${state.agentAuthBusy ? "disabled" : ""}>
             <span class="agent-auth-harness-logo-wrap" aria-hidden="true">
-              <img class="agent-auth-harness-logo" src="${escapeHTML(logoURL)}" alt="">
+              <img class="agent-auth-harness-logo" src="${escapeHTML(logoURL)}" alt="" data-color-logo="${colorLogo ? "true" : "false"}">
             </span>
             <span class="agent-auth-harness-label">${escapeHTML(label)}</span>
             <span class="agent-auth-harness-description">${escapeHTML(description)}</span>

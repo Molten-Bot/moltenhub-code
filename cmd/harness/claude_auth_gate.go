@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/jef/moltenhub-code/internal/agentruntime"
+	"github.com/jef/moltenhub-code/internal/execx"
 	"github.com/jef/moltenhub-code/internal/hub"
 	"github.com/jef/moltenhub-code/internal/hubui"
 )
@@ -33,6 +34,7 @@ type claudeAuthGate struct {
 	mu sync.Mutex
 
 	baseCtx context.Context
+	runner  execx.Runner
 	logf    func(string, ...any)
 
 	command           string
@@ -58,15 +60,25 @@ type claudeAuthGate struct {
 }
 
 func newClaudeAuthGate(ctx context.Context, command string, logf func(string, ...any)) *claudeAuthGate {
-	return newClaudeAuthGateWithContextAndConfig(ctx, command, "", hub.InitConfig{}, logf)
+	return newClaudeAuthGateWithContextAndConfigAndRunner(ctx, nil, command, "", hub.InitConfig{}, logf)
 }
 
 func newClaudeAuthGateWithConfig(command, runtimeConfigPath string, initCfg hub.InitConfig) *claudeAuthGate {
-	return newClaudeAuthGateWithContextAndConfig(context.Background(), command, runtimeConfigPath, initCfg, nil)
+	return newClaudeAuthGateWithContextAndConfigAndRunner(context.Background(), nil, command, runtimeConfigPath, initCfg, nil)
 }
 
 func newClaudeAuthGateWithContextAndConfig(
 	ctx context.Context,
+	command, runtimeConfigPath string,
+	initCfg hub.InitConfig,
+	logf func(string, ...any),
+) *claudeAuthGate {
+	return newClaudeAuthGateWithContextAndConfigAndRunner(ctx, nil, command, runtimeConfigPath, initCfg, logf)
+}
+
+func newClaudeAuthGateWithContextAndConfigAndRunner(
+	ctx context.Context,
+	runner execx.Runner,
 	command, runtimeConfigPath string,
 	initCfg hub.InitConfig,
 	logf func(string, ...any),
@@ -85,6 +97,7 @@ func newClaudeAuthGateWithContextAndConfig(
 
 	g := &claudeAuthGate{
 		baseCtx:           ctx,
+		runner:            runner,
 		logf:              logf,
 		command:           command,
 		runtimeConfigPath: strings.TrimSpace(runtimeConfigPath),
@@ -278,7 +291,7 @@ func (g *claudeAuthGate) Verify(ctx context.Context) (hubui.AgentAuthState, erro
 	return g.StartDeviceAuth(ctx)
 }
 
-func (g *claudeAuthGate) Configure(_ context.Context, rawInput string) (hubui.AgentAuthState, error) {
+func (g *claudeAuthGate) Configure(ctx context.Context, rawInput string) (hubui.AgentAuthState, error) {
 	status, _ := g.Status(context.Background())
 	if status.State == "pending_browser_login" {
 		if credentialsJSON, looksLikeJSON, err := normalizeClaudeCredentialsJSON(rawInput); looksLikeJSON {
@@ -308,12 +321,15 @@ func (g *claudeAuthGate) Configure(_ context.Context, rawInput string) (hubui.Ag
 	g.mu.Lock()
 	runtimeConfigPath := g.runtimeConfigPath
 	initCfg := g.initCfg
+	runner := g.runner
 	g.mu.Unlock()
 
 	token, failureState, err := configureGitHubToken(
+		ctx,
 		agentruntime.HarnessClaude,
 		runtimeConfigPath,
 		initCfg,
+		runner,
 		rawInput,
 		githubTokenPasteConfigureMessage,
 	)

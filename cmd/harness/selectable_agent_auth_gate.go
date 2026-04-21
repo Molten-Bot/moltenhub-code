@@ -17,10 +17,10 @@ import (
 const agentHarnessSelectionState = "needs_harness_selection"
 
 var preferredHarnessSelectionOrder = []string{
-	agentruntime.HarnessCodex,
 	agentruntime.HarnessClaude,
-	agentruntime.HarnessAuggie,
+	agentruntime.HarnessCodex,
 	agentruntime.HarnessPi,
+	agentruntime.HarnessAuggie,
 }
 
 type selectableAgentAuthGate struct {
@@ -134,9 +134,11 @@ func (g *selectableAgentAuthGate) Configure(ctx context.Context, rawInput string
 	if !selectionLocked {
 		if selectionState.State == "needs_configure" {
 			token, failureState, tokenErr := configureGitHubToken(
+				ctx,
 				"",
 				g.runtimeConfigPath,
 				activeCfg,
+				g.runner,
 				rawInput,
 				"GitHub token is required.",
 			)

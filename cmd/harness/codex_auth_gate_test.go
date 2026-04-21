@@ -195,6 +195,62 @@ func TestCodexAuthGateConfigurePersistsGitHubToken(t *testing.T) {
 	}
 }
 
+func TestCodexAuthGateConfigureRejectsInvalidGitHubTokenBeforePersisting(t *testing.T) {
+	t.Setenv("GH_TOKEN", "ghp_existing_token")
+	t.Setenv("GITHUB_TOKEN", "ghp_existing_token")
+
+	runner := &authGateRunnerStub{
+		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
+			if cmd.Name == "gh" && strings.Join(cmd.Args, " ") == "auth status" {
+				return execx.Result{Stderr: "X Failed to log in to github.com using token (GH_TOKEN)"}, errors.New("token invalid")
+			}
+			return execx.Result{}, nil
+		},
+	}
+
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	g := newCodexAuthGateWithConfig(
+		context.Background(),
+		runner,
+		"codex",
+		configPath,
+		hub.InitConfig{
+			BaseURL:      "https://na.hub.molten.bot/v1",
+			AgentHarness: "codex",
+		},
+		true,
+		nil,
+	)
+
+	status, err := g.Configure(context.Background(), "ghp_invalid_token")
+	if err == nil {
+		t.Fatal("Configure() error = nil, want non-nil")
+	}
+	if status.Ready || status.State != "needs_configure" {
+		t.Fatalf("status = %+v", status)
+	}
+	if !strings.Contains(err.Error(), "validate github token") {
+		t.Fatalf("Configure() error = %q, want token validation failure", err)
+	}
+	if got, want := os.Getenv("GH_TOKEN"), "ghp_existing_token"; got != want {
+		t.Fatalf("GH_TOKEN = %q, want %q", got, want)
+	}
+	if got, want := os.Getenv("GITHUB_TOKEN"), "ghp_existing_token"; got != want {
+		t.Fatalf("GITHUB_TOKEN = %q, want %q", got, want)
+	}
+
+	data, readErr := os.ReadFile(configPath)
+	if readErr == nil {
+		var doc map[string]any
+		if err := json.Unmarshal(data, &doc); err != nil {
+			t.Fatalf("Unmarshal() error = %v", err)
+		}
+		if _, exists := doc["github_token"]; exists {
+			t.Fatalf("github_token unexpectedly persisted in config: %#v", doc["github_token"])
+		}
+	}
+}
+
 func TestStartDeviceAuthRespectsExistingState(t *testing.T) {
 	t.Parallel()
 
@@ -727,7 +783,10 @@ func TestCodexAuthGateWithConfigConfigurePersistsGitHubTokenAndTransitionsState(
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	runner := &authGateRunnerStub{
-		run: func(_ context.Context, _ execx.Command) (execx.Result, error) {
+		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
+			if cmd.Name == "gh" && strings.Join(cmd.Args, " ") == "auth status" {
+				return execx.Result{Stdout: "Logged in to github.com as octocat"}, nil
+			}
 			return execx.Result{}, errors.New("not logged in")
 		},
 	}
