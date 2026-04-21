@@ -895,10 +895,7 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 	if configPath != "" {
 		runtimeCfg, err := hub.LoadRuntimeConfig(configPath)
 		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				return defaultHubBootConfig(configPath)
-			}
-			return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("runtime config error: %w", err)
+			return defaultHubBootConfig(configPath)
 		}
 		cfg := runtimeCfg.Init()
 		cfg.RuntimeConfigPath = runtimeCfg.RuntimeConfigPath
@@ -916,10 +913,7 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 					cfg.RuntimeConfigPath = runtimeCfg.RuntimeConfigPath
 					return cfg, harness.ExitSuccess, nil
 				}
-				if errors.Is(runtimeErr, os.ErrNotExist) {
-					return defaultHubBootConfig(runtimePath)
-				}
-				return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("runtime config error: %w", runtimeErr)
+				return defaultHubBootConfig(runtimePath)
 			}
 			return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("init config error: %w", err)
 		}
@@ -930,10 +924,7 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 
 	runtimeCfg, err := hub.LoadRuntimeConfig("")
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return defaultHubBootConfig(hub.ResolveRuntimeConfigPath(""))
-		}
-		return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("runtime config error: %w", err)
+		return defaultHubBootConfig(hub.ResolveRuntimeConfigPath(""))
 	}
 
 	cfg := runtimeCfg.Init()
@@ -2759,11 +2750,6 @@ func hubSetupBaseURL(baseURL, region string) string {
 				}
 			}
 			return hub.HubBaseURLForRegion(region)
-		}
-		if hub.AllowNonMoltenHubBaseURL() {
-			if err := hub.ValidateHubBaseURLStrict(baseURL); err != nil {
-				return baseURL
-			}
 		}
 	}
 
