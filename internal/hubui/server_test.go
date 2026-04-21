@@ -1489,14 +1489,22 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `promptVisibilityToggle.textContent = visible ? "▾" : "▸";`) {
 		t.Fatalf("expected index html to render studio toggle arrow icons for minimize/expand")
 	}
-	if !strings.Contains(markup, `pauseRun.textContent = canRun ? "▶" : "||";`) {
+	if !strings.Contains(markup, `pauseRun.appendChild(createTaskActionIcon(canRun ? "play" : "pause"));`) {
 		t.Fatalf("expected index html to render task pause/run icon control from backend capabilities")
+	}
+	if !strings.Contains(markup, `outputToggle.appendChild(createTaskActionIcon("terminal"));`) ||
+		!strings.Contains(markup, `outputToggle.title = "Open task output terminal logs.";`) {
+		t.Fatalf("expected index html to render terminal output icon control with descriptive tooltip")
 	}
 	if !strings.Contains(markup, `forceStart.title = "Force start this queued task now";`) {
 		t.Fatalf("expected index html to render force-start control for pending tasks")
 	}
-	if !strings.Contains(markup, `stop.textContent = "■";`) {
+	if !strings.Contains(markup, `stop.appendChild(createTaskActionIcon("stop"));`) {
 		t.Fatalf("expected index html to render task stop icon control")
+	}
+	if !strings.Contains(markup, `badge.appendChild(createTaskActionIcon("gear"));`) ||
+		!strings.Contains(markup, `badge.title = "Running: task is actively executing.";`) {
+		t.Fatalf("expected index html to render running badge gear icon with descriptive tooltip")
 	}
 	if !strings.Contains(markup, `close.textContent = "X";`) {
 		t.Fatalf("expected index html to render task close icon control")
