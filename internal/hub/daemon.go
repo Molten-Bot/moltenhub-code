@@ -1142,6 +1142,7 @@ func queueFailureRerun(ctx context.Context, api MoltenHubAPI, cfg InitConfig, di
 		"config":     runConfig,
 		"rerun_of":   strings.TrimSpace(dispatch.RequestID),
 	}
+	applyQueuedDispatchRouting(payload, dispatch)
 
 	return api.PublishResult(ctx, payload)
 }
@@ -1168,8 +1169,23 @@ func queueFailureFollowUp(ctx context.Context, api MoltenHubAPI, cfg InitConfig,
 		"request_id": failureFollowUpRequestID(dispatch.RequestID),
 		"config":     runConfig,
 	}
+	applyQueuedDispatchRouting(payload, dispatch)
 
 	return api.PublishResult(ctx, payload)
+}
+
+func applyQueuedDispatchRouting(payload map[string]any, dispatch SkillDispatch) {
+	if payload == nil {
+		return
+	}
+	routeTo := strings.TrimSpace(dispatch.RouteTo)
+	if routeTo == "" {
+		return
+	}
+	payload["to"] = routeTo
+	if replyTo := strings.TrimSpace(dispatch.ReplyTo); replyTo != "" {
+		payload["reply_to"] = replyTo
+	}
 }
 
 func dispatchRunConfigPayload(runCfg config.Config) (map[string]any, error) {

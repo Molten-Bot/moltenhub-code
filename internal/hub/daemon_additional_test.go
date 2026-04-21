@@ -640,6 +640,7 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 			RequestID: "req-follow-up",
 			Skill:     "code_for_me",
 			ReplyTo:   "agent-123",
+			RouteTo:   "worker-agent-uuid",
 			Config:    runCfg,
 		},
 		"",
@@ -671,6 +672,12 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 	if got := rerunPayload["rerun_of"]; got != "req-follow-up" {
 		t.Fatalf("rerun rerun_of = %#v", got)
 	}
+	if got := rerunPayload["to"]; got != "worker-agent-uuid" {
+		t.Fatalf("rerun to = %#v, want worker-agent-uuid", got)
+	}
+	if got := rerunPayload["reply_to"]; got != "agent-123" {
+		t.Fatalf("rerun reply_to = %#v, want agent-123", got)
+	}
 	rerunConfig, _ := rerunPayload["config"].(map[string]any)
 	if rerunConfig == nil {
 		t.Fatalf("rerun config missing: %#v", rerunPayload)
@@ -695,8 +702,11 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 	if got := followUpPayload["request_id"]; got != "req-follow-up-failure-review" {
 		t.Fatalf("follow-up request_id = %#v", got)
 	}
-	if _, hasReplyTo := followUpPayload["reply_to"]; hasReplyTo {
-		t.Fatalf("follow-up payload unexpectedly routed to caller: %#v", followUpPayload["reply_to"])
+	if got := followUpPayload["to"]; got != "worker-agent-uuid" {
+		t.Fatalf("follow-up to = %#v, want worker-agent-uuid", got)
+	}
+	if got := followUpPayload["reply_to"]; got != "agent-123" {
+		t.Fatalf("follow-up reply_to = %#v, want agent-123", got)
 	}
 
 	runConfig, _ := followUpPayload["config"].(map[string]any)
@@ -972,6 +982,46 @@ func TestQueueFailureFollowUpUsesDefaultRepository(t *testing.T) {
 	repos, _ := runConfig["repos"].([]string)
 	if len(repos) != 1 || repos[0] != config.DefaultRepositoryURL {
 		t.Fatalf("follow-up repos = %#v", runConfig["repos"])
+	}
+}
+
+func TestQueueFailureFollowUpSkipsCallerRoutingWhenTargetMissing(t *testing.T) {
+	t.Parallel()
+
+	api := &stubMoltenHubAPI{token: "t"}
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:         "code_for_me",
+			DispatchType: "skill_request",
+		},
+	}
+	dispatch := SkillDispatch{
+		RequestID: "req-missing-target",
+		Skill:     "code_for_me",
+		ReplyTo:   "agent-caller",
+		Config: config.Config{
+			Repo:   "git@github.com:acme/repo.git",
+			Prompt: "fix issue",
+		},
+	}
+	dispatch.Config.ApplyDefaults()
+	res := harness.Result{Err: errors.New("task failed")}
+
+	if err := queueFailureFollowUp(context.Background(), api, cfg, dispatch, res, ""); err != nil {
+		t.Fatalf("queueFailureFollowUp() error = %v", err)
+	}
+
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	if len(api.published) != 1 {
+		t.Fatalf("published payload count = %d, want 1", len(api.published))
+	}
+	payload := api.published[0]
+	if _, exists := payload["to"]; exists {
+		t.Fatalf("payload unexpectedly includes to without route target: %#v", payload["to"])
+	}
+	if _, exists := payload["reply_to"]; exists {
+		t.Fatalf("payload unexpectedly includes reply_to without route target: %#v", payload["reply_to"])
 	}
 }
 
