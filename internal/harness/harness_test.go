@@ -3307,6 +3307,29 @@ func TestRunCodexAllowsValidationToolingMissingFailure(t *testing.T) {
 	}
 }
 
+func TestRunCodexAllowsFocusedValidationUnavailableFailure(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "make GitHub setup modal narrower"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: focused Go validation unavailable in runtime.",
+				Stderr: "Error details: `/bin/sh: go: not found`",
+			},
+		},
+	}}
+
+	h := New(fake)
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
+		t.Fatalf("runCodex() error = %v, want nil for focused validation-tooling gap", err)
+	}
+}
+
 func TestRunCodexAllowsRecoveredTransientRegistryLookupFailure(t *testing.T) {
 	t.Parallel()
 
