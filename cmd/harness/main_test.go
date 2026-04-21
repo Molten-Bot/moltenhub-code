@@ -1002,7 +1002,7 @@ func TestCurrentHubSetupStateWithRemoteProfileMergesDirectProfileAndMetadata(t *
 func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 	t.Parallel()
 
-	const bindToken = "f9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+	const bindToken = "b_f9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
 
 	var bindCalled bool
 	var syncedHandle string
@@ -1050,9 +1050,8 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 		AgentHarness:      "codex",
 		RuntimeConfigPath: configPath,
 	}, hubui.HubSetupRequest{
-		AgentMode: "new",
-		Token:     bindToken,
-		Handle:    "new-builder",
+		Token:  bindToken,
+		Handle: "new-builder",
 		Profile: struct {
 			ProfileText string `json:"profile"`
 			DisplayName string `json:"display_name"`
@@ -1107,7 +1106,7 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 func TestConfigureHubSetupExistingAgentUsesAgentTokenFlow(t *testing.T) {
 	t.Parallel()
 
-	const agentToken = "a9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+	const agentToken = "t_a9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
 
 	var getCalls int
 	var onlineCalls int
@@ -1149,8 +1148,7 @@ func TestConfigureHubSetupExistingAgentUsesAgentTokenFlow(t *testing.T) {
 		AgentHarness:      "codex",
 		RuntimeConfigPath: configPath,
 	}, hubui.HubSetupRequest{
-		AgentMode: "existing",
-		Token:     agentToken,
+		Token: agentToken,
 	}, func(_ context.Context, cfg hub.InitConfig) error {
 		liveCfg = cfg
 		return nil

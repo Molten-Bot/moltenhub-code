@@ -537,7 +537,7 @@
         <div>
           <h2 id="hub-setup-title" class="text-[2rem] font-semibold leading-tight text-hub-text">Connect Molten Hub</h2>
           <p id="hub-setup-message" class="mt-3 max-w-xl text-base leading-7 text-hub-text/85">Connect this runtime to Molten Hub.</p>
-          <p id="hub-setup-copy" class="hub-setup-copy">Existing agents use an agent token. New agents use a bind token, then save display name, emoji, and profile details for the selected region.</p>
+          <p id="hub-setup-copy" class="hub-setup-copy">Paste a Molten Hub token. Agent tokens start with t_; bind tokens start with b_ and show profile setup fields.</p>
         </div>
         <button id="hub-setup-close" class="task-fullscreen-close !relative !top-0 !right-0 !flex" type="button" aria-label="Close Molten Hub setup" title="Close Molten Hub setup">
           <span class="task-fullscreen-close-icon" aria-hidden="true">&times;</span>
@@ -556,19 +556,9 @@
           </div>
         </div>
 
-        <div id="hub-setup-connect-agent-row" class="hub-setup-toggle-row">
-          <div class="hub-setup-toggle-heading">
-            <span class="prompt-label">Agent</span>
-          </div>
-          <div class="hub-setup-toggle-group" role="tablist" aria-label="Agent">
-            <button id="hub-setup-existing-toggle" class="hub-setup-toggle active" type="button" data-agent-mode="existing" aria-pressed="true">Existing</button>
-            <button id="hub-setup-new-toggle" class="hub-setup-toggle" type="button" data-agent-mode="new" aria-pressed="false">New</button>
-          </div>
-        </div>
-
         <label id="hub-setup-token-field" class="prompt-field">
           <span id="hub-setup-token-label" class="prompt-label">Agent Token</span>
-          <input id="hub-setup-token" class="prompt-control prompt-input w-full font-mono text-[0.84rem]" type="text" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Paste agent token">
+          <input id="hub-setup-token" class="prompt-control prompt-input w-full font-mono text-[0.84rem]" type="text" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Paste agent token or bind token">
         </label>
 
         <div id="hub-setup-new-agent-fields" class="hub-setup-profile-grid hidden">
@@ -1050,6 +1040,13 @@
       };
     }
 
+    function hubSetupModeForToken(token, fallback = state.hubSetup.agentMode) {
+      const trimmed = String(token || "").trim().toLowerCase();
+      if (trimmed.startsWith("b_")) return "new";
+      if (trimmed.startsWith("t_")) return "existing";
+      return normalizeHubSetup({ agent_mode: fallback }).agentMode === "new" ? "new" : "existing";
+    }
+
     function defaultHubSetupOnboarding(agentMode) {
       const isNew = String(agentMode || "").trim() === "new";
       return [
@@ -1134,7 +1131,7 @@
     }
 
     function currentHubSetupTokenPlaceholder() {
-      return state.hubSetup.agentMode === "new" ? "Paste bind token" : "Paste agent token";
+      return "Paste agent token or bind token";
     }
 
     function currentHubSetupSupportingCopy() {
@@ -1142,9 +1139,9 @@
         return "Update how this runtime appears in Molten Hub. The handle stays stable; display name, emoji, and profile text can change.";
       }
       if (state.hubSetup.agentMode === "new") {
-        return "Paste a bind token to redeem a new agent credential, then save the runtime profile for the selected region.";
+        return "Bind token detected. Save handle, display name, emoji, and profile details for the selected region.";
       }
-      return "Paste an existing agent token to reconnect this runtime while preserving the current Molten Hub identity.";
+      return "Agent token detected. Connect this runtime while preserving the current Molten Hub identity.";
     }
 
     function currentHubSetupAutoSubmitKey() {
@@ -1538,9 +1535,6 @@
     const hubSetupCopy = document.getElementById("hub-setup-copy");
     const hubSetupClose = document.getElementById("hub-setup-close");
     const hubSetupConnectRegionRow = document.getElementById("hub-setup-connect-region-row");
-    const hubSetupConnectAgentRow = document.getElementById("hub-setup-connect-agent-row");
-    const hubSetupExistingToggle = document.getElementById("hub-setup-existing-toggle");
-    const hubSetupNewToggle = document.getElementById("hub-setup-new-toggle");
     const hubSetupRegionNAToggle = document.getElementById("hub-setup-region-na-toggle");
     const hubSetupRegionEUToggle = document.getElementById("hub-setup-region-eu-toggle");
     const hubSetupTokenField = document.getElementById("hub-setup-token-field");
@@ -1934,8 +1928,6 @@
     function setHubSetupBusy(busy) {
       state.hubSetupBusy = Boolean(busy);
       if (hubSetupForm) hubSetupForm.setAttribute("aria-busy", state.hubSetupBusy ? "true" : "false");
-      if (hubSetupExistingToggle) hubSetupExistingToggle.disabled = state.hubSetupBusy;
-      if (hubSetupNewToggle) hubSetupNewToggle.disabled = state.hubSetupBusy;
       if (hubSetupRegionNAToggle) hubSetupRegionNAToggle.disabled = state.hubSetupBusy;
       if (hubSetupRegionEUToggle) hubSetupRegionEUToggle.disabled = state.hubSetupBusy;
       if (hubSetupClose) hubSetupClose.disabled = state.hubSetupBusy;
@@ -2055,14 +2047,6 @@
       }
 
       const isNew = state.hubSetup.agentMode === "new";
-      if (hubSetupExistingToggle) {
-        hubSetupExistingToggle.classList.toggle("active", !isNew);
-        hubSetupExistingToggle.setAttribute("aria-pressed", String(!isNew));
-      }
-      if (hubSetupNewToggle) {
-        hubSetupNewToggle.classList.toggle("active", isNew);
-        hubSetupNewToggle.setAttribute("aria-pressed", String(isNew));
-      }
       if (hubSetupRegionNAToggle) {
         const selected = state.hubSetup.region !== "eu";
         hubSetupRegionNAToggle.classList.toggle("active", selected);
@@ -2078,9 +2062,6 @@
       }
       if (hubSetupConnectRegionRow) {
         hubSetupConnectRegionRow.classList.toggle("hidden", profileEditor);
-      }
-      if (hubSetupConnectAgentRow) {
-        hubSetupConnectAgentRow.classList.toggle("hidden", profileEditor);
       }
       if (hubSetupTokenField) {
         hubSetupTokenField.classList.toggle("hidden", profileEditor);
@@ -2135,7 +2116,10 @@
     }
 
     function currentHubSetupPayload() {
-      const isNew = state.hubSetup.agentMode === "new";
+      const inferredMode = isHubProfileDialogMode()
+        ? state.hubSetup.agentMode
+        : hubSetupModeForToken(hubSetupToken?.value, state.hubSetup.agentMode);
+      const isNew = inferredMode === "new";
       return {
         agent_mode: isNew ? "new" : "existing",
         token_type: isNew ? "bind" : "agent",
@@ -7206,20 +7190,6 @@
         setHubSetupStatus("", "");
       });
     }
-    if (hubSetupExistingToggle) {
-      hubSetupExistingToggle.addEventListener("click", () => {
-        state.hubSetupLastAutoSubmitKey = "";
-        applyHubSetupState(currentHubSetupDraft({ agentMode: "existing" }));
-        scheduleHubSetupAutoSubmit();
-      });
-    }
-    if (hubSetupNewToggle) {
-      hubSetupNewToggle.addEventListener("click", () => {
-        state.hubSetupLastAutoSubmitKey = "";
-        applyHubSetupState(currentHubSetupDraft({ agentMode: "new" }));
-        clearHubSetupAutoSubmitTimer();
-      });
-    }
     if (hubSetupRegionNAToggle) {
       hubSetupRegionNAToggle.addEventListener("click", () => {
         state.hubSetupLastAutoSubmitKey = "";
@@ -7244,7 +7214,16 @@
       hubSetupForm.addEventListener("submit", submitHubSetup);
     }
     if (hubSetupToken) {
+      const syncHubSetupModeFromToken = () => {
+        const inferredMode = hubSetupModeForToken(hubSetupToken.value, state.hubSetup.agentMode);
+        if (inferredMode !== state.hubSetup.agentMode) {
+          applyHubSetupState(currentHubSetupDraft({ agentMode: inferredMode }));
+        } else {
+          applyHubSetupState(currentHubSetupDraft());
+        }
+      };
       hubSetupToken.addEventListener("input", () => {
+        syncHubSetupModeFromToken();
         if (currentHubSetupAutoSubmitKey() !== state.hubSetupLastAutoSubmitKey) {
           state.hubSetupLastAutoSubmitKey = "";
         }
@@ -7256,6 +7235,7 @@
       });
       hubSetupToken.addEventListener("paste", () => {
         window.setTimeout(() => {
+          syncHubSetupModeFromToken();
           if (currentHubSetupAutoSubmitKey() !== state.hubSetupLastAutoSubmitKey) {
             state.hubSetupLastAutoSubmitKey = "";
           }
