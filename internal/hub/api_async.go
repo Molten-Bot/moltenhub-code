@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/jef/moltenhub-code/internal/library"
+	"github.com/Molten-Bot/moltenhub-code/internal/library"
 )
 
 // MoltenHubAPI defines the runtime hub API surface with token-bound calls.

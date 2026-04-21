@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/jef/moltenhub-code/internal/hubui"
+	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
 )
 
 var errTaskStoppedByOperator = errors.New("task was stopped by operator")

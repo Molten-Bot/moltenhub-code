@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jef/moltenhub-code/internal/execx"
-	"github.com/jef/moltenhub-code/internal/hub"
-	"github.com/jef/moltenhub-code/internal/hubui"
+	"github.com/Molten-Bot/moltenhub-code/internal/execx"
+	"github.com/Molten-Bot/moltenhub-code/internal/hub"
+	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
 )
 
 const githubTokenPasteConfigureMessage = "GitHub token is required."
@@ -131,6 +131,16 @@ func setGitHubTokenEnvironment(token string) error {
 		return err
 	}
 	return nil
+}
+
+func isLikelyGitHubToken(value string) bool {
+	value = strings.TrimSpace(value)
+	for _, prefix := range []string{"ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_"} {
+		if strings.HasPrefix(value, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func githubTokenRequirementState(harness, runtimeConfigPath string, initCfg hub.InitConfig) (bool, hubui.AgentAuthState) {

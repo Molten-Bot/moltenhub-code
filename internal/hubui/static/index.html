@@ -428,7 +428,7 @@
   </div>
 
   <div id="agent-auth-gate" class="agent-auth-gate fixed inset-0 z-[95] hidden items-center justify-center p-4 backdrop-blur-sm" aria-live="polite">
-    <div class="agent-auth-shell flex min-h-[220px] w-full max-w-xl flex-col">
+    <div id="agent-auth-shell" class="agent-auth-shell flex min-h-[220px] w-full max-w-xl flex-col">
       <h2 id="agent-auth-title" class="text-[2rem] font-semibold leading-tight text-hub-text">Authorize Agent to get started</h2>
       <p id="agent-auth-message" class="mt-3 max-w-lg text-base leading-7 text-hub-text/85"></p>
 
@@ -437,7 +437,7 @@
       </div>
 
       <div id="agent-auth-details" class="mt-5 hidden space-y-3">
-        <div class="agent-auth-command-box agent-auth-command-box-inline">
+        <div id="agent-auth-device-code-row" class="agent-auth-command-box agent-auth-command-box-inline hidden">
           <code id="agent-auth-code" class="agent-auth-command-text agent-auth-command-text-inline font-mono text-[1.15rem] tracking-[0.22em] text-hub-text"></code>
           <button
             id="agent-auth-copy"
@@ -1531,6 +1531,7 @@
     const promptWrap = document.querySelector(".prompt-wrap");
     const promptVisibilityToggle = document.getElementById("prompt-visibility-toggle");
     const agentAuthGate = document.getElementById("agent-auth-gate");
+    const agentAuthShell = document.getElementById("agent-auth-shell");
     const hubSetupGate = document.getElementById("hub-setup-gate");
     const hubSetupTitle = document.getElementById("hub-setup-title");
     const hubSetupForm = document.getElementById("hub-setup-form");
@@ -1567,6 +1568,7 @@
     const agentAuthURL = document.getElementById("agent-auth-url");
     const agentAuthURLLogo = document.getElementById("agent-auth-url-logo");
     const agentAuthURLText = document.getElementById("agent-auth-url-text");
+    const agentAuthDeviceCodeRow = document.getElementById("agent-auth-device-code-row");
     const agentAuthCode = document.getElementById("agent-auth-code");
     const agentAuthCopy = document.getElementById("agent-auth-copy");
     const agentAuthBrowserCode = document.getElementById("agent-auth-browser-code");
@@ -2406,11 +2408,15 @@
     }
 
     function shouldAutoSubmitClaudeBrowserCode(code) {
-      return String(code || "").trim().length >= 20;
+      const value = String(code || "").trim();
+      if (isClaudeCredentialsJSONPayload(value) || isLikelyClaudeOAuthTokenPayload(value)) {
+        return true;
+      }
+      return value.length >= 20;
     }
 
     function scheduleClaudeBrowserCodeAutoSubmit() {
-      if (!isClaudeBrowserCodeState()) {
+      if (!isClaudePendingBrowserLoginState()) {
         clearAgentAuthAutoSubmitTimer();
         return;
       }
@@ -2615,7 +2621,7 @@
       if (gateState !== "pending_browser_login") {
         return false;
       }
-      return String(current?.authURL || "").trim() !== "";
+      return true;
     }
 
     function isClaudeBrowserCodeState(auth) {
@@ -2653,6 +2659,24 @@
       return normalizeClaudeBrowserCode(state.agentAuthBrowserCode || "");
     }
 
+    function isClaudeCredentialsJSONPayload(raw) {
+      const trimmed = String(raw || "").trim();
+      if (!trimmed.startsWith("{")) {
+        return false;
+      }
+      try {
+        const parsed = JSON.parse(trimmed);
+        return Boolean(parsed) && typeof parsed === "object" && !Array.isArray(parsed);
+      } catch (_err) {
+        return false;
+      }
+    }
+
+    function isLikelyClaudeOAuthTokenPayload(raw) {
+      const trimmed = String(raw || "").trim();
+      return (trimmed.startsWith("sk-ant-") || trimmed.startsWith("sk-")) && !/\s|#/.test(trimmed);
+    }
+
     function setAuggieConfigureError(message) {
       if (!agentAuthConfigureError) return;
       const text = String(message || "").trim();
@@ -2688,8 +2712,8 @@
       }
       const requiresManualConfigure = isManualConfigureState();
       const hasCodeChallenge = Boolean(state.agentAuth.authURL || state.agentAuth.deviceCode);
-      const meetsAuthInteractionRequirement = requiresManualConfigure || (!hasCodeChallenge || state.agentAuthInteracted);
       const isClaudePending = isClaudePendingBrowserLoginState();
+      const meetsAuthInteractionRequirement = isClaudePending || requiresManualConfigure || (!hasCodeChallenge || state.agentAuthInteracted);
       const visible = state.agentAuth.required &&
         !state.agentAuth.ready &&
         meetsAuthInteractionRequirement &&
@@ -2819,6 +2843,9 @@
         agentAuthGate.classList.toggle("hidden", !gateVisible);
         agentAuthGate.classList.toggle("flex", gateVisible);
       }
+      if (agentAuthShell) {
+        agentAuthShell.classList.toggle("agent-auth-github-shell", needsClaudeGitHubConfigure);
+      }
       if (agentAuthTitle) {
         if (needsHarnessSelection) {
           agentAuthTitle.textContent = "Select Agent";
@@ -2843,7 +2870,7 @@
       }
       renderAgentHarnessSelection(state.agentAuth);
 
-      const hasChallenge = Boolean(state.agentAuth.authURL || state.agentAuth.deviceCode) &&
+      const hasChallenge = (Boolean(state.agentAuth.authURL || state.agentAuth.deviceCode) || isClaudePendingBrowserLoginState(state.agentAuth)) &&
         !requiresManualConfigure &&
         !needsHarnessSelection;
       if (agentAuthDetails) {
@@ -2883,6 +2910,9 @@
       if (agentAuthCode) {
         agentAuthCode.textContent = state.agentAuth.deviceCode || "";
         agentAuthCode.classList.toggle("hidden", !state.agentAuth.deviceCode);
+      }
+      if (agentAuthDeviceCodeRow) {
+        agentAuthDeviceCodeRow.classList.toggle("hidden", !state.agentAuth.deviceCode);
       }
       if (agentAuthCopy) {
         agentAuthCopy.classList.toggle("hidden", !state.agentAuth.deviceCode);
@@ -3136,10 +3166,24 @@
       return token;
     }
 
+    function isLikelyGitHubTokenValue(raw) {
+      return /^(gh[pousr]_|github_pat_)\S+$/i.test(String(raw || "").trim());
+    }
+
+    function clearAgentAuthConfigureInputIfSensitive() {
+      if (!agentAuthConfigureInput) return;
+      if (isLikelyGitHubTokenValue(agentAuthConfigureInput.value)) {
+        agentAuthConfigureInput.value = "";
+      }
+    }
+
     function normalizePiAuthJSONPayload(raw) {
       const value = String(raw || "").trim();
       if (!value) {
         throw new Error("Paste ~/.pi/agent/auth.json first.");
+      }
+      if (isLikelyGitHubTokenValue(value)) {
+        throw new Error("GitHub token does not belong in PI auth JSON. Paste ~/.pi/agent/auth.json instead.");
       }
       return value;
     }
@@ -3277,6 +3321,7 @@
         normalizedSessionAuth = normalizeAuggieSessionAuthPayload(agentAuthConfigureInput ? agentAuthConfigureInput.value : "");
       } catch (err) {
         const message = err && err.message ? err.message : "Invalid Auggie session auth payload.";
+        clearAgentAuthConfigureInputIfSensitive();
         setAuggieConfigureError(message);
         return;
       }
@@ -3300,6 +3345,7 @@
       } catch (err) {
         const message = err && err.message ? err.message : "Auggie auth configure failed.";
         setAgentAuthVerifyPending(false);
+        clearAgentAuthConfigureInputIfSensitive();
         setAuggieConfigureError(message);
         setLocalPromptStatus("error", `${currentAgentLabel()} configure failed: ${message}`);
       } finally {
@@ -3348,6 +3394,7 @@
       } catch (err) {
         const message = err && err.message ? err.message : "GitHub token configure failed.";
         setAgentAuthVerifyPending(false);
+        clearAgentAuthConfigureInputIfSensitive();
         setAuggieConfigureError(message);
         setLocalPromptStatus("error", `${currentAgentLabel()} configure failed: ${message}`);
       } finally {
@@ -3362,6 +3409,7 @@
         authJSON = normalizePiAuthJSONPayload(agentAuthConfigureInput ? agentAuthConfigureInput.value : "");
       } catch (err) {
         const message = err && err.message ? err.message : "Invalid Pi auth JSON.";
+        clearAgentAuthConfigureInputIfSensitive();
         setAuggieConfigureError(message);
         return;
       }
@@ -3385,6 +3433,7 @@
       } catch (err) {
         const message = err && err.message ? err.message : "PI auth configure failed.";
         setAgentAuthVerifyPending(false);
+        clearAgentAuthConfigureInputIfSensitive();
         setAuggieConfigureError(message);
         setLocalPromptStatus("error", `${currentAgentLabel()} configure failed: ${message}`);
       } finally {
@@ -7061,6 +7110,7 @@
     }
     if (agentAuthBrowserCodeInput) {
       agentAuthBrowserCodeInput.addEventListener("input", () => {
+        markAgentAuthInteraction();
         state.agentAuthBrowserCode = normalizeClaudeBrowserCode(agentAuthBrowserCodeInput.value || "");
         if (state.agentAuthBrowserCode !== state.agentAuthLastAutoSubmittedCode) {
           state.agentAuthLastAutoSubmittedCode = "";
@@ -7071,6 +7121,7 @@
       });
       agentAuthBrowserCodeInput.addEventListener("paste", () => {
         window.setTimeout(() => {
+          markAgentAuthInteraction();
           state.agentAuthBrowserCode = normalizeClaudeBrowserCode(agentAuthBrowserCodeInput.value || "");
           if (state.agentAuthBrowserCode !== state.agentAuthLastAutoSubmittedCode) {
             state.agentAuthLastAutoSubmittedCode = "";

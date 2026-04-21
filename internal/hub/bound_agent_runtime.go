@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jef/moltenhub-code/internal/agentruntime"
-	"github.com/jef/moltenhub-code/internal/config"
+	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
+	"github.com/Molten-Bot/moltenhub-code/internal/config"
 )
 
 const unboundAgentRuntimeErrorMessage = "agent harness is not configured; complete agent selection in the UI"

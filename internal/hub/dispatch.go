@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jef/moltenhub-code/internal/config"
-	"github.com/jef/moltenhub-code/internal/library"
+	"github.com/Molten-Bot/moltenhub-code/internal/config"
+	"github.com/Molten-Bot/moltenhub-code/internal/library"
 )
 
 // SkillDispatch represents one inbound skill request ready for execution.

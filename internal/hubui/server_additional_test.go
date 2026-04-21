@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jef/moltenhub-code/internal/library"
+	"github.com/Molten-Bot/moltenhub-code/internal/library"
 )
 
 func TestHandleHubSetupStatusAndConfigure(t *testing.T) {
@@ -1205,6 +1205,9 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	if !strings.Contains(html, "const visible = state.agentAuth.required && !state.agentAuth.ready;") {
 		t.Fatalf("expected Codex Done button visibility to remain stable while auth is incomplete")
 	}
+	if !strings.Contains(html, "const meetsAuthInteractionRequirement = isClaudePending || requiresManualConfigure || (!hasCodeChallenge || state.agentAuthInteracted);") {
+		t.Fatalf("expected Claude browser-login flow to keep Done visible for validation retries")
+	}
 	if !strings.Contains(html, "Codex auth is required. Open browser auth, then click Done again.") ||
 		!strings.Contains(html, "Codex auth is still pending. Complete browser auth, then click Done again.") {
 		t.Fatalf("expected Done verification to emit explicit Codex auth validation feedback")
@@ -1239,8 +1242,16 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	if !strings.Contains(html, "id=\"agent-auth-configure\"") {
 		t.Fatalf("expected auggie configure panel markup")
 	}
+	if !strings.Contains(html, `id="agent-auth-device-code-row" class="agent-auth-command-box agent-auth-command-box-inline hidden"`) ||
+		!strings.Contains(html, `agentAuthDeviceCodeRow.classList.toggle("hidden", !state.agentAuth.deviceCode);`) {
+		t.Fatalf("expected empty device-code command row to stay hidden until a device code exists")
+	}
 	if !strings.Contains(html, "class=\"agent-auth-shell flex min-h-[220px] w-full max-w-xl flex-col\"") {
 		t.Fatalf("expected auth gate content to render inside a theme-aware auth shell")
+	}
+	if !strings.Contains(html, `id="agent-auth-shell"`) ||
+		!strings.Contains(html, `agentAuthShell.classList.toggle("agent-auth-github-shell", needsClaudeGitHubConfigure);`) {
+		t.Fatalf("expected GitHub token setup to use a narrower auth shell")
 	}
 	if !strings.Contains(html, "normalizeAuggieSessionAuthPayload") {
 		t.Fatalf("expected auggie configure JSON schema validator")
@@ -1264,6 +1275,14 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	}
 	if !strings.Contains(html, "function isClaudeBrowserCodeState(auth)") {
 		t.Fatalf("expected auth gate to detect Claude browser-code submission state")
+	}
+	if strings.Contains(html, `return String(current?.authURL || "").trim() !== "";`) {
+		t.Fatalf("expected Claude pending browser login UI to accept credentials JSON before an auth URL is captured")
+	}
+	if !strings.Contains(html, "function isClaudeCredentialsJSONPayload(raw)") ||
+		!strings.Contains(html, "function isLikelyClaudeOAuthTokenPayload(raw)") ||
+		!strings.Contains(html, "if (!isClaudePendingBrowserLoginState()) {") {
+		t.Fatalf("expected Claude credentials JSON/token input to enable pending-login submission without a browser URL")
 	}
 	if strings.Contains(html, "(!requiresClaudeBrowserCode || hasClaudeBrowserCode)") {
 		t.Fatalf("expected Done button visibility to allow verify flows even when Claude browser code is not pasted")

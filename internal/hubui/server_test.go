@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jef/moltenhub-code/internal/config"
-	"github.com/jef/moltenhub-code/internal/library"
+	"github.com/Molten-Bot/moltenhub-code/internal/config"
+	"github.com/Molten-Bot/moltenhub-code/internal/library"
 )
 
 type duplicateSubmissionStubError struct {
@@ -1699,6 +1699,9 @@ func TestHandlerIndexIncludesClaudeBrowserCodeFlow(t *testing.T) {
 		`return configuredHarnessName();`,
 		`function isClaudeBrowserCodeAwaitingSubmission(auth) {`,
 		`const showBrowserCode = isClaudePendingBrowserLoginState();`,
+		`id="agent-auth-device-code-row" class="agent-auth-command-box agent-auth-command-box-inline hidden"`,
+		`const agentAuthDeviceCodeRow = document.getElementById("agent-auth-device-code-row");`,
+		`agentAuthDeviceCodeRow.classList.toggle("hidden", !state.agentAuth.deviceCode);`,
 		`id="agent-auth-copy"`,
 		`aria-label="Copy device code"`,
 		`id="agent-auth-browser-command-primary"`,
@@ -1714,6 +1717,8 @@ func TestHandlerIndexIncludesClaudeBrowserCodeFlow(t *testing.T) {
 		`cat ~/.pi/agent/auth.json`,
 		`Paste ~/.pi/agent/auth.json contents...`,
 		`agent-auth-configure-input-single-line`,
+		`function clearAgentAuthConfigureInputIfSensitive()`,
+		`GitHub token does not belong in PI auth JSON`,
 		`const useClaudeLogoLink = authHarness(state.agentAuth) === "claude" && authURL !== "" && !useClaudeCommandFlow;`,
 		`const code = claudeBrowserCodeValue();`,
 		`agentAuthURL.addEventListener("click", markAgentAuthInteraction);`,
@@ -1790,6 +1795,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".agent-auth-shell {\n  padding: clamp(24px, 3vw, 32px);\n  border: 1px solid var(--surface-auth-panel-border);\n  border-radius: 24px;\n  background: var(--surface-auth-panel-bg);\n  box-shadow: var(--surface-auth-panel-shadow);\n}") {
 		t.Fatalf("expected stylesheet to render onboarding content inside a readable auth panel")
 	}
+	if !strings.Contains(css, ".agent-auth-github-shell {\n  max-width: calc(46ch + clamp(48px, 6vw, 64px) + 2px);\n}") {
+		t.Fatalf("expected stylesheet to narrow the GitHub token setup shell around the token input")
+	}
 	if !strings.Contains(css, "--surface-auth-panel-bg:") || !strings.Contains(css, "--surface-auth-panel-border:") || !strings.Contains(css, "--surface-auth-panel-shadow:") {
 		t.Fatalf("expected stylesheet to define theme-aware auth panel surface tokens")
 	}
@@ -1816,6 +1824,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".task-progress-step-icon") {
 		t.Fatalf("expected stylesheet to include task progress step icon styles")
+	}
+	if !strings.Contains(css, "filter: brightness(0) saturate(100%);") || !strings.Contains(css, ".task-progress-step.current.has-icon {\n  background: #fff;\n  border-color: rgba(0, 0, 0, 0.7);\n  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.14);") {
+		t.Fatalf("expected stylesheet to render task progress activity icons in black")
 	}
 	if !strings.Contains(css, ".task-body") {
 		t.Fatalf("expected stylesheet to include task body column styles")
