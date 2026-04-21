@@ -1811,6 +1811,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task-progress-step-icon") {
 		t.Fatalf("expected stylesheet to include task progress step icon styles")
 	}
+	if !strings.Contains(css, "filter: brightness(0) saturate(100%);") || !strings.Contains(css, ".task-progress-step.current.has-icon {\n  background: #fff;\n  border-color: rgba(0, 0, 0, 0.7);\n  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.14);") {
+		t.Fatalf("expected stylesheet to render task progress activity icons in black")
+	}
 	if !strings.Contains(css, ".task-body") {
 		t.Fatalf("expected stylesheet to include task body column styles")
 	}
