@@ -293,6 +293,7 @@ func TestDaemonRunUsesStoredRuntimeConfigPullTimeout(t *testing.T) {
 	})
 
 	const pullTimeoutMs = 4321
+	expectedPullQuery := fmt.Sprintf("timeout_ms=%d", pullTimeoutMs)
 
 	var (
 		reqMu       sync.Mutex
@@ -319,11 +320,14 @@ func TestDaemonRunUsesStoredRuntimeConfigPullTimeout(t *testing.T) {
 			http.Error(w, "upgrade required", http.StatusUpgradeRequired)
 		case "/v1/openclaw/messages/pull":
 			reqMu.Lock()
-			pullQueries = append(pullQueries, r.URL.RawQuery)
+			query := r.URL.RawQuery
+			pullQueries = append(pullQueries, query)
 			reqMu.Unlock()
-			pullOnce.Do(func() {
-				close(pullSeen)
-			})
+			if query == expectedPullQuery {
+				pullOnce.Do(func() {
+					close(pullSeen)
+				})
+			}
 			w.WriteHeader(http.StatusNoContent)
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -377,9 +381,13 @@ func TestDaemonRunUsesStoredRuntimeConfigPullTimeout(t *testing.T) {
 	if len(pullQueries) == 0 {
 		t.Fatal("expected at least one pull query")
 	}
-	if got, want := pullQueries[0], fmt.Sprintf("timeout_ms=%d", pullTimeoutMs); got != want {
-		t.Fatalf("pull query = %q, want %q", got, want)
+	want := expectedPullQuery
+	for _, query := range pullQueries {
+		if query == want {
+			return
+		}
 	}
+	t.Fatalf("pull queries = %v, want at least one %q", pullQueries, want)
 }
 
 func TestIncomingSkillName(t *testing.T) {

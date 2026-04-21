@@ -150,11 +150,6 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 		d.logf("hub.runtime status=registered skills=%d library_tasks=%d", len(supportedProfileSkills()), len(libraryCatalog.Tasks))
 	}
 
-	if err := api.UpdateAgentStatus(ctx, "online"); err != nil {
-		d.logf("hub.agent status=warn state=online err=%q", err)
-	} else {
-		d.logf("hub.agent status=online")
-	}
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), agentStatusUpdateTimeout)
 		defer cancel()
@@ -162,12 +157,8 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 			d.logf("hub.transport status=warn mode=openclaw_ws err=%q", err)
 		} else {
 			d.logf("hub.transport status=offline mode=openclaw_ws")
+			d.logf("hub.agent status=offline")
 		}
-		if err := api.UpdateAgentStatus(shutdownCtx, "offline"); err != nil {
-			d.logf("hub.agent status=warn state=offline err=%q", err)
-			return
-		}
-		d.logf("hub.agent status=offline")
 	}()
 
 	d.logf("hub.transport primary=openclaw_ws fallback=openclaw_pull")
@@ -181,6 +172,11 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	var workers sync.WaitGroup
 	defer workers.Wait()
 	deduper := newDispatchDeduper(dispatchDedupTTL)
+	if err := d.pullProbeOnce(ctx, api, cfg, dispatchController, &workers, deduper); err != nil {
+		d.logf("hub.agent status=warn state=online err=%q", err)
+	} else {
+		d.logf("hub.agent status=online")
+	}
 
 	wsURL, wsURLErr := WebsocketURL(cfg.BaseURL, cfg.SessionKey)
 	if wsURLErr != nil {

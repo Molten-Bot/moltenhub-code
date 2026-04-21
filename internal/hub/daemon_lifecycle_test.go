@@ -14,9 +14,6 @@ import (
 )
 
 func TestDaemonRunPublishesAgentLifecycleStatus(t *testing.T) {
-	type statusCall struct {
-		Status string
-	}
 	type offlineCall struct {
 		SessionKey string
 		Reason     string
@@ -27,7 +24,7 @@ func TestDaemonRunPublishesAgentLifecycleStatus(t *testing.T) {
 	}
 	var (
 		mu            sync.Mutex
-		statuses      []statusCall
+		pullCalls     int
 		offlineCalls  []offlineCall
 		metadataCalls []metadataCall
 		onlineCh      = make(chan struct{})
@@ -47,26 +44,6 @@ func TestDaemonRunPublishesAgentLifecycleStatus(t *testing.T) {
 				Path:   r.URL.Path,
 			})
 			mu.Unlock()
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"ok":true}`))
-			return
-		case "/v1/agents/me/status":
-			defer r.Body.Close()
-			data, _ := io.ReadAll(r.Body)
-			var body map[string]any
-			_ = json.Unmarshal(data, &body)
-
-			status, _ := body["status"].(string)
-			mu.Lock()
-			statuses = append(statuses, statusCall{Status: status})
-			mu.Unlock()
-
-			if status == "online" {
-				once.Do(func() {
-					close(onlineCh)
-				})
-			}
-
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
 			return
@@ -90,6 +67,12 @@ func TestDaemonRunPublishesAgentLifecycleStatus(t *testing.T) {
 			http.Error(w, "upgrade required", http.StatusUpgradeRequired)
 			return
 		case "/v1/openclaw/messages/pull":
+			mu.Lock()
+			pullCalls++
+			mu.Unlock()
+			once.Do(func() {
+				close(onlineCh)
+			})
 			w.WriteHeader(http.StatusNoContent)
 			return
 		default:
@@ -154,8 +137,8 @@ func TestDaemonRunPublishesAgentLifecycleStatus(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	if len(statuses) < 2 {
-		t.Fatalf("status calls = %d, want at least 2", len(statuses))
+	if pullCalls < 1 {
+		t.Fatalf("pull calls = %d, want at least 1", pullCalls)
 	}
 	if len(offlineCalls) < 1 {
 		t.Fatalf("offline calls = %d, want at least 1", len(offlineCalls))
@@ -168,13 +151,6 @@ func TestDaemonRunPublishesAgentLifecycleStatus(t *testing.T) {
 	}
 	if metadataCalls[0].Path != "/v1/agents/me/metadata" {
 		t.Fatalf("first metadata path = %q, want %q", metadataCalls[0].Path, "/v1/agents/me/metadata")
-	}
-	if statuses[0].Status != "online" {
-		t.Fatalf("first status = %q, want online", statuses[0].Status)
-	}
-	last := statuses[len(statuses)-1]
-	if last.Status != "offline" {
-		t.Fatalf("last status = %q, want offline", last.Status)
 	}
 	lastOffline := offlineCalls[len(offlineCalls)-1]
 	if lastOffline.SessionKey != "main" {
