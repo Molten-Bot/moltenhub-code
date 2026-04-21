@@ -164,9 +164,11 @@ func (g *piAuthGate) Configure(ctx context.Context, rawInput string) (hubui.Agen
 	if configureCommand == claudeGitHubConfigureCommand {
 		requiredMessage := "GitHub token is required."
 		token, state, err := configureGitHubToken(
+			ctx,
 			agentruntime.HarnessPi,
 			runtimeConfigPath,
 			initCfg,
+			g.runner,
 			rawInput,
 			requiredMessage,
 		)
