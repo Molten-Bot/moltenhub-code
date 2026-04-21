@@ -363,28 +363,21 @@ func (g *codexAuthGate) Configure(ctx context.Context, rawInput string) (hubui.A
 	runner := g.runner
 	g.mu.Unlock()
 
-	token, failureState, err := configureGitHubToken(
+	return configureGitHubTokenAndApply(
 		ctx,
 		agentruntime.HarnessCodex,
 		runtimeConfigPath,
 		initCfg,
 		runner,
 		rawInput,
-		githubTokenPasteConfigureMessage,
+		nil,
+		func(token string) (hubui.AgentAuthState, error) {
+			g.mu.Lock()
+			g.initCfg.GitHubToken = token
+			g.mu.Unlock()
+			return g.Verify(context.Background())
+		},
 	)
-	if err != nil {
-		return failureState, err
-	}
-
-	g.mu.Lock()
-	g.initCfg.GitHubToken = token
-	g.mu.Unlock()
-
-	state, err := g.Verify(context.Background())
-	if err != nil {
-		return state, err
-	}
-	return state, nil
 }
 
 func (g *codexAuthGate) readDeviceAuthStream(r io.ReadCloser) {

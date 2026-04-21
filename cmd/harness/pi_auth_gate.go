@@ -162,30 +162,29 @@ func (g *piAuthGate) Configure(ctx context.Context, rawInput string) (hubui.Agen
 	g.mu.Unlock()
 
 	if configureCommand == claudeGitHubConfigureCommand {
-		requiredMessage := "GitHub token is required."
-		token, state, err := configureGitHubToken(
+		return configureGitHubTokenAndApply(
 			ctx,
 			agentruntime.HarnessPi,
 			runtimeConfigPath,
 			initCfg,
 			g.runner,
 			rawInput,
-			requiredMessage,
+			func(state hubui.AgentAuthState, err error) (hubui.AgentAuthState, error) {
+				g.mu.Lock()
+				g.authState.applySnapshot(state)
+				snap := g.snapshotLocked()
+				g.mu.Unlock()
+				return snap, err
+			},
+			func(token string) (hubui.AgentAuthState, error) {
+				g.mu.Lock()
+				g.initCfg.GitHubToken = token
+				g.refreshLocked()
+				snap := g.snapshotLocked()
+				g.mu.Unlock()
+				return snap, nil
+			},
 		)
-		if err != nil {
-			g.mu.Lock()
-			g.authState.applySnapshot(state)
-			snap := g.snapshotLocked()
-			g.mu.Unlock()
-			return snap, err
-		}
-
-		g.mu.Lock()
-		g.initCfg.GitHubToken = token
-		g.refreshLocked()
-		snap := g.snapshotLocked()
-		g.mu.Unlock()
-		return snap, nil
 	}
 
 	if isLikelyPiProviderAuthInput(rawInput) {
