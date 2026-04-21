@@ -1982,8 +1982,11 @@ func maybeStartAgentAuth(ctx context.Context, runtime agentruntime.Runtime, gate
 	if !status.Required || status.Ready {
 		return
 	}
-	switch strings.TrimSpace(status.State) {
-	case "needs_configure", "needs_browser_login", "pending_browser_login":
+	if strings.TrimSpace(status.State) == "pending_browser_login" {
+		return
+	}
+	if strings.TrimSpace(status.State) == "needs_configure" &&
+		strings.TrimSpace(status.ConfigureCommand) == claudeGitHubConfigureCommand {
 		return
 	}
 	if strings.TrimSpace(status.AuthURL) != "" {
