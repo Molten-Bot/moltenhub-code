@@ -895,10 +895,7 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 	if configPath != "" {
 		runtimeCfg, err := hub.LoadRuntimeConfig(configPath)
 		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				return defaultHubBootConfig(configPath)
-			}
-			return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("runtime config error: %w", err)
+			return defaultHubBootConfig(configPath)
 		}
 		cfg := runtimeCfg.Init()
 		cfg.RuntimeConfigPath = runtimeCfg.RuntimeConfigPath
@@ -916,10 +913,7 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 					cfg.RuntimeConfigPath = runtimeCfg.RuntimeConfigPath
 					return cfg, harness.ExitSuccess, nil
 				}
-				if errors.Is(runtimeErr, os.ErrNotExist) {
-					return defaultHubBootConfig(runtimePath)
-				}
-				return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("runtime config error: %w", runtimeErr)
+				return defaultHubBootConfig(runtimePath)
 			}
 			return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("init config error: %w", err)
 		}
@@ -930,10 +924,7 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 
 	runtimeCfg, err := hub.LoadRuntimeConfig("")
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return defaultHubBootConfig(hub.ResolveRuntimeConfigPath(""))
-		}
-		return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("runtime config error: %w", err)
+		return defaultHubBootConfig(hub.ResolveRuntimeConfigPath(""))
 	}
 
 	cfg := runtimeCfg.Init()
@@ -2481,9 +2472,12 @@ func effectiveHubSetupConfig(cfg hub.InitConfig) (hub.InitConfig, error) {
 func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSetupRequest, applyLive func(context.Context, hub.InitConfig) error) (hubui.HubSetupState, error) {
 	state := currentHubSetupState(cfg)
 	token := strings.TrimSpace(req.Token)
+	requestedRegion := strings.TrimSpace(req.Region)
 	state.AgentMode = hubSetupModeForToken(token, req.AgentMode)
 	state.TokenType = hubSetupTokenTypeForMode(state.AgentMode)
-	state.Region = normalizeHubSetupRegion(req.Region)
+	if requestedRegion != "" {
+		state.Region = normalizeHubSetupRegion(requestedRegion)
+	}
 	state.Handle = strings.TrimSpace(req.Handle)
 	state.Profile.ProfileText = strings.TrimSpace(req.Profile.ProfileText)
 	state.Profile.DisplayName = strings.TrimSpace(req.Profile.DisplayName)
@@ -2499,7 +2493,9 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 	if err != nil {
 		return bindError(fmt.Errorf("load runtime config: %w", err))
 	}
-	activeCfg.BaseURL = hubSetupBaseURL(activeCfg.BaseURL, state.Region)
+	if requestedRegion != "" {
+		activeCfg.BaseURL = hubSetupBaseURL(activeCfg.BaseURL, state.Region)
+	}
 
 	useSavedCredentials := token == ""
 	if !useSavedCredentials {
@@ -2773,11 +2769,6 @@ func hubSetupBaseURL(baseURL, region string) string {
 				}
 			}
 			return hub.HubBaseURLForRegion(region)
-		}
-		if hub.AllowNonMoltenHubBaseURL() {
-			if err := hub.ValidateHubBaseURLStrict(baseURL); err != nil {
-				return baseURL
-			}
 		}
 	}
 

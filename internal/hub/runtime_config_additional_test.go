@@ -340,9 +340,10 @@ func TestSaveRuntimeConfigHubSettingsMergesHubFieldsWithoutDroppingExtras(t *tes
 	}
 
 	err := SaveRuntimeConfigHubSettings(path, InitConfig{
-		BaseURL:   "https://na.hub.molten.bot/v1",
-		BindToken: "bind_saved",
-		Handle:    "molten-builder",
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		BindToken:    "bind_saved",
+		AgentHarness: "codex",
+		Handle:       "molten-builder",
 		Profile: ProfileConfig{
 			ProfileText: "Builds things",
 			DisplayName: "Molten Builder",
@@ -405,8 +406,9 @@ func TestSaveRuntimeConfigHubSettingsClearsStaleBindTokenForAgentTokenFlow(t *te
 	}
 
 	err := SaveRuntimeConfigHubSettings(path, InitConfig{
-		BaseURL:    "https://na.hub.molten.bot/v1",
-		AgentToken: "agent_direct",
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		AgentToken:   "agent_direct",
+		AgentHarness: "codex",
 	}, "agent_direct")
 	if err != nil {
 		t.Fatalf("SaveRuntimeConfigHubSettings() error = %v", err)
@@ -441,8 +443,9 @@ func TestSaveRuntimeConfigHubSettingsPreservesConfiguredLogLevel(t *testing.T) {
 	}
 
 	if err := SaveRuntimeConfigHubSettings(path, InitConfig{
-		BaseURL:    "https://na.hub.molten.bot/v1",
-		AgentToken: "agent_direct",
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		AgentToken:   "agent_direct",
+		AgentHarness: "codex",
 	}, "agent_direct"); err != nil {
 		t.Fatalf("SaveRuntimeConfigHubSettings() error = %v", err)
 	}
