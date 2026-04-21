@@ -1326,9 +1326,12 @@ func TestCurrentWorkHeaderIncludesTaskSoundMuteToggle(t *testing.T) {
 		t.Fatalf("expected Current Work panel markup")
 	}
 	if !strings.Contains(html, "id=\"task-sound-toggle\"") ||
-		!strings.Contains(html, "aria-label=\"Disable task sounds\"") ||
-		!strings.Contains(html, "title=\"Disable task sounds\"") {
+		!strings.Contains(html, "aria-label=\"Mute task sounds\"") ||
+		!strings.Contains(html, "title=\"Mute\"") {
 		t.Fatalf("expected Current Work header to include mute toggle for task sounds")
+	}
+	if !strings.Contains(html, "class=\"task-sound-toggle-muted-slash\"") {
+		t.Fatalf("expected Current Work mute toggle icon to include a muted slash path")
 	}
 	if !strings.Contains(html, "const TASK_SOUND_MUTED_KEY = \"hubui.taskSoundMuted\";") {
 		t.Fatalf("expected task sound mute preference storage key")
@@ -1350,6 +1353,9 @@ func TestCurrentWorkHeaderIncludesTaskSoundMuteToggle(t *testing.T) {
 		!strings.Contains(html, "persistTaskSoundMuted();") ||
 		!strings.Contains(html, "taskSoundToggle.addEventListener(\"click\", () => {") {
 		t.Fatalf("expected task sound toggle to persist and react to clicks")
+	}
+	if !strings.Contains(html, "const hoverLabel = enabled ? \"Mute\" : \"Sounds\";") {
+		t.Fatalf("expected task sound toggle hover label to switch between Mute and Sounds")
 	}
 	if !strings.Contains(html, "if (!state.taskSoundMuted) {\n        ensureTaskAudioContext();\n        playTaskSuccessSound();\n      }") {
 		t.Fatalf("expected enabling task sounds to play a confirmation chirp")
@@ -1389,5 +1395,11 @@ func TestTaskSoundToggleStylesShowMutedState(t *testing.T) {
 	}
 	if !strings.Contains(css, ".task-sound-toggle-muted .task-sound-toggle-icon {\n  opacity: 0.7;\n}") {
 		t.Fatalf("expected muted task sound icon styling")
+	}
+	if !strings.Contains(css, ".task-sound-toggle-muted .task-sound-toggle-wave {\n  opacity: 0;\n}") {
+		t.Fatalf("expected muted task sound icon to hide active sound waves")
+	}
+	if !strings.Contains(css, ".task-sound-toggle-muted .task-sound-toggle-muted-slash {\n  opacity: 1;\n}") {
+		t.Fatalf("expected muted task sound icon to show slash indicator")
 	}
 }

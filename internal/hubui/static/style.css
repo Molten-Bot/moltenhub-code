@@ -1554,6 +1554,15 @@ select.prompt-control {
   stroke-linejoin: round;
 }
 
+.task-sound-toggle-wave,
+.task-sound-toggle-muted-slash {
+  transition: opacity 0.14s ease;
+}
+
+.task-sound-toggle-muted-slash {
+  opacity: 0;
+}
+
 .task-fullscreen-toggle-icon {
   width: 16px;
   height: 16px;
@@ -1598,6 +1607,14 @@ select.prompt-control {
 
 .task-sound-toggle-muted .task-sound-toggle-icon {
   opacity: 0.7;
+}
+
+.task-sound-toggle-muted .task-sound-toggle-wave {
+  opacity: 0;
+}
+
+.task-sound-toggle-muted .task-sound-toggle-muted-slash {
+  opacity: 1;
 }
 
 .task-history-toggle-unseen {
