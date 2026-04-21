@@ -27,10 +27,9 @@ const piOfflineProviderEnvVar = "PI_OFFLINE"
 const piOfflineProviderDefaultValue = "1"
 const piAuthConfigureCommand = "cat ~/.pi/agent/auth.json"
 const piAuthConfigurePlaceholder = "Paste ~/.pi/agent/auth.json contents..."
-const piAuthConfigureMessage = "Run `pi`, then `/login` on your computer. After Pi works locally, paste `~/.pi/agent/auth.json` here. MoltenHub will store it, write it to `$HOME/.pi/agent/auth.json`, and re-test Pi."
+const piAuthConfigureMessage = "Run `pi`, then `/login` on your computer. After Pi works locally, paste `~/.pi/agent/auth.json` here. MoltenHub will store it, write it to `$HOME/.pi/agent/auth.json`, and validate it."
 const piAuthInvalidPrefix = "PI auth.json is invalid"
-const piAuthValidationFailureMessage = "PI auth.json did not validate. Refresh `~/.pi/agent/auth.json` from a working local Pi login, paste it here, and try again."
-const piAuthConfiguredMessage = "PI auth.json is configured. Validating Pi launch."
+const piAuthConfiguredMessage = "PI auth.json is configured."
 const piAuthReadyMessage = "PI auth is ready via ~/.pi/agent/auth.json."
 const piExistingLocalAuthReadyMessage = "PI is ready using existing local auth."
 
@@ -211,14 +210,6 @@ func (g *piAuthGate) refreshAndSnapshot(ctx context.Context) (hubui.AgentAuthSta
 	g.mu.Unlock()
 
 	if canonicalAuthJSON != "" {
-		if err := g.probe(ctx); err != nil {
-			g.mu.Lock()
-			applyPiConfigureUIState(&g.authState, piAuthValidationFailureMessage)
-			snap := g.snapshotLocked()
-			g.mu.Unlock()
-			return snap, nil
-		}
-
 		g.mu.Lock()
 		g.validatedAuth = validatedPiAuthStateKey("json", canonicalAuthJSON)
 		g.refreshLocked()
@@ -613,14 +604,6 @@ func (g *piAuthGate) configurePiAuthJSON(ctx context.Context, rawInput string) (
 		g.mu.Unlock()
 		return snap, err
 	}
-	if err := g.probe(ctx); err != nil {
-		g.mu.Lock()
-		applyPiConfigureUIState(&g.authState, fmt.Sprintf("launch pi with %s: %v", piAuthFileRelativePath, err))
-		snap := g.snapshotLocked()
-		g.mu.Unlock()
-		return snap, err
-	}
-
 	g.mu.Lock()
 	g.initCfg.PiAuthJSON = canonical
 	g.validatedAuth = validatedPiAuthStateKey("json", canonical)
@@ -746,11 +729,77 @@ func (g *piAuthGate) probe(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("build pi probe command: %w", err)
 	}
-	if _, err := runner.Run(probeCtx, cmd); err != nil {
-		g.logf("hub.auth status=warn harness=pi action=probe err=%q", err)
-		return err
+	res, err := runner.Run(probeCtx, cmd)
+	if piProbeResultHasOK(res) {
+		return nil
 	}
-	return nil
+	if err != nil {
+		g.logf("hub.auth status=warn harness=pi action=probe err=%q", err)
+		return piProbeFailureError(res, err)
+	}
+	return piProbeFailureError(res, fmt.Errorf("probe output did not include OK"))
+}
+
+func piProbeResultHasOK(res execx.Result) bool {
+	for _, text := range []string{res.Stdout, res.Stderr} {
+		for _, line := range strings.Split(normalizeOutputNewlines(text), "\n") {
+			if strings.TrimSpace(line) == "OK" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func piProbeFailureError(res execx.Result, err error) error {
+	details := strings.TrimSpace(piProbeFailureDetails(res, err))
+	if details == "" {
+		details = "unknown error"
+	}
+	return fmt.Errorf("Failure: PI probe failed. Error details: %s", details)
+}
+
+func piProbeFailureDetails(res execx.Result, err error) string {
+	parts := make([]string, 0, 3)
+	if err != nil {
+		parts = append(parts, err.Error())
+	}
+	if stdout := summarizePiProbeOutput("stdout", res.Stdout); stdout != "" {
+		parts = append(parts, stdout)
+	}
+	if stderr := summarizePiProbeOutput("stderr", res.Stderr); stderr != "" {
+		parts = append(parts, stderr)
+	}
+	return strings.Join(parts, "; ")
+}
+
+func summarizePiProbeOutput(label, text string) string {
+	text = strings.TrimSpace(normalizeOutputNewlines(text))
+	if text == "" {
+		return ""
+	}
+
+	lines := strings.Split(text, "\n")
+	tail := make([]string, 0, 3)
+	for i := len(lines) - 1; i >= 0 && len(tail) < 3; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		tail = append(tail, line)
+	}
+	for i, j := 0, len(tail)-1; i < j; i, j = i+1, j-1 {
+		tail[i], tail[j] = tail[j], tail[i]
+	}
+	if len(tail) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s: %s", label, strings.Join(tail, " | "))
+}
+
+func normalizeOutputNewlines(text string) string {
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	return strings.ReplaceAll(text, "\r", "\n")
 }
 
 func canonicalPiProviderEnvVar(canonical string) string {
