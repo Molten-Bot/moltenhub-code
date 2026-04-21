@@ -1700,7 +1700,7 @@ func TestHandlerIndexIncludesClaudeBrowserCodeFlow(t *testing.T) {
 		`aria-label="Copy device code"`,
 		`id="agent-auth-browser-command-primary"`,
 		`class="agent-auth-command-box agent-auth-command-box-inline"`,
-		`aria-label="Copy claude setup-token command"`,
+		`aria-label="Copy Claude credentials command"`,
 		`id="agent-auth-browser-command-primary-copy"`,
 		`id="agent-auth-browser-command-secondary"`,
 		`class="agent-auth-command-box"`,

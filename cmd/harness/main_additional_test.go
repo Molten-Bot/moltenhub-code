@@ -233,7 +233,7 @@ func TestStartHubPingRetryLoopSignalsWhenPingRecovers(t *testing.T) {
 	}
 }
 
-func TestMaybeStartAgentAuthStartsClaudeLoginWhenBrowserAuthIsNeeded(t *testing.T) {
+func TestMaybeStartAgentAuthSkipsClaudeLoginWhenBrowserAuthIsNeeded(t *testing.T) {
 	t.Parallel()
 
 	gate := &stubAgentAuthGate{
@@ -260,11 +260,11 @@ func TestMaybeStartAgentAuthStartsClaudeLoginWhenBrowserAuthIsNeeded(t *testing.
 		},
 	)
 
-	if got, want := gate.startCalls, 1; got != want {
+	if got, want := gate.startCalls, 0; got != want {
 		t.Fatalf("startCalls = %d, want %d", got, want)
 	}
-	if got := strings.Join(logs, "\n"); !strings.Contains(got, "hub.auth status=start harness=claude action=start_device_auth") {
-		t.Fatalf("logs missing start marker: %q", got)
+	if got := strings.Join(logs, "\n"); strings.Contains(got, "action=start_device_auth") {
+		t.Fatalf("logs include start marker: %q", got)
 	}
 }
 
@@ -298,7 +298,7 @@ func TestMaybeStartAgentAuthLogsStartErrors(t *testing.T) {
 		statusState: hubui.AgentAuthState{
 			Required: true,
 			Ready:    false,
-			State:    "needs_browser_login",
+			State:    "unexpected_auth_state",
 			Message:  "Claude login required",
 		},
 		startState: hubui.AgentAuthState{

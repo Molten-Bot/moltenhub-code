@@ -47,7 +47,7 @@ func TestClaudeAuthGateRequiresGitHubConfigureWhenTokenIsMissing(t *testing.T) {
 	}
 }
 
-func TestClaudeAuthGateRequiresBrowserLoginWhenClaudeCredentialsAreMissing(t *testing.T) {
+func TestClaudeAuthGateRequiresCredentialsConfigureWhenClaudeCredentialsAreMissing(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	t.Setenv("ANTHROPIC_API_KEY", "")
@@ -62,17 +62,20 @@ func TestClaudeAuthGateRequiresBrowserLoginWhenClaudeCredentialsAreMissing(t *te
 	if err != nil {
 		t.Fatalf("Status() error = %v", err)
 	}
-	if got, want := status.State, "needs_browser_login"; got != want {
+	if got, want := status.State, "needs_configure"; got != want {
 		t.Fatalf("State = %q, want %q", got, want)
+	}
+	if got, want := status.ConfigureCommand, claudeCredentialsConfigureCommand; got != want {
+		t.Fatalf("ConfigureCommand = %q, want %q", got, want)
+	}
+	if got, want := status.ConfigurePlaceholder, claudeCredentialsConfigurePlaceholder; got != want {
+		t.Fatalf("ConfigurePlaceholder = %q, want %q", got, want)
 	}
 	if got := status.AuthURL; got != "" {
 		t.Fatalf("AuthURL = %q, want empty until login command emits a browser URL", got)
 	}
-	if !strings.Contains(status.Message, "Run `claude setup-token`") {
+	if !strings.Contains(status.Message, "Paste `~/.claude/.credentials.json`") {
 		t.Fatalf("message = %q", status.Message)
-	}
-	if !strings.Contains(status.Message, "not an authorization link") {
-		t.Fatalf("message should clarify docs URL semantics: %q", status.Message)
 	}
 }
 
@@ -249,7 +252,7 @@ func TestClaudeAuthGateConfigurePersistsGitHubTokenAndEnvironment(t *testing.T) 
 	}
 }
 
-func TestClaudeAuthGateConfigureAcceptsCredentialsJSONInPendingState(t *testing.T) {
+func TestClaudeAuthGateConfigureAcceptsCredentialsJSONInConfigureState(t *testing.T) {
 	t.Setenv("GH_TOKEN", "ghp_ready")
 	t.Setenv("GITHUB_TOKEN", "ghp_ready")
 	t.Setenv(claudeOAuthTokenEnv, "")
@@ -260,9 +263,8 @@ func TestClaudeAuthGateConfigureAcceptsCredentialsJSONInPendingState(t *testing.
 	g := &claudeAuthGate{
 		baseCtx:           context.Background(),
 		required:          true,
-		state:             "pending_browser_login",
+		state:             "needs_configure",
 		message:           "auth pending",
-		procRunning:       true,
 		runtimeConfigPath: path,
 		initCfg: hub.InitConfig{
 			BaseURL:      "https://na.hub.molten.bot/v1",
@@ -307,7 +309,7 @@ func TestClaudeAuthGateConfigureAcceptsCredentialsJSONInPendingState(t *testing.
 	}
 }
 
-func TestClaudeAuthGateConfigureAcceptsUnknownCredentialsJSONSchemaInPendingState(t *testing.T) {
+func TestClaudeAuthGateConfigureAcceptsUnknownCredentialsJSONSchemaInConfigureState(t *testing.T) {
 	t.Setenv("GH_TOKEN", "ghp_ready")
 	t.Setenv("GITHUB_TOKEN", "ghp_ready")
 	t.Setenv(claudeOAuthTokenEnv, "")
@@ -317,9 +319,8 @@ func TestClaudeAuthGateConfigureAcceptsUnknownCredentialsJSONSchemaInPendingStat
 	g := &claudeAuthGate{
 		baseCtx:     context.Background(),
 		required:    true,
-		state:       "pending_browser_login",
+		state:       "needs_configure",
 		message:     "auth pending",
-		procRunning: true,
 		initCfg: hub.InitConfig{
 			BaseURL:      "https://na.hub.molten.bot/v1",
 			AgentHarness: agentruntime.HarnessClaude,
@@ -351,7 +352,7 @@ func TestClaudeAuthGateConfigureAcceptsUnknownCredentialsJSONSchemaInPendingStat
 	}
 }
 
-func TestClaudeAuthGateConfigureRejectsInvalidCredentialsJSONInPendingState(t *testing.T) {
+func TestClaudeAuthGateConfigureRejectsInvalidCredentialsJSONInConfigureState(t *testing.T) {
 	t.Setenv("GH_TOKEN", "ghp_ready")
 	t.Setenv("GITHUB_TOKEN", "ghp_ready")
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
@@ -359,9 +360,8 @@ func TestClaudeAuthGateConfigureRejectsInvalidCredentialsJSONInPendingState(t *t
 	g := &claudeAuthGate{
 		baseCtx:     context.Background(),
 		required:    true,
-		state:       "pending_browser_login",
+		state:       "needs_configure",
 		message:     "auth pending",
-		procRunning: true,
 		initCfg: hub.InitConfig{
 			BaseURL:      "https://na.hub.molten.bot/v1",
 			AgentHarness: agentruntime.HarnessClaude,
@@ -375,8 +375,8 @@ func TestClaudeAuthGateConfigureRejectsInvalidCredentialsJSONInPendingState(t *t
 	if err == nil {
 		t.Fatal("Configure() error = nil, want non-nil")
 	}
-	if got := status.State; got != "pending_browser_login" {
-		t.Fatalf("status.State = %q, want %q", got, "pending_browser_login")
+	if got := status.State; got != "needs_configure" {
+		t.Fatalf("status.State = %q, want %q", got, "needs_configure")
 	}
 	if !strings.Contains(status.Message, "Claude credentials JSON is invalid:") {
 		t.Fatalf("status.Message = %q, want invalid JSON details", status.Message)
@@ -466,7 +466,7 @@ exit 1
 	}
 }
 
-func TestClaudeAuthGateVerifyStartsLoginWhenNotReady(t *testing.T) {
+func TestClaudeAuthGateVerifyDoesNotStartLoginWhenCredentialsNeedConfigure(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	t.Setenv("ANTHROPIC_API_KEY", "")
@@ -478,16 +478,11 @@ func TestClaudeAuthGateVerifyStartsLoginWhenNotReady(t *testing.T) {
 
 	cmdPath := filepath.Join(t.TempDir(), "claude-login-verify-stub.sh")
 	if err := os.WriteFile(cmdPath, []byte(`#!/bin/sh
-if [ "$1" != "auth" ] || [ "$2" != "login" ]; then
-  exit 64
+if [ "$1" = "auth" ] && [ "$2" = "status" ]; then
+  exit 1
 fi
-echo "Choose account:"
-if ! read choice; then
-  exit 3
-fi
-echo "Continue at https://claude.ai/login/verify-flow"
-sleep 0.1
-exit 1
+echo "unexpected args: $*" >&2
+exit 64
 `), 0o755); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
@@ -497,14 +492,12 @@ exit 1
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
-	if status.State != "pending_browser_login" {
-		t.Fatalf("Verify() status = %+v, want pending_browser_login", status)
+	if status.State != "needs_configure" {
+		t.Fatalf("Verify() status = %+v, want needs_configure", status)
 	}
-
-	waitForCondition(t, 5*time.Second, func() bool {
-		s, _ := g.Status(context.Background())
-		return strings.Contains(s.AuthURL, "https://claude.ai/login/verify-flow")
-	})
+	if status.ConfigureCommand != claudeCredentialsConfigureCommand {
+		t.Fatalf("ConfigureCommand = %q, want %q", status.ConfigureCommand, claudeCredentialsConfigureCommand)
+	}
 }
 
 func TestClaudeAuthGateStartDeviceAuthSendsInitialPromptAdvance(t *testing.T) {
@@ -956,8 +949,8 @@ func TestClaudeAuthHelpers(t *testing.T) {
 	if got := extractClaudeOAuthTokenCandidate("https://claude.com/cai/oauth/authorize"); got != "" {
 		t.Fatalf("extractClaudeOAuthTokenCandidate(url) = %q, want empty", got)
 	}
-	if got := claudeLoginArgs("claude"); len(got) != 1 || got[0] != "setup-token" {
-		t.Fatalf("claudeLoginArgs(claude) = %v, want [setup-token]", got)
+	if got := claudeLoginArgs("claude"); len(got) != 2 || got[0] != "auth" || got[1] != "login" {
+		t.Fatalf("claudeLoginArgs(claude) = %v, want [auth login]", got)
 	}
 	if got := claudeLoginArgs("/tmp/custom-claude-wrapper"); len(got) != 2 || got[0] != "auth" || got[1] != "login" {
 		t.Fatalf("claudeLoginArgs(custom) = %v, want [auth login]", got)

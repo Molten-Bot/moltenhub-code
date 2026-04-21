@@ -463,21 +463,21 @@
         <div id="agent-auth-browser-code" class="hidden space-y-2">
           <div id="agent-auth-browser-commands" class="space-y-2">
             <div class="agent-auth-command-box agent-auth-command-box-inline">
-              <code id="agent-auth-browser-command-primary" class="agent-auth-command-text agent-auth-command-text-inline">claude setup-token</code>
+              <code id="agent-auth-browser-command-primary" class="agent-auth-command-text agent-auth-command-text-inline">cat ~/.claude/.credentials.json</code>
               <button
                 id="agent-auth-browser-command-primary-copy"
                 class="agent-auth-copy agent-auth-command-copy rounded-md p-2"
                 type="button"
-                aria-label="Copy claude setup-token command"
-                title="Copy claude setup-token command">
+                aria-label="Copy Claude credentials command"
+                title="Copy Claude credentials command">
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <path d="M9 9h11v11H9z"></path>
                   <path d="M4 15H3V4h11v1"></path>
                 </svg>
-                <span class="sr-only">Copy claude setup-token command</span>
+                <span class="sr-only">Copy Claude credentials command</span>
               </button>
             </div>
-            <div class="text-sm text-hub-text/80">If already signed in, paste credentials output</div>
+            <div class="text-sm text-hub-text/80">If credentials use config directory, paste this output</div>
             <div class="agent-auth-command-box">
               <code id="agent-auth-browser-command-secondary" class="agent-auth-command-text">if [ -f ~/.claude/.credentials.json ]; then cat ~/.claude/.credentials.json; else cat ~/.config/claude/.credentials.json; fi</code>
               <button
@@ -2484,8 +2484,14 @@
 
     function isClaudeGitHubConfigureState(auth) {
       const current = auth && typeof auth === "object" ? auth : state.agentAuth;
-      const harness = authHarness(current);
-      return isManualConfigureState(current) && (harness === "claude" || isGitHubTokenConfigureState(current));
+      return isManualConfigureState(current) && isGitHubTokenConfigureState(current);
+    }
+
+    function isClaudeCredentialsConfigureState(auth) {
+      const current = auth && typeof auth === "object" ? auth : state.agentAuth;
+      return authHarness(current) === "claude" &&
+        isManualConfigureState(current) &&
+        !isGitHubTokenConfigureState(current);
     }
 
     function isGitHubTokenConfigureState(auth) {
@@ -2781,6 +2787,7 @@
       const needsHarnessSelection = isHarnessSelectionState(state.agentAuth);
       const needsAuggieConfigure = isAuggieConfigureState(state.agentAuth);
       const needsClaudeGitHubConfigure = isClaudeGitHubConfigureState(state.agentAuth);
+      const needsClaudeCredentialsConfigure = isClaudeCredentialsConfigureState(state.agentAuth);
 
       if (state.agentAuthChallengeKey !== challengeKey) {
         state.agentAuthChallengeKey = challengeKey;
@@ -2828,6 +2835,8 @@
           agentAuthTitle.textContent = "Setup Pi";
         } else if (needsClaudeGitHubConfigure) {
           agentAuthTitle.textContent = "Setup GitHub";
+        } else if (needsClaudeCredentialsConfigure) {
+          agentAuthTitle.textContent = "Setup Claude";
         } else if (requiresManualConfigure) {
           agentAuthTitle.textContent = `${currentAgentLabel()} Configure`;
         } else if (currentAgentLabel() === "Claude Code") {
@@ -2920,6 +2929,8 @@
       if (agentAuthConfigureLabel) {
         if (needsClaudeGitHubConfigure) {
           agentAuthConfigureLabel.textContent = "Paste GitHub token";
+        } else if (needsClaudeCredentialsConfigure) {
+          agentAuthConfigureLabel.textContent = "Paste Claude credentials";
         } else if (needsPiConfigure) {
           agentAuthConfigureLabel.textContent = "Paste ~/.pi/agent/auth.json";
         } else {
@@ -2930,9 +2941,11 @@
       if (agentAuthConfigureInput) {
         const fallbackPlaceholder = needsAuggieConfigure
           ? '{"accessToken":"XXX","tenantURL":"https://YYY/","scopes":["email"]}'
-          : needsPiConfigure
-            ? "Paste ~/.pi/agent/auth.json contents..."
-            : "ghp_xxx";
+          : needsClaudeCredentialsConfigure
+            ? "Paste ~/.claude/.credentials.json contents or CLAUDE_CODE_OAUTH_TOKEN..."
+            : needsPiConfigure
+              ? "Paste ~/.pi/agent/auth.json contents..."
+              : "ghp_xxx";
         const placeholder = state.agentAuth.configurePlaceholder || fallbackPlaceholder;
         agentAuthConfigureInput.placeholder = placeholder;
         agentAuthConfigureInput.classList.toggle("agent-auth-configure-input-github", needsClaudeGitHubConfigure);
@@ -3000,7 +3013,7 @@
       const command = agentAuthBrowserCommandPrimary ? String(agentAuthBrowserCommandPrimary.textContent || "").trim() : "";
       await copyTextToClipboard(command, agentAuthBrowserCommandPrimaryCopy, {
         preserveContents: true,
-        copiedLabel: "Copied claude setup-token command",
+        copiedLabel: "Copied Claude credentials command",
       });
     }
 
@@ -3145,13 +3158,6 @@
         throw new Error("Paste ~/.pi/agent/auth.json first.");
       }
       return value;
-    }
-
-    function shouldAutoStartClaudeSetupAfterGitHubConfigure(auth) {
-      const current = auth && typeof auth === "object" ? auth : state.agentAuth;
-      const harness = authHarness(current);
-      const gateState = String(current?.state || "").trim().toLowerCase();
-      return harness === "claude" && !current?.ready && gateState === "needs_browser_login";
     }
 
     async function requestAgentAuth(path, method, requestBody) {
@@ -3324,19 +3330,9 @@
       setAgentAuthVerifyPending(true);
       setAgentAuthBusy(true);
       try {
-        const configuredAuth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
+        const auth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
           github_token: token,
         });
-        let auth = configuredAuth;
-        if (shouldAutoStartClaudeSetupAfterGitHubConfigure(configuredAuth)) {
-          try {
-            auth = await requestAgentAuth("/api/agent-auth/start-device", "POST");
-          } catch (startErr) {
-            applyAgentAuthGate(configuredAuth);
-            const detail = startErr && startErr.message ? startErr.message : "Claude setup start failed.";
-            throw new Error(`GitHub token saved, but failed to start Claude setup: ${detail}`);
-          }
-        }
         applyAgentAuthGate(auth);
         await loadGitHubProfileLink();
         if (auth.ready) {
@@ -3350,6 +3346,40 @@
         }
       } catch (err) {
         const message = err && err.message ? err.message : "GitHub token configure failed.";
+        setAgentAuthVerifyPending(false);
+        setAuggieConfigureError(message);
+        setLocalPromptStatus("error", `${currentAgentLabel()} configure failed: ${message}`);
+      } finally {
+        setAgentAuthBusy(false);
+      }
+    }
+
+    async function configureClaudeCredentials() {
+      setAuggieConfigureError("");
+      const credentials = agentAuthConfigureInput ? String(agentAuthConfigureInput.value || "").trim() : "";
+      if (!credentials) {
+        setAuggieConfigureError("Paste Claude credentials first.");
+        return;
+      }
+
+      setAgentAuthVerifyPending(true);
+      setAgentAuthBusy(true);
+      try {
+        const auth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
+          value: credentials,
+        });
+        applyAgentAuthGate(auth);
+        if (auth.ready) {
+          setAuggieConfigureError("");
+          if (agentAuthConfigureInput) {
+            agentAuthConfigureInput.value = "";
+          }
+          setLocalPromptStatus("ok", `${currentAgentLabel()} auth is ready.`);
+        } else {
+          setAgentAuthVerifyPending(false);
+        }
+      } catch (err) {
+        const message = err && err.message ? err.message : "Claude credentials configure failed.";
         setAgentAuthVerifyPending(false);
         setAuggieConfigureError(message);
         setLocalPromptStatus("error", `${currentAgentLabel()} configure failed: ${message}`);
@@ -3411,6 +3441,10 @@
         }
         if (isClaudeGitHubConfigureState()) {
           await configureClaudeGitHubToken();
+          return;
+        }
+        if (isClaudeCredentialsConfigureState()) {
+          await configureClaudeCredentials();
           return;
         }
         if (isClaudePendingBrowserLoginState()) {

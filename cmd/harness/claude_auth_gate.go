@@ -24,7 +24,9 @@ import (
 const claudeAuthDocsURL = "https://code.claude.com/docs/en/authentication"
 const claudeGitHubConfigureCommand = "gh auth token"
 const claudeGitHubConfigurePlaceholder = "ghp_xxx"
-const claudeLoginCommand = "claude setup-token"
+const claudeCredentialsConfigureCommand = "cat ~/.claude/.credentials.json"
+const claudeCredentialsConfigurePlaceholder = "Paste ~/.claude/.credentials.json contents or CLAUDE_CODE_OAUTH_TOKEN..."
+const claudeLoginCommand = "claude auth login"
 const claudeOAuthTokenEnv = "CLAUDE_CODE_OAUTH_TOKEN"
 
 var claudeAuthURLPattern = regexp.MustCompile(`https?://[^\s"'<>()]+`)
@@ -141,12 +143,12 @@ func (g *claudeAuthGate) Status(_ context.Context) (hubui.AgentAuthState, error)
 		} else {
 			g.ready = false
 			if g.state != "pending_browser_login" && g.state != "error" {
-				g.state = "needs_browser_login"
+				g.state = "needs_configure"
 			}
-			if g.state == "needs_browser_login" || strings.TrimSpace(g.message) == "" {
+			if g.state == "needs_configure" || strings.TrimSpace(g.message) == "" {
 				g.message = firstNonEmptyString(
 					probeMessage,
-					claudeBrowserLoginRequiredMessage(),
+					claudeCredentialsConfigureMessage(),
 				)
 			}
 		}
@@ -167,7 +169,7 @@ func (g *claudeAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthStat
 	if status.Ready {
 		return status, nil
 	}
-	if status.State == "needs_configure" {
+	if status.State == "needs_configure" && strings.TrimSpace(status.ConfigureCommand) == claudeGitHubConfigureCommand {
 		return status, fmt.Errorf("github token is required")
 	}
 
@@ -293,7 +295,7 @@ func (g *claudeAuthGate) Verify(ctx context.Context) (hubui.AgentAuthState, erro
 
 func (g *claudeAuthGate) Configure(ctx context.Context, rawInput string) (hubui.AgentAuthState, error) {
 	status, _ := g.Status(context.Background())
-	if status.State == "pending_browser_login" {
+	if status.State == "pending_browser_login" || isClaudeCredentialsConfigureState(status) {
 		if credentialsJSON, looksLikeJSON, err := normalizeClaudeCredentialsJSON(rawInput); looksLikeJSON {
 			if err != nil {
 				return g.pendingBrowserLoginFailure(
@@ -314,6 +316,11 @@ func (g *claudeAuthGate) Configure(ctx context.Context, rawInput string) (hubui.
 			g.completeWithClaudeOAuthToken(token)
 			state, _ := g.Status(context.Background())
 			return state, nil
+		}
+		if isClaudeCredentialsConfigureState(status) {
+			state := status
+			state.Message = "Claude credentials are required. Paste ~/.claude/.credentials.json contents or CLAUDE_CODE_OAUTH_TOKEN."
+			return state, fmt.Errorf("claude credentials are required")
 		}
 		return g.submitBrowserCode(rawInput)
 	}
@@ -694,7 +701,7 @@ func (g *claudeAuthGate) snapshotLocked() hubui.AgentAuthState {
 		if g.ready {
 			state = "ready"
 		} else {
-			state = "needs_browser_login"
+			state = "needs_configure"
 		}
 	}
 	authURL := strings.TrimSpace(g.authURL)
@@ -703,15 +710,42 @@ func (g *claudeAuthGate) snapshotLocked() hubui.AgentAuthState {
 		required = true
 	}
 	return hubui.AgentAuthState{
-		Harness:            agentruntime.HarnessClaude,
-		Required:           required,
-		Ready:              g.ready,
-		State:              state,
-		Message:            strings.TrimSpace(g.message),
-		AuthURL:            authURL,
-		AcceptsBrowserCode: claudeAuthURLAcceptsBrowserCode(authURL),
-		UpdatedAt:          g.updatedAt.UTC().Format(time.RFC3339Nano),
+		Harness:              agentruntime.HarnessClaude,
+		Required:             required,
+		Ready:                g.ready,
+		State:                state,
+		Message:              strings.TrimSpace(g.message),
+		ConfigureCommand:     claudeConfigureCommandForState(state),
+		ConfigurePlaceholder: claudeConfigurePlaceholderForState(state),
+		AuthURL:              authURL,
+		AcceptsBrowserCode:   claudeAuthURLAcceptsBrowserCode(authURL),
+		UpdatedAt:            g.updatedAt.UTC().Format(time.RFC3339Nano),
 	}
+}
+
+func isClaudeCredentialsConfigureState(state hubui.AgentAuthState) bool {
+	if strings.TrimSpace(strings.ToLower(state.Harness)) != agentruntime.HarnessClaude {
+		return false
+	}
+	if strings.TrimSpace(strings.ToLower(state.State)) != "needs_configure" {
+		return false
+	}
+	command := strings.TrimSpace(strings.ToLower(state.ConfigureCommand))
+	return command != "" && command != claudeGitHubConfigureCommand
+}
+
+func claudeConfigureCommandForState(state string) string {
+	if strings.TrimSpace(strings.ToLower(state)) == "needs_configure" {
+		return claudeCredentialsConfigureCommand
+	}
+	return ""
+}
+
+func claudeConfigurePlaceholderForState(state string) string {
+	if strings.TrimSpace(strings.ToLower(state)) == "needs_configure" {
+		return claudeCredentialsConfigurePlaceholder
+	}
+	return ""
 }
 
 func claudeAuthURLAcceptsBrowserCode(authURL string) bool {
@@ -1251,7 +1285,7 @@ func claudeLoginArgs(command string) []string {
 	trimmed := strings.TrimSpace(command)
 	base := strings.ToLower(strings.TrimSpace(filepath.Base(trimmed)))
 	if trimmed == agentruntime.HarnessClaude || base == "claude" {
-		return []string{"setup-token"}
+		return []string{"auth", "login"}
 	}
 	return []string{"auth", "login"}
 }
@@ -1320,7 +1354,9 @@ func (g *claudeAuthGate) pendingBrowserLoginFailure(message string, err error) (
 	}
 	g.mu.Lock()
 	if !g.ready {
-		g.state = "pending_browser_login"
+		if strings.TrimSpace(g.state) == "" {
+			g.state = "needs_configure"
+		}
 		g.message = strings.TrimSpace(message)
 		g.updatedAt = time.Now().UTC()
 	}
@@ -1328,6 +1364,7 @@ func (g *claudeAuthGate) pendingBrowserLoginFailure(message string, err error) (
 	g.mu.Unlock()
 	return snap, err
 }
+
 func firstClaudeEnabledProvider() string {
 	providers := []struct {
 		flag string
@@ -1410,7 +1447,11 @@ func claudeCredentialCandidates() []string {
 }
 
 func claudeBrowserLoginRequiredMessage() string {
-	return "Claude Code login is required. Run `claude setup-token`, complete browser sign-in, then click Done.\nReference docs (not an authorization link): " + claudeAuthDocsURL
+	return claudeCredentialsConfigureMessage()
+}
+
+func claudeCredentialsConfigureMessage() string {
+	return "Claude Code credentials are required. Paste `~/.claude/.credentials.json` contents or `CLAUDE_CODE_OAUTH_TOKEN`."
 }
 
 func isClaudeDocsURL(raw string) bool {
