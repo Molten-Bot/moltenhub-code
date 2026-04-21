@@ -47,8 +47,18 @@ func TestSelectableAgentAuthGateStatusRequiresHarnessSelectionAfterGitHubReady(t
 	if len(state.ConfigureOptions) == 0 {
 		t.Fatal("ConfigureOptions = empty, want harness options")
 	}
-	if got := state.ConfigureOptions[0].Value; got != "codex" {
-		t.Fatalf("first harness option = %q, want codex", got)
+	gotOrder := make([]string, 0, len(state.ConfigureOptions))
+	for _, option := range state.ConfigureOptions {
+		gotOrder = append(gotOrder, option.Value)
+	}
+	wantOrder := []string{"claude", "codex", "pi", "auggie"}
+	if len(gotOrder) < len(wantOrder) {
+		t.Fatalf("ConfigureOptions count = %d, want at least %d", len(gotOrder), len(wantOrder))
+	}
+	for i, want := range wantOrder {
+		if gotOrder[i] != want {
+			t.Fatalf("harness option[%d] = %q, want %q (full=%v)", i, gotOrder[i], want, gotOrder)
+		}
 	}
 }
 

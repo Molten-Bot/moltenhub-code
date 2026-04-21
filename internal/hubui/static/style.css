@@ -2844,6 +2844,12 @@ select.prompt-control {
   height: 36px;
   object-fit: contain;
   filter: var(--agent-logo-filter);
+  transition: filter 160ms ease;
+}
+
+.agent-auth-harness-option:hover .agent-auth-harness-logo[data-color-logo="true"],
+.agent-auth-harness-option:focus-visible .agent-auth-harness-logo[data-color-logo="true"] {
+  filter: none;
 }
 
 .agent-auth-harness-label {
