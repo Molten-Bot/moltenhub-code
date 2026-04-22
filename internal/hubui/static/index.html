@@ -801,6 +801,13 @@
       loader: "/static/logos/task-loader.svg",
       default: "/static/logos/task-loader.svg",
     });
+    const TASK_STATUS_ICON_URLS = Object.freeze({
+      completed: "/static/logos/status-completed.svg",
+      warning: "/static/logos/status-warning.svg",
+      error: "/static/logos/status-error.svg",
+      pending: "/static/logos/status-pending.svg",
+      default: "/static/logos/status-pending.svg",
+    });
     const CLAUDE_POST_SUBMIT_VERIFY_INTERVAL_MS = 1200;
     const CLAUDE_POST_SUBMIT_VERIFY_MAX_ATTEMPTS = 25;
     const HUB_SETUP_DIALOG_MODES = ["connect", "profile"];
@@ -946,26 +953,58 @@
       return icon;
     }
 
+    function taskStatusLabel(status) {
+      return String(status || "").replace(/_/g, " ").trim() || "pending";
+    }
+
+    function taskStatusIconKey(status) {
+      if (status === "completed") {
+        return "completed";
+      }
+      if (status === "no_changes" || status === "duplicate" || status === "paused") {
+        return "warning";
+      }
+      if (status === "stopped" || status === "error" || status === "invalid") {
+        return "error";
+      }
+      return "pending";
+    }
+
+    function createTaskStatusIcon(status) {
+      const iconType = taskStatusIconKey(status);
+      const icon = document.createElement("img");
+      icon.className = `task-status-glyph task-status-glyph-${iconType}`;
+      icon.src = TASK_STATUS_ICON_URLS[iconType] || TASK_STATUS_ICON_URLS.default;
+      icon.alt = "";
+      icon.setAttribute("aria-hidden", "true");
+      icon.draggable = false;
+      return icon;
+    }
+
     function renderTaskStatusBadge(task) {
       const status = normalizedTaskStatus(task?.status) || "pending";
+      const statusLabel = taskStatusLabel(status);
       const badge = document.createElement("span");
-      badge.className = `badge ${statusClass(status)}`;
+      badge.className = `badge badge-with-icon ${statusClass(status)}`;
 
       if (status === "running" || status === "active") {
-        badge.classList.add("badge-icon", "badge-running-icon");
         badge.title = "Running: task is actively executing.";
         badge.setAttribute("aria-label", "Running: task is actively executing.");
         badge.appendChild(createTaskActionIcon("loader"));
-        const hiddenLabel = document.createElement("span");
-        hiddenLabel.className = "sr-only";
-        hiddenLabel.textContent = status;
-        badge.appendChild(hiddenLabel);
+        const label = document.createElement("span");
+        label.className = "badge-label";
+        label.textContent = statusLabel;
+        badge.appendChild(label);
         return badge;
       }
 
-      badge.textContent = status;
-      badge.title = `Status: ${status}.`;
-      badge.setAttribute("aria-label", `Status: ${status}.`);
+      badge.title = `Status: ${statusLabel}.`;
+      badge.setAttribute("aria-label", `Status: ${statusLabel}.`);
+      badge.appendChild(createTaskStatusIcon(status));
+      const label = document.createElement("span");
+      label.className = "badge-label";
+      label.textContent = statusLabel;
+      badge.appendChild(label);
       return badge;
     }
 
@@ -4926,7 +4965,7 @@
     }
 
     function normalizedTaskStatus(status) {
-      const normalized = String(status || "").trim().toLowerCase();
+      const normalized = String(status || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
       if (normalized === "ok") {
         return "completed";
       }
@@ -6383,6 +6422,7 @@
       const showOutputAction = options.showOutputAction !== false;
       const allowCollapse = options.allowCollapse !== false;
       const promptOnly = normalizeTaskPanelView(state.taskPanelView) === "prompt";
+      const historyView = normalizeTaskStatusFilter(state.taskStatusFilter) === "completed";
       const emptyEyebrow = String(options.emptyEyebrow || "Queue Ready");
       const emptyTitle = String(options.emptyTitle || "Lets get to work!");
       const emptyCopy = String(options.emptyCopy || "New runs will appear here with their progress, replay controls, local clone actions, and PR links.");
@@ -6506,9 +6546,27 @@
           if (outputAction) {
             promptActions.appendChild(outputAction);
           }
-          const closeAction = renderTaskCloseButton(task, requestID);
-          if (closeAction) {
-            promptActions.appendChild(closeAction);
+          if (historyView && canCopyTaskCloneCommand(task)) {
+            const cloneButton = document.createElement("button");
+            cloneButton.type = "button";
+            cloneButton.className = "task-copy-link task-pr-link-inline";
+            cloneButton.title = "Clone locally to test and review changes.";
+            cloneButton.setAttribute("aria-label", "Clone locally to test and review changes.");
+
+            const cloneLogo = document.createElement("img");
+            cloneLogo.className = "task-terminal-logo";
+            cloneLogo.src = TERMINAL_LOGO_URL;
+            cloneLogo.alt = "";
+            cloneLogo.loading = "lazy";
+            cloneLogo.width = TASK_PR_LOGO_SIZE;
+            cloneLogo.height = TASK_PR_LOGO_SIZE;
+            cloneButton.appendChild(cloneLogo);
+
+            cloneButton.addEventListener("click", (event) => {
+              event.stopPropagation();
+              void copyTaskCloneCommand(task, cloneButton);
+            });
+            promptActions.appendChild(cloneButton);
           }
 
           const showPromptPRLink = isCompletedTask(task) && prURL !== "";
@@ -6533,6 +6591,10 @@
               event.stopPropagation();
             });
             promptActions.appendChild(prLink);
+          }
+          const closeAction = renderTaskCloseButton(task, requestID);
+          if (closeAction) {
+            promptActions.appendChild(closeAction);
           }
 
           top.append(id);
@@ -6645,6 +6707,68 @@
           topActions.appendChild(rerun);
         }
 
+        const showTaskPRLink = isCompletedTask(task) && prURL !== "";
+        const showTaskCloneAction = canCopyTaskCloneCommand(task);
+        const showTaskSideActions = showTaskPRLink || showTaskCloneAction;
+        const inlineHistoryActions = historyView && showTaskSideActions;
+        if (inlineHistoryActions) {
+          if (showTaskCloneAction) {
+            const cloneButton = document.createElement("button");
+            cloneButton.type = "button";
+            cloneButton.className = "task-copy-link";
+            cloneButton.style.width = TASK_PR_LINK_SIZE_PX;
+            cloneButton.style.minWidth = TASK_PR_LINK_SIZE_PX;
+            cloneButton.style.height = TASK_PR_LINK_SIZE_PX;
+            cloneButton.style.flex = `0 0 ${TASK_PR_LINK_SIZE_PX}`;
+            cloneButton.style.alignSelf = "center";
+            cloneButton.title = "Clone locally to test and review changes.";
+            cloneButton.setAttribute("aria-label", "Clone locally to test and review changes.");
+
+            const cloneLogo = document.createElement("img");
+            cloneLogo.className = "task-terminal-logo";
+            cloneLogo.src = TERMINAL_LOGO_URL;
+            cloneLogo.alt = "";
+            cloneLogo.loading = "lazy";
+            cloneLogo.width = TASK_PR_LOGO_SIZE;
+            cloneLogo.height = TASK_PR_LOGO_SIZE;
+            cloneButton.appendChild(cloneLogo);
+
+            cloneButton.addEventListener("click", (event) => {
+              event.stopPropagation();
+              void copyTaskCloneCommand(task, cloneButton);
+            });
+            topActions.appendChild(cloneButton);
+          }
+
+          if (showTaskPRLink) {
+            const prLink = document.createElement("a");
+            prLink.className = "task-pr-link";
+            prLink.style.width = TASK_PR_LINK_SIZE_PX;
+            prLink.style.minWidth = TASK_PR_LINK_SIZE_PX;
+            prLink.style.height = TASK_PR_LINK_SIZE_PX;
+            prLink.style.flex = `0 0 ${TASK_PR_LINK_SIZE_PX}`;
+            prLink.style.alignSelf = "center";
+            prLink.href = prURL;
+            prLink.target = "_blank";
+            prLink.rel = "noopener noreferrer";
+            prLink.title = "Open Pull Request.";
+            prLink.setAttribute("aria-label", "Open Pull Request.");
+
+            const prLogo = document.createElement("img");
+            prLogo.src = GITHUB_LOGO_URL;
+            prLogo.alt = "GitHub";
+            prLogo.loading = "lazy";
+            prLogo.width = TASK_PR_LOGO_SIZE;
+            prLogo.height = TASK_PR_LOGO_SIZE;
+            prLink.appendChild(prLogo);
+
+            prLink.addEventListener("click", (event) => {
+              event.stopPropagation();
+            });
+            topActions.appendChild(prLink);
+          }
+        }
+
         const close = renderTaskCloseButton(task, requestID);
         if (close) {
           topActions.appendChild(close);
@@ -6685,12 +6809,12 @@
           top.append(topActions);
         }
 
-        const showTaskPRLink = isCompletedTask(task) && prURL !== "";
-        const showTaskCloneAction = canCopyTaskCloneCommand(task);
-        const showTaskSideActions = showTaskPRLink || showTaskCloneAction;
         node.classList.toggle("task-has-side-actions", showTaskSideActions);
+        if (inlineHistoryActions) {
+          node.classList.remove("task-has-side-actions");
+        }
         node.appendChild(body);
-        if (showTaskSideActions) {
+        if (showTaskSideActions && !inlineHistoryActions) {
           const sideActions = document.createElement("div");
           sideActions.className = "task-side-actions";
 
@@ -6707,6 +6831,7 @@
             cloneButton.setAttribute("aria-label", "Clone locally to test and review changes.");
 
             const cloneLogo = document.createElement("img");
+            cloneLogo.className = "task-terminal-logo";
             cloneLogo.src = TERMINAL_LOGO_URL;
             cloneLogo.alt = "";
             cloneLogo.loading = "lazy";
