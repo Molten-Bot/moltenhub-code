@@ -2325,13 +2325,13 @@ select.prompt-control {
 
 .task-progress-track {
   position: relative;
-  height: 36px;
+  height: 42px;
 }
 
 .task-progress-line {
   position: absolute;
-  left: 22px;
-  right: 22px;
+  left: 26px;
+  right: 26px;
   top: 50%;
   height: 3px;
   transform: translateY(-50%);
@@ -2352,16 +2352,16 @@ select.prompt-control {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 36px;
+  min-height: 42px;
 }
 
 .task-progress-step {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  overflow: visible;
   position: relative;
   border-radius: 50%;
   border: 1px solid rgba(113, 136, 177, 0.45);
@@ -2376,8 +2376,8 @@ select.prompt-control {
 }
 
 .task-progress-step-icon {
-  width: 16px;
-  height: 16px;
+  width: 21px;
+  height: 21px;
   display: block;
   object-fit: contain;
   filter: brightness(0) saturate(100%);
@@ -2386,8 +2386,8 @@ select.prompt-control {
 }
 
 .task-progress-step-glyph {
-  width: 16px;
-  height: 16px;
+  width: 21px;
+  height: 21px;
   display: block;
   color: currentColor;
   stroke-width: 2;
@@ -2428,15 +2428,31 @@ select.prompt-control {
 }
 
 .task-progress-step.current .task-progress-step-icon {
-  width: 16px;
-  height: 16px;
+  width: 27px;
+  height: 27px;
   opacity: 1;
 }
 
 .task-progress-step.current .task-progress-step-glyph {
-  width: 16px;
-  height: 16px;
+  width: 27px;
+  height: 27px;
   opacity: 1;
+}
+
+.task-progress.is-running .task-progress-step.current .task-progress-step-icon,
+.task-progress.is-running .task-progress-step.current .task-progress-step-glyph {
+  animation: taskProgressCurrentSpin 6s linear infinite;
+  transform-origin: center;
+  will-change: transform;
+}
+
+@keyframes taskProgressCurrentSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .task-output-list {

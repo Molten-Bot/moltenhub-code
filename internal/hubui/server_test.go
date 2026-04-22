@@ -1863,8 +1863,19 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task-progress-step-icon") {
 		t.Fatalf("expected stylesheet to include task progress step icon styles")
 	}
-	if !strings.Contains(css, "filter: brightness(0) saturate(100%);") || !strings.Contains(css, ".task-progress-step.has-icon {\n  background: color-mix(in srgb, var(--surface-progress-step) 92%, var(--surface-task-button-bg));\n  border: 1px solid rgba(113, 136, 177, 0.32);\n}") || !strings.Contains(css, ".task-progress-step-icon {\n  width: 16px;\n  height: 16px;") || !strings.Contains(css, ".task-progress-step.current .task-progress-step-icon {\n  width: 16px;\n  height: 16px;\n  opacity: 1;\n}") || !strings.Contains(css, ".task-progress-step.current .task-progress-step-glyph {\n  width: 16px;\n  height: 16px;\n  opacity: 1;\n}") {
-		t.Fatalf("expected stylesheet to render consistently sized progress icons with muted idle and emphasized active states")
+	if !strings.Contains(css, "filter: brightness(0) saturate(100%);") ||
+		!strings.Contains(css, ".task-progress-track {\n  position: relative;\n  height: 42px;\n}") ||
+		!strings.Contains(css, ".task-progress-line {\n  position: absolute;\n  left: 26px;\n  right: 26px;\n  top: 50%;") ||
+		!strings.Contains(css, ".task-progress-steps {\n  position: relative;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  min-height: 42px;\n}") ||
+		!strings.Contains(css, ".task-progress-step {\n  width: 24px;\n  height: 24px;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  overflow: visible;") ||
+		!strings.Contains(css, ".task-progress-step.has-icon {\n  background: color-mix(in srgb, var(--surface-progress-step) 92%, var(--surface-task-button-bg));\n  border: 1px solid rgba(113, 136, 177, 0.32);\n}") ||
+		!strings.Contains(css, ".task-progress-step-icon {\n  width: 21px;\n  height: 21px;") ||
+		!strings.Contains(css, ".task-progress-step-glyph {\n  width: 21px;\n  height: 21px;") ||
+		!strings.Contains(css, ".task-progress-step.current .task-progress-step-icon {\n  width: 27px;\n  height: 27px;\n  opacity: 1;\n}") ||
+		!strings.Contains(css, ".task-progress-step.current .task-progress-step-glyph {\n  width: 27px;\n  height: 27px;\n  opacity: 1;\n}") ||
+		!strings.Contains(css, ".task-progress.is-running .task-progress-step.current .task-progress-step-icon,\n.task-progress.is-running .task-progress-step.current .task-progress-step-glyph {\n  animation: taskProgressCurrentSpin 6s linear infinite;\n  transform-origin: center;\n  will-change: transform;\n}") ||
+		!strings.Contains(css, "@keyframes taskProgressCurrentSpin {\n  from {\n    transform: rotate(0deg);\n  }\n  to {\n    transform: rotate(360deg);\n  }\n}") {
+		t.Fatalf("expected stylesheet to render larger progress icons, oversized active icons, and a running spin animation")
 	}
 	if !strings.Contains(css, ".badge.stopped {\n  background: color-mix(in srgb, var(--surface-badge-idle) 82%, #5f7395);\n  color: #fff;\n}") || !strings.Contains(css, ".task-result.stopped {\n  color: var(--surface-badge-idle);\n  background: rgba(113, 136, 177, 0.13);\n}") {
 		t.Fatalf("expected stylesheet to distinguish user-stopped task visuals from hard error states")

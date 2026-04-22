@@ -6385,6 +6385,8 @@
       const index = Number.isFinite(model?.index) ? model.index : 0;
       const progress = document.createElement("div");
       progress.className = "task-progress";
+      const taskStatus = normalizedTaskStatus(task?.status);
+      progress.classList.toggle("is-running", taskStatus === "running" || taskStatus === "active");
 
       const track = document.createElement("div");
       track.className = "task-progress-track";
