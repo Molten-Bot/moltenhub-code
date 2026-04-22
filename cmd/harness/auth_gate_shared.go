@@ -154,6 +154,19 @@ func githubTokenRequirementState(harness, runtimeConfigPath string, initCfg hub.
 	return false, hubui.AgentAuthState{}
 }
 
+func applyGitHubTokenRequirementState(state *configurableAgentAuthState, harness, runtimeConfigPath string, initCfg hub.InitConfig) (string, bool) {
+	githubToken, _ := firstConfiguredGitHubToken(runtimeConfigPath, initCfg)
+	if strings.TrimSpace(githubToken) == "" {
+		state.applySnapshot(githubTokenNeedsConfigureState(harness, ""))
+		return "", true
+	}
+	if err := setGitHubTokenEnvironment(githubToken); err != nil {
+		state.applySnapshot(githubTokenNeedsConfigureState(harness, fmt.Sprintf("set github token env: %v", err)))
+		return "", true
+	}
+	return strings.TrimSpace(githubToken), false
+}
+
 func configureGitHubToken(
 	ctx context.Context,
 	harness, runtimeConfigPath string,
@@ -311,4 +324,16 @@ func decodeJSONStrict(raw string, dst any) error {
 		return err
 	}
 	return nil
+}
+
+func decodeJSONOrWrappedString(raw string, dst any) error {
+	if err := decodeJSONStrict(raw, dst); err == nil {
+		return nil
+	} else {
+		var wrapped string
+		if wrappedErr := decodeJSONStrict(raw, &wrapped); wrappedErr == nil {
+			return decodeJSONOrWrappedString(wrapped, dst)
+		}
+		return err
+	}
 }
