@@ -621,11 +621,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "const liveByID = new Map();") || !strings.Contains(markup, "for (const task of liveByID.values()) {") {
 		t.Fatalf("expected index html history mode to include live run tasks alongside saved history")
 	}
-	if !strings.Contains(markup, "if (!requestID || state.dismissedTaskIDs.has(requestID) || isTaskHistoryExpired(task)) {") {
+	if !strings.Contains(markup, "if (!requestID || state.dismissedTaskIDs.has(requestID) || isTaskHistoryExpired(task, nowMs)) {") {
 		t.Fatalf("expected index html to skip dismissed and expired completed tasks while rebuilding history")
 	}
-	if !strings.Contains(markup, "if (!requestID || liveByID.has(requestID) || state.dismissedTaskIDs.has(requestID) || isTaskHistoryExpired(task)) {") {
-		t.Fatalf("expected index html history mode to exclude dismissed and expired tasks from persisted history output")
+	if !strings.Contains(markup, "if (!requestID || liveByID.has(requestID) || state.dismissedTaskIDs.has(requestID) || isTaskHistoryExpired(task, nowMs)) {") {
+		t.Fatalf("expected index html history mode to exclude dismissed or expired tasks from persisted history output")
 	}
 	if !strings.Contains(markup, `const TASK_HISTORY_KEY = "hubui.taskHistory.v1";`) {
 		t.Fatalf("expected index html to define a dedicated persisted task history storage key")
@@ -634,17 +634,31 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to cap completed history display to the latest 25 tasks")
 	}
 	if !strings.Contains(markup, "const TASK_HISTORY_MAX_AGE_MS = 20 * 60 * 60 * 1000;") {
-		t.Fatalf("expected index html to cap completed history age at 20 hours")
-	}
-	if !strings.Contains(markup, "function isTaskHistoryExpired(task, now = Date.now())") ||
-		!strings.Contains(markup, "return updatedAt > 0 && now - updatedAt > TASK_HISTORY_MAX_AGE_MS;") {
-		t.Fatalf("expected index html to detect completed task history older than 20 hours")
+		t.Fatalf("expected index html to define a 20-hour max age for completed task history")
 	}
 	if !strings.Contains(markup, "function loadTaskHistory()") || !strings.Contains(markup, "function persistTaskHistory()") {
 		t.Fatalf("expected index html to include load/persist helpers for run history")
 	}
-	if !strings.Contains(markup, "if (!requestID || !isCompletedTask(copy) || isTaskHistoryExpired(copy, now)) {") ||
-		!strings.Contains(markup, ".filter((task) => !isTaskHistoryExpired(task))") {
+	if !strings.Contains(markup, "if (!requestID || !isCompletedTask(copy) || isTaskHistoryExpired(copy, nowMs)) {") {
+		t.Fatalf("expected index html to drop expired entries while loading persisted task history")
+	}
+	if !strings.Contains(markup, "function isTaskHistoryExpired(task, nowMs = Date.now()) {") {
+		t.Fatalf("expected index html to include a helper for completed-task history expiry checks")
+	}
+	if !strings.Contains(markup, "if (!requestID || isTaskHistoryExpired(task, nowMs)) {") {
+		t.Fatalf("expected index html to prune expired task history entries from memory")
+	}
+	if !strings.Contains(markup, "if (!requestID || state.dismissedTaskIDs.has(requestID) || isTaskHistoryExpired(task, nowMs)) {") {
+		t.Fatalf("expected index html to skip expired completed tasks when rebuilding task history")
+	}
+	if !strings.Contains(markup, "if (isCompletedTask(task) && isTaskHistoryExpired(task, nowMs)) {") {
+		t.Fatalf("expected index html to hide live completed tasks from history once they exceed max age")
+	}
+	if !strings.Contains(markup, "if (pruneTaskHistory()) {") ||
+		!strings.Contains(markup, "persistTaskHistoryUnseenIDs();") {
+		t.Fatalf("expected index html startup to sanitize expired task history and unseen markers")
+	}
+	if !strings.Contains(markup, ".filter((task) => !isTaskHistoryExpired(task))") {
 		t.Fatalf("expected index html to remove expired completed task history from storage")
 	}
 	if !strings.Contains(markup, "return out.slice(0, TASK_HISTORY_LIMIT);") {
