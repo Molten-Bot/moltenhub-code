@@ -61,6 +61,24 @@ func (s *configurableAgentAuthState) setError(message string) {
 	s.touch()
 }
 
+func (s *configurableAgentAuthState) setConfigureUI(message, command, placeholder string, options []hubui.AgentAuthOption) {
+	s.setNeedsConfigure(message)
+	s.configureCommand = strings.TrimSpace(command)
+	s.configurePlaceholder = strings.TrimSpace(placeholder)
+	s.configureOptions = append([]hubui.AgentAuthOption(nil), options...)
+}
+
+func (s *configurableAgentAuthState) setReady(message string) {
+	s.required = true
+	s.ready = true
+	s.state = "ready"
+	s.message = strings.TrimSpace(message)
+	s.configureCommand = ""
+	s.configurePlaceholder = ""
+	s.configureOptions = nil
+	s.touch()
+}
+
 func (s *configurableAgentAuthState) applySnapshot(snapshot hubui.AgentAuthState) {
 	s.required = snapshot.Required
 	s.ready = snapshot.Ready
@@ -311,4 +329,20 @@ func decodeJSONStrict(raw string, dst any) error {
 		return err
 	}
 	return nil
+}
+
+func decodeJSONStrictOrWrappedString(raw string, dst any) error {
+	raw = strings.TrimSpace(raw)
+	if err := decodeJSONStrict(raw, dst); err == nil {
+		return nil
+	}
+
+	var wrapped string
+	if err := decodeJSONStrict(raw, &wrapped); err != nil {
+		return err
+	}
+	if strings.TrimSpace(wrapped) == raw {
+		return fmt.Errorf("wrapped JSON did not unwrap")
+	}
+	return decodeJSONStrictOrWrappedString(wrapped, dst)
 }

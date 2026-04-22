@@ -193,11 +193,7 @@ func (g *auggieAuthGate) refreshLocked() {
 	}
 
 	g.initCfg.GitHubToken = strings.TrimSpace(githubToken)
-	g.authState.ready = true
-	g.authState.state = "ready"
-	g.authState.message = "Auggie session auth and GitHub token are ready."
-	g.authState.configureCommand = ""
-	g.authState.configurePlaceholder = ""
+	g.authState.setReady("Auggie session auth and GitHub token are ready.")
 }
 
 func (g *auggieAuthGate) snapshotLocked() hubui.AgentAuthState {
@@ -212,9 +208,7 @@ func (g *auggieAuthGate) refreshAndSnapshot() (hubui.AgentAuthState, error) {
 }
 
 func applyAuggieConfigureUIState(state *configurableAgentAuthState, message string) {
-	state.setNeedsConfigure(message)
-	state.configureCommand = auggieConfigureCommand
-	state.configurePlaceholder = auggieConfigurePlaceholderValue
+	state.setConfigureUI(message, auggieConfigureCommand, auggieConfigurePlaceholderValue, nil)
 }
 
 func firstConfiguredAuggieSessionAuth(runtimeConfigPath string, initCfg hub.InitConfig) (value string, source string) {
@@ -287,13 +281,8 @@ func decodeAuggieSessionAuth(rawInput string) (auggieSessionAuth, error) {
 	}
 
 	var parsed auggieSessionAuth
-	if err := decodeJSONStrict(rawInput, &parsed); err == nil {
+	if err := decodeJSONStrictOrWrappedString(rawInput, &parsed); err == nil {
 		return parsed, nil
-	}
-
-	var wrapped string
-	if err := decodeJSONStrict(rawInput, &wrapped); err == nil {
-		return decodeAuggieSessionAuth(wrapped)
 	}
 
 	return auggieSessionAuth{}, fmt.Errorf("expected JSON object with accessToken, tenantURL, and scopes")
