@@ -52,6 +52,7 @@
     })();
   </script>
   <script src="https://cdn.tailwindcss.com" defer></script>
+  <script src="/static/lucide.min.js"></script>
   <script src="/static/emoji-picker.js"></script>
   <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -96,9 +97,7 @@
         <div id="resource-metrics-item" class="status-item status-item-metrics flex h-10 min-h-[40px] items-center rounded-full border border-hub-border bg-hub-panel/75 px-3 py-1" hidden>
           <span id="resource-cpu-chip" class="metric-chip" hidden>
             <span id="resource-cpu-icon" class="metric-icon metric-icon-neutral" aria-hidden="true">
-              <svg viewBox="0 0 24 24" focusable="false">
-                <path d="M7 3h2v2h6V3h2v2h2a2 2 0 0 1 2 2v2h-2V7H5v2H3V7a2 2 0 0 1 2-2h2V3Zm12 12h2v2a2 2 0 0 1-2 2h-2v2h-2v-2H9v2H7v-2H5a2 2 0 0 1-2-2v-2h2v2h14v-2Zm-14-3h14V9H5v3Zm5-2h4v2h-4v-2Z"></path>
-              </svg>
+              <i data-lucide="cpu" class="metric-icon-glyph" aria-hidden="true"></i>
             </span>
             <span class="metric-copy">
               <span class="metric-label text-xs leading-tight">CPU</span>
@@ -107,9 +106,7 @@
           </span>
           <span id="resource-mem-chip" class="metric-chip" hidden>
             <span id="resource-mem-icon" class="metric-icon metric-icon-neutral" aria-hidden="true">
-              <svg viewBox="0 0 24 24" focusable="false">
-                <path d="M4 7h16a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-1v2h-2v-2H7v2H5v-2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Zm0 2v6h16V9H4Zm2 1h2v4H6v-4Zm4 0h2v4h-2v-4Zm4 0h2v4h-2v-4Zm4 0h2v4h-2v-4Z"></path>
-              </svg>
+              <i data-lucide="memory-stick" class="metric-icon-glyph" aria-hidden="true"></i>
             </span>
             <span class="metric-copy">
               <span class="metric-label text-xs leading-tight">MEM</span>
@@ -118,9 +115,7 @@
           </span>
           <span id="resource-disk-chip" class="metric-chip" hidden>
             <span id="resource-disk-icon" class="metric-icon metric-icon-neutral" aria-hidden="true">
-              <svg viewBox="0 0 24 24" focusable="false">
-                <path d="M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 2v12h14V6H5Zm2 2h10v2H7V8Zm0 4h10v4H7v-4Zm2 1.5v1h2v-1H9Z"></path>
-              </svg>
+              <i data-lucide="hard-drive" class="metric-icon-glyph" aria-hidden="true"></i>
             </span>
             <span class="metric-copy">
               <span class="metric-label text-xs leading-tight">I/O</span>
@@ -147,12 +142,7 @@
                 aria-pressed="true"
                 aria-label="Mute task sounds"
                 title="Mute">
-                <svg class="task-sound-toggle-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M14 4 8.8 8.2H4v7.6h4.8L14 20z"></path>
-                  <path class="task-sound-toggle-wave" d="M17.8 8.4a5 5 0 0 1 0 7.2"></path>
-                  <path class="task-sound-toggle-wave" d="M20.4 5.9a8.5 8.5 0 0 1 0 12.2"></path>
-                  <path class="task-sound-toggle-muted-slash" d="M4 4 20 20"></path>
-                </svg>
+                <i data-lucide="volume-2" class="task-sound-toggle-icon" aria-hidden="true"></i>
               </button>
               <button
                 id="task-history-toggle"
@@ -161,11 +151,7 @@
                 aria-pressed="false"
                 aria-label="Show completed task history"
                 title="Show completed task history">
-                <svg class="task-history-toggle-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M3 6v5h5"></path>
-                  <path d="M3.6 11.1A9 9 0 1 0 8 4.6"></path>
-                  <path d="M12 8v4.2l3 1.8"></path>
-                </svg>
+                <i data-lucide="history" class="task-history-toggle-icon" aria-hidden="true"></i>
                 <span id="task-history-toggle-plus" class="task-history-toggle-plus hidden" aria-hidden="true">+</span>
               </button>
               <button
@@ -175,11 +161,7 @@
                 aria-pressed="false"
                 aria-label="Show prompt-only tasks"
                 title="Show prompt-only tasks">
-                <svg class="task-view-toggle-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M4 6h16"></path>
-                  <path d="M4 12h16"></path>
-                  <path d="M4 18h16"></path>
-                </svg>
+                <i data-lucide="list" class="task-view-toggle-icon" aria-hidden="true"></i>
               </button>
               <button
                 id="task-fullscreen-toggle"
@@ -188,12 +170,7 @@
                 aria-expanded="false"
                 aria-label="Open full screen tasks"
                 title="Open full screen tasks">
-                <svg class="task-fullscreen-toggle-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M15 4h5v5"></path>
-                  <path d="M9 20H4v-5"></path>
-                  <path d="M20 4 13 11"></path>
-                  <path d="M4 20l7-7"></path>
-                </svg>
+                <i data-lucide="maximize-2" class="task-fullscreen-toggle-icon" aria-hidden="true"></i>
               </button>
             </div>
           </div>
@@ -227,9 +204,7 @@
                         aria-label="Remove selected repository from history"
                         title="Select saved repository to remove"
                         disabled>
-                        <svg class="prompt-history-delete-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                          <path d="M3 4.5h10M6.2 4.5v-1A1.5 1.5 0 0 1 7.7 2h.6a1.5 1.5 0 0 1 1.5 1.5v1M4.3 4.5l.5 8.3a1 1 0 0 0 1 .9h4.4a1 1 0 0 0 1-.9l.5-8.3M6.6 7v4.4M9.4 7v4.4"></path>
-                        </svg>
+                        <i data-lucide="trash-2" class="prompt-history-delete-icon" aria-hidden="true"></i>
                       </button>
                     </span>
                   </label>
@@ -265,9 +240,7 @@
                         aria-label="Remove selected reviewer from history"
                         title="Select saved reviewer to remove"
                         disabled>
-                        <svg class="prompt-history-delete-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                          <path d="M3 4.5h10M6.2 4.5v-1A1.5 1.5 0 0 1 7.7 2h.6a1.5 1.5 0 0 1 1.5 1.5v1M4.3 4.5l.5 8.3a1 1 0 0 0 1 .9h4.4a1 1 0 0 0 1-.9l.5-8.3M6.6 7v4.4M9.4 7v4.4"></path>
-                        </svg>
+                        <i data-lucide="trash-2" class="prompt-history-delete-icon" aria-hidden="true"></i>
                       </button>
                     </span>
                   </label>
@@ -308,9 +281,7 @@
                         aria-label="Remove selected repository from history"
                         title="Select saved repository to remove"
                         disabled>
-                        <svg class="prompt-history-delete-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                          <path d="M3 4.5h10M6.2 4.5v-1A1.5 1.5 0 0 1 7.7 2h.6a1.5 1.5 0 0 1 1.5 1.5v1M4.3 4.5l.5 8.3a1 1 0 0 0 1 .9h4.4a1 1 0 0 0 1-.9l.5-8.3M6.6 7v4.4M9.4 7v4.4"></path>
-                        </svg>
+                        <i data-lucide="trash-2" class="prompt-history-delete-icon" aria-hidden="true"></i>
                       </button>
                     </span>
                   </label>
@@ -335,9 +306,7 @@
                         aria-label="Remove selected reviewer from history"
                         title="Select saved reviewer to remove"
                         disabled>
-                        <svg class="prompt-history-delete-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                          <path d="M3 4.5h10M6.2 4.5v-1A1.5 1.5 0 0 1 7.7 2h.6a1.5 1.5 0 0 1 1.5 1.5v1M4.3 4.5l.5 8.3a1 1 0 0 0 1 .9h4.4a1 1 0 0 0 1-.9l.5-8.3M6.6 7v4.4M9.4 7v4.4"></path>
-                        </svg>
+                        <i data-lucide="trash-2" class="prompt-history-delete-icon" aria-hidden="true"></i>
                       </button>
                     </span>
                   </label>
@@ -447,10 +416,7 @@
             type="button"
             aria-label="Copy device code"
             title="Copy device code">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M9 9h11v11H9z"></path>
-              <path d="M4 15H3V4h11v1"></path>
-            </svg>
+            <i data-lucide="copy" aria-hidden="true"></i>
             <span class="sr-only">Copy device code</span>
           </button>
         </div>
@@ -472,10 +438,7 @@
                 type="button"
                 aria-label="Copy Claude credentials command"
                 title="Copy Claude credentials command">
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M9 9h11v11H9z"></path>
-                  <path d="M4 15H3V4h11v1"></path>
-                </svg>
+                <i data-lucide="copy" aria-hidden="true"></i>
                 <span class="sr-only">Copy Claude credentials command</span>
               </button>
             </div>
@@ -488,10 +451,7 @@
                 type="button"
                 aria-label="Copy Claude credentials command"
                 title="Copy Claude credentials command">
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M9 9h11v11H9z"></path>
-                  <path d="M4 15H3V4h11v1"></path>
-                </svg>
+                <i data-lucide="copy" aria-hidden="true"></i>
                 <span class="sr-only">Copy Claude credentials command</span>
               </button>
             </div>
@@ -515,10 +475,7 @@
             type="button"
             aria-label="Copy configure command"
             title="Copy configure command">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M9 9h11v11H9z"></path>
-              <path d="M4 15H3V4h11v1"></path>
-            </svg>
+            <i data-lucide="copy" aria-hidden="true"></i>
             <span class="sr-only">Copy configure command</span>
           </button>
         </div>
@@ -623,10 +580,7 @@
       <a id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true" title="Studio">
         <span class="prompt-mode-link-shell" aria-hidden="true"></span>
         <span class="prompt-mode-link-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" focusable="false">
-            <path d="M12 20h9"></path>
-            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path>
-          </svg>
+          <i data-lucide="pencil" aria-hidden="true"></i>
         </span>
         <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
         <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
@@ -636,10 +590,7 @@
       <a id="prompt-mode-library" class="prompt-mode-link" href="#studio-library" aria-selected="false" title="Library">
         <span class="prompt-mode-link-shell" aria-hidden="true"></span>
         <span class="prompt-mode-link-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" focusable="false">
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5V4.5A2.5 2.5 0 0 1 6.5 2Z"></path>
-          </svg>
+          <i data-lucide="book-open" aria-hidden="true"></i>
         </span>
         <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
         <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
@@ -649,10 +600,7 @@
       <a id="prompt-mode-json" class="prompt-mode-link" href="#studio-json" aria-selected="false" title="JSON">
         <span class="prompt-mode-link-shell" aria-hidden="true"></span>
         <span class="prompt-mode-link-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" focusable="false">
-            <path d="M8.5 5c-1.8 0-2.5 1.3-2.5 3.2v1.3c0 .9-.4 1.5-1.5 1.9 1.1.4 1.5 1 1.5 1.9v1.5c0 1.9.7 3.2 2.5 3.2"></path>
-            <path d="M15.5 5c1.8 0 2.5 1.3 2.5 3.2v1.3c0 .9.4 1.5 1.5 1.9-1.1.4-1.5 1-1.5 1.9v1.5c0 1.9-.7 3.2-2.5 3.2"></path>
-          </svg>
+          <i data-lucide="braces" aria-hidden="true"></i>
         </span>
         <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
         <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
@@ -705,9 +653,7 @@
           hidden>
           <span class="prompt-mode-link-shell" aria-hidden="true"></span>
           <span class="prompt-mode-link-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M10.2 2.4h3.6l.4 2a8 8 0 0 1 1.7.7l1.8-1 2.5 2.5-1 1.8a8 8 0 0 1 .7 1.7l2 .4v3.6l-2 .4a8 8 0 0 1-.7 1.7l1 1.8-2.5 2.5-1.8-1a8 8 0 0 1-1.7.7l-.4 2h-3.6l-.4-2a8 8 0 0 1-1.7-.7l-1.8 1-2.5-2.5 1-1.8a8 8 0 0 1-.7-1.7l-2-.4v-3.6l2-.4a8 8 0 0 1 .7-1.7l-1-1.8L6.3 4l1.8 1a8 8 0 0 1 1.7-.7l.4-2Zm1.8 6a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Z"></path>
-            </svg>
+            <i data-lucide="settings" aria-hidden="true"></i>
           </span>
           <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
           <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
@@ -718,7 +664,7 @@
       <span class="prompt-mode-divider" aria-hidden="true"></span>
       <button id="theme-toggle" class="prompt-mode-link theme-toggle theme-toggle-dock" type="button" aria-label="Switch theme. Currently: Dark" title="Dark">
         <span class="prompt-mode-link-shell" aria-hidden="true"></span>
-        <span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true"></span>
+        <span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true"><i data-lucide="moon" class="theme-toggle-icon-glyph" aria-hidden="true"></i></span>
         <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
         <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
         <span class="prompt-mode-link-tooltip" id="theme-toggle-tooltip" aria-hidden="true">Dark</span>
@@ -795,22 +741,22 @@
     const TASK_PR_LINK_SIZE_PX = "34px";
     const TASK_PR_LOGO_SIZE = 20;
     const CLAUDE_AUTH_LOGO_URL = "/static/logos/claude-code.svg";
-    const TASK_ACTION_ICON_URLS = Object.freeze({
-      output: TASK_OUTPUT_ICON_URL,
-      terminal: TASK_OUTPUT_ICON_URL,
-      rerun: "/static/logos/task-rerun.svg",
-      play: "/static/logos/task-play.svg",
-      pause: "/static/logos/task-pause.svg",
-      stop: "/static/logos/task-stop.svg",
-      loader: "/static/logos/task-loader.svg",
-      default: "/static/logos/task-loader.svg",
+    const TASK_ACTION_ICON_NAMES = Object.freeze({
+      output: "terminal-square",
+      terminal: "terminal-square",
+      rerun: "rotate-cw",
+      play: "play",
+      pause: "pause",
+      stop: "square",
+      loader: "loader-circle",
+      default: "loader-circle",
     });
-    const TASK_STATUS_ICON_URLS = Object.freeze({
-      completed: "/static/logos/status-completed.svg",
-      warning: "/static/logos/status-warning.svg",
-      error: "/static/logos/status-error.svg",
-      pending: "/static/logos/status-pending.svg",
-      default: "/static/logos/status-pending.svg",
+    const TASK_STATUS_ICON_NAMES = Object.freeze({
+      completed: "circle-check",
+      warning: "triangle-alert",
+      error: "circle-alert",
+      pending: "clock-3",
+      default: "clock-3",
     });
     const CLAUDE_POST_SUBMIT_VERIFY_INTERVAL_MS = 1200;
     const CLAUDE_POST_SUBMIT_VERIFY_MAX_ATTEMPTS = 25;
@@ -825,6 +771,22 @@
         configuredAgentLabel: String(config.configuredAgentLabel || "").trim(),
         defaultRepository: normalizeRepoValue(config.defaultRepository || "") || "git@github.com:Molten-Bot/moltenhub-code.git",
       };
+    }
+
+    function replaceLucideIcons(root) {
+      const api = window.lucide;
+      if (!api || typeof api.createIcons !== "function") {
+        return;
+      }
+      try {
+        if (root && typeof root.querySelector === "function") {
+          api.createIcons({ root });
+          return;
+        }
+        api.createIcons();
+      } catch (_err) {
+        // Keep UI resilient if icon replacement fails.
+      }
     }
 
     function trackAnalyticsEvent(name, params = {}) {
@@ -948,12 +910,10 @@
       const rawType = String(type || "").trim().toLowerCase();
       const iconType = rawType === "" ? "default" : rawType;
       const iconClass = iconType.replace(/[^a-z0-9_-]+/g, "-") || "default";
-      const icon = document.createElement("img");
+      const icon = document.createElement("i");
       icon.className = `task-action-glyph task-action-glyph-${iconClass}`;
-      icon.src = TASK_ACTION_ICON_URLS[iconType] || TASK_ACTION_ICON_URLS.default;
-      icon.alt = "";
+      icon.setAttribute("data-lucide", TASK_ACTION_ICON_NAMES[iconType] || TASK_ACTION_ICON_NAMES.default);
       icon.setAttribute("aria-hidden", "true");
-      icon.draggable = false;
       return icon;
     }
 
@@ -976,12 +936,18 @@
 
     function createTaskStatusIcon(status) {
       const iconType = taskStatusIconKey(status);
-      const icon = document.createElement("img");
+      const icon = document.createElement("i");
       icon.className = `task-status-glyph task-status-glyph-${iconType}`;
-      icon.src = TASK_STATUS_ICON_URLS[iconType] || TASK_STATUS_ICON_URLS.default;
-      icon.alt = "";
+      icon.setAttribute("data-lucide", TASK_STATUS_ICON_NAMES[iconType] || TASK_STATUS_ICON_NAMES.default);
       icon.setAttribute("aria-hidden", "true");
-      icon.draggable = false;
+      return icon;
+    }
+
+    function createTaskCloneIcon() {
+      const icon = document.createElement("i");
+      icon.className = "task-clone-logo";
+      icon.setAttribute("data-lucide", "git-branch-plus");
+      icon.setAttribute("aria-hidden", "true");
       return icon;
     }
 
@@ -1742,10 +1708,10 @@
       return THEME_MODES[(safeIndex + 1) % THEME_MODES.length];
     }
 
-    const THEME_ICONS = {
-      light: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>',
-      dark: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a8 8 0 1 0 9 9 6 6 0 0 1-9-9z"/></svg>',
-      night: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 3 2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z"/></svg>',
+    const THEME_ICON_NAMES = {
+      light: "sun",
+      dark: "moon",
+      night: "star",
     };
 
     function syncThemeToggle(theme) {
@@ -1755,7 +1721,9 @@
       const currentTheme = THEME_MODES.includes(theme) ? theme : DEFAULT_THEME_MODE;
       const currentLabel = themeLabel(currentTheme);
       themeToggleLabel.textContent = currentLabel;
-      themeToggleIcon.innerHTML = THEME_ICONS[currentTheme] || "";
+      const iconName = THEME_ICON_NAMES[currentTheme] || THEME_ICON_NAMES[DEFAULT_THEME_MODE];
+      themeToggleIcon.innerHTML = `<i data-lucide="${iconName}" class="theme-toggle-icon-glyph" aria-hidden="true"></i>`;
+      replaceLucideIcons(themeToggleIcon);
       if (themeToggleTooltip) {
         themeToggleTooltip.textContent = currentLabel;
       }
@@ -5201,6 +5169,9 @@
       taskSoundToggle.setAttribute("aria-label", ariaLabel);
       taskSoundToggle.setAttribute("title", hoverLabel);
       taskSoundToggle.classList.toggle("task-sound-toggle-muted", muted);
+      const iconName = muted ? "volume-x" : "volume-2";
+      taskSoundToggle.innerHTML = `<i data-lucide="${iconName}" class="task-sound-toggle-icon" aria-hidden="true"></i>`;
+      replaceLucideIcons(taskSoundToggle);
     }
 
     function ensureTaskAudioContext() {
@@ -6492,6 +6463,7 @@
 
         empty.append(badge, eyebrow, title, copy);
         listNode.appendChild(empty);
+        replaceLucideIcons(listNode);
         return;
       }
 
@@ -6549,13 +6521,7 @@
             cloneButton.title = "Clone locally to test and review changes.";
             cloneButton.setAttribute("aria-label", "Clone locally to test and review changes.");
 
-            const cloneLogo = document.createElement("img");
-            cloneLogo.className = "task-clone-logo";
-            cloneLogo.src = TASK_CLONE_ICON_URL;
-            cloneLogo.alt = "";
-            cloneLogo.loading = "lazy";
-            cloneLogo.width = TASK_PR_LOGO_SIZE;
-            cloneLogo.height = TASK_PR_LOGO_SIZE;
+            const cloneLogo = createTaskCloneIcon();
             cloneButton.appendChild(cloneLogo);
 
             cloneButton.addEventListener("click", (event) => {
@@ -6725,13 +6691,7 @@
             cloneButton.title = "Clone locally to test and review changes.";
             cloneButton.setAttribute("aria-label", "Clone locally to test and review changes.");
 
-            const cloneLogo = document.createElement("img");
-            cloneLogo.className = "task-clone-logo";
-            cloneLogo.src = TASK_CLONE_ICON_URL;
-            cloneLogo.alt = "";
-            cloneLogo.loading = "lazy";
-            cloneLogo.width = TASK_PR_LOGO_SIZE;
-            cloneLogo.height = TASK_PR_LOGO_SIZE;
+            const cloneLogo = createTaskCloneIcon();
             cloneButton.appendChild(cloneLogo);
 
             cloneButton.addEventListener("click", (event) => {
@@ -6831,13 +6791,7 @@
             cloneButton.title = "Clone locally to test and review changes.";
             cloneButton.setAttribute("aria-label", "Clone locally to test and review changes.");
 
-            const cloneLogo = document.createElement("img");
-            cloneLogo.className = "task-clone-logo";
-            cloneLogo.src = TASK_CLONE_ICON_URL;
-            cloneLogo.alt = "";
-            cloneLogo.loading = "lazy";
-            cloneLogo.width = TASK_PR_LOGO_SIZE;
-            cloneLogo.height = TASK_PR_LOGO_SIZE;
+            const cloneLogo = createTaskCloneIcon();
             cloneButton.appendChild(cloneLogo);
 
             cloneButton.addEventListener("click", (event) => {
@@ -6882,6 +6836,7 @@
       }
       animateTaskReflow(listNode, previousTaskRects);
       applyTaskIdleSpinClasses(listNode, tasks);
+      replaceLucideIcons(listNode);
     }
 
     function renderTasks(snapshot) {
@@ -7662,6 +7617,7 @@
     renderReviewerHistoryOptions();
     renderLibraryTaskOptions();
     renderPromptImages();
+    replaceLucideIcons(document.body);
     syncBaseBranchClearState();
     syncBuilderDraftClearState();
     try {

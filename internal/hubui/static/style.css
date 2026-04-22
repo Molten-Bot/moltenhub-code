@@ -547,7 +547,11 @@ textarea {
 .metric-icon svg {
   width: 14px;
   height: 14px;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .metric-icon-good {
@@ -1346,9 +1350,6 @@ select.prompt-control {
   width: 14px;
   height: 14px;
   display: block;
-}
-
-.prompt-history-delete-icon path {
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
@@ -1559,15 +1560,6 @@ select.prompt-control {
   shape-rendering: geometricPrecision;
 }
 
-.task-sound-toggle-wave,
-.task-sound-toggle-muted-slash {
-  transition: opacity 0.14s ease;
-}
-
-.task-sound-toggle-muted-slash {
-  opacity: 0;
-}
-
 .task-fullscreen-toggle-icon {
   width: 16px;
   height: 16px;
@@ -1584,10 +1576,13 @@ select.prompt-control {
   width: 16px;
   height: 16px;
   display: block;
-  object-fit: contain;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   pointer-events: none;
   user-select: none;
-  -webkit-user-drag: none;
   filter: var(--task-icon-contrast-filter) var(--task-icon-shadow-filter);
 }
 
@@ -1652,14 +1647,6 @@ select.prompt-control {
 
 .task-sound-toggle-muted .task-sound-toggle-icon {
   opacity: 0.7;
-}
-
-.task-sound-toggle-muted .task-sound-toggle-wave {
-  opacity: 0;
-}
-
-.task-sound-toggle-muted .task-sound-toggle-muted-slash {
-  opacity: 1;
 }
 
 .task-history-toggle-unseen {
@@ -2098,7 +2085,13 @@ select.prompt-control {
   filter: var(--agent-logo-filter);
 }
 
-.task-copy-link img.task-clone-logo {
+.task-clone-logo {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.task-copy-link .task-clone-logo {
   filter: var(--task-icon-contrast-filter) var(--task-icon-shadow-filter);
 }
 
@@ -2152,10 +2145,13 @@ select.prompt-control {
   height: 14px;
   flex: 0 0 14px;
   display: block;
-  object-fit: contain;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   pointer-events: none;
   user-select: none;
-  -webkit-user-drag: none;
   filter: var(--task-icon-contrast-filter) var(--task-icon-shadow-filter);
 }
 

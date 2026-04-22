@@ -976,7 +976,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to size task PR links inline to avoid task-height expansion when css is stale")
 	}
 	if !strings.Contains(markup, "cloneButton.className = \"task-copy-link\";") ||
-		!strings.Contains(markup, "cloneLogo.src = TASK_CLONE_ICON_URL;") ||
+		!strings.Contains(markup, "const cloneLogo = createTaskCloneIcon();") ||
 		!strings.Contains(markup, "void copyTaskCloneCommand(task, cloneButton);") {
 		t.Fatalf("expected index html to render a terminal icon button that copies the branch clone command")
 	}
@@ -1607,16 +1607,18 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `return THEME_MODES.includes(raw) ? raw : DEFAULT_THEME_MODE;`) {
 		t.Fatalf("expected index html theme loading to fall back to the default dark theme")
 	}
-	if !strings.Contains(markup, `<span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true"></span>`) {
+	if !strings.Contains(markup, `<span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true"><i data-lucide="moon" class="theme-toggle-icon-glyph" aria-hidden="true"></i></span>`) {
 		t.Fatalf("expected index html to render a dedicated theme toggle icon slot")
 	}
 	if !strings.Contains(markup, `<span id="theme-toggle-label">Dark</span>`) {
 		t.Fatalf("expected index html to render dark as the initial theme toggle label")
 	}
-	if !strings.Contains(markup, `function syncThemeToggle(theme)`) || !strings.Contains(markup, `themeToggleIcon.innerHTML = THEME_ICONS[currentTheme] || "";`) {
+	if !strings.Contains(markup, `function syncThemeToggle(theme)`) ||
+		!strings.Contains(markup, `const iconName = THEME_ICON_NAMES[currentTheme] || THEME_ICON_NAMES[DEFAULT_THEME_MODE];`) ||
+		!strings.Contains(markup, "themeToggleIcon.innerHTML = `<i data-lucide=\"${iconName}\" class=\"theme-toggle-icon-glyph\" aria-hidden=\"true\"></i>`;") {
 		t.Fatalf("expected index html to keep the theme toggle icon and label in sync")
 	}
-	if !strings.Contains(markup, `const THEME_ICONS = {`) {
+	if !strings.Contains(markup, `const THEME_ICON_NAMES = {`) {
 		t.Fatalf("expected index html to define theme toggle icons")
 	}
 	if !strings.Contains(markup, "themeToggleButton.setAttribute(\"aria-label\", `Switch theme. Currently: ${currentLabel}`);") {

@@ -1349,8 +1349,9 @@ func TestCurrentWorkHeaderIncludesTaskSoundMuteToggle(t *testing.T) {
 		!strings.Contains(html, "title=\"Mute\"") {
 		t.Fatalf("expected Current Work header to include mute toggle for task sounds")
 	}
-	if !strings.Contains(html, "class=\"task-sound-toggle-muted-slash\"") {
-		t.Fatalf("expected Current Work mute toggle icon to include a muted slash path")
+	if !strings.Contains(html, "class=\"task-sound-toggle-icon\"") ||
+		!strings.Contains(html, "data-lucide=\"volume-2\"") {
+		t.Fatalf("expected Current Work mute toggle icon to initialize with lucide volume glyph")
 	}
 	if !strings.Contains(html, "const TASK_SOUND_MUTED_KEY = \"hubui.taskSoundMuted\";") {
 		t.Fatalf("expected task sound mute preference storage key")
@@ -1373,7 +1374,9 @@ func TestCurrentWorkHeaderIncludesTaskSoundMuteToggle(t *testing.T) {
 		!strings.Contains(html, "taskSoundToggle.addEventListener(\"click\", () => {") {
 		t.Fatalf("expected task sound toggle to persist and react to clicks")
 	}
-	if !strings.Contains(html, "const hoverLabel = enabled ? \"Mute\" : \"Sounds\";") {
+	if !strings.Contains(html, "const hoverLabel = enabled ? \"Mute\" : \"Sounds\";") ||
+		!strings.Contains(html, "const iconName = muted ? \"volume-x\" : \"volume-2\";") ||
+		!strings.Contains(html, "taskSoundToggle.innerHTML = `<i data-lucide=\"${iconName}\" class=\"task-sound-toggle-icon\" aria-hidden=\"true\"></i>`;") {
 		t.Fatalf("expected task sound toggle hover label to switch between Mute and Sounds")
 	}
 	if !strings.Contains(html, "if (!state.taskSoundMuted) {\n        ensureTaskAudioContext();\n        playTaskSuccessSound();\n      }") {
@@ -1414,11 +1417,5 @@ func TestTaskSoundToggleStylesShowMutedState(t *testing.T) {
 	}
 	if !strings.Contains(css, ".task-sound-toggle-muted .task-sound-toggle-icon {\n  opacity: 0.7;\n}") {
 		t.Fatalf("expected muted task sound icon styling")
-	}
-	if !strings.Contains(css, ".task-sound-toggle-muted .task-sound-toggle-wave {\n  opacity: 0;\n}") {
-		t.Fatalf("expected muted task sound icon to hide active sound waves")
-	}
-	if !strings.Contains(css, ".task-sound-toggle-muted .task-sound-toggle-muted-slash {\n  opacity: 1;\n}") {
-		t.Fatalf("expected muted task sound icon to show slash indicator")
 	}
 }
