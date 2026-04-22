@@ -714,6 +714,7 @@
     const TASK_ICON_IDLE_REFRESH_MS = 1_000;
     const DEFERRED_SELECTION_RENDER_FLUSH_DELAY_MS = 32;
     const TASK_HISTORY_LIMIT = 25;
+    const TASK_HISTORY_MAX_AGE_MS = 20 * 60 * 60 * 1000;
     const MAX_TERMINAL_LINES = 500;
     const TASK_PROGRESS_VISIBLE = true;
     const HUB_LOGIN_URL = "https://app.molten.bot/signin?target=hub";
@@ -1398,10 +1399,11 @@
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed)) return new Map();
         const byID = new Map();
+        const nowMs = Date.now();
         for (const task of parsed) {
           const copy = cloneTaskForHistory(task);
           const requestID = String(copy?.request_id || "").trim();
-          if (!requestID || !isCompletedTask(copy)) {
+          if (!requestID || !isCompletedTask(copy) || isTaskHistoryExpired(copy, nowMs)) {
             continue;
           }
           byID.set(requestID, copy);
@@ -1526,6 +1528,10 @@
         disk: false,
       },
     };
+    if (pruneTaskHistory()) {
+      persistTaskHistory();
+      persistTaskHistoryUnseenIDs();
+    }
     let agentAuthRefreshTimer = null;
     let agentAuthAutoSubmitTimer = null;
     let claudePostSubmitVerifyTimer = null;
@@ -5972,6 +5978,17 @@
       return parseTaskTimestamp(task?.started_at);
     }
 
+    function isTaskHistoryExpired(task, nowMs = Date.now()) {
+      if (!Number.isFinite(TASK_HISTORY_MAX_AGE_MS) || TASK_HISTORY_MAX_AGE_MS <= 0) {
+        return false;
+      }
+      const updatedAt = historyTaskUpdatedAt(task);
+      if (!Number.isFinite(updatedAt) || updatedAt <= 0) {
+        return false;
+      }
+      return (nowMs - updatedAt) > TASK_HISTORY_MAX_AGE_MS;
+    }
+
     function cloneTaskForHistory(task) {
       if (!task || !task.request_id) {
         return null;
@@ -5982,14 +5999,26 @@
       };
     }
 
-    function pruneTaskHistory() {
+    function pruneTaskHistory(nowMs = Date.now()) {
+      if (!(state.taskHistoryByID instanceof Map)) {
+        return false;
+      }
+      let changed = false;
+      for (const [requestID, task] of state.taskHistoryByID.entries()) {
+        if (!requestID || isTaskHistoryExpired(task, nowMs)) {
+          state.taskHistoryByID.delete(requestID);
+          changed = true;
+          if (state.taskHistoryUnseenIDs instanceof Set) {
+            state.taskHistoryUnseenIDs.delete(requestID);
+          }
+        }
+      }
       if (
-        !(state.taskHistoryByID instanceof Map) ||
         !Number.isFinite(TASK_HISTORY_LIMIT) ||
         TASK_HISTORY_LIMIT < 1 ||
         state.taskHistoryByID.size <= TASK_HISTORY_LIMIT
       ) {
-        return false;
+        return changed;
       }
       const all = Array.from(state.taskHistoryByID.values()).sort((a, b) => {
         const updatedDiff = historyTaskUpdatedAt(b) - historyTaskUpdatedAt(a);
@@ -6011,6 +6040,7 @@
     }
 
     function rememberCompletedTaskHistory(snapshot) {
+      const nowMs = Date.now();
       let changed = false;
       if (!(state.taskHistoryByID instanceof Map)) {
         state.taskHistoryByID = new Map();
@@ -6021,7 +6051,7 @@
           continue;
         }
         const requestID = String(task?.request_id || "").trim();
-        if (!requestID || state.dismissedTaskIDs.has(requestID)) {
+        if (!requestID || state.dismissedTaskIDs.has(requestID) || isTaskHistoryExpired(task, nowMs)) {
           continue;
         }
         const copy = cloneTaskForHistory(task);
@@ -6044,9 +6074,12 @@
         state.taskHistoryByID.set(requestID, copy);
         changed = true;
       }
-      const pruned = pruneTaskHistory();
+      const pruned = pruneTaskHistory(nowMs);
       if (changed || pruned) {
         persistTaskHistory();
+        if (pruned) {
+          persistTaskHistoryUnseenIDs();
+        }
       }
     }
 
@@ -6068,6 +6101,7 @@
     }
 
     function historyTasks(snapshot) {
+      const nowMs = Date.now();
       const liveByID = new Map();
       for (const task of snapshot?.tasks || []) {
         const requestID = String(task?.request_id || "").trim();
@@ -6083,6 +6117,9 @@
         if (!requestID || state.dismissedTaskIDs.has(requestID)) {
           continue;
         }
+        if (isCompletedTask(task) && isTaskHistoryExpired(task, nowMs)) {
+          continue;
+        }
         out.push({
           ...task,
           history_only: false,
@@ -6092,7 +6129,7 @@
 
       for (const task of state.taskHistoryByID.values()) {
         const requestID = String(task?.request_id || "").trim();
-        if (!requestID || liveByID.has(requestID) || state.dismissedTaskIDs.has(requestID)) {
+        if (!requestID || liveByID.has(requestID) || state.dismissedTaskIDs.has(requestID) || isTaskHistoryExpired(task, nowMs)) {
           continue;
         }
         out.push({
