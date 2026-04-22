@@ -538,11 +538,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function taskCloneCommand(") || !strings.Contains(markup, "function copyTaskCloneCommand(") {
 		t.Fatalf("expected index html to include task clone command helpers for completed branches")
 	}
-	if !strings.Contains(markup, "const TERMINAL_LOGO_URL = \"https://molten.bot/logos/terminal.svg\";") {
-		t.Fatalf("expected index html to include the terminal logo asset for task clone controls")
-	}
-	if !strings.Contains(markup, "const TASK_CLONE_ICON_URL = \"/static/logos/task-clone.svg\";") {
-		t.Fatalf("expected index html to include a dedicated clone icon asset")
+	if !strings.Contains(markup, `const TASK_ACTION_ICON_NAMES = Object.freeze({`) ||
+		!strings.Contains(markup, `output: "terminal-square",`) {
+		t.Fatalf("expected index html task action icon mapping to use lucide terminal glyphs")
 	}
 	if !strings.Contains(markup, "function openTaskOutput(") {
 		t.Fatalf("expected index html to include focused task output opener")
