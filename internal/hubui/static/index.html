@@ -933,9 +933,9 @@
       const iconType = String(type || "").trim().toLowerCase();
 
       if (iconType === "terminal") {
-        appendTaskIconPath(svg, "M2.25 3.25h11.5v8.5H2.25z");
-        appendTaskIconPath(svg, "M4.15 6.05 6.55 8 4.15 9.95");
-        appendTaskIconPath(svg, "M7.7 10h3.95");
+        appendTaskIconPath(svg, "M3 3.25h10a1.75 1.75 0 0 1 1.75 1.75v6a1.75 1.75 0 0 1-1.75 1.75H3A1.75 1.75 0 0 1 1.25 11V5A1.75 1.75 0 0 1 3 3.25Z");
+        appendTaskIconPath(svg, "M4.35 6.2 6.7 8 4.35 9.8");
+        appendTaskIconPath(svg, "M8 9.8h3.7");
         return svg;
       }
 
@@ -950,16 +950,12 @@
       }
 
       if (iconType === "stop") {
-        appendTaskIconPath(svg, "M5 5h6v6H5z");
+        appendTaskIconPath(svg, "M5.15 5.15h5.7v5.7h-5.7z", { fill: "currentColor", stroke: "none" });
         return svg;
       }
 
       if (iconType === "gear" || iconType === "") {
-        appendTaskIconPath(
-          svg,
-          "M8 1.6a.85.85 0 0 1 .82.6l.2.67c.39.1.76.25 1.1.45l.59-.35a.85.85 0 0 1 .99.13l1.15 1.15a.85.85 0 0 1 .13.99l-.35.59c.2.34.35.71.45 1.1l.67.2a.85.85 0 0 1 .6.82v1.64a.85.85 0 0 1-.6.82l-.67.2a4.4 4.4 0 0 1-.45 1.1l.35.59a.85.85 0 0 1-.13.99l-1.15 1.15a.85.85 0 0 1-.99.13l-.59-.35c-.34.2-.71.35-1.1.45l-.2.67a.85.85 0 0 1-.82.6H7.2a.85.85 0 0 1-.82-.6l-.2-.67a4.4 4.4 0 0 1-1.1-.45l-.59.35a.85.85 0 0 1-.99-.13l-1.15-1.15a.85.85 0 0 1-.13-.99l.35-.59a4.4 4.4 0 0 1-.45-1.1l-.67-.2a.85.85 0 0 1-.6-.82V7.2a.85.85 0 0 1 .6-.82l.67-.2c.1-.39.25-.76.45-1.1l-.35-.59a.85.85 0 0 1 .13-.99l1.15-1.15a.85.85 0 0 1 .99-.13l.59.35c.34-.2.71-.35 1.1-.45l.2-.67a.85.85 0 0 1 .82-.6Zm0 4.7a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4Z",
-          { fill: "currentColor", stroke: "none" },
-        );
+        appendTaskIconPath(svg, "M8 2a6 6 0 1 0 6 6");
         return svg;
       }
 
