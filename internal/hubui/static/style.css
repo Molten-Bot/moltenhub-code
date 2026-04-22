@@ -154,8 +154,9 @@
   --theme-button-focus:
     inset 0 1px 0 rgba(255, 255, 255, 0.82),
     0 0 0 3px rgba(76, 133, 233, 0.18);
+  --task-icon-contrast-filter: brightness(0) saturate(100%);
   --agent-logo-filter: brightness(0) saturate(100%);
-  --task-terminal-icon-filter: brightness(0) saturate(100%);
+  --task-terminal-icon-filter: var(--task-icon-contrast-filter);
   --task-icon-shadow-filter: drop-shadow(0 0 0.85px rgba(11, 23, 43, 0.38));
   --body-radial-left: radial-gradient(1300px 600px at -10% -15%, rgba(10, 132, 255, 0.16), transparent 60%);
   --body-radial-right: radial-gradient(980px 560px at 110% 8%, rgba(123, 97, 255, 0.12), transparent 62%);
@@ -1587,7 +1588,7 @@ select.prompt-control {
   pointer-events: none;
   user-select: none;
   -webkit-user-drag: none;
-  filter: var(--task-icon-shadow-filter);
+  filter: var(--task-icon-contrast-filter) var(--task-icon-shadow-filter);
 }
 
 .task-action-glyph-play,
@@ -2097,9 +2098,8 @@ select.prompt-control {
   filter: var(--agent-logo-filter);
 }
 
-.task-action-glyph-output,
 .task-copy-link img.task-clone-logo {
-  filter: var(--task-terminal-icon-filter) var(--task-icon-shadow-filter);
+  filter: var(--task-icon-contrast-filter) var(--task-icon-shadow-filter);
 }
 
 .task-copy-link:hover,
@@ -2156,7 +2156,7 @@ select.prompt-control {
   pointer-events: none;
   user-select: none;
   -webkit-user-drag: none;
-  filter: var(--task-icon-shadow-filter);
+  filter: var(--task-icon-contrast-filter) var(--task-icon-shadow-filter);
 }
 
 .badge .task-action-glyph {
@@ -2174,7 +2174,7 @@ select.prompt-control {
   animation: taskRunningSpinner 920ms linear infinite;
   transform-origin: center;
   will-change: transform;
-  filter: none;
+  filter: var(--task-icon-contrast-filter);
 }
 
 .badge.running,
@@ -3834,8 +3834,9 @@ html.dark {
   --theme-button-focus:
     inset 0 1px 0 rgba(255, 255, 255, 0.03),
     0 0 0 3px rgba(76, 133, 233, 0.22);
+  --task-icon-contrast-filter: brightness(0) saturate(100%) invert(1);
   --agent-logo-filter: brightness(0) saturate(100%) invert(1);
-  --task-terminal-icon-filter: brightness(0) saturate(100%) invert(1);
+  --task-terminal-icon-filter: var(--task-icon-contrast-filter);
   --task-icon-shadow-filter: drop-shadow(0 0 1.1px rgba(0, 0, 0, 0.62));
   --shadow-sm: 0 10px 28px rgba(4, 11, 27, 0.38);
   --shadow-md: 0 18px 44px rgba(4, 11, 27, 0.5);
@@ -3977,8 +3978,9 @@ html.night {
   --theme-button-focus:
     inset 0 1px 0 rgba(255, 255, 255, 0.025),
     0 0 0 3px rgba(76, 133, 233, 0.22);
+  --task-icon-contrast-filter: brightness(0) saturate(100%) invert(1);
   --agent-logo-filter: brightness(0) saturate(100%) invert(1);
-  --task-terminal-icon-filter: brightness(0) saturate(100%) invert(1);
+  --task-terminal-icon-filter: var(--task-icon-contrast-filter);
   --task-icon-shadow-filter: drop-shadow(0 0 1.2px rgba(0, 0, 0, 0.68));
   --shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.46);
   --shadow-md: 0 18px 44px rgba(0, 0, 0, 0.58);
