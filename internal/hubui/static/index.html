@@ -710,12 +710,12 @@
     const GOOGLE_ANALYTICS_MEASUREMENT_ID = "G-BY33RFG2WB";
     const COMPLETED_STATUSES = new Set(["completed", "no_changes", "error", "invalid", "duplicate", "stopped"]);
     const TASK_PROGRESS_STEPS = [
-      { id: "received", label: "Task Received", detail: "Dispatch accepted by hub.", icon: "moltenhub" },
-      { id: "run", label: "Run Started", detail: "Harness run initialized.", icon: "moltenhub" },
-      { id: "prepare", label: "Prepare", detail: "Preflight, auth, and workspace setup.", icon: "moltenhub" },
+      { id: "received", label: "Task Received", detail: "Dispatch accepted by hub.", icon: "task_received" },
+      { id: "run", label: "Run Started", detail: "Harness run initialized.", icon: "run_started" },
+      { id: "prepare", label: "Local Prep", detail: "Local auth and workspace conditioning.", icon: "local_prepare" },
       { id: "clone", label: "Git Clone", detail: "Repository clone and branch setup.", icon: "git_clone" },
       { id: "workflow", label: "GitHub Prep", detail: "Publish strategy and fork fallback setup.", icon: "git_workflow" },
-      { id: "agent", label: "Agent", detail: "Agent execution in progress.", icon: "agent" },
+      { id: "agent", label: "Agent", detail: "Agent execution in progress.", icon: "agent_run" },
       { id: "finalize", label: "Finalize", detail: "Commit, PR, and checks.", icon: "github" },
     ];
     const AGENT_LOGO_URLS = Object.freeze({
@@ -744,7 +744,7 @@
       rerun: "rotate-cw",
       play: "play",
       pause: "pause",
-      stop: "square",
+      stop: "circle-stop",
       loader: "loader-circle",
       default: "loader-circle",
     });
@@ -756,8 +756,12 @@
       default: "clock-3",
     });
     const TASK_PROGRESS_ICON_NAMES = Object.freeze({
+      task_received: "inbox",
+      run_started: "play",
+      local_prepare: "wrench",
       git_clone: "git-branch-plus",
       git_workflow: "git-fork",
+      agent_run: "bot",
     });
     const CLAUDE_POST_SUBMIT_VERIFY_INTERVAL_MS = 1200;
     const CLAUDE_POST_SUBMIT_VERIFY_MAX_ATTEMPTS = 25;
@@ -895,9 +899,6 @@
 
     function taskProgressStepIconURL(step, task) {
       const iconKey = String(step?.icon || "").trim().toLowerCase();
-      if (iconKey === "moltenhub") {
-        return MOLTENHUB_LOGO_URL;
-      }
       if (iconKey === "github") {
         return GITHUB_LOGO_URL;
       }
