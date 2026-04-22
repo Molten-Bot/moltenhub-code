@@ -1893,6 +1893,15 @@ select.prompt-control {
   padding-bottom: 8px;
 }
 
+.task.task-history-status-left {
+  align-items: center;
+}
+
+.task.task-history-status-left .badge-icon {
+  flex: 0 0 auto;
+  align-self: center;
+}
+
 .task-top {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

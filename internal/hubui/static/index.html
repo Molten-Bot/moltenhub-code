@@ -6502,7 +6502,9 @@
 
         const topActions = document.createElement("div");
         topActions.className = "task-top-actions";
-        topActions.appendChild(badge);
+        if (!historyView) {
+          topActions.appendChild(badge);
+        }
 
         const prURL = String(task.pr_url || "").trim();
         if (promptOnly) {
@@ -6566,6 +6568,10 @@
           const body = document.createElement("div");
           body.className = "task-body";
           body.appendChild(top);
+          if (historyView) {
+            node.classList.add("task-history-status-left");
+            node.appendChild(badge);
+          }
           node.appendChild(body);
           listNode.appendChild(node);
           continue;
@@ -6773,6 +6779,10 @@
         node.classList.toggle("task-has-side-actions", showTaskSideActions);
         if (inlineHistoryActions) {
           node.classList.remove("task-has-side-actions");
+        }
+        if (historyView) {
+          node.classList.add("task-history-status-left");
+          node.appendChild(badge);
         }
         node.appendChild(body);
         if (showTaskSideActions && !inlineHistoryActions) {
