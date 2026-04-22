@@ -714,6 +714,7 @@
     const TASK_ICON_IDLE_REFRESH_MS = 1_000;
     const DEFERRED_SELECTION_RENDER_FLUSH_DELAY_MS = 32;
     const TASK_HISTORY_LIMIT = 25;
+    const TASK_HISTORY_MAX_AGE_MS = 20 * 60 * 60 * 1000;
     const MAX_TERMINAL_LINES = 500;
     const TASK_PROGRESS_VISIBLE = true;
     const HUB_LOGIN_URL = "https://app.molten.bot/signin?target=hub";
@@ -1398,10 +1399,13 @@
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed)) return new Map();
         const byID = new Map();
+        let changed = false;
+        const now = Date.now();
         for (const task of parsed) {
           const copy = cloneTaskForHistory(task);
           const requestID = String(copy?.request_id || "").trim();
-          if (!requestID || !isCompletedTask(copy)) {
+          if (!requestID || !isCompletedTask(copy) || isTaskHistoryExpired(copy, now)) {
+            changed = true;
             continue;
           }
           byID.set(requestID, copy);
@@ -1415,6 +1419,7 @@
             return String(b?.request_id || "").localeCompare(String(a?.request_id || ""));
           });
           byID.clear();
+          changed = true;
           for (let i = 0; i < limited.length && i < TASK_HISTORY_LIMIT; i += 1) {
             const task = limited[i];
             const requestID = String(task?.request_id || "").trim();
@@ -1422,6 +1427,14 @@
               continue;
             }
             byID.set(requestID, task);
+          }
+        }
+        if (changed) {
+          const entries = Array.from(byID.values());
+          if (entries.length > 0) {
+            localStorage.setItem(TASK_HISTORY_KEY, JSON.stringify(entries));
+          } else {
+            localStorage.removeItem(TASK_HISTORY_KEY);
           }
         }
         return byID;
@@ -5153,6 +5166,7 @@
           return;
         }
         const entries = Array.from(state.taskHistoryByID.values())
+          .filter((task) => !isTaskHistoryExpired(task))
           .sort((a, b) => {
             const updatedDiff = historyTaskUpdatedAt(b) - historyTaskUpdatedAt(a);
             if (updatedDiff !== 0) {
@@ -5162,6 +5176,10 @@
           })
           .map((task) => cloneTaskForHistory(task))
           .filter((task) => task && task.request_id);
+        if (entries.length === 0) {
+          localStorage.removeItem(TASK_HISTORY_KEY);
+          return;
+        }
         localStorage.setItem(TASK_HISTORY_KEY, JSON.stringify(entries));
       } catch (_err) {
         // Ignore localStorage failures.
@@ -5187,6 +5205,24 @@
       state.taskHistoryUnseenIDs.clear();
       persistTaskHistoryUnseenIDs();
       return true;
+    }
+
+    function pruneTaskHistoryUnseenIDs() {
+      if (!(state.taskHistoryUnseenIDs instanceof Set) || state.taskHistoryUnseenIDs.size === 0) {
+        return false;
+      }
+      const historyByID = state.taskHistoryByID instanceof Map ? state.taskHistoryByID : new Map();
+      let changed = false;
+      for (const requestID of Array.from(state.taskHistoryUnseenIDs.values())) {
+        if (!historyByID.has(requestID)) {
+          state.taskHistoryUnseenIDs.delete(requestID);
+          changed = true;
+        }
+      }
+      if (changed) {
+        persistTaskHistoryUnseenIDs();
+      }
+      return changed;
     }
 
     function rememberTaskHistoryUnseen(requestID) {
@@ -5972,6 +6008,11 @@
       return parseTaskTimestamp(task?.started_at);
     }
 
+    function isTaskHistoryExpired(task, now = Date.now()) {
+      const updatedAt = historyTaskUpdatedAt(task);
+      return updatedAt > 0 && now - updatedAt > TASK_HISTORY_MAX_AGE_MS;
+    }
+
     function cloneTaskForHistory(task) {
       if (!task || !task.request_id) {
         return null;
@@ -5985,11 +6026,24 @@
     function pruneTaskHistory() {
       if (
         !(state.taskHistoryByID instanceof Map) ||
+        state.taskHistoryByID.size === 0
+      ) {
+        return false;
+      }
+      let changed = false;
+      const now = Date.now();
+      for (const [requestID, task] of state.taskHistoryByID.entries()) {
+        if (isTaskHistoryExpired(task, now)) {
+          state.taskHistoryByID.delete(requestID);
+          changed = true;
+        }
+      }
+      if (
         !Number.isFinite(TASK_HISTORY_LIMIT) ||
         TASK_HISTORY_LIMIT < 1 ||
         state.taskHistoryByID.size <= TASK_HISTORY_LIMIT
       ) {
-        return false;
+        return changed;
       }
       const all = Array.from(state.taskHistoryByID.values()).sort((a, b) => {
         const updatedDiff = historyTaskUpdatedAt(b) - historyTaskUpdatedAt(a);
@@ -6045,8 +6099,12 @@
         changed = true;
       }
       const pruned = pruneTaskHistory();
+      const prunedUnseen = pruneTaskHistoryUnseenIDs();
       if (changed || pruned) {
         persistTaskHistory();
+      }
+      if (prunedUnseen) {
+        applyTaskPanelViewMeta();
       }
     }
 
@@ -6080,7 +6138,7 @@
       const out = [];
       for (const task of liveByID.values()) {
         const requestID = String(task?.request_id || "").trim();
-        if (!requestID || state.dismissedTaskIDs.has(requestID)) {
+        if (!requestID || state.dismissedTaskIDs.has(requestID) || isTaskHistoryExpired(task)) {
           continue;
         }
         out.push({
@@ -6092,7 +6150,7 @@
 
       for (const task of state.taskHistoryByID.values()) {
         const requestID = String(task?.request_id || "").trim();
-        if (!requestID || liveByID.has(requestID) || state.dismissedTaskIDs.has(requestID)) {
+        if (!requestID || liveByID.has(requestID) || state.dismissedTaskIDs.has(requestID) || isTaskHistoryExpired(task)) {
           continue;
         }
         out.push({
