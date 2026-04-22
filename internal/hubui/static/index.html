@@ -790,11 +790,15 @@
     const MOLTENHUB_LOGO_URL = "/static/logo.svg";
     const GITHUB_LOGO_URL = "/static/logos/github.svg";
     const TERMINAL_LOGO_URL = "https://molten.bot/logos/terminal.svg";
+    const TASK_OUTPUT_ICON_URL = "/static/logos/task-output.svg";
+    const TASK_CLONE_ICON_URL = "/static/logos/task-clone.svg";
     const TASK_PR_LINK_SIZE_PX = "34px";
     const TASK_PR_LOGO_SIZE = 20;
     const CLAUDE_AUTH_LOGO_URL = "/static/logos/claude-code.svg";
     const TASK_ACTION_ICON_URLS = Object.freeze({
-      terminal: TERMINAL_LOGO_URL,
+      output: TASK_OUTPUT_ICON_URL,
+      terminal: TASK_OUTPUT_ICON_URL,
+      rerun: "/static/logos/task-rerun.svg",
       play: "/static/logos/task-play.svg",
       pause: "/static/logos/task-pause.svg",
       stop: "/static/logos/task-stop.svg",
@@ -6449,7 +6453,7 @@
         outputToggle.className = "task-output-toggle task-icon-button";
         outputToggle.title = "Open task output terminal logs.";
         outputToggle.setAttribute("aria-label", "Open task output terminal logs.");
-        outputToggle.appendChild(createTaskActionIcon("terminal"));
+        outputToggle.appendChild(createTaskActionIcon("output"));
         const outputLabel = document.createElement("span");
         outputLabel.className = "sr-only";
         outputLabel.textContent = "Output";
@@ -6546,8 +6550,8 @@
             cloneButton.setAttribute("aria-label", "Clone locally to test and review changes.");
 
             const cloneLogo = document.createElement("img");
-            cloneLogo.className = "task-terminal-logo";
-            cloneLogo.src = TERMINAL_LOGO_URL;
+            cloneLogo.className = "task-clone-logo";
+            cloneLogo.src = TASK_CLONE_ICON_URL;
             cloneLogo.alt = "";
             cloneLogo.loading = "lazy";
             cloneLogo.width = TASK_PR_LOGO_SIZE;
@@ -6688,8 +6692,13 @@
         if (canRerunTask(task)) {
           const rerun = document.createElement("button");
           rerun.type = "button";
-          rerun.className = "task-rerun";
-          rerun.textContent = "Re-run";
+          rerun.className = "task-rerun task-icon-button";
+          rerun.setAttribute("aria-label", "Re-run task");
+          rerun.appendChild(createTaskActionIcon("rerun"));
+          const rerunLabel = document.createElement("span");
+          rerunLabel.className = "sr-only";
+          rerunLabel.textContent = "Re-run";
+          rerun.appendChild(rerunLabel);
           rerun.title = "Queue this task configuration again";
           rerun.disabled = state.rerunInFlight.has(requestID);
           rerun.addEventListener("click", (event) => {
@@ -6717,8 +6726,8 @@
             cloneButton.setAttribute("aria-label", "Clone locally to test and review changes.");
 
             const cloneLogo = document.createElement("img");
-            cloneLogo.className = "task-terminal-logo";
-            cloneLogo.src = TERMINAL_LOGO_URL;
+            cloneLogo.className = "task-clone-logo";
+            cloneLogo.src = TASK_CLONE_ICON_URL;
             cloneLogo.alt = "";
             cloneLogo.loading = "lazy";
             cloneLogo.width = TASK_PR_LOGO_SIZE;
@@ -6823,8 +6832,8 @@
             cloneButton.setAttribute("aria-label", "Clone locally to test and review changes.");
 
             const cloneLogo = document.createElement("img");
-            cloneLogo.className = "task-terminal-logo";
-            cloneLogo.src = TERMINAL_LOGO_URL;
+            cloneLogo.className = "task-clone-logo";
+            cloneLogo.src = TASK_CLONE_ICON_URL;
             cloneLogo.alt = "";
             cloneLogo.loading = "lazy";
             cloneLogo.width = TASK_PR_LOGO_SIZE;

@@ -466,7 +466,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `"task-closing"`) {
 		t.Fatalf("expected index html to include task closing class usage")
 	}
-	if !strings.Contains(markup, `"task-rerun"`) {
+	if !strings.Contains(markup, `"task-rerun task-icon-button"`) && !strings.Contains(markup, `"task-rerun"`) {
 		t.Fatalf("expected index html to include task rerun class usage")
 	}
 	if !strings.Contains(markup, "function dismissTask(") {
@@ -540,6 +540,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "const TERMINAL_LOGO_URL = \"https://molten.bot/logos/terminal.svg\";") {
 		t.Fatalf("expected index html to include the terminal logo asset for task clone controls")
+	}
+	if !strings.Contains(markup, "const TASK_CLONE_ICON_URL = \"/static/logos/task-clone.svg\";") {
+		t.Fatalf("expected index html to include a dedicated clone icon asset")
 	}
 	if !strings.Contains(markup, "function openTaskOutput(") {
 		t.Fatalf("expected index html to include focused task output opener")
@@ -973,7 +976,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to size task PR links inline to avoid task-height expansion when css is stale")
 	}
 	if !strings.Contains(markup, "cloneButton.className = \"task-copy-link\";") ||
-		!strings.Contains(markup, "cloneLogo.src = TERMINAL_LOGO_URL;") ||
+		!strings.Contains(markup, "cloneLogo.src = TASK_CLONE_ICON_URL;") ||
 		!strings.Contains(markup, "void copyTaskCloneCommand(task, cloneButton);") {
 		t.Fatalf("expected index html to render a terminal icon button that copies the branch clone command")
 	}
@@ -1493,7 +1496,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `pauseRun.appendChild(createTaskActionIcon(canRun ? "play" : "pause"));`) {
 		t.Fatalf("expected index html to render task pause/run icon control from backend capabilities")
 	}
-	if !strings.Contains(markup, `outputToggle.appendChild(createTaskActionIcon("terminal"));`) ||
+	if !strings.Contains(markup, `outputToggle.appendChild(createTaskActionIcon("output"));`) ||
 		!strings.Contains(markup, `outputToggle.title = "Open task output terminal logs.";`) {
 		t.Fatalf("expected index html to render terminal output icon control with descriptive tooltip")
 	}
