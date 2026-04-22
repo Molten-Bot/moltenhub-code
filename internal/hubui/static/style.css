@@ -3805,6 +3805,8 @@ html.dark {
     inset 0 1px 0 rgba(255, 255, 255, 0.03),
     0 0 0 3px rgba(76, 133, 233, 0.22);
   --agent-logo-filter: brightness(0) saturate(100%) invert(1);
+  --task-terminal-icon-filter: brightness(0) saturate(100%) invert(1);
+  --task-icon-shadow-filter: drop-shadow(0 0 1.1px rgba(0, 0, 0, 0.62));
   --shadow-sm: 0 10px 28px rgba(4, 11, 27, 0.38);
   --shadow-md: 0 18px 44px rgba(4, 11, 27, 0.5);
   --shadow-lg: 0 28px 72px rgba(4, 11, 27, 0.62);
@@ -3946,6 +3948,8 @@ html.night {
     inset 0 1px 0 rgba(255, 255, 255, 0.025),
     0 0 0 3px rgba(76, 133, 233, 0.22);
   --agent-logo-filter: brightness(0) saturate(100%) invert(1);
+  --task-terminal-icon-filter: brightness(0) saturate(100%) invert(1);
+  --task-icon-shadow-filter: drop-shadow(0 0 1.2px rgba(0, 0, 0, 0.68));
   --shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.46);
   --shadow-md: 0 18px 44px rgba(0, 0, 0, 0.58);
   --shadow-lg: 0 28px 72px rgba(0, 0, 0, 0.7);

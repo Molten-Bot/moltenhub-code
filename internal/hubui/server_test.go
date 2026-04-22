@@ -991,8 +991,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "body.className = \"task-body\";") {
 		t.Fatalf("expected index html to render a task body container alongside the PR link rail")
 	}
-	if strings.Contains(markup, "topActions.appendChild(prLink);") {
-		t.Fatalf("expected index html to place task PR links in the right-side rail instead of top actions")
+	if !strings.Contains(markup, "const inlineHistoryActions = historyView && showTaskSideActions;") ||
+		!strings.Contains(markup, "topActions.appendChild(prLink);") {
+		t.Fatalf("expected index html to allow history-mode cards to place PR links inline before close")
 	}
 	if !strings.Contains(markup, "async function copyTextToClipboard(value, buttonNode, options = {}) {") ||
 		!strings.Contains(markup, "const preserveContents = Boolean(options && options.preserveContents);") ||
