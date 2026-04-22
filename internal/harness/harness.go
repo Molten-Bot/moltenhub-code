@@ -333,7 +333,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 			agentStage,
 			len(repos) > 1,
 		); err != nil {
-			return h.fail(exitCode, stage, err, runDir)
+			return h.failWithRepos(exitCode, stage, err, runDir, repos)
 		}
 	}
 
@@ -1594,6 +1594,13 @@ func buildResult(runDir string, repos []repoWorkspace, noChanges bool) Result {
 	return res
 }
 
+func buildFailureResult(exitCode int, stage string, err error, runDir string, repos []repoWorkspace) Result {
+	res := buildResult(runDir, repos, false)
+	res.ExitCode = exitCode
+	res.Err = fmt.Errorf("%s: %w", stage, err)
+	return res
+}
+
 func codexTargetLabel(targetSubdir string, multiRepo bool) string {
 	if multiRepo {
 		return "workspace"
@@ -1890,6 +1897,11 @@ func repoDirSlug(repoURL string) string {
 func (h Harness) fail(exitCode int, stage string, err error, runDir string) Result {
 	h.logf("stage=%s status=error err=%q", stage, err)
 	return Result{ExitCode: exitCode, Err: fmt.Errorf("%s: %w", stage, err), WorkspaceDir: runDir}
+}
+
+func (h Harness) failWithRepos(exitCode int, stage string, err error, runDir string, repos []repoWorkspace) Result {
+	h.logf("stage=%s status=error err=%q", stage, err)
+	return buildFailureResult(exitCode, stage, err, runDir, repos)
 }
 
 func (h Harness) logf(format string, args ...any) {

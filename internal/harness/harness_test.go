@@ -1599,6 +1599,15 @@ func TestRunFailedChecksWithNoRemediationChangesFails(t *testing.T) {
 	if !strings.Contains(res.Err.Error(), "no remediation changes") {
 		t.Fatalf("error = %v", res.Err)
 	}
+	if res.PRURL != prURL {
+		t.Fatalf("PRURL = %q, want %q", res.PRURL, prURL)
+	}
+	if len(res.RepoResults) != 1 {
+		t.Fatalf("RepoResults len = %d, want 1", len(res.RepoResults))
+	}
+	if got := res.RepoResults[0].PRURL; got != prURL {
+		t.Fatalf("RepoResults[0].PRURL = %q, want %q", got, prURL)
+	}
 	if len(fake.exps) != 0 {
 		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
 	}
