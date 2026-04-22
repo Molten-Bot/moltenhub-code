@@ -985,26 +985,18 @@
       const status = normalizedTaskStatus(task?.status) || "pending";
       const statusLabel = taskStatusLabel(status);
       const badge = document.createElement("span");
-      badge.className = `badge badge-with-icon ${statusClass(status)}`;
+      badge.className = `badge badge-icon ${statusClass(status)}`;
 
       if (status === "running" || status === "active") {
         badge.title = "Running: task is actively executing.";
         badge.setAttribute("aria-label", "Running: task is actively executing.");
         badge.appendChild(createTaskActionIcon("loader"));
-        const label = document.createElement("span");
-        label.className = "badge-label";
-        label.textContent = statusLabel;
-        badge.appendChild(label);
         return badge;
       }
 
       badge.title = `Status: ${statusLabel}.`;
       badge.setAttribute("aria-label", `Status: ${statusLabel}.`);
       badge.appendChild(createTaskStatusIcon(status));
-      const label = document.createElement("span");
-      label.className = "badge-label";
-      label.textContent = statusLabel;
-      badge.appendChild(label);
       return badge;
     }
 

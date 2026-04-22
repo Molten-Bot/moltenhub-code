@@ -2100,40 +2100,34 @@ select.prompt-control {
 }
 
 .badge {
-  font-size: 0.64rem;
-  letter-spacing: 0.06em;
-  font-weight: 800;
-  text-transform: uppercase;
-  border-radius: 999px;
-  padding: 4px 8px;
-  color: #fff;
-  background: var(--surface-badge-default);
-}
-
-.badge-with-icon {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.badge-label {
-  line-height: 1;
-}
-
-.badge-icon {
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--surface-badge-default);
+  border: 1px solid color-mix(in srgb, #fff 28%, transparent);
+}
+
+.badge-icon {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
 }
 
 .task-status-glyph {
-  width: 11px;
-  height: 11px;
-  flex: 0 0 11px;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
   display: block;
   object-fit: contain;
   pointer-events: none;
@@ -2142,24 +2136,14 @@ select.prompt-control {
   filter: var(--task-icon-shadow-filter);
 }
 
-.badge-with-icon .task-action-glyph {
-  width: 11px;
-  height: 11px;
-}
-
-.badge-with-icon .task-action-glyph-loader {
-  width: 12px;
-  height: 12px;
-}
-
-.badge-icon .task-action-glyph {
-  width: 13px;
-  height: 13px;
-}
-
-.badge-icon .task-action-glyph-loader {
+.badge .task-action-glyph {
   width: 14px;
   height: 14px;
+}
+
+.badge .task-action-glyph-loader {
+  width: 15px;
+  height: 15px;
 }
 
 .badge.running,
