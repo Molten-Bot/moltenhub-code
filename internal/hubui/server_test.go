@@ -466,7 +466,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `"task-closing"`) {
 		t.Fatalf("expected index html to include task closing class usage")
 	}
-	if !strings.Contains(markup, `"task-rerun"`) {
+	if !strings.Contains(markup, `"task-rerun task-icon-button"`) && !strings.Contains(markup, `"task-rerun"`) {
 		t.Fatalf("expected index html to include task rerun class usage")
 	}
 	if !strings.Contains(markup, "function dismissTask(") {
@@ -540,6 +540,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "const TERMINAL_LOGO_URL = \"https://molten.bot/logos/terminal.svg\";") {
 		t.Fatalf("expected index html to include the terminal logo asset for task clone controls")
+	}
+	if !strings.Contains(markup, "const TASK_CLONE_ICON_URL = \"/static/logos/task-clone.svg\";") {
+		t.Fatalf("expected index html to include a dedicated clone icon asset")
 	}
 	if !strings.Contains(markup, "function openTaskOutput(") {
 		t.Fatalf("expected index html to include focused task output opener")
@@ -973,7 +976,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to size task PR links inline to avoid task-height expansion when css is stale")
 	}
 	if !strings.Contains(markup, "cloneButton.className = \"task-copy-link\";") ||
-		!strings.Contains(markup, "cloneLogo.src = TERMINAL_LOGO_URL;") ||
+		!strings.Contains(markup, "cloneLogo.src = TASK_CLONE_ICON_URL;") ||
 		!strings.Contains(markup, "void copyTaskCloneCommand(task, cloneButton);") {
 		t.Fatalf("expected index html to render a terminal icon button that copies the branch clone command")
 	}
@@ -991,8 +994,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "body.className = \"task-body\";") {
 		t.Fatalf("expected index html to render a task body container alongside the PR link rail")
 	}
-	if strings.Contains(markup, "topActions.appendChild(prLink);") {
-		t.Fatalf("expected index html to place task PR links in the right-side rail instead of top actions")
+	if !strings.Contains(markup, "const inlineHistoryActions = historyView && showTaskSideActions;") ||
+		!strings.Contains(markup, "topActions.appendChild(prLink);") {
+		t.Fatalf("expected index html to allow history-mode cards to place PR links inline before close")
 	}
 	if !strings.Contains(markup, "async function copyTextToClipboard(value, buttonNode, options = {}) {") ||
 		!strings.Contains(markup, "const preserveContents = Boolean(options && options.preserveContents);") ||
@@ -1492,7 +1496,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `pauseRun.appendChild(createTaskActionIcon(canRun ? "play" : "pause"));`) {
 		t.Fatalf("expected index html to render task pause/run icon control from backend capabilities")
 	}
-	if !strings.Contains(markup, `outputToggle.appendChild(createTaskActionIcon("terminal"));`) ||
+	if !strings.Contains(markup, `outputToggle.appendChild(createTaskActionIcon("output"));`) ||
 		!strings.Contains(markup, `outputToggle.title = "Open task output terminal logs.";`) {
 		t.Fatalf("expected index html to render terminal output icon control with descriptive tooltip")
 	}
@@ -1502,9 +1506,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `stop.appendChild(createTaskActionIcon("stop"));`) {
 		t.Fatalf("expected index html to render task stop icon control")
 	}
-	if !strings.Contains(markup, `badge.appendChild(createTaskActionIcon("gear"));`) ||
+	if !strings.Contains(markup, `badge.appendChild(createTaskActionIcon("loader"));`) ||
 		!strings.Contains(markup, `badge.title = "Running: task is actively executing.";`) {
-		t.Fatalf("expected index html to render running badge gear icon with descriptive tooltip")
+		t.Fatalf("expected index html to render running badge loader icon with descriptive tooltip")
 	}
 	if !strings.Contains(markup, `close.textContent = "X";`) {
 		t.Fatalf("expected index html to render task close icon control")

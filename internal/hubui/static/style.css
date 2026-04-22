@@ -154,7 +154,10 @@
   --theme-button-focus:
     inset 0 1px 0 rgba(255, 255, 255, 0.82),
     0 0 0 3px rgba(76, 133, 233, 0.18);
+  --task-icon-contrast-filter: brightness(0) saturate(100%);
   --agent-logo-filter: brightness(0) saturate(100%);
+  --task-terminal-icon-filter: var(--task-icon-contrast-filter);
+  --task-icon-shadow-filter: drop-shadow(0 0 0.85px rgba(11, 23, 43, 0.38));
   --body-radial-left: radial-gradient(1300px 600px at -10% -15%, rgba(10, 132, 255, 0.16), transparent 60%);
   --body-radial-right: radial-gradient(980px 560px at 110% 8%, rgba(123, 97, 255, 0.12), transparent 62%);
   --body-linear: linear-gradient(180deg, #f8fbff, #f2f7ff 55%, #ecf3ff);
@@ -1577,37 +1580,38 @@ select.prompt-control {
   shape-rendering: geometricPrecision;
 }
 
-.task-action-icon {
+.task-action-glyph {
+  width: 16px;
+  height: 16px;
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  filter: var(--task-icon-contrast-filter) var(--task-icon-shadow-filter);
+}
+
+.task-action-glyph-play,
+.task-action-glyph-pause {
   width: 14px;
   height: 14px;
-  display: block;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  pointer-events: none;
-  vector-effect: non-scaling-stroke;
-  shape-rendering: geometricPrecision;
 }
 
-.task-action-icon-terminal {
-  stroke-width: 1.95;
+.task-action-glyph-stop {
+  width: 20px;
+  height: 20px;
 }
 
-.task-action-icon-stop {
-  stroke-width: 1.78;
-}
-
-.task-action-icon-gear {
-  stroke-width: 1.95;
+.task-action-glyph-loader {
+  width: 14px;
+  height: 14px;
 }
 
 .task-icon-button {
-  width: 26px;
-  min-width: 26px;
-  height: 26px;
-  min-height: 26px;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -1888,8 +1892,8 @@ select.prompt-control {
 }
 
 .task.active {
-  border-color: rgba(10, 132, 255, 0.34);
-  box-shadow: inset 0 0 0 1px rgba(10, 132, 255, 0.12), var(--shadow-md);
+  border-color: rgba(10, 132, 255, 0.2);
+  box-shadow: var(--shadow-sm);
 }
 
 .task.task-collapsed {
@@ -1980,33 +1984,33 @@ select.prompt-control {
 }
 
 .task-control-toggle {
-  border: 1px solid rgba(245, 158, 11, 0.22);
-  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid color-mix(in srgb, var(--surface-warning) 44%, var(--border));
+  background: color-mix(in srgb, var(--surface-warning) 28%, var(--surface-task-button-bg));
   color: var(--surface-warning);
 }
 
 .task-control-toggle.task-control-run {
-  border-color: rgba(10, 132, 255, 0.24);
-  background: rgba(10, 132, 255, 0.11);
+  border-color: color-mix(in srgb, var(--running) 52%, var(--border));
+  background: color-mix(in srgb, var(--running) 30%, var(--surface-task-button-bg));
   color: var(--running);
 }
 
 .task-control-toggle.task-control-force {
-  border-color: color-mix(in srgb, var(--accent) 28%, rgba(123, 97, 255, 0.22));
-  background: color-mix(in srgb, var(--accent) 14%, rgba(123, 97, 255, 0.09));
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+  background: color-mix(in srgb, var(--accent) 28%, var(--surface-task-button-bg));
   color: var(--accent);
 }
 
 .task-control-toggle.task-control-pause {
-  border-color: rgba(245, 158, 11, 0.26);
-  background: rgba(245, 158, 11, 0.11);
+  border-color: color-mix(in srgb, var(--surface-warning) 52%, var(--border));
+  background: color-mix(in srgb, var(--surface-warning) 30%, var(--surface-task-button-bg));
   color: var(--surface-warning);
 }
 
 .task-stop {
-  border: 1px solid rgba(239, 68, 68, 0.18);
-  background: rgba(239, 68, 68, 0.08);
-  color: var(--surface-danger);
+  border: 1px solid color-mix(in srgb, var(--surface-danger) 36%, var(--border));
+  background: color-mix(in srgb, var(--surface-danger) 16%, var(--surface-task-button-bg));
+  color: color-mix(in srgb, var(--surface-danger) 74%, var(--text-soft));
 }
 
 .task-close:hover,
@@ -2024,6 +2028,31 @@ select.prompt-control {
   letter-spacing: 0.05em;
   text-transform: uppercase;
   transition: border-color 0.12s ease, color 0.12s ease, transform 0.12s ease, opacity 0.12s ease, box-shadow 0.12s ease;
+}
+
+.task-output-toggle.task-icon-button,
+.task-rerun.task-icon-button,
+.task-control-toggle.task-icon-button,
+.task-stop.task-icon-button {
+  padding: 0;
+}
+
+.task-rerun.task-icon-button,
+.task-output-toggle.task-icon-button {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+}
+
+.task-rerun.task-icon-button .task-action-glyph {
+  width: 19px;
+  height: 19px;
+}
+
+.task-output-toggle.task-icon-button .task-action-glyph {
+  width: 21px;
+  height: 21px;
 }
 
 .task-side-actions {
@@ -2052,12 +2081,12 @@ select.prompt-control {
 }
 
 .task-pr-link-inline {
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
-  border-radius: 10px;
-  padding: 5px;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 12px;
+  padding: 7px;
 }
 
 .task-copy-link img,
@@ -2067,6 +2096,10 @@ select.prompt-control {
   height: 100%;
   object-fit: contain;
   filter: var(--agent-logo-filter);
+}
+
+.task-copy-link img.task-clone-logo {
+  filter: var(--task-icon-contrast-filter) var(--task-icon-shadow-filter);
 }
 
 .task-copy-link:hover,
@@ -2090,34 +2123,58 @@ select.prompt-control {
 }
 
 .badge {
-  font-size: 0.64rem;
-  letter-spacing: 0.06em;
-  font-weight: 800;
-  text-transform: uppercase;
-  border-radius: 999px;
-  padding: 4px 8px;
-  color: #fff;
-  background: var(--surface-badge-default);
-}
-
-.badge-icon {
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--surface-badge-default);
+  border: 1px solid color-mix(in srgb, #fff 28%, transparent);
 }
 
-.badge-icon .task-action-icon {
-  width: 13px;
-  height: 13px;
+.badge-icon {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
 }
 
-.badge-icon .task-action-icon-gear {
+.task-status-glyph {
   width: 14px;
   height: 14px;
+  flex: 0 0 14px;
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  filter: var(--task-icon-contrast-filter) var(--task-icon-shadow-filter);
+}
+
+.badge .task-action-glyph {
+  width: 14px;
+  height: 14px;
+}
+
+.badge .task-action-glyph-loader {
+  width: 16px;
+  height: 16px;
+}
+
+.badge.running .task-action-glyph-loader,
+.badge.active .task-action-glyph-loader {
+  animation: taskRunningSpinner 920ms linear infinite;
+  transform-origin: center;
+  will-change: transform;
+  filter: var(--task-icon-contrast-filter);
 }
 
 .badge.running,
@@ -2150,10 +2207,8 @@ select.prompt-control {
   background: var(--bad);
 }
 
-.task-icons-idle-spin .task-icon-rotatable {
+.task-icons-idle-spin .task-action-glyph-loader {
   animation: taskIconIdleSpin 16s linear infinite;
-  transform-origin: center;
-  transform-box: fill-box;
 }
 
 .task-sparklet {
@@ -2174,8 +2229,23 @@ select.prompt-control {
   }
 }
 
+@keyframes taskRunningSpinner {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .task-icons-idle-spin .task-icon-rotatable {
+  .badge.running .task-action-glyph-loader,
+  .badge.active .task-action-glyph-loader {
+    animation: none;
+  }
+
+  .task-icons-idle-spin .task-action-glyph-loader {
     animation: none;
   }
 }
@@ -3764,7 +3834,10 @@ html.dark {
   --theme-button-focus:
     inset 0 1px 0 rgba(255, 255, 255, 0.03),
     0 0 0 3px rgba(76, 133, 233, 0.22);
+  --task-icon-contrast-filter: brightness(0) saturate(100%) invert(1);
   --agent-logo-filter: brightness(0) saturate(100%) invert(1);
+  --task-terminal-icon-filter: var(--task-icon-contrast-filter);
+  --task-icon-shadow-filter: drop-shadow(0 0 1.1px rgba(0, 0, 0, 0.62));
   --shadow-sm: 0 10px 28px rgba(4, 11, 27, 0.38);
   --shadow-md: 0 18px 44px rgba(4, 11, 27, 0.5);
   --shadow-lg: 0 28px 72px rgba(4, 11, 27, 0.62);
@@ -3905,7 +3978,10 @@ html.night {
   --theme-button-focus:
     inset 0 1px 0 rgba(255, 255, 255, 0.025),
     0 0 0 3px rgba(76, 133, 233, 0.22);
+  --task-icon-contrast-filter: brightness(0) saturate(100%) invert(1);
   --agent-logo-filter: brightness(0) saturate(100%) invert(1);
+  --task-terminal-icon-filter: var(--task-icon-contrast-filter);
+  --task-icon-shadow-filter: drop-shadow(0 0 1.2px rgba(0, 0, 0, 0.68));
   --shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.46);
   --shadow-md: 0 18px 44px rgba(0, 0, 0, 0.58);
   --shadow-lg: 0 28px 72px rgba(0, 0, 0, 0.7);
@@ -3928,7 +4004,7 @@ html[data-hover-mode="on"] .task:not(.task-closing) {
 }
 
 html[data-hover-mode="on"] .task:not(.task-closing) {
-  border-color: color-mix(in srgb, var(--running) 34%, var(--border));
+  border-color: color-mix(in srgb, var(--running) 20%, var(--border));
   box-shadow: var(--shadow-md);
 }
 
