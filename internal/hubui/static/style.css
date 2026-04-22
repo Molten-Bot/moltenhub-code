@@ -1585,6 +1585,18 @@ select.prompt-control {
   pointer-events: none;
 }
 
+.task-action-icon-terminal {
+  stroke-width: 1.72;
+}
+
+.task-action-icon-stop {
+  stroke-width: 1.58;
+}
+
+.task-action-icon-gear {
+  stroke-width: 1.78;
+}
+
 .task-icon-button {
   width: 26px;
   min-width: 26px;
@@ -2095,6 +2107,11 @@ select.prompt-control {
 .badge-icon .task-action-icon {
   width: 13px;
   height: 13px;
+}
+
+.badge-icon .task-action-icon-gear {
+  width: 14px;
+  height: 14px;
 }
 
 .badge.running,

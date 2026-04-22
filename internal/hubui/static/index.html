@@ -926,16 +926,19 @@
 
     function createTaskActionIcon(type) {
       const svg = document.createElementNS(SVG_NS, "svg");
-      svg.className = "task-action-icon task-icon-rotatable";
       svg.setAttribute("viewBox", "0 0 24 24");
       svg.setAttribute("aria-hidden", "true");
       svg.setAttribute("focusable", "false");
-      const iconType = String(type || "").trim().toLowerCase();
+      const rawType = String(type || "").trim().toLowerCase();
+      const iconType = rawType === "" ? "gear" : rawType;
+      const iconClass = iconType.replace(/[^a-z0-9_-]+/g, "-") || "default";
+      svg.className = `task-action-icon task-action-icon-${iconClass}`;
 
       if (iconType === "terminal") {
-        appendTaskIconPath(svg, "M4.5 5.25h15a2.25 2.25 0 0 1 2.25 2.25v9a2.25 2.25 0 0 1-2.25 2.25h-15A2.25 2.25 0 0 1 2.25 16.5v-9A2.25 2.25 0 0 1 4.5 5.25Z");
-        appendTaskIconPath(svg, "M6.6 9.1 9.8 12 6.6 14.9");
-        appendTaskIconPath(svg, "M11.4 14.9h5.2");
+        appendTaskIconPath(svg, "M4.4 5.6h15.2a1.8 1.8 0 0 1 1.8 1.8v9.2a1.8 1.8 0 0 1-1.8 1.8H4.4a1.8 1.8 0 0 1-1.8-1.8V7.4a1.8 1.8 0 0 1 1.8-1.8Z");
+        appendTaskIconPath(svg, "M2.8 9.4h18.4");
+        appendTaskIconPath(svg, "M6.9 11.4 9.9 13.4 6.9 15.4");
+        appendTaskIconPath(svg, "M11.3 15.4h5.1");
         return svg;
       }
 
@@ -951,14 +954,16 @@
       }
 
       if (iconType === "stop") {
-        appendTaskIconPath(svg, "M8.3 8.3h7.4v7.4h-7.4z", { fill: "currentColor", stroke: "none" });
+        appendTaskIconPath(svg, "M9.1 3.5h5.8L19 7.6v5.8l-4.1 4.1H9.1L5 13.4V7.6z");
+        appendTaskIconPath(svg, "M9.9 9.9h4.2v4.2H9.9z", { fill: "currentColor", stroke: "none" });
         return svg;
       }
 
-      if (iconType === "gear" || iconType === "") {
-        appendTaskIconCircle(svg, 12, 12, 3.7);
-        appendTaskIconPath(svg, "M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4");
-        appendTaskIconPath(svg, "M5.8 5.8l1.7 1.7M16.5 16.5l1.7 1.7M18.2 5.8l-1.7 1.7M7.5 16.5l-1.7 1.7");
+      if (iconType === "gear") {
+        svg.classList.add("task-icon-rotatable");
+        appendTaskIconPath(svg, "M19.4 8.8A8 8 0 1 0 20 12");
+        appendTaskIconPath(svg, "M19.4 4.9v3.9h-3.9");
+        appendTaskIconPath(svg, "M12 8.4v3.6l2.5 1.6");
         return svg;
       }
 
