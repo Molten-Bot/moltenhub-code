@@ -2214,7 +2214,11 @@ select.prompt-control {
   color: #fff;
 }
 
-.badge.stopped,
+.badge.stopped {
+  background: color-mix(in srgb, var(--surface-badge-idle) 82%, #5f7395);
+  color: #fff;
+}
+
 .badge.error,
 .badge.invalid {
   background: var(--bad);
@@ -2494,6 +2498,11 @@ select.prompt-control {
 .task-result.duplicate {
   color: var(--surface-warning);
   background: rgba(245, 158, 11, 0.1);
+}
+
+.task-result.stopped {
+  color: var(--surface-badge-idle);
+  background: rgba(113, 136, 177, 0.13);
 }
 
 .task-result.error,

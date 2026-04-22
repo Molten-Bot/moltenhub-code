@@ -520,6 +520,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `stop: "circle-stop"`) {
 		t.Fatalf("expected index html to map stop actions to the circle-stop glyph")
 	}
+	if !strings.Contains(markup, `if (status === "stopped") {`) || !strings.Contains(markup, `if (status === "error" || status === "invalid") {`) {
+		t.Fatalf("expected index html to separate stopped status icon handling from error/invalid handling")
+	}
+	if strings.Contains(markup, `status === "error" || status === "invalid" || status === "duplicate" || status === "stopped"`) || !strings.Contains(markup, `status === "error" || status === "invalid" || status === "duplicate"`) {
+		t.Fatalf("expected index html to avoid playing the error sound for user-stopped tasks")
+	}
 	if !strings.Contains(markup, "function taskProgressStepIconURL(") {
 		t.Fatalf("expected index html to include task progress icon URL resolver")
 	}
@@ -1859,6 +1865,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, "filter: brightness(0) saturate(100%);") || !strings.Contains(css, ".task-progress-step.has-icon {\n  background: color-mix(in srgb, var(--surface-progress-step) 92%, var(--surface-task-button-bg));\n  border: 1px solid rgba(113, 136, 177, 0.32);\n}") || !strings.Contains(css, ".task-progress-step-icon {\n  width: 16px;\n  height: 16px;") || !strings.Contains(css, ".task-progress-step.current .task-progress-step-icon {\n  width: 16px;\n  height: 16px;\n  opacity: 1;\n}") || !strings.Contains(css, ".task-progress-step.current .task-progress-step-glyph {\n  width: 16px;\n  height: 16px;\n  opacity: 1;\n}") {
 		t.Fatalf("expected stylesheet to render consistently sized progress icons with muted idle and emphasized active states")
+	}
+	if !strings.Contains(css, ".badge.stopped {\n  background: color-mix(in srgb, var(--surface-badge-idle) 82%, #5f7395);\n  color: #fff;\n}") || !strings.Contains(css, ".task-result.stopped {\n  color: var(--surface-badge-idle);\n  background: rgba(113, 136, 177, 0.13);\n}") {
+		t.Fatalf("expected stylesheet to distinguish user-stopped task visuals from hard error states")
 	}
 	if !strings.Contains(css, ".task-action-glyph-stop {\n  width: 14px;\n  height: 14px;\n}") || !strings.Contains(css, ".task-control-toggle.task-icon-button,\n.task-stop.task-icon-button {\n  width: 34px;\n  min-width: 34px;\n  height: 34px;\n  min-height: 34px;\n}") {
 		t.Fatalf("expected stylesheet to align stop control icon and button sizing with other task icon controls")

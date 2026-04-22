@@ -758,6 +758,7 @@
     const TASK_STATUS_ICON_NAMES = Object.freeze({
       completed: "circle-check",
       warning: "triangle-alert",
+      stopped: "circle-stop",
       error: "circle-alert",
       pending: "clock-3",
       default: "clock-3",
@@ -951,10 +952,13 @@
       if (status === "completed") {
         return "completed";
       }
+      if (status === "stopped") {
+        return "stopped";
+      }
       if (status === "no_changes" || status === "duplicate" || status === "paused") {
         return "warning";
       }
-      if (status === "stopped" || status === "error" || status === "invalid") {
+      if (status === "error" || status === "invalid") {
         return "error";
       }
       return "pending";
@@ -5275,7 +5279,7 @@
       if (status === "completed" || status === "no_changes") {
         return "success";
       }
-      if (status === "error" || status === "invalid" || status === "duplicate" || status === "stopped") {
+      if (status === "error" || status === "invalid" || status === "duplicate") {
         return "error";
       }
       return "";
