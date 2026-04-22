@@ -709,15 +709,22 @@
     const HUB_DASHBOARD_URL = "https://app.molten.bot/hub";
     const GOOGLE_ANALYTICS_MEASUREMENT_ID = "G-BY33RFG2WB";
     const COMPLETED_STATUSES = new Set(["completed", "no_changes", "error", "invalid", "duplicate", "stopped"]);
-    const TASK_PROGRESS_STEPS = [
-      { id: "received", label: "Task Received", detail: "Dispatch accepted by hub.", icon: "task_received" },
-      { id: "run", label: "Run Started", detail: "Harness run initialized.", icon: "run_started" },
-      { id: "prepare", label: "Local Prep", detail: "Local auth and workspace conditioning.", icon: "local_prepare" },
-      { id: "clone", label: "Git Clone", detail: "Repository clone and branch setup.", icon: "git_clone" },
-      { id: "workflow", label: "GitHub Prep", detail: "Publish strategy and fork fallback setup.", icon: "git_workflow" },
-      { id: "agent", label: "Agent", detail: "Agent execution in progress.", icon: "agent_run" },
-      { id: "finalize", label: "Finalize", detail: "Commit, PR, and checks.", icon: "github" },
-    ];
+    const TASK_PROGRESS_PREP_STAGES = new Set(["preflight", "auth", "workspace", "config", "submit", "dispatch"]);
+    const TASK_PROGRESS_AGENT_STAGES = new Set(["codex", "claude", "auggie", "pi", "augment", "agent", "review"]);
+    const TASK_PROGRESS_STEP_DEFS = Object.freeze({
+      entry_local: { id: "entry_local", label: "Local Submit", detail: "Queued from this runtime.", icon: "entry_local" },
+      entry_hub: { id: "entry_hub", label: "Hub Dispatch", detail: "Queued by Molten Hub.", icon: "entry_hub" },
+      prepare: { id: "prepare", label: "Prepare", detail: "Local auth and workspace conditioning.", icon: "prepare" },
+      clone: { id: "clone", label: "Clone", detail: "Repository clone and sync.", icon: "clone" },
+      branch: { id: "branch", label: "Branch", detail: "Branch selection or creation.", icon: "branch" },
+      publish: { id: "publish", label: "Publish Prep", detail: "Remote publish strategy and access checks.", icon: "publish" },
+      fork: { id: "fork", label: "Fork Fallback", detail: "Fork route prepared for public repo publishing.", icon: "fork" },
+      agent: { id: "agent", label: "Agent Run", detail: "Agent execution in progress.", icon: "agent" },
+      commit: { id: "commit", label: "Commit", detail: "Git commit and push synchronization.", icon: "commit" },
+      pr: { id: "pr", label: "Pull Request", detail: "Pull request lookup or creation.", icon: "pr" },
+      checks: { id: "checks", label: "Checks", detail: "PR checks and remediation loop.", icon: "checks" },
+      finalize: { id: "finalize", label: "Finalize", detail: "Final task status and PR linkage.", icon: "github" },
+    });
     const AGENT_LOGO_URLS = Object.freeze({
       codex: "/static/logos/codex-cli.svg",
       claude: "/static/logos/claude-code.svg",
@@ -756,12 +763,17 @@
       default: "clock-3",
     });
     const TASK_PROGRESS_ICON_NAMES = Object.freeze({
-      task_received: "inbox",
-      run_started: "play",
-      local_prepare: "wrench",
-      git_clone: "git-branch-plus",
-      git_workflow: "git-fork",
-      agent_run: "bot",
+      entry_local: "laptop",
+      entry_hub: "satellite-dish",
+      prepare: "wrench",
+      clone: "git-branch-plus",
+      branch: "git-branch",
+      publish: "upload",
+      fork: "git-fork",
+      agent: "bot",
+      commit: "git-commit-horizontal",
+      pr: "git-pull-request",
+      checks: "shield-check",
     });
     const CLAUDE_POST_SUBMIT_VERIFY_INTERVAL_MS = 1200;
     const CLAUDE_POST_SUBMIT_VERIFY_MAX_ATTEMPTS = 25;
@@ -905,12 +917,19 @@
       if (iconKey === "agent") {
         return taskAgentLogoURL(task);
       }
+      if (iconKey === "moltenhub" || iconKey === "fallback") {
+        return MOLTENHUB_LOGO_URL;
+      }
       return "";
     }
 
     function taskProgressStepIconName(step) {
       const iconKey = String(step?.icon || "").trim().toLowerCase();
       return TASK_PROGRESS_ICON_NAMES[iconKey] || "";
+    }
+
+    function taskProgressFallbackIconURL() {
+      return MOLTENHUB_LOGO_URL;
     }
 
     function createTaskActionIcon(type) {
@@ -1460,6 +1479,7 @@
       taskControlInFlight: new Set(),
       taskIconStateSignatures: new Map(),
       taskIconStateChangedAt: new Map(),
+      taskProgressModelCache: new Map(),
       sparkleTaskIDs: new Set(),
       sparkleTimers: new Map(),
       taskDisplayOrder: [],
@@ -6102,42 +6122,250 @@
       return displayTasks(snapshot);
     }
 
-    function taskProgressIndex(task) {
+    function taskProgressEntryStepID(task) {
+      const requestID = String(task?.request_id || "").trim().toLowerCase();
+      if (requestID.startsWith("local-")) {
+        return "entry_local";
+      }
+      if (requestID.startsWith("req-") || requestID.startsWith("hub-")) {
+        return "entry_hub";
+      }
+      return "entry_hub";
+    }
+
+    function parseTaskProgressField(line, key) {
+      const source = String(line || "");
+      const field = String(key || "").trim();
+      if (!source || !field) {
+        return "";
+      }
+      const pattern = new RegExp(`(?:^|\\s)${field}=((?:\"(?:\\\\.|[^\"])*\")|[^\\s]+)`);
+      const match = source.match(pattern);
+      if (!match || !match[1]) {
+        return "";
+      }
+      const token = String(match[1]).trim();
+      if (token.startsWith("\"") && token.endsWith("\"")) {
+        try {
+          return String(JSON.parse(token)).trim();
+        } catch (_err) {
+          return token.slice(1, -1).trim();
+        }
+      }
+      return token;
+    }
+
+    function taskProgressSignals(task) {
+      const signals = {
+        stages: new Set(),
+        hasWorkflowSeen: false,
+        hasForkFallback: false,
+        hasAgentSeen: false,
+        hasBranchSeen: false,
+        hasCommitSeen: false,
+        hasPublishGitSeen: false,
+        hasPRSeen: false,
+        hasChecksSeen: false,
+      };
+
+      const logs = Array.isArray(task?.logs) ? task.logs : [];
+      for (let i = 0; i < logs.length; i += 1) {
+        const line = String(logs[i]?.text || "").trim();
+        if (!line || !line.includes("stage=")) {
+          continue;
+        }
+        const stage = String(parseTaskProgressField(line, "stage") || "").trim().toLowerCase();
+        if (!stage) {
+          continue;
+        }
+        signals.stages.add(stage);
+        if (stage === "workflow") {
+          signals.hasWorkflowSeen = true;
+        }
+        if (stage === "pr") {
+          signals.hasPRSeen = true;
+        }
+        if (stage === "checks") {
+          signals.hasChecksSeen = true;
+        }
+        if (TASK_PROGRESS_AGENT_STAGES.has(stage)) {
+          signals.hasAgentSeen = true;
+        }
+        if (stage === "git") {
+          const gitAction = String(parseTaskProgressField(line, "action") || "").trim().toLowerCase();
+          if (gitAction === "branch" || gitAction === "branch_reuse") {
+            signals.hasBranchSeen = true;
+          }
+          if (gitAction.includes("commit")) {
+            signals.hasCommitSeen = true;
+          }
+          if (gitAction === "probe_write_access" || gitAction === "push_sync") {
+            signals.hasPublishGitSeen = true;
+          }
+        }
+        if (stage === "workflow") {
+          const lower = line.toLowerCase();
+          const strategy = String(parseTaskProgressField(line, "strategy") || "").trim().toLowerCase();
+          const remote = String(parseTaskProgressField(line, "remote") || "").trim().toLowerCase();
+          const action = String(parseTaskProgressField(line, "action") || "").trim().toLowerCase();
+          if (
+            strategy === "fork-fallback" ||
+            remote === "fork" ||
+            action.includes("fork") ||
+            lower.includes("reason=direct_write_unavailable") ||
+            lower.includes("strategy=fork-fallback") ||
+            lower.includes("remote=fork")
+          ) {
+            signals.hasForkFallback = true;
+          }
+        }
+      }
+
+      const currentStage = String(task?.stage || "").trim().toLowerCase();
+      if (currentStage) {
+        signals.stages.add(currentStage);
+        if (currentStage === "workflow") {
+          signals.hasWorkflowSeen = true;
+        }
+        if (TASK_PROGRESS_AGENT_STAGES.has(currentStage)) {
+          signals.hasAgentSeen = true;
+        }
+        if (currentStage === "pr") {
+          signals.hasPRSeen = true;
+        }
+        if (currentStage === "checks") {
+          signals.hasChecksSeen = true;
+        }
+      }
+      if (String(task?.pr_url || "").trim() !== "") {
+        signals.hasPRSeen = true;
+      }
+      return signals;
+    }
+
+    function taskProgressStepsForTask(task, signals) {
+      const status = normalizedTaskStatus(task?.status);
+      const entry = taskProgressEntryStepID(task);
+      const stepIDs = [entry, "prepare", "clone", "branch", "publish"];
+
+      if (signals.hasForkFallback) {
+        stepIDs.push("fork");
+      }
+
+      stepIDs.push("agent", "commit", "pr");
+      if (status !== "no_changes") {
+        stepIDs.push("checks");
+      }
+      stepIDs.push("finalize");
+
+      const unique = [];
+      const seen = new Set();
+      for (let i = 0; i < stepIDs.length; i += 1) {
+        const id = stepIDs[i];
+        if (seen.has(id)) {
+          continue;
+        }
+        const step = TASK_PROGRESS_STEP_DEFS[id];
+        if (!step) {
+          continue;
+        }
+        seen.add(id);
+        unique.push(step);
+      }
+      return unique;
+    }
+
+    function taskProgressCurrentStepID(task, signals) {
+      const status = normalizedTaskStatus(task?.status);
+      if (COMPLETED_STATUSES.has(status)) {
+        return "finalize";
+      }
+
+      const stage = String(task?.stage || "").trim().toLowerCase();
+      if (TASK_PROGRESS_PREP_STAGES.has(stage)) {
+        return "prepare";
+      }
+      if (stage === "clone") {
+        return "clone";
+      }
+      if (stage === "workflow") {
+        return signals.hasForkFallback ? "fork" : "publish";
+      }
+      if (TASK_PROGRESS_AGENT_STAGES.has(stage)) {
+        return "agent";
+      }
+      if (stage === "git") {
+        if (!signals.hasAgentSeen) {
+          if (signals.hasWorkflowSeen || signals.hasForkFallback || signals.hasPublishGitSeen) {
+            return signals.hasForkFallback ? "fork" : "publish";
+          }
+          return "branch";
+        }
+        return "commit";
+      }
+      if (stage === "pr") {
+        return "pr";
+      }
+      if (stage === "checks") {
+        return "checks";
+      }
+      if (stage === "finalize") {
+        return "finalize";
+      }
+      return taskProgressEntryStepID(task);
+    }
+
+    function buildTaskProgressModel(task) {
+      const signals = taskProgressSignals(task);
+      const steps = taskProgressStepsForTask(task, signals);
+      const currentStepID = taskProgressCurrentStepID(task, signals);
+      let index = steps.findIndex((step) => String(step?.id || "") === currentStepID);
+      if (index < 0) {
+        index = 0;
+      }
+      return { steps, index };
+    }
+
+    function taskProgressModelCacheKey(task) {
+      const logs = Array.isArray(task?.logs) ? task.logs : [];
+      const lastLog = logs.length > 0 ? logs[logs.length - 1] : null;
+      const tail = String(lastLog?.text || "").slice(0, 160);
+      return [
+        String(task?.updated_at || ""),
+        String(task?.stage || ""),
+        String(task?.stage_status || ""),
+        String(task?.status || ""),
+        String(task?.pr_url || ""),
+        String(logs.length),
+        tail,
+      ].join("|");
+    }
+
+    function taskProgressModel(task) {
       if (!task) {
-        return 0;
+        return { steps: [], index: 0 };
+      }
+      const requestID = String(task?.request_id || "").trim();
+      const key = taskProgressModelCacheKey(task);
+      if (requestID) {
+        const cached = state.taskProgressModelCache.get(requestID);
+        if (cached && cached.key === key) {
+          return cached.value;
+        }
       }
 
-      const stage = String(task.stage || "").toLowerCase();
-      const status = String(task.status || "").toLowerCase();
-      let index = 0;
+      const value = buildTaskProgressModel(task);
 
-      if (status === "running") {
-        index = 1;
+      if (requestID) {
+        state.taskProgressModelCache.set(requestID, { key, value });
+        if (state.taskProgressModelCache.size > 300) {
+          const oldest = state.taskProgressModelCache.keys().next();
+          if (!oldest.done) {
+            state.taskProgressModelCache.delete(oldest.value);
+          }
+        }
       }
-
-      if (stage === "preflight" || stage === "auth" || stage === "workspace" || stage === "config") {
-        index = Math.max(index, 2);
-      } else if (stage === "clone") {
-        index = Math.max(index, 3);
-      } else if (stage === "workflow") {
-        index = Math.max(index, 4);
-      } else if (
-        stage === "codex" ||
-        stage === "claude" ||
-        stage === "auggie" ||
-        stage === "pi" ||
-        stage === "augment" ||
-        stage === "agent"
-      ) {
-        index = Math.max(index, 5);
-      } else if (stage === "git" || stage === "pr" || stage === "checks" || stage === "finalize") {
-        index = Math.max(index, 6);
-      }
-
-      const max = TASK_PROGRESS_STEPS.length - 1;
-      if (index < 0) return 0;
-      if (index > max) return max;
-      return index;
+      return value;
     }
 
     function renderTaskProgress(task) {
@@ -6145,7 +6373,12 @@
         return null;
       }
 
-      const index = taskProgressIndex(task);
+      const model = taskProgressModel(task);
+      const stepsModel = Array.isArray(model?.steps) ? model.steps : [];
+      if (stepsModel.length === 0) {
+        return null;
+      }
+      const index = Number.isFinite(model?.index) ? model.index : 0;
       const progress = document.createElement("div");
       progress.className = "task-progress";
 
@@ -6157,8 +6390,8 @@
 
       const fill = document.createElement("div");
       fill.className = "task-progress-fill";
-      if (TASK_PROGRESS_STEPS.length > 1) {
-        fill.style.width = `${(index / (TASK_PROGRESS_STEPS.length - 1)) * 100}%`;
+      if (stepsModel.length > 1) {
+        fill.style.width = `${(index / (stepsModel.length - 1)) * 100}%`;
       } else {
         fill.style.width = "100%";
       }
@@ -6166,8 +6399,8 @@
 
       const steps = document.createElement("div");
       steps.className = "task-progress-steps";
-      for (let i = 0; i < TASK_PROGRESS_STEPS.length; i += 1) {
-        const step = TASK_PROGRESS_STEPS[i];
+      for (let i = 0; i < stepsModel.length; i += 1) {
+        const step = stepsModel[i];
         const marker = document.createElement("span");
         marker.className = "task-progress-step";
 
@@ -6195,6 +6428,13 @@
           icon.className = "task-progress-step-glyph";
           icon.setAttribute("data-lucide", iconName);
           icon.setAttribute("aria-hidden", "true");
+          marker.appendChild(icon);
+        } else {
+          marker.classList.add("has-icon");
+          const icon = document.createElement("img");
+          icon.className = "task-progress-step-icon";
+          icon.src = taskProgressFallbackIconURL();
+          icon.alt = `${step.label} logo`;
           marker.appendChild(icon);
         }
 
