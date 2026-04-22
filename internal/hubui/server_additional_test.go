@@ -644,7 +644,7 @@ func TestEmbeddedPromptActionStylesCoverPasteWidthAndStatusFade(t *testing.T) {
 
 	for _, want := range []string{
 		"flex: 0 1 var(--prompt-paste-width, 25%);",
-		"width: min(100%, var(--prompt-paste-width, 25%));",
+		"width: auto;",
 		"max-width: 50%;",
 		"flex: 1 1 0;",
 		"transition: opacity 220ms ease;",
@@ -1048,8 +1048,14 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".prompt-actions {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  min-width: 0;\n}") {
 		t.Fatalf("expected prompt actions to keep the status between screenshots and the right-aligned buttons")
 	}
-	if !strings.Contains(css, ".prompt-actions-start {\n  display: flex;\n  flex: 0 1 var(--prompt-paste-width, 25%);\n  width: min(100%, var(--prompt-paste-width, 25%));\n  max-width: 50%;\n  min-width: 0;\n}") {
-		t.Fatalf("expected prompt actions to keep the screenshot lane between 25%% and 50%% of the row")
+	if !strings.Contains(css, ".prompt-actions-start {\n  display: flex;\n  flex: 0 1 var(--prompt-paste-width, 25%);\n  width: auto;\n  max-width: 50%;\n  min-width: 0;\n}") {
+		t.Fatalf("expected prompt actions to keep screenshot lane flexible inside the row")
+	}
+	if !strings.Contains(css, "@media (max-width: 980px) {\n") ||
+		!strings.Contains(css, ".prompt-actions-start {\n    flex-basis: min(var(--prompt-paste-width, 25%), 22%);\n    max-width: 44%;\n  }\n") ||
+		!strings.Contains(css, "@media (max-width: 720px) {\n") ||
+		!strings.Contains(css, ".prompt-actions-start {\n    flex-basis: min(var(--prompt-paste-width, 25%), 16%);\n    max-width: 36%;\n  }\n") {
+		t.Fatalf("expected prompt action screenshot lane to squish smaller across narrower viewports")
 	}
 	if !strings.Contains(css, ".prompt-actions-end {\n  display: flex;\n  align-items: center;\n  justify-content: flex-end;\n  gap: 10px;\n  margin-left: auto;\n  flex: 0 0 auto;\n}") {
 		t.Fatalf("expected prompt actions to right-align Clear and Run")

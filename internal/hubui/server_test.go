@@ -886,8 +886,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "builderImagePasteTargetWrap.style.setProperty(\"--prompt-paste-width\", `${pasteWidth}%`);") {
 		t.Fatalf("expected index html to drive pasted screenshot width through the action-row wrapper")
 	}
-	if !strings.Contains(markup, "builderImagePasteTargetWrap.style.flexBasis = `${pasteWidth}%`;") {
-		t.Fatalf("expected index html to size the pasted screenshot lane from the computed width")
+	if !strings.Contains(markup, "builderImagePasteTargetWrap.style.removeProperty(\"flex-basis\");") {
+		t.Fatalf("expected index html to keep screenshot lane flex-basis responsive to viewport")
+	}
+	if !strings.Contains(markup, "const localPromptStatusDefaultText = String(localPromptStatus?.dataset.defaultText || \"\").trim();") {
+		t.Fatalf("expected index html to cache the default prompt helper copy for status swaps")
+	}
+	if !strings.Contains(markup, "function restoreLocalPromptStatusDefault() {") ||
+		!strings.Contains(markup, "localPromptStatus.textContent = localPromptStatusDefaultText;") {
+		t.Fatalf("expected index html to restore prompt helper copy after status clears")
 	}
 	if !strings.Contains(markup, "localPromptStatus.classList.add(\"is-fading\");") {
 		t.Fatalf("expected index html to fade prompt success notifications before clearing them")

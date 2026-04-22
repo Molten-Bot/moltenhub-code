@@ -1416,7 +1416,7 @@ select.prompt-control {
 .prompt-actions-start {
   display: flex;
   flex: 0 1 var(--prompt-paste-width, 25%);
-  width: min(100%, var(--prompt-paste-width, 25%));
+  width: auto;
   max-width: 50%;
   min-width: 0;
 }
@@ -2830,6 +2830,11 @@ select.prompt-control {
     max-width: none;
   }
 
+  .prompt-actions-start {
+    flex-basis: min(var(--prompt-paste-width, 25%), 22%);
+    max-width: 44%;
+  }
+
 }
 
 @media (max-width: 720px) {
@@ -2869,6 +2874,11 @@ select.prompt-control {
   .status-item-metrics .status-value {
     white-space: nowrap;
     font-size: 0.82rem;
+  }
+
+  .prompt-actions-start {
+    flex-basis: min(var(--prompt-paste-width, 25%), 16%);
+    max-width: 36%;
   }
 }
 
