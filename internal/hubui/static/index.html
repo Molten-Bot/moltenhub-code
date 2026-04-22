@@ -358,10 +358,18 @@
                 <div class="prompt-actions-end">
                   <button
                     id="builder-images-clear"
-                    class="prompt-action-button prompt-action-clear"
+                    class="prompt-action-button prompt-action-clear prompt-action-icon-only"
                     type="button"
-                    disabled>Clear</button>
-                  <button id="local-prompt-submit" class="prompt-action-button prompt-submit" type="submit">Run</button>
+                    aria-label="Clear prompt draft"
+                    title="Clear prompt draft"
+                    disabled>
+                    <i data-lucide="x" class="prompt-action-icon" aria-hidden="true"></i>
+                    <span class="sr-only">Clear</span>
+                  </button>
+                  <button id="local-prompt-submit" class="prompt-action-button prompt-submit" type="submit">
+                    <i data-lucide="play" class="prompt-action-icon" aria-hidden="true"></i>
+                    <span class="prompt-action-label">Run</span>
+                  </button>
                 </div>
               </div>
             </div>

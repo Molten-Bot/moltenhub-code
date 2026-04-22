@@ -1489,6 +1489,33 @@ select.prompt-control {
 .prompt-action-button {
   width: auto;
   display: inline-flex;
+  gap: 7px;
+}
+
+.prompt-action-icon {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+
+.prompt-action-label {
+  display: inline-flex;
+  align-items: center;
+}
+
+.prompt-action-icon-only {
+  width: 38px;
+  min-width: 38px;
+  min-inline-size: 38px;
+  padding: 0;
+  gap: 0;
+  flex: 0 0 38px;
 }
 
 .prompt-action-button,
