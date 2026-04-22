@@ -2376,8 +2376,8 @@ select.prompt-control {
 }
 
 .task-progress-step-icon {
-  width: 21px;
-  height: 21px;
+  width: 21.33px;
+  height: 21.33px;
   display: block;
   object-fit: contain;
   filter: brightness(0) saturate(100%);
@@ -2386,8 +2386,8 @@ select.prompt-control {
 }
 
 .task-progress-step-glyph {
-  width: 21px;
-  height: 21px;
+  width: 21.33px;
+  height: 21.33px;
   display: block;
   color: currentColor;
   stroke-width: 2;
@@ -2428,29 +2428,30 @@ select.prompt-control {
 }
 
 .task-progress-step.current .task-progress-step-icon {
-  width: 27px;
-  height: 27px;
+  width: 26.56px;
+  height: 26.56px;
   opacity: 1;
 }
 
 .task-progress-step.current .task-progress-step-glyph {
-  width: 27px;
-  height: 27px;
+  width: 26.56px;
+  height: 26.56px;
   opacity: 1;
 }
 
 .task-progress.is-running .task-progress-step.current .task-progress-step-icon,
 .task-progress.is-running .task-progress-step.current .task-progress-step-glyph {
-  animation: taskProgressCurrentSpin 6s linear infinite;
+  animation: taskProgressCurrentSpin 10s linear infinite;
   transform-origin: center;
   will-change: transform;
 }
 
 @keyframes taskProgressCurrentSpin {
-  from {
+  0%,
+  80% {
     transform: rotate(0deg);
   }
-  to {
+  100% {
     transform: rotate(360deg);
   }
 }
