@@ -1574,22 +1574,22 @@ select.prompt-control {
 }
 
 .task-action-icon {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   display: block;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.45;
+  stroke-width: 1.65;
   stroke-linecap: round;
   stroke-linejoin: round;
   pointer-events: none;
 }
 
 .task-icon-button {
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
-  min-height: 24px;
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  min-height: 26px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -1967,6 +1967,24 @@ select.prompt-control {
   color: var(--surface-warning);
 }
 
+.task-control-toggle.task-control-run {
+  border-color: rgba(10, 132, 255, 0.24);
+  background: rgba(10, 132, 255, 0.11);
+  color: var(--running);
+}
+
+.task-control-toggle.task-control-force {
+  border-color: color-mix(in srgb, var(--accent) 28%, rgba(123, 97, 255, 0.22));
+  background: color-mix(in srgb, var(--accent) 14%, rgba(123, 97, 255, 0.09));
+  color: var(--accent);
+}
+
+.task-control-toggle.task-control-pause {
+  border-color: rgba(245, 158, 11, 0.26);
+  background: rgba(245, 158, 11, 0.11);
+  color: var(--surface-warning);
+}
+
 .task-stop {
   border: 1px solid rgba(239, 68, 68, 0.18);
   background: rgba(239, 68, 68, 0.08);
@@ -2075,8 +2093,8 @@ select.prompt-control {
 }
 
 .badge-icon .task-action-icon {
-  width: 12px;
-  height: 12px;
+  width: 13px;
+  height: 13px;
 }
 
 .badge.running,

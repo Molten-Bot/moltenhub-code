@@ -927,42 +927,44 @@
     function createTaskActionIcon(type) {
       const svg = document.createElementNS(SVG_NS, "svg");
       svg.className = "task-action-icon task-icon-rotatable";
-      svg.setAttribute("viewBox", "0 0 16 16");
+      svg.setAttribute("viewBox", "0 0 24 24");
       svg.setAttribute("aria-hidden", "true");
       svg.setAttribute("focusable", "false");
       const iconType = String(type || "").trim().toLowerCase();
 
       if (iconType === "terminal") {
-        appendTaskIconPath(svg, "M3 3.25h10a1.75 1.75 0 0 1 1.75 1.75v6a1.75 1.75 0 0 1-1.75 1.75H3A1.75 1.75 0 0 1 1.25 11V5A1.75 1.75 0 0 1 3 3.25Z");
-        appendTaskIconPath(svg, "M4.35 6.2 6.7 8 4.35 9.8");
-        appendTaskIconPath(svg, "M8 9.8h3.7");
+        appendTaskIconPath(svg, "M4.5 5.25h15a2.25 2.25 0 0 1 2.25 2.25v9a2.25 2.25 0 0 1-2.25 2.25h-15A2.25 2.25 0 0 1 2.25 16.5v-9A2.25 2.25 0 0 1 4.5 5.25Z");
+        appendTaskIconPath(svg, "M6.6 9.1 9.8 12 6.6 14.9");
+        appendTaskIconPath(svg, "M11.4 14.9h5.2");
         return svg;
       }
 
       if (iconType === "play") {
-        appendTaskIconPath(svg, "M5.1 4.45L11.15 8 5.1 11.55Z", { fill: "currentColor", stroke: "none" });
+        appendTaskIconPath(svg, "M8.8 7.1v9.8L16.8 12z", { fill: "currentColor", stroke: "none" });
         return svg;
       }
 
       if (iconType === "pause") {
-        appendTaskIconPath(svg, "M5.8 4.45v7.1M10.2 4.45v7.1");
+        appendTaskIconPath(svg, "M8.9 7.1h2.3v9.8H8.9z", { fill: "currentColor", stroke: "none" });
+        appendTaskIconPath(svg, "M12.8 7.1h2.3v9.8h-2.3z", { fill: "currentColor", stroke: "none" });
         return svg;
       }
 
       if (iconType === "stop") {
-        appendTaskIconPath(svg, "M5.15 5.15h5.7v5.7h-5.7z", { fill: "currentColor", stroke: "none" });
+        appendTaskIconPath(svg, "M8.3 8.3h7.4v7.4h-7.4z", { fill: "currentColor", stroke: "none" });
         return svg;
       }
 
       if (iconType === "gear" || iconType === "") {
-        appendTaskIconPath(svg, "M8 2a6 6 0 1 0 6 6");
+        appendTaskIconCircle(svg, 12, 12, 3.7);
+        appendTaskIconPath(svg, "M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4");
+        appendTaskIconPath(svg, "M5.8 5.8l1.7 1.7M16.5 16.5l1.7 1.7M18.2 5.8l-1.7 1.7M7.5 16.5l-1.7 1.7");
         return svg;
       }
 
-      appendTaskIconCircle(svg, 8, 8, 4.4);
-      appendTaskIconCircle(svg, 8, 8, 2.2);
-      appendTaskIconPath(svg, "M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6");
-      appendTaskIconPath(svg, "M3.3 3.3l1.1 1.1M11.6 11.6l1.1 1.1M12.7 3.3l-1.1 1.1M4.4 11.6l-1.1 1.1");
+      appendTaskIconCircle(svg, 12, 12, 6);
+      appendTaskIconPath(svg, "M12 8.7v3.4");
+      appendTaskIconPath(svg, "M12 15.7h.01");
       return svg;
     }
 
@@ -6605,6 +6607,7 @@
             const forceStart = document.createElement("button");
             forceStart.type = "button";
             forceStart.className = "task-control-toggle task-icon-button";
+            forceStart.classList.add("task-control-force");
             forceStart.title = "Force start this queued task now";
             forceStart.setAttribute("aria-label", "Force start task");
             forceStart.appendChild(createTaskActionIcon("play"));
@@ -6623,6 +6626,7 @@
           const pauseRun = document.createElement("button");
           pauseRun.type = "button";
           pauseRun.className = "task-control-toggle task-icon-button";
+          pauseRun.classList.add(canRun ? "task-control-run" : "task-control-pause");
           pauseRun.title = canRun ? "Resume this queued task" : "Pause this queued task";
           pauseRun.setAttribute("aria-label", canRun ? "Run task" : "Pause task");
           pauseRun.appendChild(createTaskActionIcon(canRun ? "play" : "pause"));
