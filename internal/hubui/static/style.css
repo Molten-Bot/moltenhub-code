@@ -1549,9 +1549,11 @@ select.prompt-control {
   height: 16px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.6;
+  stroke-width: 1.9;
   stroke-linecap: round;
   stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  shape-rendering: geometricPrecision;
 }
 
 .task-sound-toggle-wave,
@@ -1568,9 +1570,11 @@ select.prompt-control {
   height: 16px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.7;
+  stroke-width: 1.9;
   stroke-linecap: round;
   stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  shape-rendering: geometricPrecision;
 }
 
 .task-action-icon {
@@ -1579,22 +1583,24 @@ select.prompt-control {
   display: block;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.65;
+  stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
   pointer-events: none;
+  vector-effect: non-scaling-stroke;
+  shape-rendering: geometricPrecision;
 }
 
 .task-action-icon-terminal {
-  stroke-width: 1.72;
+  stroke-width: 1.95;
 }
 
 .task-action-icon-stop {
-  stroke-width: 1.58;
+  stroke-width: 1.78;
 }
 
 .task-action-icon-gear {
-  stroke-width: 1.78;
+  stroke-width: 1.95;
 }
 
 .task-icon-button {
