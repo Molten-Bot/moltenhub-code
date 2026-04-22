@@ -263,7 +263,6 @@
                     spellcheck="false"
                     placeholder="Describe the change you want"></textarea>
                 </label>
-                <p id="builder-prompt-copy" class="prompt-field-copy">Prompt with plain language, paste screenshots directly into the prompt when visual context matters.</p>
               </div>
 
               <div id="prompt-library-panel" class="prompt-panel hidden grid gap-2.5">
@@ -354,7 +353,11 @@
                     role="button"
                     tabindex="0">Paste screenshots.</div>
                 </div>
-                <span id="local-prompt-status" class="submit-status submit-status-inline min-h-[1.3em] text-[0.74rem] leading-[1.3] text-hub-muted"></span>
+                <span
+                  id="local-prompt-status"
+                  class="submit-status submit-status-inline is-visible min-h-[1.3em] text-[0.74rem] leading-[1.3] text-hub-muted"
+                  data-default-text="Prompt with plain language, paste screenshots directly into the prompt when visual context matters."
+                  aria-live="polite">Prompt with plain language, paste screenshots directly into the prompt when visual context matters.</span>
                 <div class="prompt-actions-end">
                   <button
                     id="builder-images-clear"
@@ -1570,6 +1573,7 @@
     const localPromptInput = document.getElementById("local-prompt-input");
     const localPromptSubmit = document.getElementById("local-prompt-submit");
     const localPromptStatus = document.getElementById("local-prompt-status");
+    const localPromptStatusDefaultText = String(localPromptStatus?.dataset.defaultText || "").trim();
     let localPromptStatusTimer = 0;
     const promptModeBuilder = document.getElementById("prompt-mode-builder");
     const promptModeLibrary = document.getElementById("prompt-mode-library");
@@ -3983,7 +3987,7 @@
       builderImagePasteTarget.dataset.empty = hasImages ? "false" : "true";
       if (builderImagePasteTargetWrap) {
         builderImagePasteTargetWrap.style.setProperty("--prompt-paste-width", `${pasteWidth}%`);
-        builderImagePasteTargetWrap.style.flexBasis = `${pasteWidth}%`;
+        builderImagePasteTargetWrap.style.removeProperty("flex-basis");
       }
       syncBuilderDraftClearState();
     }
@@ -4716,6 +4720,15 @@
       return String(text || "").trim() !== "";
     }
 
+    function restoreLocalPromptStatusDefault() {
+      if (!localPromptStatus) {
+        return;
+      }
+      localPromptStatus.className = "submit-status submit-status-inline is-visible";
+      localPromptStatus.classList.remove("is-fading");
+      localPromptStatus.textContent = localPromptStatusDefaultText;
+    }
+
     function applyPromptVisibility() {
       const automatic = Boolean(state.ui?.automaticMode);
       const visible = !automatic && state.promptVisible;
@@ -4983,19 +4996,23 @@
 
     function setLocalPromptStatus(kind, text) {
       clearLocalPromptStatusTimer();
+      const trimmedText = String(text || "").trim();
+      if (!trimmedText) {
+        restoreLocalPromptStatusDefault();
+        return;
+      }
       localPromptStatus.className = kind ? `submit-status submit-status-inline ${kind}` : "submit-status submit-status-inline";
-      localPromptStatus.textContent = text;
-      localPromptStatus.classList.toggle("is-visible", String(text || "").trim() !== "");
+      localPromptStatus.textContent = trimmedText;
+      localPromptStatus.classList.toggle("is-visible", true);
       localPromptStatus.classList.remove("is-fading");
-      if (!shouldAutoDismissLocalPromptStatus(kind, text)) {
+      if (!shouldAutoDismissLocalPromptStatus(kind, trimmedText)) {
         return;
       }
       localPromptStatusTimer = window.setTimeout(() => {
         localPromptStatus.classList.add("is-fading");
         localPromptStatusTimer = window.setTimeout(() => {
           localPromptStatusTimer = 0;
-          localPromptStatus.className = "submit-status submit-status-inline";
-          localPromptStatus.textContent = "";
+          restoreLocalPromptStatusDefault();
         }, LOCAL_PROMPT_STATUS_FADE_MS);
       }, QUEUED_STATUS_TIMEOUT_MS);
     }
