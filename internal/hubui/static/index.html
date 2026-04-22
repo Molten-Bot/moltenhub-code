@@ -713,8 +713,8 @@
       { id: "received", label: "Task Received", detail: "Dispatch accepted by hub.", icon: "moltenhub" },
       { id: "run", label: "Run Started", detail: "Harness run initialized.", icon: "moltenhub" },
       { id: "prepare", label: "Prepare", detail: "Preflight, auth, and workspace setup.", icon: "moltenhub" },
-      { id: "clone", label: "Git Clone", detail: "Repository clone and branch setup.", icon: "github" },
-      { id: "workflow", label: "GitHub Prep", detail: "Publish strategy and fork fallback setup.", icon: "github" },
+      { id: "clone", label: "Git Clone", detail: "Repository clone and branch setup.", icon: "git_clone" },
+      { id: "workflow", label: "GitHub Prep", detail: "Publish strategy and fork fallback setup.", icon: "git_workflow" },
       { id: "agent", label: "Agent", detail: "Agent execution in progress.", icon: "agent" },
       { id: "finalize", label: "Finalize", detail: "Commit, PR, and checks.", icon: "github" },
     ];
@@ -754,6 +754,10 @@
       error: "circle-alert",
       pending: "clock-3",
       default: "clock-3",
+    });
+    const TASK_PROGRESS_ICON_NAMES = Object.freeze({
+      git_clone: "git-branch-plus",
+      git_workflow: "git-fork",
     });
     const CLAUDE_POST_SUBMIT_VERIFY_INTERVAL_MS = 1200;
     const CLAUDE_POST_SUBMIT_VERIFY_MAX_ATTEMPTS = 25;
@@ -901,6 +905,11 @@
         return taskAgentLogoURL(task);
       }
       return "";
+    }
+
+    function taskProgressStepIconName(step) {
+      const iconKey = String(step?.icon || "").trim().toLowerCase();
+      return TASK_PROGRESS_ICON_NAMES[iconKey] || "";
     }
 
     function createTaskActionIcon(type) {
@@ -6171,12 +6180,20 @@
         }
 
         const iconURL = taskProgressStepIconURL(step, task);
+        const iconName = taskProgressStepIconName(step);
         if (iconURL) {
           marker.classList.add("has-icon");
           const icon = document.createElement("img");
           icon.className = "task-progress-step-icon";
           icon.src = iconURL;
           icon.alt = `${step.label} logo`;
+          marker.appendChild(icon);
+        } else if (iconName) {
+          marker.classList.add("has-icon", "has-glyph");
+          const icon = document.createElement("i");
+          icon.className = "task-progress-step-glyph";
+          icon.setAttribute("data-lucide", iconName);
+          icon.setAttribute("aria-hidden", "true");
           marker.appendChild(icon);
         }
 
