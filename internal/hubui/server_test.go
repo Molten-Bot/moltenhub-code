@@ -1502,9 +1502,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `stop.appendChild(createTaskActionIcon("stop"));`) {
 		t.Fatalf("expected index html to render task stop icon control")
 	}
-	if !strings.Contains(markup, `badge.appendChild(createTaskActionIcon("gear"));`) ||
+	if !strings.Contains(markup, `badge.appendChild(createTaskActionIcon("loader"));`) ||
 		!strings.Contains(markup, `badge.title = "Running: task is actively executing.";`) {
-		t.Fatalf("expected index html to render running badge gear icon with descriptive tooltip")
+		t.Fatalf("expected index html to render running badge loader icon with descriptive tooltip")
 	}
 	if !strings.Contains(markup, `close.textContent = "X";`) {
 		t.Fatalf("expected index html to render task close icon control")

@@ -1577,37 +1577,33 @@ select.prompt-control {
   shape-rendering: geometricPrecision;
 }
 
-.task-action-icon {
+.task-action-glyph {
+  width: 16px;
+  height: 16px;
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.task-action-glyph-play,
+.task-action-glyph-pause,
+.task-action-glyph-stop {
   width: 14px;
   height: 14px;
-  display: block;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  pointer-events: none;
-  vector-effect: non-scaling-stroke;
-  shape-rendering: geometricPrecision;
 }
 
-.task-action-icon-terminal {
-  stroke-width: 1.95;
-}
-
-.task-action-icon-stop {
-  stroke-width: 1.78;
-}
-
-.task-action-icon-gear {
-  stroke-width: 1.95;
+.task-action-glyph-loader {
+  width: 14px;
+  height: 14px;
 }
 
 .task-icon-button {
-  width: 26px;
-  min-width: 26px;
-  height: 26px;
-  min-height: 26px;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -1888,8 +1884,8 @@ select.prompt-control {
 }
 
 .task.active {
-  border-color: rgba(10, 132, 255, 0.34);
-  box-shadow: inset 0 0 0 1px rgba(10, 132, 255, 0.12), var(--shadow-md);
+  border-color: rgba(10, 132, 255, 0.2);
+  box-shadow: var(--shadow-sm);
 }
 
 .task.task-collapsed {
@@ -2026,6 +2022,12 @@ select.prompt-control {
   transition: border-color 0.12s ease, color 0.12s ease, transform 0.12s ease, opacity 0.12s ease, box-shadow 0.12s ease;
 }
 
+.task-output-toggle.task-icon-button,
+.task-control-toggle.task-icon-button,
+.task-stop.task-icon-button {
+  padding: 0;
+}
+
 .task-side-actions {
   display: inline-flex;
   align-items: center;
@@ -2110,12 +2112,12 @@ select.prompt-control {
   justify-content: center;
 }
 
-.badge-icon .task-action-icon {
+.badge-icon .task-action-glyph {
   width: 13px;
   height: 13px;
 }
 
-.badge-icon .task-action-icon-gear {
+.badge-icon .task-action-glyph-loader {
   width: 14px;
   height: 14px;
 }
@@ -2150,10 +2152,8 @@ select.prompt-control {
   background: var(--bad);
 }
 
-.task-icons-idle-spin .task-icon-rotatable {
+.task-icons-idle-spin .task-action-glyph-loader {
   animation: taskIconIdleSpin 16s linear infinite;
-  transform-origin: center;
-  transform-box: fill-box;
 }
 
 .task-sparklet {
@@ -2175,7 +2175,7 @@ select.prompt-control {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .task-icons-idle-spin .task-icon-rotatable {
+  .task-icons-idle-spin .task-action-glyph-loader {
     animation: none;
   }
 }
@@ -3928,7 +3928,7 @@ html[data-hover-mode="on"] .task:not(.task-closing) {
 }
 
 html[data-hover-mode="on"] .task:not(.task-closing) {
-  border-color: color-mix(in srgb, var(--running) 34%, var(--border));
+  border-color: color-mix(in srgb, var(--running) 20%, var(--border));
   box-shadow: var(--shadow-md);
 }
 

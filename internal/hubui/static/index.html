@@ -793,33 +793,13 @@
     const TASK_PR_LINK_SIZE_PX = "34px";
     const TASK_PR_LOGO_SIZE = 20;
     const CLAUDE_AUTH_LOGO_URL = "/static/logos/claude-code.svg";
-    const SVG_NS = "http://www.w3.org/2000/svg";
-    // Lucide icon path data (MIT): https://lucide.dev/icons
-    const LUCIDE_TASK_ACTION_PATHS = Object.freeze({
-      terminal: Object.freeze([
-        Object.freeze({ d: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" }),
-        Object.freeze({ d: "m8 9 4 3-4 3" }),
-        Object.freeze({ d: "M13.5 15H17" }),
-      ]),
-      play: Object.freeze([
-        Object.freeze({ d: "M9 7v10l8-5z", fill: "currentColor", stroke: "none" }),
-      ]),
-      pause: Object.freeze([
-        Object.freeze({ d: "M9 7h2.6v10H9z", fill: "currentColor", stroke: "none" }),
-        Object.freeze({ d: "M12.9 7h2.6v10h-2.6z", fill: "currentColor", stroke: "none" }),
-      ]),
-      stop: Object.freeze([
-        Object.freeze({ d: "M8.5 8.5h7v7h-7z", fill: "currentColor", stroke: "none" }),
-      ]),
-      gear: Object.freeze([
-        Object.freeze({ d: "M21 12a9 9 0 1 1-6.22-8.56" }),
-        Object.freeze({ d: "M21 3v6h-6" }),
-      ]),
-      default: Object.freeze([
-        Object.freeze({ d: "M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12z" }),
-        Object.freeze({ d: "M12 8.8v3.6" }),
-        Object.freeze({ d: "M12 15.6h.01" }),
-      ]),
+    const TASK_ACTION_ICON_URLS = Object.freeze({
+      terminal: TERMINAL_LOGO_URL,
+      play: "/static/logos/task-play.svg",
+      pause: "/static/logos/task-pause.svg",
+      stop: "/static/logos/task-stop.svg",
+      loader: "/static/logos/task-loader.svg",
+      default: "/static/logos/task-loader.svg",
     });
     const CLAUDE_POST_SUBMIT_VERIFY_INTERVAL_MS = 1200;
     const CLAUDE_POST_SUBMIT_VERIFY_MAX_ATTEMPTS = 25;
@@ -954,38 +934,16 @@
     }
 
     function createTaskActionIcon(type) {
-      const svg = document.createElementNS(SVG_NS, "svg");
-      svg.setAttribute("viewBox", "0 0 24 24");
-      svg.setAttribute("aria-hidden", "true");
-      svg.setAttribute("focusable", "false");
       const rawType = String(type || "").trim().toLowerCase();
-      const iconType = rawType === "" ? "gear" : rawType;
+      const iconType = rawType === "" ? "default" : rawType;
       const iconClass = iconType.replace(/[^a-z0-9_-]+/g, "-") || "default";
-      svg.className = `task-action-icon task-action-icon-${iconClass}`;
-
-      if (iconType === "gear") {
-        svg.classList.add("task-icon-rotatable");
-      }
-
-      const iconSegments = LUCIDE_TASK_ACTION_PATHS[iconType] || LUCIDE_TASK_ACTION_PATHS.default;
-      for (const segment of iconSegments) {
-        appendTaskIconPath(svg, segment.d, segment);
-      }
-      return svg;
-    }
-
-    function appendTaskIconPath(svg, d, options = {}) {
-      const path = document.createElementNS(SVG_NS, "path");
-      path.setAttribute("d", d);
-      if (options && typeof options === "object") {
-        if (Object.prototype.hasOwnProperty.call(options, "fill")) {
-          path.setAttribute("fill", String(options.fill));
-        }
-        if (Object.prototype.hasOwnProperty.call(options, "stroke")) {
-          path.setAttribute("stroke", String(options.stroke));
-        }
-      }
-      svg.appendChild(path);
+      const icon = document.createElement("img");
+      icon.className = `task-action-glyph task-action-glyph-${iconClass}`;
+      icon.src = TASK_ACTION_ICON_URLS[iconType] || TASK_ACTION_ICON_URLS.default;
+      icon.alt = "";
+      icon.setAttribute("aria-hidden", "true");
+      icon.draggable = false;
+      return icon;
     }
 
     function renderTaskStatusBadge(task) {
@@ -997,7 +955,7 @@
         badge.classList.add("badge-icon", "badge-running-icon");
         badge.title = "Running: task is actively executing.";
         badge.setAttribute("aria-label", "Running: task is actively executing.");
-        badge.appendChild(createTaskActionIcon("gear"));
+        badge.appendChild(createTaskActionIcon("loader"));
         const hiddenLabel = document.createElement("span");
         hiddenLabel.className = "sr-only";
         hiddenLabel.textContent = status;
@@ -6450,6 +6408,27 @@
       listNode.dataset.pendingRenderSig = "";
       listNode.replaceChildren();
 
+      const renderOutputToggle = (requestID) => {
+        if (!showOutputAction || !requestID) {
+          return null;
+        }
+        const outputToggle = document.createElement("button");
+        outputToggle.type = "button";
+        outputToggle.className = "task-output-toggle task-icon-button";
+        outputToggle.title = "Open task output terminal logs.";
+        outputToggle.setAttribute("aria-label", "Open task output terminal logs.");
+        outputToggle.appendChild(createTaskActionIcon("terminal"));
+        const outputLabel = document.createElement("span");
+        outputLabel.className = "sr-only";
+        outputLabel.textContent = "Output";
+        outputToggle.appendChild(outputLabel);
+        outputToggle.addEventListener("click", (event) => {
+          event.stopPropagation();
+          openTaskOutput(requestID);
+        });
+        return outputToggle;
+      };
+
       if (!tasks.length) {
         const empty = document.createElement("section");
         empty.className = "task-empty brand-login-card-shell";
@@ -6523,6 +6502,10 @@
 
           const promptActions = document.createElement("div");
           promptActions.className = "task-top-actions";
+          const outputAction = renderOutputToggle(requestID);
+          if (outputAction) {
+            promptActions.appendChild(outputAction);
+          }
           const closeAction = renderTaskCloseButton(task, requestID);
           if (closeAction) {
             promptActions.appendChild(closeAction);
@@ -6576,22 +6559,9 @@
           topActions.appendChild(sparklet);
         }
 
-        if (showOutputAction) {
-          const outputToggle = document.createElement("button");
-          outputToggle.type = "button";
-          outputToggle.className = "task-output-toggle task-icon-button";
-          outputToggle.title = "Open task output terminal logs.";
-          outputToggle.setAttribute("aria-label", "Open task output terminal logs.");
-          outputToggle.appendChild(createTaskActionIcon("terminal"));
-          const outputLabel = document.createElement("span");
-          outputLabel.className = "sr-only";
-          outputLabel.textContent = "Output";
-          outputToggle.appendChild(outputLabel);
-          outputToggle.addEventListener("click", (event) => {
-            event.stopPropagation();
-            openTaskOutput(requestID);
-          });
-          topActions.appendChild(outputToggle);
+        const outputAction = renderOutputToggle(requestID);
+        if (outputAction) {
+          topActions.appendChild(outputAction);
         }
 
         const taskControlBusy = isTaskControlInFlight(requestID);
