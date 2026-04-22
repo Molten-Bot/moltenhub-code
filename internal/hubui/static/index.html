@@ -6924,7 +6924,7 @@
         const canForceRun = Boolean(controls.force_run);
         const canStop = Boolean(controls.stop);
         if (!isCompletedTask(task) && (canPause || canRun || canForceRun || canStop)) {
-          if (canForceRun) {
+          if (canForceRun && !canPause && !canRun) {
             const forceStart = document.createElement("button");
             forceStart.type = "button";
             forceStart.className = "task-control-toggle task-icon-button";

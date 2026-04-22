@@ -1548,8 +1548,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `outputToggle.title = "Open task output terminal logs.";`) {
 		t.Fatalf("expected index html to render terminal output icon control with descriptive tooltip")
 	}
-	if !strings.Contains(markup, `forceStart.title = "Force start this queued task now";`) {
-		t.Fatalf("expected index html to render force-start control for pending tasks")
+	if !strings.Contains(markup, `if (canForceRun && !canPause && !canRun) {`) ||
+		!strings.Contains(markup, `forceStart.title = "Force start this queued task now";`) {
+		t.Fatalf("expected index html to render force-start only when the pause/run toggle is unavailable")
 	}
 	if !strings.Contains(markup, `stop.appendChild(createTaskActionIcon("stop"));`) {
 		t.Fatalf("expected index html to render task stop icon control")

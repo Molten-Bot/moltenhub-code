@@ -137,9 +137,6 @@ func (h *localTaskHandle) Pause() error {
 	case h.stopped:
 		h.mu.Unlock()
 		return fmt.Errorf("task is already stopped")
-	case h.running:
-		h.mu.Unlock()
-		return fmt.Errorf("task is already running; use stop to kill it")
 	case h.paused:
 		h.mu.Unlock()
 		return fmt.Errorf("task is already paused")
@@ -232,7 +229,16 @@ func (h *localTaskHandle) Controls() hubui.TaskControls {
 	}
 
 	if h.running {
-		return hubui.TaskControls{Stop: true}
+		if h.paused {
+			return hubui.TaskControls{
+				Run:  true,
+				Stop: true,
+			}
+		}
+		return hubui.TaskControls{
+			Pause: true,
+			Stop:  true,
+		}
 	}
 
 	if h.paused {
