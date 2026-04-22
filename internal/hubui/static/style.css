@@ -1593,8 +1593,10 @@ select.prompt-control {
 }
 
 .task-action-glyph-stop {
-  width: 14px;
-  height: 14px;
+  width: 17px;
+  height: 17px;
+  fill: currentColor;
+  stroke: none;
 }
 
 .task-action-glyph-loader {
@@ -2004,9 +2006,16 @@ select.prompt-control {
 }
 
 .task-stop {
-  border: 1px solid color-mix(in srgb, var(--surface-danger) 36%, var(--border));
-  background: color-mix(in srgb, var(--surface-danger) 16%, var(--surface-task-button-bg));
-  color: color-mix(in srgb, var(--surface-danger) 74%, var(--text-soft));
+  border: 1px solid rgba(17, 34, 68, 0.12);
+  background: var(--surface-task-button-bg);
+  color: var(--text-soft);
+}
+
+.task-stop:hover,
+.task-stop:focus-visible {
+  border-color: color-mix(in srgb, var(--surface-danger) 36%, var(--border));
+  background: color-mix(in srgb, var(--surface-danger) 10%, var(--surface-task-button-bg));
+  color: color-mix(in srgb, var(--surface-danger) 72%, var(--text-soft));
 }
 
 .task-close:hover,
