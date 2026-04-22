@@ -2421,6 +2421,11 @@ select.prompt-control {
   pointer-events: none;
 }
 
+.task-progress-step-icon.is-agent-logo {
+  filter: brightness(0) saturate(100%) invert(56%) sepia(11%) saturate(735%) hue-rotate(178deg) brightness(88%) contrast(88%);
+  opacity: 1;
+}
+
 .task-progress-step-glyph {
   width: 21.33px;
   height: 21.33px;
@@ -2467,6 +2472,11 @@ select.prompt-control {
   width: 26.56px;
   height: 26.56px;
   opacity: 1;
+}
+
+html.dark .task-progress-step.current .task-progress-step-icon.is-agent-logo,
+html.night .task-progress-step.current .task-progress-step-icon.is-agent-logo {
+  filter: brightness(0) saturate(100%) invert(1);
 }
 
 .task-progress-step.current .task-progress-step-glyph {

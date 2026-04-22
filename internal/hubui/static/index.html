@@ -6487,6 +6487,9 @@
           marker.classList.add("has-icon");
           const icon = document.createElement("img");
           icon.className = "task-progress-step-icon";
+          if (String(step?.icon || "").trim().toLowerCase() === "agent") {
+            icon.classList.add("is-agent-logo");
+          }
           icon.src = iconURL;
           icon.alt = `${step.label} logo`;
           marker.appendChild(icon);

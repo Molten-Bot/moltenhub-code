@@ -305,6 +305,12 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `filter: var(--agent-logo-filter);`) {
 		t.Fatalf("expected stylesheet to keep dock icons theme-reactive via agent logo filter")
 	}
+	if !strings.Contains(stylesheet, `.task-progress-step-icon.is-agent-logo {`) {
+		t.Fatalf("expected stylesheet to give task progress agent logos a distinct inactive treatment")
+	}
+	if !strings.Contains(stylesheet, `html.dark .task-progress-step.current .task-progress-step-icon.is-agent-logo,`) {
+		t.Fatalf("expected dark mode task progress agent logo to be white while active")
+	}
 	if !strings.Contains(stylesheet, `#moltenbot-hub-link:hover img,`) {
 		t.Fatalf("expected stylesheet to give molten bot hub icon a hover-specific treatment")
 	}
