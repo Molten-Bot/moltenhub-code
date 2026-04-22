@@ -1593,8 +1593,8 @@ select.prompt-control {
 }
 
 .task-action-glyph-stop {
-  width: 20px;
-  height: 20px;
+  width: 14px;
+  height: 14px;
 }
 
 .task-action-glyph-loader {
@@ -2041,6 +2041,14 @@ select.prompt-control {
   min-height: 34px;
 }
 
+.task-control-toggle.task-icon-button,
+.task-stop.task-icon-button {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+}
+
 .task-rerun.task-icon-button .task-action-glyph {
   width: 19px;
   height: 19px;
@@ -2206,7 +2214,11 @@ select.prompt-control {
   color: #fff;
 }
 
-.badge.stopped,
+.badge.stopped {
+  background: color-mix(in srgb, var(--surface-badge-idle) 82%, #5f7395);
+  color: #fff;
+}
+
 .badge.error,
 .badge.invalid {
   background: var(--bad);
@@ -2313,13 +2325,13 @@ select.prompt-control {
 
 .task-progress-track {
   position: relative;
-  height: 28px;
+  height: 42px;
 }
 
 .task-progress-line {
   position: absolute;
-  left: 14px;
-  right: 14px;
+  left: 26px;
+  right: 26px;
   top: 50%;
   height: 3px;
   transform: translateY(-50%);
@@ -2340,63 +2352,108 @@ select.prompt-control {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 28px;
+  min-height: 42px;
 }
 
 .task-progress-step {
-  width: 14px;
-  height: 14px;
+  width: 24px;
+  height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  overflow: visible;
   position: relative;
   border-radius: 50%;
-  border: 2px solid rgba(113, 136, 177, 0.45);
-  background: var(--surface-progress-step);
-  transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+  border: 1px solid rgba(113, 136, 177, 0.45);
+  background: color-mix(in srgb, var(--surface-progress-step) 86%, var(--surface-task-button-bg));
+  color: color-mix(in srgb, var(--meta) 74%, var(--text-soft));
+  transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, color 0.12s ease;
 }
 
 .task-progress-step.has-icon {
-  background: rgba(255, 255, 255, 0.95);
-  border: 0;
+  background: color-mix(in srgb, var(--surface-progress-step) 92%, var(--surface-task-button-bg));
+  border: 1px solid rgba(113, 136, 177, 0.32);
 }
 
 .task-progress-step-icon {
-  width: 11px;
-  height: 11px;
+  width: 21.33px;
+  height: 21.33px;
   display: block;
   object-fit: contain;
   filter: brightness(0) saturate(100%);
+  opacity: 0.34;
+  pointer-events: none;
+}
+
+.task-progress-step-glyph {
+  width: 21.33px;
+  height: 21.33px;
+  display: block;
+  color: currentColor;
+  stroke-width: 2;
+  opacity: 0.42;
   pointer-events: none;
 }
 
 .task-progress-step.done {
-  background: var(--good);
-  border-color: rgba(43, 182, 115, 0.3);
+  border-color: rgba(113, 136, 177, 0.6);
+  color: color-mix(in srgb, var(--text) 54%, var(--muted));
 }
 
 .task-progress-step.done.has-icon {
-  background: #fff;
-  box-shadow: 0 0 0 1px rgba(43, 182, 115, 0.16);
+  background: color-mix(in srgb, var(--surface-progress-step) 78%, var(--surface-task-button-bg));
+  box-shadow: 0 0 0 1px rgba(113, 136, 177, 0.14);
+}
+
+.task-progress-step.done .task-progress-step-icon {
+  opacity: 0.56;
+}
+
+.task-progress-step.done .task-progress-step-glyph {
+  opacity: 0.66;
 }
 
 .task-progress-step.current {
-  background: var(--running);
+  background: #fff;
   border-color: rgba(10, 132, 255, 0.34);
-  box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.12);
-  transform: scale(2);
+  color: #101626;
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.16);
   z-index: 1;
 }
 
 .task-progress-step.current.has-icon {
   background: #fff;
-  box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.14);
+  border-color: rgba(10, 132, 255, 0.38);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.18);
 }
 
 .task-progress-step.current .task-progress-step-icon {
-  width: 12px;
-  height: 12px;
+  width: 26.56px;
+  height: 26.56px;
+  opacity: 1;
+}
+
+.task-progress-step.current .task-progress-step-glyph {
+  width: 26.56px;
+  height: 26.56px;
+  opacity: 1;
+}
+
+.task-progress.is-running .task-progress-step.current .task-progress-step-icon,
+.task-progress.is-running .task-progress-step.current .task-progress-step-glyph {
+  animation: taskProgressCurrentSpin 10s linear infinite;
+  transform-origin: center;
+  will-change: transform;
+}
+
+@keyframes taskProgressCurrentSpin {
+  0%,
+  80% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .task-output-list {
@@ -2458,6 +2515,11 @@ select.prompt-control {
 .task-result.duplicate {
   color: var(--surface-warning);
   background: rgba(245, 158, 11, 0.1);
+}
+
+.task-result.stopped {
+  color: var(--surface-badge-idle);
+  background: rgba(113, 136, 177, 0.13);
 }
 
 .task-result.error,

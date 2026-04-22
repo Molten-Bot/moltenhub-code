@@ -195,10 +195,13 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `Current Work</span>`) {
 		t.Fatalf("expected index html to render the task panel under a Current Work heading")
 	}
-	if !strings.Contains(markup, `{ id: "workflow", label: "GitHub Prep", detail: "Publish strategy and fork fallback setup.", icon: "github" },`) {
-		t.Fatalf("expected index html to include the GitHub Prep workflow progress step")
+	if !strings.Contains(markup, "const TASK_PROGRESS_STEP_DEFS = Object.freeze({") {
+		t.Fatalf("expected index html to define dynamic task progress step metadata")
 	}
-	if !strings.Contains(markup, `} else if (stage === "workflow") {`) {
+	if !strings.Contains(markup, `fork: { id: "fork", label: "Fork Fallback", detail: "Fork route prepared for public repo publishing.", icon: "fork" },`) {
+		t.Fatalf("expected index html to include a dedicated fork-fallback task progress step")
+	}
+	if !strings.Contains(markup, `if (stage === "workflow") {`) {
 		t.Fatalf("expected index html to map stage=workflow into task progress rendering")
 	}
 	if strings.Contains(markup, `Runs move through prepare, clone, agent, and finalize. Re-runs, local clone links, and PRs stay attached here.`) {
@@ -508,11 +511,29 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function renderTaskProgress(") {
 		t.Fatalf("expected index html to include renderTaskProgress handler")
 	}
-	if !strings.Contains(markup, `icon: "moltenhub"`) || !strings.Contains(markup, `icon: "github"`) || !strings.Contains(markup, `icon: "agent"`) {
-		t.Fatalf("expected index html to classify task progress steps by logo type")
+	if !strings.Contains(markup, `icon: "entry_local"`) || !strings.Contains(markup, `icon: "entry_hub"`) || !strings.Contains(markup, `icon: "prepare"`) || !strings.Contains(markup, `icon: "clone"`) || !strings.Contains(markup, `icon: "branch"`) || !strings.Contains(markup, `icon: "publish"`) || !strings.Contains(markup, `icon: "fork"`) || !strings.Contains(markup, `icon: "agent"`) || !strings.Contains(markup, `icon: "commit"`) || !strings.Contains(markup, `icon: "pr"`) || !strings.Contains(markup, `icon: "checks"`) || !strings.Contains(markup, `icon: "github"`) {
+		t.Fatalf("expected index html to classify dynamic progress steps by action icon keys")
+	}
+	if !strings.Contains(markup, `entry_local: "laptop"`) || !strings.Contains(markup, `entry_hub: "satellite-dish"`) || !strings.Contains(markup, `prepare: "wrench"`) || !strings.Contains(markup, `clone: "git-branch-plus"`) || !strings.Contains(markup, `branch: "git-branch"`) || !strings.Contains(markup, `publish: "upload"`) || !strings.Contains(markup, `fork: "git-fork"`) || !strings.Contains(markup, `agent: "bot"`) || !strings.Contains(markup, `commit: "git-commit-horizontal"`) || !strings.Contains(markup, `pr: "git-pull-request"`) || !strings.Contains(markup, `checks: "shield-check"`) {
+		t.Fatalf("expected index html to map progress icon keys to lucide action glyphs")
+	}
+	if !strings.Contains(markup, `stop: "circle-stop"`) {
+		t.Fatalf("expected index html to map stop actions to the circle-stop glyph")
+	}
+	if !strings.Contains(markup, `if (status === "stopped") {`) || !strings.Contains(markup, `if (status === "error" || status === "invalid") {`) {
+		t.Fatalf("expected index html to separate stopped status icon handling from error/invalid handling")
+	}
+	if strings.Contains(markup, `status === "error" || status === "invalid" || status === "duplicate" || status === "stopped"`) || !strings.Contains(markup, `status === "error" || status === "invalid" || status === "duplicate"`) {
+		t.Fatalf("expected index html to avoid playing the error sound for user-stopped tasks")
 	}
 	if !strings.Contains(markup, "function taskProgressStepIconURL(") {
 		t.Fatalf("expected index html to include task progress icon URL resolver")
+	}
+	if !strings.Contains(markup, "function taskProgressFallbackIconURL(") {
+		t.Fatalf("expected index html to include a moltenhub logo fallback for unknown progress icons")
+	}
+	if !strings.Contains(markup, "function taskProgressStepsForTask(") || !strings.Contains(markup, "function taskProgressCurrentStepID(") || !strings.Contains(markup, "function taskProgressModel(") {
+		t.Fatalf("expected index html to build dynamic progress steps per task")
 	}
 	if !strings.Contains(markup, `pi: "/static/logos/pi.svg"`) {
 		t.Fatalf("expected index html to map the pi harness to the pi logo asset")
@@ -520,8 +541,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "task-progress-step-icon") {
 		t.Fatalf("expected index html to render task progress step icons")
 	}
-	if !strings.Contains(markup, "stage === \"claude\"") || !strings.Contains(markup, "stage === \"auggie\"") || !strings.Contains(markup, "stage === \"pi\"") {
-		t.Fatalf("expected index html to map claude, auggie, and pi stages into the agent progress step")
+	if !strings.Contains(markup, `const TASK_PROGRESS_AGENT_STAGES = new Set(["codex", "claude", "auggie", "pi", "augment", "agent", "review"]);`) {
+		t.Fatalf("expected index html to define the stage set that maps runtime agent stages into the agent progress step")
 	}
 	if strings.Contains(markup, "current step:") {
 		t.Fatalf("expected index html to remove current step label text from task progress")
@@ -1836,14 +1857,31 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task-rerun") {
 		t.Fatalf("expected stylesheet to include task rerun styles")
 	}
-	if !strings.Contains(css, ".task-progress-step.current {\n  background: var(--running);\n  border-color: rgba(10, 132, 255, 0.34);\n  box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.12);\n  transform: scale(2);") {
-		t.Fatalf("expected stylesheet to render the active task progress step at 2x size")
+	if !strings.Contains(css, ".task-progress-step.current {\n  background: #fff;\n  border-color: rgba(10, 132, 255, 0.34);\n  color: #101626;\n  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.16);") {
+		t.Fatalf("expected stylesheet to render the active task progress step with stronger contrast instead of size scaling")
 	}
 	if !strings.Contains(css, ".task-progress-step-icon") {
 		t.Fatalf("expected stylesheet to include task progress step icon styles")
 	}
-	if !strings.Contains(css, "filter: brightness(0) saturate(100%);") || !strings.Contains(css, ".task-progress-step.has-icon {\n  background: rgba(255, 255, 255, 0.95);\n  border: 0;\n}") || !strings.Contains(css, ".task-progress-step-icon {\n  width: 11px;\n  height: 11px;") || !strings.Contains(css, ".task-progress-step.current.has-icon {\n  background: #fff;\n  box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.14);\n}") {
-		t.Fatalf("expected stylesheet to render larger task progress activity icons without a dark ring")
+	if !strings.Contains(css, "filter: brightness(0) saturate(100%);") ||
+		!strings.Contains(css, ".task-progress-track {\n  position: relative;\n  height: 42px;\n}") ||
+		!strings.Contains(css, ".task-progress-line {\n  position: absolute;\n  left: 26px;\n  right: 26px;\n  top: 50%;") ||
+		!strings.Contains(css, ".task-progress-steps {\n  position: relative;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  min-height: 42px;\n}") ||
+		!strings.Contains(css, ".task-progress-step {\n  width: 24px;\n  height: 24px;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  overflow: visible;") ||
+		!strings.Contains(css, ".task-progress-step.has-icon {\n  background: color-mix(in srgb, var(--surface-progress-step) 92%, var(--surface-task-button-bg));\n  border: 1px solid rgba(113, 136, 177, 0.32);\n}") ||
+		!strings.Contains(css, ".task-progress-step-icon {\n  width: 21.33px;\n  height: 21.33px;") ||
+		!strings.Contains(css, ".task-progress-step-glyph {\n  width: 21.33px;\n  height: 21.33px;") ||
+		!strings.Contains(css, ".task-progress-step.current .task-progress-step-icon {\n  width: 26.56px;\n  height: 26.56px;\n  opacity: 1;\n}") ||
+		!strings.Contains(css, ".task-progress-step.current .task-progress-step-glyph {\n  width: 26.56px;\n  height: 26.56px;\n  opacity: 1;\n}") ||
+		!strings.Contains(css, ".task-progress.is-running .task-progress-step.current .task-progress-step-icon,\n.task-progress.is-running .task-progress-step.current .task-progress-step-glyph {\n  animation: taskProgressCurrentSpin 10s linear infinite;\n  transform-origin: center;\n  will-change: transform;\n}") ||
+		!strings.Contains(css, "@keyframes taskProgressCurrentSpin {\n  0%,\n  80% {\n    transform: rotate(0deg);\n  }\n  100% {\n    transform: rotate(360deg);\n  }\n}") {
+		t.Fatalf("expected stylesheet to render larger progress icons, oversized active icons, and a running spin animation")
+	}
+	if !strings.Contains(css, ".badge.stopped {\n  background: color-mix(in srgb, var(--surface-badge-idle) 82%, #5f7395);\n  color: #fff;\n}") || !strings.Contains(css, ".task-result.stopped {\n  color: var(--surface-badge-idle);\n  background: rgba(113, 136, 177, 0.13);\n}") {
+		t.Fatalf("expected stylesheet to distinguish user-stopped task visuals from hard error states")
+	}
+	if !strings.Contains(css, ".task-action-glyph-stop {\n  width: 14px;\n  height: 14px;\n}") || !strings.Contains(css, ".task-control-toggle.task-icon-button,\n.task-stop.task-icon-button {\n  width: 34px;\n  min-width: 34px;\n  height: 34px;\n  min-height: 34px;\n}") {
+		t.Fatalf("expected stylesheet to align stop control icon and button sizing with other task icon controls")
 	}
 	if !strings.Contains(css, ".task-body") {
 		t.Fatalf("expected stylesheet to include task body column styles")
