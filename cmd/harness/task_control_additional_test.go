@@ -190,9 +190,21 @@ func TestLocalTaskControllerControlsReflectHandleState(t *testing.T) {
 		Run:  true,
 		Stop: true,
 	})
+	if err := controller.Run("local-controls"); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
 
 	handle.SetRunning(true)
 	assertControls("running", controller.Controls("local-controls"), hubui.TaskControls{
+		Pause: true,
+		Stop:  true,
+	})
+
+	if err := controller.Pause("local-controls"); err != nil {
+		t.Fatalf("Pause(running) error = %v", err)
+	}
+	assertControls("running paused", controller.Controls("local-controls"), hubui.TaskControls{
+		Run:  true,
 		Stop: true,
 	})
 
