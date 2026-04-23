@@ -612,8 +612,12 @@ func TestRunWithPromptImagesKeepsArtifactsOutOfRepo(t *testing.T) {
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
 		{cmd: pushDryRunCommand(repoDir, branch)},
-		{cmd: codexCommandWithOptions(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath), codexRunOptions{
-			ImagePaths: []string{imageArg},
+		{cmd: codexCommandWithOptions(targetDir, withAgentsPrompt(
+			withPromptImagePaths(cfg.Prompt, []string{imageArg}),
+			agentsPath,
+		), codexRunOptions{
+			ImagePaths:   []string{imageArg},
+			WritableDirs: []string{runDir},
 		})},
 		{cmd: statusCommand(repoDir)},
 		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch)},
@@ -2800,11 +2804,13 @@ func TestCommandBuilders(t *testing.T) {
 	codexWithImages := codexCommandWithOptions(targetDir, prompt, codexRunOptions{
 		SkipGitRepoCheck: true,
 		ImagePaths:       []string{"/tmp/run/prompt-images/01-shot.png", "/tmp/run/prompt-images/02-shot.png"},
+		WritableDirs:     []string{"/tmp/run"},
 	})
 	if codexWithImages.Name != "codex" || codexWithImages.Dir != targetDir || !reflect.DeepEqual(codexWithImages.Args, []string{
 		"exec",
 		"--sandbox", "workspace-write",
 		"--skip-git-repo-check",
+		"--add-dir", "/tmp/run",
 		"--image", "/tmp/run/prompt-images/01-shot.png",
 		"--image", "/tmp/run/prompt-images/02-shot.png",
 	}) {
@@ -3332,6 +3338,26 @@ func TestMaterializePromptImagesRequiresBaseDir(t *testing.T) {
 		{Name: "Clipboard Shot.PNG", MediaType: "image/png", DataBase64: "aGVsbG8="},
 	}); err == nil {
 		t.Fatal("materializePromptImages(blank baseDir) error = nil, want non-nil")
+	}
+}
+
+func TestWithPromptImagePaths(t *testing.T) {
+	t.Parallel()
+
+	got := withPromptImagePaths("inspect screenshot", []string{"prompt-images/01-shot.png", "  ", "/tmp/run/prompt-images/02-shot.png"})
+	for _, want := range []string{
+		"inspect screenshot",
+		"Prompt image files are available at these paths:",
+		"- prompt-images/01-shot.png",
+		"- /tmp/run/prompt-images/02-shot.png",
+		"Use these paths when you need to inspect attached images from the workspace.",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("withPromptImagePaths() missing %q in:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "-   ") {
+		t.Fatalf("withPromptImagePaths() kept blank image path:\n%s", got)
 	}
 }
 

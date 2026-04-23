@@ -272,7 +272,11 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		SkipGitRepoCheck: len(repos) > 1,
 		ImagePaths:       imageArgs,
 	}
+	if len(imageArgs) > 0 {
+		codexOpts.WritableDirs = []string{runDir}
+	}
 	codexBasePrompt := workspaceCodexPrompt(cfg.Prompt, cfg.TargetSubdir, repos)
+	codexBasePrompt = withPromptImagePaths(codexBasePrompt, imageArgs)
 	if reviewPrompt, err := h.prepareReviewPrompt(ctx, runCfg, repos, codexBasePrompt); err != nil {
 		return h.fail(ExitPR, "review", err, runDir)
 	} else {
@@ -3241,6 +3245,34 @@ func codexImageArgs(targetDir string, imagePaths []string) ([]string, error) {
 		args = append(args, imagePath)
 	}
 	return args, nil
+}
+
+func withPromptImagePaths(prompt string, imagePaths []string) string {
+	paths := make([]string, 0, len(imagePaths))
+	for _, imagePath := range imagePaths {
+		imagePath = strings.TrimSpace(imagePath)
+		if imagePath == "" {
+			continue
+		}
+		paths = append(paths, imagePath)
+	}
+	if len(paths) == 0 {
+		return prompt
+	}
+
+	var b strings.Builder
+	b.WriteString(strings.TrimSpace(prompt))
+	if b.Len() > 0 {
+		b.WriteString("\n\n")
+	}
+	b.WriteString("Prompt image files are available at these paths:\n")
+	for _, imagePath := range paths {
+		b.WriteString("- ")
+		b.WriteString(imagePath)
+		b.WriteByte('\n')
+	}
+	b.WriteString("Use these paths when you need to inspect attached images from the workspace.")
+	return b.String()
 }
 
 func validateRuntimePromptImages(runtime agentruntime.Runtime, images []config.PromptImage) error {

@@ -147,6 +147,7 @@ func TestBuildCommandCodex(t *testing.T) {
 	cmd, err := rt.BuildCommand("/tmp/work", "ship it", RunOptions{
 		SkipGitRepoCheck: true,
 		ImagePaths:       []string{"a.png", "  ", "b.png"},
+		WritableDirs:     []string{"/tmp/run", "  "},
 	})
 	if err != nil {
 		t.Fatalf("BuildCommand() error = %v", err)
@@ -160,7 +161,7 @@ func TestBuildCommandCodex(t *testing.T) {
 	if got, want := cmd.Stdin, "ship it"; got != want {
 		t.Fatalf("Stdin = %q, want %q", got, want)
 	}
-	wantArgs := []string{"exec", "--sandbox", "workspace-write", "--skip-git-repo-check", "--image", "a.png", "--image", "b.png"}
+	wantArgs := []string{"exec", "--sandbox", "workspace-write", "--skip-git-repo-check", "--add-dir", "/tmp/run", "--image", "a.png", "--image", "b.png"}
 	if !reflect.DeepEqual(cmd.Args, wantArgs) {
 		t.Fatalf("Args = %#v, want %#v", cmd.Args, wantArgs)
 	}

@@ -18,6 +18,8 @@ ENV GIT_TERMINAL_PROMPT=0 \
     HARNESS_AGENT_HARNESS="" \
     HARNESS_AGENT_COMMAND="" \
     HARNESS_AGENTS_SEED_PATH=/opt/moltenhub/library/AGENTS.md \
+    HARNESS_WORKSPACE_RAM_BASE=/workspace \
+    HARNESS_WORKSPACE_DISK_BASE=/workspace \
     PATH="/usr/local/go/bin:${PATH}"
 
 RUN apk add --no-cache \
@@ -33,7 +35,7 @@ RUN apk add --no-cache \
       @augmentcode/auggie@latest \
       @mariozechner/pi-coding-agent@latest \
     && npm cache clean --force \
-    && mkdir -p /workspace/config \
+    && mkdir -p /workspace/config /workspace/moltenhub-code/tasks \
     && chown -R node:node /workspace
 WORKDIR /workspace
 
