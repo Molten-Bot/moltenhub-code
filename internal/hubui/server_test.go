@@ -1828,6 +1828,35 @@ func TestHandlerIndexIncludesClaudeBrowserCodeFlow(t *testing.T) {
 	}
 }
 
+func TestHandlerServesReleasesWithIconStatuses(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodGet, "/releases", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+	if ct := resp.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		t.Fatalf("content-type = %q", ct)
+	}
+
+	markup := resp.Body.String()
+	if !strings.Contains(markup, `class="release-change-status release-change-status-improved" title="Improved" aria-label="Improved"`) ||
+		!strings.Contains(markup, `data-lucide="trending-up"`) {
+		t.Fatalf("expected improved release changes to use icon status with hover text")
+	}
+	if !strings.Contains(markup, `class="release-change-status release-change-status-fixed" title="Fixed" aria-label="Fixed"`) ||
+		!strings.Contains(markup, `data-lucide="wrench"`) {
+		t.Fatalf("expected fixed release changes to use icon status with hover text")
+	}
+	if strings.Contains(markup, `>IMPROVED<`) || strings.Contains(markup, `>FIXED<`) {
+		t.Fatalf("expected release status labels to be icons instead of visible text badges")
+	}
+}
+
 func TestHandlerServesStaticCSS(t *testing.T) {
 	t.Parallel()
 

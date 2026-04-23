@@ -2274,6 +2274,100 @@ select.prompt-control {
   pointer-events: none;
 }
 
+.releases-body {
+  color: var(--text);
+}
+
+.releases-page {
+  width: min(920px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 28px 0 56px;
+}
+
+.releases-header {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.releases-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  color: var(--text);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.releases-brand-logo {
+  width: 26px;
+  height: 26px;
+}
+
+.releases-header h1 {
+  margin: 0;
+  font-size: clamp(1.55rem, 3vw, 2.3rem);
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.release-list {
+  display: grid;
+  gap: 10px;
+}
+
+.release-card {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  min-height: 84px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-glass-solid);
+  box-shadow: var(--shadow-sm);
+}
+
+.release-card p {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.98rem;
+  line-height: 1.55;
+}
+
+.release-change-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+}
+
+.release-change-status svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.2;
+}
+
+.release-change-status-improved {
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.release-change-status-fixed {
+  color: #8a5a00;
+  background: rgba(245, 158, 11, 0.16);
+}
+
+.release-change-status-preserved {
+  color: #166534;
+  background: rgba(43, 182, 115, 0.14);
+}
+
 @keyframes taskIconIdleSpin {
   from {
     transform: rotate(0deg);

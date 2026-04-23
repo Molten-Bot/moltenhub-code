@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Molten Hub Code Releases</title>
+  <script src="/static/lucide.min.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="min-h-screen antialiased releases-body">
+  <main class="releases-page">
+    <header class="releases-header">
+      <a class="releases-brand" href="/" aria-label="Molten Hub Code home">
+        <img class="releases-brand-logo" src="/static/logo.svg" alt="" aria-hidden="true">
+        <span>Molten Hub Code</span>
+      </a>
+      <h1>Releases</h1>
+    </header>
+
+    <section class="release-list" aria-label="Release changes">
+      <article class="release-card">
+        <span class="release-change-status release-change-status-improved" title="Improved" aria-label="Improved">
+          <i data-lucide="trending-up" aria-hidden="true"></i>
+        </span>
+        <p>Refresh task cards so change summaries scan faster in narrow views.</p>
+      </article>
+      <article class="release-card">
+        <span class="release-change-status release-change-status-improved" title="Improved" aria-label="Improved">
+          <i data-lucide="trending-up" aria-hidden="true"></i>
+        </span>
+        <p>Polish release notes presentation for smaller screens.</p>
+      </article>
+      <article class="release-card">
+        <span class="release-change-status release-change-status-fixed" title="Fixed" aria-label="Fixed">
+          <i data-lucide="wrench" aria-hidden="true"></i>
+        </span>
+        <p>Preserve change status reference without showing text badges.</p>
+      </article>
+    </section>
+  </main>
+  <script>
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+  </script>
+</body>
+</html>
