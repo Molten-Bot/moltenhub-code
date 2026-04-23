@@ -109,6 +109,47 @@ func TestHubExitCodeMappings(t *testing.T) {
 	}
 }
 
+func TestRecordLocalRunActivityPatchesMoltenHubMetadata(t *testing.T) {
+	t.Parallel()
+
+	var patchedActivities []any
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
+			_, _ = w.Write([]byte(`{"ok":true,"result":{"agent":{"metadata":{"activities":["existing"]}}}}`))
+		case r.Method == http.MethodPatch && r.URL.Path == "/v1/agents/me/metadata":
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode patch body: %v", err)
+			}
+			meta, ok := body["metadata"].(map[string]any)
+			if !ok {
+				t.Fatalf("patch body missing metadata: %#v", body)
+			}
+			patchedActivities, _ = meta["activities"].([]any)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer ts.Close()
+
+	runCfg := config.Config{
+		Repo:            "git@github.com:acme/repo.git",
+		BaseBranch:      "main",
+		LibraryTaskName: "security-review",
+	}
+	runCfg.ApplyDefaults()
+	recordLocalRunStartedActivity(context.Background(), hub.InitConfig{
+		BaseURL:    ts.URL + "/v1",
+		AgentToken: "token",
+	}, runCfg, "req-local-activity", nil)
+
+	if got, want := fmt.Sprint(patchedActivities), "[existing working on library task: security-review]"; got != want {
+		t.Fatalf("patched activities = %s, want %s", got, want)
+	}
+}
+
 func TestShouldFallbackToLocalOnlyMode(t *testing.T) {
 	t.Parallel()
 

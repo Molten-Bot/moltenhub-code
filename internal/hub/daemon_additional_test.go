@@ -124,6 +124,19 @@ func (s *stubMoltenHubAPI) RecordGitHubTaskCompleteActivity(ctx context.Context)
 	}
 	return nil
 }
+func (s *stubMoltenHubAPI) RecordRunStartedActivity(ctx context.Context, runCfg config.Config) error {
+	if activity := RunStartedActivity(runCfg); activity != "" {
+		return s.RecordActivity(ctx, activity)
+	}
+	return s.RecordCodingActivityRunning(ctx)
+}
+
+func (s *stubMoltenHubAPI) RecordRunCompletedActivity(ctx context.Context, runCfg config.Config) error {
+	if activity := RunCompletedActivity(runCfg); activity != "" {
+		return s.RecordActivity(ctx, activity)
+	}
+	return s.RecordGitHubTaskCompleteActivity(ctx)
+}
 func (s *stubMoltenHubAPI) RegisterRuntime(context.Context, InitConfig, []library.TaskSummary) error {
 	return nil
 }

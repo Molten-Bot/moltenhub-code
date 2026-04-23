@@ -315,6 +315,22 @@ func (c APIClient) RecordCodingActivityRunning(ctx context.Context, token string
 	return c.RecordActivity(ctx, token, codingActivityRun)
 }
 
+// RecordRunStartedActivity appends the standard activity entry for one task run.
+func (c APIClient) RecordRunStartedActivity(ctx context.Context, token string, runCfg config.Config) error {
+	if activity := RunStartedActivity(runCfg); activity != "" {
+		return c.RecordActivity(ctx, token, activity)
+	}
+	return c.RecordCodingActivityRunning(ctx, token)
+}
+
+// RecordRunCompletedActivity appends the standard activity entry for one completed task run.
+func (c APIClient) RecordRunCompletedActivity(ctx context.Context, token string, runCfg config.Config) error {
+	if activity := RunCompletedActivity(runCfg); activity != "" {
+		return c.RecordActivity(ctx, token, activity)
+	}
+	return c.RecordGitHubTaskCompleteActivity(ctx, token)
+}
+
 // RecordActivity appends a custom activity entry to metadata.activities.
 func (c APIClient) RecordActivity(ctx context.Context, token, activity string) error {
 	normalizedToken, err := requireHubToken(token, "record activity")
