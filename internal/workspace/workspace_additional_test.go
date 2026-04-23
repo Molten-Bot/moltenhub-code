@@ -77,3 +77,31 @@ func TestFindPathUpwardRejectsEmptyInputs(t *testing.T) {
 		t.Fatal("findPathUpward(empty relPath) ok = true, want false")
 	}
 }
+
+func TestManagerIsManagedRunDir(t *testing.T) {
+	t.Setenv(workspaceRAMBaseEnv, "/ram-base")
+	t.Setenv(workspaceDiskBaseEnv, "/disk-base")
+	t.Setenv(workspaceRootNameEnv, "tasks-root")
+
+	m := Manager{
+		PathExists: func(path string) bool { return path == "/ram-base" || path == "/disk-base" },
+		CanExec:    func(string) bool { return true },
+	}
+
+	ramRun := filepath.Join("/ram-base", "tasks-root", "0123456789abcdef0123456789abcdef")
+	if !m.IsManagedRunDir(ramRun) {
+		t.Fatalf("IsManagedRunDir(%q) = false, want true", ramRun)
+	}
+	if !m.IsManagedRunDir(filepath.Join(ramRun, "repo")) {
+		t.Fatalf("IsManagedRunDir(%q) = false, want true", filepath.Join(ramRun, "repo"))
+	}
+	if m.IsManagedRunDir(filepath.Join("/ram-base", "tasks-root")) {
+		t.Fatalf("IsManagedRunDir(%q) = true, want false", filepath.Join("/ram-base", "tasks-root"))
+	}
+	if m.IsManagedRunDir(filepath.Join("/ram-base", "tasks-root", "bad-guid")) {
+		t.Fatalf("IsManagedRunDir(%q) = true, want false", filepath.Join("/ram-base", "tasks-root", "bad-guid"))
+	}
+	if m.IsManagedRunDir("/elsewhere/run") {
+		t.Fatalf("IsManagedRunDir(%q) = true, want false", "/elsewhere/run")
+	}
+}

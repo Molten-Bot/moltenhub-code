@@ -436,3 +436,57 @@ func configuredWorkspaceRootName() string {
 func workspaceRootForBase(base string) string {
 	return filepath.Join(base, configuredWorkspaceRootName())
 }
+
+// IsManagedRunDir reports whether path resolves to a run directory (or one of
+// its descendants) under the configured workspace roots.
+func IsManagedRunDir(path string) bool {
+	return NewManager().IsManagedRunDir(path)
+}
+
+// IsManagedRunDir reports whether path resolves to a run directory (or one of
+// its descendants) under this manager's workspace roots.
+func (m Manager) IsManagedRunDir(path string) bool {
+	path = filepath.Clean(strings.TrimSpace(path))
+	if path == "" {
+		return false
+	}
+
+	for _, rootDir := range m.rootCandidates() {
+		rootDir = filepath.Clean(strings.TrimSpace(rootDir))
+		if rootDir == "" {
+			continue
+		}
+
+		rel, err := filepath.Rel(rootDir, path)
+		if err != nil {
+			continue
+		}
+		rel = filepath.Clean(strings.TrimSpace(rel))
+		if rel == "." || rel == "" || rel == ".." || filepath.IsAbs(rel) || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
+
+		runID := rel
+		if idx := strings.IndexRune(rel, filepath.Separator); idx >= 0 {
+			runID = rel[:idx]
+		}
+		if looksLikeRunGUID(runID) {
+			return true
+		}
+	}
+	return false
+}
+
+func looksLikeRunGUID(runID string) bool {
+	if len(runID) != 32 {
+		return false
+	}
+	for i := 0; i < len(runID); i++ {
+		ch := runID[i]
+		if (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') {
+			continue
+		}
+		return false
+	}
+	return true
+}
