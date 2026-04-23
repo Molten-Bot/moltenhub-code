@@ -6891,10 +6891,6 @@
 
           const promptActions = document.createElement("div");
           promptActions.className = "task-top-actions";
-          const outputAction = renderOutputToggle(requestID);
-          if (outputAction) {
-            promptActions.appendChild(outputAction);
-          }
           if (historyView && canCopyTaskCloneCommand(task)) {
             const cloneButton = document.createElement("button");
             cloneButton.type = "button";

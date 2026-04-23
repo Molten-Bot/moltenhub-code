@@ -1014,6 +1014,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "node.classList.add(\"task-prompt-only\");") {
 		t.Fatalf("expected index html to apply prompt-only card styling when compact task view is active")
 	}
+	promptOnlyStart := strings.Index(markup, "if (promptOnly) {")
+	promptOnlyPRLink := strings.Index(markup, "const showPromptPRLink = isCompletedTask(task) && prURL !== \"\";")
+	if promptOnlyStart < 0 || promptOnlyPRLink < 0 || promptOnlyPRLink <= promptOnlyStart {
+		t.Fatalf("expected index html to render a prompt-only task branch before prompt-only PR links")
+	}
+	if strings.Contains(markup[promptOnlyStart:promptOnlyPRLink], "renderOutputToggle") {
+		t.Fatalf("expected index html prompt-only mode to hide terminal output controls")
+	}
 	if !strings.Contains(markup, "const showPromptPRLink = isCompletedTask(task) && prURL !== \"\";") {
 		t.Fatalf("expected index html prompt-only mode to gate GitHub links to completed tasks with pull request urls")
 	}
