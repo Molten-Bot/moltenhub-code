@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -98,7 +97,7 @@ func TestLocalTaskControllerStopCancelsContextWithStopCause(t *testing.T) {
 	}
 }
 
-func TestLocalTaskControllerPauseRejectsRunningTask(t *testing.T) {
+func TestLocalTaskControllerPauseRunningTaskDefersUntilNextRunnableWait(t *testing.T) {
 	t.Parallel()
 
 	controller := newLocalTaskController()
@@ -109,12 +108,18 @@ func TestLocalTaskControllerPauseRejectsRunningTask(t *testing.T) {
 	}
 	handle.SetRunning(true)
 
-	err := controller.Pause("local-3")
-	if err == nil {
-		t.Fatal("Pause() error = nil, want non-nil for running task")
+	if err := controller.Pause("local-3"); err != nil {
+		t.Fatalf("Pause() error = %v", err)
 	}
-	if !strings.Contains(err.Error(), "already running") {
-		t.Fatalf("Pause() error = %q, want running-task message", err.Error())
+	if !handle.IsPaused() {
+		t.Fatal("handle.IsPaused() = false, want true after Pause()")
+	}
+
+	handle.SetRunning(false)
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer waitCancel()
+	if err := handle.WaitUntilRunnable(waitCtx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("WaitUntilRunnable(paused) error = %v, want deadline exceeded", err)
 	}
 }
 
