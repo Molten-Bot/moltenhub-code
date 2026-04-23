@@ -285,6 +285,39 @@ func TestDefaultCatalogIncludesReduceCodebaseCentralizeClassesTask(t *testing.T)
 	}
 }
 
+func TestDefaultCatalogIncludesFixPRCITestsTask(t *testing.T) {
+	t.Setenv(catalogDirEnv, "")
+	t.Setenv(agentsSeedEnv, "")
+
+	catalog, err := LoadCatalog(DefaultDir)
+	if err != nil {
+		t.Fatalf("LoadCatalog(%q) error = %v", DefaultDir, err)
+	}
+
+	task, ok := catalog.byName["fix-pr-ci-tests"]
+	if !ok {
+		t.Fatalf("default catalog missing %q task", "fix-pr-ci-tests")
+	}
+	prompt := strings.ToLower(task.Prompt)
+	for _, want := range []string{
+		"check pr ci status",
+		"do not remove, skip, weaken, or rename test cases unless the tested functionality has been intentionally removed",
+		"test coverage must go up when practical and must never go down",
+		"`failure:`",
+		"`error details:`",
+		"do not fail solely for that",
+		"repository is not initialized after clone",
+		"do not stop work just because you cannot create a pull request or watch remote ci/cd",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt = %q, want %q guidance", task.Prompt, want)
+		}
+	}
+	if got, want := task.PRTitle, "moltenhub-fix-pr-ci-tests"; got != want {
+		t.Fatalf("PRTitle = %q, want %q", got, want)
+	}
+}
+
 func TestDefaultCatalogDoesNotIncludeDeletePromptImagesTask(t *testing.T) {
 	t.Setenv(catalogDirEnv, "")
 	t.Setenv(agentsSeedEnv, "")
