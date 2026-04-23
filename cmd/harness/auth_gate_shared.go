@@ -172,6 +172,29 @@ func githubTokenRequirementState(harness, runtimeConfigPath string, initCfg hub.
 	return false, hubui.AgentAuthState{}
 }
 
+func applyGitHubTokenRequirementState(
+	state *configurableAgentAuthState,
+	harness, runtimeConfigPath string,
+	initCfg *hub.InitConfig,
+) bool {
+	if state == nil {
+		return false
+	}
+	cfg := hub.InitConfig{}
+	if initCfg != nil {
+		cfg = *initCfg
+	}
+	if blocked, snapshot := githubTokenRequirementState(harness, runtimeConfigPath, cfg); blocked {
+		state.applySnapshot(snapshot)
+		return true
+	}
+	if initCfg != nil {
+		githubToken, _ := firstConfiguredGitHubToken(runtimeConfigPath, cfg)
+		initCfg.GitHubToken = strings.TrimSpace(githubToken)
+	}
+	return false
+}
+
 func configureGitHubToken(
 	ctx context.Context,
 	harness, runtimeConfigPath string,

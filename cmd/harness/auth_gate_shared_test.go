@@ -90,6 +90,35 @@ func TestConfigurableAgentAuthStateSharedTransitions(t *testing.T) {
 	}
 }
 
+func TestApplyGitHubTokenRequirementState(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+
+	var state configurableAgentAuthState
+	cfg := hub.InitConfig{}
+	if !applyGitHubTokenRequirementState(&state, "test-harness", filepath.Join(t.TempDir(), "missing.json"), &cfg) {
+		t.Fatal("applyGitHubTokenRequirementState() blocked = false, want true")
+	}
+	if state.ready || state.state != "needs_configure" || state.configureCommand != claudeGitHubConfigureCommand {
+		t.Fatalf("state = %+v", state)
+	}
+
+	state = configurableAgentAuthState{}
+	cfg = hub.InitConfig{GitHubToken: "ghp_init_token"}
+	if applyGitHubTokenRequirementState(&state, "test-harness", filepath.Join(t.TempDir(), "missing.json"), &cfg) {
+		t.Fatal("applyGitHubTokenRequirementState() blocked = true, want false")
+	}
+	if got, want := cfg.GitHubToken, "ghp_init_token"; got != want {
+		t.Fatalf("GitHubToken = %q, want %q", got, want)
+	}
+	if got, want := os.Getenv("GH_TOKEN"), "ghp_init_token"; got != want {
+		t.Fatalf("GH_TOKEN = %q, want %q", got, want)
+	}
+	if got, want := os.Getenv("GITHUB_TOKEN"), "ghp_init_token"; got != want {
+		t.Fatalf("GITHUB_TOKEN = %q, want %q", got, want)
+	}
+}
+
 func TestDecodeJSONStrictOrWrappedString(t *testing.T) {
 	var payload struct {
 		Value string `json:"value"`
