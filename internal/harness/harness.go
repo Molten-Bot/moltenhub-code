@@ -47,6 +47,8 @@ const (
 	maxPushSyncAttempts              = 3
 	maxCloneAttempts                 = 3
 	cloneRetryDelay                  = 2 * time.Second
+	maxAuthSetupGitAttempts          = 3
+	authSetupGitRetryDelay           = 350 * time.Millisecond
 	maxCloneErrorDetailChars         = 500
 	maxGitErrorDetailChars           = 500
 	maxReviewMetadataChars           = 12000
@@ -64,6 +66,8 @@ const (
 )
 
 type logFn func(string, ...any)
+
+var authSetupGitMu sync.Mutex
 
 // Result captures run output and status.
 type Result struct {
@@ -172,7 +176,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		return h.fail(ExitAuth, "auth", err, "")
 	}
 	if shouldSetupGitHubAuthForRepos(cfg.RepoList()) || hasGitHubAuthToken() {
-		if _, err := h.runCommand(ctx, "auth", authSetupGitCommand()); err != nil {
+		if err := h.runAuthSetupGit(ctx); err != nil {
 			return h.fail(ExitAuth, "auth", err, "")
 		}
 	}
@@ -2529,29 +2533,38 @@ func (h Harness) runCodexWithHeartbeat(
 	for {
 		select {
 		case run := <-done:
-			if run.err == nil {
-				if failed, detail := codexReportedFailure(run.res); failed {
-					detail = codexFailureDetailWithErrorDetails(run.res, detail)
-					if isNonFatalValidationToolingFailure(detail, run.res) {
-						h.logf(
-							"stage=%s status=warn action=validation_tooling_unavailable detail=%q",
-							agentStage,
-							detail,
-						)
-						return run.res, nil
-					}
-					if isRecoveredTransientRegistryLookupFailure(detail, run.res) {
-						h.logf(
-							"stage=%s status=warn action=recovered_transient_registry_lookup detail=%q",
-							agentStage,
-							detail,
-						)
-						return run.res, nil
-					}
-					return run.res, fmt.Errorf("%s reported failure: %s", agentStage, detail)
+			if failed, detail := codexReportedFailure(run.res); failed {
+				detail = codexFailureDetailWithErrorDetails(run.res, detail)
+				if isNonFatalValidationToolingFailure(detail, run.res) {
+					h.logf(
+						"stage=%s status=warn action=validation_tooling_unavailable detail=%q",
+						agentStage,
+						detail,
+					)
+					return run.res, nil
 				}
+				if isRecoveredTransientRegistryLookupFailure(detail, run.res) {
+					h.logf(
+						"stage=%s status=warn action=recovered_transient_registry_lookup detail=%q",
+						agentStage,
+						detail,
+					)
+					return run.res, nil
+				}
+				return run.res, fmt.Errorf("%s reported failure: %s", agentStage, detail)
 			}
-			return run.res, run.err
+			if run.err != nil {
+				if isNonFatalValidationToolingFailure("", run.res) {
+					h.logf(
+						"stage=%s status=warn action=validation_tooling_unavailable detail=%q",
+						agentStage,
+						strings.TrimSpace(strings.Join([]string{run.res.Stdout, run.res.Stderr}, "\n")),
+					)
+					return run.res, nil
+				}
+				return run.res, run.err
+			}
+			return run.res, nil
 		case <-ticker.C:
 			h.logf("stage=%s status=running elapsed_s=%d", agentStage, int(time.Since(start).Seconds()))
 		case <-runCtx.Done():
@@ -2685,16 +2698,25 @@ func isNonFatalValidationToolingFailure(detail string, res execx.Result) bool {
 		return false
 	}
 
-	validationUnavailable := false
 	validationUnavailableMarkers := []string{
 		"could not run automated test suite",
 		"could not run automated tests",
 		"could not run local automated tests",
+		"could not run vitest in current runtime",
 		"local automated test run unavailable",
+		"local automated validation not runnable",
+		"local automated validation not runnable in this runtime",
+		"local test runner unavailable",
+		"local test runner unavailable in runtime",
+		"local test execution unavailable",
+		"local test execution unavailable in this runtime",
 		"unable to run automated test suite",
 		"local validation tool missing in runtime",
 		"local validation command failed in runtime",
 		"local build validation command failed in runtime",
+		"local build validation not runnable",
+		"local build validation not runnable in runtime",
+		"local lint validation tool unavailable",
 		"local validation command failed",
 		"local build validation command failed",
 		"validation command failed in runtime",
@@ -2706,13 +2728,9 @@ func isNonFatalValidationToolingFailure(detail string, res execx.Result) bool {
 		"local validation tooling unavailable in runtime",
 		"full build validation could not run",
 		"focused go validation unavailable in runtime",
+		"node_modules missing",
 	}
-	for _, marker := range validationUnavailableMarkers {
-		if strings.Contains(text, marker) {
-			validationUnavailable = true
-			break
-		}
-	}
+	validationUnavailable := containsAny(text, validationUnavailableMarkers)
 
 	missingTooling := strings.Contains(text, "command not found") ||
 		strings.Contains(text, ": not found") ||
@@ -2721,7 +2739,10 @@ func isNonFatalValidationToolingFailure(detail string, res execx.Result) bool {
 		strings.Contains(text, "exit code 127") ||
 		strings.Contains(text, "returned 127") ||
 		strings.Contains(text, "enoent") ||
-		strings.Contains(text, "cannot find module")
+		strings.Contains(text, "cannot find module") ||
+		strings.Contains(text, "not installed in runtime") ||
+		strings.Contains(text, "tooling/deps not installed") ||
+		strings.Contains(text, "node_modules missing")
 	if !missingTooling {
 		return false
 	}
@@ -2729,23 +2750,56 @@ func isNonFatalValidationToolingFailure(detail string, res execx.Result) bool {
 		return true
 	}
 
-	// Some agent responses only include missing validation command output plus
-	// an "Alternative validation" section without explicit "validation unavailable"
-	// wording.
-	alternativeValidation := strings.Contains(text, "alternative validation")
 	validationCommandMarkers := []string{
 		"npm run lint",
 		"npm run build",
 		"npm run -s build",
 		"npm run typecheck",
 		"npm test",
+		"npm run test",
+		"pnpm test",
+		"yarn test",
 		"vitest",
 		"eslint",
 		"tsc",
+		"go test",
+		"go vet",
+		"golangci-lint",
 	}
-	for _, marker := range validationCommandMarkers {
+	validationContextMarkers := []string{
+		"validation",
+		"test runner",
+		"test execution",
+		"automated test",
+		"lint",
+		"typecheck",
+		"build",
+		"runtime",
+		"tooling",
+		"deps",
+		"dependency",
+		"node_modules",
+	}
+	hasValidationCommand := containsAny(text, validationCommandMarkers)
+	hasValidationContext := containsAny(text, validationContextMarkers)
+
+	// Some agent responses only include missing validation command output plus
+	// an "Alternative validation" section without explicit "validation unavailable"
+	// wording.
+	if strings.Contains(text, "alternative validation") && hasValidationCommand {
+		return true
+	}
+
+	if hasValidationCommand && hasValidationContext {
+		return true
+	}
+	return false
+}
+
+func containsAny(text string, markers []string) bool {
+	for _, marker := range markers {
 		if strings.Contains(text, marker) {
-			return alternativeValidation
+			return true
 		}
 	}
 	return false
@@ -3085,6 +3139,51 @@ func authCommand() execx.Command {
 
 func authSetupGitCommand() execx.Command {
 	return execx.Command{Name: "gh", Args: []string{"auth", "setup-git"}}
+}
+
+func (h Harness) runAuthSetupGit(ctx context.Context) error {
+	for attempt := 1; attempt <= maxAuthSetupGitAttempts; attempt++ {
+		authSetupGitMu.Lock()
+		_, err := h.runCommand(ctx, "auth", authSetupGitCommand())
+		authSetupGitMu.Unlock()
+		if err == nil {
+			return nil
+		}
+		if !isGitConfigLockContentionError(err) {
+			return err
+		}
+		if attempt >= maxAuthSetupGitAttempts {
+			h.logf(
+				"stage=auth status=warn action=setup_git_credentials reason=gitconfig_lock_contended err=%q",
+				err,
+			)
+			return nil
+		}
+		h.logf(
+			"stage=auth status=retry action=setup_git_credentials reason=gitconfig_lock_contended retry=%d/%d err=%q",
+			attempt,
+			maxAuthSetupGitAttempts-1,
+			err,
+		)
+		if sleepErr := h.Sleep(ctx, time.Duration(attempt)*authSetupGitRetryDelay); sleepErr != nil {
+			return sleepErr
+		}
+	}
+	return nil
+}
+
+func isGitConfigLockContentionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(strings.TrimSpace(err.Error()))
+	if text == "" {
+		return false
+	}
+	return strings.Contains(text, "could not lock config file") ||
+		strings.Contains(text, ".gitconfig: file exists") ||
+		strings.Contains(text, ".gitconfig.lock") ||
+		strings.Contains(text, "another git process seems to be running")
 }
 
 func hasGitHubAuthToken() bool {
