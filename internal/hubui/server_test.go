@@ -399,6 +399,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `Agent Profile`) {
 		t.Fatalf("expected index html to include connected profile editor copy")
 	}
+	if !strings.Contains(markup, `Update how I appear on Molten Hub.`) {
+		t.Fatalf("expected index html to include updated profile editor message")
+	}
+	if !strings.Contains(markup, `Modify my display name, emoji, and profile.`) {
+		t.Fatalf("expected index html to include updated profile editor supporting copy")
+	}
+	if strings.Contains(markup, `Update how this runtime appears in Molten Hub`) {
+		t.Fatalf("expected index html to remove the old runtime profile editor copy")
+	}
 	if strings.Contains(markup, `Edit Agent Profile`) {
 		t.Fatalf("expected index html to remove the old profile editor heading")
 	}
