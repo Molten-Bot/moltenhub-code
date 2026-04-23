@@ -181,3 +181,33 @@ func (d *localSubmissionDeduper) gcLocked(now time.Time) {
 func dedupeKeyForRunConfig(cfg config.Config) string {
 	return config.DedupeKey(cfg)
 }
+
+func dedupeKeyForSubmission(cfg config.Config, source string) string {
+	if !isAutomaticFollowUpSource(source) {
+		return dedupeKeyForRunConfig(cfg)
+	}
+
+	normalized := cfg
+	normalized.Prompt = strings.TrimSpace(strings.ToLower(source))
+	return dedupeKeyForRunConfig(normalized)
+}
+
+func dedupeFinalStateForSubmission(source, finalState string) string {
+	finalState = strings.TrimSpace(finalState)
+	if !isAutomaticFollowUpSource(source) {
+		return finalState
+	}
+	if strings.EqualFold(finalState, "error") {
+		return "completed"
+	}
+	return finalState
+}
+
+func isAutomaticFollowUpSource(source string) bool {
+	switch strings.TrimSpace(strings.ToLower(source)) {
+	case failureFollowUpSource, noChangesFollowUpSource, noChangesEscalationSource:
+		return true
+	default:
+		return false
+	}
+}
