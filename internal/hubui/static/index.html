@@ -1412,9 +1412,9 @@
         }
         if (Number.isFinite(TASK_HISTORY_LIMIT) && TASK_HISTORY_LIMIT > 0 && byID.size > TASK_HISTORY_LIMIT) {
           const limited = Array.from(byID.values()).sort((a, b) => {
-            const updatedDiff = historyTaskUpdatedAt(b) - historyTaskUpdatedAt(a);
-            if (updatedDiff !== 0) {
-              return updatedDiff;
+            const completedDiff = historyTaskCompletedAt(b) - historyTaskCompletedAt(a);
+            if (completedDiff !== 0) {
+              return completedDiff;
             }
             return String(b?.request_id || "").localeCompare(String(a?.request_id || ""));
           });
@@ -5172,9 +5172,9 @@
         const entries = Array.from(state.taskHistoryByID.values())
           .filter((task) => !isTaskHistoryExpired(task))
           .sort((a, b) => {
-            const updatedDiff = historyTaskUpdatedAt(b) - historyTaskUpdatedAt(a);
-            if (updatedDiff !== 0) {
-              return updatedDiff;
+            const completedDiff = historyTaskCompletedAt(b) - historyTaskCompletedAt(a);
+            if (completedDiff !== 0) {
+              return completedDiff;
             }
             return String(b?.request_id || "").localeCompare(String(a?.request_id || ""));
           })
@@ -6012,6 +6012,14 @@
       return parseTaskTimestamp(task?.started_at);
     }
 
+    function historyTaskCompletedAt(task) {
+      const completed = parseTaskTimestamp(task?.history_completed_at);
+      if (completed > 0) {
+        return completed;
+      }
+      return historyTaskUpdatedAt(task);
+    }
+
     function isTaskHistoryExpired(task, nowMs = Date.now()) {
       if (!Number.isFinite(TASK_HISTORY_MAX_AGE_MS) || TASK_HISTORY_MAX_AGE_MS <= 0) {
         return false;
@@ -6027,8 +6035,10 @@
       if (!task || !task.request_id) {
         return null;
       }
+      const historyCompletedAt = String(task.history_completed_at || task.updated_at || task.started_at || "").trim();
       return {
         ...task,
+        history_completed_at: historyCompletedAt,
         logs: cloneTaskLogsForHistory(task.logs),
       };
     }
@@ -6055,9 +6065,9 @@
         return changed;
       }
       const all = Array.from(state.taskHistoryByID.values()).sort((a, b) => {
-        const updatedDiff = historyTaskUpdatedAt(b) - historyTaskUpdatedAt(a);
-        if (updatedDiff !== 0) {
-          return updatedDiff;
+        const completedDiff = historyTaskCompletedAt(b) - historyTaskCompletedAt(a);
+        if (completedDiff !== 0) {
+          return completedDiff;
         }
         return String(b?.request_id || "").localeCompare(String(a?.request_id || ""));
       });
@@ -6093,6 +6103,9 @@
           continue;
         }
         const existing = state.taskHistoryByID.get(requestID);
+        if (existing?.history_completed_at) {
+          copy.history_completed_at = existing.history_completed_at;
+        }
         const existingLogsLength = Array.isArray(existing?.logs) ? existing.logs.length : 0;
         const nextLogsLength = Array.isArray(copy.logs) ? copy.logs.length : 0;
         if (
@@ -6158,8 +6171,10 @@
         if (isCompletedTask(task) && isTaskHistoryExpired(task, nowMs)) {
           continue;
         }
+        const historyCopy = state.taskHistoryByID.get(requestID);
         out.push({
           ...task,
+          history_completed_at: historyCopy?.history_completed_at || task.history_completed_at || task.updated_at || task.started_at || "",
           history_only: false,
           can_rerun: Boolean(task?.can_rerun),
         });
@@ -6200,8 +6215,8 @@
     function completedTasks(snapshot) {
       const out = historyTasks(snapshot).filter((task) => isCompletedTask(task));
       out.sort((a, b) => {
-        const updatedDiff = historyTaskUpdatedAt(b) - historyTaskUpdatedAt(a);
-        if (updatedDiff !== 0) return updatedDiff;
+        const completedDiff = historyTaskCompletedAt(b) - historyTaskCompletedAt(a);
+        if (completedDiff !== 0) return completedDiff;
 
         const startedDiff = parseTaskTimestamp(b?.started_at) - parseTaskTimestamp(a?.started_at);
         if (startedDiff !== 0) return startedDiff;

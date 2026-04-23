@@ -654,6 +654,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function isTaskHistoryExpired(task, nowMs = Date.now()) {") {
 		t.Fatalf("expected index html to include a helper for completed-task history expiry checks")
 	}
+	if !strings.Contains(markup, "function historyTaskCompletedAt(task)") {
+		t.Fatalf("expected index html to include stable completed-task history ordering timestamps")
+	}
+	if !strings.Contains(markup, "copy.history_completed_at = existing.history_completed_at;") {
+		t.Fatalf("expected index html to preserve first completed-task history position across later updates")
+	}
+	if !strings.Contains(markup, "history_completed_at: historyCopy?.history_completed_at || task.history_completed_at || task.updated_at || task.started_at || \"\",") {
+		t.Fatalf("expected live completed tasks to reuse persisted history ordering timestamps")
+	}
 	if !strings.Contains(markup, "if (!requestID || isTaskHistoryExpired(task, nowMs)) {") {
 		t.Fatalf("expected index html to prune expired task history entries from memory")
 	}
