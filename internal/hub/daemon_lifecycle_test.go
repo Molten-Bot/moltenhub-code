@@ -86,6 +86,10 @@ func TestDaemonRunPublishesAgentLifecycleStatus(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
 			return
+		case "/v1/openclaw/messages/online":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+			return
 		case "/v1/openclaw/messages/ws":
 			http.Error(w, "upgrade required", http.StatusUpgradeRequired)
 			return
@@ -196,7 +200,7 @@ func TestDaemonRunReturnsAuthErrorWhenTransportIsUnauthorized(t *testing.T) {
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"ok":true}`))
 			return
-		case "/v1/agents/me/metadata", "/v1/agents/me/status":
+		case "/v1/agents/me/metadata", "/v1/agents/me/status", "/v1/openclaw/messages/online":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
 			return

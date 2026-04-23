@@ -229,6 +229,9 @@ func TestAsyncAPIClientTokenBoundMethods(t *testing.T) {
 	if err := client.UpdateAgentStatus(context.Background(), "online"); err != nil {
 		t.Fatalf("UpdateAgentStatus() error = %v", err)
 	}
+	if err := client.MarkOpenClawOnline(context.Background(), "main", "runtime startup"); err != nil {
+		t.Fatalf("MarkOpenClawOnline() error = %v", err)
+	}
 	if err := client.MarkOpenClawOffline(context.Background(), "main", "harness_shutdown"); err != nil {
 		t.Fatalf("MarkOpenClawOffline() error = %v", err)
 	}
@@ -252,6 +255,7 @@ func TestAsyncAPIClientTokenBoundMethods(t *testing.T) {
 		"PATCH /v1/agents/me/status",
 		"POST /v1/openclaw/messages/ack",
 		"POST /v1/openclaw/messages/nack",
+		"POST /v1/openclaw/messages/online",
 		"POST /v1/openclaw/messages/offline",
 		"PATCH /v1/agents/me/metadata",
 	}

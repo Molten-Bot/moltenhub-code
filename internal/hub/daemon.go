@@ -158,6 +158,11 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	} else {
 		d.logf("hub.agent status=online")
 	}
+	if err := api.MarkOpenClawOnline(ctx, cfg.SessionKey, "runtime startup"); err != nil {
+		d.logf("hub.transport status=warn mode=openclaw_pull state=online err=%q", err)
+	} else {
+		d.logf("hub.transport status=online mode=openclaw_pull")
+	}
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), agentStatusUpdateTimeout)
 		defer cancel()

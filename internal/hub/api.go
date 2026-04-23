@@ -278,6 +278,33 @@ func (c APIClient) UpdateAgentStatus(ctx context.Context, token, status string) 
 	return nil
 }
 
+// MarkOpenClawOnline marks this runtime online for OpenClaw long-poll transport.
+func (c APIClient) MarkOpenClawOnline(ctx context.Context, token, sessionKey, reason string) error {
+	normalizedToken, err := requireHubToken(token, "mark openclaw online")
+	if err != nil {
+		return err
+	}
+	token = normalizedToken
+
+	body := map[string]any{}
+	if strings.TrimSpace(sessionKey) != "" {
+		body["session_key"] = strings.TrimSpace(sessionKey)
+	}
+	body["transport"] = "http_long_poll"
+	if strings.TrimSpace(reason) != "" {
+		body["reason"] = strings.TrimSpace(reason)
+	}
+
+	ok, trace := c.tryAny(ctx, token, []apiAttempt{
+		{Method: http.MethodPost, Path: "/openclaw/messages/online", Body: body},
+	})
+	if !ok {
+		return fmt.Errorf("mark openclaw online failed: %s", trace)
+	}
+
+	return nil
+}
+
 // MarkOpenClawOffline marks this runtime offline for OpenClaw websocket transport.
 func (c APIClient) MarkOpenClawOffline(ctx context.Context, token, sessionKey, reason string) error {
 	normalizedToken, err := requireHubToken(token, "mark openclaw offline")

@@ -18,6 +18,7 @@ type MoltenHubAPI interface {
 	ResolveAgentToken(ctx context.Context, cfg InitConfig) (string, error)
 	SyncProfile(ctx context.Context, cfg InitConfig) error
 	UpdateAgentStatus(ctx context.Context, status string) error
+	MarkOpenClawOnline(ctx context.Context, sessionKey, reason string) error
 	MarkOpenClawOffline(ctx context.Context, sessionKey, reason string) error
 	RecordActivity(ctx context.Context, activity string) error
 	RecordCodingActivityRunning(ctx context.Context) error
@@ -95,6 +96,13 @@ func (c *AsyncAPIClient) SyncProfile(ctx context.Context, cfg InitConfig) error 
 func (c *AsyncAPIClient) UpdateAgentStatus(ctx context.Context, status string) error {
 	return c.withToken(func(token string) error {
 		return c.client.UpdateAgentStatus(ctx, token, status)
+	})
+}
+
+// MarkOpenClawOnline marks long-poll transport online for the configured token.
+func (c *AsyncAPIClient) MarkOpenClawOnline(ctx context.Context, sessionKey, reason string) error {
+	return c.withToken(func(token string) error {
+		return c.client.MarkOpenClawOnline(ctx, token, sessionKey, reason)
 	})
 }
 

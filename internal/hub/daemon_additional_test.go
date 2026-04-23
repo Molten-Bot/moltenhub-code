@@ -91,6 +91,9 @@ func (s *stubMoltenHubAPI) ResolveAgentToken(context.Context, InitConfig) (strin
 }
 func (s *stubMoltenHubAPI) SyncProfile(context.Context, InitConfig) error   { return nil }
 func (s *stubMoltenHubAPI) UpdateAgentStatus(context.Context, string) error { return nil }
+func (s *stubMoltenHubAPI) MarkOpenClawOnline(context.Context, string, string) error {
+	return nil
+}
 func (s *stubMoltenHubAPI) MarkOpenClawOffline(_ context.Context, sessionKey, reason string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
