@@ -352,7 +352,7 @@ func runHub(args []string) int {
 			source = localSubmitSource
 		}
 
-		dedupeKey := dedupeKeyForRunConfig(runCfg)
+		dedupeKey := dedupeKeyForSubmission(runCfg, source)
 		if force {
 			dedupeKey = ""
 		}
@@ -416,7 +416,7 @@ func runHub(args []string) int {
 			finalState := ""
 			if dedupeKey != "" {
 				defer func() {
-					localSubmitDeduper.Done(dedupeKey, requestID, finalState)
+					localSubmitDeduper.Done(dedupeKey, requestID, dedupeFinalStateForSubmission(source, finalState))
 				}()
 			}
 			defer cancelRun(nil)

@@ -174,6 +174,95 @@ func TestDedupeKeyForRunConfigDiffersByTargetSubdir(t *testing.T) {
 	}
 }
 
+func TestDedupeKeyForSubmissionCanonicalizesAutomaticFollowUpPrompts(t *testing.T) {
+	t.Parallel()
+
+	cfgA := config.Config{
+		Repos:      []string{"git@github.com:acme/repo.git"},
+		BaseBranch: "main",
+		Prompt:     "Review the failing log paths first...\n- request_id=local-1\n- error=timeout",
+	}
+	cfgB := config.Config{
+		Repos:      []string{"git@github.com:acme/repo.git"},
+		BaseBranch: "main",
+		Prompt:     "Review the failing log paths first...\n- request_id=local-2\n- error=clone failed",
+	}
+
+	keyA := dedupeKeyForSubmission(cfgA, failureFollowUpSource)
+	keyB := dedupeKeyForSubmission(cfgB, failureFollowUpSource)
+	if keyA != keyB {
+		t.Fatalf("automatic follow-up keys should match despite prompt context drift\nA: %q\nB: %q", keyA, keyB)
+	}
+}
+
+func TestDedupeKeyForSubmissionKeepsPromptSpecificityForRegularRuns(t *testing.T) {
+	t.Parallel()
+
+	cfgA := config.Config{
+		Repos:      []string{"git@github.com:acme/repo.git"},
+		BaseBranch: "main",
+		Prompt:     "fix lint errors",
+	}
+	cfgB := config.Config{
+		Repos:      []string{"git@github.com:acme/repo.git"},
+		BaseBranch: "main",
+		Prompt:     "fix flaky tests",
+	}
+
+	keyA := dedupeKeyForSubmission(cfgA, localSubmitSource)
+	keyB := dedupeKeyForSubmission(cfgB, localSubmitSource)
+	if keyA == keyB {
+		t.Fatalf("regular submission keys should differ when prompts differ\nA: %q\nB: %q", keyA, keyB)
+	}
+}
+
+func TestDedupeFinalStateForSubmissionTreatsAutomaticFollowUpErrorsAsCompleted(t *testing.T) {
+	t.Parallel()
+
+	if got, want := dedupeFinalStateForSubmission(failureFollowUpSource, "error"), "completed"; got != want {
+		t.Fatalf("dedupeFinalStateForSubmission(failure_followup,error) = %q, want %q", got, want)
+	}
+	if got, want := dedupeFinalStateForSubmission(noChangesFollowUpSource, " error "), "completed"; got != want {
+		t.Fatalf("dedupeFinalStateForSubmission(no_changes_followup,error) = %q, want %q", got, want)
+	}
+	if got, want := dedupeFinalStateForSubmission(localSubmitSource, "error"), "error"; got != want {
+		t.Fatalf("dedupeFinalStateForSubmission(local_submit,error) = %q, want %q", got, want)
+	}
+}
+
+func TestAutomaticFollowUpDedupeSuppressesRepeatedFailuresWithPromptDrift(t *testing.T) {
+	t.Parallel()
+
+	d := newLocalSubmissionDeduper(2 * time.Minute)
+
+	cfgA := config.Config{
+		Repos:      []string{"git@github.com:acme/repo.git"},
+		BaseBranch: "main",
+		Prompt:     "Review failing logs\n- request_id=local-1",
+	}
+	cfgB := config.Config{
+		Repos:      []string{"git@github.com:acme/repo.git"},
+		BaseBranch: "main",
+		Prompt:     "Review failing logs\n- request_id=local-2",
+	}
+
+	keyA := dedupeKeyForSubmission(cfgA, failureFollowUpSource)
+	keyB := dedupeKeyForSubmission(cfgB, failureFollowUpSource)
+	if keyA != keyB {
+		t.Fatalf("automatic follow-up dedupe key mismatch\nA: %q\nB: %q", keyA, keyB)
+	}
+
+	if accepted, state, duplicateOf := d.Begin(keyA, "follow-up-1", false); !accepted || state != "accepted" || duplicateOf != "" {
+		t.Fatalf("Begin() = (%v, %q, %q), want (true, accepted, empty)", accepted, state, duplicateOf)
+	}
+
+	d.Done(keyA, "follow-up-1", dedupeFinalStateForSubmission(failureFollowUpSource, "error"))
+
+	if duplicate, state, duplicateOf := d.Check(keyB, false); !duplicate || state != "completed" || duplicateOf != "follow-up-1" {
+		t.Fatalf("Check() = (%v, %q, %q), want (true, completed, follow-up-1)", duplicate, state, duplicateOf)
+	}
+}
+
 func TestDedupeKeyForRunConfigNormalizesTargetSubdir(t *testing.T) {
 	t.Parallel()
 
