@@ -727,7 +727,7 @@ func TestApplyDefaultsRemovesLegacyPRFormatReferenceLine(t *testing.T) {
 		RepoURL: "git@github.com:acme/repo.git",
 		Prompt:  "fix tests",
 		PRBody: strings.Join([]string{
-			prBodyGeneratedByLine,
+			prBodyGeneratedByLegacyLinkedLine,
 			prBodyFormatReferenceLine,
 			prBodySummaryHeading,
 			"Custom PR body.",
@@ -739,6 +739,9 @@ func TestApplyDefaultsRemovesLegacyPRFormatReferenceLine(t *testing.T) {
 
 	if got := strings.Count(cfg.PRBody, prBodyGeneratedByLine); got != 1 {
 		t.Fatalf("PRBody contains %d generated-by markers, want 1: %q", got, cfg.PRBody)
+	}
+	if strings.Contains(cfg.PRBody, prBodyGeneratedByLegacyLinkedLine) {
+		t.Fatalf("PRBody retained legacy generated-by marker: %q", cfg.PRBody)
 	}
 	if got := strings.Count(cfg.PRBody, prBodyFormatReferenceLine); got != 0 {
 		t.Fatalf("PRBody contains %d format-reference markers, want 0: %q", got, cfg.PRBody)
