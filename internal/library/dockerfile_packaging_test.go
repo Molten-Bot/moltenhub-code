@@ -120,6 +120,9 @@ func TestRuntimeDockerfileUsesAlpineBaseImages(t *testing.T) {
 		"apk add --no-cache",
 		"github-cli",
 		"openssh-client-default",
+		"HARNESS_WORKSPACE_RAM_BASE=/workspace",
+		"HARNESS_WORKSPACE_DISK_BASE=/workspace",
+		"mkdir -p /workspace/config /workspace/moltenhub-code/tasks",
 		"chown -R node:node /workspace",
 		"USER node",
 	} {

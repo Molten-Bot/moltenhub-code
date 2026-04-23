@@ -36,6 +36,7 @@ var promptImageHarnesses = map[string]struct{}{
 type RunOptions struct {
 	SkipGitRepoCheck bool
 	ImagePaths       []string
+	WritableDirs     []string
 }
 
 // Runtime describes one executable LLM harness runtime.
@@ -204,6 +205,13 @@ func buildCodexCommand(targetDir, prompt string, opts RunOptions) (execx.Command
 	args := []string{"exec", "--sandbox", "workspace-write"}
 	if opts.SkipGitRepoCheck {
 		args = append(args, "--skip-git-repo-check")
+	}
+	for _, dir := range opts.WritableDirs {
+		dir = strings.TrimSpace(dir)
+		if dir == "" {
+			continue
+		}
+		args = append(args, "--add-dir", dir)
 	}
 	for _, imagePath := range opts.ImagePaths {
 		imagePath = strings.TrimSpace(imagePath)
