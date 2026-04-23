@@ -1228,7 +1228,7 @@
 
     function currentHubSetupSupportingCopy() {
       if (isHubProfileDialogMode()) {
-        return "Update how this runtime appears in Molten Hub. The handle stays stable; display name, emoji, and profile text can change.";
+        return "Modify my display name, emoji, and profile.";
       }
       if (state.hubSetup.agentMode === "new") {
         return "Bind token detected. Save handle, display name, emoji, and profile details for the selected region.";
@@ -2131,7 +2131,7 @@
       }
       if (hubSetupMessage) {
         hubSetupMessage.textContent = state.hubSetup.message || (profileEditor
-          ? "Update how this runtime appears in Molten Hub."
+          ? "Update how I appear on Molten Hub."
           : "Connect this runtime to Molten Hub.");
       }
       if (hubSetupCopy) {
