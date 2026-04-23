@@ -178,21 +178,12 @@ func (g *auggieAuthGate) refreshLocked() {
 	}
 	g.initCfg.AugmentSessionAuth = canonicalSessionAuth
 
-	githubToken, _ := firstConfiguredGitHubToken(g.runtimeConfigPath, g.initCfg)
-	if strings.TrimSpace(githubToken) == "" {
-		g.authState.configureCommand = claudeGitHubConfigureCommand
-		g.authState.configurePlaceholder = claudeGitHubConfigurePlaceholder
-		g.authState.message = "GitHub token is required."
-		return
-	}
-	if err := setGitHubTokenEnvironment(githubToken); err != nil {
-		g.authState.configureCommand = claudeGitHubConfigureCommand
-		g.authState.configurePlaceholder = claudeGitHubConfigurePlaceholder
-		g.authState.message = fmt.Sprintf("set github token env: %v", err)
+	githubToken, blocked := applyGitHubTokenRequirementState(&g.authState, agentruntime.HarnessAuggie, g.runtimeConfigPath, g.initCfg)
+	if blocked {
 		return
 	}
 
-	g.initCfg.GitHubToken = strings.TrimSpace(githubToken)
+	g.initCfg.GitHubToken = githubToken
 	g.authState.ready = true
 	g.authState.state = "ready"
 	g.authState.message = "Auggie session auth and GitHub token are ready."
@@ -287,14 +278,8 @@ func decodeAuggieSessionAuth(rawInput string) (auggieSessionAuth, error) {
 	}
 
 	var parsed auggieSessionAuth
-	if err := decodeJSONStrict(rawInput, &parsed); err == nil {
-		return parsed, nil
+	if err := decodeJSONOrWrappedString(rawInput, &parsed); err != nil {
+		return auggieSessionAuth{}, fmt.Errorf("expected JSON object with accessToken, tenantURL, and scopes")
 	}
-
-	var wrapped string
-	if err := decodeJSONStrict(rawInput, &wrapped); err == nil {
-		return decodeAuggieSessionAuth(wrapped)
-	}
-
-	return auggieSessionAuth{}, fmt.Errorf("expected JSON object with accessToken, tenantURL, and scopes")
+	return parsed, nil
 }

@@ -290,8 +290,7 @@ func (g *piAuthGate) refreshLocked() {
 		}
 		g.initCfg.PiAuthJSON = canonical
 		if g.validatedAuth == validatedPiAuthStateKey("json", canonical) {
-			if blocked, state := githubTokenRequirementState(agentruntime.HarnessPi, g.runtimeConfigPath, g.initCfg); blocked {
-				g.authState.applySnapshot(state)
+			if _, blocked := applyGitHubTokenRequirementState(&g.authState, agentruntime.HarnessPi, g.runtimeConfigPath, g.initCfg); blocked {
 				return
 			}
 			g.authState.ready = true
@@ -320,8 +319,7 @@ func (g *piAuthGate) refreshLocked() {
 		}
 		g.initCfg.PiProviderAuth = canonical
 		if g.validatedAuth == validatedPiAuthStateKey("provider", canonical) {
-			if blocked, state := githubTokenRequirementState(agentruntime.HarnessPi, g.runtimeConfigPath, g.initCfg); blocked {
-				g.authState.applySnapshot(state)
+			if _, blocked := applyGitHubTokenRequirementState(&g.authState, agentruntime.HarnessPi, g.runtimeConfigPath, g.initCfg); blocked {
 				return
 			}
 			g.authState.ready = true
@@ -334,8 +332,7 @@ func (g *piAuthGate) refreshLocked() {
 	}
 
 	if g.validatedAuth == validatedPiAuthStateKey("local", piAuthFileRelativePath) {
-		if blocked, state := githubTokenRequirementState(agentruntime.HarnessPi, g.runtimeConfigPath, g.initCfg); blocked {
-			g.authState.applySnapshot(state)
+		if _, blocked := applyGitHubTokenRequirementState(&g.authState, agentruntime.HarnessPi, g.runtimeConfigPath, g.initCfg); blocked {
 			return
 		}
 		g.authState.ready = true
@@ -447,11 +444,7 @@ func normalizePiAuthJSON(rawInput string) (string, error) {
 	}
 
 	var rawMap map[string]any
-	if err := decodeJSONStrict(rawInput, &rawMap); err != nil {
-		var wrapped string
-		if err := decodeJSONStrict(rawInput, &wrapped); err == nil {
-			return normalizePiAuthJSON(wrapped)
-		}
+	if err := decodeJSONOrWrappedString(rawInput, &rawMap); err != nil {
 		return "", fmt.Errorf("expected a JSON object")
 	}
 	if len(rawMap) == 0 {
@@ -479,11 +472,7 @@ func decodePiProviderAuth(rawInput string) (piProviderAuth, error) {
 	}
 
 	var auth piProviderAuth
-	if err := decodeJSONStrict(rawInput, &auth); err != nil {
-		var wrapped string
-		if err := decodeJSONStrict(rawInput, &wrapped); err == nil {
-			return decodePiProviderAuth(wrapped)
-		}
+	if err := decodeJSONOrWrappedString(rawInput, &auth); err != nil {
 		return piProviderAuth{}, fmt.Errorf("expected JSON object with env_var and value")
 	}
 
@@ -576,11 +565,7 @@ func isLikelyPiProviderAuthInput(rawInput string) bool {
 	}
 
 	var rawMap map[string]any
-	if err := decodeJSONStrict(rawInput, &rawMap); err != nil {
-		var wrapped string
-		if err := decodeJSONStrict(rawInput, &wrapped); err == nil {
-			return isLikelyPiProviderAuthInput(wrapped)
-		}
+	if err := decodeJSONOrWrappedString(rawInput, &rawMap); err != nil {
 		return false
 	}
 	_, hasEnvVar := rawMap["env_var"]
