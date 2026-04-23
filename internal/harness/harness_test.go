@@ -587,6 +587,63 @@ func TestRunWithGitHubTokenRunsAuthSetupGitBeforeCodex(t *testing.T) {
 	}
 }
 
+func TestRunAuthSetupGitRetriesGitConfigLockContention(t *testing.T) {
+	lockErr := errors.New("failed to set up git credential helper: failed to run git: error: could not lock config file /home/jef/.gitconfig: File exists")
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: authSetupGitCommand(), err: lockErr},
+		{cmd: authSetupGitCommand()},
+	}}
+
+	h := New(fake)
+	sleepCalls := 0
+	h.Sleep = func(context.Context, time.Duration) error {
+		sleepCalls++
+		return nil
+	}
+
+	if err := h.runAuthSetupGit(context.Background()); err != nil {
+		t.Fatalf("runAuthSetupGit() err = %v, want nil", err)
+	}
+	if sleepCalls != 1 {
+		t.Fatalf("runAuthSetupGit() sleep calls = %d, want 1", sleepCalls)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunAuthSetupGitSkipsFatalOnPersistentGitConfigLockContention(t *testing.T) {
+	lockErr := errors.New("failed to set up git credential helper: failed to run git: error: could not lock config file /home/jef/.gitconfig: File exists")
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: authSetupGitCommand(), err: lockErr},
+		{cmd: authSetupGitCommand(), err: lockErr},
+		{cmd: authSetupGitCommand(), err: lockErr},
+	}}
+
+	h := New(fake)
+	if err := h.runAuthSetupGit(context.Background()); err != nil {
+		t.Fatalf("runAuthSetupGit() err = %v, want nil", err)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunAuthSetupGitReturnsErrorForNonLockFailure(t *testing.T) {
+	setupErr := errors.New("failed to set up git credential helper: command failed")
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: authSetupGitCommand(), err: setupErr},
+	}}
+
+	h := New(fake)
+	if err := h.runAuthSetupGit(context.Background()); !errors.Is(err, setupErr) {
+		t.Fatalf("runAuthSetupGit() err = %v, want %v", err, setupErr)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
 func TestRunWithPromptImagesKeepsArtifactsOutOfRepo(t *testing.T) {
 	t.Parallel()
 
@@ -3853,6 +3910,76 @@ func TestRunCodexAllowsLocalValidationToolMissingInRuntime(t *testing.T) {
 	h := New(fake)
 	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
 		t.Fatalf("runCodex() error = %v, want nil for local validation tool missing in runtime", err)
+	}
+}
+
+func TestRunCodexAllowsLocalTestRunnerUnavailableInRuntime(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "update organization profile tests"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: Local test runner unavailable in runtime.",
+				Stderr: "Error details: `npm test -- --run src/features/hub/components/__tests__/HubOrganizationSection.test.tsx` failed with `sh: 1: vitest: not found`.",
+			},
+		},
+	}}
+
+	h := New(fake)
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
+		t.Fatalf("runCodex() error = %v, want nil for local test runner tooling gap", err)
+	}
+}
+
+func TestRunCodexAllowsLocalLintValidationToolUnavailable(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "polish profile styles"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: Local lint validation tool unavailable.",
+				Stderr: "Error details: `sh: 1: eslint: not found` while running `npm run lint`.",
+			},
+		},
+	}}
+
+	h := New(fake)
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
+		t.Fatalf("runCodex() error = %v, want nil for local lint tooling gap", err)
+	}
+}
+
+func TestRunCodexAllowsValidationToolingGapWhenCommandReturnsError(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "run validation after docs change"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: Local build validation not runnable in runtime.",
+				Stderr: "Error details: `npm run build` -> `sh: 1: tsc: not found`",
+			},
+			err: errors.New("run codex [exec]: exit status 1"),
+		},
+	}}
+
+	h := New(fake)
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
+		t.Fatalf("runCodex() error = %v, want nil for validation tooling gap on non-zero exit", err)
 	}
 }
 
