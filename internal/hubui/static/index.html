@@ -5645,6 +5645,7 @@
         }
 
         const newRequestID = body?.request_id || "(unknown)";
+        completeTaskDismissal(requestID);
         setTaskStatusFilter("running");
         trackAnalyticsEvent("task_rerun_succeeded", { request_id: requestID, forced: force, rerun_request_id: newRequestID });
         setLocalPromptStatus("ok", force ? `Queued forced request ${newRequestID} (re-run of ${requestID})` : `Queued request ${newRequestID} (re-run of ${requestID})`);
@@ -6188,7 +6189,7 @@
         out.push({
           ...task,
           history_only: true,
-          can_rerun: false,
+          can_rerun: Boolean(task?.can_rerun),
         });
       }
 

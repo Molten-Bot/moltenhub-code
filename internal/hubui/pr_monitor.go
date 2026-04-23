@@ -162,6 +162,7 @@ func (m *PRMergeMonitor) checkTaskPR(ctx context.Context, task Task) {
 			return
 		}
 	}
+	m.Broker.DropTaskRunConfig(task.RequestID)
 	if m.CleanupTask != nil {
 		if err := m.CleanupTask(ctx, task.RequestID); err != nil {
 			m.Logf("hub.ui status=warn event=pr_monitor_cleanup request_id=%s pr_url=%s err=%q", task.RequestID, task.PRURL, err)

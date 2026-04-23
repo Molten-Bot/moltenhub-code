@@ -1155,6 +1155,7 @@ func (s Server) handleTaskRerun(w http.ResponseWriter, r *http.Request, requestI
 		}
 	}
 
+	sourceTask, sourceTaskFound := s.Broker.Task(requestID)
 	newRequestID, err := submit(r.Context(), runConfigJSON)
 	if err != nil {
 		if duplicateRequestID, duplicateState, ok := duplicateSubmissionDetails(err); ok {
@@ -1173,6 +1174,13 @@ func (s Server) handleTaskRerun(w http.ResponseWriter, r *http.Request, requestI
 			"error": err.Error(),
 		})
 		return
+	}
+
+	s.Broker.RecordTaskRerunAttempt(requestID, newRequestID)
+	if sourceTaskFound && isCompletedTaskStatus(sourceTask.Status) {
+		if err := s.Broker.CloseTask(requestID); err != nil {
+			s.logf("hub.ui status=warn event=task_rerun_close_source request_id=%s rerun_request_id=%s err=%q", requestID, newRequestID, err)
+		}
 	}
 
 	writeJSON(w, http.StatusAccepted, map[string]any{
