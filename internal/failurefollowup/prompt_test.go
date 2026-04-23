@@ -2,6 +2,7 @@ package failurefollowup
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -58,6 +59,20 @@ func TestWithExecutionContractIncludesRemoteOperationsHandoff(t *testing.T) {
 	}
 }
 
+func TestRequiredPromptScopesFailureFollowUpToMoltenHubCode(t *testing.T) {
+	t.Parallel()
+
+	for _, want := range []string{
+		"fix the underlying MoltenHub Code application issues in this repository",
+		"Treat the original task prompt as failure context only",
+		"do not implement that requested product change here unless it is required to fix MoltenHub Code failure handling",
+	} {
+		if !strings.Contains(RequiredPrompt, want) {
+			t.Fatalf("RequiredPrompt missing %q: %q", want, RequiredPrompt)
+		}
+	}
+}
+
 func TestComposePromptUsesFallbackPathsAndContract(t *testing.T) {
 	t.Parallel()
 
@@ -87,7 +102,7 @@ func TestComposePromptUsesFallbackPathsAndContract(t *testing.T) {
 		RemoteOperationsInstruction,
 		ActionableChangeInstruction,
 		NoOpInstruction,
-		`{"repos":["git@github.com:Molten-Bot/moltenhub-code.git"],"baseBranch":"main","targetSubdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."}`,
+		fmt.Sprintf(`{"repos":["git@github.com:Molten-Bot/moltenhub-code.git"],"baseBranch":"main","targetSubdir":".","prompt":"%s"}`, RequiredPrompt),
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("ComposePrompt() missing %q: %q", want, got)
