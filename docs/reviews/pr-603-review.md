@@ -4,6 +4,7 @@
 - Updates task progress agent-logo rendering so the agent step gets an `is-agent-logo` class when its progress icon key is `agent`.
 - Adds task progress logo filter variables and dark/night active styling so the active agent logo is white, with a muted grey treatment while inactive.
 - Adds string-based stylesheet assertions in `internal/hubui/server_additional_test.go`.
+- Also includes an unrelated harness auth-gate refactor that centralizes configurable auth state helpers and wrapped JSON decoding.
 
 ## PR Discussion
 - GitHub PR context reviewed: PR [#603](https://github.com/Molten-Bot/moltenhub-code/pull/603), base `main`, head `moltenhub-agent-logo-is-not-visible-in-dark-mode-s`.
@@ -28,11 +29,8 @@
 
 ## Validation
 - Reviewed diff against `origin/main`.
-- Reviewed affected renderer and CSS around:
-  - `internal/hubui/static/index.html:925`
-  - `internal/hubui/static/index.html:6484`
-  - `internal/hubui/static/style.css:2416`
-  - `internal/hubui/static/style.css:2480`
+- Reviewed affected renderer and CSS around `internal/hubui/static/index.html:6484`, `internal/hubui/static/style.css:2416`, and `internal/hubui/static/style.css:2480`.
+- Reviewed shared auth helper changes around `cmd/harness/auth_gate_shared.go:64`, `cmd/harness/auth_gate_shared.go:71`, and `cmd/harness/auth_gate_shared.go:334`.
 - Reviewed PR discussion with `gh pr view --json comments,reviews`; no comments or reviews were present.
 - `git diff --check origin/main...HEAD` passed.
 - Attempted `go test ./internal/hubui`, but Go is unavailable in this runtime: `/bin/sh: go: not found`.
