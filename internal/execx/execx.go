@@ -51,7 +51,11 @@ func (OSRunner) RunStream(ctx context.Context, cmd Command, handler StreamLineHa
 }
 
 func runWithStream(ctx context.Context, cmd Command, handler StreamLineHandler) (Result, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	c := exec.CommandContext(ctx, cmd.Name, cmd.Args...)
+	configureCommandProcessGroup(c)
 	if cmd.Dir != "" {
 		c.Dir = cmd.Dir
 	}
@@ -65,6 +69,16 @@ func runWithStream(ctx context.Context, cmd Command, handler StreamLineHandler) 
 	stderrEmitter := lineEmitter{stream: "stderr", handler: handler}
 	c.Stdout = io.MultiWriter(&stdout, &stdoutEmitter)
 	c.Stderr = io.MultiWriter(&stderr, &stderrEmitter)
+
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			terminateCommandProcessGroup(c)
+		case <-done:
+		}
+	}()
 
 	err := c.Run()
 	stdoutEmitter.Flush()

@@ -74,3 +74,19 @@ func TestOSRunnerRunFailureUsesStdoutSummaryWhenStderrEmpty(t *testing.T) {
 		t.Fatalf("Run() error = %q, want stdout summary", err.Error())
 	}
 }
+
+func TestOSRunnerRunAcceptsNilContext(t *testing.T) {
+	t.Parallel()
+
+	r := OSRunner{}
+	res, err := r.Run(nil, Command{
+		Name: "sh",
+		Args: []string{"-lc", "printf ok"},
+	})
+	if err != nil {
+		t.Fatalf("Run(nil context) error = %v", err)
+	}
+	if got, want := res.Stdout, "ok"; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+}

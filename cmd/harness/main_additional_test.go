@@ -1380,3 +1380,79 @@ func TestRunLocalDispatchReportsErrorState(t *testing.T) {
 	}
 	assertLogContains(t, logs, "dispatch status=error request_id=req-1")
 }
+
+func TestTaskWorkspaceDirFromLogContent(t *testing.T) {
+	t.Parallel()
+
+	content := strings.Join([]string{
+		"dispatch status=start request_id=req-1",
+		"dispatch status=completed request_id=req-2 workspace=/tmp/ignore",
+		"dispatch status=completed request_id=req-1 workspace=/tmp/work-old",
+		"dispatch status=error request_id=req-1 workspace=/tmp/work-new err=\"boom\"",
+	}, "\n")
+
+	if got, want := taskWorkspaceDirFromLogContent(content, "req-1"), "/tmp/work-new"; got != want {
+		t.Fatalf("taskWorkspaceDirFromLogContent() = %q, want %q", got, want)
+	}
+	if got := taskWorkspaceDirFromLogContent(content, "req-missing"); got != "" {
+		t.Fatalf("taskWorkspaceDirFromLogContent(missing) = %q, want empty", got)
+	}
+}
+
+func TestTaskWorkspaceDirFromLogDir(t *testing.T) {
+	t.Parallel()
+
+	logDir := t.TempDir()
+	logContent := "dispatch status=completed request_id=req-log workspace=/tmp/workspace-from-log\n"
+	if err := os.WriteFile(filepath.Join(logDir, logFileName), []byte(logContent), 0o644); err != nil {
+		t.Fatalf("write log file: %v", err)
+	}
+
+	if got, want := taskWorkspaceDirFromLogDir(logDir, "req-log"), "/tmp/workspace-from-log"; got != want {
+		t.Fatalf("taskWorkspaceDirFromLogDir() = %q, want %q", got, want)
+	}
+}
+
+func TestRemoveManagedWorkspaceDir(t *testing.T) {
+	t.Setenv("HARNESS_WORKSPACE_RAM_BASE", filepath.Join(t.TempDir(), "ram-base"))
+	t.Setenv("HARNESS_WORKSPACE_DISK_BASE", filepath.Join(t.TempDir(), "disk-base"))
+	t.Setenv("HARNESS_WORKSPACE_ROOT_NAME", "tasks-root")
+
+	managedDir := filepath.Join(
+		os.Getenv("HARNESS_WORKSPACE_RAM_BASE"),
+		"tasks-root",
+		"0123456789abcdef0123456789abcdef",
+	)
+	if err := os.MkdirAll(managedDir, 0o755); err != nil {
+		t.Fatalf("mkdir managed dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(managedDir, "file.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("write managed file: %v", err)
+	}
+
+	removed, err := removeManagedWorkspaceDir(managedDir)
+	if err != nil {
+		t.Fatalf("removeManagedWorkspaceDir(managed) error = %v", err)
+	}
+	if !removed {
+		t.Fatal("removeManagedWorkspaceDir(managed) removed = false, want true")
+	}
+	if _, err := os.Stat(managedDir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("managed dir still exists after cleanup: %v", err)
+	}
+
+	unmanagedDir := filepath.Join(t.TempDir(), "unmanaged")
+	if err := os.MkdirAll(unmanagedDir, 0o755); err != nil {
+		t.Fatalf("mkdir unmanaged dir: %v", err)
+	}
+	removed, err = removeManagedWorkspaceDir(unmanagedDir)
+	if err != nil {
+		t.Fatalf("removeManagedWorkspaceDir(unmanaged) error = %v", err)
+	}
+	if removed {
+		t.Fatal("removeManagedWorkspaceDir(unmanaged) removed = true, want false")
+	}
+	if _, err := os.Stat(unmanagedDir); err != nil {
+		t.Fatalf("unmanaged dir stat error = %v, want present", err)
+	}
+}

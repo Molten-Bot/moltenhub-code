@@ -740,15 +740,31 @@ func runHub(args []string) int {
 			return library.OrderSummariesByUsage(catalog.Summaries(), usage), nil
 		}
 		cleanupTaskLogs := func(_ context.Context, requestID string) error {
-			logDir, ok := localTaskLogDir(logRoot, requestID)
-			if !ok {
-				return nil
+			var errs []error
+
+			logDir, ok := taskLogDir(logRoot, requestID)
+			workspaceDir := ""
+			if ok {
+				workspaceDir = taskWorkspaceDirFromLogDir(logDir, requestID)
+				if err := os.RemoveAll(logDir); err != nil {
+					errs = append(errs, fmt.Errorf("remove task log dir %s: %w", logDir, err))
+				} else {
+					daemonLogger("dispatch status=ok action=task_close_cleanup request_id=%s log_dir=%s", requestID, logDir)
+				}
 			}
-			if err := os.RemoveAll(logDir); err != nil {
-				return fmt.Errorf("remove task log dir %s: %w", logDir, err)
+
+			if workspaceDir != "" {
+				switch removed, removeErr := removeManagedWorkspaceDir(workspaceDir); {
+				case removeErr != nil:
+					errs = append(errs, removeErr)
+				case removed:
+					daemonLogger("dispatch status=ok action=task_close_cleanup request_id=%s workspace_dir=%s", requestID, workspaceDir)
+				default:
+					daemonLogger("dispatch status=warn action=skip_workspace_cleanup request_id=%s workspace_dir=%s", requestID, workspaceDir)
+				}
 			}
-			daemonLogger("dispatch status=ok action=task_close_cleanup request_id=%s log_dir=%s", requestID, logDir)
-			return nil
+
+			return errors.Join(errs...)
 		}
 		if authGate != nil {
 			uiServer.AgentAuthStatus = authGate.Status
@@ -1667,6 +1683,89 @@ func localTaskLogDir(logRoot, requestID string) (string, bool) {
 	}
 
 	return taskLogDir(logRoot, requestID)
+}
+
+func taskWorkspaceDirFromLogDir(logDir, requestID string) string {
+	logDir = strings.TrimSpace(logDir)
+	requestID = strings.TrimSpace(requestID)
+	if logDir == "" || requestID == "" {
+		return ""
+	}
+	for _, fileName := range []string{logFileName, legacyTaskLogFileName} {
+		if workspaceDir := taskWorkspaceDirFromLogFile(filepath.Join(logDir, fileName), requestID); workspaceDir != "" {
+			return workspaceDir
+		}
+	}
+	return ""
+}
+
+func taskWorkspaceDirFromLogFile(logPath, requestID string) string {
+	logPath = strings.TrimSpace(logPath)
+	requestID = strings.TrimSpace(requestID)
+	if logPath == "" || requestID == "" {
+		return ""
+	}
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		return ""
+	}
+	return taskWorkspaceDirFromLogContent(string(content), requestID)
+}
+
+func taskWorkspaceDirFromLogContent(content, requestID string) string {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return ""
+	}
+
+	lines := splitLogLines(content)
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" || !strings.HasPrefix(line, "dispatch status=") {
+			continue
+		}
+
+		fields := parseSimpleKVFields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		if strings.TrimSpace(fields["request_id"]) != requestID {
+			continue
+		}
+		status := strings.TrimSpace(fields["status"])
+		switch status {
+		case "completed", "no_changes", "error", "stopped", "ok":
+		default:
+			continue
+		}
+
+		workspaceDir := strings.TrimSpace(firstNonEmptyString(fields["workspace"], fields["workspace_dir"]))
+		if workspaceDir == "" {
+			continue
+		}
+		return workspaceDir
+	}
+	return ""
+}
+
+func splitLogLines(content string) []string {
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	content = strings.ReplaceAll(content, "\r", "\n")
+	return strings.Split(content, "\n")
+}
+
+func removeManagedWorkspaceDir(workspaceDir string) (bool, error) {
+	workspaceDir = strings.TrimSpace(workspaceDir)
+	if workspaceDir == "" {
+		return false, nil
+	}
+	if !workspace.IsManagedRunDir(workspaceDir) {
+		return false, nil
+	}
+	if err := os.RemoveAll(workspaceDir); err != nil {
+		return false, fmt.Errorf("remove workspace dir %s: %w", workspaceDir, err)
+	}
+	return true, nil
 }
 
 func monitorURL(addr string) string {
