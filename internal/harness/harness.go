@@ -2681,20 +2681,65 @@ func isNonFatalValidationToolingFailure(detail string, res execx.Result) bool {
 		return false
 	}
 
-	testSuiteUnavailable := strings.Contains(text, "could not run automated test suite") ||
-		strings.Contains(text, "could not run automated tests") ||
-		strings.Contains(text, "unable to run automated test suite") ||
-		strings.Contains(text, "validation unavailable in runtime") ||
-		strings.Contains(text, "validation tooling unavailable")
-	if !testSuiteUnavailable {
-		return false
+	validationUnavailable := false
+	validationUnavailableMarkers := []string{
+		"could not run automated test suite",
+		"could not run automated tests",
+		"could not run local automated tests",
+		"unable to run automated test suite",
+		"local validation tool missing in runtime",
+		"local validation command failed in runtime",
+		"local build validation command failed in runtime",
+		"local validation command failed",
+		"local build validation command failed",
+		"validation command failed in runtime",
+		"build validation command failed in runtime",
+		"validation command failed",
+		"build validation command failed",
+		"validation unavailable in runtime",
+		"validation tooling unavailable",
+		"local validation tooling unavailable in runtime",
+		"full build validation could not run",
+		"focused go validation unavailable in runtime",
+	}
+	for _, marker := range validationUnavailableMarkers {
+		if strings.Contains(text, marker) {
+			validationUnavailable = true
+			break
+		}
 	}
 
 	missingTooling := strings.Contains(text, "command not found") ||
 		strings.Contains(text, ": not found") ||
 		strings.Contains(text, "enoent") ||
 		strings.Contains(text, "cannot find module")
-	return missingTooling
+	if !missingTooling {
+		return false
+	}
+	if validationUnavailable {
+		return true
+	}
+
+	// Some agent responses only include missing validation command output plus
+	// an "Alternative validation" section without explicit "validation unavailable"
+	// wording.
+	alternativeValidation := strings.Contains(text, "alternative validation")
+	validationCommandMarkers := []string{
+		"npm run lint",
+		"npm run build",
+		"npm run -s build",
+		"npm run typecheck",
+		"npm test",
+		"vitest",
+		"eslint",
+		"tsc",
+	}
+	for _, marker := range validationCommandMarkers {
+		if strings.Contains(text, marker) {
+			return alternativeValidation
+		}
+	}
+	return false
 }
 
 func isRecoveredTransientRegistryLookupFailure(detail string, res execx.Result) bool {
