@@ -3738,6 +3738,52 @@ func TestRunCodexAllowsLocalAutomatedTestsValidationGap(t *testing.T) {
 	}
 }
 
+func TestRunCodexAllowsLocalAutomatedTestRunUnavailableValidationGap(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "adjust layout spacing"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: Local automated test run unavailable.",
+				Stderr: "Error details: `npm run test -- --run src/components/__tests__/Layout.test.tsx` failed with `sh: 1: vitest: not found`.",
+			},
+		},
+	}}
+
+	h := New(fake)
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
+		t.Fatalf("runCodex() error = %v, want nil for local automated test run unavailable tooling gap", err)
+	}
+}
+
+func TestRunCodexAllowsLocalAutomatedTestRunUnavailableWithExitStatus127(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "adjust dock icon stroke"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: Local automated test run unavailable in this runtime.",
+				Stderr: "Error details: `npm run test -- --run src/components/__tests__/Layout.test.tsx` exited with status 127.",
+			},
+		},
+	}}
+
+	h := New(fake)
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
+		t.Fatalf("runCodex() error = %v, want nil for local automated test run unavailable exit-status tooling gap", err)
+	}
+}
+
 func TestRunCodexAllowsBuildValidationToolingGap(t *testing.T) {
 	t.Parallel()
 

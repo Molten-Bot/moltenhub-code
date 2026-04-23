@@ -2686,6 +2686,7 @@ func isNonFatalValidationToolingFailure(detail string, res execx.Result) bool {
 		"could not run automated test suite",
 		"could not run automated tests",
 		"could not run local automated tests",
+		"local automated test run unavailable",
 		"unable to run automated test suite",
 		"local validation tool missing in runtime",
 		"local validation command failed in runtime",
@@ -2711,6 +2712,10 @@ func isNonFatalValidationToolingFailure(detail string, res execx.Result) bool {
 
 	missingTooling := strings.Contains(text, "command not found") ||
 		strings.Contains(text, ": not found") ||
+		strings.Contains(text, "exit status 127") ||
+		strings.Contains(text, "exited with status 127") ||
+		strings.Contains(text, "exit code 127") ||
+		strings.Contains(text, "returned 127") ||
 		strings.Contains(text, "enoent") ||
 		strings.Contains(text, "cannot find module")
 	if !missingTooling {
