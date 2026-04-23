@@ -178,17 +178,8 @@ func (g *auggieAuthGate) refreshLocked() {
 	}
 	g.initCfg.AugmentSessionAuth = canonicalSessionAuth
 
-	githubToken, _ := firstConfiguredGitHubToken(g.runtimeConfigPath, g.initCfg)
-	if strings.TrimSpace(githubToken) == "" {
-		g.authState.configureCommand = claudeGitHubConfigureCommand
-		g.authState.configurePlaceholder = claudeGitHubConfigurePlaceholder
-		g.authState.message = "GitHub token is required."
-		return
-	}
-	if err := setGitHubTokenEnvironment(githubToken); err != nil {
-		g.authState.configureCommand = claudeGitHubConfigureCommand
-		g.authState.configurePlaceholder = claudeGitHubConfigurePlaceholder
-		g.authState.message = fmt.Sprintf("set github token env: %v", err)
+	githubToken, blocked := applyGitHubTokenRequirementState(&g.authState, agentruntime.HarnessAuggie, g.runtimeConfigPath, g.initCfg)
+	if blocked {
 		return
 	}
 

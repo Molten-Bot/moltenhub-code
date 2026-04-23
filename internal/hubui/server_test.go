@@ -621,8 +621,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "const liveByID = new Map();") || !strings.Contains(markup, "for (const task of liveByID.values()) {") {
 		t.Fatalf("expected index html history mode to include live run tasks alongside saved history")
 	}
-	if !strings.Contains(markup, "if (!requestID || state.dismissedTaskIDs.has(requestID)) {") {
-		t.Fatalf("expected index html to skip dismissed completed tasks while rebuilding history")
+	if !strings.Contains(markup, "if (!requestID || state.dismissedTaskIDs.has(requestID) || isTaskHistoryExpired(task, nowMs)) {") {
+		t.Fatalf("expected index html to skip dismissed and expired completed tasks while rebuilding history")
 	}
 	if !strings.Contains(markup, "if (!requestID || liveByID.has(requestID) || state.dismissedTaskIDs.has(requestID) || isTaskHistoryExpired(task, nowMs)) {") {
 		t.Fatalf("expected index html history mode to exclude dismissed or expired tasks from persisted history output")
@@ -657,6 +657,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "if (pruneTaskHistory()) {") ||
 		!strings.Contains(markup, "persistTaskHistoryUnseenIDs();") {
 		t.Fatalf("expected index html startup to sanitize expired task history and unseen markers")
+	}
+	if !strings.Contains(markup, ".filter((task) => !isTaskHistoryExpired(task))") {
+		t.Fatalf("expected index html to remove expired completed task history from storage")
 	}
 	if !strings.Contains(markup, "return out.slice(0, TASK_HISTORY_LIMIT);") {
 		t.Fatalf("expected index html to limit completed history view to TASK_HISTORY_LIMIT entries")

@@ -90,6 +90,24 @@ func TestConfigurableAgentAuthStateSharedTransitions(t *testing.T) {
 	}
 }
 
+func TestApplyGitHubTokenRequirementStateConfiguresPromptWhenMissing(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+
+	var state configurableAgentAuthState
+	token, blocked := applyGitHubTokenRequirementState(&state, "test", filepath.Join(t.TempDir(), "missing.json"), hub.InitConfig{})
+	if token != "" || !blocked {
+		t.Fatalf("applyGitHubTokenRequirementState() = token %q blocked %v, want empty true", token, blocked)
+	}
+	snapshot := state.snapshot("test")
+	if snapshot.Ready || snapshot.State != "needs_configure" {
+		t.Fatalf("snapshot = %+v", snapshot)
+	}
+	if got, want := snapshot.ConfigureCommand, claudeGitHubConfigureCommand; got != want {
+		t.Fatalf("ConfigureCommand = %q, want %q", got, want)
+	}
+}
+
 func TestDecodeJSONStrictOrWrappedString(t *testing.T) {
 	var payload struct {
 		Value string `json:"value"`
@@ -103,5 +121,17 @@ func TestDecodeJSONStrictOrWrappedString(t *testing.T) {
 
 	if err := decodeJSONStrictOrWrappedString(`{"value":"ok","extra":true}`, &payload); err == nil {
 		t.Fatal("decodeJSONStrictOrWrappedString(unknown field) error = nil, want non-nil")
+	}
+}
+
+func TestDecodeJSONOrWrappedString(t *testing.T) {
+	var decoded struct {
+		Value string `json:"value"`
+	}
+	if err := decodeJSONOrWrappedString(`"{\"value\":\"ok\"}"`, &decoded); err != nil {
+		t.Fatalf("decodeJSONOrWrappedString() error = %v", err)
+	}
+	if got, want := decoded.Value, "ok"; got != want {
+		t.Fatalf("Value = %q, want %q", got, want)
 	}
 }

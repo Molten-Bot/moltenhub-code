@@ -2480,8 +2480,11 @@ html.night .task-progress-step.current.has-icon {
 .task-progress-step.current .task-progress-step-icon {
   width: 26.56px;
   height: 26.56px;
-  filter: var(--task-progress-logo-active-filter);
   opacity: 1;
+}
+
+.task-progress-step.current .task-progress-step-icon {
+  filter: var(--task-progress-logo-active-filter);
 }
 
 html.dark .task-progress-step.current .task-progress-step-icon.is-agent-logo,
