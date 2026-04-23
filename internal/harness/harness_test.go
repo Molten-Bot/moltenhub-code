@@ -3715,6 +3715,166 @@ func TestRunCodexAllowsValidationToolingMissingFailure(t *testing.T) {
 	}
 }
 
+func TestRunCodexAllowsLocalAutomatedTestsValidationGap(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "review hub diagnostics"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: Could not run local automated tests in this runtime.",
+				Stderr: "Error details: `npm test -- src/features/hub/components/__tests__/HubAgentsSection.test.tsx` -> `sh: 1: vitest: not found`",
+			},
+		},
+	}}
+
+	h := New(fake)
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
+		t.Fatalf("runCodex() error = %v, want nil for local automated tests tooling gap", err)
+	}
+}
+
+func TestRunCodexAllowsBuildValidationToolingGap(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "adjust icon stroke weight"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: Full build validation could not run in this runtime.",
+				Stderr: "Error details: `npm run -s build` -> `sh: 1: tsc: not found`",
+			},
+		},
+	}}
+
+	h := New(fake)
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
+		t.Fatalf("runCodex() error = %v, want nil for build validation tooling gap", err)
+	}
+}
+
+func TestRunCodexAllowsLocalValidationToolMissingInRuntime(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "check runtime diagnostics"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: Local validation tool missing in runtime.",
+				Stderr: "Error details: `npm run test -- src/features/hub/components/__tests__/HubAgentsSection.test.tsx` failed with `sh: 1: vitest: not found`.",
+			},
+		},
+	}}
+
+	h := New(fake)
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
+		t.Fatalf("runCodex() error = %v, want nil for local validation tool missing in runtime", err)
+	}
+}
+
+func TestRunCodexAllowsLocalValidationCommandFailedInRuntime(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "run local validation"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: local validation command failed in runtime.",
+				Stderr: "Error details: `npm run typecheck` -> `sh: 1: tsc: not found` (tooling/deps not installed in runtime).",
+			},
+		},
+	}}
+
+	h := New(fake)
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
+		t.Fatalf("runCodex() error = %v, want nil for local validation command failed in runtime", err)
+	}
+}
+
+func TestRunCodexAllowsLocalValidationCommandFailedWithToolingGap(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "run local validation"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: local validation command failed.",
+				Stderr: "Error details: `npm run typecheck` -> `sh: 1: tsc: not found` (tooling/deps not installed in runtime).",
+			},
+		},
+	}}
+
+	h := New(fake)
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
+		t.Fatalf("runCodex() error = %v, want nil for local validation command tooling gap", err)
+	}
+}
+
+func TestRunCodexAllowsLocalBuildValidationCommandFailedInRuntime(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "run local build validation"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: Local build validation command failed in runtime.",
+				Stderr: "Error details: `npm run build` -> `sh: 1: tsc: not found`",
+			},
+		},
+	}}
+
+	h := New(fake)
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
+		t.Fatalf("runCodex() error = %v, want nil for local build validation command failed in runtime", err)
+	}
+}
+
+func TestRunCodexAllowsAlternativeValidationWhenLintToolMissing(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "thin icon line weights"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: Error details: - `npm run lint` failed with `sh: 1: eslint: not found`. | Alternative validation: | - `git diff --check` passed.",
+			},
+		},
+	}}
+
+	h := New(fake)
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
+		t.Fatalf("runCodex() error = %v, want nil when alternative validation is reported", err)
+	}
+}
+
 func TestRunCodexAllowsFocusedValidationUnavailableFailure(t *testing.T) {
 	t.Parallel()
 
