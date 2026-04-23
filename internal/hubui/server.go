@@ -184,6 +184,7 @@ func (s Server) Handler() http.Handler {
 		mux.Handle("/static/", withCacheControl(staticHandler, "public, max-age=3600"))
 	}
 	mux.HandleFunc("/", s.handleIndex)
+	mux.HandleFunc("/releases", s.handleReleases)
 	mux.HandleFunc("/api/state", s.handleState)
 	mux.HandleFunc("/api/library", s.handleLibrary)
 	mux.HandleFunc("/api/library/run", s.handleLibraryRun)
@@ -278,6 +279,23 @@ func (s Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data = s.injectIndexConfig(data)
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(data)
+}
+
+func (s Server) handleReleases(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/releases" {
+		http.NotFound(w, r)
+		return
+	}
+
+	data, err := fs.ReadFile(staticFiles, "static/releases.html")
+	if err != nil {
+		http.Error(w, "releases page is unavailable", http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
