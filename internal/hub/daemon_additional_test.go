@@ -727,6 +727,9 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 	if !strings.Contains(prompt, failureFollowUpPromptBase) {
 		t.Fatalf("follow-up prompt = %q", prompt)
 	}
+	if !strings.Contains(prompt, "Treat the original task prompt as failure context only; do not implement that requested product change here unless it is required to fix MoltenHub Code failure handling.") {
+		t.Fatalf("follow-up prompt missing failure follow-up scope boundary: %q", prompt)
+	}
 	if !strings.Contains(prompt, "Relevant failing log path(s):") {
 		t.Fatalf("follow-up prompt missing log path heading: %q", prompt)
 	}

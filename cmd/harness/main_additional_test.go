@@ -454,8 +454,11 @@ func TestFailureFollowUpPromptDefaultWhenNoPaths(t *testing.T) {
 	if !strings.Contains(got, "Do not stop work just because you cannot create a pull request or watch remote CI/CD from inside this agent runtime.") {
 		t.Fatalf("prompt missing remote operations handoff: %q", got)
 	}
-	if !strings.Contains(got, `"repos":["git@github.com:Molten-Bot/moltenhub-code.git"],"baseBranch":"main","targetSubdir":".","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."`) {
+	if !strings.Contains(got, `"repos":["git@github.com:Molten-Bot/moltenhub-code.git"],"baseBranch":"main","targetSubdir":".","prompt":"`+failureFollowUpRequiredPrompt+`"`) {
 		t.Fatalf("prompt missing follow-up payload shape: %q", got)
+	}
+	if !strings.Contains(got, "Treat the original task prompt as failure context only; do not implement that requested product change here unless it is required to fix MoltenHub Code failure handling.") {
+		t.Fatalf("prompt missing failure follow-up scope boundary: %q", got)
 	}
 	if !strings.Contains(got, "Only return a no-op when the task is genuinely review/investigation-only") {
 		t.Fatalf("prompt missing no-op completion carve-out: %q", got)
