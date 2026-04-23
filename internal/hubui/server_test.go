@@ -663,6 +663,13 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "history_completed_at: historyCopy?.history_completed_at || task.history_completed_at || task.updated_at || task.started_at || \"\",") {
 		t.Fatalf("expected live completed tasks to reuse persisted history ordering timestamps")
 	}
+	if !strings.Contains(markup, "const stablePrompt = isCompletedTask(task) &&") ||
+		!strings.Contains(markup, "? historyCopy.prompt\n          : task.prompt;") {
+		t.Fatalf("expected index html history mode to keep completed-task prompts pinned to the stored history snapshot")
+	}
+	if !strings.Contains(markup, "if (typeof existing?.prompt === \"string\" && existing.prompt.trim() !== \"\") {\n          copy.prompt = existing.prompt;\n        }") {
+		t.Fatalf("expected index html to preserve the original completed-task prompt while refreshing stored history metadata")
+	}
 	if !strings.Contains(markup, "if (!requestID || isTaskHistoryExpired(task, nowMs)) {") {
 		t.Fatalf("expected index html to prune expired task history entries from memory")
 	}

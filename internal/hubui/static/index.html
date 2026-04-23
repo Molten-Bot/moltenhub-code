@@ -6107,6 +6107,9 @@
         if (existing?.history_completed_at) {
           copy.history_completed_at = existing.history_completed_at;
         }
+        if (typeof existing?.prompt === "string" && existing.prompt.trim() !== "") {
+          copy.prompt = existing.prompt;
+        }
         const existingLogsLength = Array.isArray(existing?.logs) ? existing.logs.length : 0;
         const nextLogsLength = Array.isArray(copy.logs) ? copy.logs.length : 0;
         if (
@@ -6173,8 +6176,14 @@
           continue;
         }
         const historyCopy = state.taskHistoryByID.get(requestID);
+        const stablePrompt = isCompletedTask(task) &&
+          typeof historyCopy?.prompt === "string" &&
+          historyCopy.prompt.trim() !== ""
+          ? historyCopy.prompt
+          : task.prompt;
         out.push({
           ...task,
+          prompt: stablePrompt,
           history_completed_at: historyCopy?.history_completed_at || task.history_completed_at || task.updated_at || task.started_at || "",
           history_only: false,
           can_rerun: Boolean(task?.can_rerun),
