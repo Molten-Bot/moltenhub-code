@@ -80,6 +80,17 @@ type Task struct {
 	Logs         []TaskLog    `json:"logs"`
 }
 
+// TaskAttempt is an internal record of queued/running terminal attempts for one original task.
+// It is intentionally not included in Snapshot responses.
+type TaskAttempt struct {
+	RequestID string
+	RerunOf   string
+	Status    string
+	Error     string
+	StartedAt string
+	UpdatedAt string
+}
+
 // Connection captures current monitor connectivity state.
 type Connection struct {
 	HubConnected bool   `json:"hub_connected"`
@@ -119,8 +130,10 @@ type Broker struct {
 	tasks       map[string]*taskState
 	closedTasks map[string]time.Time
 	runConfigs  map[string][]byte
-	rejectedSeq uint64
-	subs        map[chan struct{}]struct{}
+	attempts     map[string][]taskAttemptState
+	attemptRoots map[string]string
+	rejectedSeq  uint64
+	subs         map[chan struct{}]struct{}
 
 	hubConnected bool
 	hubTransport string
@@ -150,6 +163,15 @@ type taskState struct {
 	Logs         []TaskLog
 }
 
+type taskAttemptState struct {
+	RequestID string
+	RerunOf   string
+	Status    string
+	Error     string
+	StartedAt time.Time
+	UpdatedAt time.Time
+}
+
 // NewBroker returns a monitor state broker with safe defaults.
 func NewBroker() *Broker {
 	return &Broker{
@@ -159,6 +181,8 @@ func NewBroker() *Broker {
 		tasks:       map[string]*taskState{},
 		closedTasks: map[string]time.Time{},
 		runConfigs:  map[string][]byte{},
+		attempts:    map[string][]taskAttemptState{},
+		attemptRoots: map[string]string{},
 		subs:        map[chan struct{}]struct{}{},
 	}
 }
@@ -454,7 +478,78 @@ func (b *Broker) TaskRunConfig(requestID string) ([]byte, bool) {
 	return append([]byte(nil), runConfigJSON...), true
 }
 
-// CloseTask removes a terminal task and its stored rerun config.
+// DropTaskRunConfig removes stored rerun config for tasks that no longer need task-level reruns.
+func (b *Broker) DropTaskRunConfig(requestID string) {
+	if b == nil {
+		return
+	}
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return
+	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	delete(b.runConfigs, requestID)
+}
+
+// TaskAttempts returns a copy of internal attempt records for requestID's root task.
+func (b *Broker) TaskAttempts(requestID string) []TaskAttempt {
+	if b == nil {
+		return nil
+	}
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return nil
+	}
+
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	root := strings.TrimSpace(b.attemptRoots[requestID])
+	if root == "" {
+		root = requestID
+	}
+	attempts := b.attempts[root]
+	out := make([]TaskAttempt, 0, len(attempts))
+	for _, attempt := range attempts {
+		out = append(out, TaskAttempt{
+			RequestID: attempt.RequestID,
+			RerunOf:   attempt.RerunOf,
+			Status:    attempt.Status,
+			Error:     attempt.Error,
+			StartedAt: attempt.StartedAt.UTC().Format(time.RFC3339Nano),
+			UpdatedAt: attempt.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		})
+	}
+	return out
+}
+
+// RecordTaskRerunAttempt links a newly queued rerun to the original task attempt chain.
+func (b *Broker) RecordTaskRerunAttempt(rerunOf, requestID string) {
+	if b == nil {
+		return
+	}
+	rerunOf = strings.TrimSpace(rerunOf)
+	requestID = strings.TrimSpace(requestID)
+	if rerunOf == "" || requestID == "" {
+		return
+	}
+
+	now := b.now().UTC()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	root := b.taskAttemptRootLocked(rerunOf)
+	if root == "" {
+		root = rerunOf
+	}
+	b.recordTaskAttemptLocked(root, requestID, rerunOf, "queued", "", now)
+	b.notifySubscribersLocked()
+}
+
+// CloseTask removes a terminal task from the live task list while retaining its rerun config.
 func (b *Broker) CloseTask(requestID string) error {
 	if b == nil {
 		return ErrTaskNotFound
@@ -476,7 +571,6 @@ func (b *Broker) CloseTask(requestID string) error {
 	}
 
 	delete(b.tasks, requestID)
-	delete(b.runConfigs, requestID)
 	b.closedTasks[requestID] = b.now().UTC()
 	b.notifySubscribersLocked()
 	return nil
@@ -488,6 +582,7 @@ func (b *Broker) pruneExpiredTasksLocked(now time.Time) {
 			continue
 		}
 		delete(b.closedTasks, requestID)
+		delete(b.runConfigs, requestID)
 	}
 }
 
@@ -498,6 +593,7 @@ func (b *Broker) isClosedTaskLocked(requestID string, now time.Time) bool {
 	}
 	if now.Sub(closedAt) >= defaultClosedTaskRetention {
 		delete(b.closedTasks, requestID)
+		delete(b.runConfigs, requestID)
 		return false
 	}
 	return true
@@ -540,6 +636,7 @@ func (b *Broker) ensureTaskLocked(requestID string, now time.Time) *taskState {
 			existing.Branch = b.taskInitialBranchLocked(requestID)
 		}
 		existing.UpdatedAt = now
+		b.recordTaskAttemptLocked(b.taskAttemptRootLocked(requestID), requestID, "", existing.Status, existing.Error, now)
 		return existing
 	}
 
@@ -553,10 +650,17 @@ func (b *Broker) ensureTaskLocked(requestID string, now time.Time) *taskState {
 		UpdatedAt:  now,
 	}
 	b.tasks[requestID] = t
+	b.recordTaskAttemptLocked(b.taskAttemptRootLocked(requestID), requestID, "", t.Status, t.Error, now)
 	return t
 }
 
 func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[string]string, now time.Time) {
+	defer func() {
+		if t != nil {
+			b.recordTaskAttemptLocked(b.taskAttemptRootLocked(t.RequestID), t.RequestID, "", t.Status, t.Error, now)
+		}
+	}()
+
 	t.UpdatedAt = now
 
 	if strings.HasPrefix(line, "dispatch status=start") {
@@ -708,6 +812,68 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 
 func (b *Broker) appendTaskLogLocked(t *taskState, line TaskLog) {
 	t.Logs = appendCappedTaskLog(t.Logs, b.maxTaskLog, line)
+}
+
+func (b *Broker) taskAttemptRootLocked(requestID string) string {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return ""
+	}
+	if b.attemptRoots == nil {
+		b.attemptRoots = map[string]string{}
+	}
+	if root := strings.TrimSpace(b.attemptRoots[requestID]); root != "" {
+		return root
+	}
+	b.attemptRoots[requestID] = requestID
+	return requestID
+}
+
+func (b *Broker) recordTaskAttemptLocked(root, requestID, rerunOf, status, errText string, now time.Time) {
+	root = strings.TrimSpace(root)
+	requestID = strings.TrimSpace(requestID)
+	if root == "" {
+		root = requestID
+	}
+	if root == "" || requestID == "" {
+		return
+	}
+	if b.attempts == nil {
+		b.attempts = map[string][]taskAttemptState{}
+	}
+	if b.attemptRoots == nil {
+		b.attemptRoots = map[string]string{}
+	}
+	b.attemptRoots[requestID] = root
+	status = normalizeTaskTerminalStatus(status)
+	if status == "" {
+		status = "pending"
+	}
+	errText = strings.TrimSpace(errText)
+	rerunOf = strings.TrimSpace(rerunOf)
+
+	attempts := b.attempts[root]
+	for i := range attempts {
+		if attempts[i].RequestID != requestID {
+			continue
+		}
+		if rerunOf != "" {
+			attempts[i].RerunOf = rerunOf
+		}
+		attempts[i].Status = status
+		attempts[i].Error = errText
+		attempts[i].UpdatedAt = now
+		b.attempts[root] = attempts
+		return
+	}
+	b.attempts[root] = append(attempts, taskAttemptState{
+		RequestID: requestID,
+		RerunOf:   rerunOf,
+		Status:    status,
+		Error:     errText,
+		StartedAt: now,
+		UpdatedAt: now,
+	})
 }
 
 func shouldDropNoisyCommandLine(line string, fields map[string]string) bool {

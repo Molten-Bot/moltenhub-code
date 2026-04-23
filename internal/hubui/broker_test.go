@@ -524,7 +524,7 @@ func TestBrokerUpdatesTaskBranchFromStageLogsWhileRetainingBaseBranch(t *testing
 	}
 }
 
-func TestBrokerCloseTaskRemovesCompletedTaskAndRunConfig(t *testing.T) {
+func TestBrokerCloseTaskRemovesCompletedTaskAndPreservesRunConfig(t *testing.T) {
 	t.Parallel()
 
 	b := NewBroker()
@@ -537,8 +537,8 @@ func TestBrokerCloseTaskRemovesCompletedTaskAndRunConfig(t *testing.T) {
 		t.Fatalf("CloseTask() error = %v", err)
 	}
 
-	if _, ok := b.TaskRunConfig(requestID); ok {
-		t.Fatal("TaskRunConfig() found = true after CloseTask(), want false")
+	if _, ok := b.TaskRunConfig(requestID); !ok {
+		t.Fatal("TaskRunConfig() found = false after CloseTask(), want true")
 	}
 
 	snap := b.Snapshot()
@@ -685,8 +685,47 @@ func TestBrokerCloseTaskAllowsStoppedTasks(t *testing.T) {
 	if err := b.CloseTask(requestID); err != nil {
 		t.Fatalf("CloseTask() for stopped task error = %v", err)
 	}
-	if _, ok := b.TaskRunConfig(requestID); ok {
-		t.Fatal("TaskRunConfig() found = true after CloseTask(stopped), want false")
+	if _, ok := b.TaskRunConfig(requestID); !ok {
+		t.Fatal("TaskRunConfig() found = false after CloseTask(stopped), want true")
+	}
+}
+
+func TestBrokerTracksTaskAttemptsAcrossRerunsAndFailures(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog("dispatch status=start request_id=req-attempt")
+	b.IngestLog(`dispatch status=error request_id=req-attempt exit_code=1 err="first failure"`)
+	b.RecordTaskRerunAttempt("req-attempt", "req-attempt-rerun")
+	b.IngestLog("dispatch status=start request_id=req-attempt-rerun")
+	b.IngestLog("dispatch status=completed request_id=req-attempt-rerun workspace=/tmp/run branch=moltenhub-attempt")
+
+	attempts := b.TaskAttempts("req-attempt")
+	if len(attempts) != 2 {
+		t.Fatalf("len(attempts) = %d, want 2: %#v", len(attempts), attempts)
+	}
+	if got, want := attempts[0].RequestID, "req-attempt"; got != want {
+		t.Fatalf("attempt[0].RequestID = %q, want %q", got, want)
+	}
+	if got, want := attempts[0].Status, "error"; got != want {
+		t.Fatalf("attempt[0].Status = %q, want %q", got, want)
+	}
+	if got, want := attempts[0].Error, "first failure"; got != want {
+		t.Fatalf("attempt[0].Error = %q, want %q", got, want)
+	}
+	if got, want := attempts[1].RequestID, "req-attempt-rerun"; got != want {
+		t.Fatalf("attempt[1].RequestID = %q, want %q", got, want)
+	}
+	if got, want := attempts[1].RerunOf, "req-attempt"; got != want {
+		t.Fatalf("attempt[1].RerunOf = %q, want %q", got, want)
+	}
+	if got, want := attempts[1].Status, "completed"; got != want {
+		t.Fatalf("attempt[1].Status = %q, want %q", got, want)
+	}
+
+	rerunAttempts := b.TaskAttempts("req-attempt-rerun")
+	if len(rerunAttempts) != len(attempts) {
+		t.Fatalf("len(rerun attempts) = %d, want %d", len(rerunAttempts), len(attempts))
 	}
 }
 
