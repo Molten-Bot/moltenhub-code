@@ -406,6 +406,7 @@ func runHub(args []string) int {
 		go func(
 			requestID string,
 			runCfg config.Config,
+			activeCfg hub.InitConfig,
 			dedupeKey string,
 			source string,
 			allowFailureFollowUp bool,
@@ -498,6 +499,7 @@ func runHub(args []string) int {
 				if taskHandle != nil {
 					taskHandle.SetRunning(true)
 				}
+				recordLocalRunStartedActivity(runCtx, activeCfg, runCfg, requestID, daemonLogger)
 				outcome := runLocalDispatch(runCtx, runner, daemonLogger, cfg.Skill.Name, requestID, runCfg, func() bool {
 					if taskHandle == nil {
 						return false
@@ -521,6 +523,7 @@ func runHub(args []string) int {
 						}
 					}
 				case "no_changes":
+					recordLocalRunCompletedActivity(runCtx, activeCfg, runCfg, requestID, daemonLogger)
 					if source != noChangesFollowUpSource && source != noChangesEscalationSource && queueUnexpectedNoChangesFollowUp != nil {
 						queueUnexpectedNoChangesFollowUp(requestID, outcome.Result, runCfg)
 					}
@@ -529,10 +532,12 @@ func runHub(args []string) int {
 							queueEscalatedNoChangesFollowUp(requestID, outcome.Result, runCfg)
 						}
 					}
+				case "completed":
+					recordLocalRunCompletedActivity(runCtx, activeCfg, runCfg, requestID, daemonLogger)
 				}
 				return
 			}
-		}(requestID, runCfg, dedupeKey, source, allowFailureFollowUp, runCtx, cancelRun, taskHandle)
+		}(requestID, runCfg, activeCfg, dedupeKey, source, allowFailureFollowUp, runCtx, cancelRun, taskHandle)
 
 		return requestID, nil
 	}
@@ -1859,6 +1864,64 @@ func resultHasPR(result harness.Result) bool {
 		return true
 	}
 	return strings.TrimSpace(joinAllPRURLs(result.RepoResults)) != ""
+}
+
+func recordLocalRunStartedActivity(ctx context.Context, cfg hub.InitConfig, runCfg config.Config, requestID string, logf func(string, ...any)) {
+	recordLocalRunActivity(
+		ctx,
+		cfg,
+		runCfg,
+		requestID,
+		logf,
+		"record_local_run_started_activity",
+		func(ctx context.Context, client hub.APIClient, token string, runCfg config.Config) error {
+			return client.RecordRunStartedActivity(ctx, token, runCfg)
+		},
+	)
+}
+
+func recordLocalRunCompletedActivity(ctx context.Context, cfg hub.InitConfig, runCfg config.Config, requestID string, logf func(string, ...any)) {
+	recordLocalRunActivity(
+		ctx,
+		cfg,
+		runCfg,
+		requestID,
+		logf,
+		"record_local_run_completed_activity",
+		func(ctx context.Context, client hub.APIClient, token string, runCfg config.Config) error {
+			return client.RecordRunCompletedActivity(ctx, token, runCfg)
+		},
+	)
+}
+
+func recordLocalRunActivity(
+	ctx context.Context,
+	cfg hub.InitConfig,
+	runCfg config.Config,
+	requestID string,
+	logf func(string, ...any),
+	action string,
+	record func(context.Context, hub.APIClient, string, config.Config) error,
+) {
+	token := strings.TrimSpace(cfg.AgentToken)
+	if token == "" || record == nil {
+		return
+	}
+	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
+	if baseURL == "" {
+		return
+	}
+	if logf == nil {
+		logf = func(string, ...any) {}
+	}
+
+	activityCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	client := hub.NewAPIClient(baseURL)
+	if err := record(activityCtx, client, token, runCfg); err != nil {
+		logf("dispatch status=warn action=%s request_id=%s err=%q", action, requestID, err)
+	}
 }
 
 func completedPRURLs(result harness.Result) string {

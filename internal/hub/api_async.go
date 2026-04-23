@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Molten-Bot/moltenhub-code/internal/config"
 	"github.com/Molten-Bot/moltenhub-code/internal/library"
 )
 
@@ -22,6 +23,8 @@ type MoltenHubAPI interface {
 	RecordActivity(ctx context.Context, activity string) error
 	RecordCodingActivityRunning(ctx context.Context) error
 	RecordGitHubTaskCompleteActivity(ctx context.Context) error
+	RecordRunStartedActivity(ctx context.Context, runCfg config.Config) error
+	RecordRunCompletedActivity(ctx context.Context, runCfg config.Config) error
 	RegisterRuntime(ctx context.Context, cfg InitConfig, libraryTasks []library.TaskSummary) error
 	PublishResult(ctx context.Context, payload map[string]any) error
 	PublishResultAsync(ctx context.Context, payload map[string]any) <-chan error
@@ -123,6 +126,20 @@ func (c *AsyncAPIClient) RecordCodingActivityRunning(ctx context.Context) error 
 func (c *AsyncAPIClient) RecordGitHubTaskCompleteActivity(ctx context.Context) error {
 	return c.withToken(func(token string) error {
 		return c.client.RecordGitHubTaskCompleteActivity(ctx, token)
+	})
+}
+
+// RecordRunStartedActivity appends the standard activity entry for one task run.
+func (c *AsyncAPIClient) RecordRunStartedActivity(ctx context.Context, runCfg config.Config) error {
+	return c.withToken(func(token string) error {
+		return c.client.RecordRunStartedActivity(ctx, token, runCfg)
+	})
+}
+
+// RecordRunCompletedActivity appends the standard activity entry for one completed task run.
+func (c *AsyncAPIClient) RecordRunCompletedActivity(ctx context.Context, runCfg config.Config) error {
+	return c.withToken(func(token string) error {
+		return c.client.RecordRunCompletedActivity(ctx, token, runCfg)
 	})
 }
 
