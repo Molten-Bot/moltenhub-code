@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
+	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
 )
 
 func TestFirstConfiguredGitHubTokenPrefersRuntimeConfig(t *testing.T) {
@@ -64,6 +65,31 @@ func TestFirstConfiguredGitHubTokenFallsBackToGHAndGITHUBEnv(t *testing.T) {
 	}
 }
 
+func TestConfigurableAgentAuthStateSharedTransitions(t *testing.T) {
+	var state configurableAgentAuthState
+	options := []hubui.AgentAuthOption{{Value: "OPENAI_API_KEY", Label: "OpenAI"}}
+
+	state.setConfigureUI(" paste token ", " command ", " placeholder ", options)
+	options[0].Label = "mutated"
+	if !state.required || state.ready || state.state != "needs_configure" {
+		t.Fatalf("setConfigureUI() state = %+v", state)
+	}
+	if state.message != "paste token" || state.configureCommand != "command" || state.configurePlaceholder != "placeholder" {
+		t.Fatalf("setConfigureUI() config fields = %+v", state)
+	}
+	if got := state.configureOptions[0].Label; got != "OpenAI" {
+		t.Fatalf("setConfigureUI() option label = %q, want copied OpenAI", got)
+	}
+
+	state.setReady(" ready ")
+	if !state.required || !state.ready || state.state != "ready" || state.message != "ready" {
+		t.Fatalf("setReady() state = %+v", state)
+	}
+	if state.configureCommand != "" || state.configurePlaceholder != "" || state.configureOptions != nil {
+		t.Fatalf("setReady() configure fields = %+v", state)
+	}
+}
+
 func TestApplyGitHubTokenRequirementStateConfiguresPromptWhenMissing(t *testing.T) {
 	t.Setenv("GH_TOKEN", "")
 	t.Setenv("GITHUB_TOKEN", "")
@@ -79,6 +105,22 @@ func TestApplyGitHubTokenRequirementStateConfiguresPromptWhenMissing(t *testing.
 	}
 	if got, want := snapshot.ConfigureCommand, claudeGitHubConfigureCommand; got != want {
 		t.Fatalf("ConfigureCommand = %q, want %q", got, want)
+	}
+}
+
+func TestDecodeJSONStrictOrWrappedString(t *testing.T) {
+	var payload struct {
+		Value string `json:"value"`
+	}
+	if err := decodeJSONStrictOrWrappedString(`"{\"value\":\"ok\"}"`, &payload); err != nil {
+		t.Fatalf("decodeJSONStrictOrWrappedString(wrapped) error = %v", err)
+	}
+	if payload.Value != "ok" {
+		t.Fatalf("decodeJSONStrictOrWrappedString(wrapped) value = %q, want ok", payload.Value)
+	}
+
+	if err := decodeJSONStrictOrWrappedString(`{"value":"ok","extra":true}`, &payload); err == nil {
+		t.Fatal("decodeJSONStrictOrWrappedString(unknown field) error = nil, want non-nil")
 	}
 }
 
