@@ -1249,6 +1249,48 @@
       return normalizeHubSetupDialogMode(state.hubSetupDialogMode) === "profile";
     }
 
+    let hubSetupProfileBaseline = null;
+
+    function hubSetupProfileSnapshot() {
+      return {
+        handle: String(hubSetupHandle?.value || "").trim(),
+        displayName: String(hubSetupDisplayName?.value || "").trim(),
+        emoji: normalizeProfileEmoji(syncHubSetupEmojiValue()),
+        profileText: String(hubSetupProfile?.value || "").trim(),
+      };
+    }
+
+    function hubSetupProfileChanged() {
+      if (!hubSetupProfileBaseline) {
+        return false;
+      }
+      const current = hubSetupProfileSnapshot();
+      return current.handle !== hubSetupProfileBaseline.handle ||
+        current.displayName !== hubSetupProfileBaseline.displayName ||
+        current.emoji !== hubSetupProfileBaseline.emoji ||
+        current.profileText !== hubSetupProfileBaseline.profileText;
+    }
+
+    function syncHubSetupSubmitState() {
+      if (!(hubSetupSubmit instanceof HTMLButtonElement)) {
+        return;
+      }
+      if (state.hubSetupBusy) {
+        hubSetupSubmit.disabled = true;
+        return;
+      }
+      if (!isHubProfileDialogMode()) {
+        hubSetupSubmit.disabled = false;
+        return;
+      }
+      hubSetupSubmit.disabled = !hubSetupProfileChanged();
+    }
+
+    function resetHubSetupProfileBaseline() {
+      hubSetupProfileBaseline = hubSetupProfileSnapshot();
+      syncHubSetupSubmitState();
+    }
+
     function clearHubSetupAutoSubmitTimer() {
       if (state.hubSetupAutoSubmitTimer) {
         window.clearTimeout(state.hubSetupAutoSubmitTimer);
@@ -2069,7 +2111,7 @@
         hubSetupProfile.readOnly = state.hubSetupBusy;
         hubSetupProfile.setAttribute("aria-readonly", state.hubSetupBusy ? "true" : "false");
       }
-      if (hubSetupSubmit) hubSetupSubmit.disabled = state.hubSetupBusy;
+      syncHubSetupSubmitState();
     }
 
     function hubConnectionIsLive(snapshot = state.snapshot) {
@@ -2190,6 +2232,12 @@
       if (hubSetupSubmit) {
         hubSetupSubmit.textContent = profileEditor ? "Save" : (isNew ? "Redeem Token" : "Connect Runtime");
       }
+      if (profileEditor) {
+        resetHubSetupProfileBaseline();
+      } else {
+        hubSetupProfileBaseline = null;
+        syncHubSetupSubmitState();
+      }
       applyHubDockState();
       renderHubSetupConnectionToggle();
       renderHubConnection(state.snapshot);
@@ -2226,6 +2274,34 @@
           configured: false,
           message: err && err.message ? `Hub setup status failed: ${err.message}` : "Hub setup status failed.",
         });
+      }
+    }
+
+    async function refreshHubSetupProfile() {
+      try {
+        const response = await fetch("/api/hub-setup", {
+          method: "GET",
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        });
+        let body = null;
+        try {
+          body = await response.json();
+        } catch (_parseError) {
+          body = null;
+        }
+        if (body?.hub) {
+          applyHubSetupState(body.hub);
+        }
+        if (!response.ok) {
+          const detail = String(body?.error || `hub setup refresh failed with ${response.status}`).trim();
+          throw new Error(detail);
+        }
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : "Unable to refresh hub setup profile.";
+        if (typeof console !== "undefined" && typeof console.error === "function") {
+          console.error("Failed to refresh hub setup profile.", detail);
+        }
       }
     }
 
@@ -7924,6 +8000,7 @@
         setHubSetupOpen(true);
         applyHubSetupState(state.hubSetup);
         setHubSetupStatus("", "");
+        void refreshHubSetupProfile();
       });
     }
     if (hubSetupRegionNAToggle) {
@@ -7948,6 +8025,25 @@
     }
     if (hubSetupForm) {
       hubSetupForm.addEventListener("submit", submitHubSetup);
+    }
+    [
+      hubSetupHandle,
+      hubSetupDisplayName,
+      hubSetupProfile,
+      hubSetupEmoji,
+    ].forEach((field) => {
+      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+        field.addEventListener("input", syncHubSetupSubmitState);
+      }
+    });
+    if (hubSetupGate) {
+      hubSetupGate.addEventListener("click", (event) => {
+        if (event.target !== hubSetupGate || !isHubProfileDialogMode()) {
+          return;
+        }
+        setHubSetupOpen(false);
+        state.hubSetupDialogMode = "connect";
+      });
     }
     if (hubSetupToken) {
       const syncHubSetupModeFromToken = () => {
@@ -8038,6 +8134,12 @@
         return;
       }
       if (event.key === "Escape" && state.hubSetupOpen) {
+        if (!isHubProfileDialogMode()) {
+          return;
+        }
+        if (document.querySelector(".hub-emoji-picker-panel:not([hidden])")) {
+          return;
+        }
         event.preventDefault();
         setHubSetupOpen(false);
         state.hubSetupDialogMode = "connect";
