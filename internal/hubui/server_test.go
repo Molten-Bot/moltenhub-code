@@ -618,6 +618,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function historyTasks(snapshot)") || !strings.Contains(markup, "function rememberCompletedTaskHistory(snapshot)") {
 		t.Fatalf("expected index html to include running completed-task history aggregation")
 	}
+	if !strings.Contains(markup, "function completedTaskHistoryKey(task)") || !strings.Contains(markup, "function preferCompletedHistoryTask(current, next)") {
+		t.Fatalf("expected index html to include completed-task history dedupe helpers")
+	}
+	if !strings.Contains(markup, "deduped.set(key, preferCompletedHistoryTask(deduped.get(key), task));") {
+		t.Fatalf("expected index html to collapse duplicate completed tasks into latest history entry")
+	}
 	currentTasksStart := strings.Index(markup, "function currentTasks(snapshot) {")
 	historyTasksStart := strings.Index(markup, "function historyTasks(snapshot) {")
 	if currentTasksStart < 0 || historyTasksStart < 0 || historyTasksStart <= currentTasksStart {

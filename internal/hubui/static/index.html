@@ -6213,8 +6213,49 @@
       return out.filter((task) => !isCompletedTask(task));
     }
 
+    function completedTaskHistoryKey(task) {
+      const prompt = String(task?.prompt || "").trim().toLowerCase();
+      const repos = Array.isArray(task?.repos)
+        ? task.repos.map((repo) => String(repo || "").trim()).filter(Boolean).sort().join(",")
+        : "";
+      const repo = String(task?.repo || "").trim();
+      const baseBranch = String(task?.base_branch || "").trim();
+      const skill = String(task?.skill || "").trim();
+      if (!prompt && !repos && !repo && !baseBranch && !skill) {
+        return String(task?.request_id || "").trim();
+      }
+      return [skill, repos || repo, baseBranch, prompt].join("::");
+    }
+
+    function preferCompletedHistoryTask(current, next) {
+      if (!current) {
+        return next;
+      }
+      const completedDiff = historyTaskCompletedAt(next) - historyTaskCompletedAt(current);
+      if (completedDiff !== 0) {
+        return completedDiff > 0 ? next : current;
+      }
+      const updatedDiff = historyTaskUpdatedAt(next) - historyTaskUpdatedAt(current);
+      if (updatedDiff !== 0) {
+        return updatedDiff > 0 ? next : current;
+      }
+      const startedDiff = parseTaskTimestamp(next?.started_at) - parseTaskTimestamp(current?.started_at);
+      if (startedDiff !== 0) {
+        return startedDiff > 0 ? next : current;
+      }
+      return String(next?.request_id || "").localeCompare(String(current?.request_id || "")) > 0 ? next : current;
+    }
+
     function completedTasks(snapshot) {
-      const out = historyTasks(snapshot).filter((task) => isCompletedTask(task));
+      const deduped = new Map();
+      for (const task of historyTasks(snapshot)) {
+        if (!isCompletedTask(task)) {
+          continue;
+        }
+        const key = completedTaskHistoryKey(task);
+        deduped.set(key, preferCompletedHistoryTask(deduped.get(key), task));
+      }
+      const out = Array.from(deduped.values());
       out.sort((a, b) => {
         const completedDiff = historyTaskCompletedAt(b) - historyTaskCompletedAt(a);
         if (completedDiff !== 0) return completedDiff;
