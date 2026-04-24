@@ -344,6 +344,10 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `.hub-setup-toggle {`) {
 		t.Fatalf("expected stylesheet to include hub setup toggle styles")
 	}
+	if !strings.Contains(stylesheet, `.onboarding-modal-backdrop {`) ||
+		!strings.Contains(stylesheet, `.onboarding-form {`) {
+		t.Fatalf("expected stylesheet to include the dispatch onboarding modal layout")
+	}
 	if !strings.Contains(stylesheet, `.hub-setup-profile-grid {`) {
 		t.Fatalf("expected stylesheet to include hub setup profile grid styles")
 	}
