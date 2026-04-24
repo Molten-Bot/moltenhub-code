@@ -1014,6 +1014,92 @@
       return badge;
     }
 
+    function appendTaskStepIcon(parent, step, task, options = {}) {
+      if (!parent || !step) {
+        return false;
+      }
+
+      const iconClass = String(options.iconClass || "task-progress-step-icon").trim();
+      const glyphClass = String(options.glyphClass || "task-progress-step-glyph").trim();
+      const iconURL = taskProgressStepIconURL(step, task);
+      const iconName = taskProgressStepIconName(step);
+      if (iconURL) {
+        parent.classList.add("has-icon");
+        const icon = document.createElement("img");
+        icon.className = iconClass;
+        if (String(step?.icon || "").trim().toLowerCase() === "agent") {
+          icon.classList.add("is-agent-logo");
+        }
+        icon.src = iconURL;
+        icon.alt = `${step.label} logo`;
+        parent.appendChild(icon);
+        return true;
+      }
+      if (iconName) {
+        parent.classList.add("has-icon", "has-glyph");
+        const icon = document.createElement("i");
+        icon.className = glyphClass;
+        icon.setAttribute("data-lucide", iconName);
+        icon.setAttribute("aria-hidden", "true");
+        parent.appendChild(icon);
+        return true;
+      }
+
+      parent.classList.add("has-icon");
+      const icon = document.createElement("img");
+      icon.className = iconClass;
+      icon.src = taskProgressFallbackIconURL();
+      icon.alt = `${step.label} logo`;
+      parent.appendChild(icon);
+      return true;
+    }
+
+    function taskCurrentStateSignature(task) {
+      const status = normalizedTaskStatus(task?.status) || "pending";
+      if (COMPLETED_STATUSES.has(status)) {
+        return `status:${status}`;
+      }
+
+      const model = taskProgressModel(task);
+      const steps = Array.isArray(model?.steps) ? model.steps : [];
+      const index = Number.isFinite(model?.index) ? model.index : 0;
+      const step = steps[index] || null;
+      return [
+        "progress",
+        status,
+        String(step?.id || ""),
+        taskProgressModelCacheKey(task),
+      ].join(":");
+    }
+
+    function renderTaskCurrentStateBadge(task) {
+      const status = normalizedTaskStatus(task?.status) || "pending";
+      if (COMPLETED_STATUSES.has(status) || !TASK_PROGRESS_VISIBLE) {
+        return renderTaskStatusBadge(task);
+      }
+
+      const model = taskProgressModel(task);
+      const steps = Array.isArray(model?.steps) ? model.steps : [];
+      const index = Number.isFinite(model?.index) ? model.index : 0;
+      const step = steps[index] || null;
+      if (!step) {
+        return renderTaskStatusBadge(task);
+      }
+
+      const statusLabel = taskStatusLabel(status);
+      const badge = document.createElement("span");
+      badge.className = `task-current-state badge-icon ${statusClass(status)}`;
+      badge.classList.toggle("is-running", status === "running" || status === "active");
+      badge.dataset.progressStep = String(step.id || "");
+      badge.title = `${step.label}: ${step.detail}`;
+      badge.setAttribute("aria-label", `Current task stage: ${step.label}. Status: ${statusLabel}.`);
+      appendTaskStepIcon(badge, step, task, {
+        iconClass: "task-current-state-icon",
+        glyphClass: "task-current-state-glyph",
+      });
+      return badge;
+    }
+
     function currentAgentLabel() {
       const harness = String(state.agentAuth.harness || "").trim();
       if (harness) {
@@ -6695,33 +6781,7 @@
           stateText = "current";
         }
 
-        const iconURL = taskProgressStepIconURL(step, task);
-        const iconName = taskProgressStepIconName(step);
-        if (iconURL) {
-          marker.classList.add("has-icon");
-          const icon = document.createElement("img");
-          icon.className = "task-progress-step-icon";
-          if (String(step?.icon || "").trim().toLowerCase() === "agent") {
-            icon.classList.add("is-agent-logo");
-          }
-          icon.src = iconURL;
-          icon.alt = `${step.label} logo`;
-          marker.appendChild(icon);
-        } else if (iconName) {
-          marker.classList.add("has-icon", "has-glyph");
-          const icon = document.createElement("i");
-          icon.className = "task-progress-step-glyph";
-          icon.setAttribute("data-lucide", iconName);
-          icon.setAttribute("aria-hidden", "true");
-          marker.appendChild(icon);
-        } else {
-          marker.classList.add("has-icon");
-          const icon = document.createElement("img");
-          icon.className = "task-progress-step-icon";
-          icon.src = taskProgressFallbackIconURL();
-          icon.alt = `${step.label} logo`;
-          marker.appendChild(icon);
-        }
+        appendTaskStepIcon(marker, step, task);
 
         marker.title = `${step.label}: ${stateText}. ${step.detail}`;
         steps.appendChild(marker);
@@ -6903,6 +6963,7 @@
             sparkle: shouldSparkleTask(task),
             status: String(task?.status || ""),
             stage: String(task?.stage || ""),
+            currentState: taskCurrentStateSignature(task),
             prompt: taskDisplayLabel(task),
             repos: formatTaskRepos(task),
             branch: formatTaskBranch(task),
@@ -7042,7 +7103,7 @@
 
         const topActions = document.createElement("div");
         topActions.className = "task-top-actions";
-        if (!historyView) {
+        if (!historyView && !collapsed) {
           topActions.appendChild(badge);
         }
 
@@ -7097,6 +7158,7 @@
             promptActions.appendChild(closeAction);
           }
 
+          const compactState = renderTaskCurrentStateBadge(task);
           top.append(id);
           if (promptActions.childElementCount > 0) {
             top.append(promptActions);
@@ -7104,9 +7166,9 @@
           const body = document.createElement("div");
           body.className = "task-body";
           body.appendChild(top);
-          if (historyView) {
-            node.classList.add("task-history-status-left");
-            node.appendChild(badge);
+          if (compactState) {
+            node.classList.add("task-compact-state-left");
+            node.appendChild(compactState);
           }
           node.appendChild(body);
           listNode.appendChild(node);
@@ -7316,7 +7378,13 @@
         if (inlineHistoryActions) {
           node.classList.remove("task-has-side-actions");
         }
-        if (historyView) {
+        if (collapsed) {
+          const compactState = renderTaskCurrentStateBadge(task);
+          if (compactState) {
+            node.classList.add("task-compact-state-left");
+            node.appendChild(compactState);
+          }
+        } else if (historyView) {
           node.classList.add("task-history-status-left");
           node.appendChild(badge);
         }

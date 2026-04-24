@@ -1920,6 +1920,15 @@ select.prompt-control {
   padding-bottom: 8px;
 }
 
+.task.task-compact-state-left {
+  align-items: center;
+  gap: 8px;
+}
+
+.task.task-compact-state-left .task-body {
+  min-width: 0;
+}
+
 .task.task-prompt-only {
   padding-top: 8px;
   padding-bottom: 8px;
@@ -2263,6 +2272,64 @@ select.prompt-control {
   background: var(--bad);
 }
 
+.task-current-state {
+  position: relative;
+  flex: 0 0 28px;
+  background: var(--surface-badge-default);
+  border: 1px solid color-mix(in srgb, #fff 28%, transparent);
+  color: #fff;
+  overflow: visible;
+}
+
+.task-current-state.running,
+.task-current-state.active {
+  background: var(--running);
+}
+
+.task-current-state.pending {
+  background: var(--surface-badge-idle);
+}
+
+.task-current-state.paused {
+  background: var(--warn);
+}
+
+.task-current-state.error,
+.task-current-state.invalid {
+  background: var(--bad);
+}
+
+.task-current-state-icon,
+.task-current-state-glyph {
+  display: block;
+  width: 22px;
+  height: 22px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.task-current-state-icon {
+  object-fit: contain;
+  filter: var(--task-progress-logo-active-filter);
+}
+
+.task-current-state-icon.is-agent-logo {
+  filter: brightness(0) saturate(100%) invert(1);
+}
+
+.task-current-state-glyph {
+  color: currentColor;
+  stroke-width: 2;
+  filter: var(--task-icon-contrast-filter) var(--task-icon-shadow-filter);
+}
+
+.task-current-state.is-running .task-current-state-icon,
+.task-current-state.is-running .task-current-state-glyph {
+  animation: taskProgressCurrentSpin 10s linear infinite;
+  transform-origin: center;
+  will-change: transform;
+}
+
 .task-icons-idle-spin .task-action-glyph-loader {
   animation: taskIconIdleSpin 16s linear infinite;
 }
@@ -2396,6 +2463,11 @@ select.prompt-control {
   }
 
   .task-icons-idle-spin .task-action-glyph-loader {
+    animation: none;
+  }
+
+  .task-current-state.is-running .task-current-state-icon,
+  .task-current-state.is-running .task-current-state-glyph {
     animation: none;
   }
 }
