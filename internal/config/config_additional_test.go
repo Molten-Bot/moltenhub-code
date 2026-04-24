@@ -88,7 +88,7 @@ func TestTrimGeneratedPRTitleSuffixAndEnsureFooter(t *testing.T) {
 	if got := trimGeneratedPRTitleSuffix("release---"); got != "release" {
 		t.Fatalf("trimGeneratedPRTitleSuffix(no generated suffix) = %q, want %q", got, "release")
 	}
-	if got := ensurePRBodyFooter("body\n\n" + prBodyFooter); strings.Count(got, "https://molten.bot/hub") != 1 {
+	if got := ensurePRBodyFooter("body\n\n" + prBodyFooter); strings.Count(got, "https://molten.bot/code?source=pr") != 1 {
 		t.Fatalf("ensurePRBodyFooter(contains footer) duplicated link: %q", got)
 	}
 	if got := ensurePRBodyPromptAndFooter("body", "investigate failing tests"); !strings.Contains(got, "Original task prompt:\n```text\ninvestigate failing tests\n```") {
