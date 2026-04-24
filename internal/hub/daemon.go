@@ -54,6 +54,7 @@ const failureFollowUpNoPathGuidance = "No workspace or log path was captured bef
 const failureFollowUpBaseBranch = "main"
 const failureFollowUpTargetSubdir = "."
 const transportOfflineReasonExecutionFailure = "task_execution_failure"
+
 // NewDaemon returns a hub daemon with defaults.
 func NewDaemon(runner execx.Runner) Daemon {
 	return Daemon{
@@ -452,12 +453,18 @@ func (d Daemon) processInboundMessage(
 			return
 		}
 	}
-	if d.OnDispatchQueued != nil {
-		d.OnDispatchQueued(dispatch.RequestID, dispatch.Config)
-	}
 	if dispatchController == nil {
 		dispatchController = NewAdaptiveDispatchController(cfg.Dispatcher, d.logf)
 		dispatchController.Start(ctx)
+	}
+
+	runCtx, cancelRun := context.WithCancelCause(ctx)
+	var taskControl DispatchTaskControl
+	if d.RegisterTaskControl != nil {
+		taskControl = d.RegisterTaskControl(dispatch.RequestID, cancelRun)
+	}
+	if d.OnDispatchQueued != nil {
+		d.OnDispatchQueued(dispatch.RequestID, dispatch.Config)
 	}
 
 	ackedEarly := false
@@ -468,12 +475,6 @@ func (d Daemon) processInboundMessage(
 			ackedEarly = true
 			d.logf("dispatch status=ack request_id=%s delivery_id=%s", firstNonEmpty(dispatch.RequestID, dupKey), deliveryID)
 		}
-	}
-
-	runCtx, cancelRun := context.WithCancelCause(ctx)
-	var taskControl DispatchTaskControl
-	if d.RegisterTaskControl != nil {
-		taskControl = d.RegisterTaskControl(dispatch.RequestID, cancelRun)
 	}
 
 	workers.Add(1)
@@ -969,9 +970,9 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 		"message":      message,
 	}
 	if res.Err != nil {
-		result["error"] = res.Err.Error()
-		result["Failure"] = "task failed"
-		result["Error details"] = res.Err.Error()
+		errText := res.Err.Error()
+		result["error"] = errText
+		addExplicitFailureFields(result, errText)
 	}
 
 	payload := map[string]any{
@@ -987,22 +988,35 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 	if res.Err != nil {
 		errText := res.Err.Error()
 		payload["error"] = errText
-		payload["Failure"] = "task failed"
-		payload["Error details"] = errText
-		payload["failure"] = map[string]any{
-			"status":        "failed",
-			"message":       message,
-			"error":         errText,
-			"Failure":       "task failed",
-			"Error details": errText,
-			"details":       result,
+		addExplicitFailureFields(payload, errText)
+		failure := map[string]any{
+			"status":  "failed",
+			"message": message,
+			"error":   errText,
+			"details": result,
 		}
+		addExplicitFailureFields(failure, errText)
+		payload["failure"] = failure
 	}
 	if dispatch.ReplyTo != "" {
 		payload["reply_to"] = dispatch.ReplyTo
 		payload["to"] = dispatch.ReplyTo
 	}
 	return payload
+}
+
+func addExplicitFailureFields(payload map[string]any, errText string) {
+	if payload == nil {
+		return
+	}
+	errText = strings.TrimSpace(errText)
+	if errText == "" {
+		errText = "unknown error"
+	}
+	payload["Failure"] = "task failed"
+	payload["Failure:"] = "task failed"
+	payload["Error details"] = errText
+	payload["Error details:"] = errText
 }
 
 func dispatchResultDetailStatus(status string, res harness.Result) string {

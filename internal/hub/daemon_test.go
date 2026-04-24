@@ -705,6 +705,12 @@ func TestDispatchResultPayloadIncludesTopLevelFailureMessage(t *testing.T) {
 	if got := payload["error"]; got != "codex: process exited with status 1" {
 		t.Fatalf("error = %#v", got)
 	}
+	if got := payload["Failure:"]; got != "task failed" {
+		t.Fatalf("Failure: = %#v", got)
+	}
+	if got := payload["Error details:"]; got != "codex: process exited with status 1" {
+		t.Fatalf("Error details: = %#v", got)
+	}
 	if got := payload["message"]; got != "Failure: task failed. Error details: codex: process exited with status 1" {
 		t.Fatalf("message = %#v", got)
 	}
@@ -721,6 +727,12 @@ func TestDispatchResultPayloadIncludesTopLevelFailureMessage(t *testing.T) {
 	if got := result["error"]; got != "codex: process exited with status 1" {
 		t.Fatalf("result.error = %#v", got)
 	}
+	if got := result["Failure:"]; got != "task failed" {
+		t.Fatalf("result.Failure: = %#v", got)
+	}
+	if got := result["Error details:"]; got != "codex: process exited with status 1" {
+		t.Fatalf("result.Error details: = %#v", got)
+	}
 	failure, _ := payload["failure"].(map[string]any)
 	if failure == nil {
 		t.Fatal("failure payload missing")
@@ -734,6 +746,12 @@ func TestDispatchResultPayloadIncludesTopLevelFailureMessage(t *testing.T) {
 	if got := failure["error"]; got != "codex: process exited with status 1" {
 		t.Fatalf("failure.error = %#v", got)
 	}
+	if got := failure["Failure:"]; got != "task failed" {
+		t.Fatalf("failure.Failure: = %#v", got)
+	}
+	if got := failure["Error details:"]; got != "codex: process exited with status 1" {
+		t.Fatalf("failure.Error details: = %#v", got)
+	}
 	details, _ := failure["details"].(map[string]any)
 	if details == nil {
 		t.Fatal("failure.details missing")
@@ -746,6 +764,12 @@ func TestDispatchResultPayloadIncludesTopLevelFailureMessage(t *testing.T) {
 	}
 	if got := details["error"]; got != "codex: process exited with status 1" {
 		t.Fatalf("failure.details.error = %#v", got)
+	}
+	if got := details["Failure:"]; got != "task failed" {
+		t.Fatalf("failure.details.Failure: = %#v", got)
+	}
+	if got := details["Error details:"]; got != "codex: process exited with status 1" {
+		t.Fatalf("failure.details.Error details: = %#v", got)
 	}
 }
 
@@ -1257,17 +1281,28 @@ func TestProcessInboundMessageInvokesOnDispatchQueued(t *testing.T) {
 
 	d := NewDaemon(nil)
 	var (
-		mu           sync.Mutex
-		gotRequestID string
-		gotRepo      string
-		gotPrompt    string
+		mu                  sync.Mutex
+		gotRequestID        string
+		gotRepo             string
+		gotPrompt           string
+		registered          bool
+		queuedAfterRegister bool
 	)
+	d.RegisterTaskControl = func(requestID string, _ context.CancelCauseFunc) DispatchTaskControl {
+		mu.Lock()
+		defer mu.Unlock()
+		if requestID == "req-queued" {
+			registered = true
+		}
+		return nil
+	}
 	d.OnDispatchQueued = func(requestID string, runCfg config.Config) {
 		mu.Lock()
 		defer mu.Unlock()
 		gotRequestID = requestID
 		gotRepo = runCfg.RepoURL
 		gotPrompt = runCfg.Prompt
+		queuedAfterRegister = registered
 	}
 
 	cfg := InitConfig{
@@ -1309,6 +1344,9 @@ func TestProcessInboundMessageInvokesOnDispatchQueued(t *testing.T) {
 	}
 	if gotPrompt != "ship rerun button" {
 		t.Fatalf("prompt = %q, want %q", gotPrompt, "ship rerun button")
+	}
+	if !queuedAfterRegister {
+		t.Fatal("OnDispatchQueued ran before task controls were registered")
 	}
 }
 

@@ -397,12 +397,11 @@ func runHub(args []string) int {
 				return "", newDuplicateSubmissionError(duplicateOf, state)
 			}
 		}
+		runCtx, cancelRun := context.WithCancelCause(ctx)
+		taskHandle := localTaskController.Register(requestID, cancelRun)
 		if runConfigJSON, ok := marshalRunConfigJSON(runCfg); ok {
 			monitorBroker.RecordTaskRunConfig(requestID, runConfigJSON)
 		}
-
-		runCtx, cancelRun := context.WithCancelCause(ctx)
-		taskHandle := localTaskController.Register(requestID, cancelRun)
 
 		go func(
 			requestID string,
