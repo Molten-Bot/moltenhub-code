@@ -95,6 +95,9 @@ func TestSyncProfileUsesAgentMetadataPayload(t *testing.T) {
 	if got := metadata["profile"]; got != "Automation worker" {
 		t.Fatalf("metadata.profile = %#v", got)
 	}
+	if got := metadata["profile_markdown"]; got != "Automation worker" {
+		t.Fatalf("metadata.profile_markdown = %#v", got)
+	}
 	if got := metadata["agent_harness"]; got != "codex" {
 		t.Fatalf("metadata.agent_harness = %#v", got)
 	}

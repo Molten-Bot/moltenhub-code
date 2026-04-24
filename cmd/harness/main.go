@@ -2806,15 +2806,21 @@ func disconnectHubSetup(ctx context.Context, cfg hub.InitConfig, stopLive func(c
 	if !state.Configured {
 		return state, fmt.Errorf("molten hub is not configured")
 	}
-	if stopLive == nil {
-		return state, fmt.Errorf("live hub disconnect is unavailable")
+
+	var stopErr error
+	if stopLive != nil {
+		stopErr = stopLive(ctx)
 	}
-	if err := stopLive(ctx); err != nil {
+	if err := hub.ClearRuntimeConfigHubSettings(cfg.RuntimeConfigPath, cfg); err != nil {
 		state.Message = fmt.Sprintf("Molten Hub disconnect failed: %v", err)
-		return state, fmt.Errorf("disconnect live hub: %w", err)
+		return state, fmt.Errorf("clear hub setup: %w", err)
 	}
 
+	state = currentHubSetupState(cfg)
 	state.Message = "Molten Hub disconnected."
+	if stopErr != nil {
+		state.Message = fmt.Sprintf("Molten Hub disconnected. Live stop failed: %v", stopErr)
+	}
 	state.NeedsRestart = false
 	state.ActivationReady = false
 	return state, nil

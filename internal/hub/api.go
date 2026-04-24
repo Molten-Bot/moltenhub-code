@@ -1770,18 +1770,6 @@ func firstString(values ...any) string {
 	return ""
 }
 
-func buildProfileMarkdown(displayName, emoji, profileText string) string {
-	displayName = strings.TrimSpace(displayName)
-	emoji = strings.TrimSpace(emoji)
-	profileText = strings.TrimSpace(profileText)
-
-	header := strings.TrimSpace(strings.Join([]string{emoji, displayName}, " "))
-	switch {
-	case header != "" && profileText != "":
-		return "# " + header + "\n\n" + profileText
-	case header != "":
-		return "# " + header
-	default:
-		return profileText
-	}
+func buildProfileMarkdown(_, _ string, profileText string) string {
+	return strings.TrimSpace(profileText)
 }

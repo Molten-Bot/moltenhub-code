@@ -53,7 +53,6 @@
   </script>
   <script src="https://cdn.tailwindcss.com" defer></script>
   <script src="/static/lucide.min.js"></script>
-  <script src="/static/emoji-picker.js"></script>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="min-h-screen antialiased">
@@ -518,7 +517,6 @@
             <p class="eyebrow">Molten Hub Code</p>
             <h2 id="hub-setup-title">Connect to Hub</h2>
             <p id="hub-setup-message">Connect this runtime to Molten Hub.</p>
-            <p id="hub-setup-copy" class="hub-setup-copy">Paste a Molten Hub token. Agent tokens start with t_; bind tokens start with b_ and show profile setup fields.</p>
           </div>
           <div class="hub-setup-sidebar-actions">
             <a
@@ -530,9 +528,6 @@
               <span>Agent Token</span>
               <i data-lucide="external-link" aria-hidden="true"></i>
             </a>
-            <button id="hub-setup-close" class="settings-modal-close onboarding-modal-close" type="button" aria-label="Close Molten Hub setup" title="Close">
-              <i data-lucide="x" aria-hidden="true"></i>
-            </button>
           </div>
         </header>
 
@@ -557,29 +552,42 @@
               <label>Display Name<input id="hub-setup-display-name" type="text" spellcheck="false" placeholder="Code Agent"></label>
               <fieldset class="emoji-fieldset hub-setup-profile-emoji">
                 <legend>Emoji</legend>
-                <div id="hub-setup-emoji-picker" class="hub-emoji-picker" data-emoji-picker>
-                  <input id="hub-setup-emoji" class="hub-emoji-picker-input" type="text" spellcheck="false" placeholder="🔥" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" aria-describedby="hub-setup-emoji-help">
-                  <button id="hub-setup-emoji-toggle" class="hub-emoji-picker-toggle" type="button" aria-label="Choose an emoji" aria-haspopup="dialog" aria-expanded="false">
-                    <span class="hub-emoji-picker-toggle-main">
-                      <span class="hub-emoji-picker-toggle-chip" aria-hidden="true">
-                        <span id="hub-setup-emoji-preview" class="hub-emoji-picker-toggle-preview" aria-hidden="true">🙂</span>
-                      </span>
-                      <span class="hub-emoji-picker-toggle-text" data-empty-label="Choose an emoji">Choose an emoji</span>
-                    </span>
-                    <span class="hub-emoji-picker-toggle-chevron" aria-hidden="true">▾</span>
+                <div id="hub-setup-emoji-picker" class="hub-emoji-picker" data-hub-emoji-picker>
+                  <input id="hub-setup-emoji" type="hidden" value="" data-hub-emoji-input>
+                  <button
+                    id="hub-setup-emoji-toggle"
+                    class="hub-emoji-picker-toggle"
+                    type="button"
+                    data-hub-emoji-toggle
+                    aria-label="Choose emoji"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    title="Choose emoji">
+                    <span id="hub-setup-emoji-preview" class="hub-emoji-picker-toggle-preview" data-hub-emoji-preview aria-hidden="true">🙂</span>
                   </button>
-                  <div id="hub-setup-emoji-panel" class="hub-emoji-picker-panel hidden" role="dialog" aria-label="Choose emoji" hidden></div>
+                  <div id="hub-setup-emoji-panel" class="hub-emoji-picker-panel" data-hub-emoji-panel hidden>
+                    <div class="hub-emoji-picker-panel-header">
+                      <p class="hub-emoji-picker-label">Pick one emoji</p>
+                      <button type="button" class="hub-emoji-picker-clear" data-hub-emoji-clear>Clear</button>
+                    </div>
+                    <div class="hub-emoji-picker-mart" data-hub-emoji-mart-root aria-live="polite"></div>
+                  </div>
                 </div>
                 <span id="hub-setup-emoji-help" class="sr-only">Type or choose one emoji for this agent.</span>
               </fieldset>
             </div>
-            <label class="hub-setup-profile-text"><span class="prompt-label">Profile</span><textarea id="hub-setup-profile" class="prompt-text prompt-control hub-setup-profile-input" rows="2" spellcheck="false" placeholder="What this runtime is for"></textarea></label>
+            <label class="hub-setup-profile-text"><span class="prompt-label">Bio</span><textarea id="hub-setup-profile" class="prompt-text prompt-control hub-setup-profile-input" rows="4" spellcheck="false" placeholder="Please write the bio of your agent..."></textarea></label>
           </div>
 
           <div class="onboarding-form-actions hub-setup-footer">
             <p id="hub-setup-status" class="hub-setup-status submit-status submit-status-inline onboarding-message" aria-live="polite"></p>
             <div class="hub-setup-actions">
-              <button id="hub-setup-connection-toggle" class="hub-setup-connection-toggle prompt-action-button hidden" type="button">Disconnect</button>
+              <button id="hub-setup-connection-toggle" class="secondary-button hub-setup-connection-toggle hidden" type="button" aria-label="Disconnect agent" title="Disconnect">
+                <i data-lucide="unlink" aria-hidden="true"></i>
+              </button>
+              <button id="hub-setup-close" class="settings-modal-close onboarding-modal-close" type="button" aria-label="Close Molten Hub setup" title="Close">
+                <i data-lucide="x" aria-hidden="true"></i>
+              </button>
               <button id="hub-setup-submit" class="prompt-action-button prompt-submit" type="submit">Connect Runtime</button>
             </div>
           </div>
@@ -794,6 +802,22 @@
     const CLAUDE_POST_SUBMIT_VERIFY_MAX_ATTEMPTS = 25;
     const HUB_SETUP_DIALOG_MODES = ["connect", "profile"];
     const HUB_PROFILE_DEFAULT_EMOJI = "🙂";
+    const EMOJI_PANEL_VIEWPORT_GUTTER = 8;
+    const EMOJI_PANEL_OFFSET = 8;
+    const EMOJI_PANEL_MAX_WIDTH = 360;
+    const EMOJI_PANEL_ESTIMATED_HEIGHT = 430;
+    const EMOJI_PANEL_ANIMATION_DURATION_MS = 180;
+    const PROFILE_EMOJI_GROUPS = Object.freeze([
+      { label: "Smileys", emoji: ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🙂", "🙃", "😉", "😊", "😇", "😍", "🤩", "😘", "😎", "🥳", "🤔", "🫡", "🤯", "😴", "😭", "😤", "😈"] },
+      { label: "People", emoji: ["👋", "👏", "🙌", "🙏", "💪", "🦾", "👍", "👎", "✌️", "🤘", "👌", "🤌", "👀", "🧠", "🧑‍💻", "🧑‍🔬", "🧑‍🚀", "🧙", "🥷", "🦸", "🧟", "💃", "🕺", "🏃"] },
+      { label: "Nature", emoji: ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐸", "🐵", "🐧", "🐦", "🦉", "🦋", "🌵", "🌲", "🌸", "🌈", "🌊", "🔥"] },
+      { label: "Food", emoji: ["🍏", "🍎", "🍌", "🍓", "🍒", "🍑", "🍍", "🥝", "🥑", "🥕", "🌮", "🍕", "🍔", "🍟", "🍜", "🍣", "🍩", "🍪", "🍰", "☕", "🍺", "🍷", "🥂", "🍾"] },
+      { label: "Activity", emoji: ["⚽", "🏀", "🏈", "⚾", "🎾", "🏐", "🎱", "🏓", "🥊", "🎮", "🎲", "🎯", "🎨", "🎬", "🎤", "🎧", "🎹", "🥁", "🎸", "🏆", "🥇", "🧩", "♟️", "🕹️"] },
+      { label: "Travel", emoji: ["🚗", "🚕", "🚌", "🏎️", "🚓", "🚑", "🚒", "🚚", "🚲", "✈️", "🚀", "🛸", "🛰️", "⛵", "🚢", "🏠", "🏢", "🏰", "⛰️", "🏝️", "🌋", "🗺️", "🧭", "🧳"] },
+      { label: "Objects", emoji: ["⌚", "📱", "💻", "⌨️", "🖥️", "🖨️", "📷", "📡", "💡", "🔦", "🧯", "🔋", "🪫", "🔌", "🧲", "🧪", "🧬", "🔬", "🔭", "🛠️", "⚙️", "🔧", "🔨", "🪛"] },
+      { label: "Symbols", emoji: ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "💯", "💥", "💫", "💦", "✨", "⚡", "☀️", "🌙", "⭐", "🌟", "🔮", "✅", "❌", "⚠️", "♻️", "🔁"] },
+      { label: "Agent", emoji: ["🤖", "🦾", "🧠", "🚀", "🛰️", "📡", "🧪", "🧬", "⚙️", "🛠️", "💡", "🔮", "🎯", "✨", "🔥", "⚡", "🌊", "🎛️", "🧭", "🧑‍💻", "🧑‍🔬", "🧑‍🚀", "🪄", "🏁"] },
+    ]);
 
     function normalizeUIConfig(raw) {
       const config = raw && typeof raw === "object" ? raw : {};
@@ -1228,16 +1252,6 @@
       return "Paste agent token or bind token";
     }
 
-    function currentHubSetupSupportingCopy() {
-      if (isHubProfileDialogMode()) {
-        return "Modify my display name, emoji, and profile.";
-      }
-      if (state.hubSetup.agentMode === "new") {
-        return "Bind token detected. Save handle, display name, emoji, and profile details for the selected region.";
-      }
-      return "Agent token detected. Connect this runtime while preserving the current Molten Hub identity.";
-    }
-
     function currentHubSetupAutoSubmitKey() {
       const payload = currentHubSetupPayload();
       return `${payload.agent_mode}:${payload.region}:${payload.token}`;
@@ -1302,34 +1316,6 @@
 
     function scheduleHubSetupAutoSubmit() {
       clearHubSetupAutoSubmitTimer();
-      if (state.hubSetupBusy || state.hubSetup.agentMode !== "existing") {
-        return;
-      }
-      if (syncHubTokenValidation()) {
-        return;
-      }
-      const payload = currentHubSetupPayload();
-      if (!payload.token) {
-        return;
-      }
-      const autoSubmitKey = currentHubSetupAutoSubmitKey();
-      if (autoSubmitKey === state.hubSetupLastAutoSubmitKey) {
-        return;
-      }
-      state.hubSetupAutoSubmitTimer = window.setTimeout(() => {
-        state.hubSetupAutoSubmitTimer = 0;
-        if (state.hubSetupBusy || state.hubSetup.agentMode !== "existing") {
-          return;
-        }
-        if (syncHubTokenValidation()) {
-          return;
-        }
-        const nextKey = currentHubSetupAutoSubmitKey();
-        if (!nextKey || nextKey === state.hubSetupLastAutoSubmitKey) {
-          return;
-        }
-        void submitHubSetup(null, { autoSubmit: true });
-      }, 180);
     }
 
     function agentAuthLabel(harness) {
@@ -1688,7 +1674,6 @@
     const hubSetupTitle = document.getElementById("hub-setup-title");
     const hubSetupForm = document.getElementById("hub-setup-form");
     const hubSetupMessage = document.getElementById("hub-setup-message");
-    const hubSetupCopy = document.getElementById("hub-setup-copy");
     const hubSetupClose = document.getElementById("hub-setup-close");
     const hubSetupConnectRegionRow = document.getElementById("hub-setup-connect-region-row");
     const hubSetupRegionNAToggle = document.getElementById("hub-setup-region-na-toggle");
@@ -1746,8 +1731,240 @@
     const hoverSelect = document.getElementById("hover-select");
     let brandLogoRotationTimer = null;
     let brandLogoRotationPhase = 0;
-    const hubSetupEmojiPicker = window.MoltenEmojiPicker && hubSetupEmojiPickerRoot
-      ? window.MoltenEmojiPicker.attach(hubSetupEmojiPickerRoot)
+    let closeActiveEmojiPicker = null;
+
+    function eventIncludesNode(event, node) {
+      if (!(node instanceof Node)) {
+        return false;
+      }
+      if (typeof event.composedPath === "function") {
+        return event.composedPath().some((entry) => entry === node || (entry instanceof Node && node.contains(entry)));
+      }
+      return event.target instanceof Node && node.contains(event.target);
+    }
+
+    function attachHubEmojiPicker(root) {
+      const input = root.querySelector("[data-hub-emoji-input]");
+      const toggle = root.querySelector("[data-hub-emoji-toggle]");
+      const preview = root.querySelector("[data-hub-emoji-preview]");
+      const panel = root.querySelector("[data-hub-emoji-panel]");
+      const clearButton = root.querySelector("[data-hub-emoji-clear]");
+      const pickerMount = root.querySelector("[data-hub-emoji-mart-root]");
+      if (
+        !(input instanceof HTMLInputElement) ||
+        !(toggle instanceof HTMLButtonElement) ||
+        !(preview instanceof HTMLElement) ||
+        !(panel instanceof HTMLElement) ||
+        !(clearButton instanceof HTMLButtonElement) ||
+        !(pickerMount instanceof HTMLElement)
+      ) {
+        return null;
+      }
+
+      let open = false;
+      let pickerMounted = false;
+      let panelCloseTimer = 0;
+      if (panel.parentElement !== document.body) {
+        document.body.appendChild(panel);
+      }
+
+      const syncSelectedState = () => {
+        const emojiValue = normalizeProfileEmoji(input.value);
+        if (emojiValue !== input.value) {
+          input.value = emojiValue;
+        }
+        preview.textContent = emojiValue || HUB_PROFILE_DEFAULT_EMOJI;
+      };
+
+      const positionPanel = () => {
+        if (!open) {
+          return;
+        }
+        const rect = root.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const maxPanelWidth = Math.max(240, viewportWidth - EMOJI_PANEL_VIEWPORT_GUTTER * 2);
+        const panelWidth = Math.min(EMOJI_PANEL_MAX_WIDTH, maxPanelWidth);
+        const maxLeft = Math.max(EMOJI_PANEL_VIEWPORT_GUTTER, viewportWidth - panelWidth - EMOJI_PANEL_VIEWPORT_GUTTER);
+        const left = Math.min(Math.max(rect.left, EMOJI_PANEL_VIEWPORT_GUTTER), maxLeft);
+        const spaceBelow = window.innerHeight - rect.bottom - EMOJI_PANEL_VIEWPORT_GUTTER;
+        const spaceAbove = rect.top - EMOJI_PANEL_VIEWPORT_GUTTER;
+        const placeBelow = spaceBelow >= EMOJI_PANEL_ESTIMATED_HEIGHT || spaceBelow >= spaceAbove;
+
+        panel.dataset.placement = placeBelow ? "bottom" : "top";
+        panel.style.left = `${left}px`;
+        panel.style.width = `min(${EMOJI_PANEL_MAX_WIDTH}px, calc(100vw - ${EMOJI_PANEL_VIEWPORT_GUTTER * 2}px))`;
+        panel.style.maxHeight = `calc(100vh - ${EMOJI_PANEL_VIEWPORT_GUTTER * 2}px)`;
+        panel.style.top = "auto";
+        panel.style.bottom = "auto";
+        if (placeBelow) {
+          panel.style.top = `${rect.bottom + EMOJI_PANEL_OFFSET}px`;
+        } else {
+          panel.style.bottom = `${window.innerHeight - rect.top + EMOJI_PANEL_OFFSET}px`;
+        }
+      };
+
+      const detachPanelListeners = () => {
+        window.removeEventListener("mousedown", handleDocumentPointerDown);
+        window.removeEventListener("touchstart", handleDocumentPointerDown);
+        window.removeEventListener("keydown", handleWindowKeydown);
+        window.removeEventListener("resize", positionPanel);
+        window.removeEventListener("scroll", positionPanel, true);
+      };
+
+      const clearPanelCloseTimer = () => {
+        if (panelCloseTimer) {
+          window.clearTimeout(panelCloseTimer);
+          panelCloseTimer = 0;
+        }
+      };
+
+      const unmountPicker = () => {
+        pickerMounted = false;
+        pickerMount.innerHTML = "";
+      };
+
+      const closePanel = () => {
+        if (!open) {
+          return;
+        }
+        open = false;
+        toggle.classList.remove("is-open");
+        toggle.setAttribute("aria-expanded", "false");
+        detachPanelListeners();
+        panel.classList.remove("is-open");
+        panel.classList.add("is-closing");
+        clearPanelCloseTimer();
+        panelCloseTimer = window.setTimeout(() => {
+          panel.hidden = true;
+          panel.classList.remove("is-closing");
+          unmountPicker();
+          panelCloseTimer = 0;
+        }, EMOJI_PANEL_ANIMATION_DURATION_MS);
+        if (closeActiveEmojiPicker === closePanel) {
+          closeActiveEmojiPicker = null;
+        }
+      };
+
+      const setEmojiValue = (nextValue, closeWhenDone = false) => {
+        const nextEmoji = normalizeProfileEmoji(nextValue);
+        const changed = input.value !== nextEmoji;
+        input.value = nextEmoji;
+        syncSelectedState();
+        if (changed) {
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+        if (closeWhenDone) {
+          closePanel();
+        }
+      };
+
+      const mountPicker = () => {
+        if (pickerMounted || !open) {
+          return;
+        }
+        pickerMount.innerHTML = "";
+        PROFILE_EMOJI_GROUPS.forEach((group) => {
+          if (!group || !Array.isArray(group.emoji) || group.emoji.length === 0) {
+            return;
+          }
+          const section = document.createElement("section");
+          section.className = "hub-emoji-picker-category";
+          const heading = document.createElement("p");
+          heading.className = "hub-emoji-picker-category-label";
+          heading.textContent = String(group.label || "Emoji");
+          section.appendChild(heading);
+
+          const grid = document.createElement("div");
+          grid.className = "hub-emoji-picker-grid";
+          group.emoji.forEach((emoji) => {
+            const emojiValue = normalizeProfileEmoji(emoji);
+            if (!emojiValue) {
+              return;
+            }
+            const option = document.createElement("button");
+            option.type = "button";
+            option.className = "hub-emoji-picker-option";
+            option.textContent = emojiValue;
+            option.setAttribute("aria-label", `Use ${emojiValue}`);
+            option.addEventListener("click", () => {
+              setEmojiValue(emojiValue, true);
+            });
+            grid.appendChild(option);
+          });
+          section.appendChild(grid);
+          pickerMount.appendChild(section);
+        });
+        pickerMounted = true;
+        window.requestAnimationFrame(positionPanel);
+      };
+
+      const openPanel = () => {
+        if (open || toggle.disabled || input.disabled || input.readOnly) {
+          return;
+        }
+        if (closeActiveEmojiPicker && closeActiveEmojiPicker !== closePanel) {
+          closeActiveEmojiPicker();
+        }
+        closeActiveEmojiPicker = closePanel;
+        open = true;
+        clearPanelCloseTimer();
+        panel.hidden = false;
+        panel.classList.remove("is-closing");
+        toggle.classList.add("is-open");
+        toggle.setAttribute("aria-expanded", "true");
+        positionPanel();
+        window.requestAnimationFrame(() => {
+          panel.classList.add("is-open");
+        });
+        window.addEventListener("mousedown", handleDocumentPointerDown);
+        window.addEventListener("touchstart", handleDocumentPointerDown);
+        window.addEventListener("keydown", handleWindowKeydown);
+        window.addEventListener("resize", positionPanel);
+        window.addEventListener("scroll", positionPanel, true);
+        mountPicker();
+      };
+
+      function handleDocumentPointerDown(event) {
+        if (eventIncludesNode(event, root) || eventIncludesNode(event, panel)) {
+          return;
+        }
+        closePanel();
+      }
+
+      function handleWindowKeydown(event) {
+        if (event.key === "Escape") {
+          closePanel();
+        }
+      }
+
+      toggle.addEventListener("click", () => {
+        if (open) {
+          closePanel();
+          return;
+        }
+        openPanel();
+      });
+
+      clearButton.addEventListener("click", () => {
+        setEmojiValue("", true);
+      });
+      setEmojiValue(input.value);
+
+      return {
+        sync() {
+          setEmojiValue(input.value);
+        },
+        setDisabled(disabled) {
+          toggle.disabled = Boolean(disabled);
+          if (disabled) {
+            closePanel();
+          }
+        },
+      };
+    }
+
+    const hubSetupEmojiPicker = hubSetupEmojiPickerRoot
+      ? attachHubEmojiPicker(hubSetupEmojiPickerRoot)
       : null;
 
     function syncHubSetupEmojiValue() {
@@ -2116,15 +2333,6 @@
       syncHubSetupSubmitState();
     }
 
-    function hubConnectionIsLive(snapshot = state.snapshot) {
-      if (!snapshot || typeof snapshot.connection !== "object" || snapshot.connection === null) {
-        return false;
-      }
-      const conn = snapshot.connection;
-      const transport = typeof conn.hub_transport === "string" ? conn.hub_transport.trim() : "";
-      return Boolean(conn.hub_connected) || transport === "ws" || transport === "http_long_poll" || transport === "connected";
-    }
-
     function renderHubSetupConnectionToggle() {
       if (!hubSetupConnectionToggle) {
         return;
@@ -2134,10 +2342,14 @@
       if (!show) {
         return;
       }
-      const connected = hubConnectionIsLive();
-      hubSetupConnectionToggle.textContent = connected ? "Disconnect" : "Connect";
-      hubSetupConnectionToggle.setAttribute("data-action", connected ? "disconnect" : "connect");
-      hubSetupConnectionToggle.classList.toggle("hub-setup-connection-toggle-offline", connected);
+      hubSetupConnectionToggle.setAttribute("data-action", "disconnect");
+      hubSetupConnectionToggle.classList.add("hub-setup-connection-toggle-offline");
+      hubSetupConnectionToggle.setAttribute("aria-label", "Disconnect agent");
+      hubSetupConnectionToggle.title = "Disconnect";
+      if (!hubSetupConnectionToggle.querySelector("[data-lucide], svg")) {
+        hubSetupConnectionToggle.innerHTML = `<i data-lucide="unlink" aria-hidden="true"></i>`;
+        replaceLucideIcons(hubSetupConnectionToggle);
+      }
     }
 
     function applyHubDockState() {
@@ -2178,11 +2390,8 @@
       }
       if (hubSetupMessage) {
         hubSetupMessage.textContent = state.hubSetup.message || (profileEditor
-          ? "Update how I appear on Molten Hub."
+          ? "Update how this agent appears in Molten Hub."
           : "Connect this runtime to Molten Hub.");
-      }
-      if (hubSetupCopy) {
-        hubSetupCopy.textContent = currentHubSetupSupportingCopy();
       }
       if (hubSetupHandle) {
         hubSetupHandle.value = state.hubSetup.handle || "";
@@ -2235,7 +2444,7 @@
         syncHubTokenValidation();
       }
       if (hubSetupSubmit) {
-        hubSetupSubmit.textContent = profileEditor ? "Save" : (isNew ? "Redeem Token" : "Connect Runtime");
+        hubSetupSubmit.textContent = profileEditor ? "Save" : (isNew ? "Lets Gooo!" : "Connect Runtime");
       }
       if (profileEditor) {
         resetHubSetupProfileBaseline();
@@ -2256,6 +2465,9 @@
       }
       document.body.classList.toggle("onboarding-modal-open", state.hubSetupOpen);
       if (!state.hubSetupOpen) {
+        if (closeActiveEmojiPicker) {
+          closeActiveEmojiPicker();
+        }
         clearHubSetupAutoSubmitTimer();
         setHubSetupStatus("", "");
         return;
@@ -2438,10 +2650,9 @@
       if (!hubSetupConnectionToggle || state.hubSetupBusy) {
         return;
       }
-      const action = hubSetupConnectionToggle.getAttribute("data-action") === "connect" ? "connect" : "disconnect";
-      const endpoint = action === "connect" ? "/api/hub-setup/connect" : "/api/hub-setup/disconnect";
+      const endpoint = "/api/hub-setup/disconnect";
       setHubSetupBusy(true);
-      setHubSetupStatus("ok", action === "connect" ? "Connecting to Molten Hub..." : "Disconnecting from Molten Hub...");
+      setHubSetupStatus("ok", "Disconnecting from Molten Hub...");
       try {
         const response = await fetch(endpoint, { method: "POST" });
         let body = null;
@@ -2451,7 +2662,7 @@
           body = null;
         }
         if (!response.ok) {
-          throw new Error(body?.error || `hub ${action} http ${response.status}`);
+          throw new Error(body?.error || `hub disconnect http ${response.status}`);
         }
         const priorConnection = state.snapshot && typeof state.snapshot === "object" && state.snapshot !== null &&
           typeof state.snapshot.connection === "object" && state.snapshot.connection !== null
@@ -2461,15 +2672,19 @@
           ...(state.snapshot && typeof state.snapshot === "object" && state.snapshot !== null ? state.snapshot : {}),
           connection: {
             ...priorConnection,
-            hub_connected: action === "connect",
-            hub_transport: action === "connect" ? "connected" : "disconnected",
+            hub_connected: false,
+            hub_transport: "disconnected",
           },
         };
         applyHubSetupState(body?.hub);
         await loadHubSetupStatus();
-        setHubSetupStatus("ok", body?.hub?.message || (action === "connect" ? "Molten Hub connected." : "Molten Hub disconnected."));
+        setHubSetupStatus("ok", body?.hub?.message || "Molten Hub disconnected.");
+        window.setTimeout(() => {
+          state.hubSetupDialogMode = "connect";
+          setHubSetupOpen(false);
+        }, 420);
       } catch (err) {
-        setHubSetupStatus("error", err && err.message ? err.message : `Hub ${action} failed.`);
+        setHubSetupStatus("error", err && err.message ? err.message : "Hub disconnect failed.");
       } finally {
         setHubSetupBusy(false);
       }

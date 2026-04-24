@@ -174,11 +174,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `href="/static/style.css"`) {
 		t.Fatalf("expected index html to include external stylesheet link")
 	}
-	if !strings.Contains(markup, `src="/static/emoji-picker.js"`) {
-		t.Fatalf("expected index html to include the external emoji picker script")
-	}
-	if strings.Contains(markup, `src="/static/emoji-picker.js" defer`) {
-		t.Fatalf("expected emoji picker script to load before inline app bootstrapping so picker attach is available")
+	if strings.Contains(markup, `src="/static/emoji-picker.js"`) {
+		t.Fatalf("expected index html to use the inline dispatch-style emoji picker instead of the external picker script")
 	}
 	if !strings.Contains(markup, `src="https://www.googletagmanager.com/gtag/js?id=G-BY33RFG2WB"`) {
 		t.Fatalf("expected index html to load the google analytics tag script")
@@ -304,8 +301,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="hub-setup-form"`) {
 		t.Fatalf("expected index html to include hub setup form")
 	}
-	if !strings.Contains(markup, `id="hub-setup-copy"`) || !strings.Contains(markup, `Agent tokens start with t_; bind tokens start with b_`) {
-		t.Fatalf("expected index html to include supporting Molten Hub setup guidance")
+	if strings.Contains(markup, `id="hub-setup-copy"`) || strings.Contains(markup, `Agent tokens start with t_; bind tokens start with b_`) {
+		t.Fatalf("expected index html to remove the extra Molten Hub setup guidance line")
 	}
 	if !strings.Contains(markup, `id="hub-setup-token-label" class="prompt-label">Agent Token</span>`) {
 		t.Fatalf("expected index html to default the setup token label to Agent Token")
@@ -385,8 +382,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `async function loadHubSetupStatus()`) {
 		t.Fatalf("expected index html to include hub setup status loader")
 	}
-	if !strings.Contains(markup, `const hubSetupEmojiPicker = window.MoltenEmojiPicker && hubSetupEmojiPickerRoot`) {
-		t.Fatalf("expected index html to initialize the included emoji picker")
+	if !strings.Contains(markup, `function attachHubEmojiPicker(root)`) || !strings.Contains(markup, `data-hub-emoji-picker`) {
+		t.Fatalf("expected index html to initialize the inline dispatch-style emoji picker")
 	}
 	if !strings.Contains(markup, `class="prompt-mode-divider"`) {
 		t.Fatalf("expected dock to include a shared divider between internal and external links")
@@ -406,11 +403,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `Agent Profile`) {
 		t.Fatalf("expected index html to include connected profile editor copy")
 	}
-	if !strings.Contains(markup, `Update how I appear on Molten Hub.`) {
+	if !strings.Contains(markup, `Update how this agent appears in Molten Hub.`) {
 		t.Fatalf("expected index html to include updated profile editor message")
-	}
-	if !strings.Contains(markup, `Modify my display name, emoji, and profile.`) {
-		t.Fatalf("expected index html to include updated profile editor supporting copy")
 	}
 	if strings.Contains(markup, `Update how this runtime appears in Molten Hub`) {
 		t.Fatalf("expected index html to remove the old runtime profile editor copy")
@@ -421,8 +415,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="hub-setup-connection-toggle"`) {
 		t.Fatalf("expected index html to include the hub connection toggle button")
 	}
-	if !strings.Contains(markup, `id="hub-setup-connection-toggle" class="hub-setup-connection-toggle prompt-action-button hidden"`) {
-		t.Fatalf("expected index html to render the disconnect action with the shared button sizing classes")
+	if !strings.Contains(markup, `id="hub-setup-connection-toggle" class="secondary-button hub-setup-connection-toggle hidden"`) {
+		t.Fatalf("expected index html to render the disconnect action as an icon-only secondary button")
 	}
 	if !strings.Contains(markup, `id="hub-setup-submit" class="prompt-action-button prompt-submit"`) {
 		t.Fatalf("expected index html to render the profile save action with the shared submit button classes")
@@ -436,8 +430,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `hubSetupConnectionToggle.addEventListener("click", submitHubConnectionToggle);`) {
 		t.Fatalf("expected index html to wire the hub connection toggle button")
 	}
-	if !strings.Contains(markup, `<span class="prompt-label">Profile</span>`) {
-		t.Fatalf("expected index html to relabel the agent summary field as Profile")
+	if !strings.Contains(markup, `<span class="prompt-label">Bio</span>`) {
+		t.Fatalf("expected index html to relabel the agent summary field as Bio")
 	}
 	if !strings.Contains(markup, `hubSetupHandle.readOnly = profileEditor || state.hubSetupBusy;`) {
 		t.Fatalf("expected index html to make the handle field readonly in profile edit mode")
@@ -445,8 +439,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `hubSetupToken.readOnly = state.hubSetupBusy;`) {
 		t.Fatalf("expected index html to switch hub setup token entry to readonly while onboarding runs")
 	}
-	if !strings.Contains(markup, `id="hub-setup-profile" class="prompt-text prompt-control hub-setup-profile-input`) || !strings.Contains(markup, `rows="2"`) {
-		t.Fatalf("expected index html to render a two-line stretching profile textarea")
+	if !strings.Contains(markup, `id="hub-setup-profile" class="prompt-text prompt-control hub-setup-profile-input`) || !strings.Contains(markup, `rows="4"`) {
+		t.Fatalf("expected index html to render a dispatch-style four-line bio textarea")
 	}
 	if !strings.Contains(markup, `if (hubSetupForm) hubSetupForm.setAttribute("aria-busy", state.hubSetupBusy ? "true" : "false");`) {
 		t.Fatalf("expected index html to mark the hub setup form busy while saving")
@@ -454,7 +448,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `if (hubSetupClose) hubSetupClose.disabled = state.hubSetupBusy;`) {
 		t.Fatalf("expected index html to lock the setup dialog close control during save")
 	}
-	if !strings.Contains(markup, `hubSetupSubmit.textContent = profileEditor ? "Save" : (isNew ? "Redeem Token" : "Connect Runtime");`) {
+	if !strings.Contains(markup, `hubSetupSubmit.textContent = profileEditor ? "Save" : (isNew ? "Lets Gooo!" : "Connect Runtime");`) {
 		t.Fatalf("expected index html to relabel the hub setup submit button for profile, new-agent, and reconnect flows")
 	}
 	if !strings.Contains(markup, `function hubSetupModeForToken(token, fallback = state.hubSetup.agentMode)`) ||
@@ -1921,13 +1915,13 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task-close") {
 		t.Fatalf("expected stylesheet to include task close styles")
 	}
-	if !strings.Contains(css, ".hub-emoji-picker-panel") || !strings.Contains(css, ".hub-emoji-picker-body") {
+	if !strings.Contains(css, ".hub-emoji-picker-panel") || !strings.Contains(css, ".hub-emoji-picker-mart") {
 		t.Fatalf("expected stylesheet to include emoji picker styles")
 	}
 	if !strings.Contains(css, ".prompt-select-action-wrap") || !strings.Contains(css, ".prompt-history-delete") {
 		t.Fatalf("expected stylesheet to include inline delete controls for repository and reviewer history selects")
 	}
-	if !strings.Contains(css, ".hub-emoji-picker-panel-header") || !strings.Contains(css, ".hub-emoji-picker-toggle-text") || !strings.Contains(css, ".hub-emoji-mart") {
+	if !strings.Contains(css, ".hub-emoji-picker-panel-header") || !strings.Contains(css, ".hub-emoji-picker-grid") || !strings.Contains(css, ".hub-emoji-picker-option") {
 		t.Fatalf("expected stylesheet to include the refreshed emoji picker layout styles")
 	}
 	if !strings.Contains(css, ".panel-header,\n.task-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 8px;\n  padding: 13px 16px;\n  border-bottom: 1px solid var(--surface-header-border);\n  background: var(--surface-header);\n  color: var(--surface-label);") {
@@ -2231,8 +2225,14 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".theme-toggle {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;") || !strings.Contains(css, "  cursor: pointer;\n") {
 		t.Fatalf("expected stylesheet to use a pointer cursor for the interactive theme toggle")
 	}
-	if strings.Count(css, "cursor:") != 1 {
-		t.Fatalf("expected stylesheet to avoid additional custom cursor styles")
+	if !strings.Contains(css, ".hub-emoji-picker-toggle {\n  display: inline-flex;") || !strings.Contains(css, "  cursor: pointer;\n") {
+		t.Fatalf("expected stylesheet to use a pointer cursor for the interactive emoji picker")
+	}
+	if !strings.Contains(css, ".hub-emoji-picker-toggle:disabled {\n  opacity: 0.6;\n  transform: none;\n  cursor: not-allowed;\n}") {
+		t.Fatalf("expected stylesheet to mark disabled emoji picker buttons as unavailable")
+	}
+	if strings.Count(css, "cursor:") != 3 {
+		t.Fatalf("expected stylesheet to avoid unrelated custom cursor styles")
 	}
 	if strings.Contains(css, "cursor-not-allowed") {
 		t.Fatalf("expected stylesheet to avoid cursor utility classes")

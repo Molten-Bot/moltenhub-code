@@ -222,6 +222,65 @@ func SaveRuntimeConfigHubSettings(path string, initCfg InitConfig, resolvedAgent
 	return writeRuntimeConfigFile(path, encoded)
 }
 
+// ClearRuntimeConfigHubSettings removes saved Hub identity, credentials, and
+// profile fields while preserving unrelated runtime configuration.
+func ClearRuntimeConfigHubSettings(path string, initCfg InitConfig) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		path = defaultRuntimeConfigPath()
+	}
+
+	initCfg.ApplyDefaults()
+	doc, err := loadRuntimeConfigDoc(path, initCfg)
+	if err != nil {
+		return err
+	}
+
+	if docStringValue(doc["version"]) == "" {
+		doc["version"] = initCfg.Version
+	}
+	if docStringValue(doc["base_url"]) == "" && docStringValue(doc["baseUrl"]) == "" {
+		doc["base_url"] = initCfg.BaseURL
+	}
+	if docStringValue(doc["session_key"]) == "" && docStringValue(doc["sessionKey"]) == "" {
+		doc["session_key"] = initCfg.SessionKey
+	}
+	if docStringValue(doc["agent_harness"]) == "" && docStringValue(doc["agentHarness"]) == "" && strings.TrimSpace(initCfg.AgentHarness) != "" {
+		doc["agent_harness"] = initCfg.AgentHarness
+	}
+	if docStringValue(doc["agent_command"]) == "" && docStringValue(doc["agentCommand"]) == "" && strings.TrimSpace(initCfg.AgentCommand) != "" {
+		doc["agent_command"] = initCfg.AgentCommand
+	}
+	if _, ok := doc["timeout_ms"]; !ok {
+		if _, legacyOK := doc["timeoutMs"]; !legacyOK {
+			doc["timeout_ms"] = runtimeTimeoutMs
+		}
+	}
+	ensureRuntimeConfigLogLevel(doc, initCfg.LogLevel)
+
+	for _, key := range []string{
+		"agent_token",
+		"agentToken",
+		"bind_token",
+		"bindToken",
+		"token",
+		"handle",
+		"profile",
+		"profile_markdown",
+		"display_name",
+		"emoji",
+	} {
+		delete(doc, key)
+	}
+
+	encoded, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode runtime config: %w", err)
+	}
+	encoded = append(encoded, '\n')
+	return writeRuntimeConfigFile(path, encoded)
+}
+
 // SaveRuntimeConfigAuggieAuth persists augment_session_auth to the runtime
 // config JSON while preserving other configuration fields.
 func SaveRuntimeConfigAuggieAuth(path string, initCfg InitConfig, augmentSessionAuth string) error {
