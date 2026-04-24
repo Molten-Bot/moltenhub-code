@@ -1489,11 +1489,13 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "builderPromptInput.addEventListener(\"keydown\", submitBuilderPromptOnEnter);") {
 		t.Fatalf("expected index html to submit builder prompts on Enter while preserving Shift+Enter multiline input")
 	}
-	if !strings.Contains(markup, "function hasBuilderDraftToClear(") ||
+	if !strings.Contains(markup, "function hasReviewerDraftToClear(") ||
+		!strings.Contains(markup, "function hasBuilderDraftToClear(") ||
 		!strings.Contains(markup, "const promptDirty = String(builderPromptInput?.value || \"\").trim() !== \"\";") ||
 		!strings.Contains(markup, "const branchDirty = ![\"\", \"main\"].includes(String(builderBaseBranch?.value || \"\").trim());") ||
 		!strings.Contains(markup, "const targetSubdirDirty = ![\"\", \".\"].includes(String(builderTargetSubdir?.value || \"\").trim());") ||
-		!strings.Contains(markup, "const rawDirty = String(localPromptInput?.value || \"\").trim() !== \"\";") {
+		!strings.Contains(markup, "const rawDirty = String(localPromptInput?.value || \"\").trim() !== \"\";") ||
+		!strings.Contains(markup, "return promptDirty || branchDirty || targetSubdirDirty || rawDirty || hasReviewerDraftToClear() || state.promptImages.length > 0;") {
 		t.Fatalf("expected index html to detect clearable builder draft changes")
 	}
 	if !strings.Contains(markup, "function syncBuilderDraftClearState(") ||
@@ -1502,6 +1504,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "builderImagesClear.addEventListener(\"click\", clearBuilderPromptDraft);") {
 		t.Fatalf("expected index html Clear button to reset the full builder draft")
+	}
+	if !strings.Contains(markup, "function clearReviewerSelection(") ||
+		!strings.Contains(markup, "builderReviewerSelect.value = \"none\";") ||
+		!strings.Contains(markup, "libraryReviewerSelect.value = \"none\";") ||
+		!strings.Contains(markup, "clearReviewerSelection();") {
+		t.Fatalf("expected index html Clear button to reset reviewers explicitly")
 	}
 	if !strings.Contains(markup, "builderPromptInput.addEventListener(\"input\", syncBuilderDraftClearState);") ||
 		!strings.Contains(markup, "builderTargetSubdir.addEventListener(\"input\", () => {") ||
@@ -1563,7 +1571,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "No saved reviewers yet") ||
 		!strings.Contains(markup, "function reviewerListFromValue(") ||
 		!strings.Contains(markup, "payload.reviewers = reviewers;") ||
-		!strings.Contains(markup, "rememberReviewers(dedupeReviewerValues([...(Array.isArray(parsed?.reviewers) ? parsed.reviewers : []), parsed?.githubHandle]));") ||
+		!strings.Contains(markup, "const reviewers = dedupeReviewerValues([...(Array.isArray(parsed?.reviewers) ? parsed.reviewers : []), parsed?.githubHandle]);") ||
+		!strings.Contains(markup, "rememberReviewers(reviewers);") ||
+		!strings.Contains(markup, "selectSubmittedReviewer(reviewers);") ||
 		!strings.Contains(markup, "return /^none$/i.test(normalized) ? \"\" : normalized;") {
 		t.Fatalf("expected index html to capture reviewers in prompt payloads and persist reviewer history after submission")
 	}
@@ -1572,6 +1582,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "const noneSelected = rawSelectedValue === \"none\";") {
 		t.Fatalf("expected index html to preserve an explicit none reviewer selection")
+	}
+	if !strings.Contains(markup, `input.value = noneSelected ? "" : nextValue;`) {
+		t.Fatalf("expected index html to keep none reviewer selections out of the manual input")
 	}
 	if !strings.Contains(markup, `"reviewers": [`) || !strings.Contains(markup, `"octocat"`) || !strings.Contains(markup, `"hubot"`) {
 		t.Fatalf("expected index html JSON example to include reviewers")
@@ -1759,6 +1772,50 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if strings.Contains(markup, `id="hover-select"`) || strings.Contains(markup, ">Hover<") {
 		t.Fatalf("expected index html to remove the docked hover selector")
+	}
+}
+
+func TestIndexPromptReviewerClearBehavior(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+
+	markup := resp.Body.String()
+	for _, needle := range []string{
+		"function hasReviewerDraftToClear()",
+		"function clearReviewerSelection()",
+		"function selectSubmittedReviewer(reviewers)",
+		"selectSubmittedReviewer(reviewers);",
+		`input.value = noneSelected ? "" : nextValue;`,
+	} {
+		if !strings.Contains(markup, needle) {
+			t.Fatalf("expected index html to include %q", needle)
+		}
+	}
+
+	submittedStart := strings.Index(markup, "function clearSubmittedPromptState()")
+	reviewerStart := strings.Index(markup, "function clearReviewerSelection()")
+	if submittedStart == -1 || reviewerStart == -1 || reviewerStart < submittedStart {
+		t.Fatalf("expected submitted prompt cleanup before reviewer clear helper")
+	}
+	if strings.Contains(markup[submittedStart:reviewerStart], "clearReviewerSelection();") {
+		t.Fatalf("expected submit cleanup to preserve selected reviewer")
+	}
+
+	clearStart := strings.Index(markup, "function clearBuilderPromptDraft()")
+	defaultStart := strings.Index(markup, "function defaultRepoSelection(")
+	if clearStart == -1 || defaultStart == -1 || defaultStart < clearStart {
+		t.Fatalf("expected builder clear handler before repo default helper")
+	}
+	if !strings.Contains(markup[clearStart:defaultStart], "clearReviewerSelection();") {
+		t.Fatalf("expected manual Clear to clear selected reviewer")
 	}
 }
 
