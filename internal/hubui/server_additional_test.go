@@ -351,11 +351,11 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `.hub-setup-profile-grid {`) {
 		t.Fatalf("expected stylesheet to include hub setup profile grid styles")
 	}
-	if !strings.Contains(stylesheet, `grid-template-columns: repeat(2, minmax(0, 1fr));`) {
-		t.Fatalf("expected profile grid to keep two equal columns and move emoji controls onto their own row")
+	if !strings.Contains(stylesheet, `grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) auto;`) {
+		t.Fatalf("expected profile grid to match the dispatch handle, display name, emoji layout")
 	}
-	if !strings.Contains(stylesheet, `.hub-setup-profile-emoji {`) || !strings.Contains(stylesheet, `grid-column: 1 / -1;`) {
-		t.Fatalf("expected stylesheet to make the emoji profile field span the full profile grid width")
+	if !strings.Contains(stylesheet, `.hub-setup-profile-emoji {`) || !strings.Contains(stylesheet, `grid-column: auto;`) {
+		t.Fatalf("expected stylesheet to keep the emoji profile field in the compact third column")
 	}
 	if !strings.Contains(stylesheet, `.hub-setup-profile-text {`) {
 		t.Fatalf("expected stylesheet to keep the profile textarea spanning the full profile grid width")
@@ -369,23 +369,20 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `.hub-setup-signin-logo {`) {
 		t.Fatalf("expected stylesheet to include the hub setup sign-in logo styles")
 	}
-	if !strings.Contains(stylesheet, `.hub-setup-copy {`) {
-		t.Fatalf("expected stylesheet to include hub setup supporting copy styles")
-	}
 	if !strings.Contains(stylesheet, `.hub-setup-status {`) {
 		t.Fatalf("expected stylesheet to include hub setup status line styles")
 	}
 	if !strings.Contains(stylesheet, `.hub-setup-actions {`) || !strings.Contains(stylesheet, `margin-left: auto;`) {
 		t.Fatalf("expected stylesheet to keep the hub setup actions docked to the right edge")
 	}
-	if !strings.Contains(stylesheet, `.hub-emoji-picker-toggle {`) || !strings.Contains(stylesheet, `width: 100%;`) {
-		t.Fatalf("expected stylesheet to render the emoji picker as a full-width button control")
+	if !strings.Contains(stylesheet, `.hub-emoji-picker-toggle {`) || !strings.Contains(stylesheet, `width: 44px;`) {
+		t.Fatalf("expected stylesheet to render the emoji picker as a compact icon button")
 	}
-	if !strings.Contains(stylesheet, `.hub-emoji-picker-input {`) || !strings.Contains(stylesheet, `clip-path: inset(50%);`) {
+	if !strings.Contains(stylesheet, `.hub-emoji-picker input[type="hidden"] {`) || !strings.Contains(stylesheet, `display: none;`) {
 		t.Fatalf("expected stylesheet to hide the raw emoji input and rely on the picker button presentation")
 	}
-	if !strings.Contains(stylesheet, `.hub-emoji-picker-body {`) || !strings.Contains(stylesheet, `.hub-emoji-mart {`) {
-		t.Fatalf("expected stylesheet to include the embedded emoji-mart shell styles")
+	if !strings.Contains(stylesheet, `.hub-emoji-picker-mart {`) || !strings.Contains(stylesheet, `.hub-emoji-picker-grid {`) {
+		t.Fatalf("expected stylesheet to include the inline dispatch emoji picker grid styles")
 	}
 	if !strings.Contains(stylesheet, `.brand-login-card-shell {`) || !strings.Contains(stylesheet, `.brand-chip-action {`) {
 		t.Fatalf("expected stylesheet to expose user-portal-derived glass primitives for hub surfaces and chips")
@@ -1076,14 +1073,14 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".prompt-action-button {\n  width: auto;\n  display: inline-flex;") {
 		t.Fatalf("expected action buttons to avoid full-width auto-column overflow")
 	}
-	if !strings.Contains(css, ".hub-setup-actions {\n  display: grid;\n  grid-template-columns: auto auto;\n  align-items: center;\n  column-gap: 14px;\n  row-gap: 10px;\n  width: auto;\n  margin-left: auto;\n}") {
-		t.Fatalf("expected the profile modal action row to keep only the connection toggle and save button")
+	if !strings.Contains(css, ".hub-setup-actions {\n  display: grid;\n  grid-template-columns: auto auto auto;\n  align-items: center;\n  column-gap: 14px;\n  row-gap: 10px;\n  width: auto;\n  margin-left: auto;\n}") {
+		t.Fatalf("expected the profile modal action row to include disconnect, close, and save controls")
 	}
 	if !strings.Contains(css, ".hub-setup-status {\n  display: flex;\n  align-items: center;\n  justify-content: flex-start;\n  width: 100%;\n") {
 		t.Fatalf("expected the profile modal status copy to render as a single left-aligned line")
 	}
-	if !strings.Contains(css, ".hub-setup-connection-toggle {\n  min-inline-size: 72px;\n") {
-		t.Fatalf("expected the profile modal disconnect button to reuse the shared action button footprint")
+	if !strings.Contains(css, ".hub-setup-connection-toggle {\n  width: 44px;\n  height: 44px;\n  min-inline-size: 44px;\n") {
+		t.Fatalf("expected the profile modal disconnect button to use the compact icon footprint")
 	}
 	if !strings.Contains(css, ".submit-status-inline {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  flex: 1 1 0;\n  min-width: 0;\n  text-align: center;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  opacity: 0;\n  transition: opacity 220ms ease;\n}") {
 		t.Fatalf("expected inline status to stay centered in the whitespace between screenshots and the action buttons")

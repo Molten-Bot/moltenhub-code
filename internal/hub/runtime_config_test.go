@@ -411,6 +411,72 @@ func TestLoadRuntimeConfigSupportsInitStyleWholeConfig(t *testing.T) {
 	}
 }
 
+func TestClearRuntimeConfigHubSettingsRemovesHubIdentityAndPreservesAuth(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(`{
+  "version": "v1",
+  "base_url": "https://na.hub.molten.bot/v1",
+  "session_key": "main",
+  "agent_token": "agent_saved",
+  "bind_token": "bind_saved",
+  "token": "legacy_agent",
+  "handle": "codex-beast",
+  "agent_harness": "codex",
+  "agent_command": "codex",
+  "github_token": "ghp_saved",
+  "augment_session_auth": "{\"accessToken\":\"token_saved\"}",
+  "library_task_usage": {
+    "unit-test-coverage": 2
+  },
+  "profile": {
+    "display_name": "Jef's Codex",
+    "emoji": "🌊",
+    "profile": "Running code updates quickly."
+  }
+}`), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	if err := ClearRuntimeConfigHubSettings(path, InitConfig{}); err != nil {
+		t.Fatalf("ClearRuntimeConfigHubSettings() error = %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("unmarshal config: %v", err)
+	}
+	for _, key := range []string{"agent_token", "bind_token", "token", "handle", "profile"} {
+		if _, ok := doc[key]; ok {
+			t.Fatalf("doc[%q] still present after clear: %#v", key, doc[key])
+		}
+	}
+	if got, want := doc["github_token"], "ghp_saved"; got != want {
+		t.Fatalf("github_token = %#v, want %q", got, want)
+	}
+	if got, want := doc["augment_session_auth"], "{\"accessToken\":\"token_saved\"}"; got != want {
+		t.Fatalf("augment_session_auth = %#v, want %q", got, want)
+	}
+	if got, want := doc["agent_harness"], "codex"; got != want {
+		t.Fatalf("agent_harness = %#v, want %q", got, want)
+	}
+	if got, want := doc["agent_command"], "codex"; got != want {
+		t.Fatalf("agent_command = %#v, want %q", got, want)
+	}
+	usage := runtimeConfigLibraryTaskUsage(doc["library_task_usage"])
+	if want := map[string]int{"unit-test-coverage": 2}; !reflect.DeepEqual(usage, want) {
+		t.Fatalf("library_task_usage = %#v, want %#v", usage, want)
+	}
+}
+
 func TestSaveRuntimeConfigClaudeOAuthTokenPersistsValue(t *testing.T) {
 	t.Parallel()
 

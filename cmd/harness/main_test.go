@@ -2059,6 +2059,15 @@ func TestDisconnectHubSetupStopsLiveRuntime(t *testing.T) {
   "version": "v1",
   "base_url": "https://na.hub.molten.bot/v1",
   "agent_token": "agent_saved",
+  "bind_token": "bind_saved",
+  "handle": "live-agent",
+  "agent_harness": "codex",
+  "github_token": "ghp_saved",
+  "profile": {
+    "display_name": "Live Agent",
+    "emoji": "⚙️",
+    "profile": "Owns connected hub sessions"
+  },
   "timeout_ms": 20000
 }`), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
@@ -2077,10 +2086,29 @@ func TestDisconnectHubSetupStopsLiveRuntime(t *testing.T) {
 	if stopCalls != 1 {
 		t.Fatalf("stopCalls = %d, want 1", stopCalls)
 	}
-	if !state.Configured {
-		t.Fatal("Configured = false, want true")
+	if state.Configured {
+		t.Fatal("Configured = true, want false after disconnect")
 	}
 	if got, want := state.Message, "Molten Hub disconnected."; got != want {
 		t.Fatalf("Message = %q, want %q", got, want)
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	for _, key := range []string{"agent_token", "bind_token", "handle", "profile"} {
+		if _, ok := doc[key]; ok {
+			t.Fatalf("doc[%q] still present after disconnect: %#v", key, doc[key])
+		}
+	}
+	if got, want := doc["github_token"], "ghp_saved"; got != want {
+		t.Fatalf("github_token = %#v, want %q", got, want)
+	}
+	if got, want := doc["agent_harness"], "codex"; got != want {
+		t.Fatalf("agent_harness = %#v, want %q", got, want)
 	}
 }
