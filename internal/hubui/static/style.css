@@ -2021,9 +2021,9 @@ select.prompt-control {
 }
 
 .task-control-toggle {
-  border: 1px solid color-mix(in srgb, var(--surface-warning) 44%, var(--border));
-  background: color-mix(in srgb, var(--surface-warning) 28%, var(--surface-task-button-bg));
-  color: var(--surface-warning);
+  border: 1px solid rgba(17, 34, 68, 0.12);
+  background: var(--surface-task-button-bg);
+  color: var(--text-soft);
 }
 
 .task-control-toggle.task-control-run {
@@ -2038,10 +2038,11 @@ select.prompt-control {
   color: var(--accent);
 }
 
-.task-control-toggle.task-control-pause {
-  border-color: color-mix(in srgb, var(--surface-warning) 52%, var(--border));
-  background: color-mix(in srgb, var(--surface-warning) 30%, var(--surface-task-button-bg));
-  color: var(--surface-warning);
+.task-control-toggle.task-control-pause:hover,
+.task-control-toggle.task-control-pause:focus-visible {
+  border-color: color-mix(in srgb, var(--running) 36%, var(--border));
+  background: color-mix(in srgb, var(--running) 8%, var(--surface-task-button-bg));
+  color: var(--running);
 }
 
 .task-stop {

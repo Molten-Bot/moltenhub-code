@@ -2080,6 +2080,11 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 		!strings.Contains(css, ".task-control-toggle.task-icon-button,\n.task-stop.task-icon-button {\n  width: 34px;\n  min-width: 34px;\n  height: 34px;\n  min-height: 34px;\n}") {
 		t.Fatalf("expected stylesheet to render neutral stop controls with a larger stop glyph and shared icon-button sizing")
 	}
+	if !strings.Contains(css, ".task-control-toggle {\n  border: 1px solid rgba(17, 34, 68, 0.12);\n  background: var(--surface-task-button-bg);\n  color: var(--text-soft);\n}") ||
+		!strings.Contains(css, ".task-control-toggle.task-control-pause:hover,\n.task-control-toggle.task-control-pause:focus-visible {\n  border-color: color-mix(in srgb, var(--running) 36%, var(--border));\n  background: color-mix(in srgb, var(--running) 8%, var(--surface-task-button-bg));\n  color: var(--running);\n}") ||
+		strings.Contains(css, ".task-control-toggle.task-control-pause {\n  border-color: color-mix(in srgb, var(--surface-warning)") {
+		t.Fatalf("expected stylesheet to render pause controls with neutral task-button styling instead of warning/yellow treatment")
+	}
 	if !strings.Contains(css, ".task-body") {
 		t.Fatalf("expected stylesheet to include task body column styles")
 	}
