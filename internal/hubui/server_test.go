@@ -527,6 +527,17 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function renderTaskProgress(") {
 		t.Fatalf("expected index html to include renderTaskProgress handler")
 	}
+	if !strings.Contains(markup, "function renderTaskCurrentStateBadge(") ||
+		!strings.Contains(markup, "function taskCurrentStateSignature(") ||
+		!strings.Contains(markup, "appendTaskStepIcon(marker, step, task);") {
+		t.Fatalf("expected index html to reuse progress step icons for compact task state badges")
+	}
+	if !strings.Contains(markup, "currentState: taskCurrentStateSignature(task),") {
+		t.Fatalf("expected task render signatures to include compact current-state icon changes")
+	}
+	if !strings.Contains(markup, `node.classList.add("task-compact-state-left");`) {
+		t.Fatalf("expected compact/minimized task rows to render their state icon on the left")
+	}
 	if !strings.Contains(markup, `icon: "entry_local"`) || !strings.Contains(markup, `icon: "entry_hub"`) || !strings.Contains(markup, `icon: "prepare"`) || !strings.Contains(markup, `icon: "clone"`) || !strings.Contains(markup, `icon: "branch"`) || !strings.Contains(markup, `icon: "publish"`) || !strings.Contains(markup, `icon: "fork"`) || !strings.Contains(markup, `icon: "agent"`) || !strings.Contains(markup, `icon: "commit"`) || !strings.Contains(markup, `icon: "pr"`) || !strings.Contains(markup, `icon: "checks"`) || !strings.Contains(markup, `icon: "github"`) {
 		t.Fatalf("expected index html to classify dynamic progress steps by action icon keys")
 	}
@@ -2185,6 +2196,10 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".task.task-collapsed") {
 		t.Fatalf("expected stylesheet to include collapsed task styles")
+	}
+	if !strings.Contains(css, ".task.task-compact-state-left {\n  align-items: center;\n  gap: 8px;\n}") ||
+		!strings.Contains(css, ".task-current-state.is-running .task-current-state-icon,\n.task-current-state.is-running .task-current-state-glyph {\n  animation: taskProgressCurrentSpin 10s linear infinite;") {
+		t.Fatalf("expected stylesheet to position compact task state icons on the left and keep the periodic running spin")
 	}
 	if strings.Contains(css, ".task-history-list") {
 		t.Fatalf("expected stylesheet to remove prompt history list styles")
