@@ -4415,12 +4415,19 @@
       }
     }
 
+    function hasReviewerDraftToClear() {
+      return reviewerListFromValue(builderReviewerInput?.value).length > 0 ||
+        reviewerListFromValue(libraryReviewerInput?.value).length > 0 ||
+        normalizeReviewerValue(builderReviewerSelect?.value) !== "" ||
+        normalizeReviewerValue(libraryReviewerSelect?.value) !== "";
+    }
+
     function hasBuilderDraftToClear() {
       const promptDirty = String(builderPromptInput?.value || "").trim() !== "";
       const branchDirty = !["", "main"].includes(String(builderBaseBranch?.value || "").trim());
       const targetSubdirDirty = !["", "."].includes(String(builderTargetSubdir?.value || "").trim());
       const rawDirty = String(localPromptInput?.value || "").trim() !== "";
-      return promptDirty || branchDirty || targetSubdirDirty || rawDirty || state.promptImages.length > 0;
+      return promptDirty || branchDirty || targetSubdirDirty || rawDirty || hasReviewerDraftToClear() || state.promptImages.length > 0;
     }
 
     function syncBuilderDraftClearState() {
@@ -4449,6 +4456,15 @@
       clearPromptImages(false);
       resetBuilderTargetSubdir();
       resetBaseBranchToMain(false);
+      syncBuilderDraftClearState();
+    }
+
+    function clearReviewerSelection() {
+      builderReviewerInput.value = "";
+      libraryReviewerInput.value = "";
+      builderReviewerSelect.value = "none";
+      libraryReviewerSelect.value = "none";
+      renderReviewerHistoryOptions();
       syncBuilderDraftClearState();
     }
 
@@ -4582,6 +4598,21 @@
       state.reviewerHistory = unique;
       persistReviewerHistory();
       renderReviewerHistoryOptions();
+    }
+
+    function selectSubmittedReviewer(reviewers) {
+      const unique = dedupeReviewerValues(reviewers);
+      if (unique.length !== 1) {
+        return;
+      }
+
+      const reviewer = unique[0];
+      builderReviewerInput.value = reviewer;
+      libraryReviewerInput.value = reviewer;
+      builderReviewerSelect.value = reviewer;
+      libraryReviewerSelect.value = reviewer;
+      renderReviewerHistoryOptions();
+      syncBuilderDraftClearState();
     }
 
     function selectedLibraryTaskName() {
@@ -4936,6 +4967,7 @@
 
     function clearBuilderPromptDraft() {
       clearSubmittedPromptState();
+      clearReviewerSelection();
       if (state.promptMode === "json") {
         localPromptInput.focus();
         return;
@@ -5048,7 +5080,7 @@
       }
       select.value = nextValue;
       if (nextValue && currentReviewers.length <= 1) {
-        input.value = nextValue;
+        input.value = noneSelected ? "" : nextValue;
       }
 
       syncReviewerFieldVisibility();
@@ -8020,7 +8052,9 @@
         try {
           const parsed = JSON.parse(normalized.compact);
           rememberRepos(dedupeRepoValues([...(Array.isArray(parsed?.repos) ? parsed.repos : []), parsed?.repo, parsed?.repoUrl]));
-          rememberReviewers(dedupeReviewerValues([...(Array.isArray(parsed?.reviewers) ? parsed.reviewers : []), parsed?.githubHandle]));
+          const reviewers = dedupeReviewerValues([...(Array.isArray(parsed?.reviewers) ? parsed.reviewers : []), parsed?.githubHandle]);
+          rememberReviewers(reviewers);
+          selectSubmittedReviewer(reviewers);
         } catch (_err) {
           // Ignore local history extraction failures.
         }
@@ -8092,6 +8126,7 @@
         builderReviewerInput.value = value;
         libraryReviewerInput.value = value;
       }
+      syncBuilderDraftClearState();
       renderReviewerHistoryOptions();
     });
     builderReviewerDelete.addEventListener("click", () => {
@@ -8112,6 +8147,7 @@
         libraryReviewerInput.value = value;
         builderReviewerInput.value = value;
       }
+      syncBuilderDraftClearState();
       renderReviewerHistoryOptions();
     });
     libraryReviewerDelete.addEventListener("click", () => {
