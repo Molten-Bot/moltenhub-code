@@ -4985,14 +4985,22 @@
     }
 
     function taskPromptText(task) {
-      if (!task || typeof task.prompt !== "string") return "";
+      if (!task || task.prompt_is_user_input !== true || typeof task.prompt !== "string") return "";
       return task.prompt.replace(/\s+/g, " ").trim();
+    }
+
+    function taskSystemLabel(task) {
+      const requestID = taskRequestID(task);
+      if (requestID.endsWith("-failure-review")) {
+        return "Failure review";
+      }
+      return "";
     }
 
     function taskDisplayLabel(task) {
       const prompt = taskPromptText(task);
       if (!prompt) {
-        return "(prompt unavailable)";
+        return taskSystemLabel(task) || "(prompt unavailable)";
       }
       return prompt;
     }

@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Molten-Bot/moltenhub-code/internal/failurefollowup"
 )
 
 const (
@@ -59,25 +61,26 @@ type TaskControls struct {
 
 // Task represents one hub dispatch execution state.
 type Task struct {
-	RequestID    string       `json:"request_id"`
-	Prompt       string       `json:"prompt,omitempty"`
-	Skill        string       `json:"skill,omitempty"`
-	Repo         string       `json:"repo,omitempty"`
-	Repos        []string     `json:"repos,omitempty"`
-	BaseBranch   string       `json:"base_branch,omitempty"`
-	Status       string       `json:"status"`
-	Stage        string       `json:"stage,omitempty"`
-	StageStatus  string       `json:"stage_status,omitempty"`
-	ExitCode     int          `json:"exit_code,omitempty"`
-	WorkspaceDir string       `json:"workspace_dir,omitempty"`
-	Branch       string       `json:"branch,omitempty"`
-	PRURL        string       `json:"pr_url,omitempty"`
-	Error        string       `json:"error,omitempty"`
-	StartedAt    string       `json:"started_at"`
-	UpdatedAt    string       `json:"updated_at"`
-	CanRerun     bool         `json:"can_rerun,omitempty"`
-	Controls     TaskControls `json:"controls,omitempty"`
-	Logs         []TaskLog    `json:"logs"`
+	RequestID         string       `json:"request_id"`
+	Prompt            string       `json:"prompt,omitempty"`
+	PromptIsUserInput bool         `json:"prompt_is_user_input"`
+	Skill             string       `json:"skill,omitempty"`
+	Repo              string       `json:"repo,omitempty"`
+	Repos             []string     `json:"repos,omitempty"`
+	BaseBranch        string       `json:"base_branch,omitempty"`
+	Status            string       `json:"status"`
+	Stage             string       `json:"stage,omitempty"`
+	StageStatus       string       `json:"stage_status,omitempty"`
+	ExitCode          int          `json:"exit_code,omitempty"`
+	WorkspaceDir      string       `json:"workspace_dir,omitempty"`
+	Branch            string       `json:"branch,omitempty"`
+	PRURL             string       `json:"pr_url,omitempty"`
+	Error             string       `json:"error,omitempty"`
+	StartedAt         string       `json:"started_at"`
+	UpdatedAt         string       `json:"updated_at"`
+	CanRerun          bool         `json:"can_rerun,omitempty"`
+	Controls          TaskControls `json:"controls,omitempty"`
+	Logs              []TaskLog    `json:"logs"`
 }
 
 // TaskAttempt is an internal record of queued/running terminal attempts for one original task.
@@ -144,23 +147,24 @@ type Broker struct {
 }
 
 type taskState struct {
-	RequestID    string
-	Prompt       string
-	Skill        string
-	Repo         string
-	Repos        []string
-	BaseBranch   string
-	Status       string
-	Stage        string
-	StageStatus  string
-	ExitCode     int
-	WorkspaceDir string
-	Branch       string
-	PRURL        string
-	Error        string
-	StartedAt    time.Time
-	UpdatedAt    time.Time
-	Logs         []TaskLog
+	RequestID         string
+	Prompt            string
+	PromptIsUserInput bool
+	Skill             string
+	Repo              string
+	Repos             []string
+	BaseBranch        string
+	Status            string
+	Stage             string
+	StageStatus       string
+	ExitCode          int
+	WorkspaceDir      string
+	Branch            string
+	PRURL             string
+	Error             string
+	StartedAt         time.Time
+	UpdatedAt         time.Time
+	Logs              []TaskLog
 }
 
 type taskAttemptState struct {
@@ -269,24 +273,25 @@ func (b *Broker) Snapshot() Snapshot {
 	for _, t := range tasks {
 		_, canRerun := b.runConfigs[t.RequestID]
 		snapshot.Tasks = append(snapshot.Tasks, Task{
-			RequestID:    t.RequestID,
-			Prompt:       t.Prompt,
-			Skill:        t.Skill,
-			Repo:         t.Repo,
-			Repos:        append([]string(nil), t.Repos...),
-			BaseBranch:   t.BaseBranch,
-			Status:       normalizeTaskTerminalStatus(t.Status),
-			Stage:        t.Stage,
-			StageStatus:  t.StageStatus,
-			ExitCode:     t.ExitCode,
-			WorkspaceDir: t.WorkspaceDir,
-			Branch:       t.Branch,
-			PRURL:        t.PRURL,
-			Error:        t.Error,
-			StartedAt:    t.StartedAt.UTC().Format(time.RFC3339Nano),
-			UpdatedAt:    t.UpdatedAt.UTC().Format(time.RFC3339Nano),
-			CanRerun:     canRerun,
-			Logs:         append([]TaskLog(nil), t.Logs...),
+			RequestID:         t.RequestID,
+			Prompt:            t.Prompt,
+			PromptIsUserInput: t.PromptIsUserInput,
+			Skill:             t.Skill,
+			Repo:              t.Repo,
+			Repos:             append([]string(nil), t.Repos...),
+			BaseBranch:        t.BaseBranch,
+			Status:            normalizeTaskTerminalStatus(t.Status),
+			Stage:             t.Stage,
+			StageStatus:       t.StageStatus,
+			ExitCode:          t.ExitCode,
+			WorkspaceDir:      t.WorkspaceDir,
+			Branch:            t.Branch,
+			PRURL:             t.PRURL,
+			Error:             t.Error,
+			StartedAt:         t.StartedAt.UTC().Format(time.RFC3339Nano),
+			UpdatedAt:         t.UpdatedAt.UTC().Format(time.RFC3339Nano),
+			CanRerun:          canRerun,
+			Logs:              append([]TaskLog(nil), t.Logs...),
 		})
 	}
 
@@ -317,24 +322,25 @@ func (b *Broker) Task(requestID string) (Task, bool) {
 	}
 	_, canRerun := b.runConfigs[requestID]
 	return Task{
-		RequestID:    t.RequestID,
-		Prompt:       t.Prompt,
-		Skill:        t.Skill,
-		Repo:         t.Repo,
-		Repos:        append([]string(nil), t.Repos...),
-		BaseBranch:   t.BaseBranch,
-		Status:       normalizeTaskTerminalStatus(t.Status),
-		Stage:        t.Stage,
-		StageStatus:  t.StageStatus,
-		ExitCode:     t.ExitCode,
-		WorkspaceDir: t.WorkspaceDir,
-		Branch:       t.Branch,
-		PRURL:        t.PRURL,
-		Error:        t.Error,
-		StartedAt:    t.StartedAt.UTC().Format(time.RFC3339Nano),
-		UpdatedAt:    t.UpdatedAt.UTC().Format(time.RFC3339Nano),
-		CanRerun:     canRerun,
-		Logs:         append([]TaskLog(nil), t.Logs...),
+		RequestID:         t.RequestID,
+		Prompt:            t.Prompt,
+		PromptIsUserInput: t.PromptIsUserInput,
+		Skill:             t.Skill,
+		Repo:              t.Repo,
+		Repos:             append([]string(nil), t.Repos...),
+		BaseBranch:        t.BaseBranch,
+		Status:            normalizeTaskTerminalStatus(t.Status),
+		Stage:             t.Stage,
+		StageStatus:       t.StageStatus,
+		ExitCode:          t.ExitCode,
+		WorkspaceDir:      t.WorkspaceDir,
+		Branch:            t.Branch,
+		PRURL:             t.PRURL,
+		Error:             t.Error,
+		StartedAt:         t.StartedAt.UTC().Format(time.RFC3339Nano),
+		UpdatedAt:         t.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		CanRerun:          canRerun,
+		Logs:              append([]TaskLog(nil), t.Logs...),
 	}, true
 }
 
@@ -361,9 +367,16 @@ func (b *Broker) RecordTaskRunConfig(requestID string, runConfigJSON []byte) {
 		changed = true
 	}
 	if prompt != "" {
-		if t, ok := b.tasks[requestID]; ok && t.Prompt != prompt {
-			t.Prompt = prompt
-			changed = true
+		if t, ok := b.tasks[requestID]; ok {
+			promptIsUserInput := promptIsUserInputForTask(requestID, prompt)
+			if t.Prompt != prompt {
+				t.Prompt = prompt
+				changed = true
+			}
+			if t.PromptIsUserInput != promptIsUserInput {
+				t.PromptIsUserInput = promptIsUserInput
+				changed = true
+			}
 		}
 	}
 	if baseBranch != "" {
@@ -411,18 +424,19 @@ func (b *Broker) RecordRejectedPromptSubmission(runConfigJSON []byte, status str
 	b.rejectedSeq++
 	requestID := fmt.Sprintf("local-rejected-%d-%06d", now.Unix(), b.rejectedSeq)
 	t := &taskState{
-		RequestID:   requestID,
-		Prompt:      prompt,
-		Repo:        firstRepo(repos),
-		Repos:       append([]string(nil), repos...),
-		BaseBranch:  baseBranch,
-		Status:      status,
-		Branch:      baseBranch,
-		Error:       errText,
-		StartedAt:   now,
-		UpdatedAt:   now,
-		Stage:       "submit",
-		StageStatus: status,
+		RequestID:         requestID,
+		Prompt:            prompt,
+		PromptIsUserInput: promptIsUserInputForTask(requestID, prompt),
+		Repo:              firstRepo(repos),
+		Repos:             append([]string(nil), repos...),
+		BaseBranch:        baseBranch,
+		Status:            status,
+		Branch:            baseBranch,
+		Error:             errText,
+		StartedAt:         now,
+		UpdatedAt:         now,
+		Stage:             "submit",
+		StageStatus:       status,
 		Logs: []TaskLog{
 			{
 				Time:   now.Format(time.RFC3339Nano),
@@ -1236,6 +1250,19 @@ func promptFromRunConfigJSON(runConfigJSON []byte) string {
 		return ""
 	}
 	return strings.TrimSpace(raw.Prompt)
+}
+
+func promptIsUserInputForTask(requestID, prompt string) bool {
+	requestID = strings.TrimSpace(requestID)
+	prompt = strings.TrimSpace(prompt)
+	if requestID != "" && strings.HasSuffix(requestID, "-failure-review") {
+		return false
+	}
+	if prompt == "" {
+		return false
+	}
+	return prompt != strings.TrimSpace(failurefollowup.RequiredPrompt) &&
+		!strings.HasPrefix(prompt, strings.TrimSpace(failurefollowup.RequiredPrompt))
 }
 
 func reposFromRunConfigJSON(runConfigJSON []byte) []string {

@@ -799,6 +799,27 @@ func TestBrokerAppliesPromptWhenConfigRecordedAfterTaskStart(t *testing.T) {
 	if snap.Tasks[0].Branch != "release/2026.04" {
 		t.Fatalf("task.Branch = %q, want %q", snap.Tasks[0].Branch, "release/2026.04")
 	}
+	if !snap.Tasks[0].PromptIsUserInput {
+		t.Fatal("task.PromptIsUserInput = false, want true for user-entered prompt")
+	}
+}
+
+func TestBrokerMarksFailureFollowUpPromptAsSystemGenerated(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-after-start-failure-review"
+
+	b.IngestLog("dispatch status=start request_id=req-after-start-failure-review skill=moltenhub_code_run repo=git@github.com:acme/repo.git")
+	b.RecordTaskRunConfig(requestID, []byte(`{"repo":"git@github.com:acme/repo.git","baseBranch":"main","prompt":"Review the failing log paths first, identify every root cause behind the failed task, fix the underlying MoltenHub Code application issues in this repository, validate locally where possible, and summarize the verified results. Treat the original task prompt as failure context only; do not implement that requested product change here unless it is required to fix MoltenHub Code failure handling.\n\nObserved failure context:\n- error=boom"}`))
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	if snap.Tasks[0].PromptIsUserInput {
+		t.Fatal("task.PromptIsUserInput = true, want false for failure follow-up prompt")
+	}
 }
 
 func TestBrokerRecordsRejectedPromptSubmission(t *testing.T) {
