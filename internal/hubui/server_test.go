@@ -1015,8 +1015,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "const prompt = taskPromptText(task);") || !strings.Contains(markup, "return prompt;") {
 		t.Fatalf("expected index html to pass full task prompt text to task title truncation")
 	}
-	if !strings.Contains(markup, "return \"(prompt unavailable)\";") {
-		t.Fatalf("expected index html to provide prompt-only task titles with fallback text")
+	if !strings.Contains(markup, `if (!task || task.prompt_is_user_input !== true || typeof task.prompt !== "string") return "";`) {
+		t.Fatalf("expected index html to hide system-generated prompts from Current Work labels")
+	}
+	if !strings.Contains(markup, `if (requestID.endsWith("-failure-review")) {`) || !strings.Contains(markup, `return "Failure review";`) {
+		t.Fatalf("expected index html to give failure follow-up tasks a neutral Current Work label")
+	}
+	if !strings.Contains(markup, "return taskSystemLabel(task) || \"(prompt unavailable)\";") {
+		t.Fatalf("expected index html to provide task labels with a system-task fallback")
 	}
 	if !strings.Contains(markup, "id.title = prompt;") {
 		t.Fatalf("expected index html task title tooltip to contain prompt text only")
