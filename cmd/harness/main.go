@@ -320,6 +320,7 @@ func runHub(args []string) int {
 	var queueFailureFollowUp func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config, source string)
 	var queueUnexpectedNoChangesFollowUp func(requestID string, result harness.Result, runCfg config.Config)
 	var queueEscalatedNoChangesFollowUp func(requestID string, result harness.Result, runCfg config.Config)
+	hubRuntimeConnected := func() bool { return false }
 	var enqueueLocalRun func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string, force bool) (string, error)
 	enqueueLocalRun = func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string, force bool) (string, error) {
 		if authGate != nil {
@@ -499,7 +500,7 @@ func runHub(args []string) int {
 				if taskHandle != nil {
 					taskHandle.SetRunning(true)
 				}
-				recordLocalRunStartedActivity(runCtx, activeCfg, runCfg, requestID, daemonLogger)
+				recordLocalRunStartedActivity(runCtx, activeCfg, runCfg, requestID, hubRuntimeConnected, daemonLogger)
 				outcome := runLocalDispatch(runCtx, runner, daemonLogger, cfg.Skill.Name, requestID, runCfg, func() bool {
 					if taskHandle == nil {
 						return false
@@ -523,7 +524,7 @@ func runHub(args []string) int {
 						}
 					}
 				case "no_changes":
-					recordLocalRunCompletedActivity(runCtx, activeCfg, runCfg, requestID, daemonLogger)
+					recordLocalRunCompletedActivity(runCtx, activeCfg, runCfg, requestID, hubRuntimeConnected, daemonLogger)
 					if source != noChangesFollowUpSource && source != noChangesEscalationSource && queueUnexpectedNoChangesFollowUp != nil {
 						queueUnexpectedNoChangesFollowUp(requestID, outcome.Result, runCfg)
 					}
@@ -533,7 +534,7 @@ func runHub(args []string) int {
 						}
 					}
 				case "completed":
-					recordLocalRunCompletedActivity(runCtx, activeCfg, runCfg, requestID, daemonLogger)
+					recordLocalRunCompletedActivity(runCtx, activeCfg, runCfg, requestID, hubRuntimeConnected, daemonLogger)
 				}
 				return
 			}
@@ -672,6 +673,7 @@ func runHub(args []string) int {
 	}
 
 	hubController := newHubDaemonController(ctx, runner)
+	hubRuntimeConnected = hubController.Running
 	hubController.logf = daemonLogger
 	hubController.dispatchController = dispatchController
 	hubController.taskLogRoot = logRoot
@@ -1866,12 +1868,13 @@ func resultHasPR(result harness.Result) bool {
 	return strings.TrimSpace(joinAllPRURLs(result.RepoResults)) != ""
 }
 
-func recordLocalRunStartedActivity(ctx context.Context, cfg hub.InitConfig, runCfg config.Config, requestID string, logf func(string, ...any)) {
+func recordLocalRunStartedActivity(ctx context.Context, cfg hub.InitConfig, runCfg config.Config, requestID string, hubConnected func() bool, logf func(string, ...any)) {
 	recordLocalRunActivity(
 		ctx,
 		cfg,
 		runCfg,
 		requestID,
+		hubConnected,
 		logf,
 		"record_local_run_started_activity",
 		func(ctx context.Context, client hub.APIClient, token string, runCfg config.Config) error {
@@ -1880,12 +1883,13 @@ func recordLocalRunStartedActivity(ctx context.Context, cfg hub.InitConfig, runC
 	)
 }
 
-func recordLocalRunCompletedActivity(ctx context.Context, cfg hub.InitConfig, runCfg config.Config, requestID string, logf func(string, ...any)) {
+func recordLocalRunCompletedActivity(ctx context.Context, cfg hub.InitConfig, runCfg config.Config, requestID string, hubConnected func() bool, logf func(string, ...any)) {
 	recordLocalRunActivity(
 		ctx,
 		cfg,
 		runCfg,
 		requestID,
+		hubConnected,
 		logf,
 		"record_local_run_completed_activity",
 		func(ctx context.Context, client hub.APIClient, token string, runCfg config.Config) error {
@@ -1899,10 +1903,14 @@ func recordLocalRunActivity(
 	cfg hub.InitConfig,
 	runCfg config.Config,
 	requestID string,
+	hubConnected func() bool,
 	logf func(string, ...any),
 	action string,
 	record func(context.Context, hub.APIClient, string, config.Config) error,
 ) {
+	if hubConnected == nil || !hubConnected() {
+		return
+	}
 	token := strings.TrimSpace(cfg.AgentToken)
 	if token == "" || record == nil {
 		return

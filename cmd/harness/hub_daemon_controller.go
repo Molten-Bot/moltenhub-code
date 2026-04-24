@@ -144,6 +144,14 @@ func (c *hubDaemonController) Stop(ctx context.Context) error {
 	}
 }
 
+func (c *hubDaemonController) Running() bool {
+	if c == nil {
+		return false
+	}
+	cancel, _ := c.activeRun()
+	return cancel != nil
+}
+
 func (c *hubDaemonController) run(runCtx context.Context, cfg hub.InitConfig, done chan error) {
 	runDaemon := c.runDaemon
 	if runDaemon == nil {
