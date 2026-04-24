@@ -297,6 +297,10 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="hub-setup-gate"`) {
 		t.Fatalf("expected index html to include hub setup modal gate")
 	}
+	if !strings.Contains(markup, `class="onboarding-modal-backdrop hidden"`) ||
+		!strings.Contains(markup, `class="onboarding-modal form-surface hub-setup-shell"`) {
+		t.Fatalf("expected hub setup modal to use the dispatch onboarding modal layout")
+	}
 	if !strings.Contains(markup, `id="hub-setup-form"`) {
 		t.Fatalf("expected index html to include hub setup form")
 	}
@@ -326,6 +330,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `id="hub-setup-status" class="hub-setup-status submit-status submit-status-inline`) {
 		t.Fatalf("expected index html to include a dedicated hub setup status line")
+	}
+	if !strings.Contains(markup, `class="onboarding-form-actions hub-setup-footer"`) {
+		t.Fatalf("expected hub setup actions to use the dispatch onboarding action row")
 	}
 	if strings.Contains(markup, `id="hub-setup-onboarding"`) || strings.Contains(markup, `id="hub-setup-onboarding-steps"`) {
 		t.Fatalf("expected index html to remove the hub setup onboarding progress list")
