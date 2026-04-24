@@ -4163,6 +4163,14 @@
       renderRepoHistoryOptions();
     }
 
+    function rememberManualRepoEntry(value) {
+      const repo = normalizeRepoValue(value);
+      if (!repo) {
+        return;
+      }
+      rememberRepos([repo]);
+    }
+
     function dropReviewersFromHistory(reviewers) {
       const blocked = new Set(dedupeReviewerValues(reviewers));
       if (!blocked.size) return;
@@ -7736,6 +7744,12 @@
       }
       renderRepoHistoryOptions();
     });
+    builderRepoInput.addEventListener("change", () => {
+      rememberManualRepoEntry(builderRepoInput.value);
+    });
+    builderRepoInput.addEventListener("blur", () => {
+      rememberManualRepoEntry(builderRepoInput.value);
+    });
 
     libraryRepoInput.addEventListener("input", () => {
       builderRepoInput.value = libraryRepoInput.value;
@@ -7743,6 +7757,12 @@
         libraryRepoSelect.value = "";
       }
       renderRepoHistoryOptions();
+    });
+    libraryRepoInput.addEventListener("change", () => {
+      rememberManualRepoEntry(libraryRepoInput.value);
+    });
+    libraryRepoInput.addEventListener("blur", () => {
+      rememberManualRepoEntry(libraryRepoInput.value);
     });
 
     builderReviewerInput.addEventListener("input", () => {

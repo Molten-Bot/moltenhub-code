@@ -1504,6 +1504,13 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function rememberRepos(") {
 		t.Fatalf("expected index html to include repo history persistence")
 	}
+	if !strings.Contains(markup, "function rememberManualRepoEntry(value) {") ||
+		!strings.Contains(markup, "builderRepoInput.addEventListener(\"change\", () => {") ||
+		!strings.Contains(markup, "builderRepoInput.addEventListener(\"blur\", () => {") ||
+		!strings.Contains(markup, "libraryRepoInput.addEventListener(\"change\", () => {") ||
+		!strings.Contains(markup, "libraryRepoInput.addEventListener(\"blur\", () => {") {
+		t.Fatalf("expected index html to persist manually entered repositories into history before submission")
+	}
 	if !strings.Contains(markup, "function rememberReviewers(") ||
 		!strings.Contains(markup, "function renderReviewerHistorySelect(") ||
 		!strings.Contains(markup, "function renderReviewerHistoryOptions(") {
