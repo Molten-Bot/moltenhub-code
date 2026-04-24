@@ -4586,7 +4586,8 @@
         select.appendChild(option);
       }
 
-      const nextValue = manualSelected && currentValue
+      const keepManualSelection = manualSelected && select.dataset.manual === "true";
+      const nextValue = keepManualSelection
         ? ""
         : defaultRepoSelection(currentValue, manualSelected ? "" : selectedValue, unique);
       select.value = nextValue;
@@ -7667,6 +7668,8 @@
 
     builderRepoSelect.addEventListener("change", () => {
       const value = normalizeRepoValue(builderRepoSelect.value);
+      builderRepoSelect.dataset.manual = value === "" ? "true" : "false";
+      libraryRepoSelect.dataset.manual = value === "" ? "true" : "false";
       if (value) {
         builderRepoInput.value = value;
         libraryRepoInput.value = value;
@@ -7679,6 +7682,8 @@
 
     libraryRepoSelect.addEventListener("change", () => {
       const value = normalizeRepoValue(libraryRepoSelect.value);
+      libraryRepoSelect.dataset.manual = value === "" ? "true" : "false";
+      builderRepoSelect.dataset.manual = value === "" ? "true" : "false";
       if (value) {
         libraryRepoInput.value = value;
         builderRepoInput.value = value;
@@ -7731,17 +7736,19 @@
 
     builderRepoInput.addEventListener("input", () => {
       libraryRepoInput.value = builderRepoInput.value;
-      if (normalizeRepoValue(builderRepoSelect.value) !== "") {
-        builderRepoSelect.value = "";
-      }
+      builderRepoSelect.value = "";
+      libraryRepoSelect.value = "";
+      builderRepoSelect.dataset.manual = "true";
+      libraryRepoSelect.dataset.manual = "true";
       renderRepoHistoryOptions();
     });
 
     libraryRepoInput.addEventListener("input", () => {
       builderRepoInput.value = libraryRepoInput.value;
-      if (normalizeRepoValue(libraryRepoSelect.value) !== "") {
-        libraryRepoSelect.value = "";
-      }
+      libraryRepoSelect.value = "";
+      builderRepoSelect.value = "";
+      libraryRepoSelect.dataset.manual = "true";
+      builderRepoSelect.dataset.manual = "true";
       renderRepoHistoryOptions();
     });
 
