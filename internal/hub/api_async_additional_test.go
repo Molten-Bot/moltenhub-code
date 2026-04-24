@@ -7,41 +7,24 @@ import (
 	"net/http/httptest"
 	"sort"
 	"strings"
-	"sync/atomic"
 	"testing"
 )
 
 func TestAsyncAPIClientRecordGitHubTaskCompleteActivity(t *testing.T) {
 	t.Parallel()
 
-	var patchSeen int32
+	var activityBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got, want := r.Header.Get("Authorization"), "Bearer agent-token"; got != want {
 			t.Fatalf("Authorization = %q, want %q", got, want)
 		}
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/me/activities":
+			if err := json.NewDecoder(r.Body).Decode(&activityBody); err != nil {
+				t.Fatalf("decode activity body: %v", err)
+			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"metadata":{"activities":["existing"]}}`))
-		case r.Method == http.MethodPatch && (r.URL.Path == "/v1/agents/me/metadata" || r.URL.Path == "/v1/agents/me"):
-			var body map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("decode patch body: %v", err)
-			}
-			meta, _ := body["metadata"].(map[string]any)
-			activities, _ := meta["activities"].([]any)
-			found := false
-			for _, activity := range activities {
-				if strings.TrimSpace(strings.ToLower(activity.(string))) == "github task complete" {
-					found = true
-					break
-				}
-			}
-			if !found {
-				t.Fatalf("patch activities = %#v, expected github task complete", activities)
-			}
-			atomic.StoreInt32(&patchSeen, 1)
-			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
@@ -53,42 +36,29 @@ func TestAsyncAPIClientRecordGitHubTaskCompleteActivity(t *testing.T) {
 	if err := client.RecordGitHubTaskCompleteActivity(context.Background()); err != nil {
 		t.Fatalf("RecordGitHubTaskCompleteActivity() error = %v", err)
 	}
-	if atomic.LoadInt32(&patchSeen) != 1 {
-		t.Fatal("RecordGitHubTaskCompleteActivity() did not issue metadata patch")
+	if activityBody["activity"] != gitHubTaskComplete {
+		t.Fatalf("activity = %#v, want %q", activityBody["activity"], gitHubTaskComplete)
+	}
+	if activityBody["category"] != "coding" || activityBody["status"] != "completed" {
+		t.Fatalf("activity state fields = %#v", activityBody)
 	}
 }
 
 func TestAsyncAPIClientRecordCodingActivityRunning(t *testing.T) {
 	t.Parallel()
 
-	var patchSeen int32
+	var activityBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got, want := r.Header.Get("Authorization"), "Bearer agent-token"; got != want {
 			t.Fatalf("Authorization = %q, want %q", got, want)
 		}
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/me/activities":
+			if err := json.NewDecoder(r.Body).Decode(&activityBody); err != nil {
+				t.Fatalf("decode activity body: %v", err)
+			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"metadata":{"activities":["existing"]}}`))
-		case r.Method == http.MethodPatch && (r.URL.Path == "/v1/agents/me/metadata" || r.URL.Path == "/v1/agents/me"):
-			var body map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("decode patch body: %v", err)
-			}
-			meta, _ := body["metadata"].(map[string]any)
-			activities, _ := meta["activities"].([]any)
-			found := false
-			for _, activity := range activities {
-				if strings.TrimSpace(strings.ToLower(activity.(string))) == "coding activity is running" {
-					found = true
-					break
-				}
-			}
-			if !found {
-				t.Fatalf("patch activities = %#v, expected coding activity running entry", activities)
-			}
-			atomic.StoreInt32(&patchSeen, 1)
-			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
@@ -100,42 +70,29 @@ func TestAsyncAPIClientRecordCodingActivityRunning(t *testing.T) {
 	if err := client.RecordCodingActivityRunning(context.Background()); err != nil {
 		t.Fatalf("RecordCodingActivityRunning() error = %v", err)
 	}
-	if atomic.LoadInt32(&patchSeen) != 1 {
-		t.Fatal("RecordCodingActivityRunning() did not issue metadata patch")
+	if activityBody["activity"] != codingActivityRun {
+		t.Fatalf("activity = %#v, want %q", activityBody["activity"], codingActivityRun)
+	}
+	if activityBody["category"] != "coding" || activityBody["status"] != "started" {
+		t.Fatalf("activity state fields = %#v", activityBody)
 	}
 }
 
 func TestAsyncAPIClientRecordActivity(t *testing.T) {
 	t.Parallel()
 
-	var patchSeen int32
+	var activityBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got, want := r.Header.Get("Authorization"), "Bearer agent-token"; got != want {
 			t.Fatalf("Authorization = %q, want %q", got, want)
 		}
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/me/activities":
+			if err := json.NewDecoder(r.Body).Decode(&activityBody); err != nil {
+				t.Fatalf("decode activity body: %v", err)
+			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"metadata":{"activities":["existing"]}}`))
-		case r.Method == http.MethodPatch && (r.URL.Path == "/v1/agents/me/metadata" || r.URL.Path == "/v1/agents/me"):
-			var body map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("decode patch body: %v", err)
-			}
-			meta, _ := body["metadata"].(map[string]any)
-			activities, _ := meta["activities"].([]any)
-			found := false
-			for _, activity := range activities {
-				if strings.TrimSpace(strings.ToLower(activity.(string))) == "working on library task: code-review" {
-					found = true
-					break
-				}
-			}
-			if !found {
-				t.Fatalf("patch activities = %#v, expected library task activity", activities)
-			}
-			atomic.StoreInt32(&patchSeen, 1)
-			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
@@ -147,8 +104,11 @@ func TestAsyncAPIClientRecordActivity(t *testing.T) {
 	if err := client.RecordActivity(context.Background(), "working on  library task:   code-review"); err != nil {
 		t.Fatalf("RecordActivity() error = %v", err)
 	}
-	if atomic.LoadInt32(&patchSeen) != 1 {
-		t.Fatal("RecordActivity() did not issue metadata patch")
+	if activityBody["activity"] != "working on library task: code-review" {
+		t.Fatalf("activity = %#v, want normalized library task activity", activityBody["activity"])
+	}
+	if _, exists := activityBody["category"]; exists {
+		t.Fatalf("generic activity unexpectedly set category: %#v", activityBody)
 	}
 }
 

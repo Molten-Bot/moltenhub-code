@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Molten-Bot/moltenhub-code/internal/config"
 	"github.com/Molten-Bot/moltenhub-code/internal/library"
 )
 
@@ -543,6 +544,10 @@ func TestRecordGitHubTaskCompleteActivityMergesExistingMetadata(t *testing.T) {
 		defer r.Body.Close()
 
 		switch r.URL.Path {
+		case "/v1/agents/me/activities":
+			calls = append(calls, captured{Method: r.Method, Path: r.URL.Path})
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"not_found"}`))
 		case "/v1/agents/me":
 			calls = append(calls, captured{Method: r.Method, Path: r.URL.Path})
 			w.Header().Set("Content-Type", "application/json")
@@ -565,19 +570,22 @@ func TestRecordGitHubTaskCompleteActivityMergesExistingMetadata(t *testing.T) {
 		t.Fatalf("RecordGitHubTaskCompleteActivity() error = %v", err)
 	}
 
-	if len(calls) != 2 {
-		t.Fatalf("calls = %d, want 2", len(calls))
+	if len(calls) != 3 {
+		t.Fatalf("calls = %d, want 3", len(calls))
 	}
-	if calls[0].Method != http.MethodGet || calls[0].Path != "/v1/agents/me" {
+	if calls[0].Method != http.MethodPost || calls[0].Path != "/v1/agents/me/activities" {
 		t.Fatalf("first call = %#v", calls[0])
 	}
-	if calls[1].Method != http.MethodPatch || calls[1].Path != "/v1/agents/me/metadata" {
+	if calls[1].Method != http.MethodGet || calls[1].Path != "/v1/agents/me" {
 		t.Fatalf("second call = %#v", calls[1])
 	}
+	if calls[2].Method != http.MethodPatch || calls[2].Path != "/v1/agents/me/metadata" {
+		t.Fatalf("third call = %#v", calls[2])
+	}
 
-	meta, _ := calls[1].Body["metadata"].(map[string]any)
+	meta, _ := calls[2].Body["metadata"].(map[string]any)
 	if meta == nil {
-		t.Fatalf("metadata wrapper missing: %#v", calls[1].Body)
+		t.Fatalf("metadata wrapper missing: %#v", calls[2].Body)
 	}
 	if got := meta["display_name"]; got != "MoltenHub Code" {
 		t.Fatalf("display_name = %#v", got)
@@ -597,6 +605,44 @@ func TestRecordGitHubTaskCompleteActivityMergesExistingMetadata(t *testing.T) {
 	}
 }
 
+func TestRecordRunCompletedActivityPublishesAgentActivity(t *testing.T) {
+	t.Parallel()
+
+	var body map[string]any
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/agents/me/activities" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode activity body: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer ts.Close()
+
+	runCfg := config.Config{
+		Repo:            "git@github.com:acme/repo.git",
+		BaseBranch:      "main",
+		LibraryTaskName: "security-review",
+	}
+	runCfg.ApplyDefaults()
+
+	client := NewAPIClient(ts.URL + "/v1")
+	if err := client.RecordRunCompletedActivity(context.Background(), "token", runCfg); err != nil {
+		t.Fatalf("RecordRunCompletedActivity() error = %v", err)
+	}
+
+	if body["activity"] != "completed library task: security-review" {
+		t.Fatalf("activity = %#v", body["activity"])
+	}
+	if body["category"] != "coding" || body["status"] != "completed" {
+		t.Fatalf("activity state fields = %#v", body)
+	}
+}
+
 func TestRecordActivityMergesExistingMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -611,6 +657,10 @@ func TestRecordActivityMergesExistingMetadata(t *testing.T) {
 		defer r.Body.Close()
 
 		switch r.URL.Path {
+		case "/v1/agents/me/activities":
+			calls = append(calls, captured{Method: r.Method, Path: r.URL.Path})
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"not_found"}`))
 		case "/v1/agents/me":
 			calls = append(calls, captured{Method: r.Method, Path: r.URL.Path})
 			w.Header().Set("Content-Type", "application/json")
@@ -633,19 +683,22 @@ func TestRecordActivityMergesExistingMetadata(t *testing.T) {
 		t.Fatalf("RecordActivity() error = %v", err)
 	}
 
-	if len(calls) != 2 {
-		t.Fatalf("calls = %d, want 2", len(calls))
+	if len(calls) != 3 {
+		t.Fatalf("calls = %d, want 3", len(calls))
 	}
-	if calls[0].Method != http.MethodGet || calls[0].Path != "/v1/agents/me" {
+	if calls[0].Method != http.MethodPost || calls[0].Path != "/v1/agents/me/activities" {
 		t.Fatalf("first call = %#v", calls[0])
 	}
-	if calls[1].Method != http.MethodPatch || calls[1].Path != "/v1/agents/me/metadata" {
+	if calls[1].Method != http.MethodGet || calls[1].Path != "/v1/agents/me" {
 		t.Fatalf("second call = %#v", calls[1])
 	}
+	if calls[2].Method != http.MethodPatch || calls[2].Path != "/v1/agents/me/metadata" {
+		t.Fatalf("third call = %#v", calls[2])
+	}
 
-	meta, _ := calls[1].Body["metadata"].(map[string]any)
+	meta, _ := calls[2].Body["metadata"].(map[string]any)
 	if meta == nil {
-		t.Fatalf("metadata wrapper missing: %#v", calls[1].Body)
+		t.Fatalf("metadata wrapper missing: %#v", calls[2].Body)
 	}
 	activities, ok := meta["activities"].([]any)
 	if !ok {
@@ -682,6 +735,10 @@ func TestRecordCodingActivityRunningMergesExistingMetadata(t *testing.T) {
 		defer r.Body.Close()
 
 		switch r.URL.Path {
+		case "/v1/agents/me/activities":
+			calls = append(calls, captured{Method: r.Method, Path: r.URL.Path})
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"not_found"}`))
 		case "/v1/agents/me":
 			calls = append(calls, captured{Method: r.Method, Path: r.URL.Path})
 			w.Header().Set("Content-Type", "application/json")
@@ -704,19 +761,22 @@ func TestRecordCodingActivityRunningMergesExistingMetadata(t *testing.T) {
 		t.Fatalf("RecordCodingActivityRunning() error = %v", err)
 	}
 
-	if len(calls) != 2 {
-		t.Fatalf("calls = %d, want 2", len(calls))
+	if len(calls) != 3 {
+		t.Fatalf("calls = %d, want 3", len(calls))
 	}
-	if calls[0].Method != http.MethodGet || calls[0].Path != "/v1/agents/me" {
+	if calls[0].Method != http.MethodPost || calls[0].Path != "/v1/agents/me/activities" {
 		t.Fatalf("first call = %#v", calls[0])
 	}
-	if calls[1].Method != http.MethodPatch || calls[1].Path != "/v1/agents/me/metadata" {
+	if calls[1].Method != http.MethodGet || calls[1].Path != "/v1/agents/me" {
 		t.Fatalf("second call = %#v", calls[1])
 	}
+	if calls[2].Method != http.MethodPatch || calls[2].Path != "/v1/agents/me/metadata" {
+		t.Fatalf("third call = %#v", calls[2])
+	}
 
-	meta, _ := calls[1].Body["metadata"].(map[string]any)
+	meta, _ := calls[2].Body["metadata"].(map[string]any)
 	if meta == nil {
-		t.Fatalf("metadata wrapper missing: %#v", calls[1].Body)
+		t.Fatalf("metadata wrapper missing: %#v", calls[2].Body)
 	}
 	if got := meta["display_name"]; got != "MoltenHub Code" {
 		t.Fatalf("display_name = %#v", got)

@@ -108,35 +108,35 @@ func (c *AsyncAPIClient) MarkOpenClawOffline(ctx context.Context, sessionKey, re
 	})
 }
 
-// RecordActivity appends a custom activity entry to metadata.activities.
+// RecordActivity publishes a custom agent activity.
 func (c *AsyncAPIClient) RecordActivity(ctx context.Context, activity string) error {
 	return c.withToken(func(token string) error {
 		return c.client.RecordActivity(ctx, token, activity)
 	})
 }
 
-// RecordCodingActivityRunning appends a generic active-coding activity entry.
+// RecordCodingActivityRunning publishes a generic active-coding activity.
 func (c *AsyncAPIClient) RecordCodingActivityRunning(ctx context.Context) error {
 	return c.withToken(func(token string) error {
 		return c.client.RecordCodingActivityRunning(ctx, token)
 	})
 }
 
-// RecordGitHubTaskCompleteActivity appends a minimal completion activity entry.
+// RecordGitHubTaskCompleteActivity publishes a minimal completion activity.
 func (c *AsyncAPIClient) RecordGitHubTaskCompleteActivity(ctx context.Context) error {
 	return c.withToken(func(token string) error {
 		return c.client.RecordGitHubTaskCompleteActivity(ctx, token)
 	})
 }
 
-// RecordRunStartedActivity appends the standard activity entry for one task run.
+// RecordRunStartedActivity publishes the standard activity entry for one task run.
 func (c *AsyncAPIClient) RecordRunStartedActivity(ctx context.Context, runCfg config.Config) error {
 	return c.withToken(func(token string) error {
 		return c.client.RecordRunStartedActivity(ctx, token, runCfg)
 	})
 }
 
-// RecordRunCompletedActivity appends the standard activity entry for one completed task run.
+// RecordRunCompletedActivity publishes the standard activity entry for one completed task run.
 func (c *AsyncAPIClient) RecordRunCompletedActivity(ctx context.Context, runCfg config.Config) error {
 	return c.withToken(func(token string) error {
 		return c.client.RecordRunCompletedActivity(ctx, token, runCfg)

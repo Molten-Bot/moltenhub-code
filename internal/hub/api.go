@@ -25,6 +25,7 @@ type apiAttempt struct {
 }
 
 var errNoPulledMessage = errors.New("no pulled message")
+var errUnsupportedActivityPublishEndpoint = errors.New("unsupported activity publish endpoint")
 
 const (
 	runtimeIdentifier    = "moltenhub-code"
@@ -36,6 +37,12 @@ const (
 	maxActivityEntries   = 20
 	maxPullTimeoutMs     = 30000
 )
+
+type agentActivityPublish struct {
+	Activity string
+	Category string
+	Status   string
+}
 
 // PulledOpenClawMessage is one leased inbound message from pull transport.
 type PulledOpenClawMessage struct {
@@ -305,45 +312,103 @@ func (c APIClient) MarkOpenClawOffline(ctx context.Context, token, sessionKey, r
 	return nil
 }
 
-// RecordGitHubTaskCompleteActivity appends a minimal completion entry to metadata.activities.
+// RecordGitHubTaskCompleteActivity publishes a minimal completion activity.
 func (c APIClient) RecordGitHubTaskCompleteActivity(ctx context.Context, token string) error {
-	return c.RecordActivity(ctx, token, gitHubTaskComplete)
+	return c.recordActivity(ctx, token, agentActivityPublish{
+		Activity: gitHubTaskComplete,
+		Category: "coding",
+		Status:   "completed",
+	})
 }
 
-// RecordCodingActivityRunning appends a generic active-coding entry to metadata.activities.
+// RecordCodingActivityRunning publishes a generic active-coding activity.
 func (c APIClient) RecordCodingActivityRunning(ctx context.Context, token string) error {
-	return c.RecordActivity(ctx, token, codingActivityRun)
+	return c.recordActivity(ctx, token, agentActivityPublish{
+		Activity: codingActivityRun,
+		Category: "coding",
+		Status:   "started",
+	})
 }
 
-// RecordRunStartedActivity appends the standard activity entry for one task run.
+// RecordRunStartedActivity publishes the standard activity entry for one task run.
 func (c APIClient) RecordRunStartedActivity(ctx context.Context, token string, runCfg config.Config) error {
 	if activity := RunStartedActivity(runCfg); activity != "" {
-		return c.RecordActivity(ctx, token, activity)
+		return c.recordActivity(ctx, token, agentActivityPublish{
+			Activity: activity,
+			Category: "coding",
+			Status:   "started",
+		})
 	}
 	return c.RecordCodingActivityRunning(ctx, token)
 }
 
-// RecordRunCompletedActivity appends the standard activity entry for one completed task run.
+// RecordRunCompletedActivity publishes the standard activity entry for one completed task run.
 func (c APIClient) RecordRunCompletedActivity(ctx context.Context, token string, runCfg config.Config) error {
 	if activity := RunCompletedActivity(runCfg); activity != "" {
-		return c.RecordActivity(ctx, token, activity)
+		return c.recordActivity(ctx, token, agentActivityPublish{
+			Activity: activity,
+			Category: "coding",
+			Status:   "completed",
+		})
 	}
 	return c.RecordGitHubTaskCompleteActivity(ctx, token)
 }
 
-// RecordActivity appends a custom activity entry to metadata.activities.
+// RecordActivity publishes a custom activity entry.
 func (c APIClient) RecordActivity(ctx context.Context, token, activity string) error {
+	return c.recordActivity(ctx, token, agentActivityPublish{Activity: activity})
+}
+
+func (c APIClient) recordActivity(ctx context.Context, token string, activity agentActivityPublish) error {
 	normalizedToken, err := requireHubToken(token, "record activity")
 	if err != nil {
 		return err
 	}
-	normalizedActivity := normalizeActivityEntry(activity)
+	normalizedActivity := normalizeActivityEntry(activity.Activity)
 	if normalizedActivity == "" {
 		return fmt.Errorf("record activity requires non-empty text")
 	}
+	activity.Activity = normalizedActivity
+
+	if err := c.publishAgentActivity(ctx, normalizedToken, activity); err != nil {
+		if !isUnsupportedActivityPublishError(err) {
+			return err
+		}
+	} else {
+		return nil
+	}
+
 	return c.updateAgentMetadata(ctx, normalizedToken, "record activity failed", func(metadata map[string]any) {
 		metadata["activities"] = appendActivityEntries(metadata["activities"], normalizedActivity)
 	})
+}
+
+func (c APIClient) publishAgentActivity(ctx context.Context, token string, activity agentActivityPublish) error {
+	body := map[string]any{
+		"activity": activity.Activity,
+	}
+	if category := normalizeActivityEntry(activity.Category); category != "" {
+		body["category"] = category
+	}
+	if status := normalizeActivityEntry(activity.Status); status != "" {
+		body["status"] = status
+	}
+
+	status, responseBody, err := c.doJSON(ctx, http.MethodPost, "/agents/me/activities", token, body)
+	if err != nil {
+		return err
+	}
+	if status/100 == 2 {
+		return nil
+	}
+	if status == http.StatusNotFound || status == http.StatusMethodNotAllowed || status == http.StatusNotImplemented {
+		return errUnsupportedActivityPublishEndpoint
+	}
+	return fmt.Errorf("record activity failed: status=%d body=%s", status, truncateBody(responseBody))
+}
+
+func isUnsupportedActivityPublishError(err error) bool {
+	return errors.Is(err, errUnsupportedActivityPublishEndpoint)
 }
 
 // AgentMetadata loads the current agent metadata for safe merge-style updates.

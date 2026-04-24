@@ -181,7 +181,7 @@ func TestDaemonRunUsesStoredRuntimeConfigBaseURLWhenInitBaseURLOmitted(t *testin
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"ok":true}`))
-		case "/v1/agents/me/metadata", "/v1/agents/me/status":
+		case "/v1/agents/me/metadata", "/v1/agents/me/status", "/v1/agents/me/activities":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
@@ -317,7 +317,7 @@ func TestDaemonRunUsesStoredRuntimeConfigPullTimeout(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"ok":true}`))
-		case "/v1/agents/me/metadata", "/v1/agents/me/status":
+		case "/v1/agents/me/metadata", "/v1/agents/me/status", "/v1/agents/me/activities":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
@@ -835,7 +835,7 @@ func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
 		case "/v1/agents/me":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"ok":true,"result":{"agent":{"metadata":{"activities":["started"]}}}}`))
-		case "/v1/agents/me/metadata":
+		case "/v1/agents/me/metadata", "/v1/agents/me/activities":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		case "/v1/openclaw/messages/publish":
@@ -949,7 +949,7 @@ func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
 		case "/v1/agents/me":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"ok":true,"result":{"agent":{"metadata":{"activities":["started"]}}}}`))
-		case "/v1/agents/me/metadata":
+		case "/v1/agents/me/metadata", "/v1/agents/me/activities":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		case "/v1/openclaw/messages/publish":
@@ -1082,7 +1082,7 @@ func TestProcessInboundMessageInvokesOnDispatchFailedForAcquireFailure(t *testin
 		case "/v1/agents/me":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"ok":true,"result":{"agent":{"metadata":{"activities":["started"]}}}}`))
-		case "/v1/agents/me/metadata":
+		case "/v1/agents/me/metadata", "/v1/agents/me/activities":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		case "/v1/openclaw/messages/publish":

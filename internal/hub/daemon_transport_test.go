@@ -140,7 +140,7 @@ func TestDaemonRunRepeatsPingHealthPullBeforeEachWebsocketAttempt(t *testing.T) 
 			if currentAttempts >= 2 {
 				secondWS.Do(func() { close(secondWSHit) })
 			}
-		case "/v1/agents/me", "/v1/agents/me/status", "/v1/agents/me/metadata":
+		case "/v1/agents/me", "/v1/agents/me/status", "/v1/agents/me/metadata", "/v1/agents/me/activities":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
