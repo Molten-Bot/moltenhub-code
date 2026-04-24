@@ -483,6 +483,56 @@ func TestBrokerTaskRunConfigSupportsRerunMetadata(t *testing.T) {
 	}
 }
 
+func TestBrokerRecordTaskRunConfigCreatesPendingTaskAndNotifies(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	updates, cancel := b.Subscribe()
+	defer cancel()
+
+	requestID := "req-pending-config"
+	payload := []byte(`{"repos":["git@github.com:acme/repo.git","git@github.com:acme/repo-two.git"],"baseBranch":"main","targetSubdir":".","prompt":"show immediately"}`)
+
+	b.RecordTaskRunConfig(requestID, payload)
+
+	select {
+	case <-updates:
+		// Expected.
+	default:
+		t.Fatal("expected update signal")
+	}
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	task := snap.Tasks[0]
+	if task.RequestID != requestID {
+		t.Fatalf("task.RequestID = %q, want %q", task.RequestID, requestID)
+	}
+	if task.Status != "pending" {
+		t.Fatalf("task.Status = %q, want pending", task.Status)
+	}
+	if task.Stage != "dispatch" || task.StageStatus != "queued" {
+		t.Fatalf("task stage = (%q, %q), want (dispatch, queued)", task.Stage, task.StageStatus)
+	}
+	if task.Prompt != "show immediately" {
+		t.Fatalf("task.Prompt = %q, want %q", task.Prompt, "show immediately")
+	}
+	if task.Repo != "git@github.com:acme/repo.git" {
+		t.Fatalf("task.Repo = %q", task.Repo)
+	}
+	if got, want := strings.Join(task.Repos, ","), "git@github.com:acme/repo.git,git@github.com:acme/repo-two.git"; got != want {
+		t.Fatalf("task.Repos = %q, want %q", got, want)
+	}
+	if task.BaseBranch != "main" || task.Branch != "main" {
+		t.Fatalf("task branches = (%q, %q), want main", task.BaseBranch, task.Branch)
+	}
+	if !task.CanRerun {
+		t.Fatal("task.CanRerun = false, want true")
+	}
+}
+
 func TestBrokerTaskRunConfigSupportsBranchAlias(t *testing.T) {
 	t.Parallel()
 

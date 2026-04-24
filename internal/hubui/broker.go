@@ -358,17 +358,41 @@ func (b *Broker) RecordTaskRunConfig(requestID string, runConfigJSON []byte) {
 	cfgCopy := append([]byte(nil), runConfigJSON...)
 	prompt := promptFromRunConfigJSON(cfgCopy)
 	baseBranch := branchFromRunConfigJSON(cfgCopy)
+	repos := reposFromRunConfigJSON(cfgCopy)
+	now := b.now().UTC()
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
+	b.pruneExpiredTasksLocked(now)
 
 	changed := false
 	if existing, ok := b.runConfigs[requestID]; !ok || !bytes.Equal(existing, cfgCopy) {
 		b.runConfigs[requestID] = cfgCopy
 		changed = true
 	}
+	t, taskExists := b.tasks[requestID]
+	if !taskExists && !b.isClosedTaskLocked(requestID, now) {
+		t = &taskState{
+			RequestID:         requestID,
+			Prompt:            prompt,
+			PromptIsUserInput: promptIsUserInputForTask(requestID, prompt),
+			Repo:              firstRepo(repos),
+			Repos:             append([]string(nil), repos...),
+			BaseBranch:        baseBranch,
+			Branch:            baseBranch,
+			Status:            "pending",
+			Stage:             "dispatch",
+			StageStatus:       "queued",
+			StartedAt:         now,
+			UpdatedAt:         now,
+		}
+		b.tasks[requestID] = t
+		b.recordTaskAttemptLocked(b.taskAttemptRootLocked(requestID), requestID, "", t.Status, t.Error, now)
+		changed = true
+	}
 	if prompt != "" {
-		if t, ok := b.tasks[requestID]; ok {
+		if t != nil {
 			promptIsUserInput := promptIsUserInputForTask(requestID, prompt)
 			if t.Prompt != prompt {
 				t.Prompt = prompt
@@ -380,8 +404,18 @@ func (b *Broker) RecordTaskRunConfig(requestID string, runConfigJSON []byte) {
 			}
 		}
 	}
+	if len(repos) > 0 && t != nil {
+		if !sameStringSlice(t.Repos, repos) {
+			t.Repos = append([]string(nil), repos...)
+			changed = true
+		}
+		if repo := firstRepo(repos); repo != "" && t.Repo != repo {
+			t.Repo = repo
+			changed = true
+		}
+	}
 	if baseBranch != "" {
-		if t, ok := b.tasks[requestID]; ok {
+		if t != nil {
 			if t.BaseBranch != baseBranch {
 				t.BaseBranch = baseBranch
 				changed = true
@@ -393,6 +427,9 @@ func (b *Broker) RecordTaskRunConfig(requestID string, runConfigJSON []byte) {
 		}
 	}
 	if changed {
+		if t != nil {
+			t.UpdatedAt = now
+		}
 		b.notifySubscribersLocked()
 	}
 }
@@ -1241,6 +1278,18 @@ func appendNonEmptyUnique(dst []string, values ...string) []string {
 	}
 
 	return out
+}
+
+func sameStringSlice(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func promptFromRunConfigJSON(runConfigJSON []byte) string {
