@@ -129,11 +129,11 @@ type Broker struct {
 	maxEvents  int
 	maxTaskLog int
 
-	nextEventID int64
-	events      []Event
-	tasks       map[string]*taskState
-	closedTasks map[string]time.Time
-	runConfigs  map[string][]byte
+	nextEventID  int64
+	events       []Event
+	tasks        map[string]*taskState
+	closedTasks  map[string]time.Time
+	runConfigs   map[string][]byte
 	attempts     map[string][]taskAttemptState
 	attemptRoots map[string]string
 	rejectedSeq  uint64
@@ -180,15 +180,15 @@ type taskAttemptState struct {
 // NewBroker returns a monitor state broker with safe defaults.
 func NewBroker() *Broker {
 	return &Broker{
-		now:         time.Now,
-		maxEvents:   defaultMaxEvents,
-		maxTaskLog:  defaultMaxTaskLogs,
-		tasks:       map[string]*taskState{},
-		closedTasks: map[string]time.Time{},
-		runConfigs:  map[string][]byte{},
-		attempts:    map[string][]taskAttemptState{},
+		now:          time.Now,
+		maxEvents:    defaultMaxEvents,
+		maxTaskLog:   defaultMaxTaskLogs,
+		tasks:        map[string]*taskState{},
+		closedTasks:  map[string]time.Time{},
+		runConfigs:   map[string][]byte{},
+		attempts:     map[string][]taskAttemptState{},
 		attemptRoots: map[string]string{},
-		subs:        map[chan struct{}]struct{}{},
+		subs:         map[chan struct{}]struct{}{},
 	}
 }
 
@@ -643,6 +643,7 @@ func (b *Broker) ensureTaskLocked(requestID string, now time.Time) *taskState {
 	if existing, ok := b.tasks[requestID]; ok {
 		if existing.Prompt == "" {
 			existing.Prompt = b.taskPromptLocked(requestID)
+			existing.PromptIsUserInput = promptIsUserInputForTask(requestID, existing.Prompt)
 		}
 		if existing.BaseBranch == "" {
 			existing.BaseBranch = b.taskBaseBranchLocked(requestID)
@@ -655,14 +656,16 @@ func (b *Broker) ensureTaskLocked(requestID string, now time.Time) *taskState {
 		return existing
 	}
 
+	prompt := b.taskPromptLocked(requestID)
 	t := &taskState{
-		RequestID:  requestID,
-		Prompt:     b.taskPromptLocked(requestID),
-		BaseBranch: b.taskBaseBranchLocked(requestID),
-		Branch:     b.taskInitialBranchLocked(requestID),
-		Status:     "pending",
-		StartedAt:  now,
-		UpdatedAt:  now,
+		RequestID:         requestID,
+		Prompt:            prompt,
+		PromptIsUserInput: promptIsUserInputForTask(requestID, prompt),
+		BaseBranch:        b.taskBaseBranchLocked(requestID),
+		Branch:            b.taskInitialBranchLocked(requestID),
+		Status:            "pending",
+		StartedAt:         now,
+		UpdatedAt:         now,
 	}
 	b.tasks[requestID] = t
 	b.recordTaskAttemptLocked(b.taskAttemptRootLocked(requestID), requestID, "", t.Status, t.Error, now)
