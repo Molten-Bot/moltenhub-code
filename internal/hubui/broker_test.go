@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -822,6 +824,35 @@ func TestBrokerMarksFailureFollowUpPromptAsSystemGenerated(t *testing.T) {
 	}
 }
 
+func TestBrokerResolvesLibraryTaskPromptFromRunConfig(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HARNESS_LIBRARY_DIR", tmp)
+	if err := os.WriteFile(filepath.Join(tmp, "coverage.json"), []byte(`{
+  "name": "unit-test-coverage",
+  "displayName": "100% Unit Test Coverage",
+  "description": "Raise coverage.",
+  "prompt": "Raise coverage."
+}`), 0o644); err != nil {
+		t.Fatalf("write library task: %v", err)
+	}
+
+	b := NewBroker()
+	requestID := "req-library-task"
+	b.RecordTaskRunConfig(requestID, []byte(`{"repo":"git@github.com:acme/repo.git","baseBranch":"main","libraryTaskName":"unit-test-coverage"}`))
+	b.IngestLog("dispatch status=start request_id=req-library-task skill=library_task repo=git@github.com:acme/repo.git")
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	if got, want := snap.Tasks[0].Prompt, "Raise coverage."; got != want {
+		t.Fatalf("task.Prompt = %q, want %q", got, want)
+	}
+	if !snap.Tasks[0].PromptIsUserInput {
+		t.Fatal("task.PromptIsUserInput = false, want true for library prompt")
+	}
+}
+
 func TestBrokerRecordsRejectedPromptSubmission(t *testing.T) {
 	t.Parallel()
 
@@ -872,8 +903,6 @@ func TestBrokerRecordsRejectedPromptSubmission(t *testing.T) {
 }
 
 func TestPromptFromRunConfigJSON(t *testing.T) {
-	t.Parallel()
-
 	tests := []struct {
 		name string
 		raw  []byte
@@ -899,12 +928,27 @@ func TestPromptFromRunConfigJSON(t *testing.T) {
 			raw:  []byte(`{"prompt":"  refactor api  "}`),
 			want: "refactor api",
 		},
+		{
+			name: "library task prompt",
+			raw:  []byte(`{"libraryTaskName":"unit-test-coverage"}`),
+			want: "Raise coverage.",
+		},
+	}
+
+	tmp := t.TempDir()
+	t.Setenv("HARNESS_LIBRARY_DIR", tmp)
+	if err := os.WriteFile(filepath.Join(tmp, "coverage.json"), []byte(`{
+  "name": "unit-test-coverage",
+  "displayName": "100% Unit Test Coverage",
+  "description": "Raise coverage.",
+  "prompt": "Raise coverage."
+}`), 0o644); err != nil {
+		t.Fatalf("write library task: %v", err)
 	}
 
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			if got := promptFromRunConfigJSON(tt.raw); got != tt.want {
 				t.Fatalf("promptFromRunConfigJSON() = %q, want %q", got, tt.want)
 			}
