@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Molten-Bot/moltenhub-code/internal/failurefollowup"
+	"github.com/Molten-Bot/moltenhub-code/internal/library"
 )
 
 const (
@@ -1244,12 +1245,30 @@ func promptFromRunConfigJSON(runConfigJSON []byte) string {
 		return ""
 	}
 	var raw struct {
-		Prompt string `json:"prompt"`
+		Prompt          string `json:"prompt"`
+		LibraryTaskName string `json:"libraryTaskName"`
 	}
 	if err := json.Unmarshal(runConfigJSON, &raw); err != nil {
 		return ""
 	}
-	return strings.TrimSpace(raw.Prompt)
+	if prompt := strings.TrimSpace(raw.Prompt); prompt != "" {
+		return prompt
+	}
+	taskName := strings.TrimSpace(raw.LibraryTaskName)
+	if taskName == "" {
+		return ""
+	}
+	catalog, err := library.LoadCatalog(library.DefaultDir)
+	if err != nil {
+		return ""
+	}
+	for _, task := range catalog.Summaries() {
+		if strings.TrimSpace(task.Name) != taskName {
+			continue
+		}
+		return strings.TrimSpace(task.Prompt)
+	}
+	return ""
 }
 
 func promptIsUserInputForTask(requestID, prompt string) bool {
