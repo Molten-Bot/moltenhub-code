@@ -152,7 +152,7 @@
                 aria-label="Show completed task history"
                 title="Show completed task history">
                 <i data-lucide="history" class="task-history-toggle-icon" aria-hidden="true"></i>
-                <span id="task-history-toggle-plus" class="task-history-toggle-plus hidden" aria-hidden="true">+</span>
+                <span id="task-history-toggle-badge" class="task-history-toggle-badge hidden" aria-hidden="true">1</span>
               </button>
               <button
                 id="task-view-toggle"
@@ -1576,7 +1576,7 @@
     const taskPanelTitle = document.getElementById("task-panel-title");
     const taskSoundToggle = document.getElementById("task-sound-toggle");
     const taskHistoryToggle = document.getElementById("task-history-toggle");
-    const taskHistoryTogglePlus = document.getElementById("task-history-toggle-plus");
+    const taskHistoryToggleBadge = document.getElementById("task-history-toggle-badge");
     const taskViewToggle = document.getElementById("task-view-toggle");
     const taskFullscreenToggle = document.getElementById("task-fullscreen-toggle");
     const taskFullscreen = document.getElementById("task-fullscreen");
@@ -5228,6 +5228,13 @@
       return true;
     }
 
+    function taskHistoryUnseenCount() {
+      if (!(state.taskHistoryUnseenIDs instanceof Set)) {
+        return 0;
+      }
+      return state.taskHistoryUnseenIDs.size;
+    }
+
     function pruneTaskHistoryUnseenIDs() {
       if (!(state.taskHistoryUnseenIDs instanceof Set) || state.taskHistoryUnseenIDs.size === 0) {
         return false;
@@ -5480,11 +5487,10 @@
       }
       applyTaskSoundToggleMeta();
       const statusFilter = normalizeTaskStatusFilter(state.taskStatusFilter);
+      const unseenHistoryCount = taskHistoryUnseenCount();
       if (taskHistoryToggle) {
         const showingHistory = statusFilter === "completed";
-        const hasUnseenHistory = !showingHistory &&
-          state.taskHistoryUnseenIDs instanceof Set &&
-          state.taskHistoryUnseenIDs.size > 0;
+        const hasUnseenHistory = !showingHistory && unseenHistoryCount > 0;
         const toggleLabel = showingHistory
           ? "Show current running work"
           : "Show completed task history";
@@ -5493,12 +5499,11 @@
         taskHistoryToggle.setAttribute("title", toggleLabel);
         taskHistoryToggle.classList.toggle("task-history-toggle-unseen", hasUnseenHistory);
       }
-      if (taskHistoryTogglePlus) {
+      if (taskHistoryToggleBadge) {
         const showingHistory = statusFilter === "completed";
-        const hasUnseenHistory = !showingHistory &&
-          state.taskHistoryUnseenIDs instanceof Set &&
-          state.taskHistoryUnseenIDs.size > 0;
-        taskHistoryTogglePlus.classList.toggle("hidden", !hasUnseenHistory);
+        const hasUnseenHistory = !showingHistory && unseenHistoryCount > 0;
+        taskHistoryToggleBadge.textContent = `${Math.min(99, unseenHistoryCount)}`;
+        taskHistoryToggleBadge.classList.toggle("hidden", !hasUnseenHistory);
       }
       if (taskViewToggle) {
         taskViewToggle.setAttribute("aria-label", meta.toggleLabel);
