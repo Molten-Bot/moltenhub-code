@@ -1528,11 +1528,18 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "return defaultRepository();") {
 		t.Fatalf("expected index html to fall back to the configured default repository when history is empty")
 	}
-	if !strings.Contains(markup, "const nextValue = manualSelected && currentValue") ||
+	if !strings.Contains(markup, "const keepManualSelection = manualSelected && select.dataset.manual === \"true\";") ||
+		!strings.Contains(markup, "const nextValue = keepManualSelection") ||
 		!strings.Contains(markup, "defaultRepoSelection(currentValue, manualSelected ? \"\" : selectedValue, unique);") ||
 		!strings.Contains(markup, "if (nextValue) {") ||
 		!strings.Contains(markup, "input.value = nextValue;") {
 		t.Fatalf("expected index html to sync default saved repo selection into the repository input")
+	}
+	if !strings.Contains(markup, "builderRepoSelect.dataset.manual = value === \"\" ? \"true\" : \"false\";") ||
+		!strings.Contains(markup, "libraryRepoSelect.dataset.manual = value === \"\" ? \"true\" : \"false\";") ||
+		!strings.Contains(markup, "builderRepoSelect.dataset.manual = \"true\";") ||
+		!strings.Contains(markup, "libraryRepoSelect.dataset.manual = \"true\";") {
+		t.Fatalf("expected index html to preserve manual repo selection while editing the repository input")
 	}
 	if !strings.Contains(markup, "Enter reviewers manually") ||
 		!strings.Contains(markup, `option value="none">none</option>`) ||
