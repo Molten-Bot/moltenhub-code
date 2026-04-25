@@ -773,11 +773,13 @@ func claudeAuthURLAcceptsBrowserCode(authURL string) bool {
 
 func (g *claudeAuthGate) githubTokenRequirementState() (bool, hubui.AgentAuthState) {
 	g.mu.Lock()
+	baseCtx := g.baseCtx
+	runner := g.runner
 	runtimeConfigPath := g.runtimeConfigPath
 	initCfg := g.initCfg
 	g.mu.Unlock()
 
-	return githubTokenRequirementState(agentruntime.HarnessClaude, runtimeConfigPath, initCfg)
+	return githubTokenRequirementState(baseCtx, runner, agentruntime.HarnessClaude, runtimeConfigPath, initCfg)
 }
 
 func (g *claudeAuthGate) probeClaude() (bool, string) {

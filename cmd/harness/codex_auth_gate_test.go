@@ -68,6 +68,12 @@ func TestNewCodexAuthGateUsesProbeResultWhenReady(t *testing.T) {
 
 	runner := &authGateRunnerStub{
 		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
+			if cmd.Name == "gh" {
+				if got, want := strings.Join(cmd.Args, " "), "auth status"; got != want {
+					t.Fatalf("github args = %q, want %q", got, want)
+				}
+				return execx.Result{Stdout: "github.com logged in"}, nil
+			}
 			if got, want := cmd.Name, agentruntime.HarnessCodex; got != want {
 				t.Fatalf("probe command = %q, want %q", got, want)
 			}
@@ -95,7 +101,10 @@ func TestNewCodexAuthGateSetsErrorWhenCLIUnavailable(t *testing.T) {
 	t.Parallel()
 
 	runner := &authGateRunnerStub{
-		run: func(_ context.Context, _ execx.Command) (execx.Result, error) {
+		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
+			if cmd.Name == "gh" && strings.Join(cmd.Args, " ") == "auth status" {
+				return execx.Result{Stdout: "github.com logged in"}, nil
+			}
 			return execx.Result{}, errors.New("executable file not found in $PATH")
 		},
 	}
@@ -410,7 +419,10 @@ func TestVerifyTransitions(t *testing.T) {
 
 	t.Run("still-pending", func(t *testing.T) {
 		t.Parallel()
-		runner := &authGateRunnerStub{run: func(_ context.Context, _ execx.Command) (execx.Result, error) {
+		runner := &authGateRunnerStub{run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
+			if cmd.Name == "gh" && strings.Join(cmd.Args, " ") == "auth status" {
+				return execx.Result{Stdout: "github.com logged in"}, nil
+			}
 			return execx.Result{}, errors.New("not logged in")
 		}}
 		g := &codexAuthGate{baseCtx: context.Background(), runner: runner, command: "codex", required: true, procRunning: true, updatedAt: time.Now().UTC(), initCfg: codexGitHubReadyInitCfg()}
@@ -425,7 +437,10 @@ func TestVerifyTransitions(t *testing.T) {
 
 	t.Run("needs-device-auth", func(t *testing.T) {
 		t.Parallel()
-		runner := &authGateRunnerStub{run: func(_ context.Context, _ execx.Command) (execx.Result, error) {
+		runner := &authGateRunnerStub{run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
+			if cmd.Name == "gh" && strings.Join(cmd.Args, " ") == "auth status" {
+				return execx.Result{Stdout: "github.com logged in"}, nil
+			}
 			return execx.Result{}, errors.New("not logged in")
 		}}
 		g := &codexAuthGate{baseCtx: context.Background(), runner: runner, command: "codex", required: true, updatedAt: time.Now().UTC(), initCfg: codexGitHubReadyInitCfg()}
@@ -728,7 +743,10 @@ func TestNewCodexAuthGateAutoStartsWhenNotLoggedIn(t *testing.T) {
 	t.Parallel()
 
 	runner := &authGateRunnerStub{
-		run: func(_ context.Context, _ execx.Command) (execx.Result, error) {
+		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
+			if cmd.Name == "gh" && strings.Join(cmd.Args, " ") == "auth status" {
+				return execx.Result{Stdout: "github.com logged in"}, nil
+			}
 			return execx.Result{}, errors.New("not logged in")
 		},
 	}

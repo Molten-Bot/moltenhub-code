@@ -178,7 +178,7 @@ func (g *auggieAuthGate) refreshLocked() {
 	}
 	g.initCfg.AugmentSessionAuth = canonicalSessionAuth
 
-	githubToken, blocked := applyGitHubTokenRequirementState(&g.authState, agentruntime.HarnessAuggie, g.runtimeConfigPath, g.initCfg)
+	githubToken, blocked := applyGitHubTokenRequirementState(context.Background(), g.runner, &g.authState, agentruntime.HarnessAuggie, g.runtimeConfigPath, g.initCfg)
 	if blocked {
 		return
 	}

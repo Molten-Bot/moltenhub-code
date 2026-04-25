@@ -137,6 +137,53 @@ func firstConfiguredGitHubToken(runtimeConfigPath string, initCfg hub.InitConfig
 	return "", ""
 }
 
+type configuredGitHubToken struct {
+	value  string
+	source string
+}
+
+func configuredGitHubTokens(runtimeConfigPath string, initCfg hub.InitConfig) []configuredGitHubToken {
+	candidates := []configuredGitHubToken{
+		{value: strings.TrimSpace(os.Getenv("GH_TOKEN")), source: "environment"},
+		{value: strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), source: "environment"},
+		{value: hub.ReadRuntimeConfigString(runtimeConfigPath, "github_token", "githubToken", "GITHUB_TOKEN"), source: "runtime config"},
+		{value: strings.TrimSpace(initCfg.GitHubToken), source: "init config"},
+	}
+
+	seen := make(map[string]struct{}, len(candidates))
+	filtered := make([]configuredGitHubToken, 0, len(candidates))
+	for _, candidate := range candidates {
+		candidate.value = strings.TrimSpace(candidate.value)
+		if candidate.value == "" {
+			continue
+		}
+		if _, ok := seen[candidate.value]; ok {
+			continue
+		}
+		seen[candidate.value] = struct{}{}
+		filtered = append(filtered, candidate)
+	}
+	return filtered
+}
+
+func validatedGitHubToken(ctx context.Context, runner execx.Runner, runtimeConfigPath string, initCfg hub.InitConfig) (string, error) {
+	candidates := configuredGitHubTokens(runtimeConfigPath, initCfg)
+	if len(candidates) == 0 {
+		return "", fmt.Errorf("github token is required")
+	}
+
+	var validationErrs []string
+	for _, candidate := range candidates {
+		if err := validateGitHubToken(ctx, runner, candidate.value); err != nil {
+			validationErrs = append(validationErrs, err.Error())
+			continue
+		}
+		return candidate.value, nil
+	}
+
+	return "", errors.New(strings.Join(validationErrs, "; "))
+}
+
 func setGitHubTokenEnvironment(token string) error {
 	token = strings.TrimSpace(token)
 	if token == "" {
@@ -161,8 +208,14 @@ func isLikelyGitHubToken(value string) bool {
 	return false
 }
 
-func githubTokenRequirementState(harness, runtimeConfigPath string, initCfg hub.InitConfig) (bool, hubui.AgentAuthState) {
-	githubToken, _ := firstConfiguredGitHubToken(runtimeConfigPath, initCfg)
+func githubTokenRequirementState(ctx context.Context, runner execx.Runner, harness, runtimeConfigPath string, initCfg hub.InitConfig) (bool, hubui.AgentAuthState) {
+	githubToken, err := validatedGitHubToken(ctx, runner, runtimeConfigPath, initCfg)
+	if err != nil {
+		if strings.TrimSpace(err.Error()) == "github token is required" {
+			return true, githubTokenNeedsConfigureState(harness, "")
+		}
+		return true, githubTokenNeedsConfigureState(harness, err.Error())
+	}
 	if strings.TrimSpace(githubToken) == "" {
 		return true, githubTokenNeedsConfigureState(harness, "")
 	}
@@ -172,8 +225,16 @@ func githubTokenRequirementState(harness, runtimeConfigPath string, initCfg hub.
 	return false, hubui.AgentAuthState{}
 }
 
-func applyGitHubTokenRequirementState(state *configurableAgentAuthState, harness, runtimeConfigPath string, initCfg hub.InitConfig) (string, bool) {
-	githubToken, _ := firstConfiguredGitHubToken(runtimeConfigPath, initCfg)
+func applyGitHubTokenRequirementState(ctx context.Context, runner execx.Runner, state *configurableAgentAuthState, harness, runtimeConfigPath string, initCfg hub.InitConfig) (string, bool) {
+	githubToken, err := validatedGitHubToken(ctx, runner, runtimeConfigPath, initCfg)
+	if err != nil {
+		if strings.TrimSpace(err.Error()) == "github token is required" {
+			state.applySnapshot(githubTokenNeedsConfigureState(harness, ""))
+			return "", true
+		}
+		state.applySnapshot(githubTokenNeedsConfigureState(harness, err.Error()))
+		return "", true
+	}
 	if strings.TrimSpace(githubToken) == "" {
 		state.applySnapshot(githubTokenNeedsConfigureState(harness, ""))
 		return "", true
