@@ -120,7 +120,7 @@
   --surface-auth-verify-hover-shadow: 0 16px 28px rgba(10, 132, 255, 0.28);
   --surface-auth-verify-text: #ffffff;
   --radius: 4px;
-  --radius-card: 12px;
+  --radius-card: 8px;
   --radius-sm: calc(var(--radius) - 2px);
   --foreground: rgba(26, 26, 26, 1);
   --glass-bg: rgba(255, 255, 255, 0.45);
