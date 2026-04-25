@@ -16,7 +16,8 @@ For more information, see [molten.bot/code](https://molten.bot/code).
 
 First run behavior:
 - If `agent_harness` is already persisted in `.moltenhub/config.json`, that agent stays bound.
-- If no harness is configured yet, onboarding captures GitHub token first, then asks you to click an agent logo to bind this runtime.
+- If `GITHUB_TOKEN` is already set when container starts, MoltenHub Code auto-configures GitHub auth and onboarding skips GitHub token prompt.
+- If no harness is configured yet and no GitHub token is preconfigured, onboarding captures GitHub token first, then asks you to click an agent logo to bind this runtime.
 - Optional runtime env overrides remain supported: `HARNESS_AGENT_HARNESS`, `HARNESS_AGENT_COMMAND`.
 
 ### Local
@@ -131,9 +132,12 @@ Example run config fragment:
 mkdir -p ./.moltenhub
 docker run --rm -p 7777:7777 \
   -e HOME=/tmp \
+  -e GITHUB_TOKEN=ghp_your_token \
   -v "$PWD/.moltenhub:/workspace/config" \
   moltenhub-code:latest
 ```
+
+`GITHUB_TOKEN` bootstraps GitHub automatically. Entrypoint mirrors it to `GH_TOKEN`, runs `gh auth` setup, and hub runtime also accepts persisted `github_token` values from `.moltenhub/config.json` or `.moltenhub/init.json`.
 
 ## Testing
 

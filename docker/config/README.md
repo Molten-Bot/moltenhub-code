@@ -4,6 +4,8 @@
 
 This directory remains available if you prefer a manual bind mount (for example with `docker run`).
 
+`GITHUB_TOKEN` also works as direct bootstrap input. When container starts, entrypoint copies `GITHUB_TOKEN` to `GH_TOKEN`, runs `gh` auth setup, and hub onboarding skips GitHub token prompt if token already exists.
+
 Provide one of these files:
 
 - `config.json` to run `harness run --config /workspace/config/config.json` when it contains task-run fields
@@ -18,6 +20,8 @@ When running hub mode, `init.json` may also include runtime secrets:
 - `openai_api_key` for Codex CLI login when using the Codex harness
 - `augment_session_auth` for Auggie CLI auth when using the Auggie harness; set it to the full session JSON from `auggie token print`
 
+After first successful onboarding, persisted `config.json` may also contain `github_token`. Future boots load that automatically if `GITHUB_TOKEN`/`GH_TOKEN` are unset.
+
 After the first successful onboarding/hub auth, runtime fields are persisted into `config.json` so later boots can use `config.json` directly.
 
 You can bootstrap from examples:
@@ -30,3 +34,12 @@ cp init.example.json .moltenhub/init.json
 ```
 
 For manual `docker run` with a bind mount, if your host user is not uid/gid `1000`, add `--user "$(id -u):$(id -g)"` to avoid config write-permission failures.
+
+Example:
+
+```bash
+docker run --rm -p 7777:7777 \
+  -e GITHUB_TOKEN=ghp_your_token \
+  -v "$PWD/.moltenhub:/workspace/config" \
+  moltenhub-code:latest
+```
