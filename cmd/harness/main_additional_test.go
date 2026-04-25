@@ -685,7 +685,9 @@ func TestConfigureHubSetupMarksFailingOnboardingStep(t *testing.T) {
 func TestShouldQueueUnexpectedNoChangesFollowUpRequiresMissingPR(t *testing.T) {
 	t.Parallel()
 
-	ok, reason := shouldQueueUnexpectedNoChangesFollowUp(harness.Result{NoChanges: true})
+	ok, reason := shouldQueueUnexpectedNoChangesFollowUp(harness.Result{NoChanges: true}, config.Config{
+		Prompt: "fix broken workflow",
+	})
 	if !ok || reason != "" {
 		t.Fatalf("shouldQueueUnexpectedNoChangesFollowUp(no PR) = (%v, %q), want (true, \"\")", ok, reason)
 	}
@@ -693,12 +695,24 @@ func TestShouldQueueUnexpectedNoChangesFollowUpRequiresMissingPR(t *testing.T) {
 	ok, reason = shouldQueueUnexpectedNoChangesFollowUp(harness.Result{
 		NoChanges: true,
 		PRURL:     "https://github.com/acme/repo/pull/1",
+	}, config.Config{
+		Prompt: "fix broken workflow",
 	})
 	if ok {
 		t.Fatal("shouldQueueUnexpectedNoChangesFollowUp(existing PR) = true, want false")
 	}
 	if reason != "task already has a pull request" {
 		t.Fatalf("reason = %q, want %q", reason, "task already has a pull request")
+	}
+
+	ok, reason = shouldQueueUnexpectedNoChangesFollowUp(harness.Result{NoChanges: true}, config.Config{
+		Prompt: "do we have icons in lucide for north america/europe?",
+	})
+	if ok {
+		t.Fatal("shouldQueueUnexpectedNoChangesFollowUp(read-only prompt) = true, want false")
+	}
+	if reason != "original prompt does not clearly request repository changes" {
+		t.Fatalf("reason = %q, want %q", reason, "original prompt does not clearly request repository changes")
 	}
 }
 

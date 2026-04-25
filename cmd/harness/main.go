@@ -601,7 +601,7 @@ func runHub(args []string) int {
 		)
 	}
 	queueUnexpectedNoChangesFollowUp = func(requestID string, result harness.Result, runCfg config.Config) {
-		if ok, reason := shouldQueueUnexpectedNoChangesFollowUp(result); !ok {
+		if ok, reason := shouldQueueUnexpectedNoChangesFollowUp(result, runCfg); !ok {
 			daemonLogger(
 				"dispatch status=warn action=skip_no_changes_followup request_id=%s err=%q",
 				requestID,
@@ -1287,12 +1287,15 @@ func enqueueFailureRerun(ctx context.Context, enqueue localRunEnqueueFunc, faile
 	return enqueue(ctx, failedRunCfg, false, rerunSource, true)
 }
 
-func shouldQueueUnexpectedNoChangesFollowUp(result harness.Result) (bool, string) {
+func shouldQueueUnexpectedNoChangesFollowUp(result harness.Result, runCfg config.Config) (bool, string) {
 	if !result.NoChanges {
 		return false, "task did not complete with no changes"
 	}
 	if strings.TrimSpace(joinAllPRURLs(result.RepoResults)) != "" || strings.TrimSpace(result.PRURL) != "" {
 		return false, "task already has a pull request"
+	}
+	if !promptRequestsRepositoryChange(runCfg.Prompt) {
+		return false, "original prompt does not clearly request repository changes"
 	}
 	return true, ""
 }
