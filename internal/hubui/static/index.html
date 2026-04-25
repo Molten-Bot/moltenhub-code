@@ -1697,9 +1697,6 @@
     let taskTimingRefreshTimer = null;
     let deferredSelectionRenderTimer = null;
     let taskAudioContext = null;
-    let lastLibraryTaskClickName = "";
-    let lastLibraryTaskClickAt = 0;
-
     const localConnItem = document.getElementById("local-conn-item");
     const localConnDot = document.getElementById("local-conn-dot");
     const localConnText = document.getElementById("local-conn-text");
@@ -4666,6 +4663,11 @@
       return "Untitled task";
     }
 
+    function libraryTaskDescription(task) {
+      if (!task || typeof task !== "object") return "";
+      return String(task.description || "").trim();
+    }
+
     function closeLibraryPromptModal() {
       state.libraryPromptModalOpen = false;
       if (libraryPromptModal) {
@@ -4699,6 +4701,7 @@
         entries.push({
           name,
           displayName: libraryTaskDisplayName(task),
+          description: libraryTaskDescription(task),
           prompt: String(task.prompt || "").trim(),
         });
       }
@@ -4725,21 +4728,25 @@
           item.classList.add("active");
         }
 
+        const content = document.createElement("div");
+        content.className = "library-task-option-content";
+
         const button = document.createElement("button");
         button.type = "button";
         button.className = "library-task-option-toggle";
-        button.setAttribute("aria-expanded", String(entry.name === selected));
+        button.setAttribute("aria-pressed", String(entry.name === selected));
 
         const title = document.createElement("div");
         title.className = "library-task-option-title";
         title.textContent = entry.displayName;
         button.appendChild(title);
 
+        const subtitle = document.createElement("div");
+        subtitle.className = "library-task-option-subtitle";
+        subtitle.textContent = entry.description || "No subtitle available.";
+        button.appendChild(subtitle);
+
         button.addEventListener("click", () => {
-          const now = Date.now();
-          const doubleClick = lastLibraryTaskClickName === entry.name && now - lastLibraryTaskClickAt <= 450;
-          lastLibraryTaskClickName = entry.name;
-          lastLibraryTaskClickAt = now;
           state.selectedLibraryTask = entry.name;
           renderLibraryTaskOptions();
           if (state.promptMode === "json") {
@@ -4749,22 +4756,26 @@
               // Leave raw editor unchanged if library fields are incomplete.
             }
           }
-          if (doubleClick) {
-            openLibraryPromptModal(entry);
-          }
         });
 
-        item.appendChild(button);
+        const promptLink = document.createElement("button");
+        promptLink.type = "button";
+        promptLink.className = "library-task-option-link";
+        promptLink.title = "Open full prompt";
+        promptLink.setAttribute("aria-label", `Open full prompt for ${entry.displayName}`);
+        promptLink.innerHTML = `<i data-lucide="external-link" aria-hidden="true"></i>`;
+        promptLink.addEventListener("click", (event) => {
+          event.stopPropagation();
+          openLibraryPromptModal(entry);
+        });
 
-        if (entry.name === selected) {
-          const prompt = document.createElement("div");
-          prompt.className = "library-task-option-prompt";
-          prompt.textContent = entry.prompt || "Prompt unavailable.";
-          item.appendChild(prompt);
-        }
+        content.appendChild(button);
+        content.appendChild(promptLink);
+        item.appendChild(content);
 
         libraryTaskList.appendChild(item);
       }
+      replaceLucideIcons(libraryTaskList);
     }
 
     function syncBaseBranchClearState() {
