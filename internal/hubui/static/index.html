@@ -729,6 +729,7 @@
     const TASK_ICON_IDLE_SPIN_MS = 16_000;
     const TASK_ICON_IDLE_REFRESH_MS = 1_000;
     const DEFERRED_SELECTION_RENDER_FLUSH_DELAY_MS = 32;
+    const BACKGROUND_PARTICLE_ANIMATION_ENABLED = false;
     const TASK_HISTORY_LIMIT = 25;
     const TASK_HISTORY_MAX_AGE_MS = 20 * 60 * 60 * 1000;
     const MAX_TERMINAL_LINES = 500;
@@ -2197,6 +2198,10 @@
     function initSnowfallBackground() {
       const canvas = document.getElementById("snowfall-canvas");
       if (!canvas) return;
+      if (!BACKGROUND_PARTICLE_ANIMATION_ENABLED) {
+        canvas.hidden = true;
+        return;
+      }
       if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       if (window.matchMedia && window.matchMedia("(max-width: 900px)").matches) return;
       const networkInfo = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -5251,7 +5256,6 @@
 
     function taskTimingSignature(task) {
       return JSON.stringify({
-        updatedAt: String(task?.updated_at || task?.updatedAt || "").trim(),
         startedAt: String(task?.started_at || task?.startedAt || "").trim(),
       });
     }
@@ -5263,6 +5267,26 @@
       node.dataset.updatedAt = String(task?.updated_at || task?.updatedAt || "").trim();
       node.dataset.startedAt = String(task?.started_at || task?.startedAt || "").trim();
       node.textContent = taskTimingSummary(task);
+    }
+
+    function syncTaskTimingSummariesForList(listNode, tasks) {
+      if (!listNode) {
+        return;
+      }
+      const tasksByID = new Map();
+      for (const task of tasks || []) {
+        const requestID = taskRequestID(task);
+        if (!requestID || tasksByID.has(requestID)) {
+          continue;
+        }
+        tasksByID.set(requestID, task);
+      }
+      for (const node of listNode.querySelectorAll(".task-timing-summary[data-request-id]")) {
+        const task = tasksByID.get(String(node.dataset.requestId || "").trim());
+        if (task) {
+          applyTaskTimingSummary(node, task);
+        }
+      }
     }
 
     function refreshVisibleTaskTimingSummaries() {
@@ -6362,7 +6386,9 @@
         return;
       }
       applyTaskIdleSpinClasses(taskList, displayTasks(state.snapshot));
-      applyTaskIdleSpinClasses(taskFullscreenList, fullscreenTasks(state.snapshot));
+      if (state.taskFullscreenOpen) {
+        applyTaskIdleSpinClasses(taskFullscreenList, fullscreenTasks(state.snapshot));
+      }
     }
 
     function taskOrderSyncBucket(nowMs) {
@@ -7329,6 +7355,7 @@
       }
       const renderSig = taskCollectionRenderSig(tasks, options);
       if (listNode.dataset.renderSig === renderSig) {
+        syncTaskTimingSummariesForList(listNode, tasks);
         applyTaskIdleSpinClasses(listNode, tasks);
         listNode.dataset.pendingRenderSig = "";
         return;
@@ -7695,6 +7722,7 @@
           skill.textContent = `skill: ${task.skill || "-"}`;
           const update = document.createElement("div");
           update.className = "task-timing-summary";
+          update.dataset.requestId = requestID;
           applyTaskTimingSummary(update, task);
           meta.append(repos, branch, skill, update);
 
@@ -7840,6 +7868,12 @@
     }
 
     function renderFullscreenTasks(snapshot) {
+      if (!state.taskFullscreenOpen) {
+        if (taskFullscreenList) {
+          taskFullscreenList.dataset.pendingRenderSig = "";
+        }
+        return;
+      }
       const tasks = fullscreenTasks(snapshot);
       const promptOnly = normalizeTaskPanelView(state.taskPanelView) === "prompt";
       const taskStatusFilter = normalizeTaskStatusFilter(state.taskStatusFilter);
@@ -7867,6 +7901,18 @@
         emptyTitle,
         emptyCopy,
       });
+    }
+
+    function clearFullscreenTerminalRender() {
+      if (taskFullscreenHeadLabel) {
+        taskFullscreenHeadLabel.textContent = "Task output";
+      }
+      clearTaskResult(taskFullscreenResult);
+      if (taskFullscreenTerminal) {
+        taskFullscreenTerminal.dataset.renderSig = "";
+        taskFullscreenTerminal.dataset.pendingRenderSig = "";
+        taskFullscreenTerminal.textContent = "";
+      }
     }
 
     function renderTerminalForTasks(tasks, headLabelNode, resultNode, terminalNode) {
@@ -7938,6 +7984,10 @@
     }
 
     function renderFullscreenTerminal(snapshot) {
+      if (!state.taskFullscreenOpen) {
+        clearFullscreenTerminalRender();
+        return;
+      }
       const tasks = fullscreenTasks(snapshot);
       renderTerminalForTasks(tasks, taskFullscreenHeadLabel, taskFullscreenResult, taskFullscreenTerminal);
     }
@@ -7957,7 +8007,8 @@
         return;
       }
 
-      const shouldRenderTaskPanels = [taskList, taskFullscreenList].some((node) => {
+      const taskPanelNodes = state.taskFullscreenOpen ? [taskList, taskFullscreenList] : [taskList];
+      const shouldRenderTaskPanels = taskPanelNodes.some((node) => {
         return node &&
           node.dataset.pendingRenderSig &&
           !nodeContainsActiveSelection(node);
@@ -7968,6 +8019,7 @@
       }
 
       if (
+        state.taskFullscreenOpen &&
         taskFullscreenTerminal &&
         taskFullscreenTerminal.dataset.pendingRenderSig &&
         !nodeContainsActiveSelection(taskFullscreenTerminal)
