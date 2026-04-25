@@ -3,6 +3,8 @@
     "displayName": "Security Boundary Review",
     "description": "Review security boundaries and produce a documented findings PR.",
     "targetSubdir": ".",
-    "prompt": "You are a security professional. Review the security boundaries of this codebase, covering authentication, authorization, input validation, secrets management, dependency exposure, and data flow trust boundaries. Document every plausible point of compromise. Create or update docs/reviews/ with a clear markdown summary of findings ordered by severity, concrete file and line references, open questions, and an explicit statement if no material issues were found. Validate locally where possible, and keep the changes focused on that review."
+    "prompt": "You are a security professional. Review the security boundaries of this codebase, covering authentication, authorization, input validation, secrets management, dependency exposure, and data flow trust boundaries. Document every plausible point of compromise. Create or update docs/reviews/ with a clear markdown summary of findings ordered by severity, concrete file and line references, open questions, and an explicit statement if no material issues were found. Validate locally where possible, and keep the changes focused on that review.",
+    "commitMessage": "Security: Boundary Review",
+    "prTitle": "Molten Hub Code: Review"
   }
 }
