@@ -46,6 +46,7 @@ const rerunSource = "rerun"
 const failureFollowUpSource = "failure_followup"
 const noChangesFollowUpSource = "no_changes_followup"
 const noChangesEscalationSource = "no_changes_escalation"
+const automaticFailureFollowUpDisabledReason = "automatic failure follow-up disabled; queue single rerun only"
 
 const hubBootDiagnosticTimeout = 10 * time.Second
 const hubPingDiagnosticTimeout = 5 * time.Second
@@ -1254,7 +1255,7 @@ func shouldQueueFailureFollowUp(source string, failedResult harness.Result) (boo
 	if source == "hub_dispatch" {
 		return false, "hub dispatch failures are already escalated by hub transport"
 	}
-	return true, ""
+	return false, automaticFailureFollowUpDisabledReason
 }
 
 func shouldQueueFailureRerun(source string, failedResult harness.Result) (bool, string) {
