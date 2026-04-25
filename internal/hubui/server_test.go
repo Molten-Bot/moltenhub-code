@@ -258,6 +258,10 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `const LOGO_ROTATION_INTERVAL_MS = 8_000;`) {
 		t.Fatalf("expected index html to rotate brand logos every 8 seconds")
 	}
+	if !strings.Contains(markup, `const BACKGROUND_PARTICLE_ANIMATION_ENABLED = false;`) ||
+		!strings.Contains(markup, "if (!BACKGROUND_PARTICLE_ANIMATION_ENABLED) {\n        canvas.hidden = true;\n        return;\n      }") {
+		t.Fatalf("expected index html to keep the decorative particle canvas disabled by default")
+	}
 	if !strings.Contains(markup, `const TASK_TIMING_REFRESH_INTERVAL_MS = 30_000;`) {
 		t.Fatalf("expected index html to refresh task timing labels on a separate interval")
 	}
@@ -267,11 +271,26 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `timing: taskTimingSignature(task),`) {
 		t.Fatalf("expected task collection render signatures to use stable task timing data")
 	}
+	timingSignatureStart := strings.Index(markup, `function taskTimingSignature(task)`)
+	timingSignatureEnd := strings.Index(markup, `function applyTaskTimingSummary(node, task)`)
+	if timingSignatureStart < 0 || timingSignatureEnd <= timingSignatureStart {
+		t.Fatalf("expected index html to include a bounded task timing render signature helper")
+	}
+	if strings.Contains(markup[timingSignatureStart:timingSignatureEnd], "updatedAt") {
+		t.Fatalf("expected task timing render signatures to exclude log-only updated_at churn")
+	}
+	if !strings.Contains(markup, `function syncTaskTimingSummariesForList(listNode, tasks)`) ||
+		!strings.Contains(markup, `syncTaskTimingSummariesForList(listNode, tasks);`) {
+		t.Fatalf("expected index html to update task timing summaries in place when render signatures are unchanged")
+	}
 	if !strings.Contains(markup, `const controls = task?.controls || {};`) || !strings.Contains(markup, `const canStop = Boolean(controls.stop);`) {
 		t.Fatalf("expected index html to render task controls from backend-provided capabilities")
 	}
 	if !strings.Contains(markup, `update.className = "task-timing-summary";`) {
 		t.Fatalf("expected task timing labels to render into dedicated nodes for in-place refresh")
+	}
+	if !strings.Contains(markup, `update.dataset.requestId = requestID;`) {
+		t.Fatalf("expected task timing labels to keep request ids for in-place updates")
 	}
 	if !strings.Contains(markup, `scheduleTaskTimingRefresh();`) {
 		t.Fatalf("expected index html to start the task timing refresh scheduler during boot")
@@ -601,6 +620,19 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "function taskCollectionRenderSig(tasks, options = {})") {
 		t.Fatalf("expected index html to compute stable task collection render signatures")
+	}
+	if !strings.Contains(markup, "if (!state.taskFullscreenOpen) {\n        if (taskFullscreenList) {") {
+		t.Fatalf("expected index html to skip hidden fullscreen task-list renders")
+	}
+	if !strings.Contains(markup, "function clearFullscreenTerminalRender()") ||
+		!strings.Contains(markup, "if (!state.taskFullscreenOpen) {\n        clearFullscreenTerminalRender();\n        return;\n      }") {
+		t.Fatalf("expected index html to clear and skip hidden fullscreen terminal renders")
+	}
+	if !strings.Contains(markup, "const taskPanelNodes = state.taskFullscreenOpen ? [taskList, taskFullscreenList] : [taskList];") {
+		t.Fatalf("expected deferred task-panel flushes to ignore hidden fullscreen nodes")
+	}
+	if !strings.Contains(markup, "state.taskFullscreenOpen &&\n        taskFullscreenTerminal") {
+		t.Fatalf("expected deferred terminal flushes to require open fullscreen state")
 	}
 	if !strings.Contains(markup, "if (nodeContainsActiveSelection(listNode)) {") {
 		t.Fatalf("expected index html to defer task list redraws while text is selected")
