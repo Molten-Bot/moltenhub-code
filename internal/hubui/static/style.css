@@ -1766,6 +1766,7 @@ select.prompt-control {
 .library-task-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 8px;
   max-height: 280px;
   overflow: auto;
@@ -1789,10 +1790,11 @@ select.prompt-control {
 
 .library-task-option {
   width: 100%;
+  height: auto;
   text-align: left;
   color: var(--text);
   transition: border-color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .library-task-option:hover {
@@ -1809,9 +1811,9 @@ select.prompt-control {
 .library-task-option-content {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 34px;
-  align-items: center;
+  align-items: start;
   gap: 8px;
-  min-height: 104px;
+  min-height: auto;
   padding: 11px 10px 11px 12px;
 }
 
@@ -1832,6 +1834,7 @@ select.prompt-control {
   font-size: 0.8rem;
   font-weight: 800;
   line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .library-task-option-subtitle {
@@ -1846,6 +1849,7 @@ select.prompt-control {
   appearance: none;
   display: inline-flex;
   align-items: center;
+  align-self: start;
   justify-content: center;
   width: 34px;
   min-width: 34px;
