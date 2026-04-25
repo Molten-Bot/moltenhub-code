@@ -6731,6 +6731,13 @@
       return runningTasks(snapshot);
     }
 
+    function hasTaskPanelContent(snapshot) {
+      if (runningTasks(snapshot).length > 0) {
+        return true;
+      }
+      return completedTasks(snapshot).length > 0;
+    }
+
     function fullscreenTasks(snapshot) {
       return displayTasks(snapshot);
     }
@@ -7703,22 +7710,23 @@
     function renderTasks(snapshot) {
       const tasks = displayTasks(snapshot);
       const hasTasks = tasks.length > 0;
+      const hasTaskPanelTasks = hasTaskPanelContent(snapshot);
       const promptOnly = normalizeTaskPanelView(state.taskPanelView) === "prompt";
-      if (!hasTasks && state.taskFullscreenOpen) {
+      if (!hasTaskPanelTasks && state.taskFullscreenOpen) {
         state.taskFullscreenOpen = false;
         document.body.classList.remove("task-fullscreen-open");
       }
       applyTaskPanelViewMeta();
       if (rightCol) {
-        rightCol.classList.toggle("task-list-hidden", false);
+        rightCol.classList.toggle("task-list-hidden", !hasTaskPanelTasks);
       }
       if (taskPanel) {
-        taskPanel.classList.toggle("hidden", false);
+        taskPanel.classList.toggle("hidden", !hasTaskPanelTasks);
         taskPanel.classList.toggle("is-empty", !hasTasks);
-        taskPanel.setAttribute("aria-hidden", "false");
+        taskPanel.setAttribute("aria-hidden", hasTaskPanelTasks ? "false" : "true");
       }
       if (taskFullscreenToggle) {
-        taskFullscreenToggle.disabled = !hasTasks;
+        taskFullscreenToggle.disabled = !hasTaskPanelTasks;
         taskFullscreenToggle.setAttribute("aria-expanded", state.taskFullscreenOpen ? "true" : "false");
         taskFullscreenToggle.setAttribute("aria-label", "Open full screen tasks");
       }
