@@ -41,6 +41,24 @@ func TestWithExecutionContractIncludesValidationToolingInstruction(t *testing.T)
 	}
 }
 
+func TestWithExecutionContractIncludesHubActivityPrivacyInstruction(t *testing.T) {
+	t.Parallel()
+
+	got := WithExecutionContract("Base prompt")
+	if !strings.Contains(got, HubActivityPrivacyInstruction) {
+		t.Fatalf("WithExecutionContract() missing hub-activity privacy instruction: %q", got)
+	}
+	for _, want := range []string{
+		"`gh repo view OWNER/REPO --json isPrivate,nameWithOwner`",
+		"Share repo and PR links only when GitHub reports `isPrivate:false`",
+		"never share private repository links",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("WithExecutionContract() missing privacy detail %q: %q", want, got)
+		}
+	}
+}
+
 func TestWithExecutionContractIncludesUninitializedRepoInstruction(t *testing.T) {
 	t.Parallel()
 
@@ -98,6 +116,7 @@ func TestComposePromptUsesFallbackPathsAndContract(t *testing.T) {
 		OfflineReviewInstruction,
 		FailureResponseInstruction,
 		ValidationToolingInstruction,
+		HubActivityPrivacyInstruction,
 		UninitializedRepoInstruction,
 		RemoteOperationsInstruction,
 		ActionableChangeInstruction,

@@ -4517,6 +4517,8 @@ func TestWithCompletionGatePromptIncludesAgentRuntimeGuidance(t *testing.T) {
 	wantSnippets := []string{
 		"When failures occur, send a response back to the calling agent that clearly states failure and includes the error details. Use explicit `Failure:` and `Error details:` fields.",
 		"If local test or validation tooling is unavailable in this runtime (for example `command not found`), do not fail solely for that.",
+		"Before sharing repository or pull-request links in Hub activity, use `gh repo view OWNER/REPO --json isPrivate,nameWithOwner` during clone or PR tooling.",
+		"Share repo and PR links only when GitHub reports `isPrivate:false`; never share private repository links.",
 		"If a repository is not initialized after clone, use only gh CLI/git tools to create and push a main branch, then continue once git state is ready for work.",
 		"Do not stop work just because you cannot create a pull request or watch remote CI/CD from inside this agent runtime.",
 		"For implementation or repository-change requests, do not stop at analysis.",
