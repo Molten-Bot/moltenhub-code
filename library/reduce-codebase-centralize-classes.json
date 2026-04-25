@@ -3,7 +3,7 @@
     "displayName": "Reduce Codebase And Centralize Classes",
     "description": "Reduce code volume, centralize duplicated classes and logic, and prove behavior stays stable.",
     "targetSubdir": ".",
-    "prompt": "Refactor this repository to reduce the codebase size and centralize duplicated classes, types, and shared logic into the most appropriate existing abstractions. Remove redundancy instead of layering new wrappers. Preserve behavior, avoid regressions, and validate the result with focused tests and any existing local verification the repository supports before finishing.",
+    "prompt": "Refactor this repository to reduce the codebase size and centralize duplicated classes, types, and shared logic.\n\nTask:\n- Use the most appropriate existing abstractions.\n- Remove redundancy instead of layering new wrappers.\n- Preserve behavior.\n- Avoid regressions.\n- Keep the diff focused on the reduction/centralization goal.\n\nValidation:\n- Validate the result with focused tests and any existing local verification the repository supports before finishing.\n- If local test or validation tooling is unavailable in this runtime, for example `command not found`, do not fail solely for that. Continue with any alternative checks available and clearly report the validation gap.\n\nFailure reporting:\n- If failures occur, send a response back to the calling agent with these fields:\n  `Failure:` <short failure summary>\n  `Error details:` <failing command, log detail, or concrete blocker>.",
     "commitMessage": "refactor: reduce codebase and centralize classes",
     "prTitle": "Molten Hub Code: reduce-codebase-centralize-classes"
   }
