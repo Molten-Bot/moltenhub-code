@@ -718,6 +718,7 @@
     const TASK_ORDER_TRANSITION_DELAY_MS = 2_000;
     const TASK_ORDER_SYNC_INTERVAL_MS = 4_000;
     const TASK_REFLOW_TRANSITION_MS = 560;
+    const NEW_HUB_TASK_HIGHLIGHT_MS = 4_000;
     const TASK_REFLOW_TRANSITION_EASING = "cubic-bezier(0.16, 1, 0.3, 1)";
     const TASK_TIMING_REFRESH_INTERVAL_MS = 30_000;
     const TASK_ICON_IDLE_SPIN_MS = 16_000;
@@ -1626,6 +1627,8 @@
       taskProgressModelCache: new Map(),
       sparkleTaskIDs: new Set(),
       sparkleTimers: new Map(),
+      newHubTaskHighlightIDs: new Set(),
+      newHubTaskHighlightTimers: new Map(),
       taskDisplayOrder: [],
       taskOrderPendingSince: 0,
       taskOrderPendingDesired: [],
@@ -5559,6 +5562,70 @@
       return state.sparkleTaskIDs.has(requestID);
     }
 
+    function isHubTask(task) {
+      const requestID = taskRequestID(task).toLowerCase();
+      if (requestID.startsWith("req-") || requestID.startsWith("hub-")) {
+        return true;
+      }
+      const source = String(task?.source || task?.origin || task?.request_source || "").trim().toLowerCase();
+      return source === "hub" || source === "moltenhub";
+    }
+
+    function triggerNewHubTaskHighlight(requestID) {
+      requestID = String(requestID || "").trim();
+      if (!requestID) return;
+
+      const existingTimer = state.newHubTaskHighlightTimers.get(requestID);
+      if (existingTimer) {
+        window.clearTimeout(existingTimer);
+      }
+
+      state.newHubTaskHighlightIDs.add(requestID);
+      const timer = window.setTimeout(() => {
+        state.newHubTaskHighlightIDs.delete(requestID);
+        state.newHubTaskHighlightTimers.delete(requestID);
+        render(state.snapshot);
+      }, NEW_HUB_TASK_HIGHLIGHT_MS);
+      state.newHubTaskHighlightTimers.set(requestID, timer);
+    }
+
+    function shouldHighlightNewHubTask(task) {
+      const requestID = taskRequestID(task);
+      if (!requestID) return false;
+      return state.newHubTaskHighlightIDs.has(requestID);
+    }
+
+    function syncNewHubTaskFocus(previousSnapshot, nextSnapshot) {
+      if (!previousSnapshot) {
+        return;
+      }
+
+      const previousIDs = new Set();
+      for (const task of previousSnapshot?.tasks || []) {
+        const requestID = taskRequestID(task);
+        if (requestID) {
+          previousIDs.add(requestID);
+        }
+      }
+
+      let foundNewHubTask = false;
+      for (const task of nextSnapshot?.tasks || []) {
+        const requestID = taskRequestID(task);
+        if (!requestID || previousIDs.has(requestID) || !isHubTask(task)) {
+          continue;
+        }
+        foundNewHubTask = true;
+        triggerNewHubTaskHighlight(requestID);
+      }
+
+      if (!foundNewHubTask || normalizeTaskStatusFilter(state.taskStatusFilter) === "running") {
+        return;
+      }
+      state.taskStatusFilter = "running";
+      persistTaskStatusFilter();
+      clearTaskHistoryUnseen();
+    }
+
     function syncTaskCompletionSparkles(previousSnapshot, nextSnapshot) {
       const previousStatuses = new Map();
       for (const task of previousSnapshot?.tasks || []) {
@@ -7215,6 +7282,7 @@
             collapsed: allowCollapse && isMinimizedTask(task),
             closing: isTaskClosing(requestID),
             sparkle: shouldSparkleTask(task),
+            newHubTask: shouldHighlightNewHubTask(task),
             status: String(task?.status || ""),
             stage: String(task?.stage || ""),
             currentState: taskCurrentStateSignature(task),
@@ -7339,6 +7407,9 @@
         }
         if (closing) {
           node.classList.add("task-closing");
+        }
+        if (shouldHighlightNewHubTask(task)) {
+          node.classList.add("task-new-hub");
         }
         node.addEventListener("click", () => selectTask(requestID));
 
@@ -7905,6 +7976,7 @@
       const previousSnapshot = state.snapshot;
       state.snapshot = snapshot;
       syncTaskCompletionSounds(snapshot);
+      syncNewHubTaskFocus(previousSnapshot, snapshot);
       syncTaskCompletionSparkles(previousSnapshot, snapshot);
       rememberCompletedTaskHistory(snapshot);
       const observedRepos = [];

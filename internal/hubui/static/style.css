@@ -1904,6 +1904,13 @@ select.prompt-control {
   opacity: 0;
 }
 
+.task.task-new-hub {
+  outline: 1px solid rgba(43, 182, 115, 0.9);
+  box-shadow:
+    0 0 0 1px rgba(43, 182, 115, 0.42),
+    0 16px 34px rgba(43, 182, 115, 0.16);
+}
+
 .task:hover {
   border-color: rgba(10, 132, 255, 0.22);
   transform: translateY(-1px);

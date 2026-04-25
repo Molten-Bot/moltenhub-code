@@ -1441,3 +1441,39 @@ func TestTaskSoundToggleStylesShowMutedState(t *testing.T) {
 		t.Fatalf("expected muted task sound icon styling")
 	}
 }
+
+func TestNewHubTasksShowCurrentWorkAndHighlight(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.Code)
+	}
+
+	html := resp.Body.String()
+	for _, want := range []string{
+		"const NEW_HUB_TASK_HIGHLIGHT_MS = 4_000;",
+		"function syncNewHubTaskFocus(previousSnapshot, nextSnapshot) {",
+		"state.taskStatusFilter = \"running\";",
+		"node.classList.add(\"task-new-hub\");",
+		"newHubTask: shouldHighlightNewHubTask(task),",
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("expected index html to contain %q", want)
+		}
+	}
+
+	cssReq := httptest.NewRequest(http.MethodGet, "/static/style.css", nil)
+	cssResp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(cssResp, cssReq)
+	if cssResp.Code != http.StatusOK {
+		t.Fatalf("style status = %d, want 200", cssResp.Code)
+	}
+	if !strings.Contains(cssResp.Body.String(), ".task.task-new-hub {\n  outline: 1px solid rgba(43, 182, 115, 0.9);") {
+		t.Fatalf("expected stylesheet to add green border treatment for new hub tasks")
+	}
+}
