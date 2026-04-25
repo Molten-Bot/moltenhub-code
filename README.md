@@ -17,6 +17,7 @@ For more information, see [molten.bot/code](https://molten.bot/code).
 First run behavior:
 - If `agent_harness` is already persisted in `.moltenhub/config.json`, that agent stays bound.
 - If no harness is configured yet, onboarding captures GitHub token first, then asks you to click an agent logo to bind this runtime.
+- Optional automatic hub bootstrap: set `HUB_TOKEN` before `docker run` to start already bound to Molten Hub. Legacy `MOLTEN_HUB_TOKEN` still works.
 - Optional runtime env overrides remain supported: `HARNESS_AGENT_HARNESS`, `HARNESS_AGENT_COMMAND`.
 
 ### Local
@@ -131,6 +132,7 @@ Example run config fragment:
 mkdir -p ./.moltenhub
 docker run --rm -p 7777:7777 \
   -e HOME=/tmp \
+  -e HUB_TOKEN=your_agent_token \
   -v "$PWD/.moltenhub:/workspace/config" \
   moltenhub-code:latest
 ```

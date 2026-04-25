@@ -121,6 +121,35 @@ func TestWithConfigScriptBuildsInitFromEnvTokenAndRegion(t *testing.T) {
 	}
 }
 
+func TestWithConfigScriptBuildsInitFromHubTokenAlias(t *testing.T) {
+	env := newWithConfigTestEnv(t)
+	generatedInitPath := filepath.Join(env.root, "generated", "init.json")
+	output, err := runWithConfigScript(t, env, map[string]string{
+		"HUB_TOKEN":                  "hub_token_alias_123",
+		"HARNESS_GENERATED_INIT_PATH": generatedInitPath,
+	})
+	if err != nil {
+		t.Fatalf("with-config error: %v\noutput: %s", err, output)
+	}
+
+	args := readFileTrimmed(t, env.argsPath)
+	if got, want := args, "hub --init "+generatedInitPath+" --ui-listen :7777"; got != want {
+		t.Fatalf("harness args = %q, want %q", got, want)
+	}
+
+	initJSON := readFileTrimmed(t, env.initPath)
+	var parsed map[string]string
+	if err := json.Unmarshal([]byte(initJSON), &parsed); err != nil {
+		t.Fatalf("parse generated init json: %v", err)
+	}
+	if got, want := parsed["agent_token"], "hub_token_alias_123"; got != want {
+		t.Fatalf("agent_token = %q, want %q", got, want)
+	}
+	if got, want := parsed["base_url"], "https://na.hub.molten.bot/v1"; got != want {
+		t.Fatalf("base_url = %q, want %q", got, want)
+	}
+}
+
 func TestWithConfigScriptBuildsInitFromExplicitHubURL(t *testing.T) {
 	env := newWithConfigTestEnv(t)
 	generatedInitPath := filepath.Join(env.root, "generated", "init.json")
@@ -183,7 +212,7 @@ func TestWithConfigScriptMissingConfigStartsHubOnboardingMode(t *testing.T) {
 		"starting hub onboarding mode with defaults",
 		"optional run config path:",
 		"optional init config path:",
-		"set MOLTEN_HUB_TOKEN",
+		"set HUB_TOKEN",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q\noutput: %s", want, output)

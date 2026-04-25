@@ -154,7 +154,7 @@ try {
 }
 
 try_run_hub_from_env() {
-    token="${MOLTEN_HUB_TOKEN:-}"
+    token="${HUB_TOKEN:-${MOLTEN_HUB_TOKEN:-}}"
     if [ "${token}" = "" ]; then
         return 1
     fi
@@ -205,6 +205,6 @@ fi
 echo "no config file found; starting hub onboarding mode with defaults" >&2
 echo "optional run config path: ${run_config_path}" >&2
 echo "optional init config path: ${init_config_path}" >&2
-echo "or set MOLTEN_HUB_TOKEN (and optionally MOLTEN_HUB_REGION=na|eu) for remote-hub bootstrap." >&2
+echo "or set HUB_TOKEN (or legacy MOLTEN_HUB_TOKEN) and optionally MOLTEN_HUB_REGION=na|eu for remote-hub bootstrap." >&2
 
 exec_hub

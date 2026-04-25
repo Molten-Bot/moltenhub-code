@@ -9,8 +9,10 @@ Provide one of these files:
 - `config.json` to run `harness run --config /workspace/config/config.json` when it contains task-run fields
 - `config.json` to run `harness hub --config /workspace/config/config.json` when it contains hub runtime fields
 - `init.json` to run `harness hub --init /workspace/config/init.json` when `config.json` is absent
-- if both files are absent and `MOLTEN_HUB_TOKEN` is set, `with-config` auto-generates a temporary init config and starts hub mode
-- if both files are absent and `MOLTEN_HUB_TOKEN` is unset, `with-config` starts `harness hub` onboarding mode with defaults (no init required)
+- if both files are absent and `HUB_TOKEN` is set, `with-config` auto-generates a temporary init config and starts hub mode
+- if both files are absent and `HUB_TOKEN` is unset, `with-config` starts `harness hub` onboarding mode with defaults (no init required)
+
+`MOLTEN_HUB_TOKEN` remains supported as legacy alias for `HUB_TOKEN`.
 
 When running hub mode, `init.json` may also include runtime secrets:
 
