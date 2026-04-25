@@ -1822,6 +1822,7 @@ select.prompt-control {
   border: 0;
   background: transparent;
   color: inherit;
+  cursor: pointer;
   display: block;
   width: 100%;
   text-align: left;
