@@ -297,6 +297,10 @@ body.task-fullscreen-open {
   overflow: hidden;
 }
 
+body.library-prompt-modal-open {
+  overflow: hidden;
+}
+
 a {
   color: var(--running);
 }
@@ -2918,6 +2922,66 @@ html.night .task-progress-step.current .task-progress-step-icon.is-agent-logo {
   overflow: hidden;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.library-prompt-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 122;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(12px, 3vw, 28px);
+  background: var(--surface-auth-backdrop);
+  backdrop-filter: blur(10px) saturate(130%);
+  -webkit-backdrop-filter: blur(10px) saturate(130%);
+}
+
+.library-prompt-modal.hidden {
+  display: none !important;
+}
+
+.library-prompt-modal-shell {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(860px, 100%);
+  max-height: min(88vh, 760px);
+  border: 1px solid var(--surface-auth-panel-border);
+  border-radius: 16px;
+  background: var(--surface-auth-panel-bg);
+  box-shadow: var(--surface-auth-panel-shadow);
+  overflow: hidden;
+}
+
+.library-prompt-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.library-prompt-modal-head h2 {
+  margin: 0;
+  min-width: 0;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.library-prompt-modal-body {
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
+  padding: 16px;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 #task-fullscreen-terminal {

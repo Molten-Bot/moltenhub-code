@@ -413,6 +413,24 @@
     </div>
   </div>
 
+  <div
+    id="library-prompt-modal"
+    class="library-prompt-modal hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="library-prompt-modal-title"
+    aria-hidden="true">
+    <div class="library-prompt-modal-shell">
+      <div class="library-prompt-modal-head">
+        <h2 id="library-prompt-modal-title">Library Prompt</h2>
+        <button id="library-prompt-modal-close" class="settings-modal-close" type="button" aria-label="Close library prompt" title="Close">
+          <i data-lucide="x" aria-hidden="true"></i>
+        </button>
+      </div>
+      <pre id="library-prompt-modal-body" class="library-prompt-modal-body"></pre>
+    </div>
+  </div>
+
   <div id="agent-auth-gate" class="agent-auth-gate fixed inset-0 z-[95] hidden items-center justify-center p-4 backdrop-blur-sm" aria-live="polite">
     <div id="agent-auth-shell" class="agent-auth-shell flex min-h-[220px] w-full max-w-xl flex-col">
       <h2 id="agent-auth-title" class="text-[2rem] font-semibold leading-tight text-hub-text">Authorize Agent to get started</h2>
@@ -1654,6 +1672,7 @@
       agentHarnessSelectionPending: "",
       hubSetupBusy: false,
       hubSetupOpen: false,
+      libraryPromptModalOpen: false,
       hubSetupDialogMode: "connect",
       hubSetupAutoSubmitTimer: 0,
       hubSetupLastAutoSubmitKey: "",
@@ -1677,6 +1696,8 @@
     let taskTimingRefreshTimer = null;
     let deferredSelectionRenderTimer = null;
     let taskAudioContext = null;
+    let lastLibraryTaskClickName = "";
+    let lastLibraryTaskClickAt = 0;
 
     const localConnItem = document.getElementById("local-conn-item");
     const localConnDot = document.getElementById("local-conn-dot");
@@ -1710,6 +1731,10 @@
     const taskFullscreenHeadLabel = document.getElementById("task-fullscreen-head-label");
     const taskFullscreenResult = document.getElementById("task-fullscreen-result");
     const taskFullscreenTerminal = document.getElementById("task-fullscreen-terminal");
+    const libraryPromptModal = document.getElementById("library-prompt-modal");
+    const libraryPromptModalTitle = document.getElementById("library-prompt-modal-title");
+    const libraryPromptModalBody = document.getElementById("library-prompt-modal-body");
+    const libraryPromptModalClose = document.getElementById("library-prompt-modal-close");
     const localPromptForm = document.getElementById("local-prompt-form");
     const localPromptInput = document.getElementById("local-prompt-input");
     const localPromptSubmit = document.getElementById("local-prompt-submit");
@@ -4636,6 +4661,28 @@
       return "Untitled task";
     }
 
+    function closeLibraryPromptModal() {
+      state.libraryPromptModalOpen = false;
+      if (libraryPromptModal) {
+        libraryPromptModal.classList.add("hidden");
+        libraryPromptModal.setAttribute("aria-hidden", "true");
+      }
+      document.body.classList.remove("library-prompt-modal-open");
+    }
+
+    function openLibraryPromptModal(entry) {
+      if (!libraryPromptModal || !libraryPromptModalTitle || !libraryPromptModalBody) return;
+      state.libraryPromptModalOpen = true;
+      libraryPromptModalTitle.textContent = entry.displayName || "Library Prompt";
+      libraryPromptModalBody.textContent = entry.prompt || "Prompt unavailable.";
+      libraryPromptModal.classList.remove("hidden");
+      libraryPromptModal.setAttribute("aria-hidden", "false");
+      document.body.classList.add("library-prompt-modal-open");
+      if (libraryPromptModalClose) {
+        libraryPromptModalClose.focus();
+      }
+    }
+
     function renderLibraryTaskOptions() {
       if (!libraryTaskList) return;
 
@@ -4684,6 +4731,10 @@
         button.appendChild(title);
 
         button.addEventListener("click", () => {
+          const now = Date.now();
+          const doubleClick = lastLibraryTaskClickName === entry.name && now - lastLibraryTaskClickAt <= 450;
+          lastLibraryTaskClickName = entry.name;
+          lastLibraryTaskClickAt = now;
           state.selectedLibraryTask = entry.name;
           renderLibraryTaskOptions();
           if (state.promptMode === "json") {
@@ -4692,6 +4743,9 @@
             } catch (_err) {
               // Leave raw editor unchanged if library fields are incomplete.
             }
+          }
+          if (doubleClick) {
+            openLibraryPromptModal(entry);
           }
         });
 
@@ -8543,7 +8597,22 @@
     taskFullscreenClose.addEventListener("click", () => {
       setTaskFullscreen(false);
     });
+    if (libraryPromptModalClose) {
+      libraryPromptModalClose.addEventListener("click", closeLibraryPromptModal);
+    }
+    if (libraryPromptModal) {
+      libraryPromptModal.addEventListener("click", (event) => {
+        if (event.target === libraryPromptModal) {
+          closeLibraryPromptModal();
+        }
+      });
+    }
     document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && state.libraryPromptModalOpen) {
+        event.preventDefault();
+        closeLibraryPromptModal();
+        return;
+      }
       if (event.key === "Escape" && state.taskFullscreenOpen) {
         event.preventDefault();
         setTaskFullscreen(false);
