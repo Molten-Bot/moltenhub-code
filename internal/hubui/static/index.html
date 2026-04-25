@@ -5046,7 +5046,7 @@
       const unique = dedupeReviewerValues([currentValue, ...state.reviewerHistory]);
       const hasSavedHistory = state.reviewerHistory.length > 0;
 
-      historyField.classList.toggle("hidden", !hasSavedHistory);
+      historyField.classList.remove("hidden");
 
       select.replaceChildren();
       const noneOption = document.createElement("option");

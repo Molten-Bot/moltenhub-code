@@ -1541,6 +1541,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "function renderReviewerHistoryOptions(") {
 		t.Fatalf("expected index html to include reviewer history persistence and rendering helpers")
 	}
+	if !strings.Contains(markup, `historyField.classList.remove("hidden");`) {
+		t.Fatalf("expected index html to keep reviewer selector visible even without saved reviewer history")
+	}
 	if !strings.Contains(markup, "function defaultRepoSelection(") {
 		t.Fatalf("expected index html to include repo history default selection helper")
 	}
