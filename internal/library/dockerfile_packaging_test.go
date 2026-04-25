@@ -88,6 +88,27 @@ func TestRuntimeDockerfileInstallsRipgrep(t *testing.T) {
 	}
 }
 
+func TestRuntimeDockerfileInstallsPlaywrightTest(t *testing.T) {
+	t.Parallel()
+
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller(0) failed")
+	}
+
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	dockerfilePath := filepath.Join(repoRoot, "Dockerfile")
+
+	data, err := os.ReadFile(dockerfilePath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", dockerfilePath, err)
+	}
+
+	if !strings.Contains(string(data), "@playwright/test@latest") {
+		t.Fatalf("%s does not install @playwright/test in the runtime image", dockerfilePath)
+	}
+}
+
 func containsAny(content string, want ...string) bool {
 	for _, candidate := range want {
 		if strings.Contains(content, candidate) {
