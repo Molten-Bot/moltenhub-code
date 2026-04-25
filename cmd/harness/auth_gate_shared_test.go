@@ -184,6 +184,82 @@ func TestGitHubTokenRequirementStateRejectsInvalidStartupToken(t *testing.T) {
 	}
 }
 
+func TestGitHubTokenRequirementStatePrefersValidatedEnvironmentTokenOverInvalidPersistedToken(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "ghp_env_valid")
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(path, []byte(`{"github_token":"ghp_runtime_invalid"}`), 0o600); err != nil {
+		t.Fatalf("WriteFile(config) error = %v", err)
+	}
+
+	runner := &sharedAuthGateRunnerStub{
+		run: func(_ context.Context, _ execx.Command) (execx.Result, error) {
+			switch got := os.Getenv("GITHUB_TOKEN"); got {
+			case "ghp_env_valid":
+				return execx.Result{Stdout: "github.com logged in"}, nil
+			case "ghp_runtime_invalid":
+				return execx.Result{Stderr: "bad credentials"}, errors.New("token invalid")
+			default:
+				t.Fatalf("validator saw unexpected token %q", got)
+				return execx.Result{}, nil
+			}
+		},
+	}
+
+	blocked, state := githubTokenRequirementState(context.Background(), runner, "test", path, hub.InitConfig{})
+	if blocked {
+		t.Fatalf("githubTokenRequirementState() blocked = true, state = %+v", state)
+	}
+	if got, want := os.Getenv("GH_TOKEN"), "ghp_env_valid"; got != want {
+		t.Fatalf("GH_TOKEN = %q, want %q", got, want)
+	}
+}
+
+func TestApplyGitHubTokenRequirementStateFallsBackToLaterValidCandidate(t *testing.T) {
+	t.Setenv("GH_TOKEN", "ghp_env_invalid")
+	t.Setenv("GITHUB_TOKEN", "")
+
+	runner := &sharedAuthGateRunnerStub{
+		run: func(_ context.Context, _ execx.Command) (execx.Result, error) {
+			switch got := os.Getenv("GITHUB_TOKEN"); got {
+			case "ghp_env_invalid":
+				return execx.Result{Stderr: "bad credentials"}, errors.New("token invalid")
+			case "ghp_init_valid":
+				return execx.Result{Stdout: "github.com logged in"}, nil
+			default:
+				t.Fatalf("validator saw unexpected token %q", got)
+				return execx.Result{}, nil
+			}
+		},
+	}
+
+	var state configurableAgentAuthState
+	token, blocked := applyGitHubTokenRequirementState(
+		context.Background(),
+		runner,
+		&state,
+		"test",
+		filepath.Join(t.TempDir(), "missing.json"),
+		hub.InitConfig{GitHubToken: "ghp_init_valid"},
+	)
+	if blocked {
+		t.Fatalf("applyGitHubTokenRequirementState() blocked = true, state = %+v", state.snapshot("test"))
+	}
+	if got, want := token, "ghp_init_valid"; got != want {
+		t.Fatalf("token = %q, want %q", got, want)
+	}
+	if got, want := os.Getenv("GH_TOKEN"), "ghp_init_valid"; got != want {
+		t.Fatalf("GH_TOKEN = %q, want %q", got, want)
+	}
+	if got, want := os.Getenv("GITHUB_TOKEN"), "ghp_init_valid"; got != want {
+		t.Fatalf("GITHUB_TOKEN = %q, want %q", got, want)
+	}
+}
+
 func TestDecodeJSONStrictOrWrappedString(t *testing.T) {
 	var payload struct {
 		Value string `json:"value"`
