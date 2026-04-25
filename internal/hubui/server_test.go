@@ -1215,6 +1215,13 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "button.setAttribute(\"aria-expanded\", String(entry.name === selected));") {
 		t.Fatalf("expected index html to mark the selected library task as expanded")
 	}
+	if !strings.Contains(markup, `id="library-prompt-modal"`) ||
+		!strings.Contains(markup, `role="dialog"`) ||
+		!strings.Contains(markup, `const doubleClick = lastLibraryTaskClickName === entry.name && now - lastLibraryTaskClickAt <= 450;`) ||
+		!strings.Contains(markup, `openLibraryPromptModal(entry);`) ||
+		!strings.Contains(markup, `libraryPromptModalBody.textContent = entry.prompt || "Prompt unavailable.";`) {
+		t.Fatalf("expected index html to show full library prompts in a modal on double-click")
+	}
 	if strings.Contains(markup, "library-task-option-name") {
 		t.Fatalf("expected index html to stop rendering library task internal names")
 	}
