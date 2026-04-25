@@ -25,10 +25,31 @@ func clearPiAuthTestEnv(t *testing.T) {
 
 func piOKAuthGateRunner() *authGateRunnerStub {
 	return &authGateRunnerStub{
-		run: func(context.Context, execx.Command) (execx.Result, error) {
+		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
+			if cmd.Name == "gh" && strings.Join(cmd.Args, " ") == "auth status" {
+				return execx.Result{Stdout: "github.com logged in"}, nil
+			}
 			return execx.Result{Stdout: "OK\n"}, nil
 		},
 	}
+}
+
+func countRunnerCallsByCommand(runner *authGateRunnerStub, name string, args ...string) int {
+	if runner == nil {
+		return 0
+	}
+	wantArgs := strings.Join(args, "\x00")
+	count := 0
+	for _, call := range runner.calls {
+		if call.Name != name {
+			continue
+		}
+		if len(args) != 0 && strings.Join(call.Args, "\x00") != wantArgs {
+			continue
+		}
+		count++
+	}
+	return count
 }
 
 func TestNewPiAuthGateRequiresConfigureWhenExistingPiProbeFails(t *testing.T) {
@@ -62,8 +83,8 @@ func TestNewPiAuthGateRequiresConfigureWhenExistingPiProbeFails(t *testing.T) {
 	if got, want := status.ConfigurePlaceholder, piAuthConfigurePlaceholder; got != want {
 		t.Fatalf("ConfigurePlaceholder = %q, want %q", got, want)
 	}
-	if got := len(runner.calls); got != 1 {
-		t.Fatalf("probe calls = %d, want 1", got)
+	if got := countRunnerCallsByCommand(runner, "pi"); got != 1 {
+		t.Fatalf("pi probe calls = %d, want 1", got)
 	}
 }
 
@@ -82,8 +103,8 @@ func TestNewPiAuthGateReadyWhenEnvironmentAlreadyConfigured(t *testing.T) {
 	if !status.Ready || status.State != "ready" {
 		t.Fatalf("status = %+v", status)
 	}
-	if got := len(runner.calls); got != 1 {
-		t.Fatalf("probe calls = %d, want 1", got)
+	if got := countRunnerCallsByCommand(runner, "pi"); got != 1 {
+		t.Fatalf("pi probe calls = %d, want 1", got)
 	}
 }
 
@@ -110,8 +131,8 @@ func TestNewPiAuthGateRequiresGitHubConfigureWhenExistingPiAuthAlreadyWorks(t *t
 	if got, want := status.Message, "GitHub token is required."; got != want {
 		t.Fatalf("Message = %q, want %q", got, want)
 	}
-	if got := len(runner.calls); got != 1 {
-		t.Fatalf("probe calls = %d, want 1", got)
+	if got := countRunnerCallsByCommand(runner, "pi"); got != 1 {
+		t.Fatalf("pi probe calls = %d, want 1", got)
 	}
 }
 
@@ -132,8 +153,8 @@ func TestNewPiAuthGateReadyWhenExistingPiAuthAndGitHubTokenAlreadyWork(t *testin
 	if got, want := status.Message, piExistingLocalAuthReadyMessage; got != want {
 		t.Fatalf("Message = %q, want %q", got, want)
 	}
-	if got := len(runner.calls); got != 1 {
-		t.Fatalf("probe calls = %d, want 1", got)
+	if got := countRunnerCallsByCommand(runner, "pi"); got != 1 {
+		t.Fatalf("pi probe calls = %d, want 1", got)
 	}
 }
 
@@ -178,8 +199,8 @@ func TestPiAuthGateConfigurePersistsRuntimeConfigAndEnvironment(t *testing.T) {
 	if got, want := doc["pi_provider_auth"], expected; got != want {
 		t.Fatalf("pi_provider_auth = %#v, want %q", got, want)
 	}
-	if got := len(runner.calls); got != 1 {
-		t.Fatalf("probe calls = %d, want 1", got)
+	if got := countRunnerCallsByCommand(runner, "pi"); got != 1 {
+		t.Fatalf("pi probe calls = %d, want 1", got)
 	}
 }
 
@@ -228,8 +249,8 @@ func TestPiAuthGateConfigurePersistsPiAuthJSONAndWritesAuthFile(t *testing.T) {
 	if got, want := string(written), expected; got != want {
 		t.Fatalf("auth.json = %q, want %q", got, want)
 	}
-	if got := len(runner.calls); got != 1 {
-		t.Fatalf("probe calls = %d, want 1", got)
+	if got := countRunnerCallsByCommand(runner, "pi"); got != 1 {
+		t.Fatalf("pi probe calls = %d, want 1", got)
 	}
 }
 
@@ -241,7 +262,10 @@ func TestPiAuthGateConfigurePiAuthJSONAcceptsOKOutputDespiteProbeExitError(t *te
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	runner := &authGateRunnerStub{
-		run: func(context.Context, execx.Command) (execx.Result, error) {
+		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
+			if cmd.Name == "gh" && strings.Join(cmd.Args, " ") == "auth status" {
+				return execx.Result{Stdout: "github.com logged in"}, nil
+			}
 			return execx.Result{
 				Stdout: "OK\n",
 				Stderr: "No API key for provider: openai-codex\n",
@@ -266,7 +290,10 @@ func TestPiAuthGateConfigureProviderAcceptsPiOKOutputDespiteProbeExitError(t *te
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	runner := &authGateRunnerStub{
-		run: func(context.Context, execx.Command) (execx.Result, error) {
+		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
+			if cmd.Name == "gh" && strings.Join(cmd.Args, " ") == "auth status" {
+				return execx.Result{Stdout: "github.com logged in"}, nil
+			}
 			return execx.Result{
 				Stdout: "OK\n",
 				Stderr: "No API key for provider: openai-codex\n",
@@ -383,7 +410,10 @@ func TestPiAuthGateConfigureOfflineModeAllowsEmptyTokenWithoutProbe(t *testing.T
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	runner := &authGateRunnerStub{
-		run: func(context.Context, execx.Command) (execx.Result, error) {
+		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
+			if cmd.Name == "gh" && strings.Join(cmd.Args, " ") == "auth status" {
+				return execx.Result{Stdout: "github.com logged in"}, nil
+			}
 			t.Fatal("probe should not run for PI_OFFLINE provider configuration")
 			return execx.Result{}, nil
 		},
@@ -406,8 +436,8 @@ func TestPiAuthGateConfigureOfflineModeAllowsEmptyTokenWithoutProbe(t *testing.T
 	if got := strings.TrimSpace(os.Getenv("PI_OFFLINE")); got != "1" {
 		t.Fatalf("PI_OFFLINE = %q, want %q", got, "1")
 	}
-	if got := len(runner.calls); got != 0 {
-		t.Fatalf("probe calls = %d, want 0", got)
+	if got := countRunnerCallsByCommand(runner, "pi"); got != 0 {
+		t.Fatalf("pi probe calls = %d, want 0", got)
 	}
 
 	data, err := os.ReadFile(path)
@@ -659,8 +689,8 @@ func TestPiAuthGateConfigureRejectsOpenRouterPersonalAccessTokenBeforeProbe(t *t
 	if !strings.Contains(status.Message, "PI provider auth is invalid") {
 		t.Fatalf("status.Message = %q, want invalid auth detail", status.Message)
 	}
-	if got := len(runner.calls); got != 0 {
-		t.Fatalf("probe calls = %d, want 0", got)
+	if got := countRunnerCallsByCommand(runner, "pi"); got != 0 {
+		t.Fatalf("pi probe calls = %d, want 0", got)
 	}
 	if got := strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY")); got != "" {
 		t.Fatalf("OPENROUTER_API_KEY = %q, want empty", got)

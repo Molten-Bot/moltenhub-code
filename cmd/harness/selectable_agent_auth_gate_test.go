@@ -12,6 +12,20 @@ import (
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
 )
 
+func selectableGitHubReadyRunner() *sharedAuthGateRunnerStub {
+	return &sharedAuthGateRunnerStub{
+		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
+			if got, want := cmd.Name, "gh"; got != want {
+				return execx.Result{}, nil
+			}
+			if got, want := strings.Join(cmd.Args, " "), "auth status"; got != want {
+				return execx.Result{}, nil
+			}
+			return execx.Result{Stdout: "github.com logged in"}, nil
+		},
+	}
+}
+
 func TestSelectableAgentAuthGateStatusRequiresGitHubTokenWhenUnbound(t *testing.T) {
 	t.Setenv("GH_TOKEN", "")
 	t.Setenv("GITHUB_TOKEN", "")
@@ -36,7 +50,7 @@ func TestSelectableAgentAuthGateStatusRequiresHarnessSelectionAfterGitHubReady(t
 	t.Setenv("GITHUB_TOKEN", "")
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
-	gate := newSelectableAgentAuthGate(context.Background(), nil, hub.InitConfig{RuntimeConfigPath: path}, nil)
+	gate := newSelectableAgentAuthGate(context.Background(), selectableGitHubReadyRunner(), hub.InitConfig{RuntimeConfigPath: path}, nil)
 
 	state, err := gate.Status(context.Background())
 	if err != nil {
@@ -101,7 +115,7 @@ func TestSelectableAgentAuthGateConfigurePersistsSelectionAndRejectsSwitch(t *te
 	t.Setenv("GITHUB_TOKEN", "")
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
-	gate := newSelectableAgentAuthGate(context.Background(), nil, hub.InitConfig{RuntimeConfigPath: path}, nil)
+	gate := newSelectableAgentAuthGate(context.Background(), selectableGitHubReadyRunner(), hub.InitConfig{RuntimeConfigPath: path}, nil)
 
 	state, err := gate.Configure(context.Background(), "auggie")
 	if err != nil {
