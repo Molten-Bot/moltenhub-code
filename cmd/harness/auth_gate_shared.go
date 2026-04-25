@@ -181,7 +181,7 @@ func validatedGitHubToken(ctx context.Context, runner execx.Runner, runtimeConfi
 		return candidate.value, nil
 	}
 
-	return "", fmt.Errorf(strings.Join(validationErrs, "; "))
+	return "", errors.New(strings.Join(validationErrs, "; "))
 }
 
 func setGitHubTokenEnvironment(token string) error {

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
 )
 
@@ -59,6 +60,39 @@ func TestSelectableAgentAuthGateStatusRequiresHarnessSelectionAfterGitHubReady(t
 		if gotOrder[i] != want {
 			t.Fatalf("harness option[%d] = %q, want %q (full=%v)", i, gotOrder[i], want, gotOrder)
 		}
+	}
+}
+
+func TestSelectableAgentAuthGateStatusRequiresHarnessSelectionAfterValidatedGITHUBTOKEN(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "ghp_ready_token")
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	runner := &sharedAuthGateRunnerStub{
+		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
+			if got, want := cmd.Name, "gh"; got != want {
+				t.Fatalf("command = %q, want %q", got, want)
+			}
+			if got, want := strings.Join(cmd.Args, " "), "auth status"; got != want {
+				t.Fatalf("args = %q, want %q", got, want)
+			}
+			if got, want := os.Getenv("GITHUB_TOKEN"), "ghp_ready_token"; got != want {
+				t.Fatalf("GITHUB_TOKEN = %q, want %q during validation", got, want)
+			}
+			return execx.Result{Stdout: "github.com logged in"}, nil
+		},
+	}
+	gate := newSelectableAgentAuthGate(context.Background(), runner, hub.InitConfig{RuntimeConfigPath: path}, nil)
+
+	state, err := gate.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if got, want := state.State, agentHarnessSelectionState; got != want {
+		t.Fatalf("State = %q, want %q", got, want)
+	}
+	if got := state.ConfigureCommand; got != "" {
+		t.Fatalf("ConfigureCommand = %q, want empty once GitHub token is ready", got)
 	}
 }
 

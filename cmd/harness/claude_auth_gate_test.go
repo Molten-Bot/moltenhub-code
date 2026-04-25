@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
+	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
 	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
 )
@@ -76,6 +77,48 @@ func TestClaudeAuthGateRequiresCredentialsConfigureWhenClaudeCredentialsAreMissi
 	}
 	if !strings.Contains(status.Message, "Paste `~/.claude/.credentials.json`") {
 		t.Fatalf("message = %q", status.Message)
+	}
+}
+
+func TestClaudeAuthGateRequiresClaudeCredentialsAfterValidatedGITHUBTOKEN(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("CLAUDE_CODE_USE_BEDROCK", "")
+	t.Setenv("CLAUDE_CODE_USE_VERTEX", "")
+	t.Setenv("CLAUDE_CODE_USE_FOUNDRY", "")
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "ghp_ready")
+
+	runner := &sharedAuthGateRunnerStub{
+		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
+			if got, want := cmd.Name, "gh"; got != want {
+				t.Fatalf("command = %q, want %q", got, want)
+			}
+			if got, want := strings.Join(cmd.Args, " "), "auth status"; got != want {
+				t.Fatalf("args = %q, want %q", got, want)
+			}
+			if got, want := os.Getenv("GITHUB_TOKEN"), "ghp_ready"; got != want {
+				t.Fatalf("GITHUB_TOKEN = %q, want %q during validation", got, want)
+			}
+			return execx.Result{Stdout: "github.com logged in"}, nil
+		},
+	}
+
+	g := newClaudeAuthGateWithContextAndConfigAndRunner(context.Background(), runner, "", "", hub.InitConfig{}, nil)
+	status, err := g.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if got, want := status.State, "needs_configure"; got != want {
+		t.Fatalf("State = %q, want %q", got, want)
+	}
+	if got, want := status.ConfigureCommand, claudeCredentialsConfigureCommand; got != want {
+		t.Fatalf("ConfigureCommand = %q, want %q", got, want)
+	}
+	if got := status.ConfigureCommand; got == claudeGitHubConfigureCommand {
+		t.Fatalf("ConfigureCommand = %q, want Claude credentials flow after GitHub validation", got)
 	}
 }
 
