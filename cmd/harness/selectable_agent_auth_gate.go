@@ -185,7 +185,7 @@ func (g *selectableAgentAuthGate) selectionState(activeCfg hub.InitConfig) (agen
 		return runtime, true, hubui.AgentAuthState{}
 	}
 
-	blocked, blockedState := githubTokenRequirementState("", g.runtimeConfigPath, activeCfg)
+	blocked, blockedState := githubTokenRequirementState(g.baseCtx, g.runner, "", g.runtimeConfigPath, activeCfg)
 	if blocked {
 		return agentruntime.Runtime{}, false, blockedState
 	}

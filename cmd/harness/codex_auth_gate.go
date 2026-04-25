@@ -528,11 +528,13 @@ func (g *codexAuthGate) githubTokenRequirementState() (bool, hubui.AgentAuthStat
 	}
 
 	g.mu.Lock()
+	baseCtx := g.baseCtx
+	runner := g.runner
 	runtimeConfigPath := g.runtimeConfigPath
 	initCfg := g.initCfg
 	g.mu.Unlock()
 
-	return githubTokenRequirementState(agentruntime.HarnessCodex, runtimeConfigPath, initCfg)
+	return githubTokenRequirementState(baseCtx, runner, agentruntime.HarnessCodex, runtimeConfigPath, initCfg)
 }
 
 func stripANSI(text string) string {

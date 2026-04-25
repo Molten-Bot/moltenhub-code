@@ -290,7 +290,7 @@ func (g *piAuthGate) refreshLocked() {
 		}
 		g.initCfg.PiAuthJSON = canonical
 		if g.validatedAuth == validatedPiAuthStateKey("json", canonical) {
-			if _, blocked := applyGitHubTokenRequirementState(&g.authState, agentruntime.HarnessPi, g.runtimeConfigPath, g.initCfg); blocked {
+			if _, blocked := applyGitHubTokenRequirementState(context.Background(), g.runner, &g.authState, agentruntime.HarnessPi, g.runtimeConfigPath, g.initCfg); blocked {
 				return
 			}
 			g.authState.setReady(piAuthReadyMessage)
@@ -317,7 +317,7 @@ func (g *piAuthGate) refreshLocked() {
 		}
 		g.initCfg.PiProviderAuth = canonical
 		if g.validatedAuth == validatedPiAuthStateKey("provider", canonical) {
-			if _, blocked := applyGitHubTokenRequirementState(&g.authState, agentruntime.HarnessPi, g.runtimeConfigPath, g.initCfg); blocked {
+			if _, blocked := applyGitHubTokenRequirementState(context.Background(), g.runner, &g.authState, agentruntime.HarnessPi, g.runtimeConfigPath, g.initCfg); blocked {
 				return
 			}
 			g.authState.setReady(fmt.Sprintf("PI provider auth is ready via %s.", auth.EnvVar))
@@ -328,7 +328,7 @@ func (g *piAuthGate) refreshLocked() {
 	}
 
 	if g.validatedAuth == validatedPiAuthStateKey("local", piAuthFileRelativePath) {
-		if _, blocked := applyGitHubTokenRequirementState(&g.authState, agentruntime.HarnessPi, g.runtimeConfigPath, g.initCfg); blocked {
+		if _, blocked := applyGitHubTokenRequirementState(context.Background(), g.runner, &g.authState, agentruntime.HarnessPi, g.runtimeConfigPath, g.initCfg); blocked {
 			return
 		}
 		g.authState.setReady(piExistingLocalAuthReadyMessage)

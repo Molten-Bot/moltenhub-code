@@ -1,13 +1,28 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
 	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
 )
+
+type sharedAuthGateRunnerStub struct {
+	run func(context.Context, execx.Command) (execx.Result, error)
+}
+
+func (s *sharedAuthGateRunnerStub) Run(ctx context.Context, cmd execx.Command) (execx.Result, error) {
+	if s.run == nil {
+		return execx.Result{}, nil
+	}
+	return s.run(ctx, cmd)
+}
 
 func TestFirstConfiguredGitHubTokenPrefersRuntimeConfig(t *testing.T) {
 	t.Setenv("GH_TOKEN", "ghp_env_token")
@@ -95,7 +110,7 @@ func TestApplyGitHubTokenRequirementStateConfiguresPromptWhenMissing(t *testing.
 	t.Setenv("GITHUB_TOKEN", "")
 
 	var state configurableAgentAuthState
-	token, blocked := applyGitHubTokenRequirementState(&state, "test", filepath.Join(t.TempDir(), "missing.json"), hub.InitConfig{})
+	token, blocked := applyGitHubTokenRequirementState(context.Background(), nil, &state, "test", filepath.Join(t.TempDir(), "missing.json"), hub.InitConfig{})
 	if token != "" || !blocked {
 		t.Fatalf("applyGitHubTokenRequirementState() = token %q blocked %v, want empty true", token, blocked)
 	}
@@ -105,6 +120,67 @@ func TestApplyGitHubTokenRequirementStateConfiguresPromptWhenMissing(t *testing.
 	}
 	if got, want := snapshot.ConfigureCommand, claudeGitHubConfigureCommand; got != want {
 		t.Fatalf("ConfigureCommand = %q, want %q", got, want)
+	}
+}
+
+func TestGitHubTokenRequirementStateAcceptsValidatedStartupToken(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+
+	runner := &sharedAuthGateRunnerStub{
+		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
+			if got, want := cmd.Name, "gh"; got != want {
+				t.Fatalf("command = %q, want %q", got, want)
+			}
+			if got, want := strings.Join(cmd.Args, " "), "auth status"; got != want {
+				t.Fatalf("args = %q, want %q", got, want)
+			}
+			return execx.Result{Stdout: "github.com logged in"}, nil
+		},
+	}
+
+	blocked, state := githubTokenRequirementState(context.Background(), runner, "test", filepath.Join(t.TempDir(), "missing.json"), hub.InitConfig{GitHubToken: "ghp_valid"})
+	if blocked {
+		t.Fatalf("githubTokenRequirementState() blocked = true, state = %+v", state)
+	}
+	if got, want := os.Getenv("GH_TOKEN"), "ghp_valid"; got != want {
+		t.Fatalf("GH_TOKEN = %q, want %q", got, want)
+	}
+	if got, want := os.Getenv("GITHUB_TOKEN"), "ghp_valid"; got != want {
+		t.Fatalf("GITHUB_TOKEN = %q, want %q", got, want)
+	}
+}
+
+func TestGitHubTokenRequirementStateRejectsInvalidStartupToken(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+
+	runner := &sharedAuthGateRunnerStub{
+		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
+			if got, want := strings.Join(cmd.Args, " "), "auth status"; got != want {
+				t.Fatalf("args = %q, want %q", got, want)
+			}
+			return execx.Result{Stderr: "bad credentials"}, errors.New("token invalid")
+		},
+	}
+
+	var state configurableAgentAuthState
+	token, blocked := applyGitHubTokenRequirementState(context.Background(), runner, &state, "test", filepath.Join(t.TempDir(), "missing.json"), hub.InitConfig{GitHubToken: "ghp_invalid"})
+	if token != "" || !blocked {
+		t.Fatalf("applyGitHubTokenRequirementState() = token %q blocked %v, want empty true", token, blocked)
+	}
+	snapshot := state.snapshot("test")
+	if snapshot.Ready || snapshot.State != "needs_configure" {
+		t.Fatalf("snapshot = %+v", snapshot)
+	}
+	if !strings.Contains(snapshot.Message, "validate github token") {
+		t.Fatalf("message = %q, want validation failure", snapshot.Message)
+	}
+	if got := os.Getenv("GH_TOKEN"); got != "" {
+		t.Fatalf("GH_TOKEN = %q, want empty", got)
+	}
+	if got := os.Getenv("GITHUB_TOKEN"); got != "" {
+		t.Fatalf("GITHUB_TOKEN = %q, want empty", got)
 	}
 }
 
