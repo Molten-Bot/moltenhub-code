@@ -1811,7 +1811,7 @@ select.prompt-control {
   grid-template-columns: minmax(0, 1fr) 34px;
   align-items: center;
   gap: 8px;
-  min-height: 86px;
+  min-height: 104px;
   padding: 11px 10px 11px 12px;
 }
 

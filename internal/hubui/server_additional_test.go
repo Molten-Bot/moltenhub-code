@@ -1130,6 +1130,9 @@ func TestLibraryTaskListUsesDesktopTwoColumnAndMobileSingleColumnLayout(t *testi
 	if !strings.Contains(css, "@media (max-width: 720px) {\n  .library-task-list {\n    grid-template-columns: minmax(0, 1fr);\n  }") {
 		t.Fatalf("expected library task list to collapse to one column only on mobile")
 	}
+	if !strings.Contains(css, ".library-task-option-content {\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) 34px;\n  align-items: center;\n  gap: 8px;\n  min-height: 104px;") {
+		t.Fatalf("expected library task cards to be tall enough for title and subtitle copy")
+	}
 }
 
 func TestStudioStylesUseRefinedPanelAndInputTreatment(t *testing.T) {
