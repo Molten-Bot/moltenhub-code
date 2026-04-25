@@ -1788,8 +1788,6 @@ select.prompt-control {
 }
 
 .library-task-option {
-  display: grid;
-  gap: 0;
   width: 100%;
   text-align: left;
   color: var(--text);
@@ -1808,6 +1806,15 @@ select.prompt-control {
   box-shadow: inset 0 0 0 1px rgba(10, 132, 255, 0.14), 0 10px 22px rgba(10, 44, 102, 0.08);
 }
 
+.library-task-option-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 8px;
+  min-height: 86px;
+  padding: 11px 10px 11px 12px;
+}
+
 .library-task-option-toggle {
   appearance: none;
   border: 0;
@@ -1816,7 +1823,8 @@ select.prompt-control {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 11px 12px;
+  min-width: 0;
+  padding: 0;
 }
 
 .library-task-option-title {
@@ -1826,19 +1834,49 @@ select.prompt-control {
   line-height: 1.25;
 }
 
-.library-task-option-prompt {
-  border-top: 1px solid rgba(17, 34, 68, 0.08);
+.library-task-option-subtitle {
   color: var(--muted);
-  font-size: 0.73rem;
+  font-size: 0.74rem;
   line-height: 1.45;
-  padding: 10px 12px 12px;
-  white-space: pre-wrap;
+  margin-top: 8px;
   word-break: break-word;
 }
 
-.library-task-option-toggle:focus-visible {
+.library-task-option-link {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid rgba(17, 34, 68, 0.12);
+  background: var(--surface-task-button-bg);
+  color: var(--text);
+  padding: 7px;
+  transition: border-color 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+}
+
+.library-task-option-link svg,
+.library-task-option-link .lucide,
+.library-task-option-link [data-lucide] {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.library-task-option-toggle:focus-visible,
+.library-task-option-link:focus-visible {
   outline: 2px solid rgba(10, 132, 255, 0.28);
-  outline-offset: -2px;
+  outline-offset: 2px;
+}
+
+.library-task-option-link:hover,
+.library-task-option-link:focus-visible {
+  border-color: rgba(10, 132, 255, 0.45);
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.12);
+  transform: translateY(-1px);
 }
 
 #task-panel.is-empty .task-scroll {

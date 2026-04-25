@@ -1241,18 +1241,19 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title">Studio</span>`) {
 		t.Fatalf("expected index html to render the prompt panel under a Studio heading by default")
 	}
-	if !strings.Contains(markup, "library-task-option-prompt") {
-		t.Fatalf("expected index html to include expandable library prompt sections")
+	if !strings.Contains(markup, "library-task-option-subtitle") {
+		t.Fatalf("expected index html to include library task subtitles")
 	}
-	if !strings.Contains(markup, "button.setAttribute(\"aria-expanded\", String(entry.name === selected));") {
-		t.Fatalf("expected index html to mark the selected library task as expanded")
+	if !strings.Contains(markup, "button.setAttribute(\"aria-pressed\", String(entry.name === selected));") {
+		t.Fatalf("expected index html to mark the selected library task")
 	}
 	if !strings.Contains(markup, `id="library-prompt-modal"`) ||
 		!strings.Contains(markup, `role="dialog"`) ||
-		!strings.Contains(markup, `const doubleClick = lastLibraryTaskClickName === entry.name && now - lastLibraryTaskClickAt <= 450;`) ||
+		!strings.Contains(markup, `promptLink.className = "library-task-option-link";`) ||
+		!strings.Contains(markup, `promptLink.title = "Open full prompt";`) ||
 		!strings.Contains(markup, `openLibraryPromptModal(entry);`) ||
 		!strings.Contains(markup, `libraryPromptModalBody.textContent = entry.prompt || "Prompt unavailable.";`) {
-		t.Fatalf("expected index html to show full library prompts in a modal on double-click")
+		t.Fatalf("expected index html to show full library prompts in a modal from each task link button")
 	}
 	if strings.Contains(markup, "library-task-option-name") {
 		t.Fatalf("expected index html to stop rendering library task internal names")
