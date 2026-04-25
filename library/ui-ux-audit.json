@@ -1,0 +1,967 @@
+{
+  "security-secrets": {
+    "displayName": "Exhaustive UI/UX Audit",
+    "description": "Wholistic review of application to enable the best possible outcomes for users.",
+    "targetSubdir": ".",
+    "prompt": "You are acting as a senior UI/UX audit team for an existing SaaS product.
+
+The product is both consumer and B2B, but the primary emphasis is consumer. Your job is to map the current UI/UX exactly as it exists today across both the live product and the local repo/environment.
+
+Do not redesign anything.
+Do not implement anything.
+Do not refactor anything.
+Do not create new UI concepts.
+Do not propose final solutions yet.
+
+Your only job is to exhaustively click through, inspect, document, screenshot, and map the current product experience so the design/product/engineering team can later plan a UI/UX overhaul from accurate evidence.
+
+You have access to:
+- Browser tools
+- Repo/code inspection
+- Screenshots
+- Subagents
+- Local environment
+- Live URL
+- Any available staging/demo/test environment
+
+Use them.
+
+---
+
+# Primary Objective
+
+Create a complete “as-is' UX map of the product, including:
+
+1. Logged-out experience
+2. Signup flow
+3. Login flow
+4. Password reset / magic link / SSO flows, if present
+5. Consumer onboarding
+6. B2B/team/workspace onboarding
+7. First-run experience
+8. Account setup
+9. Role setup
+10. Main logged-in navigation
+11. Primary product flows
+12. Settings/account/billing/profile flows
+13. Empty states
+14. Loading states
+15. Error states
+16. Success states
+17. Modals
+18. Drawers
+19. Toasts/notifications
+20. Confirmation screens
+21. Permission states
+22. Mobile/tablet/desktop responsive states
+23. Screens found in code but not reachable through normal UI
+
+The output must support three downstream uses:
+
+- Figma redesign planning
+- Product strategy / journey mapping / User Flows
+- Engineering ticket creation
+
+But again: do not redesign. Only map and document the current experience.
+
+---
+
+# Product Context
+
+This is a SaaS product with both:
+
+- Consumer-facing flows
+- B2B / team / organization / workspace flows
+
+The consumer experience is the higher priority, but B2B flows must still be mapped.
+
+Where the product supports teams, organizations, workspaces, roles, invites, or permissions, document those flows separately from the individual consumer path.
+
+---
+
+# Access and Safety Rules
+
+You may use both:
+
+1. The live product
+2. The local repo/local environment
+
+However:
+
+- Do not modify production data.
+- Do not delete anything.
+- Do not trigger real purchases.
+- Do not send real emails or notifications unless using a safe test account/environment.
+- Do not message real users.
+- Do not invite real users.
+- Do not change production settings.
+- Do not perform destructive actions.
+- Do not complete checkout/payment unless using a documented sandbox/test mode.
+- If a risky flow appears, stop at the confirmation screen, screenshot it, and document what would happen next.
+
+You may create test accounts and test roles only where safe.
+
+When creating roles/accounts:
+- Create the lowest-permission role available.
+- Prefer read-only/view-only/no-edit/no-delete permissions.
+- Do not create an admin role unless absolutely required to inspect a role-management screen.
+- If admin access is required, document the gap and proceed only in local/staging/test data.
+- Clearly label all created accounts/roles as test/audit artifacts.
+
+Suggested naming:
+
+```text
+UX Audit Consumer Test
+UX Audit B2B Viewer
+UX Audit Read Only Role
+ux-audit-consumer@example.test
+ux-audit-viewer@example.test
+````
+
+If the product does not accept `.test` emails, use whatever safe disposable/test email convention is supported by the environment.
+
+---
+
+# Core Working Principle
+
+No screen is considered mapped until it has been reached through actual browser interaction OR explicitly found in code and marked as unreachable.
+
+Every observation must be tied to evidence:
+
+* Route
+* Screenshot
+* User action
+* Current state
+* Code location, where relevant
+* Reproducible steps
+
+Do not rely on assumptions.
+
+---
+
+# Required Audit Folder
+
+Create this structure:
+
+```text
+/ux-audit/
+  00_executive_summary.md
+  01_route_inventory.md
+  02_screen_inventory.md
+  03_logged_out_and_auth_map.md
+  04_consumer_onboarding_map.md
+  05_b2b_onboarding_and_roles_map.md
+  06_user_flow_maps.md
+  07_friction_log.md
+  08_component_and_pattern_inventory.md
+  09_accessibility_responsive_notes.md
+  10_engineering_handoff_notes.md
+  11_figma_handoff_notes.md
+  12_product_strategy_notes.md
+  13_open_questions.md
+  screenshots/
+```
+
+---
+
+# Subagent Instructions
+
+Use subagents in parallel where helpful.
+
+## 1. Browser Flow Navigator Agent
+
+Responsible for clicking through the product like a real user.
+
+Tasks:
+
+* Start logged out.
+* Explore the live product first.
+* Then compare against local/staging where available.
+* Click every visible navigation item.
+* Click every onboarding step.
+* Click every primary CTA.
+* Explore forms, validation, errors, confirmations, and success states.
+* Stop before destructive actions.
+* Capture screenshots at every meaningful state.
+* Document exact routes and interactions.
+
+Must cover:
+
+* Consumer signup
+* Consumer login
+* Consumer onboarding
+* Consumer first-run experience
+* B2B/team/workspace onboarding
+* Role selection
+* Invite flow, if available
+* Settings/profile/account
+* Billing/pricing/subscription screens, if available
+* Dashboard/home
+* Main app navigation
+* Primary product actions
+
+---
+
+## 2. Route and Code Discovery Agent
+
+Responsible for inspecting the codebase to discover screens the browser walkthrough may miss.
+
+Tasks:
+
+* Identify framework and routing structure.
+* Find all route files.
+* Find auth guards.
+* Find onboarding guards.
+* Find role/permission gates.
+* Find feature flags.
+* Find hidden/internal/admin routes.
+* Find layout shells.
+* Find navigation definitions.
+* Find modal/drawer components.
+* Find empty/loading/error state components.
+* Cross-check code routes against browser-reachable routes.
+
+Create a route inventory:
+
+```markdown
+| Route | Screen Name | Source | Auth Required | Role Required | Consumer/B2B/Internal | Reachable via UI? | State Variants | Notes |
+|---|---|---|---:|---|---|---:|---|---|
+```
+
+For each route, include:
+
+* Code file path
+* Browser URL, if reachable
+* Screenshot reference, if reached
+* Reason if unreachable
+
+---
+
+## 3. Screenshot and Screen Inventory Agent
+
+Responsible for creating a clean visual catalog.
+
+Tasks:
+
+* Capture every unique screen/state.
+* Use consistent naming.
+* Avoid duplicates unless the state meaningfully changes.
+* Capture desktop, tablet, and mobile breakpoints where the layout materially changes.
+* Organize screenshots by flow.
+
+Suggested screenshot structure:
+
+```text
+/ux-audit/screenshots/
+  00_logged_out/
+    001_landing_desktop.png
+    002_login_default_desktop.png
+    003_login_validation_error_desktop.png
+    004_password_reset_desktop.png
+
+  01_consumer_signup/
+    001_signup_default_desktop.png
+    002_signup_error_desktop.png
+    003_email_verification_desktop.png
+
+  02_consumer_onboarding/
+    001_welcome_desktop.png
+    002_profile_setup_desktop.png
+    003_preferences_desktop.png
+    004_first_run_dashboard_empty_desktop.png
+
+  03_b2b_onboarding/
+    001_workspace_create_desktop.png
+    002_team_invite_desktop.png
+    003_role_select_desktop.png
+    004_workspace_dashboard_empty_desktop.png
+
+  04_main_app/
+    001_dashboard_empty_desktop.png
+    002_dashboard_populated_desktop.png
+
+  05_settings/
+    001_profile_settings_desktop.png
+    002_account_settings_desktop.png
+    003_billing_desktop.png
+
+  06_responsive/
+    001_consumer_onboarding_mobile.png
+    002_dashboard_mobile.png
+    003_settings_tablet.png
+```
+
+Create a screen inventory:
+
+```markdown
+| Screen ID | Screen Name | Route | Flow | State | Breakpoint | Screenshot | Notes |
+|---|---|---|---|---|---|---|---|
+```
+
+---
+
+## 4. UX Heuristics Agent
+
+Responsible for documenting current UX friction only.
+
+Do not redesign.
+
+Evaluate the current experience through these lenses:
+
+* Clarity
+* Cognitive load
+* Information hierarchy
+* Navigation predictability
+* First-run comprehension
+* User confidence
+* Friction and drop-off risk
+* Redundant steps
+* Missing context
+* Empty-state usefulness
+* Error recovery
+* Accessibility basics
+* Mobile/responsive quality
+* Visual consistency
+* Terminology consistency
+* Conversion/activation quality
+
+For every issue, include evidence.
+
+Use this severity scale:
+
+* P0: Blocks user completion
+* P1: Major confusion or high drop-off risk
+* P2: Noticeable friction or inefficiency
+* P3: Polish, consistency, or minor usability issue
+
+Create:
+
+```markdown
+| Severity | Flow | Screen | Issue | Evidence | Repro Steps | Why It Matters | Redesign Later? |
+|---|---|---|---|---|---|---|---:|
+```
+
+Important:
+
+* “Redesign Later?' should be yes/no only.
+* Do not propose the redesign solution.
+* Do not write new UX copy.
+* Do not create new IA.
+* Do not invent new components.
+
+---
+
+## 5. Accessibility and Responsive QA Agent
+
+Responsible for basic accessibility and responsive mapping.
+
+Check:
+
+* Keyboard navigation
+* Visible focus states
+* Form labels
+* Button/link semantics
+* Modal behavior
+* Drawer behavior
+* Error messaging
+* Touch target size
+* Mobile layout
+* Tablet layout
+* Desktop layout
+* Text overflow
+* Horizontal scrolling
+* Navigation collapse behavior
+* Obvious contrast issues
+* Text scaling issues
+
+This is not a full WCAG certification audit. Document clear issues and evidence.
+
+Create:
+
+```markdown
+| Area | Screen | Breakpoint | Issue | Evidence | Severity | Notes |
+|---|---|---|---|---|---|---|
+```
+
+---
+
+## 6. Product Journey Agent
+
+Responsible for mapping what the product currently communicates to users.
+
+Do not redesign.
+
+Document:
+
+* What the product appears to do
+* Who the product appears to be for
+* What the user is asked to do first
+* What the product treats as activation
+* Where the user first sees value
+* Where the user may hesitate
+* Where consumer and B2B paths diverge
+* Whether terminology is consistent
+* Whether the user understands what to do next
+
+Create separate journey maps for:
+
+1. New consumer user
+2. Returning consumer user
+3. New B2B/workspace user
+4. Invited B2B user
+5. Low-permission/read-only user
+
+Use this format:
+
+```markdown
+| Journey | Step | Screen | User Goal | Product Prompt | User Action | System Response | Friction | Screenshot |
+|---|---:|---|---|---|---|---|---|---|
+```
+
+---
+
+## 7. Engineering Handoff Agent
+
+Responsible for translating the audit into engineering-friendly documentation.
+
+Do not create implementation tickets yet unless explicitly requested.
+
+Document:
+
+* Route inventory
+* Component inventory
+* Repeated UI patterns
+* State gaps
+* Broken flows
+* Console errors
+* Dead links
+* Missing states
+* Permission inconsistencies
+* Browser-only issues
+* Local-vs-live differences
+* Reproduction steps for every issue
+
+Create:
+
+```markdown
+| Area | Route | Component/File | Issue | Repro Steps | Evidence | Severity | Notes |
+|---|---|---|---|---|---|---|---|
+```
+
+---
+
+## 8. Figma Handoff Agent
+
+Responsible for making the audit easy to translate into Figma.
+
+Do not create designs.
+
+Document:
+
+* Screen groups
+* Screenshot references
+* Current layout patterns
+* Current navigation patterns
+* Current form patterns
+* Current component patterns
+* Current responsive behavior
+* Current content hierarchy
+* Current empty/error/success states
+
+Create:
+
+```markdown
+| Figma Section | Screens Included | Screenshot References | Current Pattern Notes | Missing States |
+|---|---|---|---|---|
+```
+
+Suggested Figma sections:
+
+* Logged out
+* Auth
+* Consumer onboarding
+* B2B onboarding
+* Dashboard/home
+* Main product flows
+* Settings/account
+* Billing/subscription
+* Responsive/mobile
+* Error/empty/loading states
+* Components/patterns
+
+---
+
+# Phase-by-Phase Execution
+
+## Phase 1 — Environment and Access
+
+1. Identify live URL.
+2. Identify local environment.
+3. Run local product if possible.
+4. Determine framework, routes, and app structure.
+5. Identify test/sandbox safety constraints.
+6. Create `/ux-audit/` folder.
+7. Document available credentials, roles, and limitations without exposing secrets.
+
+Create:
+
+```markdown
+# Environment Notes
+
+| Environment | URL | Data Type | Safe to Edit? | Notes |
+|---|---|---:|---:|---|
+| Live | | Production/Unknown | No | |
+| Local | | Local/Test | Yes, if local only | |
+| Staging | | Test/Staging | Yes, if available | |
+```
+
+---
+
+## Phase 2 — Code-Based Surface Discovery
+
+Inspect the repo before relying only on clicking.
+
+Find:
+
+* Routes
+* Layouts
+* Auth flows
+* Onboarding logic
+* Feature flags
+* Role gates
+* Navigation config
+* Settings screens
+* Billing screens
+* Admin/internal screens
+* Modal/drawer patterns
+* Empty/loading/error states
+
+Output:
+
+* `01_route_inventory.md`
+* Initial component/pattern inventory
+
+---
+
+## Phase 3 — Logged-Out and Auth Flow Mapping
+
+Click through:
+
+* Landing page
+* Login
+* Signup
+* Password reset
+* Email verification
+* Magic link
+* SSO
+* Invite acceptance
+* Pricing/plan selection, if available
+* Terms/privacy/help links
+* Validation errors
+* Bad credentials
+* Missing field errors
+* Disabled button states
+
+Document:
+
+* Screenshots
+* Routes
+* Error states
+* Friction
+* Dead ends
+* Differences between live and local
+
+Output:
+
+* `03_logged_out_and_auth_map.md`
+
+---
+
+## Phase 4 — Consumer Onboarding Mapping
+
+Create a new consumer test account where safe.
+
+Map:
+
+* Signup
+* Verification
+* Welcome
+* Profile setup
+* Preference setup
+* First-run dashboard
+* First required action
+* Empty states
+* Skipped steps
+* Back/forward behavior
+* Return after partial onboarding
+* Logout/login during incomplete onboarding
+* First value moment
+
+Output:
+
+* `04_consumer_onboarding_map.md`
+
+Include Mermaid flow:
+
+```mermaid
+flowchart TD
+  A[Landing] --> B[Signup]
+  B --> C[Verification]
+  C --> D[Welcome]
+  D --> E[Profile Setup]
+  E --> F[First Product Action]
+  F --> G[First-Run Dashboard]
+```
+
+Update the diagram based on the actual product.
+
+---
+
+## Phase 5 — B2B / Workspace / Role Mapping
+
+Create the lowest-permission test role available.
+
+Map:
+
+* Workspace creation
+* Organization setup
+* Team setup
+* Invite flow
+* Role creation
+* Read-only/view-only role
+* Permission-limited experience
+* B2B dashboard
+* Member vs owner/admin experience, if safely inspectable
+* Blocked/permission-denied states
+
+Rules:
+
+* Prefer no-edit/no-delete role.
+* Do not use real users.
+* Do not invite real emails.
+* Do not alter production teams.
+* If role creation is unsafe in live, only do it locally/staging.
+* In live, document the visible flow up to the unsafe action.
+
+Create permission matrix:
+
+```markdown
+| Feature / Screen | Owner/Admin | Read-Only Role | Consumer User | Invited User | Notes |
+|---|---:|---:|---:|---:|---|
+```
+
+Output:
+
+* `05_b2b_onboarding_and_roles_map.md`
+
+---
+
+## Phase 6 — Main App Flow Mapping
+
+Click every major nav item and primary CTA.
+
+For each app area, document:
+
+* Purpose of screen
+* Route
+* Main actions
+* Secondary actions
+* Empty state
+* Populated state, if available
+* Loading state, if observable
+* Error state, if safely triggerable
+* Form states
+* Filter/search/sort behavior
+* Detail screens
+* Confirmation screens
+* Toasts/notifications
+* Permission differences
+* Responsive differences
+
+Output:
+
+* `06_user_flow_maps.md`
+
+Use this table:
+
+```markdown
+| Flow | Step | Screen | Route | User Action | System Response | Screenshot | Friction | Notes |
+|---|---:|---|---|---|---|---|---|---|
+```
+
+---
+
+## Phase 7 — State Inventory
+
+For each important screen, identify:
+
+* Default
+* Empty
+* Populated
+* Loading
+* Error
+* Permission denied
+* Validation error
+* Success
+* Disabled
+* Read-only
+* Mobile
+* Tablet
+* Desktop
+
+Create:
+
+```markdown
+| Screen | Route | State | Trigger | Screenshot | Notes |
+|---|---|---|---|---|---|
+```
+
+Output:
+
+* `02_screen_inventory.md`
+
+---
+
+## Phase 8 — Component and Pattern Inventory
+
+Document recurring UI patterns:
+
+* App shell
+* Sidebar/nav
+* Header/top bar
+* Cards
+* Tables
+* Lists
+* Forms
+* Modals
+* Drawers
+* Toasts
+* Empty states
+* Error states
+* Buttons
+* Inputs
+* Search
+* Filters
+* Tabs
+* Stepper/onboarding progress
+* Tooltips
+* Badges/status indicators
+* Charts/data visualizations
+* Billing/pricing cards
+* Invite/member management UI
+* Role/permission UI
+
+Create:
+
+```markdown
+| Component / Pattern | Where Used | Current Behavior | Consistency Notes | Screenshot References | Code References |
+|---|---|---|---|---|---|
+```
+
+Output:
+
+* `08_component_and_pattern_inventory.md`
+
+---
+
+## Phase 9 — Accessibility and Responsive Notes
+
+Check at minimum:
+
+* Desktop: 1440px
+* Tablet: 768px
+* Mobile: 390px
+
+Document layout changes and breakpoints.
+
+Output:
+
+* `09_accessibility_responsive_notes.md`
+
+---
+
+## Phase 10 — Handoff Notes
+
+Create three separate handoff documents.
+
+## `10_engineering_handoff_notes.md`
+
+Focus on:
+
+* Reproducible issues
+* Route/component references
+* State gaps
+* Broken links
+* Permission inconsistencies
+* Console errors
+* Local/live mismatches
+
+Do not write implementation tickets yet.
+
+## `11_figma_handoff_notes.md`
+
+Focus on:
+
+* Screen groups
+* Screenshot catalog
+* Current UI patterns
+* Current state variants
+* Missing states
+* Responsive layouts
+
+Do not create redesign recommendations.
+
+## `12_product_strategy_notes.md`
+
+Focus on:
+
+* Current journey
+* Current activation path
+* Current user comprehension
+* Consumer vs B2B differences
+* Current onboarding burden
+* Current drop-off risks
+
+Do not propose new positioning or strategy yet.
+
+---
+
+# Final Deliverables
+
+Produce all files in `/ux-audit/`:
+
+```text
+00_executive_summary.md
+01_route_inventory.md
+02_screen_inventory.md
+03_logged_out_and_auth_map.md
+04_consumer_onboarding_map.md
+05_b2b_onboarding_and_roles_map.md
+06_user_flow_maps.md
+07_friction_log.md
+08_component_and_pattern_inventory.md
+09_accessibility_responsive_notes.md
+10_engineering_handoff_notes.md
+11_figma_handoff_notes.md
+12_product_strategy_notes.md
+13_open_questions.md
+screenshots/
+```
+
+---
+
+# Executive Summary Requirements
+
+`00_executive_summary.md` must include:
+
+1. What the product currently appears to do
+2. Who the product currently appears to serve
+3. Consumer journey summary
+4. B2B/workspace journey summary
+5. Current activation path
+6. Routes/screens mapped
+7. Screens/states captured
+8. Flows fully mapped
+9. Flows blocked or incomplete
+10. Top UX friction points
+11. Top evidence-backed redesign areas for later
+12. Key unknowns/open questions
+
+Important:
+
+* “Redesign areas for later' means areas to revisit, not proposed solutions.
+* Do not include wireframes.
+* Do not include new copy.
+* Do not include new IA.
+* Do not include visual redesign suggestions.
+
+---
+
+# Completion Criteria
+
+The audit is complete only when:
+
+* Every route found in code is accounted for.
+* Every live navigation item has been clicked.
+* Every visible onboarding branch has been attempted.
+* Consumer onboarding is mapped.
+* B2B/workspace onboarding is mapped where available.
+* A lowest-permission/read-only role has been created and tested where safe.
+* Desktop, tablet, and mobile states are checked.
+* Empty, error, loading, success, and permission states are documented where observable.
+* Screenshots exist for every major screen/state.
+* Local and live differences are documented.
+* Code-discovered screens that are not browser-reachable are listed.
+* Friction is prioritized by severity.
+* Handoff notes exist for product, Figma, and engineering.
+* No redesign or implementation work has been performed.
+
+---
+
+# Final Response Format
+
+When complete, respond with:
+
+```markdown
+# UX Audit Complete
+
+## Summary
+- Live URL audited:
+- Local environment audited:
+- Routes found:
+- Routes reached through browser:
+- Code-only/unreachable routes:
+- Unique screens/states captured:
+- Screenshots captured:
+- Consumer flows mapped:
+- B2B/workspace flows mapped:
+- Permission roles tested:
+- Responsive breakpoints checked:
+
+## Fully Mapped Flows
+-
+
+## Blocked or Incomplete Flows
+-
+
+## Top 10 UX Friction Points
+1.
+2.
+3.
+4.
+5.
+6.
+7.
+8.
+9.
+10.
+
+## Handoff Files Created
+- `/ux-audit/00_executive_summary.md`
+- `/ux-audit/01_route_inventory.md`
+- `/ux-audit/02_screen_inventory.md`
+- `/ux-audit/03_logged_out_and_auth_map.md`
+- `/ux-audit/04_consumer_onboarding_map.md`
+- `/ux-audit/05_b2b_onboarding_and_roles_map.md`
+- `/ux-audit/06_user_flow_maps.md`
+- `/ux-audit/07_friction_log.md`
+- `/ux-audit/08_component_and_pattern_inventory.md`
+- `/ux-audit/09_accessibility_responsive_notes.md`
+- `/ux-audit/10_engineering_handoff_notes.md`
+- `/ux-audit/11_figma_handoff_notes.md`
+- `/ux-audit/12_product_strategy_notes.md`
+- `/ux-audit/13_open_questions.md`
+
+## Important Notes
+-
+```
+
+```
+
+Use this as the **first-pass mapping prompt**. After Codex produces `/ux-audit/`, the next prompt should be a separate synthesis pass: “turn this audit into a redesign plan, Figma board structure, and engineering backlog.'
+```
+",
+    "commitMessage": "Exhaustive UI/UX Audit",
+    "prTitle": "Molten Hub Code: Exhuastive UI/UX Audit"
+  }
+}
