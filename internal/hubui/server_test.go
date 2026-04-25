@@ -999,11 +999,17 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if strings.Contains(markup, "rightCol.classList.toggle(\"task-output-hidden\", !outputVisible);") {
 		t.Fatalf("expected index html to remove standard layout output hiding")
 	}
-	if !strings.Contains(markup, "rightCol.classList.toggle(\"task-list-hidden\", false);") {
-		t.Fatalf("expected index html to keep the standard layout stable even when the queue is empty")
+	if !strings.Contains(markup, "rightCol.classList.toggle(\"task-list-hidden\", !hasTaskPanelTasks);") {
+		t.Fatalf("expected index html to hide the task layout when current work and history are both empty")
 	}
-	if !strings.Contains(markup, "taskPanel.classList.toggle(\"hidden\", false);") {
-		t.Fatalf("expected index html to keep the task queue panel visible when there are no tasks")
+	if !strings.Contains(markup, "function hasTaskPanelContent(snapshot) {") {
+		t.Fatalf("expected index html to define task panel visibility from both running work and completed history")
+	}
+	if !strings.Contains(markup, "taskPanel.classList.toggle(\"hidden\", !hasTaskPanelTasks);") {
+		t.Fatalf("expected index html to hide the task queue panel when current work and history are both empty")
+	}
+	if !strings.Contains(markup, "taskPanel.setAttribute(\"aria-hidden\", hasTaskPanelTasks ? \"false\" : \"true\");") {
+		t.Fatalf("expected index html to keep task panel aria visibility in sync with rendered content")
 	}
 	if !strings.Contains(markup, "openTaskOutput(requestID);") {
 		t.Fatalf("expected index html to open focused full screen output from the task action")
