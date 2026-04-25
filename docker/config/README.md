@@ -35,11 +35,18 @@ cp init.example.json .moltenhub/init.json
 
 For manual `docker run` with a bind mount, if your host user is not uid/gid `1000`, add `--user "$(id -u):$(id -g)"` to avoid config write-permission failures.
 
-Example:
+Example with persisted config mount and direct env bootstrap:
 
 ```bash
 docker run --rm -p 7777:7777 \
   -e GITHUB_TOKEN=ghp_your_token \
+  -e MOLTEN_HUB_TOKEN=hub_your_agent_token \
+  -e MOLTEN_HUB_REGION=na \
   -v "$PWD/.moltenhub:/workspace/config" \
   moltenhub-code:latest
 ```
+
+`MOLTEN_HUB_TOKEN` only needs to be present for first bootstrap when no `config.json` or `init.json` exists yet. Optional extras:
+- `MOLTEN_HUB_REGION=na|eu` selects hosted hub region
+- `MOLTEN_HUB_URL=https://na.hub.molten.bot/v1` sets explicit hosted hub API URL
+- `MOLTEN_HUB_SESSION_KEY` customizes generated init config session key
