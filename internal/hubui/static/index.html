@@ -4722,11 +4722,25 @@
       }
 
       for (const entry of entries) {
+        const selectAndOpen = () => {
+          state.selectedLibraryTask = entry.name;
+          renderLibraryTaskOptions();
+          if (state.promptMode === "json") {
+            try {
+              syncRawFromMode("library");
+            } catch (_err) {
+              // Leave raw editor unchanged if library fields are incomplete.
+            }
+          }
+          openLibraryPromptModal(entry);
+        };
+
         const item = document.createElement("div");
         item.className = "library-task-option";
         if (entry.name === selected) {
           item.classList.add("active");
         }
+        item.addEventListener("click", selectAndOpen);
 
         const content = document.createElement("div");
         content.className = "library-task-option-content";
@@ -4746,16 +4760,9 @@
         subtitle.textContent = entry.description || "No subtitle available.";
         button.appendChild(subtitle);
 
-        button.addEventListener("click", () => {
-          state.selectedLibraryTask = entry.name;
-          renderLibraryTaskOptions();
-          if (state.promptMode === "json") {
-            try {
-              syncRawFromMode("library");
-            } catch (_err) {
-              // Leave raw editor unchanged if library fields are incomplete.
-            }
-          }
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
+          selectAndOpen();
         });
 
         const promptLink = document.createElement("button");

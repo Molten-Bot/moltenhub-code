@@ -1251,9 +1251,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `role="dialog"`) ||
 		!strings.Contains(markup, `promptLink.className = "library-task-option-link";`) ||
 		!strings.Contains(markup, `promptLink.title = "Open full prompt";`) ||
+		!strings.Contains(markup, `item.addEventListener("click", selectAndOpen);`) ||
+		!strings.Contains(markup, `button.addEventListener("click", (event) => {`) ||
+		!strings.Contains(markup, `event.stopPropagation();`) ||
 		!strings.Contains(markup, `openLibraryPromptModal(entry);`) ||
 		!strings.Contains(markup, `libraryPromptModalBody.textContent = entry.prompt || "Prompt unavailable.";`) {
-		t.Fatalf("expected index html to show full library prompts in a modal from each task link button")
+		t.Fatalf("expected index html to show full library prompts in a modal from each task card or link button")
 	}
 	if strings.Contains(markup, "library-task-option-name") {
 		t.Fatalf("expected index html to stop rendering library task internal names")
