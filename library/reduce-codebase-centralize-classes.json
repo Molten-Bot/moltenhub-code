@@ -5,6 +5,6 @@
     "targetSubdir": ".",
     "prompt": "Refactor this repository to reduce the codebase size and centralize duplicated classes, types, and shared logic into the most appropriate existing abstractions. Remove redundancy instead of layering new wrappers. Preserve behavior, avoid regressions, and validate the result with focused tests and any existing local verification the repository supports before finishing.",
     "commitMessage": "refactor: reduce codebase and centralize classes",
-    "prTitle": "moltenhub-reduce-codebase-centralize-classes"
+    "prTitle": "Molten Hub Code: reduce-codebase-centralize-classes"
   }
 }

@@ -1,12 +1,79 @@
 package library
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 )
+
+func TestDefaultLibraryJSONFilesHaveCanonicalShape(t *testing.T) {
+	t.Setenv(catalogDirEnv, "")
+	t.Setenv(agentsSeedEnv, "")
+
+	dir := resolveCatalogDir(DefaultDir)
+	paths, err := filepath.Glob(filepath.Join(dir, "*.json"))
+	if err != nil {
+		t.Fatalf("glob library json files: %v", err)
+	}
+	if len(paths) == 0 {
+		t.Fatalf("no library json files found in %q", dir)
+	}
+
+	wantFields := []string{"commitMessage", "description", "displayName", "prTitle", "prompt", "targetSubdir"}
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Errorf("%s: read file: %v", path, err)
+			continue
+		}
+
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(data, &raw); err != nil {
+			t.Errorf("%s: invalid JSON: %v", path, err)
+			continue
+		}
+		if len(raw) != 1 {
+			t.Errorf("%s: got %d top-level tasks, want 1", path, len(raw))
+			continue
+		}
+
+		var taskName string
+		var taskData json.RawMessage
+		for name, data := range raw {
+			taskName = name
+			taskData = data
+		}
+		wantName := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		if taskName != wantName {
+			t.Errorf("%s: top-level task key = %q, want %q", path, taskName, wantName)
+		}
+
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(taskData, &fields); err != nil {
+			t.Errorf("%s: task %q must be a JSON object: %v", path, taskName, err)
+			continue
+		}
+		if gotFields := sortedKeys(fields); !reflect.DeepEqual(gotFields, wantFields) {
+			t.Errorf("%s: task fields = %v, want %v", path, gotFields, wantFields)
+			continue
+		}
+
+		for _, field := range wantFields {
+			var value string
+			if err := json.Unmarshal(fields[field], &value); err != nil {
+				t.Errorf("%s: field %q must be a string: %v", path, field, err)
+				continue
+			}
+			if strings.TrimSpace(value) == "" {
+				t.Errorf("%s: field %q must not be empty", path, field)
+			}
+		}
+	}
+}
 
 func TestLoadCatalogReadsJSONTasks(t *testing.T) {
 	t.Parallel()
@@ -53,6 +120,15 @@ func TestLoadCatalogReadsJSONTasks(t *testing.T) {
 	if got, want := summaries[0].Prompt, "Review the repository."; got != want {
 		t.Fatalf("Summaries()[0].Prompt = %q, want %q", got, want)
 	}
+}
+
+func sortedKeys(values map[string]json.RawMessage) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func TestLoadCatalogSupportsMultipleKeyedTasksInOneFile(t *testing.T) {
@@ -280,7 +356,7 @@ func TestDefaultCatalogIncludesReduceCodebaseCentralizeClassesTask(t *testing.T)
 	if !strings.Contains(strings.ToLower(task.Prompt), "avoid regressions") {
 		t.Fatalf("prompt = %q, want regression-prevention guidance", task.Prompt)
 	}
-	if got, want := task.PRTitle, "moltenhub-reduce-codebase-centralize-classes"; got != want {
+	if got, want := task.PRTitle, "Molten Hub Code: reduce-codebase-centralize-classes"; got != want {
 		t.Fatalf("PRTitle = %q, want %q", got, want)
 	}
 }
@@ -313,7 +389,7 @@ func TestDefaultCatalogIncludesFixPRCITestsTask(t *testing.T) {
 			t.Fatalf("prompt = %q, want %q guidance", task.Prompt, want)
 		}
 	}
-	if got, want := task.PRTitle, "moltenhub-fix-pr-ci-tests"; got != want {
+	if got, want := task.PRTitle, "Molten Hub Code: fix-pr-ci-tests"; got != want {
 		t.Fatalf("PRTitle = %q, want %q", got, want)
 	}
 }

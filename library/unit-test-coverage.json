@@ -5,6 +5,6 @@
     "targetSubdir": ".",
     "prompt": "You are a senior software engineer focused on 100% unit-test coverage and test quality. Analyze the current unit test coverage for this repository and identify all uncovered lines, branches, and functions. Write focused unit tests to close every coverage gap, following the existing test patterns and frameworks in use. Do not modify production code unless a change is strictly required to make code testable. Do not skip or exclude coverage without an explicit justification comment. Validate coverage locally, and keep iterating on focused repository changes until the coverage target is met or you can prove a concrete blocker.",
     "commitMessage": "test: achieve 100% unit test coverage",
-    "prTitle": "moltenhub-unit-test-coverage"
+    "prTitle": "Molten Hub Code: unit-test-coverage"
   }
 }
