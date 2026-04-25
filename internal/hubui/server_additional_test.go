@@ -1091,8 +1091,17 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if strings.Contains(css, ".prompt-image-chip {") {
 		t.Fatalf("expected stacked screenshot chip styles to be removed")
 	}
-	if !strings.Contains(css, "@media (max-width: 700px) {\n  .page-bottom-dock {\n    bottom: max(12px, env(safe-area-inset-bottom));\n    max-width: calc(100vw - 24px);\n  }\n\n  .prompt-mode-tabs-dock {\n    max-width: calc(100vw - 24px);\n    overflow-x: auto;\n    overflow-y: visible;\n  }\n\n  .theme-toggle {\n    right: 12px;\n    bottom: 12px;\n    left: auto;\n  }\n\n  :root {\n    --hub-floating-bottom: max(12px, env(safe-area-inset-bottom));\n    --hub-floating-stack-height: 128px;\n    --hub-studio-dock-gap: 12px;\n  }") {
-		t.Fatalf("expected mobile layout to coordinate the bottom dock stack and theme toggle spacing")
+	if !strings.Contains(css, "@media (max-width: 700px) {\n  :root {\n    --hub-floating-bottom: 0px;\n    --hub-floating-stack-height: calc(68px + env(safe-area-inset-bottom));\n    --hub-studio-dock-gap: 12px;\n  }\n\n  .page-bottom-dock {\n    left: 0;\n    right: 0;\n    bottom: 0;\n    width: 100%;\n    max-width: none;\n    transform: none;\n  }") {
+		t.Fatalf("expected mobile layout to snap the bottom dock to the viewport edge")
+	}
+	if !strings.Contains(css, ".prompt-mode-tabs-dock {\n    width: 100%;\n    max-width: none;\n    overflow: visible;\n  }\n\n  .prompt-mode-tabs {\n    width: 100%;\n    justify-content: space-around;\n    gap: 4px;\n    padding: 8px 8px calc(env(safe-area-inset-bottom) + 8px);\n    border: 0;\n    border-top: 1px solid var(--glass-border);\n    border-radius: 0;\n    box-shadow: 0 -2px 14px rgba(0, 0, 0, 0.18);\n  }") {
+		t.Fatalf("expected mobile dock menu to use a full-width glass footer bar")
+	}
+	if !strings.Contains(css, ".prompt-mode-link {\n    width: auto;\n    min-width: 0;\n    max-width: 72px;\n    height: auto;\n    flex: 1 1 44px;\n    flex-direction: column;\n    gap: 4px;\n    padding: 6px 2px;\n  }") {
+		t.Fatalf("expected mobile dock items to use compact icon-over-label controls")
+	}
+	if !strings.Contains(css, ".prompt-mode-link-tooltip {\n    position: static;\n    display: block;\n    max-width: 70px;\n    padding: 0;\n    opacity: 1;") {
+		t.Fatalf("expected mobile dock labels to stay visible under each icon")
 	}
 	if !strings.Contains(css, "@media (max-width: 640px) {\n  .panel-section-copy {\n    max-width: none;\n  }\n\n  .prompt-actions {\n    flex-wrap: wrap;\n    gap: 6px;\n  }\n\n  .prompt-actions-start,\n  .submit-status-inline,\n  .prompt-actions-end {\n    flex: 1 1 100%;\n    width: 100%;\n  }\n\n  .prompt-actions-end {\n    justify-content: flex-end;\n    margin-left: 0;\n  }\n\n  .prompt-action-paste {\n    max-width: none;\n  }\n\n  .submit-status-inline {\n    min-width: 0;\n  }\n\n  .prompt-action-button {\n    flex: 1 1 0;\n    min-inline-size: 0;\n  }\n\n  .task-empty {\n    min-height: 0;\n    padding: 18px;\n  }") {
 		t.Fatalf("expected mobile layout to keep Studio action controls fully visible")
