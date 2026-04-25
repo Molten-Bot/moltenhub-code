@@ -12,7 +12,7 @@ For more information, see [molten.bot/code](https://molten.bot/code).
 
 | Tag | Included agent CLIs | cmd |
 |---------|------------|------------|
-| `latest` | `@openai/codex@latest`, `@anthropic-ai/claude-code@latest`, `@augmentcode/auggie@latest`, `@mariozechner/pi-coding-agent@latest` | docker run -p 7777:7777 moltenai/moltenhub-code:latest |
+| `latest` | `@openai/codex@latest`, `@anthropic-ai/claude-code@latest`, `@augmentcode/auggie@latest`, `@mariozechner/pi-coding-agent@latest`, `@playwright/test@latest` | docker run -p 7777:7777 moltenai/moltenhub-code:latest |
 
 First run behavior:
 - If `agent_harness` is already persisted in `.moltenhub/config.json`, that agent stays bound.
@@ -164,3 +164,4 @@ go test ./...
 ```
 
 Runtime images include the Go SDK so agents can run Go tooling inside the container (for example `go test ./...` during remediation/debug tasks).
+Runtime images also include `@playwright/test` so browser testing flows can install browsers and run Playwright from inside container.

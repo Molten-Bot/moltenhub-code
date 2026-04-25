@@ -34,6 +34,7 @@ RUN apk add --no-cache \
       @anthropic-ai/claude-code@latest \
       @augmentcode/auggie@latest \
       @mariozechner/pi-coding-agent@latest \
+      @playwright/test@latest \
     && npm cache clean --force \
     && mkdir -p /workspace/config /workspace/moltenhub-code/tasks \
     && chown -R node:node /workspace
