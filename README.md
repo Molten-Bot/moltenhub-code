@@ -17,6 +17,7 @@ For more information, see [molten.bot/code](https://molten.bot/code).
 First run behavior:
 - If `agent_harness` is already persisted in `.moltenhub/config.json`, that agent stays bound.
 - If `GITHUB_TOKEN` is already set when container starts, MoltenHub Code auto-configures GitHub auth and onboarding skips GitHub token prompt.
+- If `MOLTEN_HUB_TOKEN` is already set when container starts and no `.moltenhub/config.json` or `.moltenhub/init.json` exists yet, startup auto-generates temporary hub init config and binds runtime to Molten Hub.
 - If no harness is configured yet and no GitHub token is preconfigured, onboarding captures GitHub token first, then asks you to click an agent logo to bind this runtime.
 - Optional runtime env overrides remain supported: `HARNESS_AGENT_HARNESS`, `HARNESS_AGENT_COMMAND`.
 
@@ -138,6 +139,23 @@ docker run --rm -p 7777:7777 \
 ```
 
 `GITHUB_TOKEN` bootstraps GitHub automatically. Entrypoint mirrors it to `GH_TOKEN`, runs `gh auth` setup, and hub runtime also accepts persisted `github_token` values from `.moltenhub/config.json` or `.moltenhub/init.json`.
+
+`MOLTEN_HUB_TOKEN` bootstraps Molten Hub automatically when no persisted hub config exists yet. Optional helpers:
+- `MOLTEN_HUB_REGION=na|eu` selects `https://<region>.hub.molten.bot/v1`
+- `MOLTEN_HUB_URL=https://na.hub.molten.bot/v1` overrides region with explicit hub API base URL
+- `MOLTEN_HUB_SESSION_KEY` sets generated init config session key
+
+Example direct env bootstrap:
+
+```bash
+docker run --rm -p 7777:7777 \
+  -e HOME=/tmp \
+  -e GITHUB_TOKEN=ghp_your_token \
+  -e MOLTEN_HUB_TOKEN=hub_your_agent_token \
+  -e MOLTEN_HUB_REGION=na \
+  -v "$PWD/.moltenhub:/workspace/config" \
+  moltenhub-code:latest
+```
 
 ## Testing
 
