@@ -39,6 +39,9 @@ func TestFailureFollowUpHelperBranches(t *testing.T) {
 	if ok, reason := shouldQueueFailureFollowUp(SkillDispatch{RequestID: "req-1-failure-review"}, harness.Result{Err: errors.New("boom")}); ok || reason != "run is already a failure follow-up" {
 		t.Fatalf("shouldQueueFailureFollowUp(nested) = (%v, %q), want (false, %q)", ok, reason, "run is already a failure follow-up")
 	}
+	if ok, reason := shouldQueueFailureFollowUp(SkillDispatch{RequestID: "req-1"}, harness.Result{Err: errors.New("boom")}); ok || reason != automaticFailureFollowUpDisabledReason {
+		t.Fatalf("shouldQueueFailureFollowUp(default) = (%v, %q), want (false, %q)", ok, reason, automaticFailureFollowUpDisabledReason)
+	}
 	if ok, reason := shouldQueueFailureRerun(SkillDispatch{RequestID: "req-1-rerun"}, harness.Result{Err: errors.New("boom")}); ok || reason != "run is already a failure rerun" {
 		t.Fatalf("shouldQueueFailureRerun(nested) = (%v, %q), want (false, %q)", ok, reason, "run is already a failure rerun")
 	}

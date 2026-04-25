@@ -49,6 +49,7 @@ const dispatchDedupTTL = 2 * time.Hour
 const agentStatusUpdateTimeout = 5 * time.Second
 const failureFollowUpRequestIDSuffix = "-failure-review"
 const failureRerunRequestIDSuffix = "-rerun"
+const automaticFailureFollowUpDisabledReason = "automatic failure follow-up disabled; queue single rerun only"
 const failureFollowUpPromptBase = failurefollowup.RequiredPrompt
 const failureFollowUpNoPathGuidance = "No workspace or log path was captured before the failure. Investigate the task history and runtime error details first."
 const failureFollowUpBaseBranch = "main"
@@ -1162,7 +1163,7 @@ func shouldQueueFailureFollowUp(dispatch SkillDispatch, res harness.Result) (boo
 	if isFailureFollowUpRequestID(dispatch.RequestID) {
 		return false, "run is already a failure follow-up"
 	}
-	return true, ""
+	return false, automaticFailureFollowUpDisabledReason
 }
 
 func queueFailureRerun(ctx context.Context, api MoltenHubAPI, cfg InitConfig, dispatch SkillDispatch) error {
