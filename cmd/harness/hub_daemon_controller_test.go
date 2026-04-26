@@ -34,6 +34,29 @@ func TestHubDaemonControllerErrorsChannel(t *testing.T) {
 	}
 }
 
+func TestHubDaemonControllerRunning(t *testing.T) {
+	t.Parallel()
+
+	var nilController *hubDaemonController
+	if nilController.Running() {
+		t.Fatal("nil controller Running() = true, want false")
+	}
+
+	controller := newHubDaemonController(context.Background(), nil)
+	if controller.Running() {
+		t.Fatal("new controller Running() = true, want false")
+	}
+	done := make(chan error)
+	controller.setActiveRun(func() {}, done)
+	if !controller.Running() {
+		t.Fatal("active controller Running() = false, want true")
+	}
+	controller.clearActiveRun(done)
+	if controller.Running() {
+		t.Fatal("cleared controller Running() = true, want false")
+	}
+}
+
 func TestHubDaemonControllerUpdateValidatesInputs(t *testing.T) {
 	t.Parallel()
 

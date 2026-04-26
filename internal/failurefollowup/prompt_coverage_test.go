@@ -37,11 +37,20 @@ func TestNonRemediableRepoAccessReasonFallsBackToEmpty(t *testing.T) {
 	if got := NonRemediableRepoAccessReason(errors.New("unrelated failure")); got != "" {
 		t.Fatalf("NonRemediableRepoAccessReason(unrelated) = %q, want empty", got)
 	}
+	if got := NonRemediableRepoAccessReason(errors.New(" \n\t ")); got != "" {
+		t.Fatalf("NonRemediableRepoAccessReason(empty error text) = %q, want empty", got)
+	}
 }
 
 func TestNonRemediableFailureReasonRecognizesQuotaAndAllowsNoDelta(t *testing.T) {
 	t.Parallel()
 
+	if got := NonRemediableFailureReason(nil); got != "" {
+		t.Fatalf("NonRemediableFailureReason(nil) = %q, want empty", got)
+	}
+	if got := NonRemediableFailureReason(errors.New(" \n\t ")); got != "" {
+		t.Fatalf("NonRemediableFailureReason(empty error text) = %q, want empty", got)
+	}
 	if got := NonRemediableFailureReason(errors.New("codex: ERROR: Quota exceeded. Check your plan and billing details.")); got != "quota exceeded" {
 		t.Fatalf("NonRemediableFailureReason(quota) = %q, want %q", got, "quota exceeded")
 	}

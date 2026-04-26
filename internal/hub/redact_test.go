@@ -21,6 +21,14 @@ func TestRedactSensitiveLogText(t *testing.T) {
 	}
 }
 
+func TestRedactSensitiveLogTextHandlesEmptyInput(t *testing.T) {
+	t.Parallel()
+
+	if got := redactSensitiveLogText(""); got != "" {
+		t.Fatalf("redactSensitiveLogText(empty) = %q, want empty", got)
+	}
+}
+
 func TestRedactSensitiveLogTextLeavesNonSensitiveInputUntouched(t *testing.T) {
 	t.Parallel()
 
@@ -50,5 +58,19 @@ func TestContainsSensitiveMarker(t *testing.T) {
 	}
 	if containsSensitiveMarker("dispatch status=ok") {
 		t.Fatal("containsSensitiveMarker(non-sensitive) = true, want false")
+	}
+}
+
+func TestASCIIFoldHelpersEdgeCases(t *testing.T) {
+	t.Parallel()
+
+	if !containsASCIIFold("anything", "") {
+		t.Fatal("containsASCIIFold(empty needle) = false, want true")
+	}
+	if containsASCIIFold("tok", "token") {
+		t.Fatal("containsASCIIFold(short value) = true, want false")
+	}
+	if hasASCIIFoldPrefix("tok", "token") {
+		t.Fatal("hasASCIIFoldPrefix(short value) = true, want false")
 	}
 }

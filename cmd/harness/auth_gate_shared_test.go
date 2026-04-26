@@ -84,6 +84,11 @@ func TestConfigurableAgentAuthStateSharedTransitions(t *testing.T) {
 	var state configurableAgentAuthState
 	options := []hubui.AgentAuthOption{{Value: "OPENAI_API_KEY", Label: "OpenAI"}}
 
+	state.setError(" failed ")
+	if !state.required || state.ready || state.state != "error" || state.message != "failed" {
+		t.Fatalf("setError() state = %+v", state)
+	}
+
 	state.setConfigureUI(" paste token ", " command ", " placeholder ", options)
 	options[0].Label = "mutated"
 	if !state.required || state.ready || state.state != "needs_configure" {

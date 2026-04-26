@@ -2,9 +2,11 @@ package execx
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestOSRunnerRunUsesDirAndErrorWithoutOutputDetail(t *testing.T) {
@@ -87,5 +89,23 @@ func TestLineEmitterFlushTrimsTrailingCarriageReturn(t *testing.T) {
 	}
 	if got := w.pending.Len(); got != 0 {
 		t.Fatalf("pending len = %d, want 0", got)
+	}
+}
+
+func TestOSRunnerRunTerminatesProcessGroupOnContextCancel(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	_, err := (OSRunner{}).Run(ctx, Command{
+		Name: "sh",
+		Args: []string{"-lc", "sleep 5"},
+	})
+	if err == nil {
+		t.Fatal("Run(canceled context) error = nil, want non-nil")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) && !strings.Contains(err.Error(), "signal: killed") {
+		t.Fatalf("Run(canceled context) error = %v, want deadline or killed process", err)
 	}
 }
