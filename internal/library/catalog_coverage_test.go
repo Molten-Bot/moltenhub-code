@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -12,8 +13,14 @@ func TestTaskDefinitionUnmarshalJSONRejectsInvalidAndUnknownFields(t *testing.T)
 	t.Parallel()
 
 	var task TaskDefinition
+	if err := task.UnmarshalJSON([]byte(`{`)); err == nil {
+		t.Fatal("TaskDefinition.UnmarshalJSON(invalid JSON) error = nil, want non-nil")
+	}
 	if err := json.Unmarshal([]byte(`{"name":"x","unknown":true}`), &task); err == nil {
 		t.Fatal("UnmarshalJSON(unknown field) error = nil, want non-nil")
+	}
+	if err := json.Unmarshal([]byte(`{"name":{}}`), &task); err == nil {
+		t.Fatal("UnmarshalJSON(invalid field type) error = nil, want non-nil")
 	}
 	if err := json.Unmarshal([]byte(`{`), &task); err == nil {
 		t.Fatal("UnmarshalJSON(invalid JSON) error = nil, want non-nil")
@@ -36,6 +43,9 @@ func TestLoadCatalogSkipsNonJSONAndRejectsDuplicates(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "nested"), 0o755); err != nil {
+		t.Fatalf("Mkdir(nested) error = %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("ignore me"), 0o644); err != nil {
 		t.Fatalf("WriteFile(notes) error = %v", err)
 	}
@@ -49,6 +59,18 @@ func TestLoadCatalogSkipsNonJSONAndRejectsDuplicates(t *testing.T) {
 	_, err := LoadCatalog(dir)
 	if err == nil || !strings.Contains(err.Error(), `duplicate library task name "dup"`) {
 		t.Fatalf("LoadCatalog() error = %v, want duplicate name failure", err)
+	}
+}
+
+func TestLoadCatalogDefaultAndReadDirErrorPaths(t *testing.T) {
+	t.Setenv(catalogDirEnv, "")
+	t.Setenv(agentsSeedEnv, "")
+
+	if _, err := LoadCatalog(" "); err != nil {
+		t.Fatalf("LoadCatalog(default dir) error = %v", err)
+	}
+	if _, err := LoadCatalog(filepath.Join(t.TempDir(), "missing")); err == nil || !strings.Contains(err.Error(), "read library dir") {
+		t.Fatalf("LoadCatalog(missing dir) error = %v, want read failure", err)
 	}
 }
 
@@ -121,8 +143,24 @@ func TestResolveCatalogHelpersCoverFallbackBranches(t *testing.T) {
 	if got := catalogDirFromHint(filepath.Join(catalogDir, "missing.json")); got != catalogDir {
 		t.Fatalf("catalogDirFromHint(missing file path) = %q, want %q", got, catalogDir)
 	}
+	if got := catalogDirFromHint(" "); got != "" {
+		t.Fatalf("catalogDirFromHint(empty) = %q, want empty", got)
+	}
+	if got := catalogDirFromHint(root); got != "" {
+		t.Fatalf("catalogDirFromHint(non-catalog dir) = %q, want empty", got)
+	}
+	plainFile := filepath.Join(root, "plain.txt")
+	if err := os.WriteFile(plainFile, []byte("plain"), 0o644); err != nil {
+		t.Fatalf("WriteFile(plain) error = %v", err)
+	}
+	if got := catalogDirFromHint(plainFile); got != "" {
+		t.Fatalf("catalogDirFromHint(non-catalog file) = %q, want empty", got)
+	}
 	if got := catalogDirFromHint(filepath.Join(root, "missing")); got != "" {
 		t.Fatalf("catalogDirFromHint(non-catalog missing path) = %q, want empty", got)
+	}
+	if got := resolveCatalogDir("definitely-not-a-library-catalog-for-test"); got != "definitely-not-a-library-catalog-for-test" {
+		t.Fatalf("resolveCatalogDir(missing rel) = %q, want original rel", got)
 	}
 
 	t.Setenv(catalogDirEnv, filepath.Join(root, "missing"))
@@ -140,5 +178,44 @@ func TestResolveCatalogHelpersCoverFallbackBranches(t *testing.T) {
 	}
 	if got, ok := findDirUpward(nested, "library"); !ok || got != catalogDir {
 		t.Fatalf("findDirUpward() = (%q, %v), want (%q, true)", got, ok, catalogDir)
+	}
+}
+
+func TestCatalogExpandAndOrderingErrorBranches(t *testing.T) {
+	t.Parallel()
+
+	catalog := Catalog{byName: map[string]TaskDefinition{
+		"bad": {Name: "bad", TargetSubdir: "../escape", Prompt: "run task"},
+	}}
+	if _, err := catalog.ExpandRunConfig("bad", "git@github.com:acme/repo.git", "main"); err == nil || !strings.Contains(err.Error(), `library task "bad"`) {
+		t.Fatalf("ExpandRunConfig(invalid task config) error = %v, want wrapped validation error", err)
+	}
+	if got := OrderSummariesByUsage(nil, map[string]int{"x": 1}); got != nil {
+		t.Fatalf("OrderSummariesByUsage(nil) = %#v, want nil", got)
+	}
+	in := []TaskSummary{{Name: "a"}, {Name: "b"}}
+	got := OrderSummariesByUsage(in, nil)
+	if len(got) != len(in) || got[0].Name != "a" || got[1].Name != "b" {
+		t.Fatalf("OrderSummariesByUsage(no usage) = %#v, want original order", got)
+	}
+}
+
+func TestIsCatalogDirReturnsFalseWhenReadDirFails(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod unreadable directory behavior differs on Windows")
+	}
+
+	dir := filepath.Join(t.TempDir(), "unreadable")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatalf("Mkdir(unreadable) error = %v", err)
+	}
+	if err := os.Chmod(dir, 0); err != nil {
+		t.Fatalf("Chmod(unreadable) error = %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+
+	if isCatalogDir(dir) {
+		t.Fatalf("isCatalogDir(%q) = true, want false", dir)
 	}
 }

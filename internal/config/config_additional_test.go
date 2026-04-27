@@ -199,6 +199,25 @@ func TestApplyDefaultsPreservesExplicitResponseModeOptOut(t *testing.T) {
 	}
 }
 
+func TestApplyDefaultsLowercasesUnsupportedResponseMode(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		RepoURL:       "git@github.com:acme/repo.git",
+		Prompt:        "run task",
+		ResponseMode:  " Loud_Mode ",
+		AgentHarness:  "codex",
+		CommitMessage: "msg",
+		PRTitle:       "title",
+		PRBody:        "body",
+	}
+	cfg.ApplyDefaults()
+
+	if got, want := cfg.ResponseMode, "loud_mode"; got != want {
+		t.Fatalf("ResponseMode = %q, want %q", got, want)
+	}
+}
+
 func TestLoadRejectsSnakeCaseResponseModeField(t *testing.T) {
 	t.Parallel()
 

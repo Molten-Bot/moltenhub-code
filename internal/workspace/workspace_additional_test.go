@@ -104,4 +104,13 @@ func TestManagerIsManagedRunDir(t *testing.T) {
 	if m.IsManagedRunDir("/elsewhere/run") {
 		t.Fatalf("IsManagedRunDir(%q) = true, want false", "/elsewhere/run")
 	}
+	if m.IsManagedRunDir(" ") {
+		t.Fatal("IsManagedRunDir(blank) = true, want false")
+	}
+	if IsManagedRunDir(ramRun) {
+		t.Fatalf("package IsManagedRunDir(%q) = true with default roots, want false", ramRun)
+	}
+	if looksLikeRunGUID("0123456789abcdef0123456789abcdeg") {
+		t.Fatal("looksLikeRunGUID(non-hex) = true, want false")
+	}
 }

@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -28,6 +29,13 @@ func TestRunConfigArrayAndAliasHelpers(t *testing.T) {
 	if len(got) != 2 || got[0] != "repo-a" || got[1] != "repo-b" {
 		t.Fatalf("nonEmptyStringArray() = %v, want [repo-a repo-b]", got)
 	}
+	got = nonEmptyStringArray([]string{" ", "repo-a", "repo-b"})
+	if len(got) != 2 || got[0] != "repo-a" || got[1] != "repo-b" {
+		t.Fatalf("nonEmptyStringArray([]string) = %v, want [repo-a repo-b]", got)
+	}
+	if got := nonEmptyStringArray(123); got != nil {
+		t.Fatalf("nonEmptyStringArray(non-array) = %#v, want nil", got)
+	}
 }
 
 func TestNormalizeRunConfigMapAndAliasesValidation(t *testing.T) {
@@ -46,6 +54,12 @@ func TestNormalizeRunConfigMapAndAliasesValidation(t *testing.T) {
 	}
 	if _, err := normalizeRunConfigMap(42, ""); err == nil {
 		t.Fatal("normalizeRunConfigMap(non-map) error = nil, want non-nil")
+	}
+	if _, err := normalizeRunConfigMap("", ""); err == nil {
+		t.Fatal("normalizeRunConfigMap(empty string) error = nil, want non-nil")
+	}
+	if err := normalizeRunConfigAliases(nil); err == nil {
+		t.Fatal("normalizeRunConfigAliases(nil) error = nil, want non-nil")
 	}
 
 	err = normalizeRunConfigAliases(map[string]any{
@@ -90,6 +104,9 @@ func TestNormalizeRunConfigMapAppliesCodeReviewSkillDefaults(t *testing.T) {
 	if _, err := normalizeRunConfigMap(`{"repo":"git@github.com:acme/repo.git"}`, "library_task"); err == nil || !strings.Contains(err.Error(), "requires libraryTaskName") {
 		t.Fatalf("normalizeRunConfigMap(library_task missing handle) error = %v", err)
 	}
+	if _, err := normalizeRunConfigMap(`{"repo":"git@github.com:acme/repo.git","prompt":"x"}`, "library_task"); err == nil || !strings.Contains(err.Error(), "does not accept prompt") {
+		t.Fatalf("normalizeRunConfigMap(library_task prompt) error = %v", err)
+	}
 }
 
 func TestExtractConfigValueAndLooksLikeRunConfigMap(t *testing.T) {
@@ -117,6 +134,117 @@ func TestExtractConfigValueAndLooksLikeRunConfigMap(t *testing.T) {
 	}
 	if looksLikeRunConfigMap(map[string]any{"prompt": "x", "repos": []any{}}) {
 		t.Fatal("looksLikeRunConfigMap(empty repos) = true, want false")
+	}
+
+	for _, msg := range []map[string]any{
+		{"payload": map[string]any{"repo": "git@github.com:acme/repo.git", "prompt": "ship"}},
+		{"data": map[string]any{"repo": "git@github.com:acme/repo.git", "prompt": "ship"}},
+		{"repo": "git@github.com:acme/repo.git", "prompt": "ship"},
+	} {
+		if _, ok := extractConfigValue(msg); !ok {
+			t.Fatalf("extractConfigValue(%#v) ok = false, want true", msg)
+		}
+	}
+}
+
+func TestDispatchHelperErrorAndEdgeBranches(t *testing.T) {
+	t.Parallel()
+
+	if _, matched, err := ParseSkillDispatch(nil, "skill_request", "code_for_me"); matched || err != nil {
+		t.Fatalf("ParseSkillDispatch(empty) = matched %v err %v, want false nil", matched, err)
+	}
+	msgMissingType := map[string]any{
+		"skill": "code_for_me",
+		"config": map[string]any{
+			"repo":   "git@github.com:acme/repo.git",
+			"prompt": "ship",
+		},
+	}
+	if _, matched, err := ParseSkillDispatch(msgMissingType, "skill_request", "code_for_me"); !matched || err == nil || !strings.Contains(err.Error(), "missing dispatch type") {
+		t.Fatalf("ParseSkillDispatch(missing type) matched=%v err=%v, want missing type", matched, err)
+	}
+	if _, err := ParseRunConfigJSON([]byte(" \n\t ")); err == nil {
+		t.Fatal("ParseRunConfigJSON(empty) error = nil, want non-nil")
+	}
+	if _, err := ParseRunConfigJSON([]byte(`{"repo":"git@github.com:acme/repo.git"}`)); err == nil || !strings.Contains(err.Error(), "validate run config payload") {
+		t.Fatalf("ParseRunConfigJSON(invalid config) error = %v, want validation error", err)
+	}
+	if _, err := parseRunConfigValue(map[string]any{
+		"repo":   "git@github.com:acme/repo.git",
+		"prompt": "ship",
+		"bad":    func() {},
+	}, ""); err == nil || !strings.Contains(err.Error(), "marshal run config payload") {
+		t.Fatalf("parseRunConfigValue(unmarshalable value) error = %v, want marshal error", err)
+	}
+	if got := propertyStringEnum("", "  "); got["minLength"] != 1 {
+		t.Fatalf("propertyStringEnum(empty values) = %#v, want non-empty string schema", got)
+	}
+	root := map[string]any{"nested": map[string]any{"value": "x"}}
+	if got, ok := valueAtPath(root); !ok || got == nil {
+		t.Fatalf("valueAtPath(root) = (%#v, %v), want root,true", got, ok)
+	}
+	if got := stringAt(map[string]any{"n": 1}, "n"); got != "" {
+		t.Fatalf("stringAt(non-string) = %q, want empty", got)
+	}
+	if got := stringAtPath(root, "nested", "value"); got != "x" {
+		t.Fatalf("stringAtPath(valid) = %q, want x", got)
+	}
+	if got := stringAtPath(root, "nested"); got != "" {
+		t.Fatalf("stringAtPath(non-string leaf) = %q, want empty", got)
+	}
+}
+
+func TestExpandLibraryTaskRunConfigBranches(t *testing.T) {
+	t.Parallel()
+
+	expanded, err := expandLibraryTaskRunConfig(map[string]any{
+		"libraryTaskName": "unit-test-coverage",
+		"repos":           []any{"git@github.com:acme/repo.git"},
+		"extra":           "kept",
+	}, "unit-test-coverage")
+	if err != nil {
+		t.Fatalf("expandLibraryTaskRunConfig() error = %v", err)
+	}
+	if got := stringAt(expanded, "extra"); got != "kept" {
+		t.Fatalf("expanded extra = %q, want kept", got)
+	}
+	if got := nonEmptyStringArray(expanded["repos"]); len(got) != 1 || got[0] != "git@github.com:acme/repo.git" {
+		t.Fatalf("expanded repos = %#v, want original repo list", expanded["repos"])
+	}
+
+	if _, err := expandLibraryTaskRunConfig(map[string]any{
+		"repo": "git@github.com:acme/repo.git",
+	}, "missing-task"); err == nil {
+		t.Fatal("expandLibraryTaskRunConfig(missing task) error = nil, want non-nil")
+	}
+}
+
+func TestReviewSelectorAndPositiveIntBranches(t *testing.T) {
+	t.Parallel()
+
+	if ensureReviewSelector(nil) {
+		t.Fatal("ensureReviewSelector(nil) = true, want false")
+	}
+	for _, review := range []map[string]any{
+		{"prUrl": "https://github.com/acme/repo/pull/1"},
+		{"headBranch": "feature"},
+	} {
+		m := map[string]any{"review": review}
+		if !ensureReviewSelector(m) {
+			t.Fatalf("ensureReviewSelector(%#v) = false, want true", m)
+		}
+	}
+	cases := []any{int32(7), int64(8), float64(9), json.Number("10")}
+	for _, value := range cases {
+		got, ok := positiveIntValue(value)
+		if !ok || got <= 0 {
+			t.Fatalf("positiveIntValue(%T(%v)) = (%d, %v), want positive", value, value, got, ok)
+		}
+	}
+	for _, value := range []any{float64(1.5), json.Number("bad"), "12"} {
+		if _, ok := positiveIntValue(value); ok {
+			t.Fatalf("positiveIntValue(%T(%v)) ok = true, want false", value, value)
+		}
 	}
 }
 

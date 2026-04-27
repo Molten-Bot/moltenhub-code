@@ -79,3 +79,85 @@ func TestHubBaseURLForRegion(t *testing.T) {
 		t.Fatalf("HubBaseURLForRegion(other) = %q, want %q", got, want)
 	}
 }
+
+func TestHubRegionFromBaseURLFallbacks(t *testing.T) {
+	t.Parallel()
+
+	if got := HubRegionFromBaseURL("http://[::1"); got != hubRegionNA {
+		t.Fatalf("HubRegionFromBaseURL(invalid) = %q, want %q", got, hubRegionNA)
+	}
+	if got := HubRegionFromBaseURL("https://na.hub.molten.bot/v1"); got != hubRegionNA {
+		t.Fatalf("HubRegionFromBaseURL(na) = %q, want %q", got, hubRegionNA)
+	}
+	if got := HubRegionFromBaseURL("https://custom.example/v1"); got != hubRegionNA {
+		t.Fatalf("HubRegionFromBaseURL(custom) = %q, want %q", got, hubRegionNA)
+	}
+}
+
+func TestValidatePersistedHubBaseURLRejectsInvalidShapes(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		baseURL string
+		want    string
+	}{
+		{name: "empty", baseURL: " ", want: "required"},
+		{name: "parse", baseURL: "https://[::1", want: "base_url:"},
+		{name: "query", baseURL: "https://na.hub.molten.bot/v1?x=1", want: "query or fragment"},
+		{name: "port", baseURL: "https://na.hub.molten.bot:443/v1", want: "port"},
+		{name: "host suffix", baseURL: "https://hub.molten.bot/v1", want: "Molten Hub domain"},
+		{name: "nested host", baseURL: "https://bad.na.hub.molten.bot/v1", want: "Molten Hub domain"},
+		{name: "path", baseURL: "https://na.hub.molten.bot/v2", want: "/v1"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := ValidatePersistedHubBaseURL(tc.baseURL)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("ValidatePersistedHubBaseURL(%q) error = %v, want %q", tc.baseURL, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestValidateHubBaseURLRejectsInvalidShapes(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		baseURL string
+		want    string
+	}{
+		{name: "empty", baseURL: " ", want: "required"},
+		{name: "parse", baseURL: "https://[::1", want: "base_url:"},
+		{name: "scheme", baseURL: "ftp://na.hub.molten.bot/v1", want: "http or https"},
+		{name: "host", baseURL: "https:///v1", want: "host is required"},
+		{name: "query", baseURL: "https://na.hub.molten.bot/v1?x=1", want: "query or fragment"},
+		{name: "port", baseURL: "https://na.hub.molten.bot:443/v1", want: "port"},
+		{name: "suffix", baseURL: "https://example.com/v1", want: "one of"},
+		{name: "region", baseURL: "https://ap.hub.molten.bot/v1", want: "one of"},
+		{name: "path", baseURL: "https://na.hub.molten.bot/v2", want: "/v1"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := ValidateHubBaseURLStrict(tc.baseURL)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("ValidateHubBaseURLStrict(%q) error = %v, want %q", tc.baseURL, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestValidateHubBaseURLAllowsNonMoltenWhenConfigured(t *testing.T) {
+	t.Parallel()
+
+	if err := validateHubBaseURL("http://localhost:3000/v1?debug=1", true); err != nil {
+		t.Fatalf("validateHubBaseURL(allow custom) error = %v", err)
+	}
+}

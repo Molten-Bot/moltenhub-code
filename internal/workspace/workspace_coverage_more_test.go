@@ -12,6 +12,9 @@ func TestMountParsingAndPathHelpers(t *testing.T) {
 	if _, _, ok := parseMountInfoLine("bad"); ok {
 		t.Fatal("parseMountInfoLine(bad) ok = true, want false")
 	}
+	if _, _, ok := parseMountInfoLine("24 23 0:21 / /tmp - tmpfs"); ok {
+		t.Fatal("parseMountInfoLine(short fields) ok = true, want false")
+	}
 	mountPoint, options, ok := parseMountInfoLine("24 23 0:21 / /tmp rw,nosuid - tmpfs tmpfs rw,noexec")
 	if !ok || mountPoint != "/tmp" || options != "rw,nosuid,rw,noexec" {
 		t.Fatalf("parseMountInfoLine() = (%q, %q, %v)", mountPoint, options, ok)
@@ -33,6 +36,15 @@ func TestMountParsingAndPathHelpers(t *testing.T) {
 	}
 	if got := unescapeMountField(`with\040space`); got != "with space" {
 		t.Fatalf("unescapeMountField() = %q, want %q", got, "with space")
+	}
+	if got := unescapeMountField(`bad\999escape`); got != `bad\999escape` {
+		t.Fatalf("unescapeMountField(invalid octal) = %q", got)
+	}
+	if pathWithinMount(" ", "/tmp") {
+		t.Fatal("pathWithinMount(blank path) = true, want false")
+	}
+	if _, ok := mountOptionsFromProcMounts(filepath.Join(t.TempDir(), "missing"), "/tmp"); ok {
+		t.Fatal("mountOptionsFromProcMounts(missing) ok = true, want false")
 	}
 }
 
@@ -73,5 +85,54 @@ func TestSeedAgentsFileFallbackAndConfigRootHelpers(t *testing.T) {
 	t.Setenv(workspaceRootNameEnv, "../escape")
 	if got := configuredWorkspaceRootName(); got != defaultWorkspaceRoot {
 		t.Fatalf("configuredWorkspaceRootName(parent) = %q, want default", got)
+	}
+}
+
+func TestCreateRunDirDefaultGUIDAndRunDirFailure(t *testing.T) {
+	diskBase := t.TempDir()
+	t.Setenv(workspaceRAMBaseEnv, filepath.Join(t.TempDir(), "missing-ram"))
+	t.Setenv(workspaceDiskBaseEnv, diskBase)
+	t.Setenv(workspaceRootNameEnv, "tasks")
+
+	runDir, guid, err := (Manager{}).CreateRunDir()
+	if err != nil {
+		t.Fatalf("CreateRunDir(default callbacks) error = %v", err)
+	}
+	if guid == "" || filepath.Base(runDir) != guid {
+		t.Fatalf("CreateRunDir() = (%q, %q), want run dir ending with guid", runDir, guid)
+	}
+
+	mkdirCalls := 0
+	m := Manager{
+		PathExists: func(string) bool { return false },
+		NewGUID:    func() string { return "0123456789abcdef0123456789abcdef" },
+		MkdirAll: func(path string, _ os.FileMode) error {
+			mkdirCalls++
+			if mkdirCalls == 2 {
+				return os.ErrPermission
+			}
+			return nil
+		},
+	}
+	if _, _, err := m.CreateRunDir(); err == nil {
+		t.Fatal("CreateRunDir(run dir mkdir failure) error = nil, want non-nil")
+	}
+}
+
+func TestSeedAgentsFileUsesDefaultCallbacks(t *testing.T) {
+	runDir := t.TempDir()
+	seedDir := t.TempDir()
+	seed := filepath.Join(seedDir, "AGENTS.md")
+	if err := os.WriteFile(seed, []byte("seed"), 0o644); err != nil {
+		t.Fatalf("WriteFile(seed) error = %v", err)
+	}
+	t.Setenv(agentsSeedEnv, seed)
+
+	got, err := (Manager{}).SeedAgentsFile(runDir)
+	if err != nil {
+		t.Fatalf("SeedAgentsFile(default callbacks) error = %v", err)
+	}
+	if data, err := os.ReadFile(got); err != nil || string(data) != "seed" {
+		t.Fatalf("ReadFile(seed copy) = (%q, %v), want seed content", string(data), err)
 	}
 }

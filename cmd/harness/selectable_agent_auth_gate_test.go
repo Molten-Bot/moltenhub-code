@@ -45,6 +45,33 @@ func TestSelectableAgentAuthGateStatusRequiresGitHubTokenWhenUnbound(t *testing.
 	}
 }
 
+func TestSelectableAgentAuthGateStartVerifyAndErrorState(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	gate := newSelectableAgentAuthGate(context.Background(), nil, hub.InitConfig{RuntimeConfigPath: path}, nil)
+
+	startState, err := gate.StartDeviceAuth(context.Background())
+	if err != nil {
+		t.Fatalf("StartDeviceAuth() error = %v", err)
+	}
+	if got, want := startState.State, "needs_configure"; got != want {
+		t.Fatalf("StartDeviceAuth() state = %q, want %q", got, want)
+	}
+	verifyState, err := gate.Verify(context.Background())
+	if err != nil {
+		t.Fatalf("Verify() error = %v", err)
+	}
+	if got, want := verifyState.State, "needs_configure"; got != want {
+		t.Fatalf("Verify() state = %q, want %q", got, want)
+	}
+	errorState := gate.errorState(" ")
+	if got, want := errorState.Message, "agent auth status failed"; got != want {
+		t.Fatalf("errorState(empty).Message = %q, want %q", got, want)
+	}
+}
+
 func TestSelectableAgentAuthGateStatusRequiresHarnessSelectionAfterGitHubReady(t *testing.T) {
 	t.Setenv("GH_TOKEN", "ghp_ready_token")
 	t.Setenv("GITHUB_TOKEN", "")

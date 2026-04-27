@@ -64,6 +64,23 @@ func TestComposePromptPrefersPrimaryLogPaths(t *testing.T) {
 	}
 }
 
+func TestWithFollowUpContractUsesFullContractWhenBaseEmpty(t *testing.T) {
+	t.Parallel()
+
+	if got := WithFollowUpContract(" \n\t "); got != FollowUpContract {
+		t.Fatalf("WithFollowUpContract(empty) = %q, want follow-up contract", got)
+	}
+}
+
+func TestWithFollowUpContractDoesNotDuplicateExistingContract(t *testing.T) {
+	t.Parallel()
+
+	base := "do the work\n\n" + FollowUpContract
+	if got := WithFollowUpContract(base); got != base {
+		t.Fatalf("WithFollowUpContract(existing contract) = %q, want unchanged", got)
+	}
+}
+
 func TestTaskLogPathsReturnsNilWhenTaskLogDirInvalid(t *testing.T) {
 	t.Parallel()
 
@@ -96,6 +113,26 @@ func TestTaskLogPathsOmitsFallbackMainLogsForLocalRequests(t *testing.T) {
 	for _, path := range paths {
 		if strings.Contains(path, filepath.Join(root, FallbackLogSubdir)+string(filepath.Separator)) {
 			t.Fatalf("TaskLogPaths(local request) should exclude fallback main logs: %v", paths)
+		}
+	}
+}
+
+func TestTaskLogPathsDeduplicatesFallbackMainLogs(t *testing.T) {
+	t.Parallel()
+
+	root := "/tmp/logs"
+	paths := TaskLogPaths(root, FallbackLogSubdir)
+	want := []string{
+		filepath.Join(root, FallbackLogSubdir),
+		filepath.Join(root, FallbackLogSubdir, LegacyTaskLogFileName),
+		filepath.Join(root, FallbackLogSubdir, LogFileName),
+	}
+	if len(paths) != len(want) {
+		t.Fatalf("len(TaskLogPaths()) = %d, want %d (%v)", len(paths), len(want), paths)
+	}
+	for i := range want {
+		if paths[i] != want[i] {
+			t.Fatalf("TaskLogPaths()[%d] = %q, want %q", i, paths[i], want[i])
 		}
 	}
 }

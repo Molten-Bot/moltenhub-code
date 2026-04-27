@@ -146,6 +146,63 @@ func TestRecordLocalRunActivityPublishesWhenHubConnected(t *testing.T) {
 	}
 }
 
+func TestRunResultPRHelpers(t *testing.T) {
+	t.Parallel()
+
+	withTopLevelPR := harness.Result{PRURL: " https://github.com/acme/repo/pull/1 "}
+	if !resultHasPR(withTopLevelPR) {
+		t.Fatal("resultHasPR(top-level PR) = false, want true")
+	}
+	withRepoPR := harness.Result{RepoResults: []harness.RepoResult{{PRURL: "https://github.com/acme/repo/pull/2"}}}
+	if !resultHasPR(withRepoPR) {
+		t.Fatal("resultHasPR(repo PR) = false, want true")
+	}
+	if resultHasPR(harness.Result{}) {
+		t.Fatal("resultHasPR(empty) = true, want false")
+	}
+	noChanges := harness.Result{
+		NoChanges: true,
+		RepoResults: []harness.RepoResult{
+			{Changed: false, PRURL: "https://github.com/acme/repo/pull/1"},
+			{Changed: true, PRURL: "https://github.com/acme/repo/pull/2"},
+		},
+	}
+	if got, want := completedPRURLs(noChanges), "https://github.com/acme/repo/pull/1,https://github.com/acme/repo/pull/2"; got != want {
+		t.Fatalf("completedPRURLs(no changes) = %q, want %q", got, want)
+	}
+	changed := noChanges
+	changed.NoChanges = false
+	if got, want := completedPRURLs(changed), "https://github.com/acme/repo/pull/2"; got != want {
+		t.Fatalf("completedPRURLs(changed only) = %q, want %q", got, want)
+	}
+}
+
+func TestValidateRunConfigPromptImages(t *testing.T) {
+	t.Parallel()
+
+	if err := validateRunConfigPromptImages(config.Config{}); err != nil {
+		t.Fatalf("validateRunConfigPromptImages(no images) error = %v", err)
+	}
+	if err := validateRunConfigPromptImages(config.Config{
+		AgentHarness: agentruntime.HarnessCodex,
+		Images:       []config.PromptImage{{Name: "shot.png"}},
+	}); err != nil {
+		t.Fatalf("validateRunConfigPromptImages(codex image) error = %v", err)
+	}
+	if err := validateRunConfigPromptImages(config.Config{
+		AgentHarness: "unknown",
+		Images:       []config.PromptImage{{Name: "shot.png"}},
+	}); err == nil {
+		t.Fatal("validateRunConfigPromptImages(unknown harness) error = nil, want non-nil")
+	}
+	if err := validateRunConfigPromptImages(config.Config{
+		AgentHarness: agentruntime.HarnessClaude,
+		Images:       []config.PromptImage{{Name: "shot.png"}},
+	}); err == nil || !errors.Is(err, agentruntime.ErrPromptImagesUnsupported) {
+		t.Fatalf("validateRunConfigPromptImages(claude image) error = %v, want unsupported images", err)
+	}
+}
+
 func TestRecordLocalRunActivitySkipsWhenHubDisconnected(t *testing.T) {
 	t.Parallel()
 

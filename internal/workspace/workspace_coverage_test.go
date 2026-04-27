@@ -29,6 +29,20 @@ func TestPrepareRootsReturnsWrappedErrorWhenAllCandidatesFail(t *testing.T) {
 	}
 }
 
+func TestPrepareRootsUsesDefaultMkdirAllWhenCallbackNil(t *testing.T) {
+	t.Setenv(workspaceRAMBaseEnv, filepath.Join(t.TempDir(), "missing-ram"))
+	diskBase := t.TempDir()
+	t.Setenv(workspaceDiskBaseEnv, diskBase)
+	t.Setenv(workspaceRootNameEnv, "tasks")
+
+	if err := (Manager{}).PrepareRoots(); err != nil {
+		t.Fatalf("PrepareRoots(default mkdir) error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(diskBase, "tasks")); err != nil {
+		t.Fatalf("Stat(workspace root) error = %v", err)
+	}
+}
+
 func TestSelectBaseWithDefaultCallbacksHonorsConfiguredBases(t *testing.T) {
 	ramBase := filepath.Join(t.TempDir(), "ram")
 	diskBase := filepath.Join(t.TempDir(), "disk")
@@ -69,5 +83,13 @@ func TestBaseAllowsExecUsesCachedValue(t *testing.T) {
 
 	if got := baseAllowsExec(" " + key + " "); got {
 		t.Fatalf("baseAllowsExec(cached false) = true, want false")
+	}
+}
+
+func TestBaseAllowsExecAllowsBlankPath(t *testing.T) {
+	t.Parallel()
+
+	if !baseAllowsExec(" \n\t ") {
+		t.Fatal("baseAllowsExec(blank) = false, want true")
 	}
 }

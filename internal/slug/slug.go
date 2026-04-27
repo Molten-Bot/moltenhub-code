@@ -26,9 +26,6 @@ func FromPrompt(prompt string) string {
 		s = s[:40]
 		s = strings.Trim(s, "-")
 	}
-	if s == "" {
-		return "task"
-	}
 	return s
 }
 

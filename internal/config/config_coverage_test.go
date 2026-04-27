@@ -12,6 +12,16 @@ import (
 func TestConfigUnmarshalBranchAliasAndImageSnakeCaseFallback(t *testing.T) {
 	t.Parallel()
 
+	if err := (&Config{}).UnmarshalJSON([]byte(`not-json`)); err == nil {
+		t.Fatal("UnmarshalJSON(invalid json) error = nil, want non-nil")
+	}
+	if err := json.Unmarshal([]byte(`{"repos":{}}`), &Config{}); err == nil {
+		t.Fatal("UnmarshalJSON(invalid repos type) error = nil, want non-nil")
+	}
+	if err := json.Unmarshal([]byte(`{"branch":{}}`), &Config{}); err == nil {
+		t.Fatal("UnmarshalJSON(invalid branch alias) error = nil, want non-nil")
+	}
+
 	var cfg Config
 	if err := json.Unmarshal([]byte(`{"repo":"git@github.com:acme/repo.git","branch":"release","prompt":"x"}`), &cfg); err != nil {
 		t.Fatalf("UnmarshalJSON(branch alias) error = %v", err)
@@ -26,10 +36,17 @@ func TestConfigUnmarshalBranchAliasAndImageSnakeCaseFallback(t *testing.T) {
 	if err := rejectSnakeCaseImageFields(json.RawMessage(`[{"data_base64":"x"}]`)); err == nil {
 		t.Fatal("rejectSnakeCaseImageFields(data_base64) error = nil, want non-nil")
 	}
+	if err := rejectSnakeCaseImageFields(json.RawMessage(`[{"mediaType":"image/png"}]`)); err != nil {
+		t.Fatalf("rejectSnakeCaseImageFields(canonical image fields) error = %v", err)
+	}
 }
 
 func TestLoadAndValidateErrorPaths(t *testing.T) {
 	t.Parallel()
+
+	if _, err := Load(filepath.Join(t.TempDir(), "missing.json")); err == nil || !strings.Contains(err.Error(), "read config") {
+		t.Fatalf("Load(missing) error = %v, want read failure", err)
+	}
 
 	dir := t.TempDir()
 	bad := filepath.Join(dir, "bad.json")
@@ -43,6 +60,11 @@ func TestLoadAndValidateErrorPaths(t *testing.T) {
 	cfg := Config{Version: "v2"}
 	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), `unsupported version "v2"`) {
 		t.Fatalf("Validate(unsupported version) error = %v", err)
+	}
+
+	cfg = Config{Version: " "}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "version is required") {
+		t.Fatalf("Validate(missing version) error = %v, want version required", err)
 	}
 
 	cfg = Config{
@@ -77,6 +99,36 @@ func TestLoadAndValidateErrorPaths(t *testing.T) {
 	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "commitMessage is required") {
 		t.Fatalf("Validate(missing commit message) error = %v", err)
 	}
+	cfg.CommitMessage = "msg"
+	cfg.PRTitle = ""
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "prTitle is required") {
+		t.Fatalf("Validate(missing pr title) error = %v", err)
+	}
+	cfg.PRTitle = "title"
+	cfg.PRBody = ""
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "prBody is required") {
+		t.Fatalf("Validate(missing pr body) error = %v", err)
+	}
+	cfg.PRBody = "body"
+	cfg.Images = []PromptImage{{MediaType: "image/png"}}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "images[0].dataBase64 is required") {
+		t.Fatalf("Validate(invalid image) error = %v", err)
+	}
+	cfg.Images = nil
+	cfg.BaseBranch = ""
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "baseBranch is required") {
+		t.Fatalf("Validate(missing baseBranch) error = %v", err)
+	}
+	cfg.BaseBranch = "main"
+	cfg.TargetSubdir = ""
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "targetSubdir is required") {
+		t.Fatalf("Validate(missing targetSubdir) error = %v", err)
+	}
+	cfg.TargetSubdir = "."
+	cfg.Prompt = ""
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "prompt is required") {
+		t.Fatalf("Validate(missing prompt) error = %v", err)
+	}
 }
 
 func TestNormalizationAndValidationHelpers(t *testing.T) {
@@ -84,6 +136,9 @@ func TestNormalizationAndValidationHelpers(t *testing.T) {
 
 	if got := normalizePromptImages([]PromptImage{{}, {Name: " shot.png ", MediaType: " image/png ", DataBase64: " ZGF0YQ== "}}); len(got) != 1 {
 		t.Fatalf("normalizePromptImages() len = %d, want 1", len(got))
+	}
+	if got := normalizePromptImages([]PromptImage{{Name: " "}}); got != nil {
+		t.Fatalf("normalizePromptImages(blank values) = %#v, want nil", got)
 	}
 	if got := normalizeReviewConfig(&ReviewConfig{}); got != nil {
 		t.Fatalf("normalizeReviewConfig(empty) = %#v, want nil", got)
@@ -106,6 +161,12 @@ func TestNormalizationAndValidationHelpers(t *testing.T) {
 	if err := validateRepoRef("ssh://git@github.com:owner/repo.git"); err == nil {
 		t.Fatal("validateRepoRef(mixed ssh styles) error = nil, want non-nil")
 	}
+	if err := validateRepoRef("https://[::1"); err == nil {
+		t.Fatal("validateRepoRef(parse error) error = nil, want non-nil")
+	}
+	if err := validateRepoRef("git@github.com:acme/repo with spaces.git"); err == nil {
+		t.Fatal("validateRepoRef(whitespace) error = nil, want non-nil")
+	}
 	if err := validateRepoRef("https:///repo.git"); err == nil {
 		t.Fatal("validateRepoRef(missing host) error = nil, want non-nil")
 	}
@@ -120,6 +181,18 @@ func TestNormalizationAndValidationHelpers(t *testing.T) {
 	}
 	if got := NormalizeResponseMode("off"); got != DisabledResponseMode {
 		t.Fatalf("NormalizeResponseMode(off) = %q, want %q", got, DisabledResponseMode)
+	}
+	if got := NormalizeResponseMode("unknown"); got != "" {
+		t.Fatalf("NormalizeResponseMode(unknown) = %q, want empty", got)
+	}
+	if got := NormalizeResponseMode("wenyan_lite"); got != "caveman-wenyan-lite" {
+		t.Fatalf("NormalizeResponseMode(wenyan_lite) = %q, want caveman-wenyan-lite", got)
+	}
+	if got := NormalizeResponseMode("wenyan_ultra"); got != "caveman-wenyan-ultra" {
+		t.Fatalf("NormalizeResponseMode(wenyan_ultra) = %q, want caveman-wenyan-ultra", got)
+	}
+	if modes := SupportedResponseModes(); len(modes) != 7 || modes[0] != DisabledResponseMode {
+		t.Fatalf("SupportedResponseModes() = %#v", modes)
 	}
 	if modes := SupportedResponseModesWithDefault(); len(modes) != 8 || modes[0] != "default" || modes[1] != DisabledResponseMode {
 		t.Fatalf("SupportedResponseModesWithDefault() = %#v", modes)
@@ -164,11 +237,32 @@ func TestDefaultMetadataAndStringHelpers(t *testing.T) {
 	if got := normalizePRTitle("moltenhub-existing-title"); got != "existing-title" {
 		t.Fatalf("normalizePRTitle(existing prefix) = %q", got)
 	}
+	if got := normalizePRTitle(" "); got != "Automated update" {
+		t.Fatalf("normalizePRTitle(empty) = %q, want Automated update", got)
+	}
+	if got := trimGeneratedPRTitleSuffix(" -20260407-002959"); got != "-20260407-002959" {
+		t.Fatalf("trimGeneratedPRTitleSuffix(generated-only) = %q, want original title", got)
+	}
+	if got := trimGeneratedPRTitleSuffix(" "); got != "" {
+		t.Fatalf("trimGeneratedPRTitleSuffix(empty) = %q, want empty", got)
+	}
+	if got := ensurePRBodyFooter(" "); got != prBodyFooter {
+		t.Fatalf("ensurePRBodyFooter(empty) = %q, want footer", got)
+	}
 	if got := stripLineComments([]byte("{\"url\":\"https://example.com\"}//note\n")); strings.Contains(string(got), "//note") {
 		t.Fatalf("stripLineComments() retained comment: %q", string(got))
 	}
+	if got := stripLineComments([]byte(`{"quote":"escaped \\\" value"}`)); string(got) != `{"quote":"escaped \\\" value"}` {
+		t.Fatalf("stripLineComments(escaped string) = %q", string(got))
+	}
 	if got := normalizeNonEmptyStrings([]string{" a ", "", "a", "b "}); len(got) != 2 || got[0] != "a" || got[1] != "b" {
 		t.Fatalf("normalizeNonEmptyStrings() = %#v, want [a b]", got)
+	}
+	if got := normalizeNonEmptyStrings([]string{" ", "\t"}); got != nil {
+		t.Fatalf("normalizeNonEmptyStrings(empty values) = %#v, want nil", got)
+	}
+	if got := prependIfMissing([]string{"b"}, " "); len(got) != 1 || got[0] != "b" {
+		t.Fatalf("prependIfMissing(empty value) = %#v, want unchanged", got)
 	}
 	if got := prependIfMissing([]string{"a"}, "a"); len(got) != 1 {
 		t.Fatalf("prependIfMissing(existing) = %#v, want unchanged", got)

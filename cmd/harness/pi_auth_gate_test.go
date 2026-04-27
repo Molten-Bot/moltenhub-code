@@ -108,6 +108,30 @@ func TestNewPiAuthGateReadyWhenEnvironmentAlreadyConfigured(t *testing.T) {
 	}
 }
 
+func TestPiAuthGateStartAndVerifyRefreshState(t *testing.T) {
+	clearPiAuthTestEnv(t)
+	t.Setenv("OPENAI_API_KEY", "sk-env")
+	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GITHUB_TOKEN", "")
+	runner := piOKAuthGateRunner()
+	g := newPiAuthGateWithRuntime(runner, "pi", filepath.Join(t.TempDir(), ".moltenhub", "config.json"), hub.InitConfig{}, nil)
+
+	startState, err := g.StartDeviceAuth(context.Background())
+	if err != nil {
+		t.Fatalf("StartDeviceAuth() error = %v", err)
+	}
+	if !startState.Ready || startState.State != "ready" {
+		t.Fatalf("StartDeviceAuth() state = %+v, want ready", startState)
+	}
+	verifyState, err := g.Verify(context.Background())
+	if err != nil {
+		t.Fatalf("Verify() error = %v", err)
+	}
+	if !verifyState.Ready || verifyState.State != "ready" {
+		t.Fatalf("Verify() state = %+v, want ready", verifyState)
+	}
+}
+
 func TestNewPiAuthGateRequiresGitHubConfigureWhenExistingPiAuthAlreadyWorks(t *testing.T) {
 	clearPiAuthTestEnv(t)
 	t.Setenv("GH_TOKEN", "")
