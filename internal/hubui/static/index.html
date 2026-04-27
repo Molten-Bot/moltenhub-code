@@ -5702,22 +5702,13 @@
         }
       }
 
-      let foundNewHubTask = false;
       for (const task of nextSnapshot?.tasks || []) {
         const requestID = taskRequestID(task);
         if (!requestID || previousIDs.has(requestID) || !isHubTask(task)) {
           continue;
         }
-        foundNewHubTask = true;
         triggerNewHubTaskHighlight(requestID);
       }
-
-      if (!foundNewHubTask || normalizeTaskStatusFilter(state.taskStatusFilter) === "running") {
-        return;
-      }
-      state.taskStatusFilter = "running";
-      persistTaskStatusFilter();
-      clearTaskHistoryUnseen();
     }
 
     function syncTaskCompletionSparkles(previousSnapshot, nextSnapshot) {
@@ -6074,7 +6065,7 @@
         const showingHistory = statusFilter === "completed";
         const hasUnseenHistory = !showingHistory && unseenHistoryCount > 0;
         const toggleLabel = showingHistory
-          ? "Show current running work"
+          ? "Hide completed task history"
           : "Show completed task history";
         taskHistoryToggle.setAttribute("aria-pressed", showingHistory ? "true" : "false");
         taskHistoryToggle.setAttribute("aria-label", toggleLabel);
@@ -6886,10 +6877,14 @@
       return out;
     }
 
+    function historyFilterTasks(snapshot) {
+      return [...runningTasks(snapshot), ...completedTasks(snapshot)];
+    }
+
     function displayTasks(snapshot) {
       const filter = normalizeTaskStatusFilter(state.taskStatusFilter);
       if (filter === "completed") {
-        return completedTasks(snapshot);
+        return historyFilterTasks(snapshot);
       }
       return runningTasks(snapshot);
     }
@@ -7490,6 +7485,7 @@
       for (const task of tasks) {
         const requestID = taskRequestID(task);
         const collapsed = !promptOnly && allowCollapse && isMinimizedTask(task);
+        const taskHistoryView = historyView && isCompletedTask(task);
         const closing = isTaskClosing(requestID);
         const node = document.createElement("article");
         node.className = "task";
@@ -7525,7 +7521,7 @@
 
         const topActions = document.createElement("div");
         topActions.className = "task-top-actions";
-        if (!historyView && !collapsed) {
+        if (!taskHistoryView && !collapsed) {
           topActions.appendChild(badge);
         }
 
@@ -7535,7 +7531,7 @@
 
           const promptActions = document.createElement("div");
           promptActions.className = "task-top-actions";
-          if (historyView && canCopyTaskCloneCommand(task)) {
+          if (taskHistoryView && canCopyTaskCloneCommand(task)) {
             const cloneButton = document.createElement("button");
             cloneButton.type = "button";
             cloneButton.className = "task-copy-link task-pr-link-inline";
@@ -7703,7 +7699,7 @@
         const showTaskPRLink = isCompletedTask(task) && prURL !== "";
         const showTaskCloneAction = canCopyTaskCloneCommand(task);
         const showTaskSideActions = showTaskPRLink || showTaskCloneAction;
-        const inlineHistoryActions = historyView && showTaskSideActions;
+        const inlineHistoryActions = taskHistoryView && showTaskSideActions;
         if (inlineHistoryActions) {
           if (showTaskCloneAction) {
             const cloneButton = document.createElement("button");
@@ -7807,7 +7803,7 @@
             node.classList.add("task-compact-state-left");
             node.appendChild(compactState);
           }
-        } else if (historyView) {
+        } else if (taskHistoryView) {
           node.classList.add("task-history-status-left");
           node.appendChild(badge);
         }

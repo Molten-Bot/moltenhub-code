@@ -792,7 +792,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "taskHistoryToggle.addEventListener(\"click\", () => {") ||
 		!strings.Contains(markup, "const nextFilter = normalizeTaskStatusFilter(state.taskStatusFilter) === \"completed\"") {
-		t.Fatalf("expected index html to wire history icon toggle interactions for running/completed task views")
+		t.Fatalf("expected index html to wire history icon toggle interactions for completed-history filtering")
 	}
 	if !strings.Contains(markup, "taskSoundToggle.addEventListener(\"click\", () => {") {
 		t.Fatalf("expected index html to wire task sound toggle interactions")
@@ -815,8 +815,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function runningTasks(snapshot)") || !strings.Contains(markup, "function completedTasks(snapshot)") {
 		t.Fatalf("expected index html to derive running and completed task lists independently")
 	}
-	if !strings.Contains(markup, "if (filter === \"completed\") {") || !strings.Contains(markup, "return completedTasks(snapshot);") {
-		t.Fatalf("expected index html to route displayTasks through completed task history when requested")
+	if !strings.Contains(markup, "function historyFilterTasks(snapshot)") ||
+		!strings.Contains(markup, "return [...runningTasks(snapshot), ...completedTasks(snapshot)];") {
+		t.Fatalf("expected index html history filter to include current work plus completed task history")
+	}
+	if !strings.Contains(markup, "if (filter === \"completed\") {") || !strings.Contains(markup, "return historyFilterTasks(snapshot);") {
+		t.Fatalf("expected index html to route displayTasks through the additive history filter when requested")
 	}
 	if !strings.Contains(markup, "const statusFilter = normalizeTaskStatusFilter(state.taskStatusFilter);") {
 		t.Fatalf("expected index html to normalize status filter state before applying task panel metadata")
@@ -1145,7 +1149,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "body.className = \"task-body\";") {
 		t.Fatalf("expected index html to render a task body container alongside the PR link rail")
 	}
-	if !strings.Contains(markup, "const inlineHistoryActions = historyView && showTaskSideActions;") ||
+	if !strings.Contains(markup, "const inlineHistoryActions = taskHistoryView && showTaskSideActions;") ||
 		!strings.Contains(markup, "topActions.appendChild(prLink);") {
 		t.Fatalf("expected index html to allow history-mode cards to place PR links inline before close")
 	}
