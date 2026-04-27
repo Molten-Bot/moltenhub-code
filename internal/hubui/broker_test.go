@@ -399,25 +399,44 @@ func TestBrokerCapturesWorkspaceAndBranchFromErrorStatus(t *testing.T) {
 	}
 }
 
-func TestBrokerCapturesDuplicateStatus(t *testing.T) {
+func TestBrokerDoesNotMaterializeDuplicateStatusAsTask(t *testing.T) {
 	t.Parallel()
 
 	b := NewBroker()
 	b.IngestLog("dispatch status=duplicate request_id=req-dup state=in_flight duplicate_of=req-100")
 
 	snap := b.Snapshot()
+	if len(snap.Tasks) != 0 {
+		t.Fatalf("tasks = %d, want 0", len(snap.Tasks))
+	}
+	if len(snap.Events) != 1 {
+		t.Fatalf("events = %d, want 1", len(snap.Events))
+	}
+}
+
+func TestBrokerDuplicateStatusDoesNotReplaceOriginalTask(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog("dispatch status=start request_id=req-100 skill=moltenhub_code_run repo=git@github.com:acme/repo.git")
+	b.IngestLog(
+		"dispatch status=completed request_id=req-100 workspace=/tmp/run branch=moltenhub-fix pr_url=https://github.com/acme/repo/pull/55",
+	)
+	b.IngestLog("dispatch status=duplicate request_id=req-dup state=completed duplicate_of=req-100")
+
+	snap := b.Snapshot()
 	if len(snap.Tasks) != 1 {
 		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
 	}
 	task := snap.Tasks[0]
-	if task.Status != "duplicate" {
-		t.Fatalf("status = %q, want duplicate", task.Status)
+	if task.RequestID != "req-100" {
+		t.Fatalf("request_id = %q, want req-100", task.RequestID)
 	}
-	if task.StageStatus != "in_flight" {
-		t.Fatalf("stage status = %q, want in_flight", task.StageStatus)
+	if task.Status != "completed" {
+		t.Fatalf("status = %q, want completed", task.Status)
 	}
-	if task.Error != "duplicate submission ignored (state=in_flight, duplicate_of=req-100)" {
-		t.Fatalf("error = %q", task.Error)
+	if task.Error != "" {
+		t.Fatalf("error = %q, want empty", task.Error)
 	}
 }
 
