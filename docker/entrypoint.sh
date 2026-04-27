@@ -2,6 +2,12 @@
 set -eu
 
 config_dir="${HARNESS_CONFIG_DIR:-/workspace/config}"
+if [ "${HOME:-}" = "" ]; then
+    export HOME="${config_dir}/home"
+fi
+if ! mkdir -p "${HOME}"; then
+    echo "warning: home directory ${HOME} could not be created; persisted CLI auth settings may fail to save." >&2
+fi
 
 if [ ! -w "${config_dir}" ]; then
     echo "warning: config directory ${config_dir} is not writable by uid=$(id -u) gid=$(id -g); persisted onboarding/auth settings may fail to save." >&2

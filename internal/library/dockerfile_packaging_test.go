@@ -143,7 +143,8 @@ func TestRuntimeDockerfileUsesAlpineBaseImages(t *testing.T) {
 		"openssh-client-default",
 		"HARNESS_WORKSPACE_RAM_BASE=/workspace",
 		"HARNESS_WORKSPACE_DISK_BASE=/workspace",
-		"mkdir -p /workspace/config /workspace/moltenhub-code/tasks",
+		"HOME=/workspace/config/home",
+		"mkdir -p /workspace/config/home /workspace/moltenhub-code/tasks",
 		"chown -R node:node /workspace",
 		"USER node",
 	} {

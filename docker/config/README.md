@@ -3,6 +3,7 @@
 `docker-compose.yml` mounts `./.moltenhub` to `/workspace/config` in the container.
 
 This directory remains available if you prefer a manual bind mount (for example with `docker run`).
+The image sets `HOME=/workspace/config/home` by default so CLI auth files from Codex, Claude, Auggie, and PI persist with the same config mount.
 
 `GITHUB_TOKEN` also works as direct bootstrap input. When container starts, entrypoint copies `GITHUB_TOKEN` to `GH_TOKEN`, runs `gh` auth setup, and hub onboarding skips GitHub token prompt if token already exists.
 

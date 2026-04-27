@@ -11,13 +11,12 @@ For product details, see [molten.bot/code](https://molten.bot/code).
 ```bash
 mkdir -p ./.moltenhub
 docker run --rm -p 7777:7777 \
-  -e HOME=/tmp \
   -e GITHUB_TOKEN=ghp_your_token \
   -v "$PWD/.moltenhub:/workspace/config" \
   moltenai/moltenhub-code:latest
 ```
 
-The container starts the hub UI on port `7777`. It persists onboarding and runtime config in `/workspace/config`, so mount that path for repeat runs.
+The container starts the hub UI on port `7777`. It persists onboarding, runtime config, and CLI auth home data in `/workspace/config`, so mount that path for repeat runs.
 
 The runtime image includes:
 
