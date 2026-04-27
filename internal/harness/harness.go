@@ -2740,6 +2740,10 @@ func isNonFatalValidationToolingFailure(detail string, res execx.Result) bool {
 		strings.Contains(text, "returned 127") ||
 		strings.Contains(text, "enoent") ||
 		strings.Contains(text, "cannot find module") ||
+		strings.Contains(text, "do you have node modules installed") ||
+		strings.Contains(text, "have node modules installed") ||
+		strings.Contains(text, "do you have node_modules installed") ||
+		strings.Contains(text, "have node_modules installed") ||
 		strings.Contains(text, "not installed in runtime") ||
 		strings.Contains(text, "tooling/deps not installed") ||
 		strings.Contains(text, "node_modules missing")
@@ -2753,6 +2757,7 @@ func isNonFatalValidationToolingFailure(detail string, res execx.Result) bool {
 	validationCommandMarkers := []string{
 		"npm run lint",
 		"npm run build",
+		"npm run check",
 		"npm run -s build",
 		"npm run typecheck",
 		"npm test",
@@ -2778,6 +2783,7 @@ func isNonFatalValidationToolingFailure(detail string, res execx.Result) bool {
 		"tooling",
 		"deps",
 		"dependency",
+		"node modules",
 		"node_modules",
 	}
 	hasValidationCommand := containsAny(text, validationCommandMarkers)

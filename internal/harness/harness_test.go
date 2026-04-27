@@ -4030,6 +4030,29 @@ func TestRunCodexAllowsLocalValidationCommandFailedWithToolingGap(t *testing.T) 
 	}
 }
 
+func TestRunCodexAllowsNPMCheckMissingNodeModulesPluginResolution(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "fix ios scroll"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: `npm run check` failed.",
+				Stderr: "Error details: `PluginError: Failed to resolve plugin for module \"expo-image-picker\" relative to \"../repo\". Do you have node modules installed?`",
+			},
+		},
+	}}
+
+	h := New(fake)
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
+		t.Fatalf("runCodex() error = %v, want nil for missing node_modules plugin-resolution tooling gap", err)
+	}
+}
+
 func TestRunCodexAllowsLocalBuildValidationCommandFailedInRuntime(t *testing.T) {
 	t.Parallel()
 
@@ -4516,7 +4539,7 @@ func TestWithCompletionGatePromptIncludesAgentRuntimeGuidance(t *testing.T) {
 	got := withCompletionGatePrompt("Build API")
 	wantSnippets := []string{
 		"When failures occur, send a response back to the calling agent that clearly states failure and includes the error details. Use explicit `Failure:` and `Error details:` fields.",
-		"If local test or validation tooling is unavailable in this runtime (for example `command not found`), do not fail solely for that.",
+		"If local test or validation tooling is unavailable in this runtime (for example `command not found` or missing `node_modules`), do not fail solely for that.",
 		"Before sharing repository or pull-request links in Hub activity, use `gh repo view OWNER/REPO --json isPrivate,nameWithOwner` during clone or PR tooling.",
 		"Share repo and PR links only when GitHub reports `isPrivate:false`; never share private repository links.",
 		"If a repository is not initialized after clone, use only gh CLI/git tools to create and push a main branch, then continue once git state is ready for work.",
