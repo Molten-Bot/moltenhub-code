@@ -133,7 +133,7 @@
 
     <div class="layout min-h-[calc(100vh-130px)] max-[980px]:min-h-0">
       <div class="right-col grid gap-4">
-        <section id="task-panel" class="panel brand-login-card-shell min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]" aria-hidden="false">
+        <section id="task-panel" class="panel brand-login-card-shell min-h-[220px] overflow-hidden rounded-md border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]" aria-hidden="false">
           <div class="panel-header flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
             <div class="panel-header-copy">
               <span id="task-panel-title" class="panel-section-title">Current Work</span>
@@ -183,7 +183,7 @@
           </div>
         </section>
 
-        <section class="panel prompt-wrap brand-login-card-shell min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
+        <section class="panel prompt-wrap brand-login-card-shell min-h-[220px] overflow-visible rounded-md border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
           <div class="panel-header prompt-titlebar flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
             <div class="panel-header-copy">
               <span id="prompt-panel-title" class="panel-section-title">Studio</span>
@@ -262,7 +262,7 @@
                   <span class="prompt-label">Prompt</span>
                   <textarea
                     id="builder-prompt-input"
-                    class="prompt-text prompt-control h-[calc(6*1.4em+18px)] min-h-[calc(6*1.4em+18px)] w-full resize-y rounded-lg border border-hub-border p-2.5 font-mono text-[0.79rem] leading-[1.4]"
+                    class="prompt-text prompt-control h-[calc(6*1.4em+18px)] min-h-[calc(6*1.4em+18px)] w-full resize-y rounded-md border border-hub-border p-2.5 font-mono text-[0.79rem] leading-[1.4]"
                     rows="6"
                     spellcheck="false"
                     placeholder="Describe the change you want"></textarea>
@@ -333,7 +333,7 @@
               <div id="prompt-raw-panel" class="prompt-panel hidden">
                 <textarea
                   id="local-prompt-input"
-                  class="prompt-text prompt-control h-[calc(7*1.4em+20px)] min-h-[calc(7*1.4em+20px)] w-full resize-y rounded-lg border border-hub-border p-2.5 font-mono text-[0.79rem] leading-[1.4]"
+                  class="prompt-text prompt-control h-[calc(7*1.4em+20px)] min-h-[calc(7*1.4em+20px)] w-full resize-y rounded-md border border-hub-border p-2.5 font-mono text-[0.79rem] leading-[1.4]"
                   rows="7"
                   spellcheck="false"
                   placeholder='{
@@ -518,7 +518,7 @@
       </div>
 
       <div class="mt-auto flex justify-end pt-4">
-        <button id="agent-auth-verify" class="agent-auth-verify hidden rounded-lg border px-3 py-2 text-sm font-medium" type="button" onclick="return window.__hubAuthVerifyClick ? window.__hubAuthVerifyClick(event) : true;">Done</button>
+        <button id="agent-auth-verify" class="agent-auth-verify hidden rounded-md border px-3 py-2 text-sm font-medium" type="button" onclick="return window.__hubAuthVerifyClick ? window.__hubAuthVerifyClick(event) : true;">Done</button>
       </div>
     </div>
   </div>

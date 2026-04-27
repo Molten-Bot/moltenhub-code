@@ -894,7 +894,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `if (!state.promptVisible && !Boolean(state.ui?.automaticMode)) {`) {
 		t.Fatalf("expected index html to auto-expand studio when a mode tab is selected")
 	}
-	if !strings.Contains(markup, `id="task-panel" class="panel brand-login-card-shell min-h-[220px] overflow-hidden rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]" aria-hidden="false"`) {
+	if !strings.Contains(markup, `id="task-panel" class="panel brand-login-card-shell min-h-[220px] overflow-hidden rounded-md border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]" aria-hidden="false"`) {
 		t.Fatalf("expected index html to render the task queue panel immediately with the shared glass shell")
 	}
 	if !strings.Contains(markup, `id="task-panel-title" class="panel-section-title">Current Work</span>`) {
@@ -2077,7 +2077,7 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".theme-toggle:hover { transform: scale(1.04); }") || !strings.Contains(css, ".theme-toggle:active { transform: scale(.96); }") {
 		t.Fatalf("expected stylesheet to include the theme toggle hover and active treatments")
 	}
-	if !strings.Contains(css, ".agent-auth-shell {\n  padding: clamp(24px, 3vw, 32px);\n  border: 1px solid var(--surface-auth-panel-border);\n  border-radius: 20px;\n  background: var(--surface-auth-panel-bg);\n  box-shadow: var(--surface-auth-panel-shadow);\n}") {
+	if !strings.Contains(css, ".agent-auth-shell {\n  padding: clamp(24px, 3vw, 32px);\n  border: 1px solid var(--surface-auth-panel-border);\n  border-radius: var(--radius-card);\n  background: var(--surface-auth-panel-bg);\n  box-shadow: var(--surface-auth-panel-shadow);\n}") {
 		t.Fatalf("expected stylesheet to render onboarding content inside a readable auth panel")
 	}
 	if !strings.Contains(css, ".agent-auth-github-shell {\n  max-width: calc(46ch + 2px);\n}") {
@@ -2337,7 +2337,7 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".configured-agent-logo {\n  padding: 0;\n  border: 0;\n  border-radius: 0;\n  background: transparent;\n  box-shadow: none;\n  filter: var(--agent-logo-filter);") {
 		t.Fatalf("expected stylesheet to keep rotating configured-agent logos transparent and theme-tinted")
 	}
-	if !strings.Contains(css, ".agent-auth-url-logo {\n  display: block;\n  width: 58px;\n  height: 58px;\n  padding: 9px;\n  border: 0;\n  border-radius: 12px;\n  background: transparent;\n  box-shadow: none;\n  filter: var(--agent-logo-filter);") {
+	if !strings.Contains(css, ".agent-auth-url-logo {\n  display: block;\n  width: 58px;\n  height: 58px;\n  padding: 9px;\n  border: 0;\n  border-radius: var(--radius-card);\n  background: transparent;\n  box-shadow: none;\n  filter: var(--agent-logo-filter);") {
 		t.Fatalf("expected stylesheet to tint auth-gate agent logos based on active theme")
 	}
 	if !strings.Contains(css, ".rotating-brand-logo") || !strings.Contains(css, ".brand-logo-visible") {
