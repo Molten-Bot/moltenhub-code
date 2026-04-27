@@ -116,14 +116,16 @@ func runEntrypointScript(t *testing.T, env entrypointTestEnv, extra map[string]s
 
 	cmd := exec.Command("sh", entrypointScriptPath(t), "envdump")
 	pathValue := filepath.Join(env.root, "bin") + ":" + os.Getenv("PATH")
-		cmd.Env = []string{
-			"PATH=" + pathValue,
-			"HARNESS_CONFIG_DIR=" + env.configDir,
-			"HARNESS_STUB_AUGMENT_FILE=" + env.augmentPath,
-			"HARNESS_STUB_PI_FILE=" + env.piPath,
-			"HOME=" + env.homeDir,
-			"GITHUB_TOKEN=ghp_test",
-		}
+	cmd.Env = []string{
+		"PATH=" + pathValue,
+		"HARNESS_CONFIG_DIR=" + env.configDir,
+		"HARNESS_STUB_AUGMENT_FILE=" + env.augmentPath,
+		"HARNESS_STUB_PI_FILE=" + env.piPath,
+		"GITHUB_TOKEN=ghp_test",
+	}
+	if _, ok := extra["HOME"]; !ok {
+		cmd.Env = append(cmd.Env, "HOME="+env.homeDir)
+	}
 	for key, value := range extra {
 		cmd.Env = append(cmd.Env, key+"="+value)
 	}
@@ -194,5 +196,32 @@ func TestEntrypointScriptWritesPiAuthJSONFromRunConfig(t *testing.T) {
 	}
 	if want := `{"provider":"pi","token":"saved"}`; string(got) != want {
 		t.Fatalf("pi auth json = %q, want %q", string(got), want)
+	}
+}
+
+func TestEntrypointScriptDefaultsHomeUnderConfigDir(t *testing.T) {
+	t.Parallel()
+
+	env := newEntrypointTestEnv(t)
+	configPath := filepath.Join(env.configDir, "config.json")
+	if err := os.WriteFile(configPath, []byte(`{
+  "repo": "git@github.com:acme/repo.git",
+  "prompt": "test prompt",
+  "pi_auth_json": "{\"provider\":\"pi\",\"token\":\"saved\"}"
+}`), 0o644); err != nil {
+		t.Fatalf("write run config: %v", err)
+	}
+
+	output, err := runEntrypointScript(t, env, map[string]string{"HOME": ""})
+	if err != nil {
+		t.Fatalf("entrypoint error: %v\noutput: %s", err, output)
+	}
+
+	got, err := os.ReadFile(filepath.Join(env.configDir, "home", ".pi", "agent", "auth.json"))
+	if err != nil {
+		t.Fatalf("read persisted pi auth file: %v", err)
+	}
+	if want := `{"provider":"pi","token":"saved"}`; string(got) != want {
+		t.Fatalf("persisted pi auth json = %q, want %q", string(got), want)
 	}
 }
