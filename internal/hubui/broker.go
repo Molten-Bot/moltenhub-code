@@ -223,7 +223,9 @@ func (b *Broker) IngestLog(line string) {
 		Line:      line,
 	})
 
-	if requestID != "" && !b.isClosedTaskLocked(requestID, now) {
+	if requestID != "" &&
+		!isDuplicateTaskDispatchLine(fields) &&
+		!b.isClosedTaskLocked(requestID, now) {
 		t := b.ensureTaskLocked(requestID, now)
 		b.updateTaskFromLineLocked(t, line, fields, now)
 	}
@@ -863,6 +865,13 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 			Text:   line,
 		})
 	}
+}
+
+func isDuplicateTaskDispatchLine(fields map[string]string) bool {
+	if fields == nil {
+		return false
+	}
+	return strings.TrimSpace(fields["status"]) == "duplicate"
 }
 
 func (b *Broker) appendTaskLogLocked(t *taskState, line TaskLog) {
