@@ -5405,6 +5405,86 @@
       return repo;
     }
 
+    function githubRepoPathFromValue(value) {
+      const repo = String(value || "").trim();
+      if (!repo) return "";
+
+      let path = "";
+      const githubSSHMatch = repo.match(/^git@github\.com:([^?#]+)$/i);
+      if (githubSSHMatch) {
+        path = githubSSHMatch[1];
+      } else {
+        const githubSSHURLMatch = repo.match(/^ssh:\/\/git@github\.com\/([^?#]+)$/i);
+        if (githubSSHURLMatch) {
+          path = githubSSHURLMatch[1];
+        } else {
+          try {
+            const parsed = new URL(repo);
+            if (/^(www\.)?github\.com$/i.test(parsed.hostname)) {
+              path = parsed.pathname.replace(/^\/+/, "");
+            }
+          } catch (_err) {
+            if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/.test(repo)) {
+              path = repo;
+            }
+          }
+        }
+      }
+
+      path = path.replace(/^\/+|\/+$/g, "").replace(/\.git$/i, "");
+      const parts = path.split("/").filter(Boolean);
+      if (parts.length < 2) return "";
+      return `${parts[0]}/${parts[1]}`;
+    }
+
+    function taskRepoRootURL(task) {
+      for (const repo of taskRepoValues(task)) {
+        const repoPath = githubRepoPathFromValue(repo);
+        if (repoPath) {
+          return `https://github.com/${repoPath}`;
+        }
+      }
+      return "";
+    }
+
+    function taskGitHubLinkURL(task) {
+      const prURL = String(task?.pr_url || "").trim();
+      if (isCompletedTask(task) && prURL) {
+        return prURL;
+      }
+      return taskRepoRootURL(task);
+    }
+
+    function taskGitHubLinkIsPR(task) {
+      return isCompletedTask(task) && String(task?.pr_url || "").trim() !== "";
+    }
+
+    function createTaskGitHubLink(task, className) {
+      const href = taskGitHubLinkURL(task);
+      if (!href) return null;
+
+      const prLink = document.createElement("a");
+      prLink.className = className || "task-pr-link";
+      prLink.href = href;
+      prLink.target = "_blank";
+      prLink.rel = "noopener noreferrer";
+      prLink.title = taskGitHubLinkIsPR(task) ? "Open Pull Request." : "Open repository.";
+      prLink.setAttribute("aria-label", taskGitHubLinkIsPR(task) ? "Open Pull Request." : "Open repository.");
+
+      const prLogo = document.createElement("img");
+      prLogo.src = GITHUB_LOGO_URL;
+      prLogo.alt = "GitHub";
+      prLogo.loading = "lazy";
+      prLogo.width = TASK_PR_LOGO_SIZE;
+      prLogo.height = TASK_PR_LOGO_SIZE;
+      prLink.appendChild(prLogo);
+
+      prLink.addEventListener("click", (event) => {
+        event.stopPropagation();
+      });
+      return prLink;
+    }
+
     function shellQuote(value) {
       const text = String(value || "");
       if (!text) return "''";
@@ -7383,6 +7463,7 @@
             skill: String(task?.skill || ""),
             timing: taskTimingSignature(task),
             prURL: String(task?.pr_url || "").trim(),
+            githubURL: taskGitHubLinkURL(task),
             canRerun: canRerunTask(task),
             canCopyClone: canCopyTaskCloneCommand(task),
             historyOnly: Boolean(task?.history_only),
@@ -7525,7 +7606,6 @@
           topActions.appendChild(badge);
         }
 
-        const prURL = String(task.pr_url || "").trim();
         if (promptOnly) {
           node.classList.add("task-prompt-only");
 
@@ -7548,28 +7628,12 @@
             promptActions.appendChild(cloneButton);
           }
 
-          const showPromptPRLink = isCompletedTask(task) && prURL !== "";
+          const showPromptPRLink = taskGitHubLinkURL(task) !== "";
           if (showPromptPRLink) {
-            const prLink = document.createElement("a");
-            prLink.className = "task-pr-link task-pr-link-inline";
-            prLink.href = prURL;
-            prLink.target = "_blank";
-            prLink.rel = "noopener noreferrer";
-            prLink.title = "Open Pull Request.";
-            prLink.setAttribute("aria-label", "Open Pull Request.");
-
-            const prLogo = document.createElement("img");
-            prLogo.src = GITHUB_LOGO_URL;
-            prLogo.alt = "GitHub";
-            prLogo.loading = "lazy";
-            prLogo.width = TASK_PR_LOGO_SIZE;
-            prLogo.height = TASK_PR_LOGO_SIZE;
-            prLink.appendChild(prLogo);
-
-            prLink.addEventListener("click", (event) => {
-              event.stopPropagation();
-            });
-            promptActions.appendChild(prLink);
+            const prLink = createTaskGitHubLink(task, "task-pr-link task-pr-link-inline");
+            if (prLink) {
+              promptActions.appendChild(prLink);
+            }
           }
           const closeAction = renderTaskCloseButton(task, requestID);
           if (closeAction) {
@@ -7696,7 +7760,7 @@
           topActions.appendChild(rerun);
         }
 
-        const showTaskPRLink = isCompletedTask(task) && prURL !== "";
+        const showTaskPRLink = taskGitHubLinkURL(task) !== "";
         const showTaskCloneAction = canCopyTaskCloneCommand(task);
         const showTaskSideActions = showTaskPRLink || showTaskCloneAction;
         const inlineHistoryActions = taskHistoryView && showTaskSideActions;
@@ -7724,31 +7788,15 @@
           }
 
           if (showTaskPRLink) {
-            const prLink = document.createElement("a");
-            prLink.className = "task-pr-link";
-            prLink.style.width = TASK_PR_LINK_SIZE_PX;
-            prLink.style.minWidth = TASK_PR_LINK_SIZE_PX;
-            prLink.style.height = TASK_PR_LINK_SIZE_PX;
-            prLink.style.flex = `0 0 ${TASK_PR_LINK_SIZE_PX}`;
-            prLink.style.alignSelf = "center";
-            prLink.href = prURL;
-            prLink.target = "_blank";
-            prLink.rel = "noopener noreferrer";
-            prLink.title = "Open Pull Request.";
-            prLink.setAttribute("aria-label", "Open Pull Request.");
-
-            const prLogo = document.createElement("img");
-            prLogo.src = GITHUB_LOGO_URL;
-            prLogo.alt = "GitHub";
-            prLogo.loading = "lazy";
-            prLogo.width = TASK_PR_LOGO_SIZE;
-            prLogo.height = TASK_PR_LOGO_SIZE;
-            prLink.appendChild(prLogo);
-
-            prLink.addEventListener("click", (event) => {
-              event.stopPropagation();
-            });
-            topActions.appendChild(prLink);
+            const prLink = createTaskGitHubLink(task, "task-pr-link");
+            if (prLink) {
+              prLink.style.width = TASK_PR_LINK_SIZE_PX;
+              prLink.style.minWidth = TASK_PR_LINK_SIZE_PX;
+              prLink.style.height = TASK_PR_LINK_SIZE_PX;
+              prLink.style.flex = `0 0 ${TASK_PR_LINK_SIZE_PX}`;
+              prLink.style.alignSelf = "center";
+              topActions.appendChild(prLink);
+            }
           }
         }
 
@@ -7835,32 +7883,16 @@
           }
 
           if (showTaskPRLink) {
-            const prLink = document.createElement("a");
-            prLink.className = "task-pr-link";
-            // Keep PR affordance size stable even if stale CSS is cached.
-            prLink.style.width = TASK_PR_LINK_SIZE_PX;
-            prLink.style.minWidth = TASK_PR_LINK_SIZE_PX;
-            prLink.style.height = TASK_PR_LINK_SIZE_PX;
-            prLink.style.flex = `0 0 ${TASK_PR_LINK_SIZE_PX}`;
-            prLink.style.alignSelf = "center";
-            prLink.href = prURL;
-            prLink.target = "_blank";
-            prLink.rel = "noopener noreferrer";
-            prLink.title = "Open Pull Request.";
-            prLink.setAttribute("aria-label", "Open Pull Request.");
-
-            const prLogo = document.createElement("img");
-            prLogo.src = GITHUB_LOGO_URL;
-            prLogo.alt = "GitHub";
-            prLogo.loading = "lazy";
-            prLogo.width = TASK_PR_LOGO_SIZE;
-            prLogo.height = TASK_PR_LOGO_SIZE;
-            prLink.appendChild(prLogo);
-
-            prLink.addEventListener("click", (event) => {
-              event.stopPropagation();
-            });
-            sideActions.appendChild(prLink);
+            const prLink = createTaskGitHubLink(task, "task-pr-link");
+            if (prLink) {
+              // Keep PR affordance size stable even if stale CSS is cached.
+              prLink.style.width = TASK_PR_LINK_SIZE_PX;
+              prLink.style.minWidth = TASK_PR_LINK_SIZE_PX;
+              prLink.style.height = TASK_PR_LINK_SIZE_PX;
+              prLink.style.flex = `0 0 ${TASK_PR_LINK_SIZE_PX}`;
+              prLink.style.alignSelf = "center";
+              sideActions.appendChild(prLink);
+            }
           }
 
           node.appendChild(sideActions);

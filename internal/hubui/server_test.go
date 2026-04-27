@@ -1093,18 +1093,28 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to apply prompt-only card styling when compact task view is active")
 	}
 	promptOnlyStart := strings.Index(markup, "if (promptOnly) {")
-	promptOnlyPRLink := strings.Index(markup, "const showPromptPRLink = isCompletedTask(task) && prURL !== \"\";")
+	promptOnlyPRLink := strings.Index(markup, "const showPromptPRLink = taskGitHubLinkURL(task) !== \"\";")
 	if promptOnlyStart < 0 || promptOnlyPRLink < 0 || promptOnlyPRLink <= promptOnlyStart {
 		t.Fatalf("expected index html to render a prompt-only task branch before prompt-only PR links")
 	}
 	if strings.Contains(markup[promptOnlyStart:promptOnlyPRLink], "renderOutputToggle") {
 		t.Fatalf("expected index html prompt-only mode to hide terminal output controls")
 	}
-	if !strings.Contains(markup, "const showPromptPRLink = isCompletedTask(task) && prURL !== \"\";") {
-		t.Fatalf("expected index html prompt-only mode to gate GitHub links to completed tasks with pull request urls")
+	if !strings.Contains(markup, "function githubRepoPathFromValue(value)") ||
+		!strings.Contains(markup, "function taskRepoRootURL(task)") ||
+		!strings.Contains(markup, "function taskGitHubLinkURL(task)") ||
+		!strings.Contains(markup, "return `https://github.com/${repoPath}`;") {
+		t.Fatalf("expected index html to derive unfinished task GitHub links from repository roots")
 	}
-	if !strings.Contains(markup, "prLink.className = \"task-pr-link task-pr-link-inline\";") {
-		t.Fatalf("expected index html prompt-only mode to render a compact inline GitHub pull-request link affordance")
+	if !strings.Contains(markup, "if (isCompletedTask(task) && prURL) {") ||
+		!strings.Contains(markup, "return prURL;") {
+		t.Fatalf("expected index html to prefer pull-request links after task completion")
+	}
+	if !strings.Contains(markup, "const showPromptPRLink = taskGitHubLinkURL(task) !== \"\";") {
+		t.Fatalf("expected index html prompt-only mode to show GitHub links when a task repo or completed PR is available")
+	}
+	if !strings.Contains(markup, `const prLink = createTaskGitHubLink(task, "task-pr-link task-pr-link-inline");`) {
+		t.Fatalf("expected index html prompt-only mode to render a compact inline GitHub link affordance")
 	}
 	if !strings.Contains(markup, "const closeAction = renderTaskCloseButton(task, requestID);") {
 		t.Fatalf("expected index html prompt-only mode to include completed-task close actions")
@@ -1112,8 +1122,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "completeTaskDismissal(requestID);") || !strings.Contains(markup, "Removed task ${requestID} from history") {
 		t.Fatalf("expected index html to clear history-only tasks locally when close is clicked")
 	}
-	if !strings.Contains(markup, "const showTaskPRLink = isCompletedTask(task) && prURL !== \"\";") {
-		t.Fatalf("expected index html to gate task PR links to completed tasks with a pull request URL")
+	if !strings.Contains(markup, "const showTaskPRLink = taskGitHubLinkURL(task) !== \"\";") {
+		t.Fatalf("expected index html to show task GitHub links before completion when a repository root can be resolved")
 	}
 	if !strings.Contains(markup, "const showTaskCloneAction = canCopyTaskCloneCommand(task);") ||
 		!strings.Contains(markup, "const showTaskSideActions = showTaskPRLink || showTaskCloneAction;") {
@@ -1142,9 +1152,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "prLogo.width = TASK_PR_LOGO_SIZE;") || !strings.Contains(markup, "prLogo.height = TASK_PR_LOGO_SIZE;") {
 		t.Fatalf("expected index html to define deterministic task PR logo dimensions")
 	}
-	if !strings.Contains(markup, `prLink.title = "Open Pull Request.";`) ||
-		!strings.Contains(markup, `prLink.setAttribute("aria-label", "Open Pull Request.");`) {
-		t.Fatalf("expected index html to render the requested github icon hover copy")
+	if !strings.Contains(markup, `prLink.title = taskGitHubLinkIsPR(task) ? "Open Pull Request." : "Open repository.";`) ||
+		!strings.Contains(markup, `prLink.setAttribute("aria-label", taskGitHubLinkIsPR(task) ? "Open Pull Request." : "Open repository.");`) {
+		t.Fatalf("expected index html to render GitHub icon hover copy for repo roots before completion and pull requests after completion")
 	}
 	if !strings.Contains(markup, "body.className = \"task-body\";") {
 		t.Fatalf("expected index html to render a task body container alongside the PR link rail")
