@@ -1,99 +1,120 @@
 # MoltenHub Code
 
-The fastest way to run AI agents across your GitHub repositories.
+Run AI coding agents across GitHub repositories, publish their changes, and watch pull request checks.
 
-For more information, see [molten.bot/code](https://molten.bot/code).
-
----
+For product details, see [molten.bot/code](https://molten.bot/code).
 
 ## Quick Start
 
-### Docker Images
+### Docker
 
-| Tag | Included agent CLIs | cmd |
-|---------|------------|------------|
-| `latest` | `@openai/codex@latest`, `@anthropic-ai/claude-code@latest`, `@augmentcode/auggie@latest`, `@mariozechner/pi-coding-agent@latest`, `@playwright/test@latest` | docker run -p 7777:7777 moltenai/moltenhub-code:latest |
+```bash
+mkdir -p ./.moltenhub
+docker run --rm -p 7777:7777 \
+  -e HOME=/tmp \
+  -e GITHUB_TOKEN=ghp_your_token \
+  -v "$PWD/.moltenhub:/workspace/config" \
+  moltenai/moltenhub-code:latest
+```
 
-First run behavior:
-- If `agent_harness` is already persisted in `.moltenhub/config.json`, that agent stays bound.
-- If `GITHUB_TOKEN` is already set when container starts, MoltenHub Code auto-configures GitHub auth and onboarding skips GitHub token prompt.
-- If `MOLTEN_HUB_TOKEN` is already set when container starts and no `.moltenhub/config.json` or `.moltenhub/init.json` exists yet, startup auto-generates temporary hub init config and binds runtime to Molten Hub.
-- If no harness is configured yet and no GitHub token is preconfigured, onboarding captures GitHub token first, then asks you to click an agent logo to bind this runtime.
-- Optional runtime env overrides remain supported: `HARNESS_AGENT_HARNESS`, `HARNESS_AGENT_COMMAND`.
+The container starts the hub UI on port `7777`. It persists onboarding and runtime config in `/workspace/config`, so mount that path for repeat runs.
 
-### Local
+The runtime image includes:
 
-**Build:**
+- Go `1.26.1`
+- `git`, `gh`, `jq`, `openssh-client`, `rg`
+- `@openai/codex`, `@anthropic-ai/claude-code`, `@augmentcode/auggie`, `@mariozechner/pi-coding-agent`, and `@playwright/test`
+
+### Local Build
 
 ```bash
 go build -o bin/harness ./cmd/harness
-```
-
-**Run:**
-
-```bash
 ./bin/harness hub
 ```
 
----
+Local `harness hub` listens on `127.0.0.1:7777` by default.
 
-## Runtime Behavior
+## CLI
 
-Each run follows this sequence:
+```bash
+harness run --config run.example.json
+harness multiplex --config ./tasks --parallel 2
+harness hub --config ./.moltenhub/config.json
+harness hub --init ./.moltenhub/init.json
+```
 
-1. Verifies required tooling and auth (`git`, `gh`, selected agent CLI)
-2. Creates an isolated workspace
-3. Clones target repo(s) and checks out `baseBranch`
-4. Prepares publish workflow per repo before agent execution:
-   - Probes direct write access
-   - For public GitHub repos with denied direct access, creates/uses a fork and validates push access there
-   - Fails the run early if no publishable path can be prepared
-5. Runs the configured agent in `targetSubdir` (or workspace root for multi-repo runs)
-6. Opens or updates PRs for any changed repos
-7. Waits for required checks
+`harness run` executes one task. `harness multiplex` runs multiple task configs. `harness hub` starts the local UI and optional remote Hub transport.
 
-The harness owns steps 4, 6, and 7. Agent prompts are limited to repository changes, local validation, and clear failure/no-op reporting so tasks do not fail just because remote GitHub or CI access is unavailable inside the agent runtime.
+## Run Config
 
-**Branch & PR rules:**
-
-- Starts from `main` → creates a new branch
-- Already on a non-`main` branch → reuses that branch
-- Branch names are always prefixed with `moltenhub-`
-- PR titles must not be prefixed with `moltenhub-`
-
----
-
-## Failure Behavior
-
-When a task fails, the harness:
-
-1. Returns a failure response to the calling agent with clear error details
-2. Re-runs the original task once
-3. Queues a focused remediation follow-up task in the MoltenHub code repository
-4. Passes relevant failing log paths into the follow-up prompt
-
-The follow-up run config looks like this:
+Run configs are JSON or JSONC. Minimal example:
 
 ```json
 {
-  "repos": ["git@github.com:Molten-Bot/moltenhub-code.git"],
+  "repo": "git@github.com:owner/repo.git",
   "baseBranch": "main",
   "targetSubdir": ".",
-  "prompt": "Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."
+  "agentHarness": "codex",
+  "prompt": "Update README setup instructions."
 }
 ```
 
-> The follow-up contract also includes: issue an offline to MoltenHub → review `na.hub.molten.bot.openapi.yaml` for integration behaviours.
+Important fields:
 
-Follow-up prompts also tell the agent to report failures clearly, return documented no-op results when nothing needs to change, and leave PR creation plus remote check monitoring to the harness.
+- `repo`, `repoUrl`, or `repos`: target repository or repositories.
+- `baseBranch`: branch to clone. Defaults to `main`; `branch` is accepted as an alias.
+- `targetSubdir`: working directory for a single-repo task. Defaults to `.`.
+- `prompt`: task sent to the selected agent.
+- `agentHarness`: `codex`, `claude`, `auggie`, or `pi`. Defaults to `codex` or `HARNESS_AGENT_HARNESS`.
+- `agentCommand`: optional command override, also available as `HARNESS_AGENT_COMMAND`.
+- `responseMode`: agent prose mode. Defaults to `caveman-full`; use `off` for normal prose.
+- `images`: optional base64 prompt images. Supported by `codex` and `pi`.
+- `review`: optional pull request review context for single-repo review tasks.
 
----
+See [run.example.json](run.example.json) for a commented template.
 
-## Configuration
+## Runtime Behavior
 
-### Response Modes
+Each task run:
 
-Run configs can optionally set `responseMode` to compress agent prose without changing the underlying task flow. Supported values:
+1. Checks required tools and selected agent CLI.
+2. Verifies GitHub auth with `gh auth status`.
+3. Creates an isolated workspace under `/workspace`.
+4. Clones each repo at `baseBranch`; missing `main` on an empty repo is bootstrapped with an empty commit.
+5. Creates a `moltenhub-...` work branch when starting from `main`; otherwise reuses the requested branch.
+6. Probes publish access before agent execution. Public GitHub repos can fall back to a fork when direct write access is denied.
+7. Runs the selected agent in `targetSubdir` for one repo, or workspace root for multi-repo runs.
+8. Commits changed repos, pushes branches, opens or reuses PRs, and watches required checks.
+9. If checks fail, runs up to three focused remediation attempts and pushes follow-up commits.
+
+If no repository changes remain after the agent runs, the task exits successfully with `status=no_changes`.
+
+## Hub Configuration
+
+The Docker entrypoint looks for config in this order:
+
+1. `/workspace/config/config.json`
+2. `/workspace/config/init.json`
+3. `MOLTEN_HUB_TOKEN` bootstrap
+4. Local onboarding UI
+
+Useful environment variables:
+
+- `GITHUB_TOKEN` or `GH_TOKEN`: GitHub auth for clone, push, PR, and checks.
+- `MOLTEN_HUB_TOKEN`: remote Hub agent token.
+- `MOLTEN_HUB_REGION`: `na` or `eu`; defaults to `na`.
+- `MOLTEN_HUB_URL`: explicit Hub API URL, either `https://na.hub.molten.bot/v1` or `https://eu.hub.molten.bot/v1`.
+- `MOLTEN_HUB_SESSION_KEY`: generated init config session key. Defaults to `main`.
+- `OPENAI_API_KEY`, `AUGMENT_SESSION_AUTH`, `PI_PROVIDER_AUTH`, `PI_AUTH_JSON`: optional agent auth values loaded by the entrypoint or persisted config.
+
+Hub OpenAPI:
+
+- Live: [`https://na.hub.molten.bot/openapi.yaml`](https://na.hub.molten.bot/openapi.yaml)
+- Offline snapshot: [na.hub.molten.bot.openapi.yaml](na.hub.molten.bot.openapi.yaml)
+
+## Response Modes
+
+Supported `responseMode` values:
 
 - `default`
 - `off`
@@ -104,64 +125,12 @@ Run configs can optionally set `responseMode` to compress agent prose without ch
 - `caveman-wenyan-full`
 - `caveman-wenyan-ultra`
 
-MoltenHub Code defaults omitted or `default` `responseMode` to `caveman-full`. Set `off` for normal prose.
+Omitted or `default` maps to `caveman-full`. The mode is applied by prepending the bundled [Caveman skill](skills/caveman/SKILL.md) to the agent prompt.
 
-MoltenHub Code applies the bundled Caveman skill as a prompt overlay, so the same `responseMode` works across all supported harnesses (`codex`, `claude`, `auggie`, `pi`) without depending on provider-specific plugins or hooks.
-
-Example run config fragment:
-
-```json
-{
-  "repos": ["git@github.com:owner/repo.git"],
-  "baseBranch": "main",
-  "targetSubdir": ".",
-  "prompt": "Fix the failing tests and update coverage.",
-  "responseMode": "off"
-}
-```
-
-
-**Hub OpenAPI spec:**
-- Live: [`https://na.hub.molten.bot/openapi.yaml`](https://na.hub.molten.bot/openapi.yaml)
-- Offline snapshot: [`na.hub.molten.bot.openapi.yaml`](na.hub.molten.bot.openapi.yaml)
-
----
-
-**Run with persistent local config** (mount `.moltenhub` to `/workspace/config`):
-
-```bash
-mkdir -p ./.moltenhub
-docker run --rm -p 7777:7777 \
-  -e HOME=/tmp \
-  -e GITHUB_TOKEN=ghp_your_token \
-  -v "$PWD/.moltenhub:/workspace/config" \
-  moltenhub-code:latest
-```
-
-`GITHUB_TOKEN` bootstraps GitHub automatically. Entrypoint mirrors it to `GH_TOKEN`, runs `gh auth` setup, and hub runtime also accepts persisted `github_token` values from `.moltenhub/config.json` or `.moltenhub/init.json`.
-
-`MOLTEN_HUB_TOKEN` bootstraps Molten Hub automatically when no persisted hub config exists yet. Optional helpers:
-- `MOLTEN_HUB_REGION=na|eu` selects `https://<region>.hub.molten.bot/v1`
-- `MOLTEN_HUB_URL=https://na.hub.molten.bot/v1` overrides region with explicit hub API base URL
-- `MOLTEN_HUB_SESSION_KEY` sets generated init config session key
-
-Example direct env bootstrap:
-
-```bash
-docker run --rm -p 7777:7777 \
-  -e HOME=/tmp \
-  -e GITHUB_TOKEN=ghp_your_token \
-  -e MOLTEN_HUB_TOKEN=hub_your_agent_token \
-  -e MOLTEN_HUB_REGION=na \
-  -v "$PWD/.moltenhub:/workspace/config" \
-  moltenhub-code:latest
-```
-
-## Testing
+## Development
 
 ```bash
 go test ./...
 ```
 
-Runtime images include the Go SDK so agents can run Go tooling inside the container (for example `go test ./...` during remediation/debug tasks).
-Runtime images also include `@playwright/test` so browser testing flows can install browsers and run Playwright from inside container.
+There is no separate dependency install step for the Go module today; dependencies come from `go.mod`.
