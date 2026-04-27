@@ -2664,8 +2664,19 @@ func codexReportedCompactPlainFailure(output string) (bool, string) {
 		if strings.HasPrefix(lower, "failure:") || strings.HasPrefix(lower, "task failed") {
 			return true, line
 		}
+		if isNoImplementationTargetLine(lower) {
+			return true, "Failure: agent did not identify an implementation target."
+		}
 	}
 	return false, ""
+}
+
+func isNoImplementationTargetLine(lowerLine string) bool {
+	lowerLine = strings.TrimSpace(lowerLine)
+	return strings.Contains(lowerLine, "no implementation target given") ||
+		strings.Contains(lowerLine, "no implementation target was given") ||
+		strings.Contains(lowerLine, "no implementation target provided") ||
+		strings.Contains(lowerLine, "no implementation target was provided")
 }
 
 func codexFailureDetailWithErrorDetails(res execx.Result, failureDetail string) string {
@@ -2949,6 +2960,9 @@ func codexReportedFailureInOutput(output string, allowStructured bool) (bool, st
 		lower := strings.ToLower(trimmed)
 		if strings.HasPrefix(lower, "failure:") {
 			return true, trimmed
+		}
+		if isNoImplementationTargetLine(lower) {
+			return true, "Failure: agent did not identify an implementation target."
 		}
 		if allowStructured && structuredTaskFailureLine == "" && isStructuredTaskFailureLine(trimmed) {
 			structuredTaskFailureLine = trimmed

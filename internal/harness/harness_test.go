@@ -3776,6 +3776,38 @@ func TestRunCodexReturnsErrorWhenCodexFailureOnlyHasStderrDetail(t *testing.T) {
 	}
 }
 
+func TestRunCodexReturnsErrorWhenAgentReportsNoImplementationTarget(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "fix failing dispatch follow-up handling"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "`AGENTS.md` loaded. Repo checked. No implementation target given yet.\nSend bug/feature/change.",
+			},
+		},
+	}}
+
+	h := New(fake)
+	err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", "")
+	if err == nil {
+		t.Fatal("runCodex() error = nil, want codex reported failure error")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "codex reported failure") {
+		t.Fatalf("runCodex() error = %v, want codex reported failure marker", err)
+	}
+	if !strings.Contains(err.Error(), "Failure: agent did not identify an implementation target.") {
+		t.Fatalf("runCodex() error = %v, want no-implementation-target failure", err)
+	}
+	if !strings.Contains(err.Error(), "Error details: `AGENTS.md` loaded. Repo checked. No implementation target given yet.") {
+		t.Fatalf("runCodex() error = %v, want explicit no-implementation-target detail", err)
+	}
+}
+
 func TestRunCodexAllowsValidationToolingMissingFailure(t *testing.T) {
 	t.Parallel()
 
