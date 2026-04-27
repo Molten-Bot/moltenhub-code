@@ -250,7 +250,7 @@ body::after {
   height: 52px;
   display: grid;
   place-items: center;
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   border: 1px solid var(--glass-icon-border);
   background: var(--glass-icon-bg);
   box-shadow: var(--glass-icon-shadow);
@@ -670,7 +670,7 @@ textarea {
 }
 
 .panel {
-  border-radius: 18px;
+  border-radius: var(--radius-card);
   overflow: hidden;
   min-width: 0;
 }
@@ -729,7 +729,7 @@ textarea {
 }
 
 .event {
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   padding: 10px 12px;
   font-size: 0.8rem;
   line-height: 1.4;
@@ -1246,7 +1246,7 @@ body .right-col.prompt-collapsed.task-list-hidden {
 .prompt-action-paste {
   width: 100%;
   border: 1px solid var(--surface-control-border);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   background: var(--surface-control-bg);
   color: var(--text);
   box-shadow: var(--surface-control-shadow);
@@ -1344,7 +1344,7 @@ select.prompt-control {
   align-items: center;
   justify-content: center;
   border: 1px solid var(--surface-control-border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--surface-control-bg);
   color: var(--surface-action-muted);
   box-shadow: var(--surface-control-shadow);
@@ -1533,7 +1533,7 @@ select.prompt-control {
   min-width: 0;
   min-inline-size: 72px;
   min-height: 38px;
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   padding: 8px 13px;
   font-size: 0.77rem;
   font-weight: 800;
@@ -1554,7 +1554,7 @@ select.prompt-control {
   min-height: 32px;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius);
   color: var(--text-soft);
   background: transparent;
   box-shadow: none;
@@ -1573,7 +1573,7 @@ select.prompt-control {
   min-height: 32px;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius);
   color: var(--text-soft);
   background: transparent;
   box-shadow: none;
@@ -1775,7 +1775,7 @@ select.prompt-control {
 
 .library-task-empty,
 .library-task-option {
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   background: var(--surface-library-bg);
   border: 1px solid var(--border);
 }
@@ -1854,7 +1854,7 @@ select.prompt-control {
   width: 34px;
   min-width: 34px;
   height: 34px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   border: 1px solid rgba(17, 34, 68, 0.12);
   background: var(--surface-task-button-bg);
   color: var(--text);
@@ -1930,7 +1930,7 @@ select.prompt-control {
 }
 
 .task {
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   padding: 10px 11px;
   transition: border-color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease, opacity 2000ms ease;
   min-width: 0;
@@ -2179,7 +2179,7 @@ select.prompt-control {
   height: 34px;
   flex: 0 0 34px;
   align-self: center;
-  border-radius: 8px;
+  border-radius: var(--radius);
   border: 1px solid rgba(17, 34, 68, 0.12);
   background: var(--surface-task-button-bg);
   padding: 7px;
@@ -2191,7 +2191,7 @@ select.prompt-control {
   min-width: 34px;
   height: 34px;
   flex: 0 0 34px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 7px;
 }
 
@@ -2989,7 +2989,7 @@ html.night .task-progress-step.current .task-progress-step-icon.is-agent-logo {
   width: min(860px, 100%);
   max-height: min(88vh, 760px);
   border: 1px solid var(--surface-auth-panel-border);
-  border-radius: 16px;
+  border-radius: var(--radius-card);
   background: var(--surface-auth-panel-bg);
   box-shadow: var(--surface-auth-panel-shadow);
   overflow: hidden;
@@ -3341,7 +3341,7 @@ html.night .task-progress-step.current .task-progress-step-icon.is-agent-logo {
 .agent-auth-shell {
   padding: clamp(24px, 3vw, 32px);
   border: 1px solid var(--surface-auth-panel-border);
-  border-radius: 20px;
+  border-radius: var(--radius-card);
   background: var(--surface-auth-panel-bg);
   box-shadow: var(--surface-auth-panel-shadow);
 }
@@ -3368,7 +3368,7 @@ html.night .task-progress-step.current .task-progress-step-icon.is-agent-logo {
 .agent-auth-harness-empty {
   padding: 14px 16px;
   border: 1px solid var(--surface-auth-panel-border);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   background: color-mix(in srgb, var(--surface-auth-panel-bg) 85%, transparent);
   color: var(--text-soft);
   font-size: 0.84rem;
@@ -3380,7 +3380,7 @@ html.night .task-progress-step.current .task-progress-step-icon.is-agent-logo {
   width: 100%;
   padding: 14px;
   border: 1px solid var(--glass-border);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   background: var(--glass-bg);
   box-shadow: var(--glass-shadow);
   text-align: left;
@@ -3427,7 +3427,7 @@ html.night .task-progress-step.current .task-progress-step-icon.is-agent-logo {
   width: 58px;
   height: 58px;
   border: 1px solid var(--glass-icon-border);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   background: var(--glass-icon-bg);
   box-shadow: var(--glass-icon-shadow);
 }
@@ -3481,7 +3481,7 @@ html.night .task-progress-step.current .task-progress-step-icon.is-agent-logo {
   width: 100%;
   padding: 12px 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   background: rgba(10, 18, 34, 0.32);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
@@ -3552,7 +3552,7 @@ html.night .task-progress-step.current .task-progress-step-icon.is-agent-logo {
   height: 58px;
   padding: 9px;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   background: transparent;
   box-shadow: none;
   filter: var(--agent-logo-filter);
@@ -3815,7 +3815,7 @@ body.onboarding-modal-open {
   max-height: min(92vh, 880px);
   overflow: auto;
   border: 1px solid var(--surface-auth-panel-border);
-  border-radius: 20px;
+  border-radius: var(--radius-card);
   background: var(--surface-auth-panel-bg);
   box-shadow: var(--surface-auth-panel-shadow);
   display: block;
@@ -3834,7 +3834,7 @@ body.onboarding-modal-open {
   gap: 14px 18px;
   padding: clamp(16px, 2vw, 22px);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   background: linear-gradient(180deg, rgba(10, 132, 255, 0.08), rgba(255, 255, 255, 0.58));
   color: rgba(248, 250, 252, 0.96);
 }
@@ -3977,7 +3977,7 @@ body.onboarding-modal-open {
   min-height: 40px;
   padding: 8px 12px;
   border: 1px solid rgba(148, 163, 184, 0.24);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: linear-gradient(180deg, rgba(248, 250, 252, 0.86), rgba(226, 232, 240, 0.7));
   color: var(--surface-label);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
@@ -4010,7 +4010,7 @@ body.onboarding-modal-open {
   min-height: 44px;
   padding: 11px 14px;
   border: 1px solid var(--surface-control-border);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   background: var(--surface-control-bg);
   box-shadow: var(--surface-control-shadow);
   color: var(--text);
@@ -4155,7 +4155,7 @@ body.onboarding-modal-open {
   min-height: 44px;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--bad) 42%, var(--border));
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   background: color-mix(in srgb, var(--bad) 10%, transparent);
   box-shadow: none;
   color: var(--bad);

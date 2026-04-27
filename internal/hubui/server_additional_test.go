@@ -1157,7 +1157,7 @@ func TestStudioStylesUseRefinedPanelAndInputTreatment(t *testing.T) {
 	if !strings.Contains(css, ".prompt-mode-link.active {\n  color: var(--running);\n}") {
 		t.Fatalf("expected active studio mode link to stay highlighted after removing button sections")
 	}
-	if !strings.Contains(css, ".prompt-control,\n.prompt-text,\n.prompt-action-paste {\n  width: 100%;\n  border: 1px solid var(--surface-control-border);\n  border-radius: 12px;\n  background: var(--surface-control-bg);") {
+	if !strings.Contains(css, ".prompt-control,\n.prompt-text,\n.prompt-action-paste {\n  width: 100%;\n  border: 1px solid var(--surface-control-border);\n  border-radius: var(--radius-card);\n  background: var(--surface-control-bg);") {
 		t.Fatalf("expected studio controls to use theme-aware input tokens")
 	}
 	if !strings.Contains(css, "select.prompt-control {\n  appearance: none;\n  background-image:\n    linear-gradient(45deg, transparent 50%, var(--surface-control-arrow) 50%),\n    linear-gradient(135deg, var(--surface-control-arrow) 50%, transparent 50%);") {
