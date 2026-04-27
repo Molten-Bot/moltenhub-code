@@ -1461,13 +1461,15 @@ func TestNewHubTasksShowCurrentWorkAndHighlight(t *testing.T) {
 	for _, want := range []string{
 		"const NEW_HUB_TASK_HIGHLIGHT_MS = 4_000;",
 		"function syncNewHubTaskFocus(previousSnapshot, nextSnapshot) {",
-		"state.taskStatusFilter = \"running\";",
 		"node.classList.add(\"task-new-hub\");",
 		"newHubTask: shouldHighlightNewHubTask(task),",
 	} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("expected index html to contain %q", want)
 		}
+	}
+	if strings.Contains(html, "state.taskStatusFilter = \"running\";") {
+		t.Fatalf("expected new hub tasks to stay in the current task filter")
 	}
 
 	cssReq := httptest.NewRequest(http.MethodGet, "/static/style.css", nil)
