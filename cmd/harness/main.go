@@ -41,6 +41,9 @@ const gitHubCLIPackageLabel = "github-cli (gh)"
 const gitHubCLIAuthRecommendation = "Run `gh auth login` (the GitHub CLI binary from the `github-cli` package) or set GH_TOKEN before dispatching tasks."
 const followUpTaskLogArchiveSubdir = "followup"
 const hubSetupLocationsURL = "https://molten.bot/hubs.json"
+const moltenHubTokenEnv = "MOLTEN_HUB_TOKEN"
+const moltenHubURLEnv = "MOLTEN_HUB_URL"
+const moltenHubRegionEnv = "MOLTEN_HUB_REGION"
 const localSubmitSource = "local_submit"
 const rerunSource = "rerun"
 const failureFollowUpSource = "failure_followup"
@@ -916,7 +919,7 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 	}
 
 	if configPath != "" {
-		return loadHubBootRuntimeConfigOrDefault(configPath)
+		return finalizeHubBootConfig(loadHubBootRuntimeConfigOrDefault(configPath))
 	}
 
 	if initPath != "" {
@@ -928,18 +931,18 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 				if runtimeErr == nil {
 					cfg := runtimeCfg.Init()
 					cfg.RuntimeConfigPath = runtimeCfg.RuntimeConfigPath
-					return cfg, harness.ExitSuccess, nil
+					return finalizeHubBootConfig(cfg, harness.ExitSuccess, nil)
 				}
-				return loadHubBootRuntimeConfigOrDefault(runtimePath)
+				return finalizeHubBootConfig(loadHubBootRuntimeConfigOrDefault(runtimePath))
 			}
 			return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("init config error: %w", err)
 		}
 		cfg.RuntimeConfigPath = hub.ResolveRuntimeConfigPath(initPath)
 		cfg.LogLevel = configuredHubLogLevel(cfg.LogLevel, cfg.RuntimeConfigPath)
-		return cfg, harness.ExitSuccess, nil
+		return finalizeHubBootConfig(cfg, harness.ExitSuccess, nil)
 	}
 
-	return loadHubBootRuntimeConfigOrDefault("")
+	return finalizeHubBootConfig(loadHubBootRuntimeConfigOrDefault(""))
 }
 
 func loadHubBootRuntimeConfigOrDefault(path string) (hub.InitConfig, int, error) {
@@ -955,6 +958,62 @@ func loadHubBootRuntimeConfigOrDefault(path string) (hub.InitConfig, int, error)
 	cfg := runtimeCfg.Init()
 	cfg.RuntimeConfigPath = runtimeCfg.RuntimeConfigPath
 	return cfg, harness.ExitSuccess, nil
+}
+
+func finalizeHubBootConfig(cfg hub.InitConfig, exitCode int, err error) (hub.InitConfig, int, error) {
+	if err != nil {
+		return cfg, exitCode, err
+	}
+	if err := applyMoltenHubEnvBootstrap(&cfg); err != nil {
+		return hub.InitConfig{}, harness.ExitConfig, err
+	}
+	return cfg, exitCode, nil
+}
+
+func applyMoltenHubEnvBootstrap(cfg *hub.InitConfig) error {
+	if cfg == nil {
+		return nil
+	}
+
+	token := strings.TrimSpace(os.Getenv(moltenHubTokenEnv))
+	if token == "" {
+		return nil
+	}
+
+	if strings.TrimSpace(cfg.AgentToken) == "" && strings.TrimSpace(cfg.BindToken) == "" {
+		cfg.AgentToken = token
+		if baseURL, err := moltenHubEnvBaseURL(); err != nil {
+			return err
+		} else if baseURL != "" {
+			cfg.BaseURL = baseURL
+		}
+	}
+
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("init config error: %w", err)
+	}
+	return nil
+}
+
+func moltenHubEnvBaseURL() (string, error) {
+	if rawURL := strings.TrimSpace(os.Getenv(moltenHubURLEnv)); rawURL != "" {
+		baseURL, err := hub.CanonicalHubBaseURL(rawURL)
+		if err != nil {
+			return "", fmt.Errorf("%s: %w", moltenHubURLEnv, err)
+		}
+		return baseURL, nil
+	}
+
+	region := strings.ToLower(strings.TrimSpace(os.Getenv(moltenHubRegionEnv)))
+	switch region {
+	case "":
+		return "", nil
+	case "na", "eu":
+		return hub.HubBaseURLForRegion(region), nil
+	default:
+		return "", fmt.Errorf("%s must be na or eu", moltenHubRegionEnv)
+	}
 }
 
 func configuredHubLogLevel(preferred, runtimeConfigPath string) string {
@@ -2508,7 +2567,10 @@ func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 		persistedBindToken = strings.TrimSpace(storedCfg.BindToken)
 		persistedAgentToken = strings.TrimSpace(storedCfg.AgentToken)
 	}
-	state.Configured = persistedBindToken != "" || persistedAgentToken != ""
+	activeBindToken := strings.TrimSpace(activeCfg.BindToken)
+	activeAgentToken := strings.TrimSpace(activeCfg.AgentToken)
+	state.Configured = persistedBindToken != "" || persistedAgentToken != "" ||
+		activeBindToken != "" || activeAgentToken != ""
 	if storedFound && strings.TrimSpace(storedCfg.BaseURL) != "" {
 		state.Region = hubSetupRegionForBaseURLWithLocations(storedCfg.BaseURL, locations)
 	} else {
@@ -2519,7 +2581,7 @@ func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 	state.Profile.DisplayName = strings.TrimSpace(activeCfg.Profile.DisplayName)
 	state.Profile.Emoji = strings.TrimSpace(activeCfg.Profile.Emoji)
 	if state.Configured {
-		if persistedBindToken != "" {
+		if persistedBindToken != "" || activeBindToken != "" {
 			state.AgentMode = "new"
 			state.TokenType = "bind"
 		} else {

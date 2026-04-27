@@ -378,6 +378,34 @@ func TestLoadHubBootConfigWithoutFlagsAllowsDefaultRuntimeConfigWithoutCredentia
 	}
 }
 
+func TestLoadHubBootConfigUsesMoltenHubTokenEnvWhenRuntimeConfigOmitsCredentials(t *testing.T) {
+	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
+	t.Setenv("MOLTEN_HUB_TOKEN", "t_env_agent_token")
+	t.Setenv("MOLTEN_HUB_REGION", "eu")
+
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(configPath, []byte(`{"github_token":"ghp_saved","agent_harness":"codex"}`), 0o600); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+
+	cfg, exitCode, err := loadHubBootConfig("", configPath)
+	if err != nil {
+		t.Fatalf("loadHubBootConfig() error = %v", err)
+	}
+	if exitCode != harness.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	}
+	if got, want := cfg.AgentToken, "t_env_agent_token"; got != want {
+		t.Fatalf("AgentToken = %q, want %q", got, want)
+	}
+	if got, want := cfg.BaseURL, "https://eu.hub.molten.bot/v1"; got != want {
+		t.Fatalf("BaseURL = %q, want %q", got, want)
+	}
+	if got, want := cfg.GitHubToken, "ghp_saved"; got != want {
+		t.Fatalf("GitHubToken = %q, want %q", got, want)
+	}
+}
+
 func TestLoadHubBootConfigWithBadRuntimeConfigFallsBackToDefaults(t *testing.T) {
 	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
 	t.Setenv("HARNESS_ALLOW_NON_MOLTEN_HUB_BASE_URL", "")
@@ -1902,7 +1930,7 @@ func TestConnectHubSetupUsesSavedRuntimeConfig(t *testing.T) {
 	}
 }
 
-func TestCurrentHubSetupStateRequiresPersistedCredentialsForConfiguredMode(t *testing.T) {
+func TestCurrentHubSetupStateUsesLiveCredentialsForConfiguredMode(t *testing.T) {
 	t.Parallel()
 
 	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
@@ -1928,8 +1956,8 @@ func TestCurrentHubSetupStateRequiresPersistedCredentialsForConfiguredMode(t *te
 		},
 	})
 
-	if state.Configured {
-		t.Fatal("Configured = true, want false")
+	if !state.Configured {
+		t.Fatal("Configured = false, want true")
 	}
 	if got, want := state.Region, "eu"; got != want {
 		t.Fatalf("Region = %q, want %q", got, want)
@@ -1951,6 +1979,9 @@ func TestCurrentHubSetupStateRequiresPersistedCredentialsForConfiguredMode(t *te
 	}
 	if got, want := state.TokenType, "agent"; got != want {
 		t.Fatalf("TokenType = %q, want %q", got, want)
+	}
+	if !state.ActivationReady {
+		t.Fatal("ActivationReady = false, want true")
 	}
 }
 
