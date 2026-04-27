@@ -109,6 +109,63 @@ func TestRuntimeDockerfileInstallsPlaywrightTest(t *testing.T) {
 	}
 }
 
+func TestRuntimeDockerfileInstallsPythonTooling(t *testing.T) {
+	t.Parallel()
+
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller(0) failed")
+	}
+
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	dockerfilePath := filepath.Join(repoRoot, "Dockerfile")
+
+	data, err := os.ReadFile(dockerfilePath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", dockerfilePath, err)
+	}
+
+	content := string(data)
+	for _, want := range []string{
+		"python3",
+		"py3-pip",
+		"py3-virtualenv",
+		"ln -sf /usr/bin/python3 /usr/local/bin/python",
+		"ln -sf /usr/bin/pip3 /usr/local/bin/pip",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("%s does not install Python runtime requirement %q", dockerfilePath, want)
+		}
+	}
+}
+
+func TestRuntimeDockerfileInstallsOpenAIPythonSDK(t *testing.T) {
+	t.Parallel()
+
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller(0) failed")
+	}
+
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	dockerfilePath := filepath.Join(repoRoot, "Dockerfile")
+
+	data, err := os.ReadFile(dockerfilePath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", dockerfilePath, err)
+	}
+
+	content := string(data)
+	for _, want := range []string{
+		"python3 -m pip install",
+		"--upgrade openai",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("%s does not install latest OpenAI Python SDK requirement %q", dockerfilePath, want)
+		}
+	}
+}
+
 func containsAny(content string, want ...string) bool {
 	for _, candidate := range want {
 		if strings.Contains(content, candidate) {
