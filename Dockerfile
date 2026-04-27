@@ -28,7 +28,13 @@ RUN apk add --no-cache \
         github-cli \
         jq \
         openssh-client-default \
+        py3-pip \
+        py3-virtualenv \
+        python3 \
         ripgrep \
+    && ln -sf /usr/bin/python3 /usr/local/bin/python \
+    && ln -sf /usr/bin/pip3 /usr/local/bin/pip \
+    && python3 -m pip install --no-cache-dir --break-system-packages --root-user-action=ignore --upgrade openai \
     && npm install --global \
       @openai/codex@latest \
       @anthropic-ai/claude-code@latest \
