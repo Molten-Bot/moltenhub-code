@@ -789,7 +789,7 @@
     );
     const MOLTENHUB_LOGO_URL = "/static/logo.svg";
     const GITHUB_LOGO_URL = "/static/logos/github.svg";
-    const TASK_PR_LINK_SIZE_PX = "34px";
+    const TASK_SIDE_ACTION_SIZE_PX = "34px";
     const TASK_PR_LOGO_SIZE = 20;
     const CLAUDE_AUTH_LOGO_URL = "/static/logos/claude-code.svg";
     const TASK_ACTION_ICON_NAMES = Object.freeze({
@@ -7624,7 +7624,7 @@
           if (taskHistoryView && canCopyTaskCloneCommand(task)) {
             const cloneButton = document.createElement("button");
             cloneButton.type = "button";
-            cloneButton.className = "task-copy-link task-pr-link-inline";
+            cloneButton.className = "task-copy-link";
             cloneButton.title = "Clone locally to test and review changes.";
             cloneButton.setAttribute("aria-label", "Clone locally to test and review changes.");
 
@@ -7638,13 +7638,13 @@
             promptActions.appendChild(cloneButton);
           }
 
-          const showPromptPRLink = taskGitHubLinkURL(task) !== "";
-          if (showPromptPRLink) {
+          if (taskHistoryView && taskGitHubLinkURL(task) !== "") {
             const prLink = createTaskGitHubLink(task, "task-pr-link task-pr-link-inline");
             if (prLink) {
               promptActions.appendChild(prLink);
             }
           }
+
           const closeAction = renderTaskCloseButton(task, requestID);
           if (closeAction) {
             promptActions.appendChild(closeAction);
@@ -7770,19 +7770,19 @@
           topActions.appendChild(rerun);
         }
 
-        const showTaskPRLink = taskGitHubLinkURL(task) !== "";
         const showTaskCloneAction = canCopyTaskCloneCommand(task);
-        const showTaskSideActions = showTaskPRLink || showTaskCloneAction;
+        const showTaskGitHubAction = taskHistoryView && taskGitHubLinkURL(task) !== "";
+        const showTaskSideActions = showTaskCloneAction || showTaskGitHubAction;
         const inlineHistoryActions = taskHistoryView && showTaskSideActions;
         if (inlineHistoryActions) {
           if (showTaskCloneAction) {
             const cloneButton = document.createElement("button");
             cloneButton.type = "button";
             cloneButton.className = "task-copy-link";
-            cloneButton.style.width = TASK_PR_LINK_SIZE_PX;
-            cloneButton.style.minWidth = TASK_PR_LINK_SIZE_PX;
-            cloneButton.style.height = TASK_PR_LINK_SIZE_PX;
-            cloneButton.style.flex = `0 0 ${TASK_PR_LINK_SIZE_PX}`;
+            cloneButton.style.width = TASK_SIDE_ACTION_SIZE_PX;
+            cloneButton.style.minWidth = TASK_SIDE_ACTION_SIZE_PX;
+            cloneButton.style.height = TASK_SIDE_ACTION_SIZE_PX;
+            cloneButton.style.flex = `0 0 ${TASK_SIDE_ACTION_SIZE_PX}`;
             cloneButton.style.alignSelf = "center";
             cloneButton.title = "Clone locally to test and review changes.";
             cloneButton.setAttribute("aria-label", "Clone locally to test and review changes.");
@@ -7797,13 +7797,13 @@
             topActions.appendChild(cloneButton);
           }
 
-          if (showTaskPRLink) {
+          if (showTaskGitHubAction) {
             const prLink = createTaskGitHubLink(task, "task-pr-link");
             if (prLink) {
-              prLink.style.width = TASK_PR_LINK_SIZE_PX;
-              prLink.style.minWidth = TASK_PR_LINK_SIZE_PX;
-              prLink.style.height = TASK_PR_LINK_SIZE_PX;
-              prLink.style.flex = `0 0 ${TASK_PR_LINK_SIZE_PX}`;
+              prLink.style.width = TASK_SIDE_ACTION_SIZE_PX;
+              prLink.style.minWidth = TASK_SIDE_ACTION_SIZE_PX;
+              prLink.style.height = TASK_SIDE_ACTION_SIZE_PX;
+              prLink.style.flex = `0 0 ${TASK_SIDE_ACTION_SIZE_PX}`;
               prLink.style.alignSelf = "center";
               topActions.appendChild(prLink);
             }
@@ -7874,10 +7874,10 @@
             const cloneButton = document.createElement("button");
             cloneButton.type = "button";
             cloneButton.className = "task-copy-link";
-            cloneButton.style.width = TASK_PR_LINK_SIZE_PX;
-            cloneButton.style.minWidth = TASK_PR_LINK_SIZE_PX;
-            cloneButton.style.height = TASK_PR_LINK_SIZE_PX;
-            cloneButton.style.flex = `0 0 ${TASK_PR_LINK_SIZE_PX}`;
+            cloneButton.style.width = TASK_SIDE_ACTION_SIZE_PX;
+            cloneButton.style.minWidth = TASK_SIDE_ACTION_SIZE_PX;
+            cloneButton.style.height = TASK_SIDE_ACTION_SIZE_PX;
+            cloneButton.style.flex = `0 0 ${TASK_SIDE_ACTION_SIZE_PX}`;
             cloneButton.style.alignSelf = "center";
             cloneButton.title = "Clone locally to test and review changes.";
             cloneButton.setAttribute("aria-label", "Clone locally to test and review changes.");
@@ -7890,19 +7890,6 @@
               void copyTaskCloneCommand(task, cloneButton);
             });
             sideActions.appendChild(cloneButton);
-          }
-
-          if (showTaskPRLink) {
-            const prLink = createTaskGitHubLink(task, "task-pr-link");
-            if (prLink) {
-              // Keep PR affordance size stable even if stale CSS is cached.
-              prLink.style.width = TASK_PR_LINK_SIZE_PX;
-              prLink.style.minWidth = TASK_PR_LINK_SIZE_PX;
-              prLink.style.height = TASK_PR_LINK_SIZE_PX;
-              prLink.style.flex = `0 0 ${TASK_PR_LINK_SIZE_PX}`;
-              prLink.style.alignSelf = "center";
-              sideActions.appendChild(prLink);
-            }
           }
 
           node.appendChild(sideActions);
