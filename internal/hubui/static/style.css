@@ -2169,8 +2169,7 @@ select.prompt-control {
   align-self: center;
 }
 
-.task-copy-link,
-.task-pr-link {
+.task-copy-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2186,17 +2185,7 @@ select.prompt-control {
   transition: border-color 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
 }
 
-.task-pr-link-inline {
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-  border-radius: var(--radius);
-  padding: 7px;
-}
-
-.task-copy-link img,
-.task-pr-link img {
+.task-copy-link img {
   display: block;
   width: 100%;
   height: 100%;
@@ -2214,15 +2203,13 @@ select.prompt-control {
   filter: var(--task-icon-contrast-filter) var(--task-icon-shadow-filter);
 }
 
-.task-copy-link:hover,
-.task-pr-link:hover {
+.task-copy-link:hover {
   transform: translateY(-1px);
   border-color: rgba(10, 132, 255, 0.45);
   box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.12);
 }
 
-.task-copy-link:focus-visible,
-.task-pr-link:focus-visible {
+.task-copy-link:focus-visible {
   outline: none;
   border-color: rgba(10, 132, 255, 0.52);
   box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.15);

@@ -1099,12 +1099,19 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to apply prompt-only card styling when compact task view is active")
 	}
 	promptOnlyStart := strings.Index(markup, "if (promptOnly) {")
-	promptOnlyHistoryGitHubLink := strings.Index(markup, "if (taskHistoryView && taskGitHubLinkURL(task) !== \"\") {")
-	if promptOnlyStart < 0 || promptOnlyHistoryGitHubLink < 0 || promptOnlyHistoryGitHubLink <= promptOnlyStart {
-		t.Fatalf("expected index html to render a prompt-only task branch before history-only GitHub links")
+	if promptOnlyStart < 0 {
+		t.Fatalf("expected index html to render a prompt-only task branch")
 	}
-	if strings.Contains(markup[promptOnlyStart:promptOnlyHistoryGitHubLink], "renderOutputToggle") {
+	promptOnlyCloseAction := strings.Index(markup[promptOnlyStart:], "const closeAction = renderTaskCloseButton(task, requestID);")
+	if promptOnlyCloseAction < 0 {
+		t.Fatalf("expected index html to render a prompt-only task branch with close actions")
+	}
+	promptOnlyCloseAction += promptOnlyStart
+	if strings.Contains(markup[promptOnlyStart:promptOnlyCloseAction], "renderOutputToggle") {
 		t.Fatalf("expected index html prompt-only mode to hide terminal output controls")
+	}
+	if strings.Contains(markup[promptOnlyStart:promptOnlyCloseAction], "createTaskGitHubLink") {
+		t.Fatalf("expected index html prompt-only mode to omit duplicate standalone GitHub links")
 	}
 	if !strings.Contains(markup, "function githubRepoPathFromValue(value)") ||
 		!strings.Contains(markup, "function taskRepoRootURL(task)") ||
@@ -1122,11 +1129,10 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `marker.href = githubHref;`) {
 		t.Fatalf("expected index html to link the final GitHub progress step to the repo before PR creation and the PR once available")
 	}
-	if !strings.Contains(markup, `if (taskHistoryView && taskGitHubLinkURL(task) !== "") {`) {
-		t.Fatalf("expected index html prompt-only mode to reserve standalone GitHub links for completed history")
-	}
-	if !strings.Contains(markup, `const prLink = createTaskGitHubLink(task, "task-pr-link task-pr-link-inline");`) {
-		t.Fatalf("expected index html prompt-only history mode to render a compact inline GitHub link affordance")
+	if strings.Contains(markup, "function createTaskGitHubLink(") ||
+		strings.Contains(markup, "taskGitHubLinkIsPR") ||
+		strings.Contains(markup, "task-pr-link") {
+		t.Fatalf("expected index html to remove standalone task GitHub link rendering")
 	}
 	if !strings.Contains(markup, "const closeAction = renderTaskCloseButton(task, requestID);") {
 		t.Fatalf("expected index html prompt-only mode to include completed-task close actions")
@@ -1135,20 +1141,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to clear history-only tasks locally when close is clicked")
 	}
 	if !strings.Contains(markup, "const showTaskCloneAction = canCopyTaskCloneCommand(task);") ||
-		!strings.Contains(markup, `const showTaskGitHubAction = taskHistoryView && taskGitHubLinkURL(task) !== "";`) ||
-		!strings.Contains(markup, "const showTaskSideActions = showTaskCloneAction || showTaskGitHubAction;") {
-		t.Fatalf("expected index html to gate the terminal clone action alongside history-only GitHub links")
+		!strings.Contains(markup, "const showTaskSideActions = showTaskCloneAction;") {
+		t.Fatalf("expected index html to gate task side actions to the terminal clone action")
 	}
 	if !strings.Contains(markup, "const TASK_SIDE_ACTION_SIZE_PX = \"34px\";") {
 		t.Fatalf("expected index html to define a stable runtime width for task side actions")
 	}
 	if !strings.Contains(markup, "node.classList.toggle(\"task-has-side-actions\", showTaskSideActions);") {
 		t.Fatalf("expected index html to mark task cards with right-side side-action rails")
-	}
-	if !strings.Contains(markup, "prLink.style.width = TASK_SIDE_ACTION_SIZE_PX;") ||
-		!strings.Contains(markup, "prLink.style.height = TASK_SIDE_ACTION_SIZE_PX;") ||
-		!strings.Contains(markup, "prLink.style.alignSelf = \"center\";") {
-		t.Fatalf("expected index html to size history GitHub links inline to avoid task-height expansion when css is stale")
 	}
 	if !strings.Contains(markup, "cloneButton.className = \"task-copy-link\";") ||
 		!strings.Contains(markup, "const cloneLogo = createTaskCloneIcon();") ||
@@ -1159,19 +1159,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `cloneButton.setAttribute("aria-label", "Clone locally to test and review changes.");`) {
 		t.Fatalf("expected index html to render the requested terminal icon hover copy")
 	}
-	if !strings.Contains(markup, "prLogo.width = TASK_PR_LOGO_SIZE;") || !strings.Contains(markup, "prLogo.height = TASK_PR_LOGO_SIZE;") {
-		t.Fatalf("expected index html to define deterministic task PR logo dimensions")
-	}
-	if !strings.Contains(markup, `prLink.title = taskGitHubLinkIsPR(task) ? "Open Pull Request." : "Open repository.";`) ||
-		!strings.Contains(markup, `prLink.setAttribute("aria-label", taskGitHubLinkIsPR(task) ? "Open Pull Request." : "Open repository.");`) {
-		t.Fatalf("expected index html to render GitHub icon hover copy for repo roots before PR creation and pull requests once available")
-	}
 	if !strings.Contains(markup, "body.className = \"task-body\";") {
 		t.Fatalf("expected index html to render a task body container alongside side actions")
 	}
 	if !strings.Contains(markup, "const inlineHistoryActions = taskHistoryView && showTaskSideActions;") ||
-		!strings.Contains(markup, "topActions.appendChild(prLink);") {
-		t.Fatalf("expected index html to allow history-mode cards to place PR links inline before close")
+		!strings.Contains(markup, "topActions.appendChild(cloneButton);") {
+		t.Fatalf("expected index html to allow history-mode cards to place clone actions inline before close")
 	}
 	if !strings.Contains(markup, "async function copyTextToClipboard(value, buttonNode, options = {}) {") ||
 		!strings.Contains(markup, "const preserveContents = Boolean(options && options.preserveContents);") ||
@@ -2167,8 +2160,8 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task-top-actions {\n  display: flex;\n  align-items: center;\n  justify-content: flex-end;\n  flex-wrap: nowrap;") {
 		t.Fatalf("expected stylesheet to keep task action controls on a single right-aligned row")
 	}
-	if !strings.Contains(css, ".task-pr-link-inline") {
-		t.Fatalf("expected stylesheet to include inline GitHub icon sizing for prompt-only task rows")
+	if strings.Contains(css, ".task-pr-link") {
+		t.Fatalf("expected stylesheet to remove standalone task GitHub link styles")
 	}
 	if !strings.Contains(css, ".task-output-toggle") {
 		t.Fatalf("expected stylesheet to include task output toggle styles")
@@ -2245,38 +2238,29 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task-fullscreen") {
 		t.Fatalf("expected stylesheet to include full screen task layout styles")
 	}
-	if !strings.Contains(css, ".task-pr-link") ||
+	if !strings.Contains(css, ".task-copy-link {") ||
 		!strings.Contains(css, "width: 34px;") ||
 		!strings.Contains(css, "height: 34px;") ||
 		!strings.Contains(css, "align-self: center;") {
-		t.Fatalf("expected stylesheet to render task PR links as fixed-size controls that do not affect task card height")
+		t.Fatalf("expected stylesheet to render task clone links as fixed-size controls that do not affect task card height")
 	}
 	if !strings.Contains(css, ".task-side-actions {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;") {
-		t.Fatalf("expected stylesheet to group terminal and GitHub task actions in a compact side rail")
+		t.Fatalf("expected stylesheet to group terminal clone actions in a compact side rail")
 	}
-	if !strings.Contains(css, ".task-copy-link,\n.task-pr-link {") {
-		t.Fatalf("expected stylesheet to share icon-button sizing between task clone and PR actions")
+	if !strings.Contains(css, ".task-copy-link {") {
+		t.Fatalf("expected stylesheet to include task clone icon-button sizing")
 	}
 	if strings.Contains(css, "align-self: stretch;") {
-		t.Fatalf("expected stylesheet to avoid stretching task PR links to task card height")
+		t.Fatalf("expected stylesheet to avoid stretching task action links to task card height")
 	}
 	if strings.Contains(css, ".task.task-has-side-actions {\n  padding-right: 0;\n  gap: 0;") {
 		t.Fatalf("expected stylesheet to remove the dedicated right-side PR rail layout")
 	}
-	if strings.Contains(css, ".task.task-has-pr-link .task-pr-link {\n  margin-top: -10px;\n  margin-bottom: -10px;") {
-		t.Fatalf("expected stylesheet to avoid task-height-filling PR link margins")
-	}
 	if strings.Contains(css, "aspect-ratio: 1 / 1;") {
-		t.Fatalf("expected stylesheet to avoid aspect-ratio-driven PR link stretching")
+		t.Fatalf("expected stylesheet to avoid aspect-ratio-driven task action stretching")
 	}
-	if !strings.Contains(css, ".task-pr-link img {\n  display: block;\n  width: 100%;\n  height: 100%;") {
-		t.Fatalf("expected stylesheet to scale the GitHub logo to fill the task PR rail")
-	}
-	if !strings.Contains(css, ".task-pr-link img {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: contain;\n  filter: var(--agent-logo-filter);") {
-		t.Fatalf("expected stylesheet to apply theme-aware monochrome treatment to task PR logos")
-	}
-	if !strings.Contains(css, ".task-copy-link img,\n.task-pr-link img {") {
-		t.Fatalf("expected stylesheet to apply the same image sizing treatment to terminal clone icons")
+	if !strings.Contains(css, ".task-copy-link img {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: contain;\n  filter: var(--agent-logo-filter);") {
+		t.Fatalf("expected stylesheet to scale terminal clone icons inside task clone controls")
 	}
 	if !strings.Contains(css, ".task-copy-link.is-copied {") {
 		t.Fatalf("expected stylesheet to include copied-state feedback for the terminal clone action")
