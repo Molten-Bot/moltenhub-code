@@ -1797,27 +1797,24 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `localPromptInput.value = normalized.pretty;
 
-      setTaskStatusFilter("running");
       localPromptSubmit.disabled = true;`) {
-		t.Fatalf("expected index html to switch back to Current Work as soon as Run starts from history view")
+		t.Fatalf("expected index html to keep selected task history filter when Run starts")
 	}
-	if !strings.Contains(markup, `setTaskStatusFilter("running");
+	if !strings.Contains(markup, `trackAnalyticsEvent("prompt_submit_duplicate", { prompt_mode: state.promptMode });
             setLocalPromptStatus("warn", duplicateNotice(body));`) {
-		t.Fatalf("expected index html to switch back to Current Work when a duplicate submit resolves to an active task")
+		t.Fatalf("expected index html to keep selected task history filter when a duplicate submit resolves to an active task")
 	}
 	if !strings.Contains(markup, `clearSubmittedPromptState();
         trackAnalyticsEvent("prompt_submit_succeeded", { prompt_mode: state.promptMode, request_id: requestID });`) {
-		t.Fatalf("expected index html to keep prompt submit success flow after switching back to Current Work")
+		t.Fatalf("expected index html to keep prompt submit success flow without changing task history filter")
 	}
 	if !strings.Contains(markup, `trackAnalyticsEvent("task_rerun_duplicate", { request_id: requestID, forced: force });
-            setTaskStatusFilter("running");
             setLocalPromptStatus("warn", duplicateNotice(body));`) {
-		t.Fatalf("expected index html to switch back to Current Work when a duplicate rerun resolves to an active task")
+		t.Fatalf("expected index html to keep selected task history filter when a duplicate rerun resolves to an active task")
 	}
 	if !strings.Contains(markup, `const newRequestID = body?.request_id || "(unknown)";
-        setTaskStatusFilter("running");
         trackAnalyticsEvent("task_rerun_succeeded", { request_id: requestID, forced: force, rerun_request_id: newRequestID });`) {
-		t.Fatalf("expected index html to switch back to Current Work after a successful rerun")
+		t.Fatalf("expected index html to keep selected task history filter after a successful rerun")
 	}
 	if !strings.Contains(markup, `return THEME_MODES.includes(raw) ? raw : DEFAULT_THEME_MODE;`) {
 		t.Fatalf("expected index html theme loading to fall back to the default dark theme")

@@ -6312,7 +6312,6 @@
               }
             }
             trackAnalyticsEvent("task_rerun_duplicate", { request_id: requestID, forced: force });
-            setTaskStatusFilter("running");
             setLocalPromptStatus("warn", duplicateNotice(body));
             return;
           }
@@ -6320,7 +6319,6 @@
         }
 
         const newRequestID = body?.request_id || "(unknown)";
-        setTaskStatusFilter("running");
         trackAnalyticsEvent("task_rerun_succeeded", { request_id: requestID, forced: force, rerun_request_id: newRequestID });
         completeTaskDismissal(requestID);
         setLocalPromptStatus("ok", force ? `Queued forced request ${newRequestID} (re-run of ${requestID})` : `Queued request ${newRequestID} (re-run of ${requestID})`);
@@ -8255,7 +8253,6 @@
       }
       localPromptInput.value = normalized.pretty;
 
-      setTaskStatusFilter("running");
       localPromptSubmit.disabled = true;
       trackAnalyticsEvent("prompt_submit_started", {
         prompt_mode: state.promptMode,
@@ -8281,7 +8278,6 @@
         if (!response.ok) {
           if (response.status === 409 && body?.duplicate) {
             trackAnalyticsEvent("prompt_submit_duplicate", { prompt_mode: state.promptMode });
-            setTaskStatusFilter("running");
             setLocalPromptStatus("warn", duplicateNotice(body));
             return;
           }
