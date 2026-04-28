@@ -413,18 +413,9 @@ func isUnsupportedActivityPublishError(err error) bool {
 
 // AgentMetadata loads the current agent metadata for safe merge-style updates.
 func (c APIClient) AgentMetadata(ctx context.Context, token string) (map[string]any, error) {
-	normalizedToken, err := requireHubToken(token, "agent metadata")
+	body, err := c.agentMeJSON(ctx, token, "agent metadata")
 	if err != nil {
 		return nil, err
-	}
-	token = normalizedToken
-
-	status, body, err := c.doJSON(ctx, http.MethodGet, "/agents/me", token, nil)
-	if err != nil {
-		return nil, err
-	}
-	if status/100 != 2 {
-		return nil, fmt.Errorf("status=%d body=%s", status, truncateBody(body))
 	}
 
 	return extractMetadataFromJSON(body), nil
@@ -432,21 +423,28 @@ func (c APIClient) AgentMetadata(ctx context.Context, token string) (map[string]
 
 // AgentProfile loads the current agent handle/profile for config persistence.
 func (c APIClient) AgentProfile(ctx context.Context, token string) (AgentProfile, error) {
-	normalizedToken, err := requireHubToken(token, "agent profile")
+	body, err := c.agentMeJSON(ctx, token, "agent profile")
 	if err != nil {
 		return AgentProfile{}, err
-	}
-	token = normalizedToken
-
-	status, body, err := c.doJSON(ctx, http.MethodGet, "/agents/me", token, nil)
-	if err != nil {
-		return AgentProfile{}, err
-	}
-	if status/100 != 2 {
-		return AgentProfile{}, fmt.Errorf("status=%d body=%s", status, truncateBody(body))
 	}
 
 	return extractAgentProfileFromJSON(body), nil
+}
+
+func (c APIClient) agentMeJSON(ctx context.Context, token, operation string) ([]byte, error) {
+	normalizedToken, err := requireHubToken(token, operation)
+	if err != nil {
+		return nil, err
+	}
+
+	status, body, err := c.doJSON(ctx, http.MethodGet, "/agents/me", normalizedToken, nil)
+	if err != nil {
+		return nil, err
+	}
+	if status/100 != 2 {
+		return nil, fmt.Errorf("status=%d body=%s", status, truncateBody(body))
+	}
+	return body, nil
 }
 
 // RegisterRuntime sends plugin/runtime metadata to hub.
