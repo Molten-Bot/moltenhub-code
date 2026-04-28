@@ -214,12 +214,7 @@ func SaveRuntimeConfigHubSettings(path string, initCfg InitConfig, resolvedAgent
 	}
 	ensureRuntimeConfigLogLevel(doc, initCfg.LogLevel)
 
-	encoded, err := json.MarshalIndent(doc, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode runtime config: %w", err)
-	}
-	encoded = append(encoded, '\n')
-	return writeRuntimeConfigFile(path, encoded)
+	return writeRuntimeConfigDoc(path, doc)
 }
 
 // ClearRuntimeConfigHubSettings removes saved Hub identity, credentials, and
@@ -273,12 +268,7 @@ func ClearRuntimeConfigHubSettings(path string, initCfg InitConfig) error {
 		delete(doc, key)
 	}
 
-	encoded, err := json.MarshalIndent(doc, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode runtime config: %w", err)
-	}
-	encoded = append(encoded, '\n')
-	return writeRuntimeConfigFile(path, encoded)
+	return writeRuntimeConfigDoc(path, doc)
 }
 
 // SaveRuntimeConfigAuggieAuth persists augment_session_auth to the runtime
@@ -372,12 +362,7 @@ func SaveRuntimeConfigAgentRuntime(path string, initCfg InitConfig, harness, com
 	doc["agent_command"] = runtime.Command
 	ensureRuntimeConfigLogLevel(doc, initCfg.LogLevel)
 
-	encoded, err := json.MarshalIndent(doc, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode runtime config: %w", err)
-	}
-	encoded = append(encoded, '\n')
-	return writeRuntimeConfigFile(path, encoded)
+	return writeRuntimeConfigDoc(path, doc)
 }
 
 // ReadRuntimeConfigString returns the first non-empty string for the provided
@@ -451,12 +436,7 @@ func IncrementRuntimeConfigLibraryTaskUsage(path string, initCfg InitConfig, tas
 	doc["library_task_usage"] = usage
 	ensureRuntimeConfigLogLevel(doc, initCfg.LogLevel)
 
-	encoded, err := json.MarshalIndent(doc, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode runtime config: %w", err)
-	}
-	encoded = append(encoded, '\n')
-	return writeRuntimeConfigFile(path, encoded)
+	return writeRuntimeConfigDoc(path, doc)
 }
 
 func saveRuntimeConfigStringField(
@@ -483,6 +463,10 @@ func saveRuntimeConfigStringField(
 	doc[field] = value
 	ensureRuntimeConfigLogLevel(doc, initCfg.LogLevel)
 
+	return writeRuntimeConfigDoc(path, doc)
+}
+
+func writeRuntimeConfigDoc(path string, doc map[string]any) error {
 	encoded, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode runtime config: %w", err)

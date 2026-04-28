@@ -209,41 +209,34 @@ func isLikelyGitHubToken(value string) bool {
 }
 
 func githubTokenRequirementState(ctx context.Context, runner execx.Runner, harness, runtimeConfigPath string, initCfg hub.InitConfig) (bool, hubui.AgentAuthState) {
-	githubToken, err := validatedGitHubToken(ctx, runner, runtimeConfigPath, initCfg)
-	if err != nil {
-		if strings.TrimSpace(err.Error()) == "github token is required" {
-			return true, githubTokenNeedsConfigureState(harness, "")
-		}
-		return true, githubTokenNeedsConfigureState(harness, err.Error())
-	}
-	if strings.TrimSpace(githubToken) == "" {
-		return true, githubTokenNeedsConfigureState(harness, "")
-	}
-	if err := setGitHubTokenEnvironment(githubToken); err != nil {
-		return true, githubTokenNeedsConfigureState(harness, fmt.Sprintf("set github token env: %v", err))
-	}
-	return false, hubui.AgentAuthState{}
+	_, state, blocked := githubTokenRequirement(ctx, runner, harness, runtimeConfigPath, initCfg)
+	return blocked, state
 }
 
 func applyGitHubTokenRequirementState(ctx context.Context, runner execx.Runner, state *configurableAgentAuthState, harness, runtimeConfigPath string, initCfg hub.InitConfig) (string, bool) {
+	githubToken, snapshot, blocked := githubTokenRequirement(ctx, runner, harness, runtimeConfigPath, initCfg)
+	if blocked {
+		state.applySnapshot(snapshot)
+		return "", true
+	}
+	return githubToken, false
+}
+
+func githubTokenRequirement(ctx context.Context, runner execx.Runner, harness, runtimeConfigPath string, initCfg hub.InitConfig) (string, hubui.AgentAuthState, bool) {
 	githubToken, err := validatedGitHubToken(ctx, runner, runtimeConfigPath, initCfg)
 	if err != nil {
 		if strings.TrimSpace(err.Error()) == "github token is required" {
-			state.applySnapshot(githubTokenNeedsConfigureState(harness, ""))
-			return "", true
+			return "", githubTokenNeedsConfigureState(harness, ""), true
 		}
-		state.applySnapshot(githubTokenNeedsConfigureState(harness, err.Error()))
-		return "", true
+		return "", githubTokenNeedsConfigureState(harness, err.Error()), true
 	}
 	if strings.TrimSpace(githubToken) == "" {
-		state.applySnapshot(githubTokenNeedsConfigureState(harness, ""))
-		return "", true
+		return "", githubTokenNeedsConfigureState(harness, ""), true
 	}
 	if err := setGitHubTokenEnvironment(githubToken); err != nil {
-		state.applySnapshot(githubTokenNeedsConfigureState(harness, fmt.Sprintf("set github token env: %v", err)))
-		return "", true
+		return "", githubTokenNeedsConfigureState(harness, fmt.Sprintf("set github token env: %v", err)), true
 	}
-	return strings.TrimSpace(githubToken), false
+	return strings.TrimSpace(githubToken), hubui.AgentAuthState{}, false
 }
 
 func configureGitHubToken(
