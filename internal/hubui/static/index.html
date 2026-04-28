@@ -790,7 +790,6 @@
     const MOLTENHUB_LOGO_URL = "/static/logo.svg";
     const GITHUB_LOGO_URL = "/static/logos/github.svg";
     const TASK_SIDE_ACTION_SIZE_PX = "34px";
-    const TASK_PR_LOGO_SIZE = 20;
     const CLAUDE_AUTH_LOGO_URL = "/static/logos/claude-code.svg";
     const TASK_ACTION_ICON_NAMES = Object.freeze({
       output: "terminal-square",
@@ -5455,36 +5454,6 @@
       return taskRepoRootURL(task);
     }
 
-    function taskGitHubLinkIsPR(task) {
-      return String(task?.pr_url || "").trim() !== "";
-    }
-
-    function createTaskGitHubLink(task, className) {
-      const href = taskGitHubLinkURL(task);
-      if (!href) return null;
-
-      const prLink = document.createElement("a");
-      prLink.className = className || "task-pr-link";
-      prLink.href = href;
-      prLink.target = "_blank";
-      prLink.rel = "noopener noreferrer";
-      prLink.title = taskGitHubLinkIsPR(task) ? "Open Pull Request." : "Open repository.";
-      prLink.setAttribute("aria-label", taskGitHubLinkIsPR(task) ? "Open Pull Request." : "Open repository.");
-
-      const prLogo = document.createElement("img");
-      prLogo.src = GITHUB_LOGO_URL;
-      prLogo.alt = "GitHub";
-      prLogo.loading = "lazy";
-      prLogo.width = TASK_PR_LOGO_SIZE;
-      prLogo.height = TASK_PR_LOGO_SIZE;
-      prLink.appendChild(prLogo);
-
-      prLink.addEventListener("click", (event) => {
-        event.stopPropagation();
-      });
-      return prLink;
-    }
-
     function shellQuote(value) {
       const text = String(value || "");
       if (!text) return "''";
@@ -7636,13 +7605,6 @@
             promptActions.appendChild(cloneButton);
           }
 
-          if (taskHistoryView && taskGitHubLinkURL(task) !== "") {
-            const prLink = createTaskGitHubLink(task, "task-pr-link task-pr-link-inline");
-            if (prLink) {
-              promptActions.appendChild(prLink);
-            }
-          }
-
           const closeAction = renderTaskCloseButton(task, requestID);
           if (closeAction) {
             promptActions.appendChild(closeAction);
@@ -7769,8 +7731,7 @@
         }
 
         const showTaskCloneAction = canCopyTaskCloneCommand(task);
-        const showTaskGitHubAction = taskHistoryView && taskGitHubLinkURL(task) !== "";
-        const showTaskSideActions = showTaskCloneAction || showTaskGitHubAction;
+        const showTaskSideActions = showTaskCloneAction;
         const inlineHistoryActions = taskHistoryView && showTaskSideActions;
         if (inlineHistoryActions) {
           if (showTaskCloneAction) {
@@ -7793,18 +7754,6 @@
               void copyTaskCloneCommand(task, cloneButton);
             });
             topActions.appendChild(cloneButton);
-          }
-
-          if (showTaskGitHubAction) {
-            const prLink = createTaskGitHubLink(task, "task-pr-link");
-            if (prLink) {
-              prLink.style.width = TASK_SIDE_ACTION_SIZE_PX;
-              prLink.style.minWidth = TASK_SIDE_ACTION_SIZE_PX;
-              prLink.style.height = TASK_SIDE_ACTION_SIZE_PX;
-              prLink.style.flex = `0 0 ${TASK_SIDE_ACTION_SIZE_PX}`;
-              prLink.style.alignSelf = "center";
-              topActions.appendChild(prLink);
-            }
           }
         }
 
