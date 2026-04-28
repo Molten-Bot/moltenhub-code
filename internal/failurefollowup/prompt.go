@@ -14,6 +14,7 @@ const FollowUpRepositoryURL = config.DefaultRepositoryURL
 
 const OfflineReviewInstruction = "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours."
 const FailureResponseInstruction = "When failures occur, send a response back to the calling agent that clearly states failure and includes the error details. Use explicit `Failure:` and `Error details:` fields."
+const RuntimeToolingInstruction = "Runtime tooling available to agents includes Playwright for local browser testing, screenshots, and comparisons; npm for JavaScript package installs, scripts, tests, and builds; Python with pip and virtualenv; and Go tooling such as `go test` and `go build`. Use the matching local tooling when it fits the repository."
 const ValidationToolingInstruction = "If local test or validation tooling is unavailable in this runtime (for example `command not found` or missing `node_modules`), do not fail solely for that. Continue with repository changes, run any alternative checks you can, and clearly report the validation gap."
 const HubActivityPrivacyInstruction = "Before sharing repository or pull-request links in Hub activity, use `gh repo view OWNER/REPO --json isPrivate,nameWithOwner` during clone or PR tooling. Share repo and PR links only when GitHub reports `isPrivate:false`; never share private repository links."
 const UninitializedRepoInstruction = "If a repository is not initialized after clone, use only gh CLI/git tools to create and push a main branch, then continue once git state is ready for work."
@@ -23,6 +24,7 @@ const NoOpInstruction = "Only return a no-op when the task is genuinely review/i
 
 var ExecutionContract = strings.Join([]string{
 	FailureResponseInstruction,
+	RuntimeToolingInstruction,
 	ValidationToolingInstruction,
 	HubActivityPrivacyInstruction,
 	UninitializedRepoInstruction,

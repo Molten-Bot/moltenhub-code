@@ -25,6 +25,9 @@ func TestRuntimeDockerfileCopiesFullLibraryCatalog(t *testing.T) {
 	}
 
 	content := string(data)
+	if !strings.Contains(content, "HARNESS_AGENTS_SEED_PATH=/opt/moltenhub/library/AGENTS.md") {
+		t.Fatalf("%s does not configure the runtime agents seed path", dockerfilePath)
+	}
 	if !strings.Contains(content, "COPY library /opt/moltenhub/library") {
 		t.Fatalf("%s does not copy the full library directory into the runtime image", dockerfilePath)
 	}
