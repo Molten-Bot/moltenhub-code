@@ -551,10 +551,10 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `node.classList.add("task-compact-state-left");`) {
 		t.Fatalf("expected compact/minimized task rows to render their state icon on the left")
 	}
-	if !strings.Contains(markup, `icon: "entry_local"`) || !strings.Contains(markup, `icon: "entry_hub"`) || !strings.Contains(markup, `icon: "prepare"`) || !strings.Contains(markup, `icon: "clone"`) || !strings.Contains(markup, `icon: "branch"`) || !strings.Contains(markup, `icon: "publish"`) || !strings.Contains(markup, `icon: "fork"`) || !strings.Contains(markup, `icon: "agent"`) || !strings.Contains(markup, `icon: "commit"`) || !strings.Contains(markup, `icon: "pr"`) || !strings.Contains(markup, `icon: "checks"`) || !strings.Contains(markup, `icon: "github"`) {
+	if !strings.Contains(markup, `icon: "entry_local"`) || !strings.Contains(markup, `icon: "entry_hub"`) || !strings.Contains(markup, `icon: "prepare"`) || !strings.Contains(markup, `icon: "clone"`) || !strings.Contains(markup, `icon: "branch"`) || !strings.Contains(markup, `icon: "publish"`) || !strings.Contains(markup, `icon: "fork"`) || !strings.Contains(markup, `icon: "agent"`) || !strings.Contains(markup, `icon: "commit"`) || !strings.Contains(markup, `icon: "pr"`) || !strings.Contains(markup, `icon: "checks"`) || !strings.Contains(markup, `icon: "finalize"`) {
 		t.Fatalf("expected index html to classify dynamic progress steps by action icon keys")
 	}
-	if !strings.Contains(markup, `entry_local: "laptop"`) || !strings.Contains(markup, `entry_hub: "satellite-dish"`) || !strings.Contains(markup, `prepare: "wrench"`) || !strings.Contains(markup, `clone: "git-branch-plus"`) || !strings.Contains(markup, `branch: "git-branch"`) || !strings.Contains(markup, `publish: "upload"`) || !strings.Contains(markup, `fork: "git-fork"`) || !strings.Contains(markup, `agent: "bot"`) || !strings.Contains(markup, `commit: "git-commit-horizontal"`) || !strings.Contains(markup, `pr: "git-pull-request"`) || !strings.Contains(markup, `checks: "shield-check"`) {
+	if !strings.Contains(markup, `entry_local: "laptop"`) || !strings.Contains(markup, `entry_hub: "satellite-dish"`) || !strings.Contains(markup, `prepare: "wrench"`) || !strings.Contains(markup, `clone: "git-branch-plus"`) || !strings.Contains(markup, `branch: "git-branch"`) || !strings.Contains(markup, `publish: "upload"`) || !strings.Contains(markup, `fork: "git-fork"`) || !strings.Contains(markup, `agent: "bot"`) || !strings.Contains(markup, `commit: "git-commit-horizontal"`) || !strings.Contains(markup, `pr: "git-pull-request"`) || !strings.Contains(markup, `checks: "shield-check"`) || !strings.Contains(markup, `finalize: "circle-check"`) {
 		t.Fatalf("expected index html to map progress icon keys to lucide action glyphs")
 	}
 	if !strings.Contains(markup, `stop: "square"`) {
@@ -1106,9 +1106,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "return `https://github.com/${repoPath}`;") {
 		t.Fatalf("expected index html to derive unfinished task GitHub links from repository roots")
 	}
-	if !strings.Contains(markup, "if (isCompletedTask(task) && prURL) {") ||
+	if !strings.Contains(markup, "if (prURL) {") ||
 		!strings.Contains(markup, "return prURL;") {
-		t.Fatalf("expected index html to prefer pull-request links after task completion")
+		t.Fatalf("expected index html to prefer pull-request links as soon as a PR URL is available")
 	}
 	if !strings.Contains(markup, "const showPromptPRLink = taskGitHubLinkURL(task) !== \"\";") {
 		t.Fatalf("expected index html prompt-only mode to show GitHub links when a task repo or completed PR is available")
@@ -1154,7 +1154,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `prLink.title = taskGitHubLinkIsPR(task) ? "Open Pull Request." : "Open repository.";`) ||
 		!strings.Contains(markup, `prLink.setAttribute("aria-label", taskGitHubLinkIsPR(task) ? "Open Pull Request." : "Open repository.");`) {
-		t.Fatalf("expected index html to render GitHub icon hover copy for repo roots before completion and pull requests after completion")
+		t.Fatalf("expected index html to render GitHub icon hover copy for repo roots before PR creation and pull requests once available")
 	}
 	if !strings.Contains(markup, "body.className = \"task-body\";") {
 		t.Fatalf("expected index html to render a task body container alongside the PR link rail")

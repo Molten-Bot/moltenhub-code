@@ -770,7 +770,7 @@
       commit: { id: "commit", label: "Commit", detail: "Git commit and push synchronization.", icon: "commit" },
       pr: { id: "pr", label: "Pull Request", detail: "Pull request lookup or creation.", icon: "pr" },
       checks: { id: "checks", label: "Checks", detail: "PR checks and remediation loop.", icon: "checks" },
-      finalize: { id: "finalize", label: "Finalize", detail: "Final task status and PR linkage.", icon: "github" },
+      finalize: { id: "finalize", label: "Finalize", detail: "Final task status and PR linkage.", icon: "finalize" },
     });
     const AGENT_LOGO_URLS = Object.freeze({
       codex: "/static/logos/codex-cli.svg",
@@ -822,6 +822,7 @@
       commit: "git-commit-horizontal",
       pr: "git-pull-request",
       checks: "shield-check",
+      finalize: "circle-check",
     });
     const CLAUDE_POST_SUBMIT_VERIFY_INTERVAL_MS = 1200;
     const CLAUDE_POST_SUBMIT_VERIFY_MAX_ATTEMPTS = 25;
@@ -975,9 +976,6 @@
 
     function taskProgressStepIconURL(step, task) {
       const iconKey = String(step?.icon || "").trim().toLowerCase();
-      if (iconKey === "github") {
-        return GITHUB_LOGO_URL;
-      }
       if (iconKey === "agent") {
         return taskAgentLogoURL(task);
       }
@@ -5449,14 +5447,14 @@
 
     function taskGitHubLinkURL(task) {
       const prURL = String(task?.pr_url || "").trim();
-      if (isCompletedTask(task) && prURL) {
+      if (prURL) {
         return prURL;
       }
       return taskRepoRootURL(task);
     }
 
     function taskGitHubLinkIsPR(task) {
-      return isCompletedTask(task) && String(task?.pr_url || "").trim() !== "";
+      return String(task?.pr_url || "").trim() !== "";
     }
 
     function createTaskGitHubLink(task, className) {
