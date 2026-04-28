@@ -345,6 +345,7 @@ func TestSaveRuntimeConfigHubSettingsMergesHubFieldsWithoutDroppingExtras(t *tes
 		BaseURL:      "https://na.hub.molten.bot/v1",
 		BindToken:    "bind_saved",
 		AgentHarness: "codex",
+		GitHubToken:  "ghp_env",
 		Handle:       "molten-builder",
 		Profile: ProfileConfig{
 			ProfileText: "Builds things",
@@ -391,8 +392,8 @@ func TestSaveRuntimeConfigHubSettingsMergesHubFieldsWithoutDroppingExtras(t *tes
 	if got["custom"] != "preserved" {
 		t.Fatalf("custom = %#v, want %q", got["custom"], "preserved")
 	}
-	if got["github_token"] != "ghp_saved" {
-		t.Fatalf("github_token = %#v, want %q", got["github_token"], "ghp_saved")
+	if got["github_token"] != "ghp_env" {
+		t.Fatalf("github_token = %#v, want %q", got["github_token"], "ghp_env")
 	}
 }
 

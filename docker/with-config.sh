@@ -163,6 +163,12 @@ try_run_hub_from_env() {
         return 1
     fi
     session_key="${MOLTEN_HUB_SESSION_KEY:-main}"
+    github_token="${GH_TOKEN:-}"
+    if [ "${github_token}" = "" ]; then
+        github_token="${GITHUB_TOKEN:-}"
+    fi
+    agent_harness="${HARNESS_AGENT_HARNESS:-codex}"
+    agent_command="${HARNESS_AGENT_COMMAND:-}"
     generated_init_dir=$(dirname "${generated_init_path}")
     mkdir -p "${generated_init_dir}"
 
@@ -170,6 +176,13 @@ try_run_hub_from_env() {
         printf '{\n'
         printf '  "base_url": "%s",\n' "$(json_escape "${hub_base_url}")"
         printf '  "agent_token": "%s",\n' "$(json_escape "${token}")"
+        if [ "${github_token}" != "" ]; then
+            printf '  "github_token": "%s",\n' "$(json_escape "${github_token}")"
+        fi
+        printf '  "agent_harness": "%s",\n' "$(json_escape "${agent_harness}")"
+        if [ "${agent_command}" != "" ]; then
+            printf '  "agent_command": "%s",\n' "$(json_escape "${agent_command}")"
+        fi
         printf '  "session_key": "%s"\n' "$(json_escape "${session_key}")"
         printf '}\n'
     } > "${generated_init_path}"

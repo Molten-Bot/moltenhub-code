@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/harness"
@@ -403,6 +404,34 @@ func TestLoadHubBootConfigUsesMoltenHubTokenEnvWhenRuntimeConfigOmitsCredentials
 	}
 	if got, want := cfg.GitHubToken, "ghp_saved"; got != want {
 		t.Fatalf("GitHubToken = %q, want %q", got, want)
+	}
+}
+
+func TestLoadHubBootConfigAppliesEnvTokensToDefaultConfig(t *testing.T) {
+	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
+	t.Setenv("MOLTEN_HUB_TOKEN", "t_env_agent_token")
+	t.Setenv("GITHUB_TOKEN", "ghp_env_token")
+	t.Setenv("MOLTEN_HUB_REGION", "eu")
+
+	configPath := filepath.Join(t.TempDir(), "missing.json")
+	cfg, exitCode, err := loadHubBootConfig("", configPath)
+	if err != nil {
+		t.Fatalf("loadHubBootConfig() error = %v", err)
+	}
+	if exitCode != harness.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	}
+	if got, want := cfg.AgentToken, "t_env_agent_token"; got != want {
+		t.Fatalf("AgentToken = %q, want %q", got, want)
+	}
+	if got, want := cfg.GitHubToken, "ghp_env_token"; got != want {
+		t.Fatalf("GitHubToken = %q, want %q", got, want)
+	}
+	if got, want := cfg.AgentHarness, agentruntime.HarnessCodex; got != want {
+		t.Fatalf("AgentHarness = %q, want %q", got, want)
+	}
+	if got, want := cfg.BaseURL, "https://eu.hub.molten.bot/v1"; got != want {
+		t.Fatalf("BaseURL = %q, want %q", got, want)
 	}
 }
 
