@@ -770,7 +770,7 @@
       commit: { id: "commit", label: "Commit", detail: "Git commit and push synchronization.", icon: "commit" },
       pr: { id: "pr", label: "Pull Request", detail: "Pull request lookup or creation.", icon: "pr" },
       checks: { id: "checks", label: "Checks", detail: "PR checks and remediation loop.", icon: "checks" },
-      finalize: { id: "finalize", label: "Finalize", detail: "Final task status and PR linkage.", icon: "finalize" },
+      finalize: { id: "finalize", label: "GitHub", detail: "Repository link before PR creation; pull request link once available.", icon: "github" },
     });
     const AGENT_LOGO_URLS = Object.freeze({
       codex: "/static/logos/codex-cli.svg",
@@ -822,7 +822,6 @@
       commit: "git-commit-horizontal",
       pr: "git-pull-request",
       checks: "shield-check",
-      finalize: "circle-check",
     });
     const CLAUDE_POST_SUBMIT_VERIFY_INTERVAL_MS = 1200;
     const CLAUDE_POST_SUBMIT_VERIFY_MAX_ATTEMPTS = 25;
@@ -978,6 +977,9 @@
       const iconKey = String(step?.icon || "").trim().toLowerCase();
       if (iconKey === "agent") {
         return taskAgentLogoURL(task);
+      }
+      if (iconKey === "github") {
+        return GITHUB_LOGO_URL;
       }
       if (iconKey === "moltenhub" || iconKey === "fallback") {
         return MOLTENHUB_LOGO_URL;
@@ -7259,8 +7261,18 @@
       steps.className = "task-progress-steps";
       for (let i = 0; i < stepsModel.length; i += 1) {
         const step = stepsModel[i];
-        const marker = document.createElement("span");
+        const isGitHubStep = String(step?.icon || "").trim().toLowerCase() === "github";
+        const githubHref = isGitHubStep ? taskGitHubLinkURL(task) : "";
+        const marker = document.createElement(githubHref ? "a" : "span");
         marker.className = "task-progress-step";
+        if (githubHref) {
+          marker.href = githubHref;
+          marker.target = "_blank";
+          marker.rel = "noopener noreferrer";
+          marker.addEventListener("click", (event) => {
+            event.stopPropagation();
+          });
+        }
 
         let stateText = "upcoming";
         if (i < index) {

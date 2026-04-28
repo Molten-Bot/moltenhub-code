@@ -2629,6 +2629,10 @@ select.prompt-control {
   transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, color 0.12s ease;
 }
 
+a.task-progress-step {
+  text-decoration: none;
+}
+
 .task-progress-step.has-icon {
   background: color-mix(in srgb, var(--surface-progress-step) 92%, var(--surface-task-button-bg));
   border: 1px solid rgba(113, 136, 177, 0.32);
