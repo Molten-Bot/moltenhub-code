@@ -975,6 +975,10 @@ func applyMoltenHubEnvBootstrap(cfg *hub.InitConfig) error {
 		return nil
 	}
 
+	if token := githubTokenFromEnv(); token != "" && strings.TrimSpace(cfg.GitHubToken) == "" {
+		cfg.GitHubToken = token
+	}
+
 	token := strings.TrimSpace(os.Getenv(moltenHubTokenEnv))
 	if token == "" {
 		return nil
@@ -988,12 +992,22 @@ func applyMoltenHubEnvBootstrap(cfg *hub.InitConfig) error {
 			cfg.BaseURL = baseURL
 		}
 	}
+	if strings.TrimSpace(cfg.AgentHarness) == "" {
+		cfg.AgentHarness = agentruntime.Default().Harness
+	}
 
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("init config error: %w", err)
 	}
 	return nil
+}
+
+func githubTokenFromEnv() string {
+	if token := strings.TrimSpace(os.Getenv("GH_TOKEN")); token != "" {
+		return token
+	}
+	return strings.TrimSpace(os.Getenv("GITHUB_TOKEN"))
 }
 
 func moltenHubEnvBaseURL() (string, error) {

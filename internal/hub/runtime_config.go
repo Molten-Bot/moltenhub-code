@@ -206,6 +206,9 @@ func SaveRuntimeConfigHubSettings(path string, initCfg InitConfig, resolvedAgent
 	if strings.TrimSpace(initCfg.AgentCommand) != "" {
 		doc["agent_command"] = initCfg.AgentCommand
 	}
+	if strings.TrimSpace(initCfg.GitHubToken) != "" {
+		doc["github_token"] = strings.TrimSpace(initCfg.GitHubToken)
+	}
 	if _, ok := doc["timeout_ms"]; !ok {
 		doc["timeout_ms"] = runtimeTimeoutMs
 	}

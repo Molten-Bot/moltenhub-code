@@ -116,6 +116,9 @@ func TestWithConfigScriptBuildsInitFromEnvTokenAndRegion(t *testing.T) {
 	if got, want := parsed["agent_token"], "hub_token_123"; got != want {
 		t.Fatalf("agent_token = %q, want %q", got, want)
 	}
+	if got, want := parsed["agent_harness"], "codex"; got != want {
+		t.Fatalf("agent_harness = %q, want %q", got, want)
+	}
 	if got, want := parsed["session_key"], "session-dev"; got != want {
 		t.Fatalf("session_key = %q, want %q", got, want)
 	}
@@ -145,6 +148,36 @@ func TestWithConfigScriptBuildsInitFromExplicitHubURL(t *testing.T) {
 	}
 	if got, want := parsed["base_url"], "https://na.hub.molten.bot/v1"; got != want {
 		t.Fatalf("base_url = %q, want %q", got, want)
+	}
+}
+
+func TestWithConfigScriptBuildsInitFromEnvGitHubTokenAndAgentRuntime(t *testing.T) {
+	env := newWithConfigTestEnv(t)
+	generatedInitPath := filepath.Join(env.root, "generated", "init.json")
+	output, err := runWithConfigScript(t, env, map[string]string{
+		"MOLTEN_HUB_TOKEN":            "hub_token_123",
+		"GITHUB_TOKEN":                "ghp_env_token",
+		"HARNESS_AGENT_HARNESS":       "claude",
+		"HARNESS_AGENT_COMMAND":       "claude-custom",
+		"HARNESS_GENERATED_INIT_PATH": generatedInitPath,
+	})
+	if err != nil {
+		t.Fatalf("with-config error: %v\noutput: %s", err, output)
+	}
+
+	initJSON := readFileTrimmed(t, env.initPath)
+	var parsed map[string]string
+	if err := json.Unmarshal([]byte(initJSON), &parsed); err != nil {
+		t.Fatalf("parse generated init json: %v", err)
+	}
+	if got, want := parsed["github_token"], "ghp_env_token"; got != want {
+		t.Fatalf("github_token = %q, want %q", got, want)
+	}
+	if got, want := parsed["agent_harness"], "claude"; got != want {
+		t.Fatalf("agent_harness = %q, want %q", got, want)
+	}
+	if got, want := parsed["agent_command"], "claude-custom"; got != want {
+		t.Fatalf("agent_command = %q, want %q", got, want)
 	}
 }
 
