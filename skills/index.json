@@ -48,7 +48,7 @@
     "handle": "library_task",
     "mode": "library_task",
     "displayName": "Library Task",
-    "description": "Runs a checked-in library task by handle. Available handles: code-review, contributor-history-ranking, fix-merge-main, fix-pr-ci-tests, readme-upkeep, reduce-codebase-centralize-classes, security-review, security-secrets, ui-ux-audit, unit-test-coverage. Omitted or `default` `responseMode` uses bundled `caveman-full`; set `off` for normal prose.",
+    "description": "Runs a checked-in library task by handle. Available handles: code-review, contributor-history-ranking, fix-merge-main, fix-pr-ci-tests, readme-upkeep, reduce-codebase-centralize-classes, secrets-pii-logging-removal, security-review, security-secrets, ui-ux-audit, unit-test-coverage. Omitted or `default` `responseMode` uses bundled `caveman-full`; set `off` for normal prose.",
     "activation": {
       "type": "skill_request",
       "skill": "library_task",
