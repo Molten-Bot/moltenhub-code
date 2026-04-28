@@ -42,6 +42,23 @@ You are working inside an existing repository. Solve the user's actual problem w
 - Verify repository state, auth, and command output instead of assuming them.
 - Let real files, configs, tests, and failures guide your decisions.
 
+## Runtime Tooling
+
+- Playwright is installed in the container for local browser testing, screenshots, and UI comparisons.
+- `npm` is available for JavaScript package installs, scripts, tests, and builds.
+- Python, `pip`, and `virtualenv` are available for Python workflows and validation.
+- Go is available for Go workflows and validation, including `go test` and `go build`.
+- Use the tooling that matches the repository. If a tool or dependency is unavailable in this runtime, continue with any useful alternative checks and report the validation gap instead of failing solely for missing tooling.
+
+## Failure And Hub Safety
+
+- When failures occur, return `Failure:` and `Error details:` fields with a concrete summary and error detail.
+- Before sharing repository or pull-request links in Hub activity, use `gh repo view OWNER/REPO --json isPrivate,nameWithOwner`; share repo and PR links only when GitHub reports `isPrivate:false`.
+- If a repository is not initialized after clone, use only `gh` CLI and `git` tools to create and push a main branch, then continue once git state is ready.
+- Do not stop work only because PR creation or remote CI/CD watching is unavailable in this runtime. Finish repository changes and local validation possible here.
+- For implementation or repository-change requests, produce the smallest correct repository diff unless concrete file evidence proves the requested outcome already exists.
+- Return a no-op only for review/investigation-only tasks or when concrete repository evidence shows no file changes are required.
+
 ## Avoid
 
 - Reinventing functionality that already exists in the repository.

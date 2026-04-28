@@ -32,6 +32,25 @@ func TestWithExecutionContractIncludesFailureResponseInstruction(t *testing.T) {
 	}
 }
 
+func TestWithExecutionContractIncludesRuntimeToolingInstruction(t *testing.T) {
+	t.Parallel()
+
+	got := WithExecutionContract("Base prompt")
+	if !strings.Contains(got, RuntimeToolingInstruction) {
+		t.Fatalf("WithExecutionContract() missing runtime-tooling instruction: %q", got)
+	}
+	for _, want := range []string{
+		"Playwright",
+		"npm",
+		"Python",
+		"Go",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("WithExecutionContract() missing runtime-tooling detail %q: %q", want, got)
+		}
+	}
+}
+
 func TestWithExecutionContractIncludesValidationToolingInstruction(t *testing.T) {
 	t.Parallel()
 
@@ -115,6 +134,7 @@ func TestComposePromptUsesFallbackPathsAndContract(t *testing.T) {
 		"Observed failure context:",
 		OfflineReviewInstruction,
 		FailureResponseInstruction,
+		RuntimeToolingInstruction,
 		ValidationToolingInstruction,
 		HubActivityPrivacyInstruction,
 		UninitializedRepoInstruction,
