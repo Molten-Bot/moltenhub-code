@@ -1154,8 +1154,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to clear history-only tasks locally when close is clicked")
 	}
 	if !strings.Contains(markup, "const showTaskCloneAction = canCopyTaskCloneCommand(task);") ||
-		!strings.Contains(markup, "const showTaskSideActions = showTaskCloneAction;") {
-		t.Fatalf("expected index html to gate task side actions to the terminal clone action")
+		!strings.Contains(markup, "const inlineCompletedActions = isCompletedTask(task) && showTaskCloneAction;") ||
+		!strings.Contains(markup, "const showTaskSideActions = showTaskCloneAction && !inlineCompletedActions;") {
+		t.Fatalf("expected index html to inline completed-task clone actions and gate side actions to remaining clone actions")
 	}
 	if !strings.Contains(markup, "const TASK_SIDE_ACTION_SIZE_PX = \"34px\";") {
 		t.Fatalf("expected index html to define a stable runtime width for task side actions")
@@ -1175,9 +1176,27 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "body.className = \"task-body\";") {
 		t.Fatalf("expected index html to render a task body container alongside side actions")
 	}
-	if !strings.Contains(markup, "const inlineHistoryActions = taskHistoryView && showTaskSideActions;") ||
+	if !strings.Contains(markup, "if (inlineCompletedActions) {") ||
 		!strings.Contains(markup, "topActions.appendChild(cloneButton);") {
-		t.Fatalf("expected index html to allow history-mode cards to place clone actions inline before close")
+		t.Fatalf("expected index html to place completed-task clone actions inline")
+	}
+	taskActionsStart := strings.Index(markup, "const outputAction = renderOutputToggle(requestID);")
+	if taskActionsStart < 0 {
+		t.Fatalf("expected index html to render task action controls")
+	}
+	taskActionsEnd := strings.Index(markup[taskActionsStart:], "top.append(id);")
+	if taskActionsEnd < 0 {
+		t.Fatalf("expected index html to finish task action controls before appending task title")
+	}
+	taskActionsMarkup := markup[taskActionsStart : taskActionsStart+taskActionsEnd]
+	actionOutputIndex := strings.Index(taskActionsMarkup, "topActions.appendChild(outputAction);")
+	actionCloneIndex := strings.Index(taskActionsMarkup, "topActions.appendChild(cloneButton);")
+	actionRerunIndex := strings.Index(taskActionsMarkup, "topActions.appendChild(rerun);")
+	actionGitHubIndex := strings.Index(taskActionsMarkup, "topActions.appendChild(githubAction);")
+	actionCloseIndex := strings.Index(taskActionsMarkup, "topActions.appendChild(close);")
+	if actionOutputIndex < 0 || actionCloneIndex < 0 || actionRerunIndex < 0 || actionGitHubIndex < 0 || actionCloseIndex < 0 ||
+		!(actionOutputIndex < actionCloneIndex && actionCloneIndex < actionRerunIndex && actionRerunIndex < actionGitHubIndex && actionGitHubIndex < actionCloseIndex) {
+		t.Fatalf("expected completed task action order: terminal output, git clone, rerun, GitHub link, close")
 	}
 	if !strings.Contains(markup, "async function copyTextToClipboard(value, buttonNode, options = {}) {") ||
 		!strings.Contains(markup, "const preserveContents = Boolean(options && options.preserveContents);") ||
