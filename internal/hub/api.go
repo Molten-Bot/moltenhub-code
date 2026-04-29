@@ -1471,7 +1471,6 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 		"description": "Prompt-driven repository task run. Omitted or `default` `responseMode` uses bundled `caveman-full`; set `off` for normal prose.",
 		"activation": buildActivation(skillCfg.Name, map[string]any{
 			"repos":        []string{"<git@github.com:owner/repo.git>"},
-			"branch":       "main",
 			"prompt":       "<describe the requested change>",
 			"responseMode": responseModePlaceholder(),
 			"reviewers":    []string{"<githubhandle>"},
@@ -1487,7 +1486,7 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 		"description": fmt.Sprintf("Runs the %s workflow using repo + either branch or prNumber context. Omitted or `default` `responseMode` uses bundled `caveman-full`; set `off` for normal prose.", codeReviewLibraryTaskName),
 		"activation": buildActivation(codeReviewSkillName, map[string]any{
 			"repos":        []string{"<git@github.com:owner/repo.git>"},
-			"branch":       "main",
+			"branch":       "<pull-request-head-branch>",
 			"responseMode": responseModePlaceholder(),
 		}),
 	})
@@ -1514,7 +1513,6 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 		"description": libraryTaskDescription + " Omitted or `default` `responseMode` uses bundled `caveman-full`; set `off` for normal prose.",
 		"activation": buildActivation(libraryTaskSkillName, map[string]any{
 			"repos":           []string{"<git@github.com:owner/repo.git>"},
-			"branch":          "main",
 			"libraryTaskName": "<library-handle>",
 			"responseMode":    responseModePlaceholder(),
 			"reviewers":       []string{"<githubhandle>"},

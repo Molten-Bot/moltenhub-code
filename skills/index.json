@@ -12,7 +12,6 @@
           "repos": [
             "<git@github.com:owner/repo.git>"
           ],
-          "branch": "main",
           "prompt": "<describe the requested change>",
           "responseMode": "<default|off|caveman-lite|caveman-full|caveman-ultra|caveman-wenyan-lite|caveman-wenyan-full|caveman-wenyan-ultra>",
           "reviewers": [
@@ -37,7 +36,7 @@
           "repos": [
             "<git@github.com:owner/repo.git>"
           ],
-          "branch": "main",
+          "branch": "<pull-request-head-branch>",
           "responseMode": "<default|off|caveman-lite|caveman-full|caveman-ultra|caveman-wenyan-lite|caveman-wenyan-full|caveman-wenyan-ultra>"
         }
       }
@@ -57,7 +56,6 @@
           "repos": [
             "<git@github.com:owner/repo.git>"
           ],
-          "branch": "main",
           "libraryTaskName": "<library-handle>",
           "responseMode": "<default|off|caveman-lite|caveman-full|caveman-ultra|caveman-wenyan-lite|caveman-wenyan-full|caveman-wenyan-ultra>",
           "reviewers": [

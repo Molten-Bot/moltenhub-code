@@ -52,7 +52,6 @@ Run configs are JSON or JSONC. Minimal example:
 ```json
 {
   "repo": "git@github.com:owner/repo.git",
-  "baseBranch": "main",
   "targetSubdir": ".",
   "agentHarness": "codex",
   "prompt": "Update README setup instructions."
@@ -62,7 +61,7 @@ Run configs are JSON or JSONC. Minimal example:
 Important fields:
 
 - `repo`, `repoUrl`, or `repos`: target repository or repositories.
-- `baseBranch`: branch to clone. Defaults to `main`; `branch` is accepted as an alias.
+- `baseBranch`: optional branch to clone. Omit it to use the repository default branch; `branch` is accepted as an alias.
 - `targetSubdir`: working directory for a single-repo task. Defaults to `.`.
 - `prompt`: task sent to the selected agent.
 - `agentHarness`: `codex`, `claude`, `auggie`, or `pi`. Defaults to `codex` or `HARNESS_AGENT_HARNESS`.
@@ -80,8 +79,8 @@ Each task run:
 1. Checks required tools and selected agent CLI.
 2. Verifies GitHub auth with `gh auth status`.
 3. Creates an isolated workspace under `/workspace`.
-4. Clones each repo at `baseBranch`; missing `main` on an empty repo is bootstrapped with an empty commit.
-5. Creates a `moltenhub-...` work branch when starting from `main`; otherwise reuses the requested branch.
+4. Clones each repo at `baseBranch`, or the repository default branch when no branch is specified. Missing `main` on an empty repo is bootstrapped with an empty commit.
+5. Creates a `moltenhub-...` work branch when starting from the repository default branch; otherwise reuses the requested branch.
 6. Probes publish access before agent execution. Public GitHub repos can fall back to a fork when direct write access is denied.
 7. Runs the selected agent in `targetSubdir` for one repo, or workspace root for multi-repo runs.
 8. Commits changed repos, pushes branches, opens or reuses PRs, and watches required checks.

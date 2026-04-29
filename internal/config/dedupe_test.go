@@ -29,7 +29,7 @@ func TestDedupeKeyDefaultsEmptyBranchAndTarget(t *testing.T) {
 		TargetSubdir: " ",
 		Prompt:       "fix tests",
 	})
-	want := `{"repos":["git@github.com:acme/repo.git"],"baseBranch":"main","targetSubdir":".","promptHash":"ee9cbc728602f8e7e3e355c3916d8a4866c51955db5badefe9ef0d25f127d639"}`
+	want := `{"repos":["git@github.com:acme/repo.git"],"baseBranch":"default","targetSubdir":".","promptHash":"ee9cbc728602f8e7e3e355c3916d8a4866c51955db5badefe9ef0d25f127d639"}`
 	if got != want {
 		t.Fatalf("DedupeKey(empty defaults) = %q, want %q", got, want)
 	}

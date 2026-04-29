@@ -74,6 +74,12 @@ func TestHarnessURLCloneAndSandboxHelpers(t *testing.T) {
 	if !shouldFallbackCloneToDefaultBranch("moltenhub-topic", execx.Result{Stderr: "remote branch moltenhub-topic not found"}, errors.New("missing")) {
 		t.Fatal("shouldFallbackCloneToDefaultBranch() = false, want true")
 	}
+	if !shouldFallbackCloneToDefaultBranch("main", execx.Result{Stderr: "remote branch main not found"}, errors.New("missing")) {
+		t.Fatal("shouldFallbackCloneToDefaultBranch(main) = false, want true")
+	}
+	if !shouldFallbackCloneToDefaultBranch("master", execx.Result{Stderr: "remote branch master not found"}, errors.New("missing")) {
+		t.Fatal("shouldFallbackCloneToDefaultBranch(master) = false, want true")
+	}
 	if shouldFallbackCloneToDefaultBranch("release", execx.Result{Stderr: "remote branch release not found"}, errors.New("missing")) {
 		t.Fatal("shouldFallbackCloneToDefaultBranch(non-moltenhub) = true, want false")
 	}

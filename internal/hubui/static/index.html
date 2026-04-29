@@ -218,14 +218,14 @@
                   <label class="prompt-field prompt-field-base-branch">
                     <span class="prompt-label">Branch</span>
                     <span class="prompt-input-action-wrap" data-has-action="false">
-                      <input id="builder-base-branch" class="prompt-control prompt-input" type="text" value="main" spellcheck="false" placeholder="main">
+                      <input id="builder-base-branch" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="default">
                       <button
                         id="builder-base-branch-clear"
                         class="prompt-input-action"
                         type="button"
-                        aria-label="Reset branch to main"
+                        aria-label="Reset branch to default"
                         aria-hidden="true"
-                        title="Already on main"
+                        title="Already using default branch"
                         hidden
                         disabled><span class="prompt-input-action-icon" aria-hidden="true">&times;</span></button>
                     </span>
@@ -293,7 +293,7 @@
                   </label>
                   <label class="prompt-field prompt-field-base-branch">
                     <span class="prompt-label">Branch</span>
-                    <input id="library-base-branch" class="prompt-control prompt-input" type="text" value="main" spellcheck="false" placeholder="main">
+                    <input id="library-base-branch" class="prompt-control prompt-input" type="text" spellcheck="false" placeholder="default">
                   </label>
                   <label id="library-reviewer-history-field" class="prompt-field prompt-field-reviewer-history">
                     <span class="prompt-label">Reviewer</span>
@@ -341,7 +341,6 @@
     "git@github.com:org/repo.git",
     "git@github.com:org/repo-two.git"
   ],
-  "branch": "main",
   "libraryTaskName": "unit-test-coverage",
   "reviewers": [
     "octocat",
@@ -4485,7 +4484,7 @@
 
     function hasBuilderDraftToClear() {
       const promptDirty = String(builderPromptInput?.value || "").trim() !== "";
-      const branchDirty = !["", "main"].includes(String(builderBaseBranch?.value || "").trim());
+      const branchDirty = String(builderBaseBranch?.value || "").trim() !== "";
       const targetSubdirDirty = !["", "."].includes(String(builderTargetSubdir?.value || "").trim());
       const rawDirty = String(localPromptInput?.value || "").trim() !== "";
       return promptDirty || branchDirty || targetSubdirDirty || rawDirty || hasReviewerDraftToClear() || state.promptImages.length > 0;
@@ -4516,7 +4515,7 @@
       clearSubmittedPromptDraft();
       clearPromptImages(false);
       resetBuilderTargetSubdir();
-      resetBaseBranchToMain(false);
+      resetBaseBranchToDefault(false);
       syncBuilderDraftClearState();
     }
 
@@ -4807,20 +4806,20 @@
     function syncBaseBranchClearState() {
       if (!builderBaseBranchClear) return;
       const branch = String(builderBaseBranch.value || "").trim();
-      const isMain = branch === "" || branch === "main";
+      const isDefault = branch === "";
       const branchActionWrap = builderBaseBranchClear.closest(".prompt-input-action-wrap");
-      builderBaseBranchClear.disabled = isMain;
-      builderBaseBranchClear.hidden = isMain;
-      builderBaseBranchClear.setAttribute("aria-hidden", String(isMain));
-      builderBaseBranchClear.title = isMain ? "Already on main" : "Reset to main";
+      builderBaseBranchClear.disabled = isDefault;
+      builderBaseBranchClear.hidden = isDefault;
+      builderBaseBranchClear.setAttribute("aria-hidden", String(isDefault));
+      builderBaseBranchClear.title = isDefault ? "Already using default branch" : "Reset to default";
       if (branchActionWrap) {
-        branchActionWrap.dataset.hasAction = isMain ? "false" : "true";
+        branchActionWrap.dataset.hasAction = isDefault ? "false" : "true";
       }
     }
 
-    function resetBaseBranchToMain(syncRaw = true) {
-      builderBaseBranch.value = "main";
-      libraryBaseBranch.value = "main";
+    function resetBaseBranchToDefault(syncRaw = true) {
+      builderBaseBranch.value = "";
+      libraryBaseBranch.value = "";
       syncBaseBranchClearState();
       syncBuilderDraftClearState();
       if (syncRaw && state.promptMode === "json") {
@@ -4964,18 +4963,20 @@
         throw new Error("Repository is required.");
       }
 
-      const branch = String(builderBaseBranch.value || "").trim() || "main";
+      const branch = String(builderBaseBranch.value || "").trim();
       const prompt = String(builderPromptInput.value || "").trim();
       if (!prompt) {
         throw new Error("Prompt is required.");
       }
       const payload = {
         repos: [repo],
-        baseBranch: branch,
         targetSubdir: String(builderTargetSubdir.value || "").trim() || ".",
         prompt,
         images: normalizePromptImages(state.promptImages),
       };
+      if (branch) {
+        payload.baseBranch = branch;
+      }
       const reviewers = reviewerListFromValue(builderReviewerInput.value);
       if (reviewers.length) {
         payload.reviewers = reviewers;
@@ -4994,14 +4995,16 @@
         throw new Error("Select a library task.");
       }
 
-      const branch = String(libraryBaseBranch.value || "").trim() || "main";
+      const branch = String(libraryBaseBranch.value || "").trim();
       const payload = {
         repos: [repo],
-        branch,
         targetSubdir: String(libraryTargetSubdir.value || "").trim() || ".",
         libraryTaskName: libraryTaskName,
         images: normalizePromptImages(state.promptImages),
       };
+      if (branch) {
+        payload.branch = branch;
+      }
       const reviewers = reviewerListFromValue(libraryReviewerInput.value);
       if (reviewers.length) {
         payload.reviewers = reviewers;
@@ -5027,7 +5030,7 @@
       ]);
 
       const repo = repos[0] || "";
-      const branch = String(payload.baseBranch || payload.branch || "main").trim() || "main";
+      const branch = String(payload.baseBranch || payload.branch || "").trim();
       const reviewers = dedupeReviewerValues([
         ...(Array.isArray(payload.reviewers) ? payload.reviewers : []),
         payload.githubHandle,
@@ -8448,7 +8451,7 @@
       syncBaseBranchClearState();
       syncBuilderDraftClearState();
     });
-    builderBaseBranchClear.addEventListener("click", resetBaseBranchToMain);
+    builderBaseBranchClear.addEventListener("click", resetBaseBranchToDefault);
 
     builderPromptInput.addEventListener("input", syncBuilderDraftClearState);
     builderPromptInput.addEventListener("keydown", submitBuilderPromptOnEnter);

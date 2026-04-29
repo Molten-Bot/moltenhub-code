@@ -37,7 +37,7 @@ var FollowUpContract = strings.Join([]string{
 	OfflineReviewInstruction,
 	ExecutionContract,
 	fmt.Sprintf(`Harness-managed follow-up targeting:
-{"repos":["%s"],"baseBranch":"main","targetSubdir":".","prompt":"%s"}`, FollowUpRepositoryURL, RequiredPrompt),
+{"repos":["%s"],"targetSubdir":".","prompt":"%s"}`, FollowUpRepositoryURL, RequiredPrompt),
 }, "\n\n")
 
 const (
@@ -94,9 +94,9 @@ func WithFollowUpContract(base string) string {
 	if !strings.Contains(base, OfflineReviewInstruction) {
 		base += "\n\n" + OfflineReviewInstruction
 	}
-	if !strings.Contains(base, fmt.Sprintf(`{"repos":["%s"],"baseBranch":"main","targetSubdir":".","prompt":"%s"}`, FollowUpRepositoryURL, RequiredPrompt)) {
+	if !strings.Contains(base, fmt.Sprintf(`{"repos":["%s"],"targetSubdir":".","prompt":"%s"}`, FollowUpRepositoryURL, RequiredPrompt)) {
 		base += "\n\n" + fmt.Sprintf(`Harness-managed follow-up targeting:
-{"repos":["%s"],"baseBranch":"main","targetSubdir":".","prompt":"%s"}`, FollowUpRepositoryURL, RequiredPrompt)
+{"repos":["%s"],"targetSubdir":".","prompt":"%s"}`, FollowUpRepositoryURL, RequiredPrompt)
 	}
 	return WithExecutionContract(base)
 }
@@ -135,7 +135,7 @@ func ComposePrompt(requiredPrompt string, logPaths, fallbackLogPaths []string, n
 }
 
 func FollowUpTargeting(baseBranch, targetSubdir, currentBranch string) (string, string) {
-	return "main", "."
+	return "", "."
 }
 
 func TaskLogPaths(logRoot, requestID string) []string {

@@ -13,7 +13,7 @@ import (
 func DedupeKey(cfg Config) string {
 	baseBranch := normalizeBranchRefForDeduper(cfg.BaseBranch)
 	if baseBranch == "" {
-		baseBranch = "main"
+		baseBranch = "default"
 	}
 
 	repos := normalizeRepoListForDeduper(cfg.RepoList())
