@@ -1110,18 +1110,31 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if strings.Contains(markup[promptOnlyStart:promptOnlyCloseAction], "renderOutputToggle") {
 		t.Fatalf("expected index html prompt-only mode to hide terminal output controls")
 	}
-	if strings.Contains(markup[promptOnlyStart:promptOnlyCloseAction], "createTaskGitHubLink") {
-		t.Fatalf("expected index html prompt-only mode to omit duplicate standalone GitHub links")
+	if !strings.Contains(markup[promptOnlyStart:promptOnlyCloseAction], "const githubAction = renderTaskPullRequestAction(task);") {
+		t.Fatalf("expected index html prompt-only mode to include completed-task GitHub pull request links")
 	}
 	if !strings.Contains(markup, "function githubRepoPathFromValue(value)") ||
 		!strings.Contains(markup, "function taskRepoRootURL(task)") ||
 		!strings.Contains(markup, "function taskGitHubLinkURL(task)") ||
+		!strings.Contains(markup, "function taskPullRequestURL(task)") ||
 		!strings.Contains(markup, "return `https://github.com/${repoPath}`;") {
 		t.Fatalf("expected index html to derive unfinished task GitHub links from repository roots")
 	}
 	if !strings.Contains(markup, "if (prURL) {") ||
 		!strings.Contains(markup, "return prURL;") {
 		t.Fatalf("expected index html to prefer pull-request links as soon as a PR URL is available")
+	}
+	if !strings.Contains(markup, "function renderTaskPullRequestAction(task)") ||
+		!strings.Contains(markup, `link.className = "task-github-link";`) ||
+		!strings.Contains(markup, `link.href = prURL;`) ||
+		!strings.Contains(markup, `logo.src = GITHUB_LOGO_URL;`) ||
+		strings.Count(markup, "const githubAction = renderTaskPullRequestAction(task);") < 2 {
+		t.Fatalf("expected completed task cards to render GitHub-logo pull request links")
+	}
+	if !strings.Contains(markup, `detail.textContent = prURL ? "Pull request ready." : "Completed.";`) ||
+		!strings.Contains(markup, `link.className = "task-result-link task-result-github-link";`) ||
+		!strings.Contains(markup, `label.textContent = "Open PR";`) {
+		t.Fatalf("expected completed task result banners to include pull request links")
 	}
 	if !strings.Contains(markup, `const isGitHubStep = String(step?.icon || "").trim().toLowerCase() === "github";`) ||
 		!strings.Contains(markup, `const githubHref = isGitHubStep ? taskGitHubLinkURL(task) : "";`) ||
@@ -2161,7 +2174,7 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 		t.Fatalf("expected stylesheet to keep task action controls on a single right-aligned row")
 	}
 	if strings.Contains(css, ".task-pr-link") {
-		t.Fatalf("expected stylesheet to remove standalone task GitHub link styles")
+		t.Fatalf("expected stylesheet to remove legacy task-pr-link styles")
 	}
 	if !strings.Contains(css, ".task-output-toggle") {
 		t.Fatalf("expected stylesheet to include task output toggle styles")
@@ -2264,6 +2277,14 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".task-copy-link.is-copied {") {
 		t.Fatalf("expected stylesheet to include copied-state feedback for the terminal clone action")
+	}
+	if !strings.Contains(css, ".task-github-link {") ||
+		!strings.Contains(css, ".task-github-link img {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: contain;\n  filter: var(--agent-logo-filter);") {
+		t.Fatalf("expected stylesheet to render completed-task GitHub pull request links as logo buttons")
+	}
+	if !strings.Contains(css, ".task-result-github-link {") ||
+		!strings.Contains(css, ".task-result-link-logo {") {
+		t.Fatalf("expected stylesheet to size pull request links in task result banners")
 	}
 	if !strings.Contains(css, ".page-bottom-dock {\n  position: fixed;\n  left: 50%;\n  bottom: max(16px, env(safe-area-inset-bottom));\n  z-index: 61;\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  justify-content: center;") {
 		t.Fatalf("expected stylesheet to align the bottom dock tabs and GitHub profile link on a shared row")
