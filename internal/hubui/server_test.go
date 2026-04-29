@@ -1550,7 +1550,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function syncBaseBranchClearState(") ||
 		!strings.Contains(markup, "builderBaseBranchClear.hidden = isDefault;") ||
 		!strings.Contains(markup, "branchActionWrap.dataset.hasAction = isDefault ? \"false\" : \"true\";") ||
-		!strings.Contains(markup, "builderBaseBranchClear.addEventListener(\"click\", resetBaseBranchToDefault);") {
+		!strings.Contains(markup, `trackAnalyticsEvent("base_branch_reset", { prompt_mode: state.promptMode });`) ||
+		!strings.Contains(markup, "resetBaseBranchToDefault();") {
 		t.Fatalf("expected index html to include branch clear behavior")
 	}
 	if !strings.Contains(markup, "function resetBuilderTargetSubdir(") || !strings.Contains(markup, "builderTargetSubdir.value = \".\";") {
@@ -1797,8 +1798,22 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `function trackAnalyticsEvent(name, params = {})`) {
 		t.Fatalf("expected index html to include the analytics event helper")
 	}
+	if !strings.Contains(markup, `const payload = { send_to: GOOGLE_ANALYTICS_MEASUREMENT_ID };`) {
+		t.Fatalf("expected analytics events to route to the configured google analytics destination")
+	}
 	if !strings.Contains(markup, `trackAnalyticsEvent("prompt_submit_succeeded", { prompt_mode: state.promptMode, request_id: requestID });`) {
 		t.Fatalf("expected index html to track successful prompt submissions")
+	}
+	for _, want := range []string{
+		`trackAnalyticsEvent("task_view_changed", { task_view: nextView });`,
+		`trackAnalyticsEvent("task_pull_request_opened", { request_id: taskRequestID(task) });`,
+		`trackAnalyticsEvent("hub_setup_started", hubSetupAnalyticsParams({ auto_submit: autoSubmit }));`,
+		`trackAnalyticsEvent("agent_auth_configure_started", agentAuthAnalyticsParams({ auth_method: "github_token" }));`,
+		`trackAnalyticsEvent("prompt_screenshots_attached", {`,
+	} {
+		if !strings.Contains(markup, want) {
+			t.Fatalf("expected index html to include analytics event tag %q", want)
+		}
 	}
 	if !strings.Contains(markup, `localPromptInput.value = normalized.pretty;
 
@@ -2001,7 +2016,7 @@ func TestHandlerIndexIncludesClaudeBrowserCodeFlow(t *testing.T) {
 		`GitHub token does not belong in PI auth JSON`,
 		`const useClaudeLogoLink = authHarness(state.agentAuth) === "claude" && authURL !== "" && !useClaudeCommandFlow;`,
 		`const code = claudeBrowserCodeValue();`,
-		`agentAuthURL.addEventListener("click", markAgentAuthInteraction);`,
+		`trackAnalyticsEvent("agent_auth_link_opened", agentAuthAnalyticsParams());`,
 		`copiedLabel: "Copied device code"`,
 		`copiedLabel: "Copied configure command"`,
 	}
