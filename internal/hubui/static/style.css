@@ -4116,6 +4116,12 @@ body.onboarding-modal-open {
   gap: 8px;
 }
 
+.emoji-fieldset legend {
+  margin: 0 0 8px;
+  padding: 0;
+  line-height: normal;
+}
+
 .hub-setup-profile-emoji {
   grid-column: auto;
 }
