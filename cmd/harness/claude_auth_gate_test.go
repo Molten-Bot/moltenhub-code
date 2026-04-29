@@ -337,7 +337,8 @@ func TestClaudeAuthGateConfigureAcceptsCredentialsJSONInConfigureState(t *testin
 		logf:      func(string, ...any) {},
 	}
 
-	raw := `{"claudeAiOauth":{"accessToken":"anthropic_oauth_token_fixture"}}`
+	claudeOAuthToken := "sk-" + "ant-oat01-manual-token-123456"
+	raw := fmt.Sprintf(`{"claudeAiOauth":{"accessToken":%q}}`, claudeOAuthToken)
 	status, err := g.Configure(context.Background(), raw)
 	if err != nil {
 		t.Fatalf("Configure() error = %v", err)
@@ -345,7 +346,7 @@ func TestClaudeAuthGateConfigureAcceptsCredentialsJSONInConfigureState(t *testin
 	if !status.Ready {
 		t.Fatalf("status = %+v, want ready", status)
 	}
-	if got, want := os.Getenv(claudeOAuthTokenEnv), "anthropic_oauth_token_fixture"; got != want {
+	if got, want := os.Getenv(claudeOAuthTokenEnv), claudeOAuthToken; got != want {
 		t.Fatalf("%s = %q, want %q", claudeOAuthTokenEnv, got, want)
 	}
 
@@ -357,7 +358,7 @@ func TestClaudeAuthGateConfigureAcceptsCredentialsJSONInConfigureState(t *testin
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
-	if got, want := doc["claude_code_oauth_token"], "anthropic_oauth_token_fixture"; got != want {
+	if got, want := doc["claude_code_oauth_token"], claudeOAuthToken; got != want {
 		t.Fatalf("claude_code_oauth_token = %#v, want %q", got, want)
 	}
 

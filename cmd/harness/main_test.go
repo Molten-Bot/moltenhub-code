@@ -1121,7 +1121,7 @@ func TestCurrentHubSetupStateWithRemoteProfileMergesDirectProfileAndMetadata(t *
 func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 	t.Parallel()
 
-	bindToken := fakeHubSetupToken("bind-")
+	bindToken := fakeHubSetupToken("b_")
 
 	var bindCalled bool
 	var syncedHandle string
@@ -1225,7 +1225,7 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 func TestConfigureHubSetupExistingAgentUsesAgentTokenFlow(t *testing.T) {
 	t.Parallel()
 
-	agentToken := fakeHubSetupToken("agent-")
+	agentToken := fakeHubSetupToken("t_")
 
 	var getCalls int
 	var onlineCalls int
@@ -1469,7 +1469,7 @@ func TestConfigureHubSetupRejectsUnboundAgentWithoutWritingConfig(t *testing.T) 
 		RuntimeConfigPath: configPath,
 	}, hubui.HubSetupRequest{
 		AgentMode: "existing",
-		Token:     fakeHubSetupToken("agent-"),
+		Token:     fakeHubSetupToken("t_"),
 	}, nil)
 	if err == nil {
 		t.Fatal("configureHubSetup() error = nil, want non-nil")
@@ -1488,7 +1488,7 @@ func TestConfigureHubSetupRejectsUnboundAgentWithoutWritingConfig(t *testing.T) 
 func TestConfigureHubSetupExistingAgentIgnoresStatusUpdateFailuresDuringVerification(t *testing.T) {
 	t.Parallel()
 
-	agentToken := fakeHubSetupToken("agent-")
+	agentToken := fakeHubSetupToken("t_")
 
 	var (
 		getCalls    int
@@ -1545,7 +1545,7 @@ func TestConfigureHubSetupExistingAgentIgnoresStatusUpdateFailuresDuringVerifica
 func TestConfigureHubSetupExistingAgentReturnsLoginVerificationFailure(t *testing.T) {
 	t.Parallel()
 
-	agentToken := fakeHubSetupToken("agent-")
+	agentToken := fakeHubSetupToken("t_")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -1882,7 +1882,7 @@ func TestConfigureHubSetupExistingAgentLoadsProfileTextFromProfileMarkdown(t *te
 func TestConfigureHubSetupReturnsSavedStateWhenLiveApplyFails(t *testing.T) {
 	t.Parallel()
 
-	agentToken := fakeHubSetupToken("agent-")
+	agentToken := fakeHubSetupToken("t_")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

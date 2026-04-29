@@ -349,7 +349,7 @@ func TestPiAuthGateConfigureRejectsGitHubTokenInPiAuthJSONField(t *testing.T) {
 	}
 	g := newPiAuthGateWithRuntime(runner, "pi", path, hub.InitConfig{}, nil)
 
-	token := "github_token_wrong_field_token"
+	token := fakeGitHubPAT("wrong_field_token")
 	status, err := g.Configure(context.Background(), token)
 	if err == nil {
 		t.Fatal("Configure() error = nil, want non-nil")
