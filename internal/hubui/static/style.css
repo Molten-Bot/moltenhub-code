@@ -4963,3 +4963,20 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
     -webkit-backdrop-filter: none;
   }
 }
+
+/* MoltenHub validation pink theme */
+:root {
+  --validation-pink-bg: #ffe1f0;
+  --validation-pink-accent: #ff4fb8;
+}
+body {
+  background: var(--validation-pink-bg) !important;
+}
+.app-shell,
+.topbar,
+.sidebar,
+.panel,
+.card,
+button {
+  border-color: var(--validation-pink-accent) !important;
+}
