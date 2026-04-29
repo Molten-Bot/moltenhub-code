@@ -2162,7 +2162,7 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task-rerun") {
 		t.Fatalf("expected stylesheet to include task rerun styles")
 	}
-	if !strings.Contains(css, ".task-progress-step.current {\n  background: #fff;\n  border-color: rgba(10, 132, 255, 0.34);\n  color: #101626;\n  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.16);") {
+	if !strings.Contains(css, ".task-progress-step.current {\n  background: #fff;\n  border-color: rgba(236, 72, 153, 0.34);\n  color: #101626;\n  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.16);") {
 		t.Fatalf("expected stylesheet to render the active task progress step with stronger contrast instead of size scaling")
 	}
 	if !strings.Contains(css, ".task-progress-step-icon") {

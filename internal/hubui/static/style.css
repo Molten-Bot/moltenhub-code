@@ -16,9 +16,9 @@
   --hub-good-rgb: 43 182 115;
   --hub-warn-rgb: 245 158 11;
   --hub-bad-rgb: 239 68 68;
-  --hub-running-rgb: 10 132 255;
+  --hub-running-rgb: 236 72 153;
   --hub-meta-rgb: 113 136 177;
-  --hub-accent-rgb: 123 97 255;
+  --hub-accent-rgb: 217 70 239;
   --bg: #f4f8ff;
   --bg-soft: rgba(255, 255, 255, 0.84);
   --bg-elevated: #ffffff;
@@ -26,7 +26,7 @@
   --bg-panel-strong: rgba(255, 255, 255, 0.92);
   --bg-panel-muted: rgba(232, 239, 255, 0.82);
   --border: rgba(17, 34, 68, 0.14);
-  --border-strong: rgba(10, 132, 255, 0.22);
+  --border-strong: rgba(236, 72, 153, 0.22);
   --text: #0f1b33;
   --text-soft: #35507a;
   --muted: #5a6f95;
@@ -34,10 +34,10 @@
   --good: #2bb673;
   --warn: #f59e0b;
   --bad: #ef4444;
-  --running: #0a84ff;
-  --accent: #7b61ff;
-  --accent-soft: rgba(123, 97, 255, 0.12);
-  --brand-gradient: linear-gradient(135deg, #3ecbff 0%, #0a84ff 48%, #7b61ff 100%);
+  --running: #ec4899;
+  --accent: #d946ef;
+  --accent-soft: rgba(217, 70, 239, 0.12);
+  --brand-gradient: linear-gradient(135deg, #fb7185 0%, #ec4899 48%, #d946ef 100%);
   --surface-glass: linear-gradient(160deg, rgba(255, 255, 255, 0.88), rgba(240, 245, 255, 0.74));
   --surface-glass-strong: linear-gradient(160deg, rgba(255, 255, 255, 0.94), rgba(240, 246, 255, 0.9));
   --surface-glass-solid: rgba(255, 255, 255, 0.92);
@@ -89,15 +89,15 @@
   --surface-danger: #b42318;
   --surface-terminal-bg:
     linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(243, 247, 255, 0.92)),
-    radial-gradient(circle at top left, rgba(62, 203, 255, 0.07), transparent 40%);
+    radial-gradient(circle at top left, rgba(251, 113, 133, 0.07), transparent 40%);
   --surface-scroll-track: rgba(232, 239, 255, 0.5);
   --surface-scroll-thumb: rgba(113, 136, 177, 0.55);
   --surface-scroll-thumb-border: rgba(232, 239, 255, 0.8);
   --surface-scroll-thumb-hover: rgba(90, 111, 149, 0.72);
   --surface-fullscreen-bg:
     linear-gradient(180deg, rgba(244, 248, 255, 0.76), rgba(236, 243, 255, 0.9)),
-    radial-gradient(circle at top left, rgba(62, 203, 255, 0.14), transparent 38%),
-    radial-gradient(circle at bottom right, rgba(123, 97, 255, 0.16), transparent 42%);
+    radial-gradient(circle at top left, rgba(251, 113, 133, 0.14), transparent 38%),
+    radial-gradient(circle at bottom right, rgba(217, 70, 239, 0.16), transparent 42%);
   --surface-fullscreen-close-bg: rgba(15, 27, 51, 0.92);
   --surface-fullscreen-close-border: rgba(15, 27, 51, 0.2);
   --surface-fullscreen-close-hover-bg: rgba(15, 27, 51, 0.98);
@@ -113,11 +113,11 @@
   --surface-auth-button-bg: rgba(255, 255, 255, 0.05);
   --surface-auth-button-hover-bg: rgba(255, 255, 255, 0.1);
   --surface-auth-link: #8dc6ff;
-  --surface-auth-verify-bg: linear-gradient(180deg, #0a84ff, #0057d8);
-  --surface-auth-verify-hover-bg: linear-gradient(180deg, #2191ff, #0a6ae6);
-  --surface-auth-verify-border: rgba(10, 132, 255, 0.24);
-  --surface-auth-verify-shadow: 0 12px 24px rgba(10, 132, 255, 0.22);
-  --surface-auth-verify-hover-shadow: 0 16px 28px rgba(10, 132, 255, 0.28);
+  --surface-auth-verify-bg: linear-gradient(180deg, #ec4899, #be185d);
+  --surface-auth-verify-hover-bg: linear-gradient(180deg, #f472b6, #db2777);
+  --surface-auth-verify-border: rgba(236, 72, 153, 0.24);
+  --surface-auth-verify-shadow: 0 12px 24px rgba(236, 72, 153, 0.22);
+  --surface-auth-verify-hover-shadow: 0 16px 28px rgba(236, 72, 153, 0.28);
   --surface-auth-verify-text: #ffffff;
   --radius: 4px;
   --radius-card: 8px;
@@ -160,11 +160,11 @@
   --agent-logo-filter: brightness(0) saturate(100%);
   --task-terminal-icon-filter: var(--task-icon-contrast-filter);
   --task-icon-shadow-filter: drop-shadow(0 0 0.85px rgba(11, 23, 43, 0.38));
-  --body-radial-left: radial-gradient(1300px 600px at -10% -15%, rgba(10, 132, 255, 0.16), transparent 60%);
-  --body-radial-right: radial-gradient(980px 560px at 110% 8%, rgba(123, 97, 255, 0.12), transparent 62%);
+  --body-radial-left: radial-gradient(1300px 600px at -10% -15%, rgba(236, 72, 153, 0.16), transparent 60%);
+  --body-radial-right: radial-gradient(980px 560px at 110% 8%, rgba(217, 70, 239, 0.12), transparent 62%);
   --body-linear: linear-gradient(180deg, #f8fbff, #f2f7ff 55%, #ecf3ff);
-  --body-orb-a: radial-gradient(circle, rgba(62, 203, 255, 0.24) 0%, rgba(62, 203, 255, 0) 66%);
-  --body-orb-b: radial-gradient(circle, rgba(123, 97, 255, 0.2) 0%, rgba(123, 97, 255, 0) 70%);
+  --body-orb-a: radial-gradient(circle, rgba(251, 113, 133, 0.24) 0%, rgba(251, 113, 133, 0) 66%);
+  --body-orb-b: radial-gradient(circle, rgba(217, 70, 239, 0.2) 0%, rgba(217, 70, 239, 0) 70%);
   --shadow-sm: 0 10px 28px rgba(10, 44, 102, 0.08);
   --shadow-md: 0 18px 44px rgba(10, 44, 102, 0.14);
   --shadow-lg: 0 28px 72px rgba(10, 44, 102, 0.18);
@@ -447,7 +447,7 @@ textarea {
 }
 
 .status-item-compact:focus-visible {
-  outline: 2px solid rgba(10, 132, 255, 0.34);
+  outline: 2px solid rgba(236, 72, 153, 0.34);
   outline-offset: 2px;
 }
 
@@ -745,7 +745,7 @@ textarea {
 .event-kind {
   padding: 3px 8px;
   border-radius: 999px;
-  background: rgba(10, 132, 255, 0.1);
+  background: rgba(236, 72, 153, 0.1);
   color: var(--running);
   font-size: 0.66rem;
   font-weight: 800;
@@ -1063,8 +1063,8 @@ body .right-col.prompt-collapsed.task-list-hidden {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: linear-gradient(180deg, #0a84ff, #0057d8);
-  box-shadow: 0 8px 18px rgba(10, 132, 255, 0.3);
+  background: linear-gradient(180deg, #ec4899, #be185d);
+  box-shadow: 0 8px 18px rgba(236, 72, 153, 0.3);
   color: #fff;
   font-size: 12px;
   font-weight: 700;
@@ -1272,7 +1272,7 @@ body .right-col.prompt-collapsed.task-list-hidden {
 .task-terminal-toggle:focus-visible,
 .task-view-toggle:focus-visible,
 .task-fullscreen-toggle:focus-visible {
-  outline: 2px solid rgba(10, 132, 255, 0.24);
+  outline: 2px solid rgba(236, 72, 153, 0.24);
   outline-offset: 2px;
 }
 
@@ -1326,8 +1326,8 @@ select.prompt-control {
 
 .prompt-input-action:hover:not(:disabled),
 .prompt-input-action:focus-visible:not(:disabled) {
-  border-color: rgba(10, 132, 255, 0.18);
-  background: rgba(10, 132, 255, 0.08);
+  border-color: rgba(236, 72, 153, 0.18);
+  background: rgba(236, 72, 153, 0.08);
   color: var(--running);
   outline: none;
 }
@@ -1486,7 +1486,7 @@ select.prompt-control {
 .task-terminal-toggle,
 .task-fullscreen-toggle,
 .prompt-visibility-toggle {
-  border: 1px solid rgba(10, 132, 255, 0.16);
+  border: 1px solid rgba(236, 72, 153, 0.16);
   color: var(--running);
   background: var(--surface-button-bg);
   box-shadow: var(--surface-button-shadow);
@@ -1654,7 +1654,7 @@ select.prompt-control {
 .task-terminal-toggle:hover,
 .task-fullscreen-toggle:hover,
 .prompt-visibility-toggle:hover {
-  border-color: rgba(10, 132, 255, 0.28);
+  border-color: rgba(236, 72, 153, 0.28);
   color: var(--accent);
   transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
@@ -1668,7 +1668,7 @@ select.prompt-control {
 .task-sound-toggle:focus-visible {
   border-color: transparent;
   color: var(--running);
-  background: rgba(10, 132, 255, 0.08);
+  background: rgba(236, 72, 153, 0.08);
   transform: none;
   box-shadow: none;
 }
@@ -1677,7 +1677,7 @@ select.prompt-control {
 .task-view-toggle[aria-pressed="true"],
 .task-sound-toggle[aria-pressed="true"] {
   color: var(--running);
-  background: rgba(10, 132, 255, 0.13);
+  background: rgba(236, 72, 153, 0.13);
 }
 
 .task-sound-toggle-muted .task-sound-toggle-icon {
@@ -1690,7 +1690,7 @@ select.prompt-control {
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(232, 243, 255, 0.92));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.88),
-    0 10px 24px rgba(10, 132, 255, 0.18);
+    0 10px 24px rgba(236, 72, 153, 0.18);
 }
 
 .task-history-toggle-badge {
@@ -1704,8 +1704,8 @@ select.prompt-control {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: linear-gradient(180deg, #0a84ff, #0057d8);
-  box-shadow: 0 8px 18px rgba(10, 132, 255, 0.3);
+  background: linear-gradient(180deg, #ec4899, #be185d);
+  box-shadow: 0 8px 18px rgba(236, 72, 153, 0.3);
   color: #fff;
   font-size: 12px;
   font-weight: 700;
@@ -1716,7 +1716,7 @@ select.prompt-control {
 .task-fullscreen-toggle:focus-visible {
   border-color: transparent;
   color: var(--running);
-  background: rgba(10, 132, 255, 0.08);
+  background: rgba(236, 72, 153, 0.08);
   transform: none;
   box-shadow: none;
 }
@@ -1729,13 +1729,13 @@ select.prompt-control {
   border: 0;
   background: var(--brand-gradient);
   color: #fff;
-  box-shadow: 0 12px 22px rgba(10, 132, 255, 0.22);
+  box-shadow: 0 12px 22px rgba(236, 72, 153, 0.22);
 }
 
 .prompt-submit:hover {
   color: #fff;
   transform: translateY(-1px);
-  box-shadow: 0 16px 28px rgba(10, 132, 255, 0.26);
+  box-shadow: 0 16px 28px rgba(236, 72, 153, 0.26);
 }
 
 .prompt-action-button:disabled,
@@ -1798,14 +1798,14 @@ select.prompt-control {
 }
 
 .library-task-option:hover {
-  border-color: rgba(10, 132, 255, 0.24);
+  border-color: rgba(236, 72, 153, 0.24);
   transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
 }
 
 .library-task-option.active {
-  border-color: rgba(10, 132, 255, 0.38);
-  box-shadow: inset 0 0 0 1px rgba(10, 132, 255, 0.14), 0 10px 22px rgba(10, 44, 102, 0.08);
+  border-color: rgba(236, 72, 153, 0.38);
+  box-shadow: inset 0 0 0 1px rgba(236, 72, 153, 0.14), 0 10px 22px rgba(10, 44, 102, 0.08);
 }
 
 .library-task-option-content {
@@ -1872,14 +1872,14 @@ select.prompt-control {
 
 .library-task-option-toggle:focus-visible,
 .library-task-option-link:focus-visible {
-  outline: 2px solid rgba(10, 132, 255, 0.28);
+  outline: 2px solid rgba(236, 72, 153, 0.28);
   outline-offset: 2px;
 }
 
 .library-task-option-link:hover,
 .library-task-option-link:focus-visible {
-  border-color: rgba(10, 132, 255, 0.45);
-  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.12);
+  border-color: rgba(236, 72, 153, 0.45);
+  box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.12);
   transform: translateY(-1px);
 }
 
@@ -1958,13 +1958,13 @@ select.prompt-control {
 }
 
 .task:hover {
-  border-color: rgba(10, 132, 255, 0.22);
+  border-color: rgba(236, 72, 153, 0.22);
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
 }
 
 .task.active {
-  border-color: rgba(10, 132, 255, 0.2);
+  border-color: rgba(236, 72, 153, 0.2);
   box-shadow: var(--shadow-sm);
 }
 
@@ -2205,14 +2205,14 @@ select.prompt-control {
 
 .task-copy-link:hover {
   transform: translateY(-1px);
-  border-color: rgba(10, 132, 255, 0.45);
-  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.12);
+  border-color: rgba(236, 72, 153, 0.45);
+  box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.12);
 }
 
 .task-copy-link:focus-visible {
   outline: none;
-  border-color: rgba(10, 132, 255, 0.52);
-  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.15);
+  border-color: rgba(236, 72, 153, 0.52);
+  box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.15);
 }
 
 .task-copy-link.is-copied {
@@ -2248,14 +2248,14 @@ select.prompt-control {
 
 .task-github-link:hover {
   transform: translateY(-1px);
-  border-color: rgba(10, 132, 255, 0.45);
-  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.12);
+  border-color: rgba(236, 72, 153, 0.45);
+  box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.12);
 }
 
 .task-github-link:focus-visible {
   outline: none;
-  border-color: rgba(10, 132, 255, 0.52);
-  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.15);
+  border-color: rgba(236, 72, 153, 0.52);
+  box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.15);
 }
 
 .badge {
@@ -2559,8 +2559,8 @@ select.prompt-control {
   margin-left: -2px;
   margin-top: -2px;
   border-radius: 999px;
-  background: radial-gradient(circle, #fff 0%, #7b61ff 65%, rgba(123, 97, 255, 0) 100%);
-  box-shadow: 0 0 12px rgba(123, 97, 255, 0.5);
+  background: radial-gradient(circle, #fff 0%, #d946ef 65%, rgba(217, 70, 239, 0) 100%);
+  box-shadow: 0 0 12px rgba(217, 70, 239, 0.5);
   animation: taskSparkletBurst 2s ease-out forwards;
 }
 
@@ -2707,23 +2707,23 @@ a.task-progress-step {
 
 .task-progress-step.current {
   background: #fff;
-  border-color: rgba(10, 132, 255, 0.34);
+  border-color: rgba(236, 72, 153, 0.34);
   color: #101626;
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.16);
+  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.16);
   z-index: 1;
 }
 
 .task-progress-step.current.has-icon {
   background: #fff;
-  border-color: rgba(10, 132, 255, 0.38);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.18);
+  border-color: rgba(236, 72, 153, 0.38);
+  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.18);
 }
 
 html.dark .task-progress-step.current.has-icon,
 html.night .task-progress-step.current.has-icon {
   background: var(--running);
   border-color: rgba(255, 255, 255, 0.24);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.24);
+  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.24);
 }
 
 .task-progress-step.current .task-progress-step-icon {
@@ -2850,7 +2850,7 @@ html.night .task-progress-step.current .task-progress-step-icon.is-agent-logo {
 .task-result-link {
   color: var(--running);
   text-decoration: none;
-  border-bottom: 1px dotted rgba(10, 132, 255, 0.45);
+  border-bottom: 1px dotted rgba(236, 72, 153, 0.45);
   word-break: break-all;
 }
 
@@ -2871,7 +2871,7 @@ html.night .task-progress-step.current .task-progress-step-icon.is-agent-logo {
 
 .task-result-link:hover {
   color: var(--accent);
-  border-bottom-color: rgba(123, 97, 255, 0.55);
+  border-bottom-color: rgba(217, 70, 239, 0.55);
 }
 
 .term {
@@ -3105,9 +3105,9 @@ html.night .task-progress-step.current .task-progress-step-icon.is-agent-logo {
 }
 
 @keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(10, 132, 255, 0.28); }
-  70% { box-shadow: 0 0 0 8px rgba(10, 132, 255, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(10, 132, 255, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(236, 72, 153, 0.28); }
+  70% { box-shadow: 0 0 0 8px rgba(236, 72, 153, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(236, 72, 153, 0); }
 }
 
 @keyframes taskSparkletBurst {
@@ -3675,7 +3675,7 @@ html.night .task-progress-step.current .task-progress-step-icon.is-agent-logo {
 .hub-emoji-picker-toggle:focus-visible,
 .hub-emoji-picker-clear:focus-visible,
 .hub-emoji-picker-mart:focus-within {
-  outline: 2px solid rgba(10, 132, 255, 0.24);
+  outline: 2px solid rgba(236, 72, 153, 0.24);
   outline-offset: 2px;
 }
 
@@ -3878,7 +3878,7 @@ body.onboarding-modal-open {
   padding: clamp(16px, 2vw, 22px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-card);
-  background: linear-gradient(180deg, rgba(10, 132, 255, 0.08), rgba(255, 255, 255, 0.58));
+  background: linear-gradient(180deg, rgba(236, 72, 153, 0.08), rgba(255, 255, 255, 0.58));
   color: rgba(248, 250, 252, 0.96);
 }
 
@@ -4065,7 +4065,7 @@ body.onboarding-modal-open {
 .onboarding-modal textarea:focus,
 .onboarding-modal select:focus,
 .onboarding-modal button:focus-visible {
-  outline: 2px solid rgba(10, 132, 255, 0.24);
+  outline: 2px solid rgba(236, 72, 153, 0.24);
   outline-offset: 2px;
 }
 
@@ -4451,11 +4451,11 @@ html.dark {
   --hub-text-rgb: 232 240 255;
   --hub-muted-rgb: 159 178 214;
   --hub-meta-rgb: 140 162 204;
-  --body-radial-left: radial-gradient(1200px 620px at -12% -12%, rgba(10, 132, 255, 0.28), transparent 58%);
-  --body-radial-right: radial-gradient(880px 540px at 108% 4%, rgba(123, 97, 255, 0.22), transparent 60%);
+  --body-radial-left: radial-gradient(1200px 620px at -12% -12%, rgba(236, 72, 153, 0.28), transparent 58%);
+  --body-radial-right: radial-gradient(880px 540px at 108% 4%, rgba(217, 70, 239, 0.22), transparent 60%);
   --body-linear: linear-gradient(180deg, #0d1424, #0a1120 58%, #09101d);
-  --body-orb-a: radial-gradient(circle, rgba(10, 132, 255, 0.22) 0%, rgba(10, 132, 255, 0) 68%);
-  --body-orb-b: radial-gradient(circle, rgba(123, 97, 255, 0.18) 0%, rgba(123, 97, 255, 0) 72%);
+  --body-orb-a: radial-gradient(circle, rgba(236, 72, 153, 0.22) 0%, rgba(236, 72, 153, 0) 68%);
+  --body-orb-b: radial-gradient(circle, rgba(217, 70, 239, 0.18) 0%, rgba(217, 70, 239, 0) 72%);
   --bg: #0f1627;
   --bg-soft: rgba(20, 29, 49, 0.88);
   --bg-elevated: #18233a;
@@ -4463,16 +4463,16 @@ html.dark {
   --bg-panel-strong: rgba(26, 38, 63, 0.9);
   --bg-panel-muted: rgba(34, 48, 78, 0.82);
   --border: rgba(150, 179, 230, 0.24);
-  --border-strong: rgba(92, 157, 255, 0.4);
+  --border-strong: rgba(244, 114, 182, 0.4);
   --text: #e8f0ff;
   --text-soft: #b8caea;
   --muted: #9fb2d6;
   --meta: #8ca2cc;
-  --accent-soft: rgba(123, 97, 255, 0.24);
+  --accent-soft: rgba(217, 70, 239, 0.24);
   --surface-glass: linear-gradient(160deg, rgba(25, 35, 57, 0.9), rgba(18, 27, 44, 0.82));
   --surface-glass-strong: linear-gradient(160deg, rgba(31, 43, 69, 0.94), rgba(20, 29, 47, 0.9));
   --surface-glass-solid: rgba(20, 30, 52, 0.94);
-  --surface-glow-border: rgba(92, 157, 255, 0.24);
+  --surface-glow-border: rgba(244, 114, 182, 0.24);
   --surface-glow:
     linear-gradient(180deg, rgba(23, 35, 58, 0.98), rgba(18, 28, 46, 0.94) 18%, rgba(14, 22, 37, 0.94) 100%),
     linear-gradient(160deg, rgba(30, 42, 67, 0.88), rgba(17, 26, 43, 0.92));
@@ -4490,7 +4490,7 @@ html.dark {
     0 12px 24px rgba(0, 0, 0, 0.24);
   --surface-tab-text: #a9bbdc;
   --surface-tab-hover-text: #d5e3ff;
-  --surface-tab-hover-bg: rgba(92, 157, 255, 0.12);
+  --surface-tab-hover-bg: rgba(244, 114, 182, 0.12);
   --surface-tab-active-bg: linear-gradient(135deg, rgba(46, 63, 97, 0.98) 0%, rgba(31, 46, 74, 0.98) 100%);
   --surface-tab-active-border: rgba(108, 148, 224, 0.48);
   --surface-tab-active-text: #edf3ff;
@@ -4518,15 +4518,15 @@ html.dark {
   --surface-danger: #ff9f97;
   --surface-terminal-bg:
     linear-gradient(180deg, rgba(18, 27, 43, 0.94), rgba(10, 18, 31, 0.98)),
-    radial-gradient(circle at top left, rgba(62, 203, 255, 0.08), transparent 40%);
+    radial-gradient(circle at top left, rgba(251, 113, 133, 0.08), transparent 40%);
   --surface-scroll-track: rgba(24, 35, 58, 0.8);
   --surface-scroll-thumb: rgba(119, 142, 184, 0.62);
   --surface-scroll-thumb-border: rgba(24, 35, 58, 0.82);
   --surface-scroll-thumb-hover: rgba(150, 179, 230, 0.72);
   --surface-fullscreen-bg:
     linear-gradient(180deg, rgba(8, 14, 25, 0.84), rgba(7, 12, 22, 0.94)),
-    radial-gradient(circle at top left, rgba(10, 132, 255, 0.16), transparent 38%),
-    radial-gradient(circle at bottom right, rgba(123, 97, 255, 0.16), transparent 42%);
+    radial-gradient(circle at top left, rgba(236, 72, 153, 0.16), transparent 38%),
+    radial-gradient(circle at bottom right, rgba(217, 70, 239, 0.16), transparent 42%);
   --surface-fullscreen-close-bg: rgba(232, 240, 255, 0.14);
   --surface-fullscreen-close-border: rgba(232, 240, 255, 0.18);
   --surface-fullscreen-close-hover-bg: rgba(232, 240, 255, 0.2);
@@ -4542,11 +4542,11 @@ html.dark {
   --surface-auth-button-bg: rgba(232, 240, 255, 0.06);
   --surface-auth-button-hover-bg: rgba(232, 240, 255, 0.1);
   --surface-auth-link: #9bd1ff;
-  --surface-auth-verify-bg: linear-gradient(180deg, #0a84ff, #0057d8);
-  --surface-auth-verify-hover-bg: linear-gradient(180deg, #2191ff, #0a6ae6);
-  --surface-auth-verify-border: rgba(61, 155, 255, 0.28);
-  --surface-auth-verify-shadow: 0 14px 28px rgba(10, 132, 255, 0.24);
-  --surface-auth-verify-hover-shadow: 0 18px 34px rgba(10, 132, 255, 0.3);
+  --surface-auth-verify-bg: linear-gradient(180deg, #ec4899, #be185d);
+  --surface-auth-verify-hover-bg: linear-gradient(180deg, #f472b6, #db2777);
+  --surface-auth-verify-border: rgba(244, 114, 182, 0.28);
+  --surface-auth-verify-shadow: 0 14px 28px rgba(236, 72, 153, 0.24);
+  --surface-auth-verify-hover-shadow: 0 18px 34px rgba(236, 72, 153, 0.3);
   --foreground: rgba(245, 245, 247, 1);
   --muted-foreground: rgba(152, 152, 157, 1);
   --glass-bg: rgba(50, 50, 52, 0.55);
@@ -4596,11 +4596,11 @@ html.night {
   --hub-text-rgb: 237 243 255;
   --hub-muted-rgb: 155 173 207;
   --hub-meta-rgb: 140 161 201;
-  --body-radial-left: radial-gradient(1100px 560px at -12% -16%, rgba(48, 124, 255, 0.2), transparent 56%);
-  --body-radial-right: radial-gradient(920px 520px at 112% 2%, rgba(86, 112, 255, 0.16), transparent 60%);
+  --body-radial-left: radial-gradient(1100px 560px at -12% -16%, rgba(236, 72, 153, 0.2), transparent 56%);
+  --body-radial-right: radial-gradient(920px 520px at 112% 2%, rgba(217, 70, 239, 0.16), transparent 60%);
   --body-linear: linear-gradient(180deg, #05070d, #070b14 55%, #090f1a);
-  --body-orb-a: radial-gradient(circle, rgba(55, 120, 255, 0.16) 0%, rgba(55, 120, 255, 0) 70%);
-  --body-orb-b: radial-gradient(circle, rgba(99, 117, 255, 0.14) 0%, rgba(99, 117, 255, 0) 74%);
+  --body-orb-a: radial-gradient(circle, rgba(244, 114, 182, 0.16) 0%, rgba(244, 114, 182, 0) 70%);
+  --body-orb-b: radial-gradient(circle, rgba(217, 70, 239, 0.14) 0%, rgba(217, 70, 239, 0) 74%);
   --bg: #080b14;
   --bg-soft: rgba(9, 14, 24, 0.92);
   --bg-elevated: #0f1626;
@@ -4613,7 +4613,7 @@ html.night {
   --text-soft: #bed0ef;
   --muted: #9badcf;
   --meta: #8ca1c9;
-  --accent-soft: rgba(123, 97, 255, 0.28);
+  --accent-soft: rgba(217, 70, 239, 0.28);
   --surface-glass: linear-gradient(160deg, rgba(16, 24, 41, 0.92), rgba(9, 14, 25, 0.88));
   --surface-glass-strong: linear-gradient(160deg, rgba(20, 29, 49, 0.96), rgba(11, 18, 31, 0.92));
   --surface-glass-solid: rgba(12, 18, 31, 0.95);
@@ -4663,15 +4663,15 @@ html.night {
   --surface-danger: #ffaaa3;
   --surface-terminal-bg:
     linear-gradient(180deg, rgba(10, 16, 28, 0.96), rgba(7, 11, 20, 0.99)),
-    radial-gradient(circle at top left, rgba(55, 120, 255, 0.08), transparent 40%);
+    radial-gradient(circle at top left, rgba(244, 114, 182, 0.08), transparent 40%);
   --surface-scroll-track: rgba(15, 22, 38, 0.86);
   --surface-scroll-thumb: rgba(108, 130, 168, 0.6);
   --surface-scroll-thumb-border: rgba(15, 22, 38, 0.88);
   --surface-scroll-thumb-hover: rgba(140, 161, 201, 0.74);
   --surface-fullscreen-bg:
     linear-gradient(180deg, rgba(5, 8, 15, 0.86), rgba(7, 11, 20, 0.96)),
-    radial-gradient(circle at top left, rgba(48, 124, 255, 0.14), transparent 38%),
-    radial-gradient(circle at bottom right, rgba(86, 112, 255, 0.14), transparent 42%);
+    radial-gradient(circle at top left, rgba(236, 72, 153, 0.14), transparent 38%),
+    radial-gradient(circle at bottom right, rgba(217, 70, 239, 0.14), transparent 42%);
   --surface-fullscreen-close-bg: rgba(237, 243, 255, 0.14);
   --surface-fullscreen-close-border: rgba(237, 243, 255, 0.18);
   --surface-fullscreen-close-hover-bg: rgba(237, 243, 255, 0.2);
@@ -4687,11 +4687,11 @@ html.night {
   --surface-auth-button-bg: rgba(237, 243, 255, 0.05);
   --surface-auth-button-hover-bg: rgba(237, 243, 255, 0.1);
   --surface-auth-link: #a8d2ff;
-  --surface-auth-verify-bg: linear-gradient(180deg, #0a84ff, #0057d8);
-  --surface-auth-verify-hover-bg: linear-gradient(180deg, #2191ff, #0a6ae6);
-  --surface-auth-verify-border: rgba(61, 155, 255, 0.28);
-  --surface-auth-verify-shadow: 0 14px 28px rgba(10, 132, 255, 0.24);
-  --surface-auth-verify-hover-shadow: 0 18px 34px rgba(10, 132, 255, 0.3);
+  --surface-auth-verify-bg: linear-gradient(180deg, #ec4899, #be185d);
+  --surface-auth-verify-hover-bg: linear-gradient(180deg, #f472b6, #db2777);
+  --surface-auth-verify-border: rgba(244, 114, 182, 0.28);
+  --surface-auth-verify-shadow: 0 14px 28px rgba(236, 72, 153, 0.24);
+  --surface-auth-verify-hover-shadow: 0 18px 34px rgba(236, 72, 153, 0.3);
   --foreground: rgba(220, 220, 225, 1);
   --muted-foreground: rgba(118, 118, 128, 1);
   --elevation-sm: 0px 1px 3px 0px rgba(0, 0, 0, 0.7);
