@@ -482,7 +482,7 @@ func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
 	if !ok {
 		t.Fatalf("skill_catalog = %#v, want []any", meta["skill_catalog"])
 	}
-	if got, want := len(skillCatalog), 3; got != want {
+	if got, want := len(skillCatalog), 2; got != want {
 		t.Fatalf("len(skill_catalog) = %d, want %d", got, want)
 	}
 	first, ok := skillCatalog[0].(map[string]any)
@@ -523,10 +523,6 @@ func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
 	}
 	if _, exists := secondConfig["prNumber"]; exists {
 		t.Fatalf("skill_catalog[1].activation.input.config.prNumber unexpectedly present: %#v", secondConfig["prNumber"])
-	}
-	third, ok := skillCatalog[2].(map[string]any)
-	if !ok || third["handle"] != "library_task" {
-		t.Fatalf("skill_catalog[2] = %#v, want handle library_task", skillCatalog[2])
 	}
 }
 

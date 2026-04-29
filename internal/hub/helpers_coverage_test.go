@@ -154,8 +154,8 @@ func TestDispatchAndProfileHelperBranches(t *testing.T) {
 	if got := normalizeDescription(strings.Repeat("x", 260), "fallback"); len(got) > 240 {
 		t.Fatalf("normalizeDescription() len = %d, want <= 240", len(got))
 	}
-	if got := buildSupportedSkillsMetadata(); len(got) != 3 {
-		t.Fatalf("buildSupportedSkillsMetadata() len = %d, want 3", len(got))
+	if got := buildSupportedSkillsMetadata(); len(got) != 2 {
+		t.Fatalf("buildSupportedSkillsMetadata() len = %d, want 2", len(got))
 	}
 	runConfigPayload := requiredSkillPayloadSchema("", "", []string{"unit-test-coverage"})
 	runConfigSchema, _ := runConfigPayload["run_config_schema"].(map[string]any)

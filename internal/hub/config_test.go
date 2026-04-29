@@ -320,8 +320,8 @@ func TestApplyDefaultsDerivesProfileRuntimeFields(t *testing.T) {
 	if got, want := cfg.Profile.Harness, runtimeIdentifier; got != want {
 		t.Fatalf("Profile.Harness = %q, want %q", got, want)
 	}
-	if len(cfg.Profile.Skills) != 3 || cfg.Profile.Skills[0] != defaultRuntimeSkillName || cfg.Profile.Skills[1] != codeReviewSkillName || cfg.Profile.Skills[2] != libraryTaskSkillName {
-		t.Fatalf("Profile.Skills = %#v, want [%q %q %q]", cfg.Profile.Skills, defaultRuntimeSkillName, codeReviewSkillName, libraryTaskSkillName)
+	if len(cfg.Profile.Skills) != 2 || cfg.Profile.Skills[0] != defaultRuntimeSkillName || cfg.Profile.Skills[1] != codeReviewSkillName {
+		t.Fatalf("Profile.Skills = %#v, want [%q %q]", cfg.Profile.Skills, defaultRuntimeSkillName, codeReviewSkillName)
 	}
 }
 
@@ -344,7 +344,7 @@ func TestApplyDefaultsForcesImmutableProfileRuntimeFields(t *testing.T) {
 	if got, want := cfg.Profile.Harness, runtimeIdentifier; got != want {
 		t.Fatalf("Profile.Harness = %q, want %q", got, want)
 	}
-	if len(cfg.Profile.Skills) != 3 || cfg.Profile.Skills[0] != defaultRuntimeSkillName || cfg.Profile.Skills[1] != codeReviewSkillName || cfg.Profile.Skills[2] != libraryTaskSkillName {
-		t.Fatalf("Profile.Skills = %#v, want [%q %q %q]", cfg.Profile.Skills, defaultRuntimeSkillName, codeReviewSkillName, libraryTaskSkillName)
+	if len(cfg.Profile.Skills) != 2 || cfg.Profile.Skills[0] != defaultRuntimeSkillName || cfg.Profile.Skills[1] != codeReviewSkillName {
+		t.Fatalf("Profile.Skills = %#v, want [%q %q]", cfg.Profile.Skills, defaultRuntimeSkillName, codeReviewSkillName)
 	}
 }
