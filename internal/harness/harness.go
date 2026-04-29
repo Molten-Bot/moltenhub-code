@@ -2,7 +2,9 @@ package harness
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -91,22 +93,24 @@ type RepoResult struct {
 }
 
 type repoWorkspace struct {
-	URL                string
-	Dir                string
-	RelDir             string
-	Branch             string
-	PRURL              string
-	PRHeadRef          string
-	PRHeadOwner        string
-	PRTargetRepo       string
-	BaseBranch         string
-	CreateWorkBranch   bool
-	Changed            bool
-	WriteAccessChecked bool
-	WriteAccessAllowed bool
-	WriteAccessErr     error
-	PushRemote         string
-	PublishStrategy    string
+	URL                         string
+	Dir                         string
+	RelDir                      string
+	Branch                      string
+	PRURL                       string
+	PRHeadRef                   string
+	PRHeadOwner                 string
+	PRTargetRepo                string
+	BaseBranch                  string
+	CreateWorkBranch            bool
+	Changed                     bool
+	WriteAccessChecked          bool
+	WriteAccessAllowed          bool
+	WriteAccessErr              error
+	PushRemote                  string
+	PublishStrategy             string
+	PRCommentScreenshotBaseline map[string]string
+	PRCommentScreenshotFiles    []string
 }
 
 type codexRunOptions = agentruntime.RunOptions
@@ -259,6 +263,13 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 			return h.fail(ExitGit, "workflow", err, runDir)
 		}
 	}
+	for i := range repos {
+		screenshotSnapshot, err := prCommentScreenshotSnapshot(repos[i].Dir)
+		if err != nil {
+			return h.fail(ExitGit, "git", err, runDir)
+		}
+		repos[i].PRCommentScreenshotBaseline = screenshotSnapshot
+	}
 
 	codexDir := targetDir
 	if len(repos) > 1 {
@@ -396,10 +407,11 @@ func (h Harness) processChangedRepo(
 	if _, err := h.runCommand(ctx, "git", addCommand(repo.Dir)); err != nil {
 		return ExitGit, "git", err
 	}
-	if screenshotFiles, err := prCommentScreenshotFiles(repo.Dir); err != nil {
+	if screenshotFiles, err := changedPRCommentScreenshotFiles(repo.Dir, repo.PRCommentScreenshotBaseline); err != nil {
 		return ExitGit, "git", err
 	} else if len(screenshotFiles) > 0 {
-		if _, err := h.runCommand(ctx, "git", addPRCommentScreenshotsCommand(repo.Dir)); err != nil {
+		repo.PRCommentScreenshotFiles = screenshotFiles
+		if _, err := h.runCommand(ctx, "git", addPRCommentScreenshotsCommand(repo.Dir, screenshotFiles)); err != nil {
 			return ExitGit, "git", err
 		}
 	}
@@ -477,7 +489,7 @@ func (h Harness) processChangedRepo(
 		}
 	}
 	h.logf("stage=pr status=ok repo=%s repo_dir=%s pr_url=%s", repo.URL, repo.RelDir, repo.PRURL)
-	if err := h.commentPRScreenshots(ctx, *repo); err != nil {
+	if err := h.commentPRScreenshots(ctx, *repo, repo.PRCommentScreenshotFiles); err != nil {
 		h.logf(
 			"stage=pr status=warn action=comment_screenshots repo=%s repo_dir=%s pr_url=%s err=%q",
 			repo.URL,
@@ -1629,7 +1641,7 @@ func (h Harness) repoHasPendingChanges(
 	if hasTrackedWorktreeChanges(statusStdout) || hasAheadCommitsInStatus(statusStdout) {
 		return true, nil
 	}
-	screenshotFiles, err := prCommentScreenshotFiles(repo.Dir)
+	screenshotFiles, err := changedPRCommentScreenshotFiles(repo.Dir, repo.PRCommentScreenshotBaseline)
 	if err != nil {
 		return false, err
 	}
@@ -3674,8 +3686,14 @@ func addCommand(repoDir string) execx.Command {
 	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"add", "-A"}}
 }
 
-func addPRCommentScreenshotsCommand(repoDir string) execx.Command {
-	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"add", "-f", "--", prCommentScreenshotsRelDir}}
+func addPRCommentScreenshotsCommand(repoDir string, files []string) execx.Command {
+	args := []string{"add", "-f", "--"}
+	if len(files) == 0 {
+		args = append(args, prCommentScreenshotsRelDir)
+	} else {
+		args = append(args, files...)
+	}
+	return execx.Command{Dir: repoDir, Name: "git", Args: args}
 }
 
 func commitCommand(repoDir, msg string) execx.Command {
@@ -3766,11 +3784,7 @@ func appendPRReviewers(args []string, reviewers []string) []string {
 	return args
 }
 
-func (h Harness) commentPRScreenshots(ctx context.Context, repo repoWorkspace) error {
-	files, err := prCommentScreenshotFiles(repo.Dir)
-	if err != nil {
-		return err
-	}
+func (h Harness) commentPRScreenshots(ctx context.Context, repo repoWorkspace, files []string) error {
 	if len(files) == 0 {
 		return nil
 	}
@@ -3788,17 +3802,45 @@ func (h Harness) commentPRScreenshots(ctx context.Context, repo repoWorkspace) e
 }
 
 func prCommentScreenshotFiles(repoDir string) ([]string, error) {
+	snapshot, err := prCommentScreenshotSnapshot(repoDir)
+	if err != nil {
+		return nil, err
+	}
+	files := make([]string, 0, len(snapshot))
+	for file := range snapshot {
+		files = append(files, file)
+	}
+	sort.Strings(files)
+	return files, nil
+}
+
+func changedPRCommentScreenshotFiles(repoDir string, baseline map[string]string) ([]string, error) {
+	current, err := prCommentScreenshotSnapshot(repoDir)
+	if err != nil {
+		return nil, err
+	}
+	files := make([]string, 0, len(current))
+	for file, sum := range current {
+		if baseline == nil || baseline[file] != sum {
+			files = append(files, file)
+		}
+	}
+	sort.Strings(files)
+	return files, nil
+}
+
+func prCommentScreenshotSnapshot(repoDir string) (map[string]string, error) {
 	root := filepath.Join(repoDir, prCommentScreenshotsRelDir)
 	if st, err := os.Stat(root); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
+			return map[string]string{}, nil
 		}
 		return nil, fmt.Errorf("stat PR screenshot directory: %w", err)
 	} else if !st.IsDir() {
 		return nil, fmt.Errorf("PR screenshot path is not a directory: %s", prCommentScreenshotsRelDir)
 	}
 
-	var files []string
+	files := make(map[string]string)
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -3816,13 +3858,17 @@ func prCommentScreenshotFiles(repoDir string) ([]string, error) {
 		if err != nil {
 			return err
 		}
-		files = append(files, filepath.ToSlash(rel))
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(data)
+		files[filepath.ToSlash(rel)] = hex.EncodeToString(sum[:])
 		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list PR screenshots: %w", err)
 	}
-	sort.Strings(files)
 	return files, nil
 }
 
