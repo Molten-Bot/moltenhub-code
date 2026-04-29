@@ -1,6 +1,5 @@
 {
   "repo": "git@github.com:Molten-Bot/moltenhub-code.git",
-  "branch": "main",
   "agentHarness": "codex",
   // Optional for containerized Auggie runs: full session JSON from `auggie token print`.
   // "augmentSessionAuth": "{\"accessToken\":\"XXX\",\"tenantURL\":\"https://YYY/\",\"scopes\":[\"email\"]}",
@@ -20,6 +19,8 @@
   // "libraryTaskName": "unit-test-coverage",
   // optional for subdirectory-scoped runs:
   // "targetSubdir": ".",
+  // optional branch override; omitted means the repository default branch
+  // "branch": "release/2026.04",
   // code review example: provide either "branch" or "prNumber"
   // "prNumber": 123,
   // "review": {

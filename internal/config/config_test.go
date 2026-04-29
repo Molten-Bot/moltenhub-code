@@ -37,8 +37,8 @@ this can contain extra notes after the object`
 	if len(cfg.Repos) != 1 || cfg.Repos[0] != "git@github.com:acme/repo.git" {
 		t.Fatalf("Repos = %#v", cfg.Repos)
 	}
-	if cfg.BaseBranch != "main" {
-		t.Fatalf("BaseBranch = %q, want main", cfg.BaseBranch)
+	if cfg.BaseBranch != "" {
+		t.Fatalf("BaseBranch = %q, want empty for remote default", cfg.BaseBranch)
 	}
 	if cfg.TargetSubdir != "." {
 		t.Fatalf("TargetSubdir = %q, want .", cfg.TargetSubdir)
@@ -48,7 +48,7 @@ this can contain extra notes after the object`
 	}
 }
 
-func TestLoadDefaultsBaseBranch(t *testing.T) {
+func TestLoadLeavesBaseBranchEmptyForRemoteDefault(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -65,8 +65,8 @@ func TestLoadDefaultsBaseBranch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if cfg.BaseBranch != "main" {
-		t.Fatalf("BaseBranch = %q, want main", cfg.BaseBranch)
+	if cfg.BaseBranch != "" {
+		t.Fatalf("BaseBranch = %q, want empty for remote default", cfg.BaseBranch)
 	}
 }
 

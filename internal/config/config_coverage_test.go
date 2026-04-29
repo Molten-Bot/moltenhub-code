@@ -115,11 +115,6 @@ func TestLoadAndValidateErrorPaths(t *testing.T) {
 		t.Fatalf("Validate(invalid image) error = %v", err)
 	}
 	cfg.Images = nil
-	cfg.BaseBranch = ""
-	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "baseBranch is required") {
-		t.Fatalf("Validate(missing baseBranch) error = %v", err)
-	}
-	cfg.BaseBranch = "main"
 	cfg.TargetSubdir = ""
 	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "targetSubdir is required") {
 		t.Fatalf("Validate(missing targetSubdir) error = %v", err)

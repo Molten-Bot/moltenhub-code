@@ -98,6 +98,8 @@ type repoWorkspace struct {
 	PRHeadRef          string
 	PRHeadOwner        string
 	PRTargetRepo       string
+	BaseBranch         string
+	CreateWorkBranch   bool
 	Changed            bool
 	WriteAccessChecked bool
 	WriteAccessAllowed bool
@@ -200,9 +202,6 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 	runCfg := cfg
 	cloneBaseBranch := strings.TrimSpace(runCfg.BaseBranch)
-	if cloneBaseBranch == "" {
-		cloneBaseBranch = "main"
-	}
 
 	repos := make([]repoWorkspace, 0, len(repoURLs))
 	for i, repoURL := range repoURLs {
@@ -216,12 +215,12 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 			PublishStrategy: publishStrategyDirect,
 		})
 	}
-	effectiveBaseBranch, err := h.cloneRepositories(ctx, repos, cloneBaseBranch)
-	if err != nil {
+	if err := h.cloneRepositories(ctx, repos, cloneBaseBranch); err != nil {
 		return h.fail(ExitClone, "clone", err, runDir)
 	}
-	cloneBaseBranch = effectiveBaseBranch
-	runCfg.BaseBranch = cloneBaseBranch
+	if len(repos) > 0 {
+		runCfg.BaseBranch = repos[0].BaseBranch
+	}
 
 	targetDir, err := resolveTargetDir(repos[0].Dir, cfg.TargetSubdir)
 	if err != nil {
@@ -231,18 +230,18 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		return h.fail(ExitConfig, "config", fmt.Errorf("targetSubdir does not exist or is not a directory: %s", cfg.TargetSubdir), runDir)
 	}
 
-	createWorkBranch := shouldCreateWorkBranch(runCfg.BaseBranch)
-	branch := strings.TrimSpace(runCfg.BaseBranch)
-	if createWorkBranch {
-		branch = slug.BranchName(cfg.Prompt, h.Now(), guid)
-	}
+	generatedBranch := slug.BranchName(cfg.Prompt, h.Now(), guid)
 	for i := range repos {
+		branch := strings.TrimSpace(repos[i].BaseBranch)
+		if repos[i].CreateWorkBranch {
+			branch = generatedBranch
+		}
 		repos[i].Branch = branch
-		if !createWorkBranch {
+		if !repos[i].CreateWorkBranch {
 			h.logf(
 				"stage=git status=ok action=branch_reuse branch=%s baseBranch=%s repo=%s repo_dir=%s",
 				branch,
-				runCfg.BaseBranch,
+				repos[i].BaseBranch,
 				repos[i].URL,
 				repos[i].RelDir,
 			)
@@ -302,7 +301,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		}
 		repos[i].Branch = pickFirstNonEmpty(localBranchFromStatus(statusRes.Stdout), repos[i].Branch)
 		syncRepoPublishHeadRef(&repos[i])
-		changed, detectErr := h.repoHasPendingChanges(ctx, repos[i], statusRes.Stdout, runCfg.BaseBranch)
+		changed, detectErr := h.repoHasPendingChanges(ctx, repos[i], statusRes.Stdout)
 		if detectErr != nil {
 			return h.fail(ExitGit, "git", detectErr, runDir)
 		}
@@ -398,7 +397,7 @@ func (h Harness) processChangedRepo(
 	}
 	commitRes, commitErr := h.runCommand(ctx, "git", commitCommand(repo.Dir, cfg.CommitMessage))
 	if commitErr != nil {
-		noChanges, statusErr := h.refreshRepoChangeStateAfterNoOpCommit(ctx, repo, cfg.BaseBranch, commitRes, commitErr)
+		noChanges, statusErr := h.refreshRepoChangeStateAfterNoOpCommit(ctx, repo, commitRes, commitErr)
 		if statusErr != nil {
 			return ExitGit, "git", statusErr
 		}
@@ -417,7 +416,7 @@ func (h Harness) processChangedRepo(
 	h.logf("stage=git status=ok action=commit repo=%s repo_dir=%s", repo.URL, repo.RelDir)
 
 	h.logf("stage=pr status=start repo=%s repo_dir=%s", repo.URL, repo.RelDir)
-	createWorkBranch := shouldCreateWorkBranch(cfg.BaseBranch)
+	createWorkBranch := repo.CreateWorkBranch
 	headRef := repoPRHeadRef(*repo)
 	targetRepo := repoPRTargetRepo(*repo)
 	if !createWorkBranch {
@@ -434,7 +433,7 @@ func (h Harness) processChangedRepo(
 			err   error
 		)
 		if createWorkBranch {
-			prRes, err = h.runCommand(ctx, "pr", prCreateWithOptionsCommand(repo.Dir, cfg, cfg.BaseBranch, headRef, targetRepo))
+			prRes, err = h.runCommand(ctx, "pr", prCreateWithOptionsCommand(repo.Dir, cfg, repo.BaseBranch, headRef, targetRepo))
 		} else {
 			prRes, err = h.runCommand(ctx, "pr", prCreateWithoutBaseWithOptionsCommand(repo.Dir, cfg, headRef, targetRepo))
 		}
@@ -653,7 +652,7 @@ func (h Harness) processChangedRepo(
 		}
 		commitRes, commitErr := h.runCommand(ctx, "git", commitCommand(repo.Dir, remediationCommitMessage(cfg.CommitMessage, attempt+1)))
 		if commitErr != nil {
-			noChanges, statusErr := h.refreshRepoChangeStateAfterNoOpCommit(ctx, repo, cfg.BaseBranch, commitRes, commitErr)
+			noChanges, statusErr := h.refreshRepoChangeStateAfterNoOpCommit(ctx, repo, commitRes, commitErr)
 			if statusErr != nil {
 				return ExitGit, "git", statusErr
 			}
@@ -1164,13 +1163,10 @@ func (h Harness) runCloneWithRetry(
 	}
 }
 
-func (h Harness) cloneRepositories(ctx context.Context, repos []repoWorkspace, baseBranch string) (string, error) {
+func (h Harness) cloneRepositories(ctx context.Context, repos []repoWorkspace, baseBranch string) error {
 	baseBranch = strings.TrimSpace(baseBranch)
-	if baseBranch == "" {
-		baseBranch = "main"
-	}
 	if len(repos) == 0 {
-		return baseBranch, nil
+		return nil
 	}
 	repoURLs := make([]string, 0, len(repos))
 	for _, repo := range repos {
@@ -1178,12 +1174,10 @@ func (h Harness) cloneRepositories(ctx context.Context, repos []repoWorkspace, b
 	}
 	repoOwnerHints := repoOwnerFallbackCandidates(repoURLs)
 
-	usedFallback := make([]bool, len(repos))
 	cloneErrors := make([]error, len(repos))
 
 	cloneOne := func(index int) {
-		fellBack, err := h.cloneRepository(ctx, &repos[index], baseBranch, repoOwnerHints)
-		usedFallback[index] = fellBack
+		err := h.cloneRepository(ctx, &repos[index], baseBranch, repoOwnerHints)
 		cloneErrors[index] = err
 	}
 
@@ -1204,44 +1198,104 @@ func (h Harness) cloneRepositories(ctx context.Context, repos []repoWorkspace, b
 
 	for _, err := range cloneErrors {
 		if err != nil {
-			return baseBranch, err
+			return err
 		}
 	}
 
-	effectiveBaseBranch := baseBranch
-	for _, fellBack := range usedFallback {
-		if fellBack {
-			effectiveBaseBranch = "main"
-			break
+	for _, repo := range repos {
+		if repo.CreateWorkBranch {
+			continue
 		}
+		h.logf("stage=clone status=start action=fetch_base branch=%s repo=%s repo_dir=%s", repo.BaseBranch, repo.URL, repo.RelDir)
+		if _, err := h.runCommand(ctx, "clone", fetchBaseBranchCommand(repo.Dir, repo.BaseBranch)); err != nil {
+			return err
+		}
+		h.logf("stage=clone status=ok action=fetch_base branch=%s repo=%s repo_dir=%s", repo.BaseBranch, repo.URL, repo.RelDir)
 	}
 
-	if !shouldCreateWorkBranch(effectiveBaseBranch) {
-		for _, repo := range repos {
-			h.logf("stage=clone status=start action=fetch_main repo=%s repo_dir=%s", repo.URL, repo.RelDir)
-			if _, err := h.runCommand(ctx, "clone", fetchMainBranchCommand(repo.Dir)); err != nil {
-				return effectiveBaseBranch, err
-			}
-			h.logf("stage=clone status=ok action=fetch_main repo=%s repo_dir=%s", repo.URL, repo.RelDir)
-		}
-	}
-
-	return effectiveBaseBranch, nil
+	return nil
 }
 
-func (h Harness) cloneRepository(ctx context.Context, repo *repoWorkspace, branch string, repoOwnerHints []string) (bool, error) {
+func (h Harness) cloneRepository(ctx context.Context, repo *repoWorkspace, branch string, repoOwnerHints []string) error {
 	if repo == nil {
-		return false, fmt.Errorf("repo workspace is required")
+		return fmt.Errorf("repo workspace is required")
 	}
 
 	branch = strings.TrimSpace(branch)
-	if branch == "" {
-		branch = "main"
-	}
 
 	repoURL := repo.URL
 	requestedRepoURL := repoURL
-	h.logf("stage=clone status=start repo=%s branch=%s repo_dir=%s", repoURL, branch, repo.RelDir)
+	h.logf("stage=clone status=start repo=%s branch=%s repo_dir=%s", repoURL, cloneRetryBranchLabel(branch), repo.RelDir)
+
+	if branch == "" {
+		cloneRes, cloneErr := h.runCloneWithRetry(
+			ctx,
+			repoURL,
+			branch,
+			repo.Dir,
+			repo.RelDir,
+			cloneRepoDefaultBranchCommand(repoURL, repo.Dir),
+		)
+		if cloneErr != nil && isRepoNotFoundCloneError(cloneErr, cloneRes) {
+			if fallbackRepoURL, ok := repoOwnerFallbackURL(repoURL, repoOwnerHints); ok {
+				h.logf(
+					"stage=clone status=warn action=fallback_repo_owner reason=repository_not_found repo=%s fallback_repo=%s branch=%s repo_dir=%s",
+					repoURL,
+					fallbackRepoURL,
+					cloneRetryBranchLabel(branch),
+					repo.RelDir,
+				)
+				if err := os.RemoveAll(repo.Dir); err != nil {
+					return fmt.Errorf("cleanup failed clone dir %s: %w", repo.Dir, err)
+				}
+				fallbackRes, fallbackErr := h.runCloneWithRetry(
+					ctx,
+					fallbackRepoURL,
+					branch,
+					repo.Dir,
+					repo.RelDir,
+					cloneRepoDefaultBranchCommand(fallbackRepoURL, repo.Dir),
+				)
+				if fallbackErr == nil {
+					repo.URL = fallbackRepoURL
+					repoURL = fallbackRepoURL
+					cloneErr = nil
+					h.logf(
+						"stage=clone status=ok action=fallback_repo_owner repo=%s fallback_repo=%s branch=%s repo_dir=%s",
+						requestedRepoURL,
+						fallbackRepoURL,
+						cloneRetryBranchLabel(branch),
+						repo.RelDir,
+					)
+				} else {
+					repo.URL = fallbackRepoURL
+					repoURL = fallbackRepoURL
+					cloneRes = fallbackRes
+					cloneErr = fallbackErr
+					h.logf(
+						"stage=clone status=warn action=fallback_repo_owner reason=fallback_failed repo=%s fallback_repo=%s branch=%s repo_dir=%s err=%q",
+						requestedRepoURL,
+						fallbackRepoURL,
+						cloneRetryBranchLabel(branch),
+						repo.RelDir,
+						fallbackErr,
+					)
+				}
+			}
+		}
+		if cloneErr != nil {
+			return cloneErr
+		}
+		resolvedBranch, err := h.resolveClonedDefaultBranch(ctx, *repo, repoURL)
+		if err != nil {
+			return err
+		}
+		repo.BaseBranch = resolvedBranch
+		repo.CreateWorkBranch = true
+		h.logf("stage=clone status=ok repo=%s repo_dir=%s resolved_branch=%s", repoURL, repo.RelDir, resolvedBranch)
+		return nil
+	}
+
 	cloneRes, cloneErr := h.runCloneWithRetry(
 		ctx,
 		repoURL,
@@ -1260,7 +1314,7 @@ func (h Harness) cloneRepository(ctx context.Context, repo *repoWorkspace, branc
 				repo.RelDir,
 			)
 			if err := os.RemoveAll(repo.Dir); err != nil {
-				return false, fmt.Errorf("cleanup failed clone dir %s: %w", repo.Dir, err)
+				return fmt.Errorf("cleanup failed clone dir %s: %w", repo.Dir, err)
 			}
 			fallbackRes, fallbackErr := h.runCloneWithRetry(
 				ctx,
@@ -1299,23 +1353,27 @@ func (h Harness) cloneRepository(ctx context.Context, repo *repoWorkspace, branc
 		}
 	}
 	if cloneErr == nil {
+		repo.BaseBranch = normalizeBranchRef(branch)
+		repo.CreateWorkBranch = shouldCreateWorkBranch(branch)
 		h.logf("stage=clone status=ok repo=%s repo_dir=%s", repoURL, repo.RelDir)
-		return false, nil
+		return nil
 	}
 	if shouldBootstrapUninitializedMainBranch(branch, cloneRes, cloneErr) {
 		hasRefs, refsErr := h.remoteRepositoryHasRefs(ctx, repoURL)
 		if refsErr != nil {
-			return false, refsErr
+			return refsErr
 		}
 		if !hasRefs {
 			if err := h.bootstrapUninitializedMainBranch(ctx, *repo, repoURL); err != nil {
-				return false, err
+				return err
 			}
-			return false, nil
+			repo.BaseBranch = "main"
+			repo.CreateWorkBranch = true
+			return nil
 		}
 	}
 	if !shouldFallbackCloneToDefaultBranch(branch, cloneRes, cloneErr) {
-		return false, cloneErr
+		return cloneErr
 	}
 
 	h.logf(
@@ -1325,7 +1383,7 @@ func (h Harness) cloneRepository(ctx context.Context, repo *repoWorkspace, branc
 		repo.RelDir,
 	)
 	if err := os.RemoveAll(repo.Dir); err != nil {
-		return false, fmt.Errorf("cleanup failed clone dir %s: %w", repo.Dir, err)
+		return fmt.Errorf("cleanup failed clone dir %s: %w", repo.Dir, err)
 	}
 	if _, err := h.runCloneWithRetry(
 		ctx,
@@ -1335,16 +1393,58 @@ func (h Harness) cloneRepository(ctx context.Context, repo *repoWorkspace, branc
 		repo.RelDir,
 		cloneRepoDefaultBranchCommand(repoURL, repo.Dir),
 	); err != nil {
-		return false, err
+		return err
 	}
+	resolvedBranch, err := h.resolveClonedDefaultBranch(ctx, *repo, repoURL)
+	if err != nil {
+		return err
+	}
+	repo.BaseBranch = resolvedBranch
+	repo.CreateWorkBranch = true
 
 	h.logf(
 		"stage=clone status=ok action=fallback_default_branch repo=%s repo_dir=%s resolved_branch=%s",
 		repoURL,
 		repo.RelDir,
-		"main",
+		resolvedBranch,
 	)
-	return true, nil
+	return nil
+}
+
+func (h Harness) resolveClonedDefaultBranch(ctx context.Context, repo repoWorkspace, repoURL string) (string, error) {
+	res, err := h.runCommand(ctx, "clone", currentBranchCommand(repo.Dir))
+	if err != nil {
+		return "", commandErrorWithDetails(
+			fmt.Sprintf("resolve cloned default branch for repo %s", repoURL),
+			err,
+			res,
+			maxCloneErrorDetailChars,
+		)
+	}
+	branch := normalizeBranchRef(res.Stdout)
+	headRes, headErr := h.runCommand(ctx, "clone", headCommitSHACommand(repo.Dir))
+	if headErr == nil && branch != "" {
+		return branch, nil
+	}
+	hasRefs, refsErr := h.remoteRepositoryHasRefs(ctx, repoURL)
+	if refsErr != nil {
+		return "", refsErr
+	}
+	if !hasRefs {
+		if err := h.bootstrapUninitializedMainBranch(ctx, repo, repoURL); err != nil {
+			return "", err
+		}
+		return "main", nil
+	}
+	if headErr != nil {
+		return "", commandErrorWithDetails(
+			fmt.Sprintf("verify cloned default branch HEAD for repo %s", repoURL),
+			headErr,
+			headRes,
+			maxCloneErrorDetailChars,
+		)
+	}
+	return "", fmt.Errorf("resolve cloned default branch for repo %s: git branch --show-current returned empty branch", repoURL)
 }
 
 func (h Harness) remoteRepositoryHasRefs(ctx context.Context, repoURL string) (bool, error) {
@@ -1457,7 +1557,6 @@ func commandErrorWithDetails(prefix string, err error, res execx.Result, maxChar
 func (h Harness) refreshRepoChangeStateAfterNoOpCommit(
 	ctx context.Context,
 	repo *repoWorkspace,
-	baseBranch string,
 	commitRes execx.Result,
 	commitErr error,
 ) (bool, error) {
@@ -1471,7 +1570,7 @@ func (h Harness) refreshRepoChangeStateAfterNoOpCommit(
 	}
 	repo.Branch = pickFirstNonEmpty(localBranchFromStatus(statusRes.Stdout), repo.Branch)
 	syncRepoPublishHeadRef(repo)
-	changed, detectErr := h.repoHasPendingChanges(ctx, *repo, statusRes.Stdout, baseBranch)
+	changed, detectErr := h.repoHasPendingChanges(ctx, *repo, statusRes.Stdout)
 	if detectErr != nil {
 		return false, detectErr
 	}
@@ -1509,7 +1608,6 @@ func (h Harness) repoHasPendingChanges(
 	ctx context.Context,
 	repo repoWorkspace,
 	statusStdout string,
-	baseBranch string,
 ) (bool, error) {
 	if hasTrackedWorktreeChanges(statusStdout) || hasAheadCommitsInStatus(statusStdout) {
 		return true, nil
@@ -1519,10 +1617,10 @@ func (h Harness) repoHasPendingChanges(
 	if strings.TrimSpace(localBranchFromStatus(statusStdout)) == "" {
 		return false, nil
 	}
-	if !shouldCreateWorkBranch(baseBranch) {
+	if !repo.CreateWorkBranch {
 		return false, nil
 	}
-	commitsAhead, err := h.countCommitsAheadOfBase(ctx, repo, normalizeBranchRef(baseBranch))
+	commitsAhead, err := h.countCommitsAheadOfBase(ctx, repo, normalizeBranchRef(repo.BaseBranch))
 	if err != nil {
 		return false, err
 	}
@@ -1532,7 +1630,7 @@ func (h Harness) repoHasPendingChanges(
 func (h Harness) countCommitsAheadOfBase(ctx context.Context, repo repoWorkspace, baseBranch string) (int, error) {
 	baseBranch = normalizeBranchRef(baseBranch)
 	if baseBranch == "" {
-		baseBranch = "main"
+		return 0, fmt.Errorf("base branch is required to count commits ahead for repo %s", repo.URL)
 	}
 	res, err := h.runCommand(ctx, "git", commitsAheadOfBaseCommand(repo.Dir, baseBranch))
 	if err != nil {
@@ -1639,7 +1737,7 @@ func workspaceCodexPrompt(prompt, targetSubdir string, repos []repoWorkspace) st
 		b.WriteString(fmt.Sprintf("- %s => %s\n", repo.RelDir, repo.URL))
 	}
 	b.WriteString("- If you modify files in any repository, keep each changed repository on its own branch and PR.\n")
-	b.WriteString("- Only create a new branch when starting from 'main'; if you're fixing an existing non-'main' branch, stay on it.\n")
+	b.WriteString("- Only create a new branch when starting from the repository default branch; if you're fixing an existing non-default branch, stay on it.\n")
 	b.WriteString("- Start every new branch name with 'moltenhub-'. Do not prefix PR titles with it.\n")
 	return strings.TrimSpace(b.String())
 }
@@ -2292,7 +2390,7 @@ func shouldFallbackCloneToDefaultBranch(baseBranch string, res execx.Result, err
 		return false
 	}
 	normalized := normalizeBranchRef(baseBranch)
-	if !strings.HasPrefix(normalized, "moltenhub-") {
+	if !strings.HasPrefix(normalized, "moltenhub-") && !isKnownDefaultBranchName(normalized) {
 		return false
 	}
 	return isMissingRemoteBranchCloneError(err, res)
@@ -3221,6 +3319,9 @@ func shouldSetupGitHubAuthForRepos(repoURLs []string) bool {
 }
 
 func cloneCommand(cfg config.Config, repoDir string) execx.Command {
+	if strings.TrimSpace(cfg.BaseBranch) == "" {
+		return cloneRepoDefaultBranchCommand(cfg.RepoURL, repoDir)
+	}
 	return cloneRepoCommand(cfg.RepoURL, cfg.BaseBranch, repoDir)
 }
 
@@ -3238,11 +3339,19 @@ func remoteRefsCommand(repoURL string) execx.Command {
 	}
 }
 
-func fetchMainBranchCommand(repoDir string) execx.Command {
+func currentBranchCommand(repoDir string) execx.Command {
 	return execx.Command{
 		Dir:  repoDir,
 		Name: "git",
-		Args: []string{"fetch", "origin", "main:refs/remotes/origin/main"},
+		Args: []string{"branch", "--show-current"},
+	}
+}
+
+func fetchBaseBranchCommand(repoDir, branch string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "git",
+		Args: []string{"fetch", "origin", fmt.Sprintf("%s:refs/remotes/origin/%s", normalizeBranchRef(branch), normalizeBranchRef(branch))},
 	}
 }
 
@@ -3279,7 +3388,16 @@ func initializeMainBranchCommitCommand(repoDir string) execx.Command {
 }
 
 func shouldCreateWorkBranch(baseBranch string) bool {
-	return normalizeBranchRef(baseBranch) == "main"
+	return isKnownDefaultBranchName(baseBranch)
+}
+
+func isKnownDefaultBranchName(branch string) bool {
+	switch normalizeBranchRef(branch) {
+	case "main", "master":
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeBranchRef(branch string) string {
@@ -3561,7 +3679,7 @@ func pushDryRunToRemoteCommand(repoDir, remote, branch string) execx.Command {
 func commitsAheadOfBaseCommand(repoDir, baseBranch string) execx.Command {
 	baseBranch = normalizeBranchRef(baseBranch)
 	if baseBranch == "" {
-		baseBranch = "main"
+		baseBranch = "HEAD"
 	}
 	return execx.Command{
 		Dir:  repoDir,

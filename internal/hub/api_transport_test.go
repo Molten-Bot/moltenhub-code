@@ -515,8 +515,8 @@ func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
 	if !ok {
 		t.Fatalf("skill_catalog[1].activation.input.config = %#v, want map[string]any", secondInput["config"])
 	}
-	if got := secondConfig["branch"]; got != "main" {
-		t.Fatalf("skill_catalog[1].activation.input.config.branch = %#v, want main", got)
+	if got := secondConfig["branch"]; got != "<pull-request-head-branch>" {
+		t.Fatalf("skill_catalog[1].activation.input.config.branch = %#v, want pull request head placeholder", got)
 	}
 	if got := secondConfig["responseMode"]; got != responseModePlaceholder() {
 		t.Fatalf("skill_catalog[1].activation.input.config.responseMode = %#v, want %q", got, responseModePlaceholder())

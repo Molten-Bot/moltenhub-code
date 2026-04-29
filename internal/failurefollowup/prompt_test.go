@@ -141,7 +141,7 @@ func TestComposePromptUsesFallbackPathsAndContract(t *testing.T) {
 		RemoteOperationsInstruction,
 		ActionableChangeInstruction,
 		NoOpInstruction,
-		fmt.Sprintf(`{"repos":["git@github.com:Molten-Bot/moltenhub-code.git"],"baseBranch":"main","targetSubdir":".","prompt":"%s"}`, RequiredPrompt),
+		fmt.Sprintf(`{"repos":["git@github.com:Molten-Bot/moltenhub-code.git"],"targetSubdir":".","prompt":"%s"}`, RequiredPrompt),
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("ComposePrompt() missing %q: %q", want, got)
@@ -171,36 +171,36 @@ func TestTaskLogPathsBuildsExpectedLegacyAndCurrentFiles(t *testing.T) {
 	}
 }
 
-func TestFollowUpTargetingDefaultsToMainAndRoot(t *testing.T) {
+func TestFollowUpTargetingDefaultsToRemoteDefaultAndRoot(t *testing.T) {
 	t.Parallel()
 
 	baseBranch, targetSubdir := FollowUpTargeting("", "", "")
-	if baseBranch != "main" {
-		t.Fatalf("baseBranch = %q, want %q", baseBranch, "main")
+	if baseBranch != "" {
+		t.Fatalf("baseBranch = %q, want empty for remote default", baseBranch)
 	}
 	if targetSubdir != "." {
 		t.Fatalf("targetSubdir = %q, want %q", targetSubdir, ".")
 	}
 }
 
-func TestFollowUpTargetingForcesMainAndRootForNonMainInputs(t *testing.T) {
+func TestFollowUpTargetingForcesRemoteDefaultAndRootForNonDefaultInputs(t *testing.T) {
 	t.Parallel()
 
 	baseBranch, targetSubdir := FollowUpTargeting("release/2026.04-hotfix", "internal/hub", "release/2026.04-hotfix")
-	if baseBranch != "main" {
-		t.Fatalf("baseBranch = %q, want %q", baseBranch, "main")
+	if baseBranch != "" {
+		t.Fatalf("baseBranch = %q, want empty for remote default", baseBranch)
 	}
 	if targetSubdir != "." {
 		t.Fatalf("targetSubdir = %q, want %q", targetSubdir, ".")
 	}
 }
 
-func TestFollowUpTargetingKeepsMainAndRootWhenBaseIsMain(t *testing.T) {
+func TestFollowUpTargetingUsesRemoteDefaultAndRootWhenBaseIsMain(t *testing.T) {
 	t.Parallel()
 
 	baseBranch, targetSubdir := FollowUpTargeting("main", ".", "moltenhub-fix-issue")
-	if baseBranch != "main" {
-		t.Fatalf("baseBranch = %q, want %q", baseBranch, "main")
+	if baseBranch != "" {
+		t.Fatalf("baseBranch = %q, want empty for remote default", baseBranch)
 	}
 	if targetSubdir != "." {
 		t.Fatalf("targetSubdir = %q, want %q", targetSubdir, ".")

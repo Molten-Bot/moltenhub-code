@@ -1538,7 +1538,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `data-has-action="false"`) ||
 		!strings.Contains(markup, `aria-hidden="true"`) ||
 		!strings.Contains(markup, `hidden`) {
-		t.Fatalf("expected index html to hide the branch clear action while already on main")
+		t.Fatalf("expected index html to hide the branch clear action while using the default branch")
 	}
 	if !strings.Contains(markup, `class="prompt-grid"`) ||
 		!strings.Contains(markup, `id="builder-repo-history-field" class="prompt-field prompt-field-repo-history"`) ||
@@ -1548,9 +1548,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to include the builder row with explicit field layout classes")
 	}
 	if !strings.Contains(markup, "function syncBaseBranchClearState(") ||
-		!strings.Contains(markup, "builderBaseBranchClear.hidden = isMain;") ||
-		!strings.Contains(markup, "branchActionWrap.dataset.hasAction = isMain ? \"false\" : \"true\";") ||
-		!strings.Contains(markup, "builderBaseBranchClear.addEventListener(\"click\", resetBaseBranchToMain);") {
+		!strings.Contains(markup, "builderBaseBranchClear.hidden = isDefault;") ||
+		!strings.Contains(markup, "branchActionWrap.dataset.hasAction = isDefault ? \"false\" : \"true\";") ||
+		!strings.Contains(markup, "builderBaseBranchClear.addEventListener(\"click\", resetBaseBranchToDefault);") {
 		t.Fatalf("expected index html to include branch clear behavior")
 	}
 	if !strings.Contains(markup, "function resetBuilderTargetSubdir(") || !strings.Contains(markup, "builderTargetSubdir.value = \".\";") {
@@ -1568,7 +1568,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function hasReviewerDraftToClear(") ||
 		!strings.Contains(markup, "function hasBuilderDraftToClear(") ||
 		!strings.Contains(markup, "const promptDirty = String(builderPromptInput?.value || \"\").trim() !== \"\";") ||
-		!strings.Contains(markup, "const branchDirty = ![\"\", \"main\"].includes(String(builderBaseBranch?.value || \"\").trim());") ||
+		!strings.Contains(markup, "const branchDirty = String(builderBaseBranch?.value || \"\").trim() !== \"\";") ||
 		!strings.Contains(markup, "const targetSubdirDirty = ![\"\", \".\"].includes(String(builderTargetSubdir?.value || \"\").trim());") ||
 		!strings.Contains(markup, "const rawDirty = String(localPromptInput?.value || \"\").trim() !== \"\";") ||
 		!strings.Contains(markup, "return promptDirty || branchDirty || targetSubdirDirty || rawDirty || hasReviewerDraftToClear() || state.promptImages.length > 0;") {
@@ -1672,7 +1672,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "const repo = normalizeRepoValue(libraryRepoInput.value) || defaultRepository();") {
 		t.Fatalf("expected index html payload builders to fall back to the configured default repository")
 	}
-	if !strings.Contains(markup, "const payload = {\n        repos: [repo],\n        branch,") {
+	if !strings.Contains(markup, "const payload = {\n        repos: [repo],\n        targetSubdir:") ||
+		!strings.Contains(markup, "if (branch) {\n        payload.branch = branch;\n      }") {
 		t.Fatalf("expected index html library payload to emit selected repositories through repos[]")
 	}
 	if !strings.Contains(markup, "function dropReposFromHistory(") {
@@ -1775,7 +1776,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "clearPromptImages(false);") {
 		t.Fatalf("expected index html to clear attached screenshots after a successful submit without repopulating raw JSON")
 	}
-	if !strings.Contains(markup, "resetBuilderTargetSubdir();") || !strings.Contains(markup, "resetBaseBranchToMain(false);") {
+	if !strings.Contains(markup, "resetBuilderTargetSubdir();") || !strings.Contains(markup, "resetBaseBranchToDefault(false);") {
 		t.Fatalf("expected index html to reset branch and target subdir as part of queued-submit cleanup")
 	}
 	if !strings.Contains(markup, "clearSubmittedPromptState();") {

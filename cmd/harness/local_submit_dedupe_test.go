@@ -23,7 +23,7 @@ func TestDedupeKeyForRunConfigDefaultsBranchAndNormalizesRepos(t *testing.T) {
 	}
 
 	got := dedupeKeyForRunConfig(cfg)
-	want := `{"repos":["git@github.com:acme/repo-two.git","git@github.com:acme/repo.git"],"baseBranch":"main","targetSubdir":".","promptHash":"` + promptHashForTest("update docs") + `"}`
+	want := `{"repos":["git@github.com:acme/repo-two.git","git@github.com:acme/repo.git"],"baseBranch":"default","targetSubdir":".","promptHash":"` + promptHashForTest("update docs") + `"}`
 	if got != want {
 		t.Fatalf("dedupeKeyForRunConfig() = %q, want %q", got, want)
 	}

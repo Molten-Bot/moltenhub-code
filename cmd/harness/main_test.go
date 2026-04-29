@@ -577,8 +577,8 @@ func TestFailureFollowUpRunConfigUsesRequiredPayloadShapeAndLogContext(t *testin
 	if got, want := cfg.Repos, []string{config.DefaultRepositoryURL}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Repos = %v, want %v", got, want)
 	}
-	if cfg.BaseBranch != "main" {
-		t.Fatalf("BaseBranch = %q, want %q", cfg.BaseBranch, "main")
+	if cfg.BaseBranch != "" {
+		t.Fatalf("BaseBranch = %q, want empty for remote default", cfg.BaseBranch)
 	}
 	if cfg.TargetSubdir != "." {
 		t.Fatalf("TargetSubdir = %q, want %q", cfg.TargetSubdir, ".")
@@ -596,7 +596,7 @@ func TestFailureFollowUpRunConfigUsesRequiredPayloadShapeAndLogContext(t *testin
 	}
 }
 
-func TestFailureFollowUpRunConfigForcesMainBranchAndRootTarget(t *testing.T) {
+func TestFailureFollowUpRunConfigForcesRemoteDefaultBranchAndRootTarget(t *testing.T) {
 	t.Parallel()
 
 	logRoot := filepath.Join(t.TempDir(), ".log")
@@ -612,8 +612,8 @@ func TestFailureFollowUpRunConfigForcesMainBranchAndRootTarget(t *testing.T) {
 	}
 
 	cfg := failureFollowUpRunConfig("local-1712345678-000001", failedResult, failedRunCfg, logRoot)
-	if cfg.BaseBranch != "main" {
-		t.Fatalf("BaseBranch = %q, want %q", cfg.BaseBranch, "main")
+	if cfg.BaseBranch != "" {
+		t.Fatalf("BaseBranch = %q, want empty for remote default", cfg.BaseBranch)
 	}
 	if cfg.TargetSubdir != "." {
 		t.Fatalf("TargetSubdir = %q, want %q", cfg.TargetSubdir, ".")

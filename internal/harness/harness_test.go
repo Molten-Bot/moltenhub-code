@@ -731,7 +731,7 @@ func TestRunNonMainBranchReusesExistingBranchAndPR(t *testing.T) {
 		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
-		{cmd: fetchMainBranchCommand(repoDir)},
+		{cmd: fetchBaseBranchCommand(repoDir, cfg.BaseBranch)},
 		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## release/2026.04-hotfix...origin/release/2026.04-hotfix\n M file.go\n"}},
@@ -836,7 +836,7 @@ func TestRunNonMainBranchPushNonFastForwardRetriesWithMergeSync(t *testing.T) {
 		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
-		{cmd: fetchMainBranchCommand(repoDir)},
+		{cmd: fetchBaseBranchCommand(repoDir, cfg.BaseBranch)},
 		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch), res: pushRejected, err: errors.New("push rejected")},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
@@ -1458,7 +1458,7 @@ func TestRunNonMainBranchNoChangesReportsExistingPR(t *testing.T) {
 		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
-		{cmd: fetchMainBranchCommand(repoDir)},
+		{cmd: fetchBaseBranchCommand(repoDir, cfg.BaseBranch)},
 		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "\n"}},
@@ -2359,7 +2359,7 @@ func TestRunNonMainBranchReusesExistingPR(t *testing.T) {
 		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
-		{cmd: fetchMainBranchCommand(repoDir)},
+		{cmd: fetchBaseBranchCommand(repoDir, cfg.BaseBranch)},
 		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
@@ -2414,7 +2414,7 @@ func TestRunNonMainBranchCreatesPRWithoutExplicitBaseWhenNoOpenPR(t *testing.T) 
 		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
-		{cmd: fetchMainBranchCommand(repoDir)},
+		{cmd: fetchBaseBranchCommand(repoDir, cfg.BaseBranch)},
 		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
@@ -2476,6 +2476,8 @@ func TestRunMissingMoltenhubBaseBranchFallsBackToDefaultAndCreatesNewBranch(t *t
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneRepoCommand(cfg.RepoURL, cfg.BaseBranch, repoDir), res: cloneMissingBranch, err: errors.New("clone failed")},
 		{cmd: cloneRepoDefaultBranchCommand(cfg.RepoURL, repoDir)},
+		{cmd: currentBranchCommand(repoDir), res: execx.Result{Stdout: "main\n"}},
+		{cmd: headCommitSHACommand(repoDir)},
 		{cmd: branchCommand(repoDir, branch)},
 		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
@@ -2484,6 +2486,125 @@ func TestRunMissingMoltenhubBaseBranchFallsBackToDefaultAndCreatesNewBranch(t *t
 		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
 		{cmd: pushCommand(repoDir, branch)},
 		{cmd: prCreateCommand(repoDir, cfgMain, branch), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL)},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if got, want := res.Branch, branch; got != want {
+		t.Fatalf("Branch = %q, want %q", got, want)
+	}
+	if got, want := res.PRURL, prURL; got != want {
+		t.Fatalf("PRURL = %q, want %q", got, want)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunEmptyBaseBranchClonesRemoteDefaultAndCreatesNewBranch(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.BaseBranch = ""
+
+	now := time.Date(2026, 4, 6, 19, 53, 52, 0, time.UTC)
+	guid := "9ded650b29c70708825082be50fbf433"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+	prURL := "https://github.com/acme/repo/pull/114"
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneRepoDefaultBranchCommand(cfg.RepoURL, repoDir)},
+		{cmd: currentBranchCommand(repoDir), res: execx.Result{Stdout: "master\n"}},
+		{cmd: headCommitSHACommand(repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateWithOptionsCommand(repoDir, cfg, "master", branch, ""), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL)},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if got, want := res.Branch, branch; got != want {
+		t.Fatalf("Branch = %q, want %q", got, want)
+	}
+	if got, want := res.PRURL, prURL; got != want {
+		t.Fatalf("PRURL = %q, want %q", got, want)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunMissingMainBaseBranchFallsBackToRemoteDefaultAndCreatesNewBranch(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 6, 19, 53, 52, 0, time.UTC)
+	guid := "9ded650b29c70708825082be50fbf433"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+	prURL := "https://github.com/acme/repo/pull/115"
+
+	cloneMissingMain := execx.Result{
+		Stderr: "warning: Could not find remote branch main to clone.\n" +
+			"fatal: Remote branch main not found in upstream origin\n",
+	}
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneRepoCommand(cfg.RepoURL, cfg.BaseBranch, repoDir), res: cloneMissingMain, err: errors.New("clone failed")},
+		{cmd: remoteRefsCommand(cfg.RepoURL), res: execx.Result{Stdout: "abc123\trefs/heads/master\n"}},
+		{cmd: cloneRepoDefaultBranchCommand(cfg.RepoURL, repoDir)},
+		{cmd: currentBranchCommand(repoDir), res: execx.Result{Stdout: "master\n"}},
+		{cmd: headCommitSHACommand(repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateWithOptionsCommand(repoDir, cfg, "master", branch, ""), res: execx.Result{Stdout: prURL + "\n"}},
 		{cmd: prChecksCommand(repoDir, prURL)},
 	}}
 
@@ -2805,13 +2926,23 @@ func TestCommandBuilders(t *testing.T) {
 	if clone.Name != "git" || !reflect.DeepEqual(clone.Args, []string{"clone", "--branch", "main", "--single-branch", cfg.RepoURL, repoDir}) {
 		t.Fatalf("clone command unexpected: %+v", clone)
 	}
-	fetchMain := fetchMainBranchCommand(repoDir)
-	if fetchMain.Name != "git" || fetchMain.Dir != repoDir || !reflect.DeepEqual(fetchMain.Args, []string{"fetch", "origin", "main:refs/remotes/origin/main"}) {
-		t.Fatalf("fetch main command unexpected: %+v", fetchMain)
+	cfgDefaultBranch := cfg
+	cfgDefaultBranch.BaseBranch = ""
+	cloneDefaultBranch := cloneCommand(cfgDefaultBranch, repoDir)
+	if cloneDefaultBranch.Name != "git" || !reflect.DeepEqual(cloneDefaultBranch.Args, []string{"clone", "--single-branch", cfg.RepoURL, repoDir}) {
+		t.Fatalf("clone command for default branch unexpected: %+v", cloneDefaultBranch)
+	}
+	fetchBase := fetchBaseBranchCommand(repoDir, "main")
+	if fetchBase.Name != "git" || fetchBase.Dir != repoDir || !reflect.DeepEqual(fetchBase.Args, []string{"fetch", "origin", "main:refs/remotes/origin/main"}) {
+		t.Fatalf("fetch base command unexpected: %+v", fetchBase)
 	}
 	cloneDefault := cloneRepoDefaultBranchCommand(cfg.RepoURL, repoDir)
 	if cloneDefault.Name != "git" || !reflect.DeepEqual(cloneDefault.Args, []string{"clone", "--single-branch", cfg.RepoURL, repoDir}) {
 		t.Fatalf("clone default command unexpected: %+v", cloneDefault)
+	}
+	currentBranch := currentBranchCommand(repoDir)
+	if currentBranch.Name != "git" || currentBranch.Dir != repoDir || !reflect.DeepEqual(currentBranch.Args, []string{"branch", "--show-current"}) {
+		t.Fatalf("current branch command unexpected: %+v", currentBranch)
 	}
 	remoteRefs := remoteRefsCommand(cfg.RepoURL)
 	if remoteRefs.Name != "git" || !reflect.DeepEqual(remoteRefs.Args, []string{"ls-remote", "--heads", "--tags", cfg.RepoURL}) {
@@ -2957,6 +3088,9 @@ func TestCommandBuilders(t *testing.T) {
 	}
 	if !shouldCreateWorkBranch("origin/main") {
 		t.Fatal("shouldCreateWorkBranch(origin/main) = false, want true")
+	}
+	if !shouldCreateWorkBranch("master") {
+		t.Fatal("shouldCreateWorkBranch(master) = false, want true")
 	}
 	if shouldCreateWorkBranch("Main") {
 		t.Fatal("shouldCreateWorkBranch(Main) = true, want false")
@@ -4682,6 +4816,9 @@ func TestShouldCreateWorkBranch(t *testing.T) {
 	}
 	if !shouldCreateWorkBranch("origin/main") {
 		t.Fatal("shouldCreateWorkBranch(origin/main) = false, want true")
+	}
+	if !shouldCreateWorkBranch("master") {
+		t.Fatal("shouldCreateWorkBranch(master) = false, want true")
 	}
 	if shouldCreateWorkBranch("Main") {
 		t.Fatal("shouldCreateWorkBranch(Main) = true, want false")
