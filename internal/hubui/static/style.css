@@ -2737,7 +2737,8 @@ a.task-progress-step {
 }
 
 html.dark .task-progress-step.current.has-icon,
-html.night .task-progress-step.current.has-icon {
+html.night .task-progress-step.current.has-icon,
+html.pink .task-progress-step.current.has-icon {
   background: var(--running);
   border-color: rgba(255, 255, 255, 0.24);
   box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.24);
@@ -2754,7 +2755,8 @@ html.night .task-progress-step.current.has-icon {
 }
 
 html.dark .task-progress-step.current .task-progress-step-icon.is-agent-logo,
-html.night .task-progress-step.current .task-progress-step-icon.is-agent-logo {
+html.night .task-progress-step.current .task-progress-step-icon.is-agent-logo,
+html.pink .task-progress-step.current .task-progress-step-icon.is-agent-logo {
   filter: brightness(0) saturate(100%) invert(1);
 }
 
