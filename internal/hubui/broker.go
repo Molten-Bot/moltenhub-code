@@ -735,21 +735,21 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 		t.Status = "completed"
 		t.WorkspaceDir = firstNonEmpty(fields["workspace"], fields["workspace_dir"], t.WorkspaceDir)
 		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
-		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
+		t.PRURL = firstNonEmpty(taskPRURLFromFields(fields), t.PRURL)
 	}
 
 	if isFinalTaskDispatchLine(fields) && strings.HasPrefix(line, "dispatch status=ok") {
 		t.Status = "completed"
 		t.WorkspaceDir = firstNonEmpty(fields["workspace"], fields["workspace_dir"], t.WorkspaceDir)
 		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
-		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
+		t.PRURL = firstNonEmpty(taskPRURLFromFields(fields), t.PRURL)
 	}
 
 	if isFinalTaskDispatchLine(fields) && strings.HasPrefix(line, "dispatch status=no_changes") {
 		t.Status = "no_changes"
 		t.WorkspaceDir = firstNonEmpty(fields["workspace"], fields["workspace_dir"], t.WorkspaceDir)
 		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
-		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
+		t.PRURL = firstNonEmpty(taskPRURLFromFields(fields), t.PRURL)
 	}
 
 	if strings.HasPrefix(line, "dispatch status=paused") {
@@ -773,7 +773,7 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 		}
 		t.WorkspaceDir = firstNonEmpty(fields["workspace"], fields["workspace_dir"], t.WorkspaceDir)
 		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
-		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
+		t.PRURL = firstNonEmpty(taskPRURLFromFields(fields), t.PRURL)
 		t.Error = firstNonEmpty(fields["err"], fields["error"], t.Error)
 		if strings.TrimSpace(t.Error) == "" {
 			t.Error = "task stopped by operator"
@@ -787,7 +787,7 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 		}
 		t.WorkspaceDir = firstNonEmpty(fields["workspace"], fields["workspace_dir"], t.WorkspaceDir)
 		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
-		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
+		t.PRURL = firstNonEmpty(taskPRURLFromFields(fields), t.PRURL)
 		t.Error = firstNonEmpty(fields["err"], fields["error"], t.Error)
 	}
 
@@ -830,7 +830,7 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 			}
 		}
 		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
-		t.PRURL = firstNonEmpty(fields["pr_url"], t.PRURL)
+		t.PRURL = firstNonEmpty(taskPRURLFromFields(fields), t.PRURL)
 		t.Error = firstNonEmpty(fields["err"], fields["error"], t.Error)
 	}
 
@@ -1242,6 +1242,21 @@ func reposFromFields(fields map[string]string) []string {
 	}
 	merged = append(merged, list...)
 	return appendNonEmptyUnique(nil, merged...)
+}
+
+func taskPRURLFromFields(fields map[string]string) string {
+	if fields == nil {
+		return ""
+	}
+	prURL := strings.TrimSpace(fields["pr_url"])
+	if prURL != "" {
+		return prURL
+	}
+	prURLs := splitCommaSeparatedNonEmpty(fields["pr_urls"])
+	if len(prURLs) > 0 {
+		return prURLs[0]
+	}
+	return ""
 }
 
 func splitCommaSeparatedNonEmpty(value string) []string {

@@ -257,6 +257,22 @@ func TestBrokerCapturesPRURLFromStageLine(t *testing.T) {
 	}
 }
 
+func TestBrokerCapturesFirstPRURLFromCompletedPRURLsField(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog("dispatch status=start request_id=req-prs skill=moltenhub_code_run repo=git@github.com:acme/repo.git")
+	b.IngestLog("dispatch status=completed request_id=req-prs workspace=/tmp/run branch=moltenhub-feature pr_url= pr_urls=https://github.com/acme/repo-a/pull/101,https://github.com/acme/repo-b/pull/202")
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	if got, want := snap.Tasks[0].PRURL, "https://github.com/acme/repo-a/pull/101"; got != want {
+		t.Fatalf("task.PRURL = %q, want %q", got, want)
+	}
+}
+
 func TestBrokerFallsBackToSingleRepoWhenReposFieldMissing(t *testing.T) {
 	t.Parallel()
 
