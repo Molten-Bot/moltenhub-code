@@ -299,7 +299,7 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `.prompt-mode-link-icon img {`) {
 		t.Fatalf("expected stylesheet to size dock icon images through shared logo styles")
 	}
-	if !strings.Contains(stylesheet, `.prompt-mode-link-icon svg {`) {
+	if !strings.Contains(stylesheet, ".prompt-mode-link-icon svg,\n.prompt-mode-link-icon .lucide,\n.prompt-mode-link-icon [data-lucide] {") {
 		t.Fatalf("expected stylesheet to size dock svg icons through shared icon styles")
 	}
 	if !strings.Contains(stylesheet, `filter: var(--agent-logo-filter);`) {

@@ -1864,6 +1864,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `<span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true"><i data-lucide="moon" class="theme-toggle-icon-glyph" aria-hidden="true"></i></span>`) {
 		t.Fatalf("expected index html to render a dedicated theme toggle icon slot")
 	}
+	if !strings.Contains(markup, `<span class="prompt-mode-mobile-label" aria-hidden="true">Theme</span>`) {
+		t.Fatalf("expected index html to expose a mobile label for the nav theme selector")
+	}
 	if !strings.Contains(markup, `<span id="theme-toggle-label">Dark</span>`) {
 		t.Fatalf("expected index html to render dark as the initial theme toggle label")
 	}
@@ -2117,6 +2120,23 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".theme-toggle") || !strings.Contains(css, ".theme-toggle-icon") {
 		t.Fatalf("expected stylesheet to include theme toggle styles")
+	}
+	if !strings.Contains(css, ".prompt-mode-mobile-label {\n  display: none;\n}") ||
+		!strings.Contains(css, ".prompt-mode-mobile-label {\n    position: relative;\n    z-index: 1;\n    display: block;") {
+		t.Fatalf("expected stylesheet to expose mobile labels for docked nav controls")
+	}
+	if !strings.Contains(css, ".prompt-mode-link-icon {\n  position: relative;\n  z-index: 1;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 18px;\n  height: 18px;\n  overflow: hidden;\n  border: 0;\n  background: transparent;\n  box-shadow: none;") {
+		t.Fatalf("expected stylesheet to render dock link icons without circular button chrome")
+	}
+	if !strings.Contains(css, ".theme-toggle.theme-toggle-dock .theme-toggle-icon {\n  position: relative;\n  z-index: 1;\n  display: inline-flex;\n  width: 18px;\n  height: 18px;\n  align-items: center;\n  justify-content: center;\n  overflow: hidden;\n  border: 0;\n  background: transparent;\n  box-shadow: none;") {
+		t.Fatalf("expected stylesheet to render dock theme icon without circular button chrome")
+	}
+	if !strings.Contains(css, "--input-background: var(--surface-control-bg-strong);") ||
+		!strings.Contains(css, "--popover: var(--bg-panel-strong);") ||
+		!strings.Contains(css, "background: var(--input-background);") ||
+		!strings.Contains(css, "background: var(--popover);") ||
+		!strings.Contains(css, "outline: 2px solid rgb(var(--hub-running-rgb) / 0.24);") {
+		t.Fatalf("expected emoji picker surfaces to inherit active theme tokens")
 	}
 	if !strings.Contains(css, ".agent-auth-command-box {") ||
 		!strings.Contains(css, ".agent-auth-command-copy svg {") ||
