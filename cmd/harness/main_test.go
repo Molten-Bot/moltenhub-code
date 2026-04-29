@@ -1124,8 +1124,7 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 	bindToken := fakeHubSetupToken("b_")
 
 	var bindCalled bool
-	var syncedHandle string
-	var syncedMetadata bool
+	var profilePatchCalls int
 	var liveCfg hub.InitConfig
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1143,19 +1142,14 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 				t.Fatalf("GET /agents/me token = %q, want %q", got, "agent-resolved")
 			}
 			_, _ = w.Write([]byte(`{"handle":"new-builder","profile":{"display_name":"Molten Builder","emoji":"🔥","profile":"Builds things"}}`))
+		case r.Method == http.MethodPatch && r.URL.Path == "/v1/agents/me/status":
+			_, _ = w.Write([]byte(`{"ok":true}`))
 		case (r.Method == http.MethodPost || r.Method == http.MethodPatch) &&
 			(r.URL.Path == "/v1/agents/me" || r.URL.Path == "/v1/agents/me/metadata"):
 			if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != "agent-resolved" {
 				t.Fatalf("sync token = %q, want %q", got, "agent-resolved")
 			}
-			bodyBytes, _ := io.ReadAll(r.Body)
-			body := string(bodyBytes)
-			if strings.Contains(body, `"handle":"new-builder"`) {
-				syncedHandle = "new-builder"
-			}
-			if strings.Contains(body, `"metadata"`) {
-				syncedMetadata = true
-			}
+			profilePatchCalls++
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
@@ -1190,8 +1184,8 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 	if !bindCalled {
 		t.Fatal("expected bind token flow to be used for new agent setup")
 	}
-	if syncedHandle == "" || !syncedMetadata {
-		t.Fatalf("expected profile sync requests, got handle=%q metadata=%v", syncedHandle, syncedMetadata)
+	if profilePatchCalls != 0 {
+		t.Fatalf("profile patch calls = %d, want 0 when submitted profile matches Hub profile", profilePatchCalls)
 	}
 	if got, want := state.AgentMode, "new"; got != want {
 		t.Fatalf("AgentMode = %q, want %q", got, want)
@@ -1585,7 +1579,7 @@ func TestConfigureHubSetupExistingAgentReturnsLoginVerificationFailure(t *testin
 	}
 }
 
-func TestConfigureHubSetupExistingAgentProfileEditUsesSavedCredentials(t *testing.T) {
+func TestConfigureHubSetupExistingAgentProfileEditSkipsSyncWhenRemoteAlreadyMatches(t *testing.T) {
 	t.Parallel()
 
 	savedToken := fakeHubSetupToken("saved-")
@@ -1602,20 +1596,6 @@ func TestConfigureHubSetupExistingAgentProfileEditUsesSavedCredentials(t *testin
 		switch {
 		case (r.Method == http.MethodPost || r.Method == http.MethodPatch) &&
 			(r.URL.Path == "/v1/agents/me/metadata" || r.URL.Path == "/v1/agents/me"):
-			bodyBytes, _ := io.ReadAll(r.Body)
-			body := string(bodyBytes)
-			if !strings.Contains(body, `"metadata"`) {
-				t.Fatalf("profile sync missing metadata wrapper: %s", body)
-			}
-			if !strings.Contains(body, `"display_name":"Molten Bot"`) {
-				t.Fatalf("profile sync missing display_name: %s", body)
-			}
-			if !strings.Contains(body, `"emoji":"⚙️"`) {
-				t.Fatalf("profile sync missing emoji: %s", body)
-			}
-			if !strings.Contains(body, `"profile":"Owns hub edits"`) {
-				t.Fatalf("profile sync missing profile text: %s", body)
-			}
 			syncCalls++
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
@@ -1656,11 +1636,11 @@ func TestConfigureHubSetupExistingAgentProfileEditUsesSavedCredentials(t *testin
 	if err != nil {
 		t.Fatalf("configureHubSetup() error = %v", err)
 	}
-	if syncCalls == 0 {
-		t.Fatal("expected profile sync request when editing with saved credentials")
+	if syncCalls != 0 {
+		t.Fatalf("profile sync requests = %d, want 0 when submitted profile already matches Hub profile", syncCalls)
 	}
 	if profileGets == 0 {
-		t.Fatal("expected profile lookup after sync")
+		t.Fatal("expected profile lookup before deciding whether to sync")
 	}
 	if got, want := state.Profile.DisplayName, "Molten Bot"; got != want {
 		t.Fatalf("DisplayName = %q, want %q", got, want)

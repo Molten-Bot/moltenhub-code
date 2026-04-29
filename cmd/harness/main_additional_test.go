@@ -626,6 +626,8 @@ func TestConfigureHubSetupTracksCompletedOnboardingSteps(t *testing.T) {
 			_, _ = w.Write([]byte(`{"agent_token":"agent_bound"}`))
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
 			_, _ = w.Write([]byte(`{"handle":"saved-agent","profile":{"display_name":"Saved Agent","emoji":"🔥","profile":"Ships onboarding"}}`))
+		case r.Method == http.MethodPatch && r.URL.Path == "/v1/agents/me/status":
+			_, _ = w.Write([]byte(`{"ok":true}`))
 		case (r.Method == http.MethodPatch || r.Method == http.MethodPost) &&
 			(r.URL.Path == "/v1/agents/me" || r.URL.Path == "/v1/agents/me/metadata"):
 			_, _ = w.Write([]byte(`{"ok":true}`))
