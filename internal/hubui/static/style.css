@@ -4876,11 +4876,19 @@ html.pink {
     0 2px 8px rgba(0, 0, 0, 0.25),
     0 12px 40px rgba(0, 0, 0, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.03);
-  --glass-icon-bg: rgba(255, 255, 255, 0.7);
-  --glass-icon-border: rgba(255, 255, 255, 0.8);
+  --glass-icon-bg: rgba(82, 31, 59, 0.82);
+  --glass-icon-border: rgba(244, 114, 182, 0.28);
   --glass-icon-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.06),
-    0 4px 12px rgba(0, 0, 0, 0.04);
+    0 1px 3px rgba(10, 2, 7, 0.28),
+    0 4px 12px rgba(10, 2, 7, 0.18);
+  --btn-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.4),
+    0 4px 12px rgba(236, 72, 153, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --btn-shadow-hover:
+    0 2px 6px rgba(0, 0, 0, 0.45),
+    0 8px 24px rgba(236, 72, 153, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   --theme-dock-border: rgba(244, 114, 182, 0.36);
   --theme-dock-bg: linear-gradient(180deg, rgba(55, 20, 40, 0.95), rgba(36, 13, 27, 0.94));
   --theme-dock-shadow:
@@ -4895,7 +4903,7 @@ html.pink {
   --theme-button-text: #ffe4f1;
   --theme-button-meta: #e7a4c7;
   --theme-button-focus:
-    inset 0 1px 0 rgba(255, 255, 255, 0.025),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
     0 0 0 3px rgba(236, 72, 153, 0.24);
   --task-icon-contrast-filter: brightness(0) saturate(100%) invert(1);
   --agent-logo-filter: brightness(0) saturate(100%) invert(1);
