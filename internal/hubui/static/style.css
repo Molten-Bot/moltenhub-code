@@ -1926,6 +1926,16 @@ select.prompt-control {
   line-height: 1.6;
 }
 
+.task-empty-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0 0 0 18px;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .task-empty-chips {
   display: flex;
   flex-wrap: wrap;
