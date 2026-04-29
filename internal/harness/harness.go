@@ -59,6 +59,7 @@ const (
 	bootstrapGitUserEmail            = "bot@molten.bot"
 	bootstrapMainCommitMessage       = "chore: initialize main branch"
 	agentsCredentialGuardInstruction = "YOU ARE NOT ALLOWED TO SHARE: GITHUB PAT and YOUR (AGENTS) AUTH CREDENTIALS"
+	prCommentScreenshotsRelDir       = ".moltenhub/pr-comment-screenshots"
 	publishRemoteOrigin              = "origin"
 	publishRemoteFork                = "fork"
 	publishStrategyDirect            = "direct"
@@ -395,6 +396,13 @@ func (h Harness) processChangedRepo(
 	if _, err := h.runCommand(ctx, "git", addCommand(repo.Dir)); err != nil {
 		return ExitGit, "git", err
 	}
+	if screenshotFiles, err := prCommentScreenshotFiles(repo.Dir); err != nil {
+		return ExitGit, "git", err
+	} else if len(screenshotFiles) > 0 {
+		if _, err := h.runCommand(ctx, "git", addPRCommentScreenshotsCommand(repo.Dir)); err != nil {
+			return ExitGit, "git", err
+		}
+	}
 	commitRes, commitErr := h.runCommand(ctx, "git", commitCommand(repo.Dir, cfg.CommitMessage))
 	if commitErr != nil {
 		noChanges, statusErr := h.refreshRepoChangeStateAfterNoOpCommit(ctx, repo, commitRes, commitErr)
@@ -469,6 +477,15 @@ func (h Harness) processChangedRepo(
 		}
 	}
 	h.logf("stage=pr status=ok repo=%s repo_dir=%s pr_url=%s", repo.URL, repo.RelDir, repo.PRURL)
+	if err := h.commentPRScreenshots(ctx, *repo); err != nil {
+		h.logf(
+			"stage=pr status=warn action=comment_screenshots repo=%s repo_dir=%s pr_url=%s err=%q",
+			repo.URL,
+			repo.RelDir,
+			repo.PRURL,
+			err,
+		)
+	}
 
 	for attempt := 0; ; attempt++ {
 		var (
@@ -1610,6 +1627,13 @@ func (h Harness) repoHasPendingChanges(
 	statusStdout string,
 ) (bool, error) {
 	if hasTrackedWorktreeChanges(statusStdout) || hasAheadCommitsInStatus(statusStdout) {
+		return true, nil
+	}
+	screenshotFiles, err := prCommentScreenshotFiles(repo.Dir)
+	if err != nil {
+		return false, err
+	}
+	if len(screenshotFiles) > 0 {
 		return true, nil
 	}
 	// `git status --porcelain --branch` should include a branch header.
@@ -3650,6 +3674,10 @@ func addCommand(repoDir string) execx.Command {
 	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"add", "-A"}}
 }
 
+func addPRCommentScreenshotsCommand(repoDir string) execx.Command {
+	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"add", "-f", "--", prCommentScreenshotsRelDir}}
+}
+
 func commitCommand(repoDir, msg string) execx.Command {
 	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"commit", "-m", msg}}
 }
@@ -3736,6 +3764,135 @@ func appendPRReviewers(args []string, reviewers []string) []string {
 		args = append(args, "--reviewer", normalized)
 	}
 	return args
+}
+
+func (h Harness) commentPRScreenshots(ctx context.Context, repo repoWorkspace) error {
+	files, err := prCommentScreenshotFiles(repo.Dir)
+	if err != nil {
+		return err
+	}
+	if len(files) == 0 {
+		return nil
+	}
+
+	body, err := prCommentScreenshotsBody(repo.PRURL, repo.PRHeadOwner, repo.Branch, files)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(body) == "" {
+		return nil
+	}
+
+	_, err = h.runCommand(ctx, "pr", prCommentCommand(repo.Dir, repo.PRURL, body))
+	return err
+}
+
+func prCommentScreenshotFiles(repoDir string) ([]string, error) {
+	root := filepath.Join(repoDir, prCommentScreenshotsRelDir)
+	if st, err := os.Stat(root); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("stat PR screenshot directory: %w", err)
+	} else if !st.IsDir() {
+		return nil, fmt.Errorf("PR screenshot path is not a directory: %s", prCommentScreenshotsRelDir)
+	}
+
+	var files []string
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(entry.Name()))
+		switch ext {
+		case ".png", ".jpg", ".jpeg":
+		default:
+			return nil
+		}
+		rel, err := filepath.Rel(repoDir, path)
+		if err != nil {
+			return err
+		}
+		files = append(files, filepath.ToSlash(rel))
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list PR screenshots: %w", err)
+	}
+	sort.Strings(files)
+	return files, nil
+}
+
+func prCommentScreenshotsBody(prURL, headOwner, branch string, files []string) (string, error) {
+	owner, repo, ok := parseGitHubPRRepo(prURL)
+	if !ok {
+		return "", fmt.Errorf("parse GitHub pull request URL for screenshot comment: %s", prURL)
+	}
+	if override := strings.TrimSpace(headOwner); override != "" {
+		owner = override
+	}
+	branch = strings.TrimSpace(branch)
+	if branch == "" {
+		return "", fmt.Errorf("branch is required for screenshot comment links")
+	}
+
+	var b strings.Builder
+	b.WriteString("Automated screenshots captured during the run.\n\n")
+	for _, file := range files {
+		file = strings.TrimSpace(filepath.ToSlash(file))
+		if file == "" {
+			continue
+		}
+		rawURL := rawGitHubFileURL(owner, repo, branch, file)
+		b.WriteString(fmt.Sprintf("### %s\n\n![%s](%s)\n\n", file, file, rawURL))
+	}
+	return strings.TrimSpace(b.String()), nil
+}
+
+func parseGitHubPRRepo(raw string) (owner, repo string, ok bool) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return "", "", false
+	}
+	if !strings.EqualFold(parsed.Hostname(), "github.com") {
+		return "", "", false
+	}
+	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	if len(parts) < 4 || parts[2] != "pull" {
+		return "", "", false
+	}
+	owner = strings.TrimSpace(parts[0])
+	repo = strings.TrimSpace(parts[1])
+	return owner, repo, owner != "" && repo != ""
+}
+
+func rawGitHubFileURL(owner, repo, branch, path string) string {
+	return fmt.Sprintf(
+		"https://raw.githubusercontent.com/%s/%s/%s/%s",
+		url.PathEscape(owner),
+		url.PathEscape(repo),
+		url.PathEscape(branch),
+		escapePathSegments(path),
+	)
+}
+
+func escapePathSegments(path string) string {
+	parts := strings.Split(filepath.ToSlash(path), "/")
+	for i, part := range parts {
+		parts[i] = url.PathEscape(part)
+	}
+	return strings.Join(parts, "/")
+}
+
+func prCommentCommand(repoDir, prURL, body string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: []string{"pr", "comment", prURL, "--body", body},
+	}
 }
 
 func prCreateCommand(repoDir string, cfg config.Config, branch string) execx.Command {

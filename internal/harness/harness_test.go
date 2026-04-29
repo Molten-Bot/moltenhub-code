@@ -3052,6 +3052,17 @@ func TestCommandBuilders(t *testing.T) {
 		t.Fatalf("pr without base args should omit none reviewer sentinel: %v", prNoBaseReviewer.Args)
 	}
 
+	prComment := prCommentCommand(repoDir, "https://github.com/acme/repo/pull/42", "body")
+	wantComment := []string{"pr", "comment", "https://github.com/acme/repo/pull/42", "--body", "body"}
+	if prComment.Name != "gh" || prComment.Dir != repoDir || !reflect.DeepEqual(prComment.Args, wantComment) {
+		t.Fatalf("pr comment command unexpected: %+v", prComment)
+	}
+	addScreenshots := addPRCommentScreenshotsCommand(repoDir)
+	wantAddScreenshots := []string{"add", "-f", "--", ".moltenhub/pr-comment-screenshots"}
+	if addScreenshots.Name != "git" || addScreenshots.Dir != repoDir || !reflect.DeepEqual(addScreenshots.Args, wantAddScreenshots) {
+		t.Fatalf("add PR comment screenshots command unexpected: %+v", addScreenshots)
+	}
+
 	prLookup := prLookupByHeadCommand(repoDir, branch)
 	wantLookup := []string{"pr", "list", "--state", "open", "--head", branch, "--json", "url", "--limit", "1"}
 	if prLookup.Name != "gh" || prLookup.Dir != repoDir || !reflect.DeepEqual(prLookup.Args, wantLookup) {
@@ -3200,6 +3211,107 @@ func TestCommandBuilders(t *testing.T) {
 	remoteSetURL := gitRemoteSetURLCommand(repoDir, "fork", "git@github.com:octocat/repo.git")
 	if remoteSetURL.Name != "git" || remoteSetURL.Dir != repoDir || !reflect.DeepEqual(remoteSetURL.Args, []string{"remote", "set-url", "fork", "git@github.com:octocat/repo.git"}) {
 		t.Fatalf("git remote set-url command unexpected: %+v", remoteSetURL)
+	}
+}
+
+func TestPRCommentScreenshotFilesFindsImagesInHandoffDirectory(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	root := filepath.Join(repoDir, prCommentScreenshotsRelDir)
+	if err := os.MkdirAll(filepath.Join(root, "nested"), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	for _, rel := range []string{
+		"after.png",
+		"before.JPG",
+		filepath.Join("nested", "app.jpeg"),
+		"notes.txt",
+	} {
+		path := filepath.Join(root, rel)
+		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+			t.Fatalf("WriteFile(%s) error = %v", rel, err)
+		}
+	}
+
+	files, err := prCommentScreenshotFiles(repoDir)
+	if err != nil {
+		t.Fatalf("prCommentScreenshotFiles() error = %v", err)
+	}
+	want := []string{
+		".moltenhub/pr-comment-screenshots/after.png",
+		".moltenhub/pr-comment-screenshots/before.JPG",
+		".moltenhub/pr-comment-screenshots/nested/app.jpeg",
+	}
+	if !reflect.DeepEqual(files, want) {
+		t.Fatalf("files = %#v, want %#v", files, want)
+	}
+}
+
+func TestRepoHasPendingChangesTreatsScreenshotHandoffAsChange(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	root := filepath.Join(repoDir, prCommentScreenshotsRelDir)
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "after.png"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	changed, err := New(nil).repoHasPendingChanges(context.Background(), repoWorkspace{
+		Dir:              repoDir,
+		CreateWorkBranch: true,
+		BaseBranch:       "main",
+	}, "## moltenhub-validation\n")
+	if err != nil {
+		t.Fatalf("repoHasPendingChanges() error = %v", err)
+	}
+	if !changed {
+		t.Fatal("repoHasPendingChanges() = false, want true")
+	}
+}
+
+func TestPRCommentScreenshotsBodyBuildsRawImageLinks(t *testing.T) {
+	t.Parallel()
+
+	body, err := prCommentScreenshotsBody(
+		"https://github.com/acme/repo/pull/42",
+		"",
+		"moltenhub-pink",
+		[]string{".moltenhub/pr-comment-screenshots/before shot.png"},
+	)
+	if err != nil {
+		t.Fatalf("prCommentScreenshotsBody() error = %v", err)
+	}
+	for _, want := range []string{
+		"Automated screenshots captured during the run.",
+		"### .moltenhub/pr-comment-screenshots/before shot.png",
+		"![.moltenhub/pr-comment-screenshots/before shot.png]",
+		"https://raw.githubusercontent.com/acme/repo/moltenhub-pink/.moltenhub/pr-comment-screenshots/before%20shot.png",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestPRCommentScreenshotsBodyUsesForkHeadOwner(t *testing.T) {
+	t.Parallel()
+
+	body, err := prCommentScreenshotsBody(
+		"https://github.com/acme/repo/pull/42",
+		"octocat",
+		"moltenhub-pink",
+		[]string{".moltenhub/pr-comment-screenshots/after.png"},
+	)
+	if err != nil {
+		t.Fatalf("prCommentScreenshotsBody() error = %v", err)
+	}
+	want := "https://raw.githubusercontent.com/octocat/repo/moltenhub-pink/.moltenhub/pr-comment-screenshots/after.png"
+	if !strings.Contains(body, want) {
+		t.Fatalf("body missing fork raw URL %q:\n%s", want, body)
 	}
 }
 
