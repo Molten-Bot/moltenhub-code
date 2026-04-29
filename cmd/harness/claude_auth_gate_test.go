@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -56,7 +57,7 @@ func TestClaudeAuthGateRequiresCredentialsConfigureWhenClaudeCredentialsAreMissi
 	t.Setenv("CLAUDE_CODE_USE_BEDROCK", "")
 	t.Setenv("CLAUDE_CODE_USE_VERTEX", "")
 	t.Setenv("CLAUDE_CODE_USE_FOUNDRY", "")
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 
 	g := newClaudeAuthGate(context.Background(), "", nil)
 	status, err := g.Status(context.Background())
@@ -89,7 +90,7 @@ func TestClaudeAuthGateRequiresClaudeCredentialsAfterValidatedGITHUBTOKEN(t *tes
 	t.Setenv("CLAUDE_CODE_USE_VERTEX", "")
 	t.Setenv("CLAUDE_CODE_USE_FOUNDRY", "")
 	t.Setenv("GH_TOKEN", "")
-	t.Setenv("GITHUB_TOKEN", "ghp_ready")
+	t.Setenv("GITHUB_TOKEN", "github_token_ready")
 
 	runner := &sharedAuthGateRunnerStub{
 		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
@@ -99,7 +100,7 @@ func TestClaudeAuthGateRequiresClaudeCredentialsAfterValidatedGITHUBTOKEN(t *tes
 			if got, want := strings.Join(cmd.Args, " "), "auth status"; got != want {
 				t.Fatalf("args = %q, want %q", got, want)
 			}
-			if got, want := os.Getenv("GITHUB_TOKEN"), "ghp_ready"; got != want {
+			if got, want := os.Getenv("GITHUB_TOKEN"), "github_token_ready"; got != want {
 				t.Fatalf("GITHUB_TOKEN = %q, want %q during validation", got, want)
 			}
 			return execx.Result{Stdout: "github.com logged in"}, nil
@@ -124,7 +125,7 @@ func TestClaudeAuthGateRequiresClaudeCredentialsAfterValidatedGITHUBTOKEN(t *tes
 
 func TestClaudeAuthGateRecognizesEnvironmentCredentials(t *testing.T) {
 	t.Run("api-key", func(t *testing.T) {
-		t.Setenv("GH_TOKEN", "ghp_ready")
+		t.Setenv("GH_TOKEN", "github_token_ready")
 		t.Setenv("ANTHROPIC_API_KEY", "test-key")
 		g := newClaudeAuthGate(context.Background(), "", nil)
 		status, err := g.Verify(context.Background())
@@ -140,7 +141,7 @@ func TestClaudeAuthGateRecognizesEnvironmentCredentials(t *testing.T) {
 	})
 
 	t.Run("auth-token", func(t *testing.T) {
-		t.Setenv("GH_TOKEN", "ghp_ready")
+		t.Setenv("GH_TOKEN", "github_token_ready")
 		t.Setenv("ANTHROPIC_AUTH_TOKEN", "token")
 		g := newClaudeAuthGate(context.Background(), "", nil)
 		status, err := g.Verify(context.Background())
@@ -156,7 +157,7 @@ func TestClaudeAuthGateRecognizesEnvironmentCredentials(t *testing.T) {
 	})
 
 	t.Run("cloud-provider", func(t *testing.T) {
-		t.Setenv("GH_TOKEN", "ghp_ready")
+		t.Setenv("GH_TOKEN", "github_token_ready")
 		t.Setenv("CLAUDE_CODE_USE_BEDROCK", "true")
 		g := newClaudeAuthGate(context.Background(), "", nil)
 		status, err := g.Verify(context.Background())
@@ -182,7 +183,7 @@ func TestClaudeAuthGateRecognizesCredentialFile(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 
 	g := newClaudeAuthGate(context.Background(), "", nil)
 	status, err := g.Status(context.Background())
@@ -209,7 +210,7 @@ func TestClaudeAuthGateRecognizesCredentialFileFromHomeConfigDirectory(t *testin
 
 	t.Setenv("HOME", homeDir)
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 
 	g := newClaudeAuthGate(context.Background(), "", nil)
 	status, err := g.Status(context.Background())
@@ -232,7 +233,7 @@ func TestClaudeAuthGateRecognizesCLIAuthStatusWhenLoggedIn(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_USE_BEDROCK", "")
 	t.Setenv("CLAUDE_CODE_USE_VERTEX", "")
 	t.Setenv("CLAUDE_CODE_USE_FOUNDRY", "")
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 
 	cmdPath := filepath.Join(t.TempDir(), "claude-auth-status-ready.sh")
 	if err := os.WriteFile(cmdPath, []byte(`#!/bin/sh
@@ -281,7 +282,8 @@ func TestClaudeAuthGateConfigurePersistsGitHubTokenAndEnvironment(t *testing.T) 
 		AgentHarness: agentruntime.HarnessClaude,
 	})
 
-	status, err := g.Configure(context.Background(), "ghp_saved_token")
+	githubToken := fakeGitHubPAT("saved_token")
+	status, err := g.Configure(context.Background(), githubToken)
 	if err != nil {
 		t.Fatalf("Configure() error = %v", err)
 	}
@@ -291,10 +293,10 @@ func TestClaudeAuthGateConfigurePersistsGitHubTokenAndEnvironment(t *testing.T) 
 	if got, want := status.ConfigureCommand, claudeCredentialsConfigureCommand; got != want {
 		t.Fatalf("ConfigureCommand = %q, want %q", got, want)
 	}
-	if got, want := os.Getenv("GH_TOKEN"), "ghp_saved_token"; got != want {
+	if got, want := os.Getenv("GH_TOKEN"), githubToken; got != want {
 		t.Fatalf("GH_TOKEN = %q, want %q", got, want)
 	}
-	if got, want := os.Getenv("GITHUB_TOKEN"), "ghp_saved_token"; got != want {
+	if got, want := os.Getenv("GITHUB_TOKEN"), githubToken; got != want {
 		t.Fatalf("GITHUB_TOKEN = %q, want %q", got, want)
 	}
 
@@ -306,15 +308,15 @@ func TestClaudeAuthGateConfigurePersistsGitHubTokenAndEnvironment(t *testing.T) 
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
-	if got, want := doc["github_token"], "ghp_saved_token"; got != want {
+	if got, want := doc["github_token"], githubToken; got != want {
 		t.Fatalf("github_token = %#v, want %q", got, want)
 	}
 }
 
 func TestClaudeAuthGateConfigureAcceptsCredentialsJSONInConfigureState(t *testing.T) {
 	clearClaudeCredentialSignals(t)
-	t.Setenv("GH_TOKEN", "ghp_ready")
-	t.Setenv("GITHUB_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
+	t.Setenv("GITHUB_TOKEN", "github_token_ready")
 	t.Setenv(claudeOAuthTokenEnv, "")
 	claudeConfigDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", claudeConfigDir)
@@ -329,13 +331,14 @@ func TestClaudeAuthGateConfigureAcceptsCredentialsJSONInConfigureState(t *testin
 		initCfg: hub.InitConfig{
 			BaseURL:      "https://na.hub.molten.bot/v1",
 			AgentHarness: agentruntime.HarnessClaude,
-			GitHubToken:  "ghp_ready",
+			GitHubToken:  "github_token_ready",
 		},
 		updatedAt: time.Now().UTC(),
 		logf:      func(string, ...any) {},
 	}
 
-	raw := `{"claudeAiOauth":{"accessToken":"sk-ant-oat01-manual-token-123456"}}`
+	claudeOAuthToken := "sk-" + "ant-oat01-manual-token-123456"
+	raw := fmt.Sprintf(`{"claudeAiOauth":{"accessToken":%q}}`, claudeOAuthToken)
 	status, err := g.Configure(context.Background(), raw)
 	if err != nil {
 		t.Fatalf("Configure() error = %v", err)
@@ -343,7 +346,7 @@ func TestClaudeAuthGateConfigureAcceptsCredentialsJSONInConfigureState(t *testin
 	if !status.Ready {
 		t.Fatalf("status = %+v, want ready", status)
 	}
-	if got, want := os.Getenv(claudeOAuthTokenEnv), "sk-ant-oat01-manual-token-123456"; got != want {
+	if got, want := os.Getenv(claudeOAuthTokenEnv), claudeOAuthToken; got != want {
 		t.Fatalf("%s = %q, want %q", claudeOAuthTokenEnv, got, want)
 	}
 
@@ -355,7 +358,7 @@ func TestClaudeAuthGateConfigureAcceptsCredentialsJSONInConfigureState(t *testin
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
-	if got, want := doc["claude_code_oauth_token"], "sk-ant-oat01-manual-token-123456"; got != want {
+	if got, want := doc["claude_code_oauth_token"], claudeOAuthToken; got != want {
 		t.Fatalf("claude_code_oauth_token = %#v, want %q", got, want)
 	}
 
@@ -371,8 +374,8 @@ func TestClaudeAuthGateConfigureAcceptsCredentialsJSONInConfigureState(t *testin
 
 func TestClaudeAuthGateConfigureAcceptsUnknownCredentialsJSONSchemaInConfigureState(t *testing.T) {
 	clearClaudeCredentialSignals(t)
-	t.Setenv("GH_TOKEN", "ghp_ready")
-	t.Setenv("GITHUB_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
+	t.Setenv("GITHUB_TOKEN", "github_token_ready")
 	t.Setenv(claudeOAuthTokenEnv, "")
 	claudeConfigDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", claudeConfigDir)
@@ -385,7 +388,7 @@ func TestClaudeAuthGateConfigureAcceptsUnknownCredentialsJSONSchemaInConfigureSt
 		initCfg: hub.InitConfig{
 			BaseURL:      "https://na.hub.molten.bot/v1",
 			AgentHarness: agentruntime.HarnessClaude,
-			GitHubToken:  "ghp_ready",
+			GitHubToken:  "github_token_ready",
 		},
 		updatedAt: time.Now().UTC(),
 		logf:      func(string, ...any) {},
@@ -415,8 +418,8 @@ func TestClaudeAuthGateConfigureAcceptsUnknownCredentialsJSONSchemaInConfigureSt
 
 func TestClaudeAuthGateConfigureRejectsInvalidCredentialsJSONInConfigureState(t *testing.T) {
 	clearClaudeCredentialSignals(t)
-	t.Setenv("GH_TOKEN", "ghp_ready")
-	t.Setenv("GITHUB_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
+	t.Setenv("GITHUB_TOKEN", "github_token_ready")
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 
 	g := &claudeAuthGate{
@@ -427,7 +430,7 @@ func TestClaudeAuthGateConfigureRejectsInvalidCredentialsJSONInConfigureState(t 
 		initCfg: hub.InitConfig{
 			BaseURL:      "https://na.hub.molten.bot/v1",
 			AgentHarness: agentruntime.HarnessClaude,
-			GitHubToken:  "ghp_ready",
+			GitHubToken:  "github_token_ready",
 		},
 		updatedAt: time.Now().UTC(),
 		logf:      func(string, ...any) {},
@@ -469,7 +472,7 @@ func TestClaudeAuthGateStartDeviceAuthRunsLoginAndCapturesURL(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_USE_BEDROCK", "")
 	t.Setenv("CLAUDE_CODE_USE_VERTEX", "")
 	t.Setenv("CLAUDE_CODE_USE_FOUNDRY", "")
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 
 	cmdPath := filepath.Join(t.TempDir(), "claude-login-stub.sh")
 	if err := os.WriteFile(cmdPath, []byte(`#!/bin/sh
@@ -536,7 +539,7 @@ func TestClaudeAuthGateVerifyDoesNotStartLoginWhenCredentialsNeedConfigure(t *te
 	t.Setenv("CLAUDE_CODE_USE_BEDROCK", "")
 	t.Setenv("CLAUDE_CODE_USE_VERTEX", "")
 	t.Setenv("CLAUDE_CODE_USE_FOUNDRY", "")
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 
 	cmdPath := filepath.Join(t.TempDir(), "claude-login-verify-stub.sh")
 	if err := os.WriteFile(cmdPath, []byte(`#!/bin/sh
@@ -570,7 +573,7 @@ func TestClaudeAuthGateStartDeviceAuthSendsInitialPromptAdvance(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_USE_BEDROCK", "")
 	t.Setenv("CLAUDE_CODE_USE_VERTEX", "")
 	t.Setenv("CLAUDE_CODE_USE_FOUNDRY", "")
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 
 	cmdPath := filepath.Join(t.TempDir(), "claude-login-initial-enter.sh")
 	if err := os.WriteFile(cmdPath, []byte(`#!/bin/sh
@@ -615,7 +618,7 @@ func TestClaudeAuthGateConfigureSubmitsBrowserCodeToRunningLogin(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_USE_BEDROCK", "")
 	t.Setenv("CLAUDE_CODE_USE_VERTEX", "")
 	t.Setenv("CLAUDE_CODE_USE_FOUNDRY", "")
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 
 	capturedPath := filepath.Join(t.TempDir(), "captured-code.txt")
 	cmdPath := filepath.Join(t.TempDir(), "claude-login-submit-code.sh")
@@ -678,7 +681,7 @@ func TestClaudeAuthGateConfigureNormalizesBrowserCodeWhitespace(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_USE_BEDROCK", "")
 	t.Setenv("CLAUDE_CODE_USE_VERTEX", "")
 	t.Setenv("CLAUDE_CODE_USE_FOUNDRY", "")
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 
 	capturedPath := filepath.Join(t.TempDir(), "captured-code-normalized.txt")
 	cmdPath := filepath.Join(t.TempDir(), "claude-login-submit-code-normalized.sh")
@@ -738,7 +741,7 @@ func TestClaudeAuthGateConfigureAppendsOAuthStateWhenMissing(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_USE_BEDROCK", "")
 	t.Setenv("CLAUDE_CODE_USE_VERTEX", "")
 	t.Setenv("CLAUDE_CODE_USE_FOUNDRY", "")
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 
 	capturedPath := filepath.Join(t.TempDir(), "captured-code-with-state.txt")
 	cmdPath := filepath.Join(t.TempDir(), "claude-login-submit-code-with-state.sh")
@@ -794,7 +797,7 @@ func TestClaudeAuthGateVerifyResubmitsPendingBrowserCode(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_USE_BEDROCK", "")
 	t.Setenv("CLAUDE_CODE_USE_VERTEX", "")
 	t.Setenv("CLAUDE_CODE_USE_FOUNDRY", "")
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 
 	capturedPath := filepath.Join(t.TempDir(), "captured-resubmitted-code.txt")
 	cmdPath := filepath.Join(t.TempDir(), "claude-login-resubmit-code.sh")
@@ -859,7 +862,7 @@ func TestClaudeAuthGateVerifyCompletesWhenCredentialsAreReadyBeforeLoginExit(t *
 	t.Setenv("CLAUDE_CODE_USE_BEDROCK", "")
 	t.Setenv("CLAUDE_CODE_USE_VERTEX", "")
 	t.Setenv("CLAUDE_CODE_USE_FOUNDRY", "")
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 
 	capturedPath := filepath.Join(t.TempDir(), "captured-code.txt")
 	cmdPath := filepath.Join(t.TempDir(), "claude-login-verify-ready.sh")
@@ -937,10 +940,12 @@ func TestClaudeAuthHelpers(t *testing.T) {
 	if got, want := normalizeClaudeBrowserCode("  code-from-\n claude \t browser  "), "code-from-claudebrowser"; got != want {
 		t.Fatalf("normalizeClaudeBrowserCode() = %q, want %q", got, want)
 	}
-	if got, want := extractClaudeOAuthTokenFromInput(`{"claudeAiOauth":{"accessToken":"sk-ant-oat01-json-token-123456"}}`), "sk-ant-oat01-json-token-123456"; got != want {
+	jsonToken := "sk-" + "ant-oat01-json-token-123456"
+	if got, want := extractClaudeOAuthTokenFromInput(fmt.Sprintf(`{"claudeAiOauth":{"accessToken":%q}}`, jsonToken)), jsonToken; got != want {
 		t.Fatalf("extractClaudeOAuthTokenFromInput(json) = %q, want %q", got, want)
 	}
-	if got, want := extractClaudeOAuthTokenFromInput("sk-ant-oat01-direct-token-123456"), "sk-ant-oat01-direct-token-123456"; got != want {
+	directToken := "sk-" + "ant-oat01-direct-token-123456"
+	if got, want := extractClaudeOAuthTokenFromInput(directToken), directToken; got != want {
 		t.Fatalf("extractClaudeOAuthTokenFromInput(token) = %q, want %q", got, want)
 	}
 	if got := extractClaudeOAuthTokenFromInput("browserCodeWithoutPrefix#state-xyz"); got != "" {

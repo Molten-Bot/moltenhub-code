@@ -22,7 +22,7 @@ import (
 func TestHandleHubSetupStatusAndConfigure(t *testing.T) {
 	t.Parallel()
 
-	const token = "f9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+	token := "test_" + strings.Repeat("x", 35)
 
 	srv := NewServer("", NewBroker())
 	srv.HubSetupStatus = func(context.Context) (HubSetupState, error) {
@@ -751,7 +751,7 @@ func TestAgentAuthConfigureEndpointAcceptsGitHubTokenPayload(t *testing.T) {
 
 	srv := NewServer("", NewBroker())
 	srv.ConfigureAgentAuth = func(_ context.Context, value string) (AgentAuthState, error) {
-		if got, want := strings.TrimSpace(value), "ghp_saved_token"; got != want {
+		if got, want := strings.TrimSpace(value), "github_token_saved_token"; got != want {
 			t.Fatalf("configure value = %q, want %q", got, want)
 		}
 		return AgentAuthState{
@@ -769,7 +769,7 @@ func TestAgentAuthConfigureEndpointAcceptsGitHubTokenPayload(t *testing.T) {
 	resp, err := http.Post(
 		ts.URL+"/api/agent-auth/configure",
 		"application/json",
-		bytes.NewBufferString(`{"github_token":"ghp_saved_token"}`),
+		bytes.NewBufferString(`{"github_token":"github_token_saved_token"}`),
 	)
 	if err != nil {
 		t.Fatalf("POST /api/agent-auth/configure error = %v", err)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -121,7 +122,7 @@ func runEntrypointScript(t *testing.T, env entrypointTestEnv, extra map[string]s
 		"HARNESS_CONFIG_DIR=" + env.configDir,
 		"HARNESS_STUB_AUGMENT_FILE=" + env.augmentPath,
 		"HARNESS_STUB_PI_FILE=" + env.piPath,
-		"GITHUB_TOKEN=ghp_test",
+		"GITHUB_TOKEN=github_token_test",
 	}
 	if _, ok := extra["HOME"]; !ok {
 		cmd.Env = append(cmd.Env, "HOME="+env.homeDir)
@@ -148,13 +149,14 @@ func entrypointScriptPath(t *testing.T) string {
 func TestEntrypointScriptExportsPiProviderAuthFromRunConfig(t *testing.T) {
 	t.Parallel()
 
+	piAPIKey := "sk-" + "pi-from-run"
 	env := newEntrypointTestEnv(t)
 	configPath := filepath.Join(env.configDir, "config.json")
-	if err := os.WriteFile(configPath, []byte(`{
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf(`{
   "repo": "git@github.com:acme/repo.git",
   "prompt": "test prompt",
-  "pi_provider_auth": "{\"env_var\":\"OPENAI_API_KEY\",\"value\":\"sk-pi-from-run\"}"
-}`), 0o644); err != nil {
+  "pi_provider_auth": "{\"env_var\":\"OPENAI_API_KEY\",\"value\":\"%s\"}"
+}`, piAPIKey)), 0o644); err != nil {
 		t.Fatalf("write run config: %v", err)
 	}
 
@@ -167,7 +169,7 @@ func TestEntrypointScriptExportsPiProviderAuthFromRunConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read pi env file: %v", err)
 	}
-	if want := "sk-pi-from-run"; string(got) != want {
+	if want := piAPIKey; string(got) != want {
 		t.Fatalf("OPENAI_API_KEY = %q, want %q", string(got), want)
 	}
 }

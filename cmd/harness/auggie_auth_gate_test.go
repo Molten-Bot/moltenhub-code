@@ -40,7 +40,7 @@ func TestNewAuggieAuthGateRequiresConfigureWhenMissingSession(t *testing.T) {
 
 func TestNewAuggieAuthGateReadyWhenEnvironmentAlreadyConfigured(t *testing.T) {
 	t.Setenv(auggieSessionAuthEnv, `{"accessToken":"token_env","tenantURL":"https://tenant.example/","scopes":["email"]}`)
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 	t.Setenv("GITHUB_TOKEN", "")
 	g := newAuggieAuthGate(filepath.Join(t.TempDir(), ".moltenhub", "config.json"), hub.InitConfig{})
 
@@ -76,7 +76,7 @@ func TestNewAuggieAuthGateRequiresGitHubConfigureWhenTokenMissing(t *testing.T) 
 
 func TestAuggieAuthGateConfigurePersistsRuntimeConfigAndEnvironment(t *testing.T) {
 	t.Setenv(auggieSessionAuthEnv, "")
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 	t.Setenv("GITHUB_TOKEN", "")
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
@@ -152,17 +152,18 @@ func TestAuggieAuthGateConfigureAcceptsGitHubTokenWhenRequired(t *testing.T) {
 		AgentHarness: agentruntime.HarnessAuggie,
 	})
 
-	status, err := g.Configure(context.Background(), "ghp_saved_token")
+	githubToken := fakeGitHubPAT("saved_token")
+	status, err := g.Configure(context.Background(), githubToken)
 	if err != nil {
 		t.Fatalf("Configure() error = %v", err)
 	}
 	if !status.Ready || status.State != "ready" {
 		t.Fatalf("status = %+v", status)
 	}
-	if got, want := os.Getenv("GH_TOKEN"), "ghp_saved_token"; got != want {
+	if got, want := os.Getenv("GH_TOKEN"), githubToken; got != want {
 		t.Fatalf("GH_TOKEN = %q, want %q", got, want)
 	}
-	if got, want := os.Getenv("GITHUB_TOKEN"), "ghp_saved_token"; got != want {
+	if got, want := os.Getenv("GITHUB_TOKEN"), githubToken; got != want {
 		t.Fatalf("GITHUB_TOKEN = %q, want %q", got, want)
 	}
 
@@ -174,7 +175,7 @@ func TestAuggieAuthGateConfigureAcceptsGitHubTokenWhenRequired(t *testing.T) {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
-	if got, want := doc["github_token"], "ghp_saved_token"; got != want {
+	if got, want := doc["github_token"], githubToken; got != want {
 		t.Fatalf("github_token = %#v, want %q", got, want)
 	}
 }

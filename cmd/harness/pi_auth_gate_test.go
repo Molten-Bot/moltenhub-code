@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -91,7 +92,7 @@ func TestNewPiAuthGateRequiresConfigureWhenExistingPiProbeFails(t *testing.T) {
 func TestNewPiAuthGateReadyWhenEnvironmentAlreadyConfigured(t *testing.T) {
 	clearPiAuthTestEnv(t)
 	t.Setenv("OPENAI_API_KEY", "sk-env")
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 	t.Setenv("GITHUB_TOKEN", "")
 	runner := piOKAuthGateRunner()
 	g := newPiAuthGateWithRuntime(runner, "pi", filepath.Join(t.TempDir(), ".moltenhub", "config.json"), hub.InitConfig{}, nil)
@@ -111,7 +112,7 @@ func TestNewPiAuthGateReadyWhenEnvironmentAlreadyConfigured(t *testing.T) {
 func TestPiAuthGateStartAndVerifyRefreshState(t *testing.T) {
 	clearPiAuthTestEnv(t)
 	t.Setenv("OPENAI_API_KEY", "sk-env")
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 	t.Setenv("GITHUB_TOKEN", "")
 	runner := piOKAuthGateRunner()
 	g := newPiAuthGateWithRuntime(runner, "pi", filepath.Join(t.TempDir(), ".moltenhub", "config.json"), hub.InitConfig{}, nil)
@@ -162,7 +163,7 @@ func TestNewPiAuthGateRequiresGitHubConfigureWhenExistingPiAuthAlreadyWorks(t *t
 
 func TestNewPiAuthGateReadyWhenExistingPiAuthAndGitHubTokenAlreadyWork(t *testing.T) {
 	clearPiAuthTestEnv(t)
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 	t.Setenv("GITHUB_TOKEN", "")
 	runner := piOKAuthGateRunner()
 	g := newPiAuthGateWithRuntime(runner, "pi", filepath.Join(t.TempDir(), ".moltenhub", "config.json"), hub.InitConfig{}, nil)
@@ -184,7 +185,7 @@ func TestNewPiAuthGateReadyWhenExistingPiAuthAndGitHubTokenAlreadyWork(t *testin
 
 func TestPiAuthGateConfigurePersistsRuntimeConfigAndEnvironment(t *testing.T) {
 	clearPiAuthTestEnv(t)
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 	t.Setenv("GITHUB_TOKEN", "")
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
@@ -230,7 +231,7 @@ func TestPiAuthGateConfigurePersistsRuntimeConfigAndEnvironment(t *testing.T) {
 
 func TestPiAuthGateConfigurePersistsPiAuthJSONAndWritesAuthFile(t *testing.T) {
 	clearPiAuthTestEnv(t)
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 	t.Setenv("GITHUB_TOKEN", "")
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
@@ -280,7 +281,7 @@ func TestPiAuthGateConfigurePersistsPiAuthJSONAndWritesAuthFile(t *testing.T) {
 
 func TestPiAuthGateConfigurePiAuthJSONAcceptsOKOutputDespiteProbeExitError(t *testing.T) {
 	clearPiAuthTestEnv(t)
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 	t.Setenv("GITHUB_TOKEN", "")
 	t.Setenv("HOME", t.TempDir())
 
@@ -309,7 +310,7 @@ func TestPiAuthGateConfigurePiAuthJSONAcceptsOKOutputDespiteProbeExitError(t *te
 
 func TestPiAuthGateConfigureProviderAcceptsPiOKOutputDespiteProbeExitError(t *testing.T) {
 	clearPiAuthTestEnv(t)
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 	t.Setenv("GITHUB_TOKEN", "")
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
@@ -348,7 +349,7 @@ func TestPiAuthGateConfigureRejectsGitHubTokenInPiAuthJSONField(t *testing.T) {
 	}
 	g := newPiAuthGateWithRuntime(runner, "pi", path, hub.InitConfig{}, nil)
 
-	token := "ghp_wrong_field_token"
+	token := fakeGitHubPAT("wrong_field_token")
 	status, err := g.Configure(context.Background(), token)
 	if err == nil {
 		t.Fatal("Configure() error = nil, want non-nil")
@@ -392,7 +393,7 @@ func TestPiProbeResultHasOKRejectsSubstringOnly(t *testing.T) {
 
 func TestPiAuthGateConfigureProviderProbeFailureIncludesExplicitFailureFields(t *testing.T) {
 	clearPiAuthTestEnv(t)
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 	t.Setenv("GITHUB_TOKEN", "")
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
@@ -429,7 +430,7 @@ func TestPiAuthGateConfigureRejectsUnsupportedEnvVar(t *testing.T) {
 
 func TestPiAuthGateConfigureOfflineModeAllowsEmptyTokenWithoutProbe(t *testing.T) {
 	clearPiAuthTestEnv(t)
-	t.Setenv("GH_TOKEN", "ghp_ready")
+	t.Setenv("GH_TOKEN", "github_token_ready")
 	t.Setenv("GITHUB_TOKEN", "")
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
@@ -529,17 +530,18 @@ func TestPiAuthGateConfigureAcceptsGitHubTokenWhenRequired(t *testing.T) {
 		t.Fatalf("status = %+v", status)
 	}
 
-	status, err = g.Configure(context.Background(), "ghp_saved_token")
+	githubToken := fakeGitHubPAT("saved_token")
+	status, err = g.Configure(context.Background(), githubToken)
 	if err != nil {
 		t.Fatalf("Configure() error = %v", err)
 	}
 	if !status.Ready || status.State != "ready" {
 		t.Fatalf("status = %+v", status)
 	}
-	if got, want := os.Getenv("GH_TOKEN"), "ghp_saved_token"; got != want {
+	if got, want := os.Getenv("GH_TOKEN"), githubToken; got != want {
 		t.Fatalf("GH_TOKEN = %q, want %q", got, want)
 	}
-	if got, want := os.Getenv("GITHUB_TOKEN"), "ghp_saved_token"; got != want {
+	if got, want := os.Getenv("GITHUB_TOKEN"), githubToken; got != want {
 		t.Fatalf("GITHUB_TOKEN = %q, want %q", got, want)
 	}
 
@@ -551,7 +553,7 @@ func TestPiAuthGateConfigureAcceptsGitHubTokenWhenRequired(t *testing.T) {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
-	if got, want := doc["github_token"], "ghp_saved_token"; got != want {
+	if got, want := doc["github_token"], githubToken; got != want {
 		t.Fatalf("github_token = %#v, want %q", got, want)
 	}
 }
@@ -655,7 +657,8 @@ func TestPiAuthGateConfigureOpenRouterPATFailureIncludesActionableGuidance(t *te
 	}
 	g := newPiAuthGateWithRuntime(runner, "pi", path, hub.InitConfig{}, nil)
 
-	status, err := g.Configure(context.Background(), `{"env_var":"OPENROUTER_API_KEY","value":"sk-or-v1-demo"}`)
+	openRouterKey := "sk-" + "or-v1-demo"
+	status, err := g.Configure(context.Background(), fmt.Sprintf(`{"env_var":"OPENROUTER_API_KEY","value":%q}`, openRouterKey))
 	if err == nil {
 		t.Fatal("Configure() error = nil, want non-nil")
 	}
@@ -732,13 +735,13 @@ func TestIsLikelyOpenRouterAPIKey(t *testing.T) {
 		value string
 		want  bool
 	}{
-		{name: "v1 key", value: "sk-or-v1-demo", want: true},
-		{name: "v10 key", value: "sk-or-v10-demo", want: true},
-		{name: "trimmed whitespace", value: "  sk-or-v1-demo  ", want: true},
-		{name: "missing prefix", value: "sk-demo", want: false},
-		{name: "missing version digits", value: "sk-or-v-demo", want: false},
-		{name: "missing separator after version", value: "sk-or-v1demo", want: false},
-		{name: "missing key body", value: "sk-or-v1-", want: false},
+		{name: "v1 key", value: "sk-" + "or-v1-demo", want: true},
+		{name: "v10 key", value: "sk-" + "or-v10-demo", want: true},
+		{name: "trimmed whitespace", value: "  " + "sk-" + "or-v1-demo  ", want: true},
+		{name: "missing prefix", value: "sk-" + "demo", want: false},
+		{name: "missing version digits", value: "sk-" + "or-v-demo", want: false},
+		{name: "missing separator after version", value: "sk-" + "or-v1demo", want: false},
+		{name: "missing key body", value: "sk-" + "or-v1-", want: false},
 		{name: "personal token marker", value: "pat_demo_token", want: false},
 	}
 

@@ -11,7 +11,7 @@ For product details, see [molten.bot/code](https://molten.bot/code).
 ```bash
 mkdir -p ./.moltenhub
 docker run --rm -p 7777:7777 \
-  -e GITHUB_TOKEN=ghp_your_token \
+  -e GITHUB_TOKEN \
   -v "$PWD/.moltenhub:/workspace/config" \
   moltenai/moltenhub-code:latest
 ```

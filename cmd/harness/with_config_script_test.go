@@ -156,7 +156,7 @@ func TestWithConfigScriptBuildsInitFromEnvGitHubTokenAndAgentRuntime(t *testing.
 	generatedInitPath := filepath.Join(env.root, "generated", "init.json")
 	output, err := runWithConfigScript(t, env, map[string]string{
 		"MOLTEN_HUB_TOKEN":            "hub_token_123",
-		"GITHUB_TOKEN":                "ghp_env_token",
+		"GITHUB_TOKEN":                "github_token_env_token",
 		"HARNESS_AGENT_HARNESS":       "claude",
 		"HARNESS_AGENT_COMMAND":       "claude-custom",
 		"HARNESS_GENERATED_INIT_PATH": generatedInitPath,
@@ -170,7 +170,7 @@ func TestWithConfigScriptBuildsInitFromEnvGitHubTokenAndAgentRuntime(t *testing.
 	if err := json.Unmarshal([]byte(initJSON), &parsed); err != nil {
 		t.Fatalf("parse generated init json: %v", err)
 	}
-	if got, want := parsed["github_token"], "ghp_env_token"; got != want {
+	if got, want := parsed["github_token"], "github_token_env_token"; got != want {
 		t.Fatalf("github_token = %q, want %q", got, want)
 	}
 	if got, want := parsed["agent_harness"], "claude"; got != want {

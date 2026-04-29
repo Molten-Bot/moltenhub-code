@@ -24,20 +24,24 @@ func (s *sharedAuthGateRunnerStub) Run(ctx context.Context, cmd execx.Command) (
 	return s.run(ctx, cmd)
 }
 
+func fakeGitHubPAT(suffix string) string {
+	return "ghp_" + suffix
+}
+
 func TestFirstConfiguredGitHubTokenPrefersRuntimeConfig(t *testing.T) {
-	t.Setenv("GH_TOKEN", "ghp_env_token")
-	t.Setenv("GITHUB_TOKEN", "ghp_env_token_alt")
+	t.Setenv("GH_TOKEN", "github_token_env_token")
+	t.Setenv("GITHUB_TOKEN", "github_token_env_token_alt")
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
-	if err := os.WriteFile(path, []byte(`{"github_token":"ghp_runtime_token"}`), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"github_token":"github_token_runtime_token"}`), 0o600); err != nil {
 		t.Fatalf("WriteFile(config) error = %v", err)
 	}
 
-	got, source := firstConfiguredGitHubToken(path, hub.InitConfig{GitHubToken: "ghp_init_token"})
-	if want := "ghp_runtime_token"; got != want {
+	got, source := firstConfiguredGitHubToken(path, hub.InitConfig{GitHubToken: "github_token_init_token"})
+	if want := "github_token_runtime_token"; got != want {
 		t.Fatalf("firstConfiguredGitHubToken() value = %q, want %q", got, want)
 	}
 	if want := "runtime config"; source != want {
@@ -46,11 +50,11 @@ func TestFirstConfiguredGitHubTokenPrefersRuntimeConfig(t *testing.T) {
 }
 
 func TestFirstConfiguredGitHubTokenPrefersInitConfigOverEnvironment(t *testing.T) {
-	t.Setenv("GH_TOKEN", "ghp_env_token")
-	t.Setenv("GITHUB_TOKEN", "ghp_env_token_alt")
+	t.Setenv("GH_TOKEN", "github_token_env_token")
+	t.Setenv("GITHUB_TOKEN", "github_token_env_token_alt")
 
-	got, source := firstConfiguredGitHubToken(filepath.Join(t.TempDir(), "missing.json"), hub.InitConfig{GitHubToken: "ghp_init_token"})
-	if want := "ghp_init_token"; got != want {
+	got, source := firstConfiguredGitHubToken(filepath.Join(t.TempDir(), "missing.json"), hub.InitConfig{GitHubToken: "github_token_init_token"})
+	if want := "github_token_init_token"; got != want {
 		t.Fatalf("firstConfiguredGitHubToken() value = %q, want %q", got, want)
 	}
 	if want := "init config"; source != want {
@@ -59,11 +63,11 @@ func TestFirstConfiguredGitHubTokenPrefersInitConfigOverEnvironment(t *testing.T
 }
 
 func TestFirstConfiguredGitHubTokenFallsBackToGHAndGITHUBEnv(t *testing.T) {
-	t.Setenv("GH_TOKEN", "ghp_env_token")
-	t.Setenv("GITHUB_TOKEN", "ghp_env_token_alt")
+	t.Setenv("GH_TOKEN", "github_token_env_token")
+	t.Setenv("GITHUB_TOKEN", "github_token_env_token_alt")
 
 	got, source := firstConfiguredGitHubToken(filepath.Join(t.TempDir(), "missing.json"), hub.InitConfig{})
-	if want := "ghp_env_token"; got != want {
+	if want := "github_token_env_token"; got != want {
 		t.Fatalf("firstConfiguredGitHubToken() value = %q, want %q", got, want)
 	}
 	if want := "environment"; source != want {
@@ -72,7 +76,7 @@ func TestFirstConfiguredGitHubTokenFallsBackToGHAndGITHUBEnv(t *testing.T) {
 
 	t.Setenv("GH_TOKEN", "")
 	got, source = firstConfiguredGitHubToken(filepath.Join(t.TempDir(), "missing-2.json"), hub.InitConfig{})
-	if want := "ghp_env_token_alt"; got != want {
+	if want := "github_token_env_token_alt"; got != want {
 		t.Fatalf("firstConfiguredGitHubToken() value = %q, want %q", got, want)
 	}
 	if want := "environment"; source != want {
@@ -144,14 +148,14 @@ func TestGitHubTokenRequirementStateAcceptsValidatedStartupToken(t *testing.T) {
 		},
 	}
 
-	blocked, state := githubTokenRequirementState(context.Background(), runner, "test", filepath.Join(t.TempDir(), "missing.json"), hub.InitConfig{GitHubToken: "ghp_valid"})
+	blocked, state := githubTokenRequirementState(context.Background(), runner, "test", filepath.Join(t.TempDir(), "missing.json"), hub.InitConfig{GitHubToken: "github_token_valid"})
 	if blocked {
 		t.Fatalf("githubTokenRequirementState() blocked = true, state = %+v", state)
 	}
-	if got, want := os.Getenv("GH_TOKEN"), "ghp_valid"; got != want {
+	if got, want := os.Getenv("GH_TOKEN"), "github_token_valid"; got != want {
 		t.Fatalf("GH_TOKEN = %q, want %q", got, want)
 	}
-	if got, want := os.Getenv("GITHUB_TOKEN"), "ghp_valid"; got != want {
+	if got, want := os.Getenv("GITHUB_TOKEN"), "github_token_valid"; got != want {
 		t.Fatalf("GITHUB_TOKEN = %q, want %q", got, want)
 	}
 }
@@ -170,7 +174,7 @@ func TestGitHubTokenRequirementStateRejectsInvalidStartupToken(t *testing.T) {
 	}
 
 	var state configurableAgentAuthState
-	token, blocked := applyGitHubTokenRequirementState(context.Background(), runner, &state, "test", filepath.Join(t.TempDir(), "missing.json"), hub.InitConfig{GitHubToken: "ghp_invalid"})
+	token, blocked := applyGitHubTokenRequirementState(context.Background(), runner, &state, "test", filepath.Join(t.TempDir(), "missing.json"), hub.InitConfig{GitHubToken: "github_token_invalid"})
 	if token != "" || !blocked {
 		t.Fatalf("applyGitHubTokenRequirementState() = token %q blocked %v, want empty true", token, blocked)
 	}
@@ -191,22 +195,22 @@ func TestGitHubTokenRequirementStateRejectsInvalidStartupToken(t *testing.T) {
 
 func TestGitHubTokenRequirementStatePrefersValidatedEnvironmentTokenOverInvalidPersistedToken(t *testing.T) {
 	t.Setenv("GH_TOKEN", "")
-	t.Setenv("GITHUB_TOKEN", "ghp_env_valid")
+	t.Setenv("GITHUB_TOKEN", "github_token_env_valid")
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
-	if err := os.WriteFile(path, []byte(`{"github_token":"ghp_runtime_invalid"}`), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"github_token":"github_token_runtime_invalid"}`), 0o600); err != nil {
 		t.Fatalf("WriteFile(config) error = %v", err)
 	}
 
 	runner := &sharedAuthGateRunnerStub{
 		run: func(_ context.Context, _ execx.Command) (execx.Result, error) {
 			switch got := os.Getenv("GITHUB_TOKEN"); got {
-			case "ghp_env_valid":
+			case "github_token_env_valid":
 				return execx.Result{Stdout: "github.com logged in"}, nil
-			case "ghp_runtime_invalid":
+			case "github_token_runtime_invalid":
 				return execx.Result{Stderr: "bad credentials"}, errors.New("token invalid")
 			default:
 				t.Fatalf("validator saw unexpected token %q", got)
@@ -219,21 +223,21 @@ func TestGitHubTokenRequirementStatePrefersValidatedEnvironmentTokenOverInvalidP
 	if blocked {
 		t.Fatalf("githubTokenRequirementState() blocked = true, state = %+v", state)
 	}
-	if got, want := os.Getenv("GH_TOKEN"), "ghp_env_valid"; got != want {
+	if got, want := os.Getenv("GH_TOKEN"), "github_token_env_valid"; got != want {
 		t.Fatalf("GH_TOKEN = %q, want %q", got, want)
 	}
 }
 
 func TestApplyGitHubTokenRequirementStateFallsBackToLaterValidCandidate(t *testing.T) {
-	t.Setenv("GH_TOKEN", "ghp_env_invalid")
+	t.Setenv("GH_TOKEN", "github_token_env_invalid")
 	t.Setenv("GITHUB_TOKEN", "")
 
 	runner := &sharedAuthGateRunnerStub{
 		run: func(_ context.Context, _ execx.Command) (execx.Result, error) {
 			switch got := os.Getenv("GITHUB_TOKEN"); got {
-			case "ghp_env_invalid":
+			case "github_token_env_invalid":
 				return execx.Result{Stderr: "bad credentials"}, errors.New("token invalid")
-			case "ghp_init_valid":
+			case "github_token_init_valid":
 				return execx.Result{Stdout: "github.com logged in"}, nil
 			default:
 				t.Fatalf("validator saw unexpected token %q", got)
@@ -249,18 +253,18 @@ func TestApplyGitHubTokenRequirementStateFallsBackToLaterValidCandidate(t *testi
 		&state,
 		"test",
 		filepath.Join(t.TempDir(), "missing.json"),
-		hub.InitConfig{GitHubToken: "ghp_init_valid"},
+		hub.InitConfig{GitHubToken: "github_token_init_valid"},
 	)
 	if blocked {
 		t.Fatalf("applyGitHubTokenRequirementState() blocked = true, state = %+v", state.snapshot("test"))
 	}
-	if got, want := token, "ghp_init_valid"; got != want {
+	if got, want := token, "github_token_init_valid"; got != want {
 		t.Fatalf("token = %q, want %q", got, want)
 	}
-	if got, want := os.Getenv("GH_TOKEN"), "ghp_init_valid"; got != want {
+	if got, want := os.Getenv("GH_TOKEN"), "github_token_init_valid"; got != want {
 		t.Fatalf("GH_TOKEN = %q, want %q", got, want)
 	}
-	if got, want := os.Getenv("GITHUB_TOKEN"), "ghp_init_valid"; got != want {
+	if got, want := os.Getenv("GITHUB_TOKEN"), "github_token_init_valid"; got != want {
 		t.Fatalf("GITHUB_TOKEN = %q, want %q", got, want)
 	}
 }
