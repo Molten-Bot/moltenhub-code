@@ -878,7 +878,7 @@
         return;
       }
 
-      const payload = { measurement_id: GOOGLE_ANALYTICS_MEASUREMENT_ID };
+      const payload = { send_to: GOOGLE_ANALYTICS_MEASUREMENT_ID };
       for (const [key, value] of Object.entries(params || {})) {
         if (typeof value === "string") {
           const trimmed = value.trim();
@@ -901,6 +901,25 @@
       } catch (_err) {
         // Keep UI interactions working even if analytics dispatch fails.
       }
+    }
+
+    function agentAuthAnalyticsParams(extra = {}) {
+      return {
+        agent_harness: authHarness(state.agentAuth),
+        auth_state: String(state.agentAuth?.state || "").trim(),
+        ...extra,
+      };
+    }
+
+    function hubSetupAnalyticsParams(extra = {}) {
+      const payload = currentHubSetupPayload();
+      return {
+        agent_mode: payload.agent_mode,
+        token_type: payload.token_type,
+        region: payload.region,
+        dialog_mode: state.hubSetupDialogMode,
+        ...extra,
+      };
     }
 
     function configuredHarnessName() {
@@ -1065,6 +1084,7 @@
       link.appendChild(logo);
       link.addEventListener("click", (event) => {
         event.stopPropagation();
+        trackAnalyticsEvent("task_pull_request_opened", { request_id: taskRequestID(task) });
       });
       return link;
     }
@@ -2232,12 +2252,15 @@
 
       if (themeToggleButton) {
         themeToggleButton.addEventListener("click", () => {
-          applyThemeMode(nextThemeMode(currentThemeMode()), true);
+          const nextTheme = nextThemeMode(currentThemeMode());
+          applyThemeMode(nextTheme, true);
+          trackAnalyticsEvent("theme_changed", { theme: nextTheme });
         });
       }
       if (hoverSelect) {
         hoverSelect.addEventListener("change", () => {
           applyHoverMode(hoverSelect.value, true);
+          trackAnalyticsEvent("hover_mode_changed", { hover_mode: hoverSelect.value });
         });
       }
     }
@@ -2721,13 +2744,13 @@
       const payload = currentHubSetupPayload();
       const requiresToken = !isHubProfileDialogMode();
       if (requiresToken && !payload.token) {
-        trackAnalyticsEvent("hub_setup_validation_failed", { agent_mode: payload.agent_mode });
+        trackAnalyticsEvent("hub_setup_validation_failed", hubSetupAnalyticsParams({ validation_error: "missing_token" }));
         setHubSetupStatus("error", `${payload.agent_mode === "new" ? "Bind" : "Agent"} token is required.`);
         return;
       }
       const tokenValidationMessage = requiresToken ? syncHubTokenValidation() : "";
       if (tokenValidationMessage) {
-        trackAnalyticsEvent("hub_setup_validation_failed", { agent_mode: payload.agent_mode });
+        trackAnalyticsEvent("hub_setup_validation_failed", hubSetupAnalyticsParams({ validation_error: "invalid_token" }));
         setHubSetupStatus("error", tokenValidationMessage);
         if (hubSetupToken && typeof hubSetupToken.reportValidity === "function") {
           hubSetupToken.reportValidity();
@@ -2743,7 +2766,7 @@
         onboardingStage: initialStage,
       }));
       updateHubSetupOnboarding(initialStage, "current");
-      trackAnalyticsEvent("hub_setup_started", { agent_mode: payload.agent_mode, token_type: payload.token_type });
+      trackAnalyticsEvent("hub_setup_started", hubSetupAnalyticsParams({ auto_submit: autoSubmit }));
       setHubSetupStatus("ok", hubSetupStatusMessageForStep(initialStage, "Saving Molten Hub setup..."));
       let body = null;
       try {
@@ -2763,7 +2786,7 @@
         state.hubSetupLastAutoSubmitKey = currentHubSetupAutoSubmitKey();
         applyHubSetupState(body?.hub);
         await loadAgentAuthStatus();
-        trackAnalyticsEvent("hub_setup_succeeded", { agent_mode: payload.agent_mode, token_type: payload.token_type });
+        trackAnalyticsEvent("hub_setup_succeeded", hubSetupAnalyticsParams({ auto_submit: autoSubmit }));
         const successMessage = state.hubSetup.message || "Molten Hub setup saved.";
         setHubSetupStatus("ok", successMessage);
         if (hubSetupToken) {
@@ -2779,7 +2802,7 @@
           }, 420);
         }
       } catch (err) {
-        trackAnalyticsEvent("hub_setup_failed", { agent_mode: payload.agent_mode, token_type: payload.token_type });
+        trackAnalyticsEvent("hub_setup_failed", hubSetupAnalyticsParams({ auto_submit: autoSubmit }));
         state.hubSetupLastAutoSubmitKey = "";
         if (body && body.hub) {
           applyHubSetupState(body.hub);
@@ -2797,6 +2820,7 @@
         return;
       }
       const endpoint = "/api/hub-setup/disconnect";
+      trackAnalyticsEvent("hub_connection_toggle_started", hubSetupAnalyticsParams({ action: "disconnect" }));
       setHubSetupBusy(true);
       setHubSetupStatus("ok", "Disconnecting from Molten Hub...");
       try {
@@ -2824,12 +2848,14 @@
         };
         applyHubSetupState(body?.hub);
         await loadHubSetupStatus();
+        trackAnalyticsEvent("hub_connection_toggle_succeeded", hubSetupAnalyticsParams({ action: "disconnect" }));
         setHubSetupStatus("ok", body?.hub?.message || "Molten Hub disconnected.");
         window.setTimeout(() => {
           state.hubSetupDialogMode = "connect";
           setHubSetupOpen(false);
         }, 420);
       } catch (err) {
+        trackAnalyticsEvent("hub_connection_toggle_failed", hubSetupAnalyticsParams({ action: "disconnect" }));
         setHubSetupStatus("error", err && err.message ? err.message : "Hub disconnect failed.");
       } finally {
         setHubSetupBusy(false);
@@ -2838,6 +2864,7 @@
 
     function openHubConnectPage() {
       const hubURL = state.hubSetup.configured ? state.hubSetup.dashboardURL : state.hubSetup.connectURL;
+      trackAnalyticsEvent("hub_dashboard_opened", { configured: Boolean(state.hubSetup.configured) });
       if (typeof window.open === "function") {
         window.open(hubURL, "_blank", "noopener,noreferrer");
         return;
@@ -2852,7 +2879,9 @@
       if (event) {
         event.preventDefault();
       }
+      trackAnalyticsEvent("hub_connection_clicked", { configured: Boolean(state.hubSetup.configured) });
       if (!state.hubSetup.configured) {
+        trackAnalyticsEvent("hub_setup_opened", { source: "connection_status" });
         setHubSetupOpen(true);
         return;
       }
@@ -3572,6 +3601,7 @@
         preserveContents: true,
         copiedLabel: "Copied device code",
       });
+      trackAnalyticsEvent("agent_auth_code_copied", agentAuthAnalyticsParams());
     }
 
     async function copyAuggieConfigureCommand() {
@@ -3580,6 +3610,7 @@
         preserveContents: true,
         copiedLabel: "Copied configure command",
       });
+      trackAnalyticsEvent("agent_auth_command_copied", agentAuthAnalyticsParams({ copy_type: "configure" }));
     }
 
     async function copyClaudeBrowserPrimaryCommand() {
@@ -3588,6 +3619,7 @@
         preserveContents: true,
         copiedLabel: "Copied Claude credentials command",
       });
+      trackAnalyticsEvent("agent_auth_command_copied", agentAuthAnalyticsParams({ copy_type: "claude_primary" }));
     }
 
     async function copyClaudeBrowserSecondaryCommand() {
@@ -3596,6 +3628,7 @@
         preserveContents: true,
         copiedLabel: "Copied Claude credentials command",
       });
+      trackAnalyticsEvent("agent_auth_command_copied", agentAuthAnalyticsParams({ copy_type: "claude_secondary" }));
     }
 
     async function copyTextToClipboard(value, buttonNode, options = {}) {
@@ -3784,10 +3817,13 @@
     async function startAgentDeviceAuth() {
       setAgentAuthVerifyPending(false);
       setAgentAuthBusy(true);
+      trackAnalyticsEvent("agent_auth_device_started", agentAuthAnalyticsParams());
       try {
         const auth = await requestAgentAuth("/api/agent-auth/start-device", "POST");
         applyAgentAuthGate(auth);
+        trackAnalyticsEvent("agent_auth_device_succeeded", agentAuthAnalyticsParams({ auth_state: auth.state }));
       } catch (err) {
+        trackAnalyticsEvent("agent_auth_device_failed", agentAuthAnalyticsParams());
         const message = err && err.message ? err.message : "device auth start failed";
         setLocalPromptStatus("error", `${currentAgentLabel()} auth start failed: ${message}`);
         return;
@@ -3810,10 +3846,13 @@
       state.agentHarnessSelectionPending = harness;
       renderAgentHarnessSelection(state.agentAuth);
       setAgentAuthBusy(true);
+      trackAnalyticsEvent("agent_harness_select_started", { selected_harness: harness });
       try {
         const auth = await requestAgentAuth("/api/agent-auth/configure", "POST", { value: harness });
         applyAgentAuthGate(auth);
+        trackAnalyticsEvent("agent_harness_select_succeeded", { selected_harness: harness });
       } catch (err) {
+        trackAnalyticsEvent("agent_harness_select_failed", { selected_harness: harness });
         const message = err && err.message ? err.message : "Agent selection failed.";
         state.agentHarnessSelectionPending = "";
         renderAgentHarnessSelection(state.agentAuth);
@@ -3833,6 +3872,7 @@
 
       setAgentAuthVerifyPending(true);
       setAgentAuthBusy(true);
+      trackAnalyticsEvent("agent_auth_configure_started", agentAuthAnalyticsParams({ auth_method: "claude_browser_code" }));
       try {
         const auth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
           claude_auth_code: code,
@@ -3855,7 +3895,9 @@
           scheduleClaudePostSubmitVerifyPolling();
           setLocalPromptStatus("warn", `${currentAgentLabel()} code submitted. Waiting for browser authentication to finish...`);
         }
+        trackAnalyticsEvent("agent_auth_configure_succeeded", agentAuthAnalyticsParams({ auth_method: "claude_browser_code", ready: Boolean(verified.ready) }));
       } catch (err) {
+        trackAnalyticsEvent("agent_auth_configure_failed", agentAuthAnalyticsParams({ auth_method: "claude_browser_code" }));
         const message = err && err.message ? err.message : "Claude code submission failed.";
         stopClaudePostSubmitVerifyPolling();
         setAgentAuthVerifyPending(false);
@@ -3880,6 +3922,7 @@
 
       setAgentAuthVerifyPending(true);
       setAgentAuthBusy(true);
+      trackAnalyticsEvent("agent_auth_configure_started", agentAuthAnalyticsParams({ auth_method: "auggie_session" }));
       try {
         const auth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
           augment_session_auth: normalizedSessionAuth,
@@ -3894,7 +3937,9 @@
         } else {
           setAgentAuthVerifyPending(false);
         }
+        trackAnalyticsEvent("agent_auth_configure_succeeded", agentAuthAnalyticsParams({ auth_method: "auggie_session", ready: Boolean(auth.ready) }));
       } catch (err) {
+        trackAnalyticsEvent("agent_auth_configure_failed", agentAuthAnalyticsParams({ auth_method: "auggie_session" }));
         const message = err && err.message ? err.message : "Auggie auth configure failed.";
         setAgentAuthVerifyPending(false);
         clearAgentAuthConfigureInputIfSensitive();
@@ -3918,6 +3963,7 @@
 
       setAgentAuthVerifyPending(true);
       setAgentAuthBusy(true);
+      trackAnalyticsEvent("agent_auth_configure_started", agentAuthAnalyticsParams({ auth_method: "github_token" }));
       try {
         const auth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
           github_token: token,
@@ -3933,7 +3979,9 @@
         } else {
           setAgentAuthVerifyPending(false);
         }
+        trackAnalyticsEvent("agent_auth_configure_succeeded", agentAuthAnalyticsParams({ auth_method: "github_token", ready: Boolean(auth.ready) }));
       } catch (err) {
+        trackAnalyticsEvent("agent_auth_configure_failed", agentAuthAnalyticsParams({ auth_method: "github_token" }));
         const message = err && err.message ? err.message : "GitHub token configure failed.";
         setAgentAuthVerifyPending(false);
         clearAgentAuthConfigureInputIfSensitive();
@@ -3954,6 +4002,7 @@
 
       setAgentAuthVerifyPending(true);
       setAgentAuthBusy(true);
+      trackAnalyticsEvent("agent_auth_configure_started", agentAuthAnalyticsParams({ auth_method: "claude_credentials" }));
       try {
         const auth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
           value: credentials,
@@ -3968,7 +4017,9 @@
         } else {
           setAgentAuthVerifyPending(false);
         }
+        trackAnalyticsEvent("agent_auth_configure_succeeded", agentAuthAnalyticsParams({ auth_method: "claude_credentials", ready: Boolean(auth.ready) }));
       } catch (err) {
+        trackAnalyticsEvent("agent_auth_configure_failed", agentAuthAnalyticsParams({ auth_method: "claude_credentials" }));
         const message = err && err.message ? err.message : "Claude credentials configure failed.";
         setAgentAuthVerifyPending(false);
         setAuggieConfigureError(message);
@@ -3992,6 +4043,7 @@
 
       setAgentAuthVerifyPending(true);
       setAgentAuthBusy(true);
+      trackAnalyticsEvent("agent_auth_configure_started", agentAuthAnalyticsParams({ auth_method: "pi_auth_json" }));
       try {
         const auth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
           pi_auth_json: authJSON,
@@ -4006,7 +4058,9 @@
         } else {
           setAgentAuthVerifyPending(false);
         }
+        trackAnalyticsEvent("agent_auth_configure_succeeded", agentAuthAnalyticsParams({ auth_method: "pi_auth_json", ready: Boolean(auth.ready) }));
       } catch (err) {
+        trackAnalyticsEvent("agent_auth_configure_failed", agentAuthAnalyticsParams({ auth_method: "pi_auth_json" }));
         const message = err && err.message ? err.message : "PI auth configure failed.";
         setAgentAuthVerifyPending(false);
         clearAgentAuthConfigureInputIfSensitive();
@@ -4021,6 +4075,7 @@
       if (state.agentAuthBusy || (state.agentAuthVerifyPending && !isClaudePendingBrowserLoginState())) {
         return;
       }
+      trackAnalyticsEvent("agent_auth_verify_started", agentAuthAnalyticsParams());
       try {
         markAgentAuthInteraction();
         if (isAuggieConfigureState()) {
@@ -4052,20 +4107,24 @@
           const auth = await requestAgentAuth("/api/agent-auth/verify", "POST");
           applyAgentAuthGate(auth);
           if (auth.ready) {
+            trackAnalyticsEvent("agent_auth_verify_succeeded", agentAuthAnalyticsParams({ auth_state: auth.state }));
             setLocalPromptStatus("ok", `${currentAgentLabel()} auth is ready.`);
           } else if (auth.state === "needs_device_auth") {
+            trackAnalyticsEvent("agent_auth_verify_pending", agentAuthAnalyticsParams({ auth_state: auth.state }));
             setAgentAuthVerifyPending(false);
             if (authHarness(auth) === "codex") {
               setLocalPromptStatus("warn", "Codex auth is required. Open browser auth, then click Done again.");
             }
             await startAgentDeviceAuth();
           } else {
+            trackAnalyticsEvent("agent_auth_verify_pending", agentAuthAnalyticsParams({ auth_state: auth.state }));
             setAgentAuthVerifyPending(false);
             if (authHarness(auth) === "codex") {
               setLocalPromptStatus("warn", "Codex auth is still pending. Complete browser auth, then click Done again.");
             }
           }
         } catch (err) {
+          trackAnalyticsEvent("agent_auth_verify_failed", agentAuthAnalyticsParams());
           const message = err && err.message ? err.message : "device auth verify failed";
           setLocalPromptStatus("error", `${currentAgentLabel()} auth verify failed: ${message}`);
           setAgentAuthVerifyPending(false);
@@ -4074,6 +4133,7 @@
           setAgentAuthBusy(false);
         }
       } catch (err) {
+        trackAnalyticsEvent("agent_auth_verify_failed", agentAuthAnalyticsParams());
         const message = err && err.message ? err.message : "unexpected auth handler error";
         setLocalPromptStatus("error", `${currentAgentLabel()} auth handler failed: ${message}`);
         setAgentAuthVerifyPending(false);
@@ -4582,8 +4642,13 @@
       event.preventDefault();
       try {
         const count = await appendPromptImages(files);
+        trackAnalyticsEvent("prompt_screenshots_attached", {
+          prompt_mode: state.promptMode,
+          image_count: count,
+        });
         setLocalPromptStatus("ok", `Attached ${count} screenshot${count === 1 ? "" : "s"}.`);
       } catch (err) {
+        trackAnalyticsEvent("prompt_screenshots_failed", { prompt_mode: state.promptMode });
         setLocalPromptStatus("error", `Screenshot paste failed: ${err.message}`);
       }
     }
@@ -4694,6 +4759,9 @@
     }
 
     function closeLibraryPromptModal() {
+      if (state.libraryPromptModalOpen) {
+        trackAnalyticsEvent("library_prompt_modal_closed", { prompt_mode: state.promptMode });
+      }
       state.libraryPromptModalOpen = false;
       if (libraryPromptModal) {
         libraryPromptModal.classList.add("hidden");
@@ -4705,6 +4773,10 @@
     function openLibraryPromptModal(entry) {
       if (!libraryPromptModal || !libraryPromptModalTitle || !libraryPromptModalBody) return;
       state.libraryPromptModalOpen = true;
+      trackAnalyticsEvent("library_prompt_modal_opened", {
+        prompt_mode: state.promptMode,
+        library_task: entry.name,
+      });
       libraryPromptModalTitle.textContent = entry.displayName || "Library Prompt";
       libraryPromptModalBody.textContent = entry.prompt || "Prompt unavailable.";
       libraryPromptModal.classList.remove("hidden");
@@ -4772,7 +4844,14 @@
         button.appendChild(subtitle);
 
         button.addEventListener("click", () => {
+          const changed = state.selectedLibraryTask !== entry.name;
           state.selectedLibraryTask = entry.name;
+          if (changed) {
+            trackAnalyticsEvent("library_task_selected", {
+              prompt_mode: state.promptMode,
+              library_task: entry.name,
+            });
+          }
           renderLibraryTaskOptions();
           if (state.promptMode === "json") {
             try {
@@ -5073,6 +5152,10 @@
     }
 
     function clearBuilderPromptDraft() {
+      trackAnalyticsEvent("prompt_draft_cleared", {
+        prompt_mode: state.promptMode,
+        image_count: state.promptImages.length,
+      });
       clearSubmittedPromptState();
       clearReviewerSelection();
       if (state.promptMode === "json") {
@@ -5316,6 +5399,7 @@
       state.promptVisible = !state.promptVisible;
       persistPromptVisibility();
       applyPromptVisibility();
+      trackAnalyticsEvent("prompt_visibility_changed", { visible: state.promptVisible });
     }
 
     function relativeTime(iso) {
@@ -5592,6 +5676,7 @@
         preserveContents: true,
         copiedLabel: "Copied git clone command",
       });
+      trackAnalyticsEvent("task_clone_command_copied", { request_id: taskRequestID(task) });
     }
 
     function taskPromptText(task) {
@@ -6069,6 +6154,7 @@
       }
       persistTaskSoundMuted();
       applyTaskSoundToggleMeta();
+      trackAnalyticsEvent("task_sound_toggled", { muted: state.taskSoundMuted });
     }
 
     function setTaskPanelView(view, options = {}) {
@@ -6173,6 +6259,7 @@
       requestID = String(requestID || "").trim();
       if (!requestID) return;
       state.selectedTaskId = requestID;
+      trackAnalyticsEvent("task_output_opened", { request_id: requestID });
       setTaskFullscreen(true);
     }
 
@@ -6263,6 +6350,7 @@
       close.addEventListener("click", (event) => {
         event.stopPropagation();
         if (historyOnly) {
+          trackAnalyticsEvent("task_history_removed", { request_id: requestID });
           completeTaskDismissal(requestID);
           setLocalPromptStatus("ok", `Removed task ${requestID} from history`);
           return;
@@ -7361,13 +7449,21 @@
         label.textContent = "Open PR";
 
         link.append(logo, label);
+        link.addEventListener("click", () => {
+          trackAnalyticsEvent("task_pull_request_opened", { request_id: taskRequestID(task) });
+        });
         node.appendChild(link);
       }
 
     }
 
     function selectTask(id) {
-      state.selectedTaskId = id || "";
+      const requestID = String(id || "").trim();
+      const changed = state.selectedTaskId !== requestID;
+      state.selectedTaskId = requestID;
+      if (changed && requestID) {
+        trackAnalyticsEvent("task_selected", { request_id: requestID });
+      }
       render(state.snapshot);
     }
 
@@ -8324,6 +8420,7 @@
 
     builderRepoSelect.addEventListener("change", () => {
       const value = normalizeRepoValue(builderRepoSelect.value);
+      trackAnalyticsEvent("repo_history_selected", { prompt_mode: "builder", manual: value === "" });
       builderRepoSelect.dataset.manual = value === "" ? "true" : "false";
       libraryRepoSelect.dataset.manual = value === "" ? "true" : "false";
       if (value) {
@@ -8333,11 +8430,13 @@
       renderRepoHistoryOptions();
     });
     builderRepoDelete.addEventListener("click", () => {
+      trackAnalyticsEvent("repo_history_removed", { prompt_mode: "builder" });
       removeSelectedRepoFromHistory(builderRepoSelect);
     });
 
     libraryRepoSelect.addEventListener("change", () => {
       const value = normalizeRepoValue(libraryRepoSelect.value);
+      trackAnalyticsEvent("repo_history_selected", { prompt_mode: "library", manual: value === "" });
       libraryRepoSelect.dataset.manual = value === "" ? "true" : "false";
       builderRepoSelect.dataset.manual = value === "" ? "true" : "false";
       if (value) {
@@ -8347,12 +8446,17 @@
       renderRepoHistoryOptions();
     });
     libraryRepoDelete.addEventListener("click", () => {
+      trackAnalyticsEvent("repo_history_removed", { prompt_mode: "library" });
       removeSelectedRepoFromHistory(libraryRepoSelect);
     });
 
     builderReviewerSelect.addEventListener("change", () => {
       const rawValue = String(builderReviewerSelect.value || "").trim();
       const value = normalizeReviewerValue(rawValue);
+      trackAnalyticsEvent("reviewer_history_selected", {
+        prompt_mode: "builder",
+        reviewer_mode: rawValue === "none" ? "none" : (value ? "saved" : "manual"),
+      });
       if (rawValue === "none") {
         builderReviewerInput.value = "";
         libraryReviewerInput.value = "";
@@ -8368,12 +8472,17 @@
       renderReviewerHistoryOptions();
     });
     builderReviewerDelete.addEventListener("click", () => {
+      trackAnalyticsEvent("reviewer_history_removed", { prompt_mode: "builder" });
       removeSelectedReviewerFromHistory(builderReviewerSelect);
     });
 
     libraryReviewerSelect.addEventListener("change", () => {
       const rawValue = String(libraryReviewerSelect.value || "").trim();
       const value = normalizeReviewerValue(rawValue);
+      trackAnalyticsEvent("reviewer_history_selected", {
+        prompt_mode: "library",
+        reviewer_mode: rawValue === "none" ? "none" : (value ? "saved" : "manual"),
+      });
       if (rawValue === "none") {
         libraryReviewerInput.value = "";
         builderReviewerInput.value = "";
@@ -8389,6 +8498,7 @@
       renderReviewerHistoryOptions();
     });
     libraryReviewerDelete.addEventListener("click", () => {
+      trackAnalyticsEvent("reviewer_history_removed", { prompt_mode: "library" });
       removeSelectedReviewerFromHistory(libraryReviewerSelect);
     });
 
@@ -8451,7 +8561,10 @@
       syncBaseBranchClearState();
       syncBuilderDraftClearState();
     });
-    builderBaseBranchClear.addEventListener("click", resetBaseBranchToDefault);
+    builderBaseBranchClear.addEventListener("click", () => {
+      trackAnalyticsEvent("base_branch_reset", { prompt_mode: state.promptMode });
+      resetBaseBranchToDefault();
+    });
 
     builderPromptInput.addEventListener("input", syncBuilderDraftClearState);
     builderPromptInput.addEventListener("keydown", submitBuilderPromptOnEnter);
@@ -8468,7 +8581,10 @@
     builderImagesClear.addEventListener("click", clearBuilderPromptDraft);
     localPromptInput.addEventListener("input", syncBuilderDraftClearState);
     if (agentAuthURL) {
-      agentAuthURL.addEventListener("click", markAgentAuthInteraction);
+      agentAuthURL.addEventListener("click", () => {
+        markAgentAuthInteraction();
+        trackAnalyticsEvent("agent_auth_link_opened", agentAuthAnalyticsParams());
+      });
     }
     if (agentAuthCopy) {
       agentAuthCopy.addEventListener("click", copyAgentAuthCode);
@@ -8501,6 +8617,9 @@
           return;
         }
         markAgentAuthInteraction();
+        trackAnalyticsEvent("agent_harness_selected", {
+          selected_harness: String(target.getAttribute("data-agent-harness") || "").trim().toLowerCase(),
+        });
         void configureAgentHarnessSelection(target.getAttribute("data-agent-harness"));
       });
     }
@@ -8540,6 +8659,11 @@
         applyAgentAuthGate(state.agentAuth);
       });
     }
+    if (githubProfileLink) {
+      githubProfileLink.addEventListener("click", () => {
+        trackAnalyticsEvent("github_profile_opened", { source: "dock" });
+      });
+    }
     if (hubConnItem) {
       hubConnItem.addEventListener("click", maybeOpenHubConnectPage);
       hubConnItem.addEventListener("keydown", (event) => {
@@ -8554,10 +8678,12 @@
     if (moltenBotHubLink) {
       moltenBotHubLink.addEventListener("click", (event) => {
         if (state.hubSetup.configured) {
+          trackAnalyticsEvent("hub_dashboard_link_opened", { source: "dock" });
           return;
         }
         event.preventDefault();
         state.hubSetupDialogMode = "connect";
+        trackAnalyticsEvent("hub_setup_opened", { source: "dock" });
         setHubSetupOpen(true);
         applyHubSetupState(currentHubSetupDraft());
         setHubSetupStatus("", "");
@@ -8566,6 +8692,7 @@
     if (moltenBotHubProfileButton) {
       moltenBotHubProfileButton.addEventListener("click", () => {
         state.hubSetupDialogMode = "profile";
+        trackAnalyticsEvent("hub_profile_opened", { source: "dock" });
         setHubSetupOpen(true);
         applyHubSetupState(state.hubSetup);
         setHubSetupStatus("", "");
@@ -8575,6 +8702,7 @@
     if (hubSetupRegionNAToggle) {
       hubSetupRegionNAToggle.addEventListener("click", () => {
         state.hubSetupLastAutoSubmitKey = "";
+        trackAnalyticsEvent("hub_setup_region_changed", { region: "na" });
         applyHubSetupState(currentHubSetupDraft({ region: "na" }));
         scheduleHubSetupAutoSubmit();
       });
@@ -8582,14 +8710,21 @@
     if (hubSetupRegionEUToggle) {
       hubSetupRegionEUToggle.addEventListener("click", () => {
         state.hubSetupLastAutoSubmitKey = "";
+        trackAnalyticsEvent("hub_setup_region_changed", { region: "eu" });
         applyHubSetupState(currentHubSetupDraft({ region: "eu" }));
         scheduleHubSetupAutoSubmit();
       });
     }
     if (hubSetupClose) {
       hubSetupClose.addEventListener("click", () => {
+        trackAnalyticsEvent("hub_setup_closed", { source: "close_button", dialog_mode: state.hubSetupDialogMode });
         setHubSetupOpen(false);
         state.hubSetupDialogMode = "connect";
+      });
+    }
+    if (hubSetupSigninLink) {
+      hubSetupSigninLink.addEventListener("click", () => {
+        trackAnalyticsEvent("hub_setup_signin_opened", { source: "setup_dialog" });
       });
     }
     if (hubSetupForm) {
@@ -8610,6 +8745,7 @@
         if (event.target !== hubSetupGate || state.hubSetupBusy) {
           return;
         }
+        trackAnalyticsEvent("hub_setup_closed", { source: "backdrop", dialog_mode: state.hubSetupDialogMode });
         setHubSetupOpen(false);
         state.hubSetupDialogMode = "connect";
       });
@@ -8679,6 +8815,7 @@
         ? "running"
         : "completed";
       setTaskStatusFilter(nextFilter);
+      trackAnalyticsEvent("task_status_filter_changed", { task_status_filter: nextFilter });
     });
     taskSoundToggle.addEventListener("click", () => {
       toggleTaskSoundMuted();
@@ -8689,12 +8826,16 @@
     taskViewToggle.addEventListener("click", () => {
       const nextView = normalizeTaskPanelView(state.taskPanelView) === "prompt" ? "main" : "prompt";
       setTaskPanelView(nextView);
+      trackAnalyticsEvent("task_view_changed", { task_view: nextView });
     });
     taskFullscreenToggle.addEventListener("click", () => {
-      setTaskFullscreen(!state.taskFullscreenOpen);
+      const nextOpen = !state.taskFullscreenOpen;
+      setTaskFullscreen(nextOpen);
+      trackAnalyticsEvent("task_fullscreen_toggled", { open: nextOpen, source: "button" });
     });
     taskFullscreenClose.addEventListener("click", () => {
       setTaskFullscreen(false);
+      trackAnalyticsEvent("task_fullscreen_toggled", { open: false, source: "close_button" });
     });
     if (libraryPromptModalClose) {
       libraryPromptModalClose.addEventListener("click", closeLibraryPromptModal);
@@ -8715,6 +8856,7 @@
       if (event.key === "Escape" && state.taskFullscreenOpen) {
         event.preventDefault();
         setTaskFullscreen(false);
+        trackAnalyticsEvent("task_fullscreen_toggled", { open: false, source: "escape_key" });
         return;
       }
       if (event.key === "Escape" && state.hubSetupOpen) {
@@ -8725,6 +8867,7 @@
           return;
         }
         event.preventDefault();
+        trackAnalyticsEvent("hub_setup_closed", { source: "escape_key", dialog_mode: state.hubSetupDialogMode });
         setHubSetupOpen(false);
         state.hubSetupDialogMode = "connect";
       }
