@@ -729,7 +729,7 @@
     const TASK_SOUND_MUTED_KEY = "hubui.taskSoundMuted";
     const THEME_KEY = "hubui.theme";
     const HOVER_MODE_KEY = "hubui.hoverMode";
-    const THEME_MODES = ["light", "dark", "night"];
+    const THEME_MODES = ["light", "dark", "night", "pink"];
     const DEFAULT_THEME_MODE = "dark";
     const HOVER_MODES = ["auto", "on", "off"];
     const CLOSE_TASK_FADE_MS = 2000;
@@ -2195,6 +2195,7 @@
       light: "sun",
       dark: "moon",
       night: "star",
+      pink: "heart",
     };
 
     function syncThemeToggle(theme) {
@@ -2217,7 +2218,7 @@
     function applyThemeMode(theme, persist) {
       const normalized = THEME_MODES.includes(theme) ? theme : DEFAULT_THEME_MODE;
       const root = document.documentElement;
-      root.classList.remove("light", "dark", "night");
+      root.classList.remove("light", "dark", "night", "pink");
       root.classList.add(normalized);
       root.setAttribute("data-theme", normalized);
       syncThemeToggle(normalized);

@@ -1808,6 +1808,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="theme-toggle"`) || !strings.Contains(markup, `function nextThemeMode(theme)`) {
 		t.Fatalf("expected index html to include theme toggle control")
 	}
+	if !strings.Contains(markup, `const THEME_MODES = ["light", "dark", "night", "pink"];`) {
+		t.Fatalf("expected index html to include pink in the theme selector cycle")
+	}
 	if !strings.Contains(markup, `const DEFAULT_THEME_MODE = "dark";`) {
 		t.Fatalf("expected index html to define dark as the default theme mode")
 	}
@@ -1871,6 +1874,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `const THEME_ICON_NAMES = {`) {
 		t.Fatalf("expected index html to define theme toggle icons")
+	}
+	if !strings.Contains(markup, `pink: "heart",`) {
+		t.Fatalf("expected index html to define a pink theme icon")
+	}
+	if !strings.Contains(markup, `root.classList.remove("light", "dark", "night", "pink");`) {
+		t.Fatalf("expected index html to remove the pink theme class when switching themes")
 	}
 	if !strings.Contains(markup, "themeToggleButton.setAttribute(\"aria-label\", `Switch theme. Currently: ${currentLabel}`);") {
 		t.Fatalf("expected index html to expose the current theme through the toggle aria-label")
@@ -2134,6 +2143,12 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".theme-toggle:hover { transform: scale(1.04); }") || !strings.Contains(css, ".theme-toggle:active { transform: scale(.96); }") {
 		t.Fatalf("expected stylesheet to include the theme toggle hover and active treatments")
+	}
+	if !strings.Contains(css, `/* Selectable pink theme. */`) || !strings.Contains(css, `html.pink {`) {
+		t.Fatalf("expected stylesheet to include the selectable pink theme")
+	}
+	if !strings.Contains(css, `--primary: #ec4899;`) || !strings.Contains(css, `--accent: #db2777;`) || !strings.Contains(css, `--theme-button-text: #ffe4f1;`) {
+		t.Fatalf("expected stylesheet to define pink theme palette tokens")
 	}
 	if !strings.Contains(css, ".agent-auth-shell {\n  padding: clamp(24px, 3vw, 32px);\n  border: 1px solid var(--surface-auth-panel-border);\n  border-radius: var(--radius-card);\n  background: var(--surface-auth-panel-bg);\n  box-shadow: var(--surface-auth-panel-shadow);\n}") {
 		t.Fatalf("expected stylesheet to render onboarding content inside a readable auth panel")
