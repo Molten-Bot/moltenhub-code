@@ -2682,6 +2682,29 @@ func hubSetupProfileNeedsRemoteHydration(state hubui.HubSetupState) bool {
 		strings.TrimSpace(state.Profile.ProfileText) == ""
 }
 
+func hubSetupProfilesMatch(submitted, remote hub.AgentProfile) bool {
+	if handle := strings.TrimSpace(submitted.Handle); handle != "" && handle != strings.TrimSpace(remote.Handle) {
+		return false
+	}
+	if displayName := strings.TrimSpace(submitted.Profile.DisplayName); displayName != "" && displayName != strings.TrimSpace(remote.Profile.DisplayName) {
+		return false
+	}
+	if emoji := strings.TrimSpace(submitted.Profile.Emoji); emoji != "" && emoji != strings.TrimSpace(remote.Profile.Emoji) {
+		return false
+	}
+	if profileText := strings.TrimSpace(submitted.Profile.ProfileText); profileText != "" && profileText != strings.TrimSpace(remote.Profile.ProfileText) {
+		return false
+	}
+	return true
+}
+
+func hubSetupProfileSubmissionHasValues(profile hub.AgentProfile) bool {
+	return strings.TrimSpace(profile.Handle) != "" ||
+		strings.TrimSpace(profile.Profile.DisplayName) != "" ||
+		strings.TrimSpace(profile.Profile.Emoji) != "" ||
+		strings.TrimSpace(profile.Profile.ProfileText) != ""
+}
+
 func effectiveHubSetupConfig(cfg hub.InitConfig) (hub.InitConfig, error) {
 	activeCfg := cfg
 	activeCfg.ApplyDefaults()
@@ -2783,10 +2806,26 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 	}
 	finalCfg.BaseURL = hubSetupPersistedBaseURL(finalCfg.BaseURL, state.Region)
 	finalCfg.AgentToken = resolvedToken
-	profileUpdateRequested := strings.TrimSpace(state.Handle) != strings.TrimSpace(activeCfg.Handle) ||
-		strings.TrimSpace(state.Profile.ProfileText) != strings.TrimSpace(activeCfg.Profile.ProfileText) ||
-		strings.TrimSpace(state.Profile.DisplayName) != strings.TrimSpace(activeCfg.Profile.DisplayName) ||
-		strings.TrimSpace(state.Profile.Emoji) != strings.TrimSpace(activeCfg.Profile.Emoji)
+
+	submittedProfile := hub.AgentProfile{
+		Handle: strings.TrimSpace(state.Handle),
+		Profile: hub.ProfileConfig{
+			ProfileText: strings.TrimSpace(state.Profile.ProfileText),
+			DisplayName: strings.TrimSpace(state.Profile.DisplayName),
+			Emoji:       strings.TrimSpace(state.Profile.Emoji),
+		},
+	}
+	profileSubmissionHasValues := hubSetupProfileSubmissionHasValues(submittedProfile)
+	var remoteProfile hub.AgentProfile
+	if profileSubmissionHasValues {
+		var err error
+		remoteProfile, err = client.AgentProfile(ctx, resolvedToken)
+		if err != nil {
+			hubSetupMarkStep(&state, "profile_set", "error", err.Error())
+			return state, fmt.Errorf("load hub profile: %w", err)
+		}
+	}
+	profileUpdateRequested := profileSubmissionHasValues && !hubSetupProfilesMatch(submittedProfile, remoteProfile)
 	if profileUpdateRequested {
 		finalCfg.Handle = state.Handle
 		finalCfg.Profile.ProfileText = state.Profile.ProfileText
@@ -2804,23 +2843,30 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 	}
 	hubSetupMarkStep(&state, "work_activate", "current", "")
 
-	// Always read back profile after token resolution so config initialization
-	// stays accurate for first-time binds and re-binds.
-	profile, err := client.AgentProfile(ctx, resolvedToken)
-	if err != nil {
-		hubSetupMarkStep(&state, "work_activate", "error", err.Error())
-		return state, fmt.Errorf("load hub profile: %w", err)
-	}
 	if profileUpdateRequested {
+		// Read back after a profile PATCH so config follows any server-side normalization.
+		profile, err := client.AgentProfile(ctx, resolvedToken)
+		if err != nil {
+			hubSetupMarkStep(&state, "work_activate", "error", err.Error())
+			return state, fmt.Errorf("load hub profile: %w", err)
+		}
 		if strings.TrimSpace(finalCfg.Handle) == "" {
 			finalCfg.Handle = strings.TrimSpace(profile.Handle)
 		}
 		finalCfg.Profile = mergeProfileConfig(finalCfg.Profile, profile.Profile)
 	} else {
-		if strings.TrimSpace(profile.Handle) != "" {
-			finalCfg.Handle = strings.TrimSpace(profile.Handle)
+		if !profileSubmissionHasValues {
+			var err error
+			remoteProfile, err = client.AgentProfile(ctx, resolvedToken)
+			if err != nil {
+				hubSetupMarkStep(&state, "work_activate", "error", err.Error())
+				return state, fmt.Errorf("load hub profile: %w", err)
+			}
 		}
-		finalCfg.Profile = mergeProfileConfig(profile.Profile, finalCfg.Profile)
+		if strings.TrimSpace(remoteProfile.Handle) != "" {
+			finalCfg.Handle = strings.TrimSpace(remoteProfile.Handle)
+		}
+		finalCfg.Profile = mergeProfileConfig(remoteProfile.Profile, finalCfg.Profile)
 	}
 	finalCfg.ApplyDefaults()
 
