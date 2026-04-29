@@ -7620,6 +7620,8 @@
       const emptyEyebrow = String(options.emptyEyebrow || "Queue Ready");
       const emptyTitle = String(options.emptyTitle || "Lets get to work!");
       const emptyCopy = String(options.emptyCopy || "New runs will appear here with their progress, replay controls, local clone actions, and PR links.");
+      const emptyItems = Array.isArray(options.emptyItems) ? options.emptyItems : [];
+      const leadingEmptyState = options.leadingEmptyState || null;
       if (countNode) {
         countNode.textContent = String(tasks.length);
       }
@@ -7643,6 +7645,54 @@
       listNode.dataset.pendingRenderSig = "";
       listNode.replaceChildren();
 
+      const renderEmptyState = (emptyOptions = {}) => {
+        const empty = document.createElement("section");
+        empty.className = "task-empty brand-login-card-shell";
+
+        const badge = document.createElement("div");
+        badge.className = "brand-login-badge task-empty-badge";
+        const badgeLogo = document.createElement("img");
+        badgeLogo.className = "brand-login-badge-logo";
+        badgeLogo.src = MOLTENHUB_LOGO_URL;
+        badgeLogo.alt = "";
+        badgeLogo.setAttribute("aria-hidden", "true");
+        badge.appendChild(badgeLogo);
+
+        const eyebrow = document.createElement("span");
+        eyebrow.className = "task-empty-eyebrow brand-label-uppercase";
+        eyebrow.textContent = String(emptyOptions.eyebrow || emptyEyebrow);
+
+        const title = document.createElement("h3");
+        title.className = "task-empty-title";
+        title.textContent = String(emptyOptions.title || emptyTitle);
+
+        const copy = document.createElement("p");
+        copy.className = "task-empty-copy";
+        copy.textContent = String(emptyOptions.copy || emptyCopy);
+
+        empty.append(badge, eyebrow, title, copy);
+
+        const items = Array.isArray(emptyOptions.items) ? emptyOptions.items : emptyItems;
+        if (items.length) {
+          const list = document.createElement("ul");
+          list.className = "task-empty-list";
+          for (const item of items) {
+            const text = String(item || "").trim();
+            if (!text) {
+              continue;
+            }
+            const row = document.createElement("li");
+            row.textContent = text;
+            list.appendChild(row);
+          }
+          if (list.childElementCount > 0) {
+            empty.appendChild(list);
+          }
+        }
+
+        listNode.appendChild(empty);
+      };
+
       const renderOutputToggle = (requestID) => {
         if (!showOutputAction || !requestID) {
           return null;
@@ -7665,34 +7715,13 @@
       };
 
       if (!tasks.length) {
-        const empty = document.createElement("section");
-        empty.className = "task-empty brand-login-card-shell";
-
-        const badge = document.createElement("div");
-        badge.className = "brand-login-badge task-empty-badge";
-        const badgeLogo = document.createElement("img");
-        badgeLogo.className = "brand-login-badge-logo";
-        badgeLogo.src = MOLTENHUB_LOGO_URL;
-        badgeLogo.alt = "";
-        badgeLogo.setAttribute("aria-hidden", "true");
-        badge.appendChild(badgeLogo);
-
-        const eyebrow = document.createElement("span");
-        eyebrow.className = "task-empty-eyebrow brand-label-uppercase";
-        eyebrow.textContent = emptyEyebrow;
-
-        const title = document.createElement("h3");
-        title.className = "task-empty-title";
-        title.textContent = emptyTitle;
-
-        const copy = document.createElement("p");
-        copy.className = "task-empty-copy";
-        copy.textContent = emptyCopy;
-
-        empty.append(badge, eyebrow, title, copy);
-        listNode.appendChild(empty);
+        renderEmptyState();
         replaceLucideIcons(listNode);
         return;
+      }
+
+      if (leadingEmptyState) {
+        renderEmptyState(leadingEmptyState);
       }
 
       for (const task of tasks) {
@@ -8007,6 +8036,39 @@
       replaceLucideIcons(listNode);
     }
 
+    function runningTaskCelebrationTitle(count) {
+      const safeCount = Math.max(0, Number(count) || 0);
+      const taskWord = safeCount === 1 ? "task" : "tasks";
+      return `Amazing job: ${safeCount} ${taskWord} running.`;
+    }
+
+    function runningTaskCelebrationCopy() {
+      return "No completed tasks yet, but this session already has work in flight.";
+    }
+
+    function runningTaskCelebrationItems(count) {
+      const safeCount = Math.max(0, Number(count) || 0);
+      const taskWord = safeCount === 1 ? "task" : "tasks";
+      return [
+        `Nice momentum. ${safeCount} ${taskWord} moving through the queue.`,
+        "Keep shipping small fixes while results land.",
+        "Queue another focused task when ready.",
+      ];
+    }
+
+    function completedHistoryEmptyState(snapshot) {
+      const runningCount = runningTasks(snapshot).length;
+      if (runningCount <= 0) {
+        return null;
+      }
+      return {
+        eyebrow: "History",
+        title: runningTaskCelebrationTitle(runningCount),
+        copy: runningTaskCelebrationCopy(),
+        items: runningTaskCelebrationItems(runningCount),
+      };
+    }
+
     function renderTasks(snapshot) {
       const tasks = displayTasks(snapshot);
       const hasTasks = tasks.length > 0;
@@ -8039,6 +8101,10 @@
         taskFullscreen.setAttribute("aria-hidden", state.taskFullscreenOpen ? "false" : "true");
       }
       const taskStatusFilter = normalizeTaskStatusFilter(state.taskStatusFilter);
+      const completedCount = completedTasks(snapshot).length;
+      const leadingEmptyState = taskStatusFilter === "completed" && completedCount === 0
+        ? completedHistoryEmptyState(snapshot)
+        : null;
       const emptyEyebrow = promptOnly
         ? "Prompt View"
         : taskStatusFilter === "completed"
@@ -8060,6 +8126,7 @@
         emptyEyebrow,
         emptyTitle,
         emptyCopy,
+        leadingEmptyState,
       });
     }
 
@@ -8073,6 +8140,10 @@
       const tasks = fullscreenTasks(snapshot);
       const promptOnly = normalizeTaskPanelView(state.taskPanelView) === "prompt";
       const taskStatusFilter = normalizeTaskStatusFilter(state.taskStatusFilter);
+      const completedCount = completedTasks(snapshot).length;
+      const leadingEmptyState = taskStatusFilter === "completed" && completedCount === 0
+        ? completedHistoryEmptyState(snapshot)
+        : null;
       const emptyEyebrow = promptOnly
         ? "Prompt View"
         : taskStatusFilter === "completed"
@@ -8096,6 +8167,7 @@
         emptyEyebrow,
         emptyTitle,
         emptyCopy,
+        leadingEmptyState,
       });
     }
 

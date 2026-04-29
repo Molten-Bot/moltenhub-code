@@ -393,7 +393,7 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `.prompt-field-copy {`) {
 		t.Fatalf("expected stylesheet to retain helper copy styles")
 	}
-	if !strings.Contains(stylesheet, `.task-empty {`) || !strings.Contains(stylesheet, `.task-empty-copy {`) {
+	if !strings.Contains(stylesheet, `.task-empty {`) || !strings.Contains(stylesheet, `.task-empty-copy {`) || !strings.Contains(stylesheet, `.task-empty-list {`) {
 		t.Fatalf("expected stylesheet to include the richer task queue empty state styles")
 	}
 }
