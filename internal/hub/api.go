@@ -1443,7 +1443,7 @@ func mergeRuntimeRegistrationMetadata(metadata map[string]any, cfg InitConfig, l
 	metadata["library_task_count"] = len(libraryNames)
 	metadata["library_tasks"] = libraryTasks
 	metadata["skill_catalog"] = buildRuntimeSkillCatalog(cfg.Skill, libraryTasks)
-	metadata["run_config_modes"] = []string{"prompt", "review", "library_task"}
+	metadata["run_config_modes"] = []string{"prompt", "review"}
 	metadata["supports_branch_key"] = true
 }
 
@@ -1463,7 +1463,7 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 		}
 	}
 
-	out := make([]map[string]any, 0, 3)
+	out := make([]map[string]any, 0, 2)
 	out = append(out, map[string]any{
 		"name":        normalizeSkillName(skillCfg.Name),
 		"handle":      normalizeSkillName(skillCfg.Name),
@@ -1491,34 +1491,6 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 		}),
 	})
 
-	libraryTaskDescription := "Runs a checked-in library task by handle."
-	if len(libraryTasks) > 0 {
-		names := make([]string, 0, len(libraryTasks))
-		for _, task := range libraryTasks {
-			name := strings.TrimSpace(task.Name)
-			if name == "" {
-				continue
-			}
-			names = append(names, name)
-		}
-		if len(names) > 0 {
-			libraryTaskDescription = fmt.Sprintf("Runs a checked-in library task by handle. Available handles: %s.", strings.Join(names, ", "))
-		}
-	}
-	out = append(out, map[string]any{
-		"name":        normalizeSkillName(libraryTaskSkillName),
-		"handle":      normalizeSkillName(libraryTaskSkillName),
-		"mode":        "library_task",
-		"displayName": "Library Task",
-		"description": libraryTaskDescription + " Omitted or `default` `responseMode` uses bundled `caveman-full`; set `off` for normal prose.",
-		"activation": buildActivation(libraryTaskSkillName, map[string]any{
-			"repos":           []string{"<git@github.com:owner/repo.git>"},
-			"libraryTaskName": "<library-handle>",
-			"responseMode":    responseModePlaceholder(),
-			"reviewers":       []string{"<githubhandle>"},
-		}),
-	})
-
 	return out
 }
 
@@ -1532,10 +1504,6 @@ func buildSupportedSkillsMetadata() []map[string]any {
 		{
 			"name":        normalizeSkillName(codeReviewSkillName),
 			"description": "Repository code review run that targets the checked-in review workflow. Defaults to `caveman-full`; set `responseMode=off` for normal prose.",
-		},
-		{
-			"name":        normalizeSkillName(libraryTaskSkillName),
-			"description": "Generic library task entrypoint that requires a library task handle. Defaults to `caveman-full`; set `responseMode=off` for normal prose.",
 		},
 	}
 }

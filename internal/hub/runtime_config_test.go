@@ -78,8 +78,8 @@ func TestSaveRuntimeConfigWritesExpectedShape(t *testing.T) {
 	if got.Profile.Harness != runtimeIdentifier {
 		t.Fatalf("Profile.Harness = %q, want %q", got.Profile.Harness, runtimeIdentifier)
 	}
-	if len(got.Profile.Skills) != 3 || got.Profile.Skills[0] != "code_for_me" || got.Profile.Skills[1] != "code_review" || got.Profile.Skills[2] != "library_task" {
-		t.Fatalf("Profile.Skills = %#v, want [code_for_me code_review library_task]", got.Profile.Skills)
+	if len(got.Profile.Skills) != 2 || got.Profile.Skills[0] != "code_for_me" || got.Profile.Skills[1] != "code_review" {
+		t.Fatalf("Profile.Skills = %#v, want [code_for_me code_review]", got.Profile.Skills)
 	}
 	if got.GitHubToken != "github_token_fixture" {
 		t.Fatalf("GitHubToken = %q", got.GitHubToken)

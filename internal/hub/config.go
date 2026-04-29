@@ -220,7 +220,6 @@ func supportedProfileSkills() []string {
 	return []string{
 		normalizeSkillName(defaultRuntimeSkillName),
 		normalizeSkillName(codeReviewSkillName),
-		normalizeSkillName(libraryTaskSkillName),
 	}
 }
 

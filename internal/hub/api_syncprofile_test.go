@@ -108,7 +108,7 @@ func TestSyncProfileUsesAgentMetadataPayload(t *testing.T) {
 		t.Fatalf("metadata.harness = %#v", got)
 	}
 	skills, ok := metadata["skills"].([]any)
-	if !ok || len(skills) != 3 {
+	if !ok || len(skills) != 2 {
 		t.Fatalf("metadata.skills = %#v", metadata["skills"])
 	}
 	firstSkill, ok := skills[0].(map[string]any)
@@ -124,13 +124,6 @@ func TestSyncProfileUsesAgentMetadataPayload(t *testing.T) {
 	}
 	if got := strings.TrimSpace(secondSkill["name"].(string)); got != "code_review" {
 		t.Fatalf("metadata.skills[1].name = %q, want code_review", got)
-	}
-	thirdSkill, ok := skills[2].(map[string]any)
-	if !ok {
-		t.Fatalf("metadata.skills[2] = %#v, want map[string]any", skills[2])
-	}
-	if got := strings.TrimSpace(thirdSkill["name"].(string)); got != "library_task" {
-		t.Fatalf("metadata.skills[2].name = %q, want library_task", got)
 	}
 }
 
