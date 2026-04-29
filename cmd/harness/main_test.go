@@ -34,6 +34,13 @@ func useHubSetupLocationsLoaderForTest(t *testing.T, loader func(context.Context
 	})
 }
 
+func fakeHubSetupToken(prefix string) string {
+	if len(prefix) >= 40 {
+		return prefix
+	}
+	return prefix + strings.Repeat("x", 40-len(prefix))
+}
+
 func TestRunUsageMissingSubcommand(t *testing.T) {
 	orig := os.Args
 	t.Cleanup(func() { os.Args = orig })
@@ -385,7 +392,7 @@ func TestLoadHubBootConfigUsesMoltenHubTokenEnvWhenRuntimeConfigOmitsCredentials
 	t.Setenv("MOLTEN_HUB_REGION", "eu")
 
 	configPath := filepath.Join(t.TempDir(), "config.json")
-	if err := os.WriteFile(configPath, []byte(`{"github_token":"ghp_saved","agent_harness":"codex"}`), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte(`{"github_token":"github_token_saved","agent_harness":"codex"}`), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
 
@@ -402,7 +409,7 @@ func TestLoadHubBootConfigUsesMoltenHubTokenEnvWhenRuntimeConfigOmitsCredentials
 	if got, want := cfg.BaseURL, "https://eu.hub.molten.bot/v1"; got != want {
 		t.Fatalf("BaseURL = %q, want %q", got, want)
 	}
-	if got, want := cfg.GitHubToken, "ghp_saved"; got != want {
+	if got, want := cfg.GitHubToken, "github_token_saved"; got != want {
 		t.Fatalf("GitHubToken = %q, want %q", got, want)
 	}
 }
@@ -410,7 +417,7 @@ func TestLoadHubBootConfigUsesMoltenHubTokenEnvWhenRuntimeConfigOmitsCredentials
 func TestLoadHubBootConfigAppliesEnvTokensToDefaultConfig(t *testing.T) {
 	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
 	t.Setenv("MOLTEN_HUB_TOKEN", "t_env_agent_token")
-	t.Setenv("GITHUB_TOKEN", "ghp_env_token")
+	t.Setenv("GITHUB_TOKEN", "github_token_env_token")
 	t.Setenv("MOLTEN_HUB_REGION", "eu")
 
 	configPath := filepath.Join(t.TempDir(), "missing.json")
@@ -424,7 +431,7 @@ func TestLoadHubBootConfigAppliesEnvTokensToDefaultConfig(t *testing.T) {
 	if got, want := cfg.AgentToken, "t_env_agent_token"; got != want {
 		t.Fatalf("AgentToken = %q, want %q", got, want)
 	}
-	if got, want := cfg.GitHubToken, "ghp_env_token"; got != want {
+	if got, want := cfg.GitHubToken, "github_token_env_token"; got != want {
 		t.Fatalf("GitHubToken = %q, want %q", got, want)
 	}
 	if got, want := cfg.AgentHarness, agentruntime.HarnessCodex; got != want {
@@ -944,7 +951,7 @@ func TestCurrentHubSetupStateUsesStoredBindTokenAsNewAgentMode(t *testing.T) {
 func TestCurrentHubSetupStateWithRemoteProfileHydratesMissingProfileFromHub(t *testing.T) {
 	t.Parallel()
 
-	const savedToken = "z9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+	savedToken := fakeHubSetupToken("saved-")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -1000,7 +1007,7 @@ func TestCurrentHubSetupStateWithRemoteProfileHydratesMissingProfileFromHub(t *t
 func TestCurrentHubSetupStateWithRemoteProfileMergesSplitProfileFields(t *testing.T) {
 	t.Parallel()
 
-	const savedToken = "p9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+	savedToken := fakeHubSetupToken("saved-")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -1059,7 +1066,7 @@ func TestCurrentHubSetupStateWithRemoteProfileMergesSplitProfileFields(t *testin
 func TestCurrentHubSetupStateWithRemoteProfileMergesDirectProfileAndMetadata(t *testing.T) {
 	t.Parallel()
 
-	const savedToken = "q9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+	savedToken := fakeHubSetupToken("saved-")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -1114,7 +1121,7 @@ func TestCurrentHubSetupStateWithRemoteProfileMergesDirectProfileAndMetadata(t *
 func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 	t.Parallel()
 
-	const bindToken = "b_f9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+	bindToken := fakeHubSetupToken("bind-")
 
 	var bindCalled bool
 	var syncedHandle string
@@ -1218,7 +1225,7 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 func TestConfigureHubSetupExistingAgentUsesAgentTokenFlow(t *testing.T) {
 	t.Parallel()
 
-	const agentToken = "t_a9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+	agentToken := fakeHubSetupToken("agent-")
 
 	var getCalls int
 	var onlineCalls int
@@ -1462,7 +1469,7 @@ func TestConfigureHubSetupRejectsUnboundAgentWithoutWritingConfig(t *testing.T) 
 		RuntimeConfigPath: configPath,
 	}, hubui.HubSetupRequest{
 		AgentMode: "existing",
-		Token:     "c9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs",
+		Token:     fakeHubSetupToken("agent-"),
 	}, nil)
 	if err == nil {
 		t.Fatal("configureHubSetup() error = nil, want non-nil")
@@ -1481,7 +1488,7 @@ func TestConfigureHubSetupRejectsUnboundAgentWithoutWritingConfig(t *testing.T) 
 func TestConfigureHubSetupExistingAgentIgnoresStatusUpdateFailuresDuringVerification(t *testing.T) {
 	t.Parallel()
 
-	const agentToken = "c9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+	agentToken := fakeHubSetupToken("agent-")
 
 	var (
 		getCalls    int
@@ -1538,7 +1545,7 @@ func TestConfigureHubSetupExistingAgentIgnoresStatusUpdateFailuresDuringVerifica
 func TestConfigureHubSetupExistingAgentReturnsLoginVerificationFailure(t *testing.T) {
 	t.Parallel()
 
-	const agentToken = "d9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+	agentToken := fakeHubSetupToken("agent-")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -1581,7 +1588,7 @@ func TestConfigureHubSetupExistingAgentReturnsLoginVerificationFailure(t *testin
 func TestConfigureHubSetupExistingAgentProfileEditUsesSavedCredentials(t *testing.T) {
 	t.Parallel()
 
-	const savedToken = "e9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+	savedToken := fakeHubSetupToken("saved-")
 
 	var (
 		syncCalls   int
@@ -1669,7 +1676,7 @@ func TestConfigureHubSetupExistingAgentProfileEditUsesSavedCredentials(t *testin
 func TestConfigureHubSetupSavedCredentialsWithoutProfileChangesSkipsProfileSync(t *testing.T) {
 	t.Parallel()
 
-	const savedToken = "h9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+	savedToken := fakeHubSetupToken("saved-")
 
 	var (
 		getCalls    int
@@ -1742,7 +1749,7 @@ func TestConfigureHubSetupSavedCredentialsWithoutProfileChangesSkipsProfileSync(
 func TestConfigureHubSetupExistingAgentProfileEditKeepsRequestedValuesWhenReadbackStale(t *testing.T) {
 	t.Parallel()
 
-	const savedToken = "i9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+	savedToken := fakeHubSetupToken("saved-")
 
 	var syncCalls int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1822,7 +1829,7 @@ func TestConfigureHubSetupExistingAgentProfileEditKeepsRequestedValuesWhenReadba
 func TestConfigureHubSetupExistingAgentLoadsProfileTextFromProfileMarkdown(t *testing.T) {
 	t.Parallel()
 
-	const savedToken = "f9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+	savedToken := fakeHubSetupToken("saved-")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -1875,7 +1882,7 @@ func TestConfigureHubSetupExistingAgentLoadsProfileTextFromProfileMarkdown(t *te
 func TestConfigureHubSetupReturnsSavedStateWhenLiveApplyFails(t *testing.T) {
 	t.Parallel()
 
-	const agentToken = "b9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+	agentToken := fakeHubSetupToken("agent-")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -2048,7 +2055,7 @@ func TestCurrentHubSetupStateUsesSavedBaseURLForRegionWhenCredentialsAreMissing(
 func TestConfigureHubSetupFallsBackToLiveInitCredentialsWhenRuntimeConfigOmitsTokens(t *testing.T) {
 	t.Parallel()
 
-	const liveToken = "c9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+	liveToken := fakeHubSetupToken("live-")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -2122,7 +2129,7 @@ func TestDisconnectHubSetupStopsLiveRuntime(t *testing.T) {
   "bind_token": "bind_saved",
   "handle": "live-agent",
   "agent_harness": "codex",
-  "github_token": "ghp_saved",
+  "github_token": "github_token_saved",
   "profile": {
     "display_name": "Live Agent",
     "emoji": "⚙️",
@@ -2165,7 +2172,7 @@ func TestDisconnectHubSetupStopsLiveRuntime(t *testing.T) {
 			t.Fatalf("doc[%q] still present after disconnect: %#v", key, doc[key])
 		}
 	}
-	if got, want := doc["github_token"], "ghp_saved"; got != want {
+	if got, want := doc["github_token"], "github_token_saved"; got != want {
 		t.Fatalf("github_token = %#v, want %q", got, want)
 	}
 	if got, want := doc["agent_harness"], "codex"; got != want {

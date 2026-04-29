@@ -26,8 +26,8 @@ func TestSaveRuntimeConfigWritesExpectedShape(t *testing.T) {
 			Emoji:       "🤙🏻",
 			ProfileText: "Lightspeed is trailing behind my commit velocity",
 		},
-		GitHubToken:  "ghp_secret",
-		OpenAIAPIKey: "sk-secret",
+		GitHubToken:  "github_token_fixture",
+		OpenAIAPIKey: "openai_api_key_fixture",
 		Dispatcher: DispatcherConfig{
 			MaxParallel:            3,
 			MinParallel:            1,
@@ -81,10 +81,10 @@ func TestSaveRuntimeConfigWritesExpectedShape(t *testing.T) {
 	if len(got.Profile.Skills) != 3 || got.Profile.Skills[0] != "code_for_me" || got.Profile.Skills[1] != "code_review" || got.Profile.Skills[2] != "library_task" {
 		t.Fatalf("Profile.Skills = %#v, want [code_for_me code_review library_task]", got.Profile.Skills)
 	}
-	if got.GitHubToken != "ghp_secret" {
+	if got.GitHubToken != "github_token_fixture" {
 		t.Fatalf("GitHubToken = %q", got.GitHubToken)
 	}
-	if got.OpenAIAPIKey != "sk-secret" {
+	if got.OpenAIAPIKey != "openai_api_key_fixture" {
 		t.Fatalf("OpenAIAPIKey = %q", got.OpenAIAPIKey)
 	}
 
@@ -365,7 +365,7 @@ func TestLoadRuntimeConfigSupportsInitStyleWholeConfig(t *testing.T) {
   "agent_token": "agent_saved",
   "agent_harness": "codex",
   "session_key": "main",
-  "github_token": "ghp_saved",
+  "github_token": "github_token_saved",
   "openai_api_key": "sk_saved",
   "augment_session_auth": "{\"accessToken\":\"token_saved\",\"tenantURL\":\"https://tenant.example\"}",
   "profile": {
@@ -397,7 +397,7 @@ func TestLoadRuntimeConfigSupportsInitStyleWholeConfig(t *testing.T) {
 	if got.Profile.DisplayName != "moltenbot000 hub coder" {
 		t.Fatalf("Profile.DisplayName = %q", got.Profile.DisplayName)
 	}
-	if got.GitHubToken != "ghp_saved" {
+	if got.GitHubToken != "github_token_saved" {
 		t.Fatalf("GitHubToken = %q", got.GitHubToken)
 	}
 	if got.OpenAIAPIKey != "sk_saved" {
@@ -428,7 +428,7 @@ func TestClearRuntimeConfigHubSettingsRemovesHubIdentityAndPreservesAuth(t *test
   "handle": "codex-beast",
   "agent_harness": "codex",
   "agent_command": "codex",
-  "github_token": "ghp_saved",
+  "github_token": "github_token_saved",
   "augment_session_auth": "{\"accessToken\":\"token_saved\"}",
   "library_task_usage": {
     "unit-test-coverage": 2
@@ -459,7 +459,7 @@ func TestClearRuntimeConfigHubSettingsRemovesHubIdentityAndPreservesAuth(t *test
 			t.Fatalf("doc[%q] still present after clear: %#v", key, doc[key])
 		}
 	}
-	if got, want := doc["github_token"], "ghp_saved"; got != want {
+	if got, want := doc["github_token"], "github_token_saved"; got != want {
 		t.Fatalf("github_token = %#v, want %q", got, want)
 	}
 	if got, want := doc["augment_session_auth"], "{\"accessToken\":\"token_saved\"}"; got != want {

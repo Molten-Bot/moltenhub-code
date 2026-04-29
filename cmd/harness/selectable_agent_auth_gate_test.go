@@ -73,7 +73,7 @@ func TestSelectableAgentAuthGateStartVerifyAndErrorState(t *testing.T) {
 }
 
 func TestSelectableAgentAuthGateStatusRequiresHarnessSelectionAfterGitHubReady(t *testing.T) {
-	t.Setenv("GH_TOKEN", "ghp_ready_token")
+	t.Setenv("GH_TOKEN", "github_token_ready_token")
 	t.Setenv("GITHUB_TOKEN", "")
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
@@ -106,7 +106,7 @@ func TestSelectableAgentAuthGateStatusRequiresHarnessSelectionAfterGitHubReady(t
 
 func TestSelectableAgentAuthGateStatusRequiresHarnessSelectionAfterValidatedGITHUBTOKEN(t *testing.T) {
 	t.Setenv("GH_TOKEN", "")
-	t.Setenv("GITHUB_TOKEN", "ghp_ready_token")
+	t.Setenv("GITHUB_TOKEN", "github_token_ready_token")
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	runner := &sharedAuthGateRunnerStub{
@@ -117,7 +117,7 @@ func TestSelectableAgentAuthGateStatusRequiresHarnessSelectionAfterValidatedGITH
 			if got, want := strings.Join(cmd.Args, " "), "auth status"; got != want {
 				t.Fatalf("args = %q, want %q", got, want)
 			}
-			if got, want := os.Getenv("GITHUB_TOKEN"), "ghp_ready_token"; got != want {
+			if got, want := os.Getenv("GITHUB_TOKEN"), "github_token_ready_token"; got != want {
 				t.Fatalf("GITHUB_TOKEN = %q, want %q during validation", got, want)
 			}
 			return execx.Result{Stdout: "github.com logged in"}, nil
@@ -138,7 +138,7 @@ func TestSelectableAgentAuthGateStatusRequiresHarnessSelectionAfterValidatedGITH
 }
 
 func TestSelectableAgentAuthGateConfigurePersistsSelectionAndRejectsSwitch(t *testing.T) {
-	t.Setenv("GH_TOKEN", "ghp_ready_token")
+	t.Setenv("GH_TOKEN", "github_token_ready_token")
 	t.Setenv("GITHUB_TOKEN", "")
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")

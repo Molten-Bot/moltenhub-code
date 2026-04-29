@@ -31,7 +31,7 @@ func (s *authGateRunnerStub) Run(ctx context.Context, cmd execx.Command) (execx.
 }
 
 func codexGitHubReadyInitCfg() hub.InitConfig {
-	return hub.InitConfig{GitHubToken: "ghp_ready"}
+	return hub.InitConfig{GitHubToken: "github_token_ready"}
 }
 
 func TestCodexAuthGateNilReceiversReturnReady(t *testing.T) {
@@ -177,17 +177,18 @@ func TestCodexAuthGateConfigurePersistsGitHubToken(t *testing.T) {
 		nil,
 	)
 
-	status, err := g.Configure(context.Background(), "ghp_saved_token")
+	githubToken := fakeGitHubPAT("saved_token")
+	status, err := g.Configure(context.Background(), githubToken)
 	if err != nil {
 		t.Fatalf("Configure() error = %v", err)
 	}
 	if !status.Ready || status.State != "ready" {
 		t.Fatalf("status = %+v", status)
 	}
-	if got, want := os.Getenv("GH_TOKEN"), "ghp_saved_token"; got != want {
+	if got, want := os.Getenv("GH_TOKEN"), githubToken; got != want {
 		t.Fatalf("GH_TOKEN = %q, want %q", got, want)
 	}
-	if got, want := os.Getenv("GITHUB_TOKEN"), "ghp_saved_token"; got != want {
+	if got, want := os.Getenv("GITHUB_TOKEN"), githubToken; got != want {
 		t.Fatalf("GITHUB_TOKEN = %q, want %q", got, want)
 	}
 
@@ -199,14 +200,14 @@ func TestCodexAuthGateConfigurePersistsGitHubToken(t *testing.T) {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
-	if got, want := doc["github_token"], "ghp_saved_token"; got != want {
+	if got, want := doc["github_token"], githubToken; got != want {
 		t.Fatalf("github_token = %#v, want %q", got, want)
 	}
 }
 
 func TestCodexAuthGateConfigureRejectsInvalidGitHubTokenBeforePersisting(t *testing.T) {
-	t.Setenv("GH_TOKEN", "ghp_existing_token")
-	t.Setenv("GITHUB_TOKEN", "ghp_existing_token")
+	t.Setenv("GH_TOKEN", "github_token_existing_token")
+	t.Setenv("GITHUB_TOKEN", "github_token_existing_token")
 
 	runner := &authGateRunnerStub{
 		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
@@ -231,7 +232,7 @@ func TestCodexAuthGateConfigureRejectsInvalidGitHubTokenBeforePersisting(t *test
 		nil,
 	)
 
-	status, err := g.Configure(context.Background(), "ghp_invalid_token")
+	status, err := g.Configure(context.Background(), fakeGitHubPAT("invalid_token"))
 	if err == nil {
 		t.Fatal("Configure() error = nil, want non-nil")
 	}
@@ -241,10 +242,10 @@ func TestCodexAuthGateConfigureRejectsInvalidGitHubTokenBeforePersisting(t *test
 	if !strings.Contains(err.Error(), "validate github token") {
 		t.Fatalf("Configure() error = %q, want token validation failure", err)
 	}
-	if got, want := os.Getenv("GH_TOKEN"), "ghp_existing_token"; got != want {
+	if got, want := os.Getenv("GH_TOKEN"), "github_token_existing_token"; got != want {
 		t.Fatalf("GH_TOKEN = %q, want %q", got, want)
 	}
-	if got, want := os.Getenv("GITHUB_TOKEN"), "ghp_existing_token"; got != want {
+	if got, want := os.Getenv("GITHUB_TOKEN"), "github_token_existing_token"; got != want {
 		t.Fatalf("GITHUB_TOKEN = %q, want %q", got, want)
 	}
 
@@ -823,17 +824,18 @@ func TestCodexAuthGateWithConfigConfigurePersistsGitHubTokenAndTransitionsState(
 		nil,
 	)
 
-	status, err := g.Configure(context.Background(), "ghp_saved_token")
+	githubToken := fakeGitHubPAT("saved_token")
+	status, err := g.Configure(context.Background(), githubToken)
 	if err != nil {
 		t.Fatalf("Configure() error = %v", err)
 	}
 	if status.Ready || status.State != "needs_device_auth" {
 		t.Fatalf("status = %+v", status)
 	}
-	if got, want := os.Getenv("GH_TOKEN"), "ghp_saved_token"; got != want {
+	if got, want := os.Getenv("GH_TOKEN"), githubToken; got != want {
 		t.Fatalf("GH_TOKEN = %q, want %q", got, want)
 	}
-	if got, want := os.Getenv("GITHUB_TOKEN"), "ghp_saved_token"; got != want {
+	if got, want := os.Getenv("GITHUB_TOKEN"), githubToken; got != want {
 		t.Fatalf("GITHUB_TOKEN = %q, want %q", got, want)
 	}
 
@@ -845,7 +847,7 @@ func TestCodexAuthGateWithConfigConfigurePersistsGitHubTokenAndTransitionsState(
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
-	if got, want := doc["github_token"], "ghp_saved_token"; got != want {
+	if got, want := doc["github_token"], githubToken; got != want {
 		t.Fatalf("github_token = %#v, want %q", got, want)
 	}
 }

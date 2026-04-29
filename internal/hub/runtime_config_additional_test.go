@@ -272,7 +272,7 @@ func TestSaveRuntimeConfigGitHubTokenCreatesConfigFromInitWhenMissing(t *testing
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
-	token := "ghp_saved_token"
+	token := "github_token_saved_token"
 
 	if err := SaveRuntimeConfigGitHubToken(path, InitConfig{
 		BaseURL:      "https://na.hub.molten.bot/v1",
@@ -309,7 +309,7 @@ func TestSaveRuntimeConfigGitHubTokenMergesIntoExistingConfig(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	if err := SaveRuntimeConfigGitHubToken(path, InitConfig{}, "ghp_saved_token"); err != nil {
+	if err := SaveRuntimeConfigGitHubToken(path, InitConfig{}, "github_token_saved_token"); err != nil {
 		t.Fatalf("SaveRuntimeConfigGitHubToken() error = %v", err)
 	}
 
@@ -322,8 +322,8 @@ func TestSaveRuntimeConfigGitHubTokenMergesIntoExistingConfig(t *testing.T) {
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
-	if got["github_token"] != "ghp_saved_token" {
-		t.Fatalf("github_token = %#v, want %q", got["github_token"], "ghp_saved_token")
+	if got["github_token"] != "github_token_saved_token" {
+		t.Fatalf("github_token = %#v, want %q", got["github_token"], "github_token_saved_token")
 	}
 	if got["custom"] != "preserved" {
 		t.Fatalf("custom = %#v, want %q", got["custom"], "preserved")
@@ -337,7 +337,7 @@ func TestSaveRuntimeConfigHubSettingsMergesHubFieldsWithoutDroppingExtras(t *tes
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
-	if err := os.WriteFile(path, []byte(`{"base_url":"https://na.hub.molten.bot/v1","custom":"preserved","github_token":"ghp_saved"}`), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"base_url":"https://na.hub.molten.bot/v1","custom":"preserved","github_token":"github_token_saved"}`), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
@@ -345,7 +345,7 @@ func TestSaveRuntimeConfigHubSettingsMergesHubFieldsWithoutDroppingExtras(t *tes
 		BaseURL:      "https://na.hub.molten.bot/v1",
 		BindToken:    "bind_saved",
 		AgentHarness: "codex",
-		GitHubToken:  "ghp_env",
+		GitHubToken:  "github_token_env",
 		Handle:       "molten-builder",
 		Profile: ProfileConfig{
 			ProfileText: "Builds things",
@@ -392,8 +392,8 @@ func TestSaveRuntimeConfigHubSettingsMergesHubFieldsWithoutDroppingExtras(t *tes
 	if got["custom"] != "preserved" {
 		t.Fatalf("custom = %#v, want %q", got["custom"], "preserved")
 	}
-	if got["github_token"] != "ghp_env" {
-		t.Fatalf("github_token = %#v, want %q", got["github_token"], "ghp_env")
+	if got["github_token"] != "github_token_env" {
+		t.Fatalf("github_token = %#v, want %q", got["github_token"], "github_token_env")
 	}
 }
 
@@ -494,11 +494,11 @@ func TestReadRuntimeConfigString(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
-	if err := os.WriteFile(path, []byte(`{"github_token":"ghp_saved","augment_session_auth":"{\"accessToken\":\"a\"}"}`), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"github_token":"github_token_saved","augment_session_auth":"{\"accessToken\":\"a\"}"}`), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	if got, want := ReadRuntimeConfigString(path, "github_token", "githubToken"), "ghp_saved"; got != want {
+	if got, want := ReadRuntimeConfigString(path, "github_token", "githubToken"), "github_token_saved"; got != want {
 		t.Fatalf("ReadRuntimeConfigString(github_token) = %q, want %q", got, want)
 	}
 	if got, want := ReadRuntimeConfigString(path, "missing", "augment_session_auth"), `{"accessToken":"a"}`; got != want {

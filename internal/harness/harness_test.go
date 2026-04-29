@@ -549,7 +549,7 @@ func TestRunWithGitHubTokenRunsAuthSetupGitBeforeCodex(t *testing.T) {
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
 	branch := "moltenhub-build-api"
 
-	t.Setenv("GITHUB_TOKEN", "ghp_example_token")
+	t.Setenv("GITHUB_TOKEN", "github_token_example_token")
 	t.Setenv("GH_TOKEN", "")
 
 	fake := &fakeRunner{t: t, exps: []expectedRun{
@@ -1173,7 +1173,7 @@ func TestPreparePublishWorkflowGitHubSSHPermissionDeniedUsesForkFallback(t *test
 }
 
 func TestPreparePublishWorkflowForkFallbackSwitchesToHTTPSWhenSSHForkProbeFailsWithToken(t *testing.T) {
-	t.Setenv("GH_TOKEN", "ghp_example")
+	t.Setenv("GH_TOKEN", "github_token_example")
 	t.Setenv("GITHUB_TOKEN", "")
 
 	repoDir := "/tmp/repo"
@@ -4727,13 +4727,13 @@ func TestHasGitHubAuthToken(t *testing.T) {
 		t.Fatal("hasGitHubAuthToken() = true, want false")
 	}
 
-	t.Setenv("GITHUB_TOKEN", "ghp_example")
+	t.Setenv("GITHUB_TOKEN", "github_token_example")
 	if !hasGitHubAuthToken() {
 		t.Fatal("hasGitHubAuthToken() = false with GITHUB_TOKEN set, want true")
 	}
 
 	t.Setenv("GITHUB_TOKEN", "")
-	t.Setenv("GH_TOKEN", "ghp_example_from_gh_token")
+	t.Setenv("GH_TOKEN", "github_token_from_gh_token")
 	if !hasGitHubAuthToken() {
 		t.Fatal("hasGitHubAuthToken() = false with GH_TOKEN set, want true")
 	}

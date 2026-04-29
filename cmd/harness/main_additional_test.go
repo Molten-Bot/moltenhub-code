@@ -617,7 +617,7 @@ func TestFailureFollowUpPromptIncludesFailureContext(t *testing.T) {
 func TestConfigureHubSetupTracksCompletedOnboardingSteps(t *testing.T) {
 	t.Parallel()
 
-	const bindToken = "b_f9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+	bindToken := fakeHubSetupToken("bind-")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -683,7 +683,7 @@ func TestConfigureHubSetupTracksCompletedOnboardingSteps(t *testing.T) {
 func TestConfigureHubSetupMarksFailingOnboardingStep(t *testing.T) {
 	t.Parallel()
 
-	const bindToken = "b_f9mju6sL6Qns5WX1H09ghY5X4HJHHRTlcc6nzfiOdxs"
+	bindToken := fakeHubSetupToken("bind-")
 	var agentProfileReads int
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

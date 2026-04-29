@@ -40,8 +40,8 @@ Example with persisted config mount and direct env bootstrap:
 
 ```bash
 docker run --rm -p 7777:7777 \
-  -e GITHUB_TOKEN=ghp_your_token \
-  -e MOLTEN_HUB_TOKEN=hub_your_agent_token \
+  -e GITHUB_TOKEN \
+  -e MOLTEN_HUB_TOKEN \
   -e MOLTEN_HUB_REGION=na \
   -v "$PWD/.moltenhub:/workspace/config" \
   moltenhub-code:latest
