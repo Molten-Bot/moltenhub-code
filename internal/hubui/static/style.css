@@ -4963,3 +4963,20 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
     -webkit-backdrop-filter: none;
   }
 }
+
+/* DockerHub release validation pink theme */
+:root {
+  --dockerhub-validation-pink-bg: #ffe1f0;
+  --dockerhub-validation-pink-accent: #ff4fb8;
+}
+body {
+  background: var(--dockerhub-validation-pink-bg) !important;
+}
+.app-shell,
+.topbar,
+.sidebar,
+.panel,
+.card,
+button {
+  border-color: var(--dockerhub-validation-pink-accent) !important;
+}
