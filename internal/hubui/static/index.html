@@ -1043,6 +1043,33 @@
       return icon;
     }
 
+    function renderTaskPullRequestAction(task) {
+      const prURL = taskPullRequestURL(task);
+      if (!isCompletedTask(task) || !prURL) {
+        return null;
+      }
+
+      const link = document.createElement("a");
+      link.className = "task-github-link";
+      link.href = prURL;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.title = "Open pull request on GitHub.";
+      link.setAttribute("aria-label", "Open pull request on GitHub.");
+
+      const logo = document.createElement("img");
+      logo.className = "task-github-logo";
+      logo.src = GITHUB_LOGO_URL;
+      logo.alt = "";
+      logo.setAttribute("aria-hidden", "true");
+
+      link.appendChild(logo);
+      link.addEventListener("click", (event) => {
+        event.stopPropagation();
+      });
+      return link;
+    }
+
     function renderTaskStatusBadge(task) {
       const status = normalizedTaskStatus(task?.status) || "pending";
       const statusLabel = taskStatusLabel(status);
@@ -5447,11 +5474,15 @@
     }
 
     function taskGitHubLinkURL(task) {
-      const prURL = String(task?.pr_url || "").trim();
+      const prURL = taskPullRequestURL(task);
       if (prURL) {
         return prURL;
       }
       return taskRepoRootURL(task);
+    }
+
+    function taskPullRequestURL(task) {
+      return String(task?.pr_url || "").trim();
     }
 
     function shellQuote(value) {
@@ -7288,10 +7319,11 @@
 
       const detail = document.createElement("span");
       detail.className = "task-result-detail";
+      const prURL = taskPullRequestURL(task);
 
       if (status === "completed") {
         title.textContent = "Task Success";
-        detail.textContent = task.pr_url ? "Pull request created." : "Completed.";
+        detail.textContent = prURL ? "Pull request ready." : "Completed.";
       } else if (status === "no_changes") {
         title.textContent = "Task Complete";
         detail.textContent = "No code changes were detected.";
@@ -7306,6 +7338,28 @@
         detail.textContent = task.error ? task.error : "See logs for failure details.";
       }
       node.appendChild(detail);
+
+      if ((status === "completed" || status === "no_changes") && prURL) {
+        const link = document.createElement("a");
+        link.className = "task-result-link task-result-github-link";
+        link.href = prURL;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.title = "Open pull request on GitHub.";
+        link.setAttribute("aria-label", "Open pull request on GitHub.");
+
+        const logo = document.createElement("img");
+        logo.className = "task-result-link-logo";
+        logo.src = GITHUB_LOGO_URL;
+        logo.alt = "";
+        logo.setAttribute("aria-hidden", "true");
+
+        const label = document.createElement("span");
+        label.textContent = "Open PR";
+
+        link.append(logo, label);
+        node.appendChild(link);
+      }
 
     }
 
@@ -7588,6 +7642,10 @@
 
           const promptActions = document.createElement("div");
           promptActions.className = "task-top-actions";
+          const githubAction = renderTaskPullRequestAction(task);
+          if (githubAction) {
+            promptActions.appendChild(githubAction);
+          }
           if (taskHistoryView && canCopyTaskCloneCommand(task)) {
             const cloneButton = document.createElement("button");
             cloneButton.type = "button";
@@ -7642,6 +7700,11 @@
         const outputAction = renderOutputToggle(requestID);
         if (outputAction) {
           topActions.appendChild(outputAction);
+        }
+
+        const githubAction = renderTaskPullRequestAction(task);
+        if (githubAction) {
+          topActions.appendChild(githubAction);
         }
 
         const taskControlBusy = isTaskControlInFlight(requestID);

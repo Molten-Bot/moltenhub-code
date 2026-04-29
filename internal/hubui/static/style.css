@@ -2221,6 +2221,43 @@ select.prompt-control {
   box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.12);
 }
 
+.task-github-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  align-self: center;
+  border-radius: var(--radius);
+  border: 1px solid rgba(17, 34, 68, 0.12);
+  background: var(--surface-task-button-bg);
+  padding: 7px;
+  text-decoration: none;
+  transition: border-color 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+}
+
+.task-github-link img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: var(--agent-logo-filter);
+}
+
+.task-github-link:hover {
+  transform: translateY(-1px);
+  border-color: rgba(10, 132, 255, 0.45);
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.12);
+}
+
+.task-github-link:focus-visible {
+  outline: none;
+  border-color: rgba(10, 132, 255, 0.52);
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.15);
+}
+
 .badge {
   width: 28px;
   min-width: 28px;
@@ -2815,6 +2852,21 @@ html.night .task-progress-step.current .task-progress-step-icon.is-agent-logo {
   text-decoration: none;
   border-bottom: 1px dotted rgba(10, 132, 255, 0.45);
   word-break: break-all;
+}
+
+.task-result-github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.task-result-link-logo {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  object-fit: contain;
+  filter: var(--agent-logo-filter);
 }
 
 .task-result-link:hover {
