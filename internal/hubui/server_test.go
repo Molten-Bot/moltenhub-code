@@ -843,8 +843,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "taskPanelTitle.textContent = \"Current Work\";") || !strings.Contains(markup, "taskFullscreenPanelTitle.textContent = \"Current Work\";") {
 		t.Fatalf("expected index html to keep task panel labels anchored to Current Work across view states")
 	}
-	if !strings.Contains(markup, `<html lang="en" class="dark">`) {
-		t.Fatalf("expected index html to default to dark theme class")
+	if !strings.Contains(markup, `<html lang="en" class="light">`) {
+		t.Fatalf("expected index html to default to light theme class")
 	}
 	if !strings.Contains(markup, "function isMinimizedTask(") {
 		t.Fatalf("expected index html to include completed-task minimization handler")
@@ -1787,8 +1787,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="theme-toggle"`) || !strings.Contains(markup, `function nextThemeMode(theme)`) {
 		t.Fatalf("expected index html to include theme toggle control")
 	}
-	if !strings.Contains(markup, `const DEFAULT_THEME_MODE = "dark";`) {
-		t.Fatalf("expected index html to define dark as the default theme mode")
+	if !strings.Contains(markup, `const DEFAULT_THEME_MODE = "light";`) {
+		t.Fatalf("expected index html to define light as the default theme mode")
 	}
 	if !strings.Contains(markup, `const GOOGLE_ANALYTICS_MEASUREMENT_ID = "G-BY33RFG2WB";`) {
 		t.Fatalf("expected index html to expose the google analytics measurement id constant to the usage tracker")
@@ -1821,13 +1821,13 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to keep selected task history filter after a successful rerun")
 	}
 	if !strings.Contains(markup, `return THEME_MODES.includes(raw) ? raw : DEFAULT_THEME_MODE;`) {
-		t.Fatalf("expected index html theme loading to fall back to the default dark theme")
+		t.Fatalf("expected index html theme loading to fall back to the default light theme")
 	}
-	if !strings.Contains(markup, `<span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true"><i data-lucide="moon" class="theme-toggle-icon-glyph" aria-hidden="true"></i></span>`) {
+	if !strings.Contains(markup, `<span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true"><i data-lucide="sun" class="theme-toggle-icon-glyph" aria-hidden="true"></i></span>`) {
 		t.Fatalf("expected index html to render a dedicated theme toggle icon slot")
 	}
-	if !strings.Contains(markup, `<span id="theme-toggle-label">Dark</span>`) {
-		t.Fatalf("expected index html to render dark as the initial theme toggle label")
+	if !strings.Contains(markup, `<span id="theme-toggle-label">Light</span>`) {
+		t.Fatalf("expected index html to render light as the initial theme toggle label")
 	}
 	if !strings.Contains(markup, `function syncThemeToggle(theme)`) ||
 		!strings.Contains(markup, `const iconName = THEME_ICON_NAMES[currentTheme] || THEME_ICON_NAMES[DEFAULT_THEME_MODE];`) ||
@@ -2127,7 +2127,7 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task-rerun") {
 		t.Fatalf("expected stylesheet to include task rerun styles")
 	}
-	if !strings.Contains(css, ".task-progress-step.current {\n  background: #fff;\n  border-color: rgba(10, 132, 255, 0.34);\n  color: #101626;\n  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.16);") {
+	if !strings.Contains(css, ".task-progress-step.current {\n  background: #fff;\n  border-color: rgba(236, 72, 153, 0.34);\n  color: #101626;\n  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.16);") {
 		t.Fatalf("expected stylesheet to render the active task progress step with stronger contrast instead of size scaling")
 	}
 	if !strings.Contains(css, ".task-progress-step-icon") {
@@ -2138,7 +2138,7 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 		!strings.Contains(css, ".task-progress-line {\n  position: absolute;\n  left: 26px;\n  right: 26px;\n  top: 50%;") ||
 		!strings.Contains(css, ".task-progress-steps {\n  position: relative;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  min-height: 42px;\n}") ||
 		!strings.Contains(css, ".task-progress-step {\n  width: 24px;\n  height: 24px;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  overflow: visible;") ||
-		!strings.Contains(css, ".task-progress-step.has-icon {\n  background: color-mix(in srgb, var(--surface-progress-step) 92%, var(--surface-task-button-bg));\n  border: 1px solid rgba(113, 136, 177, 0.32);\n}") ||
+		!strings.Contains(css, ".task-progress-step.has-icon {\n  background: color-mix(in srgb, var(--surface-progress-step) 92%, var(--surface-task-button-bg));\n  border: 1px solid rgba(170, 92, 133, 0.32);\n}") ||
 		!strings.Contains(css, ".task-progress-step-icon {\n  width: 21.33px;\n  height: 21.33px;") ||
 		!strings.Contains(css, ".task-progress-step-glyph {\n  width: 21.33px;\n  height: 21.33px;") ||
 		!strings.Contains(css, ".task-progress-step.current .task-progress-step-icon {\n  width: 26.56px;\n  height: 26.56px;\n  opacity: 1;\n}") ||
@@ -2147,16 +2147,16 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 		!strings.Contains(css, "@keyframes taskProgressCurrentSpin {\n  0%,\n  80% {\n    transform: rotate(0deg);\n  }\n  100% {\n    transform: rotate(360deg);\n  }\n}") {
 		t.Fatalf("expected stylesheet to render larger progress icons, oversized active icons, and a running spin animation")
 	}
-	if !strings.Contains(css, ".badge.stopped {\n  background: color-mix(in srgb, var(--surface-badge-idle) 82%, #5f7395);\n  color: #fff;\n}") || !strings.Contains(css, ".task-result.stopped {\n  color: var(--surface-badge-idle);\n  background: rgba(113, 136, 177, 0.13);\n}") {
+	if !strings.Contains(css, ".badge.stopped {\n  background: color-mix(in srgb, var(--surface-badge-idle) 82%, #5f7395);\n  color: #fff;\n}") || !strings.Contains(css, ".task-result.stopped {\n  color: var(--surface-badge-idle);\n  background: rgba(170, 92, 133, 0.13);\n}") {
 		t.Fatalf("expected stylesheet to distinguish user-stopped task visuals from hard error states")
 	}
 	if !strings.Contains(css, ".task-action-glyph-stop {\n  width: 17px;\n  height: 17px;\n  fill: currentColor;\n  stroke: none;\n}") ||
-		!strings.Contains(css, ".task-stop {\n  border: 1px solid rgba(17, 34, 68, 0.12);\n  background: var(--surface-task-button-bg);\n  color: var(--text-soft);\n}") ||
+		!strings.Contains(css, ".task-stop {\n  border: 1px solid rgba(96, 18, 62, 0.12);\n  background: var(--surface-task-button-bg);\n  color: var(--text-soft);\n}") ||
 		!strings.Contains(css, ".task-stop:hover,\n.task-stop:focus-visible {\n  border-color: color-mix(in srgb, var(--surface-danger) 36%, var(--border));\n  background: color-mix(in srgb, var(--surface-danger) 10%, var(--surface-task-button-bg));\n  color: color-mix(in srgb, var(--surface-danger) 72%, var(--text-soft));\n}") ||
 		!strings.Contains(css, ".task-control-toggle.task-icon-button,\n.task-stop.task-icon-button {\n  width: 34px;\n  min-width: 34px;\n  height: 34px;\n  min-height: 34px;\n}") {
 		t.Fatalf("expected stylesheet to render neutral stop controls with a larger stop glyph and shared icon-button sizing")
 	}
-	if !strings.Contains(css, ".task-control-toggle {\n  border: 1px solid rgba(17, 34, 68, 0.12);\n  background: var(--surface-task-button-bg);\n  color: var(--text-soft);\n}") ||
+	if !strings.Contains(css, ".task-control-toggle {\n  border: 1px solid rgba(96, 18, 62, 0.12);\n  background: var(--surface-task-button-bg);\n  color: var(--text-soft);\n}") ||
 		!strings.Contains(css, ".task-control-toggle.task-control-pause:hover,\n.task-control-toggle.task-control-pause:focus-visible {\n  border-color: color-mix(in srgb, var(--running) 36%, var(--border));\n  background: color-mix(in srgb, var(--running) 8%, var(--surface-task-button-bg));\n  color: var(--running);\n}") ||
 		strings.Contains(css, ".task-control-toggle.task-control-pause {\n  border-color: color-mix(in srgb, var(--surface-warning)") {
 		t.Fatalf("expected stylesheet to render pause controls with neutral task-button styling instead of warning/yellow treatment")
