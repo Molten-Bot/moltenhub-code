@@ -3057,8 +3057,8 @@ func TestCommandBuilders(t *testing.T) {
 	if prComment.Name != "gh" || prComment.Dir != repoDir || !reflect.DeepEqual(prComment.Args, wantComment) {
 		t.Fatalf("pr comment command unexpected: %+v", prComment)
 	}
-	addScreenshots := addPRCommentScreenshotsCommand(repoDir)
-	wantAddScreenshots := []string{"add", "-f", "--", ".moltenhub/pr-comment-screenshots"}
+	addScreenshots := addPRCommentScreenshotsCommand(repoDir, []string{".moltenhub/pr-comment-screenshots/after.png"})
+	wantAddScreenshots := []string{"add", "-f", "--", ".moltenhub/pr-comment-screenshots/after.png"}
 	if addScreenshots.Name != "git" || addScreenshots.Dir != repoDir || !reflect.DeepEqual(addScreenshots.Args, wantAddScreenshots) {
 		t.Fatalf("add PR comment screenshots command unexpected: %+v", addScreenshots)
 	}
@@ -3270,6 +3270,70 @@ func TestRepoHasPendingChangesTreatsScreenshotHandoffAsChange(t *testing.T) {
 	}
 	if !changed {
 		t.Fatal("repoHasPendingChanges() = false, want true")
+	}
+}
+
+func TestRepoHasPendingChangesIgnoresUnchangedScreenshotHandoffBaseline(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	root := filepath.Join(repoDir, prCommentScreenshotsRelDir)
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "after.png"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	baseline, err := prCommentScreenshotSnapshot(repoDir)
+	if err != nil {
+		t.Fatalf("prCommentScreenshotSnapshot() error = %v", err)
+	}
+
+	changed, err := New(nil).repoHasPendingChanges(context.Background(), repoWorkspace{
+		Dir:                         repoDir,
+		BaseBranch:                  "main",
+		PRCommentScreenshotBaseline: baseline,
+	}, "## moltenhub-validation\n")
+	if err != nil {
+		t.Fatalf("repoHasPendingChanges() error = %v", err)
+	}
+	if changed {
+		t.Fatal("repoHasPendingChanges() = true, want false")
+	}
+}
+
+func TestChangedPRCommentScreenshotFilesFindsOnlyNewOrModifiedImages(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	root := filepath.Join(repoDir, prCommentScreenshotsRelDir)
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "before.png"), []byte("old"), 0o644); err != nil {
+		t.Fatalf("WriteFile(before) error = %v", err)
+	}
+	baseline, err := prCommentScreenshotSnapshot(repoDir)
+	if err != nil {
+		t.Fatalf("prCommentScreenshotSnapshot() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "before.png"), []byte("new"), 0o644); err != nil {
+		t.Fatalf("WriteFile(before modified) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "after.jpg"), []byte("after"), 0o644); err != nil {
+		t.Fatalf("WriteFile(after) error = %v", err)
+	}
+
+	files, err := changedPRCommentScreenshotFiles(repoDir, baseline)
+	if err != nil {
+		t.Fatalf("changedPRCommentScreenshotFiles() error = %v", err)
+	}
+	want := []string{
+		".moltenhub/pr-comment-screenshots/after.jpg",
+		".moltenhub/pr-comment-screenshots/before.png",
+	}
+	if !reflect.DeepEqual(files, want) {
+		t.Fatalf("files = %#v, want %#v", files, want)
 	}
 }
 
