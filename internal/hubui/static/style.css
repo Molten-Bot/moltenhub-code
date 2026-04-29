@@ -4734,6 +4734,341 @@ html.night {
   --shadow-lg: 0 28px 72px rgba(0, 0, 0, 0.7);
 }
 
+/* Pink theme overrides */
+html:root {
+  --hub-bg-rgb: 255 241 248;
+  --hub-panel-rgb: 255 249 252;
+  --hub-panel-soft-rgb: 255 226 242;
+  --hub-border-rgb: 186 55 125;
+  --hub-text-rgb: 65 18 43;
+  --hub-muted-rgb: 134 73 105;
+  --hub-running-rgb: 226 31 132;
+  --hub-meta-rgb: 166 86 128;
+  --hub-accent-rgb: 255 79 177;
+  --bg: #fff1f8;
+  --bg-soft: rgba(255, 247, 251, 0.86);
+  --bg-elevated: #ffffff;
+  --bg-panel: rgba(255, 246, 251, 0.78);
+  --bg-panel-strong: rgba(255, 249, 252, 0.94);
+  --bg-panel-muted: rgba(255, 226, 242, 0.84);
+  --border: rgba(186, 55, 125, 0.18);
+  --border-strong: rgba(226, 31, 132, 0.34);
+  --text: #41122b;
+  --text-soft: #6f2a4e;
+  --muted: #864969;
+  --meta: #a65680;
+  --running: #e21f84;
+  --accent: #ff4fb1;
+  --accent-soft: rgba(255, 79, 177, 0.14);
+  --brand-gradient: linear-gradient(135deg, #ff9ccf 0%, #ff4fb1 48%, #c21875 100%);
+  --surface-glass: linear-gradient(160deg, rgba(255, 249, 252, 0.9), rgba(255, 232, 244, 0.76));
+  --surface-glass-strong: linear-gradient(160deg, rgba(255, 253, 255, 0.96), rgba(255, 238, 248, 0.9));
+  --surface-glass-solid: rgba(255, 249, 252, 0.94);
+  --surface-glow-border: rgba(226, 31, 132, 0.22);
+  --surface-glow:
+    linear-gradient(180deg, rgba(255, 232, 244, 0.98), rgba(255, 244, 250, 0.92) 18%, rgba(255, 249, 252, 0.94) 100%),
+    linear-gradient(160deg, rgba(255, 253, 255, 0.9), rgba(255, 232, 244, 0.82));
+  --surface-glow-shadow:
+    0 18px 42px rgba(199, 31, 118, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.76);
+  --surface-header: linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.1));
+  --surface-header-border: rgba(226, 31, 132, 0.2);
+  --surface-label: #a65680;
+  --surface-action-muted: #8f4b70;
+  --surface-tab-border: rgba(226, 31, 132, 0.28);
+  --surface-tab-bg: linear-gradient(180deg, rgba(255, 250, 253, 0.98), rgba(255, 231, 244, 0.94));
+  --surface-tab-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 12px 24px rgba(199, 31, 118, 0.12);
+  --surface-tab-text: #9a4d75;
+  --surface-tab-hover-text: #bf1c72;
+  --surface-tab-hover-bg: rgba(255, 79, 177, 0.12);
+  --surface-tab-active-bg: linear-gradient(135deg, #ffffff 0%, #ffeaf5 48%, #ffd4eb 100%);
+  --surface-tab-active-border: rgba(226, 31, 132, 0.34);
+  --surface-tab-active-text: #b01668;
+  --surface-tab-active-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    0 8px 16px rgba(199, 31, 118, 0.16);
+  --surface-control-border: rgba(226, 31, 132, 0.32);
+  --surface-control-bg: linear-gradient(180deg, rgba(255, 253, 255, 0.98), rgba(255, 236, 247, 0.9));
+  --surface-control-bg-strong: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 243, 250, 0.92));
+  --surface-control-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 7px 18px rgba(199, 31, 118, 0.08);
+  --surface-control-arrow: #d51d80;
+  --surface-button-bg: rgba(255, 249, 252, 0.74);
+  --surface-button-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.74);
+  --surface-library-bg: linear-gradient(155deg, rgba(255, 250, 253, 0.92), rgba(255, 238, 248, 0.88));
+  --surface-task-button-bg: rgba(255, 249, 252, 0.8);
+  --surface-badge-idle: #b57091;
+  --surface-badge-default: #c66498;
+  --surface-progress-track: rgba(166, 86, 128, 0.22);
+  --surface-progress-step: #fff;
+  --surface-terminal-bg:
+    linear-gradient(180deg, rgba(255, 249, 252, 0.9), rgba(255, 242, 249, 0.94)),
+    radial-gradient(circle at top left, rgba(255, 79, 177, 0.08), transparent 40%);
+  --surface-scroll-track: rgba(255, 226, 242, 0.58);
+  --surface-scroll-thumb: rgba(166, 86, 128, 0.56);
+  --surface-scroll-thumb-border: rgba(255, 226, 242, 0.84);
+  --surface-scroll-thumb-hover: rgba(134, 73, 105, 0.74);
+  --surface-fullscreen-bg:
+    linear-gradient(180deg, rgba(255, 241, 248, 0.78), rgba(255, 229, 243, 0.9)),
+    radial-gradient(circle at top left, rgba(255, 79, 177, 0.16), transparent 38%),
+    radial-gradient(circle at bottom right, rgba(194, 24, 117, 0.16), transparent 42%);
+  --surface-fullscreen-close-bg: rgba(65, 18, 43, 0.92);
+  --surface-fullscreen-close-border: rgba(65, 18, 43, 0.2);
+  --surface-fullscreen-close-hover-bg: rgba(65, 18, 43, 0.98);
+  --surface-fullscreen-close-hover-border: rgba(65, 18, 43, 0.28);
+  --surface-fullscreen-close-shadow: 0 16px 36px rgba(135, 12, 76, 0.22);
+  --surface-auth-backdrop: rgba(28, 5, 19, 0.86);
+  --surface-auth-panel-bg: linear-gradient(180deg, rgba(255, 249, 252, 0.98), rgba(255, 241, 248, 0.96));
+  --surface-auth-panel-border: rgba(226, 31, 132, 0.28);
+  --surface-auth-panel-shadow:
+    0 24px 54px rgba(135, 12, 76, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  --surface-auth-link: #d51d80;
+  --surface-auth-verify-bg: linear-gradient(180deg, #f83aa1, #c21875);
+  --surface-auth-verify-hover-bg: linear-gradient(180deg, #ff58b3, #d51d80);
+  --surface-auth-verify-border: rgba(226, 31, 132, 0.28);
+  --surface-auth-verify-shadow: 0 12px 24px rgba(226, 31, 132, 0.22);
+  --surface-auth-verify-hover-shadow: 0 16px 28px rgba(226, 31, 132, 0.28);
+  --glass-bg: rgba(255, 246, 251, 0.5);
+  --glass-border: rgba(255, 255, 255, 0.62);
+  --glass-shadow:
+    0 0 0 0.5px rgba(112, 18, 67, 0.04),
+    0 2px 8px rgba(112, 18, 67, 0.04),
+    0 12px 40px rgba(199, 31, 118, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  --glass-icon-bg: rgba(255, 249, 252, 0.72);
+  --glass-icon-border: rgba(255, 255, 255, 0.82);
+  --theme-dock-border: rgba(190, 84, 138, 0.26);
+  --theme-dock-bg: linear-gradient(180deg, rgba(255, 249, 252, 0.96), rgba(255, 240, 248, 0.9));
+  --theme-dock-shadow:
+    0 14px 36px rgba(199, 31, 118, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.74);
+  --theme-dock-label: #985678;
+  --theme-button-border: rgba(190, 84, 138, 0.34);
+  --theme-button-bg: linear-gradient(180deg, rgba(255, 252, 254, 0.98), rgba(255, 239, 248, 0.98));
+  --theme-button-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.84),
+    0 1px 2px rgba(145, 42, 94, 0.08);
+  --theme-button-text: #703050;
+  --theme-button-meta: #985678;
+  --theme-button-focus:
+    inset 0 1px 0 rgba(255, 255, 255, 0.84),
+    0 0 0 3px rgba(255, 79, 177, 0.18);
+  --body-radial-left: radial-gradient(1300px 600px at -10% -15%, rgba(255, 79, 177, 0.18), transparent 60%);
+  --body-radial-right: radial-gradient(980px 560px at 110% 8%, rgba(194, 24, 117, 0.14), transparent 62%);
+  --body-linear: linear-gradient(180deg, #fff7fb, #fff0f7 55%, #ffe4f3);
+  --body-orb-a: radial-gradient(circle, rgba(255, 156, 207, 0.26) 0%, rgba(255, 156, 207, 0) 66%);
+  --body-orb-b: radial-gradient(circle, rgba(255, 79, 177, 0.22) 0%, rgba(255, 79, 177, 0) 70%);
+  --shadow-sm: 0 10px 28px rgba(135, 12, 76, 0.08);
+  --shadow-md: 0 18px 44px rgba(135, 12, 76, 0.14);
+  --shadow-lg: 0 28px 72px rgba(135, 12, 76, 0.18);
+}
+
+html.dark {
+  --hub-bg-rgb: 45 9 31;
+  --hub-panel-rgb: 67 18 48;
+  --hub-panel-soft-rgb: 86 26 62;
+  --hub-border-rgb: 255 151 204;
+  --hub-text-rgb: 255 239 248;
+  --hub-muted-rgb: 235 170 205;
+  --hub-running-rgb: 255 93 184;
+  --hub-meta-rgb: 216 134 178;
+  --hub-accent-rgb: 255 109 193;
+  --bg: #2d091f;
+  --bg-soft: rgba(54, 12, 38, 0.9);
+  --bg-elevated: #431230;
+  --bg-panel: rgba(58, 14, 42, 0.8);
+  --bg-panel-strong: rgba(72, 20, 52, 0.92);
+  --bg-panel-muted: rgba(86, 26, 62, 0.84);
+  --border: rgba(255, 151, 204, 0.26);
+  --border-strong: rgba(255, 93, 184, 0.42);
+  --text: #ffeff8;
+  --text-soft: #f5c4de;
+  --muted: #ebaacd;
+  --meta: #d886b2;
+  --running: #ff5db8;
+  --accent: #ff6dc1;
+  --accent-soft: rgba(255, 109, 193, 0.24);
+  --surface-glass: linear-gradient(160deg, rgba(69, 18, 50, 0.92), rgba(44, 10, 32, 0.84));
+  --surface-glass-strong: linear-gradient(160deg, rgba(82, 23, 59, 0.96), rgba(50, 12, 36, 0.92));
+  --surface-glass-solid: rgba(58, 14, 42, 0.95);
+  --surface-glow-border: rgba(255, 109, 193, 0.28);
+  --surface-glow:
+    linear-gradient(180deg, rgba(72, 20, 52, 0.98), rgba(55, 14, 40, 0.95) 18%, rgba(43, 9, 31, 0.96) 100%),
+    linear-gradient(160deg, rgba(82, 23, 59, 0.9), rgba(48, 11, 35, 0.94));
+  --surface-glow-shadow:
+    0 18px 42px rgba(18, 1, 12, 0.46),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --surface-header: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.025));
+  --surface-header-border: rgba(255, 151, 204, 0.22);
+  --surface-label: #e3a0c4;
+  --surface-action-muted: #efb4d3;
+  --surface-tab-border: rgba(235, 126, 185, 0.42);
+  --surface-tab-bg: linear-gradient(180deg, rgba(70, 18, 50, 0.98), rgba(48, 12, 35, 0.96));
+  --surface-tab-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 12px 24px rgba(0, 0, 0, 0.26);
+  --surface-tab-text: #e7a8ca;
+  --surface-tab-hover-text: #fff0f8;
+  --surface-tab-hover-bg: rgba(255, 109, 193, 0.14);
+  --surface-tab-active-bg: linear-gradient(135deg, rgba(101, 31, 72, 0.98) 0%, rgba(70, 19, 51, 0.98) 100%);
+  --surface-tab-active-border: rgba(255, 126, 196, 0.5);
+  --surface-tab-active-text: #fff5fa;
+  --surface-control-border: rgba(235, 126, 185, 0.44);
+  --surface-control-bg: linear-gradient(180deg, rgba(70, 18, 50, 0.98), rgba(48, 12, 35, 0.94));
+  --surface-control-bg-strong: linear-gradient(180deg, rgba(82, 23, 59, 0.98), rgba(50, 12, 36, 0.96));
+  --surface-control-arrow: #ffc1df;
+  --surface-button-bg: rgba(59, 14, 42, 0.9);
+  --surface-library-bg: linear-gradient(155deg, rgba(75, 20, 54, 0.92), rgba(50, 12, 36, 0.88));
+  --surface-task-button-bg: rgba(58, 14, 42, 0.9);
+  --surface-badge-idle: #b86791;
+  --surface-badge-default: #c7719f;
+  --surface-progress-track: rgba(216, 134, 178, 0.3);
+  --surface-progress-step: #3d0d2b;
+  --surface-terminal-bg:
+    linear-gradient(180deg, rgba(48, 12, 35, 0.96), rgba(31, 6, 23, 0.98)),
+    radial-gradient(circle at top left, rgba(255, 109, 193, 0.09), transparent 40%);
+  --surface-scroll-track: rgba(67, 18, 48, 0.84);
+  --surface-scroll-thumb: rgba(216, 134, 178, 0.64);
+  --surface-scroll-thumb-border: rgba(67, 18, 48, 0.86);
+  --surface-scroll-thumb-hover: rgba(255, 151, 204, 0.74);
+  --surface-fullscreen-bg:
+    linear-gradient(180deg, rgba(35, 7, 25, 0.86), rgba(29, 5, 21, 0.95)),
+    radial-gradient(circle at top left, rgba(255, 109, 193, 0.18), transparent 38%),
+    radial-gradient(circle at bottom right, rgba(255, 93, 184, 0.16), transparent 42%);
+  --surface-fullscreen-close-bg: rgba(255, 239, 248, 0.14);
+  --surface-fullscreen-close-border: rgba(255, 239, 248, 0.18);
+  --surface-fullscreen-close-hover-bg: rgba(255, 239, 248, 0.2);
+  --surface-fullscreen-close-hover-border: rgba(255, 239, 248, 0.24);
+  --surface-auth-backdrop: rgba(18, 1, 12, 0.9);
+  --surface-auth-panel-bg: linear-gradient(180deg, rgba(58, 14, 42, 0.98), rgba(38, 8, 27, 0.97));
+  --surface-auth-panel-border: rgba(255, 126, 196, 0.34);
+  --surface-auth-link: #ffc1df;
+  --surface-auth-verify-bg: linear-gradient(180deg, #ff5db8, #c21875);
+  --surface-auth-verify-hover-bg: linear-gradient(180deg, #ff79c7, #df2b8b);
+  --surface-auth-verify-border: rgba(255, 109, 193, 0.3);
+  --surface-auth-verify-shadow: 0 14px 28px rgba(255, 93, 184, 0.24);
+  --surface-auth-verify-hover-shadow: 0 18px 34px rgba(255, 93, 184, 0.3);
+  --glass-bg: rgba(82, 23, 59, 0.58);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --theme-dock-border: rgba(235, 126, 185, 0.38);
+  --theme-dock-bg: linear-gradient(180deg, rgba(58, 14, 42, 0.95), rgba(38, 8, 27, 0.95));
+  --theme-dock-label: #d998bc;
+  --theme-button-border: rgba(235, 126, 185, 0.44);
+  --theme-button-bg: linear-gradient(180deg, rgba(76, 20, 55, 0.98), rgba(52, 12, 38, 0.98));
+  --theme-button-text: #f6c7df;
+  --theme-button-meta: #d998bc;
+  --theme-button-focus:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 0 0 3px rgba(255, 109, 193, 0.22);
+  --body-radial-left: radial-gradient(1200px 620px at -12% -12%, rgba(255, 93, 184, 0.28), transparent 58%);
+  --body-radial-right: radial-gradient(880px 540px at 108% 4%, rgba(194, 24, 117, 0.24), transparent 60%);
+  --body-linear: linear-gradient(180deg, #2d091f, #230719 58%, #1d0515);
+  --body-orb-a: radial-gradient(circle, rgba(255, 93, 184, 0.22) 0%, rgba(255, 93, 184, 0) 68%);
+  --body-orb-b: radial-gradient(circle, rgba(255, 109, 193, 0.18) 0%, rgba(255, 109, 193, 0) 72%);
+  --shadow-sm: 0 10px 28px rgba(18, 1, 12, 0.4);
+  --shadow-md: 0 18px 44px rgba(18, 1, 12, 0.52);
+  --shadow-lg: 0 28px 72px rgba(18, 1, 12, 0.64);
+}
+
+html.night {
+  --hub-bg-rgb: 22 3 16;
+  --hub-panel-rgb: 34 7 25;
+  --hub-panel-soft-rgb: 51 12 37;
+  --hub-border-rgb: 225 118 177;
+  --hub-text-rgb: 255 242 249;
+  --hub-muted-rgb: 226 166 198;
+  --hub-running-rgb: 255 82 177;
+  --hub-meta-rgb: 207 126 169;
+  --body-radial-left: radial-gradient(1100px 560px at -12% -16%, rgba(255, 82, 177, 0.22), transparent 56%);
+  --body-radial-right: radial-gradient(920px 520px at 112% 2%, rgba(194, 24, 117, 0.18), transparent 60%);
+  --body-linear: linear-gradient(180deg, #160310, #1b0413 55%, #210618);
+  --body-orb-a: radial-gradient(circle, rgba(255, 82, 177, 0.16) 0%, rgba(255, 82, 177, 0) 70%);
+  --body-orb-b: radial-gradient(circle, rgba(255, 109, 193, 0.14) 0%, rgba(255, 109, 193, 0) 74%);
+  --bg: #160310;
+  --bg-soft: rgba(25, 5, 18, 0.92);
+  --bg-elevated: #28081d;
+  --bg-panel: rgba(29, 6, 21, 0.88);
+  --bg-panel-strong: rgba(37, 8, 27, 0.95);
+  --bg-panel-muted: rgba(51, 12, 37, 0.9);
+  --border: rgba(225, 118, 177, 0.3);
+  --border-strong: rgba(255, 82, 177, 0.46);
+  --text: #fff2f9;
+  --text-soft: #f2bfd9;
+  --muted: #e2a6c6;
+  --meta: #cf7ea9;
+  --running: #ff52b1;
+  --accent: #ff6dc1;
+  --accent-soft: rgba(255, 109, 193, 0.28);
+  --surface-glass: linear-gradient(160deg, rgba(34, 7, 25, 0.94), rgba(22, 3, 16, 0.9));
+  --surface-glass-strong: linear-gradient(160deg, rgba(44, 10, 32, 0.96), rgba(25, 5, 18, 0.94));
+  --surface-glass-solid: rgba(29, 6, 21, 0.96);
+  --surface-glow-border: rgba(255, 82, 177, 0.26);
+  --surface-glow:
+    linear-gradient(180deg, rgba(34, 7, 25, 0.98), rgba(25, 5, 18, 0.97) 18%, rgba(22, 3, 16, 0.97) 100%),
+    linear-gradient(160deg, rgba(44, 10, 32, 0.9), rgba(22, 3, 16, 0.94));
+  --surface-glow-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  --surface-header-border: rgba(225, 118, 177, 0.2);
+  --surface-label: #e7a8ca;
+  --surface-action-muted: #efb4d3;
+  --surface-tab-border: rgba(225, 118, 177, 0.44);
+  --surface-tab-bg: linear-gradient(180deg, rgba(34, 7, 25, 0.98), rgba(22, 3, 16, 0.98));
+  --surface-tab-text: #eab0cf;
+  --surface-tab-hover-text: #fff4fa;
+  --surface-tab-hover-bg: rgba(255, 82, 177, 0.13);
+  --surface-tab-active-bg: linear-gradient(135deg, rgba(61, 15, 44, 0.98) 0%, rgba(35, 8, 26, 0.98) 100%);
+  --surface-tab-active-border: rgba(255, 82, 177, 0.52);
+  --surface-tab-active-text: #fff6fb;
+  --surface-control-border: rgba(225, 118, 177, 0.46);
+  --surface-control-bg: linear-gradient(180deg, rgba(34, 7, 25, 0.98), rgba(22, 3, 16, 0.96));
+  --surface-control-bg-strong: linear-gradient(180deg, rgba(44, 10, 32, 0.98), rgba(25, 5, 18, 0.98));
+  --surface-control-arrow: #ffc4e1;
+  --surface-button-bg: rgba(28, 6, 20, 0.94);
+  --surface-library-bg: linear-gradient(155deg, rgba(34, 7, 25, 0.94), rgba(22, 3, 16, 0.92));
+  --surface-task-button-bg: rgba(28, 6, 20, 0.94);
+  --surface-badge-idle: #a85f87;
+  --surface-badge-default: #ba6994;
+  --surface-progress-track: rgba(207, 126, 169, 0.3);
+  --surface-progress-step: #220619;
+  --surface-terminal-bg:
+    linear-gradient(180deg, rgba(22, 3, 16, 0.97), rgba(14, 2, 10, 0.99)),
+    radial-gradient(circle at top left, rgba(255, 82, 177, 0.08), transparent 40%);
+  --surface-scroll-track: rgba(34, 7, 25, 0.88);
+  --surface-scroll-thumb: rgba(207, 126, 169, 0.62);
+  --surface-scroll-thumb-border: rgba(34, 7, 25, 0.9);
+  --surface-scroll-thumb-hover: rgba(225, 118, 177, 0.76);
+  --surface-fullscreen-bg:
+    linear-gradient(180deg, rgba(17, 2, 12, 0.88), rgba(14, 2, 10, 0.97)),
+    radial-gradient(circle at top left, rgba(255, 82, 177, 0.15), transparent 38%),
+    radial-gradient(circle at bottom right, rgba(194, 24, 117, 0.15), transparent 42%);
+  --surface-auth-backdrop: rgba(12, 1, 8, 0.92);
+  --surface-auth-panel-bg: linear-gradient(180deg, rgba(30, 6, 22, 0.98), rgba(17, 2, 12, 0.98));
+  --surface-auth-panel-border: rgba(225, 118, 177, 0.34);
+  --surface-auth-link: #ffc4e1;
+  --surface-auth-verify-bg: linear-gradient(180deg, #ff52b1, #ba146b);
+  --surface-auth-verify-hover-bg: linear-gradient(180deg, #ff73c5, #d82687);
+  --glass-bg: rgba(34, 7, 25, 0.64);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --theme-dock-border: rgba(225, 118, 177, 0.4);
+  --theme-dock-bg: linear-gradient(180deg, rgba(30, 6, 22, 0.96), rgba(17, 2, 12, 0.96));
+  --theme-dock-label: #d89abc;
+  --theme-button-border: rgba(225, 118, 177, 0.46);
+  --theme-button-bg: linear-gradient(180deg, rgba(38, 8, 28, 0.98), rgba(22, 3, 16, 0.98));
+  --theme-button-text: #f1c2db;
+  --theme-button-meta: #d89abc;
+  --theme-button-focus:
+    inset 0 1px 0 rgba(255, 255, 255, 0.025),
+    0 0 0 3px rgba(255, 82, 177, 0.22);
+  --shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.48);
+  --shadow-md: 0 18px 44px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 28px 72px rgba(0, 0, 0, 0.72);
+}
+
 html[data-hover-mode="on"] .prompt-action-button:not(:disabled),
 html[data-hover-mode="on"] .task-rerun:not(:disabled),
 html[data-hover-mode="on"] .task-output-toggle:not(:disabled),
