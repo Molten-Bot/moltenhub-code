@@ -311,6 +311,10 @@ func TestStaticStyleIncludesSharedDockIconStyles(t *testing.T) {
 	if !strings.Contains(stylesheet, `html.dark .task-progress-step.current .task-progress-step-icon.is-agent-logo,`) {
 		t.Fatalf("expected dark mode task progress agent logo to be white while active")
 	}
+	if !strings.Contains(stylesheet, `html.pink .task-progress-step.current.has-icon {`) ||
+		!strings.Contains(stylesheet, `html.pink .task-progress-step.current .task-progress-step-icon.is-agent-logo {`) {
+		t.Fatalf("expected pink mode active task progress agent logo to sit on a colored background")
+	}
 	if !strings.Contains(stylesheet, `#moltenbot-hub-link:hover img,`) {
 		t.Fatalf("expected stylesheet to give molten bot hub icon a hover-specific treatment")
 	}
