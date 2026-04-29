@@ -7741,10 +7741,6 @@
 
           const promptActions = document.createElement("div");
           promptActions.className = "task-top-actions";
-          const githubAction = renderTaskPullRequestAction(task);
-          if (githubAction) {
-            promptActions.appendChild(githubAction);
-          }
           if (taskHistoryView && canCopyTaskCloneCommand(task)) {
             const cloneButton = document.createElement("button");
             cloneButton.type = "button";
@@ -7760,6 +7756,10 @@
               void copyTaskCloneCommand(task, cloneButton);
             });
             promptActions.appendChild(cloneButton);
+          }
+          const githubAction = renderTaskPullRequestAction(task);
+          if (githubAction) {
+            promptActions.appendChild(githubAction);
           }
 
           const closeAction = renderTaskCloseButton(task, requestID);
@@ -7801,9 +7801,29 @@
           topActions.appendChild(outputAction);
         }
 
-        const githubAction = renderTaskPullRequestAction(task);
-        if (githubAction) {
-          topActions.appendChild(githubAction);
+        const showTaskCloneAction = canCopyTaskCloneCommand(task);
+        const inlineCompletedActions = isCompletedTask(task) && showTaskCloneAction;
+        const showTaskSideActions = showTaskCloneAction && !inlineCompletedActions;
+        if (inlineCompletedActions) {
+          const cloneButton = document.createElement("button");
+          cloneButton.type = "button";
+          cloneButton.className = "task-copy-link";
+          cloneButton.style.width = TASK_SIDE_ACTION_SIZE_PX;
+          cloneButton.style.minWidth = TASK_SIDE_ACTION_SIZE_PX;
+          cloneButton.style.height = TASK_SIDE_ACTION_SIZE_PX;
+          cloneButton.style.flex = `0 0 ${TASK_SIDE_ACTION_SIZE_PX}`;
+          cloneButton.style.alignSelf = "center";
+          cloneButton.title = "Clone locally to test and review changes.";
+          cloneButton.setAttribute("aria-label", "Clone locally to test and review changes.");
+
+          const cloneLogo = createTaskCloneIcon();
+          cloneButton.appendChild(cloneLogo);
+
+          cloneButton.addEventListener("click", (event) => {
+            event.stopPropagation();
+            void copyTaskCloneCommand(task, cloneButton);
+          });
+          topActions.appendChild(cloneButton);
         }
 
         const taskControlBusy = isTaskControlInFlight(requestID);
@@ -7892,31 +7912,9 @@
           topActions.appendChild(rerun);
         }
 
-        const showTaskCloneAction = canCopyTaskCloneCommand(task);
-        const showTaskSideActions = showTaskCloneAction;
-        const inlineHistoryActions = taskHistoryView && showTaskSideActions;
-        if (inlineHistoryActions) {
-          if (showTaskCloneAction) {
-            const cloneButton = document.createElement("button");
-            cloneButton.type = "button";
-            cloneButton.className = "task-copy-link";
-            cloneButton.style.width = TASK_SIDE_ACTION_SIZE_PX;
-            cloneButton.style.minWidth = TASK_SIDE_ACTION_SIZE_PX;
-            cloneButton.style.height = TASK_SIDE_ACTION_SIZE_PX;
-            cloneButton.style.flex = `0 0 ${TASK_SIDE_ACTION_SIZE_PX}`;
-            cloneButton.style.alignSelf = "center";
-            cloneButton.title = "Clone locally to test and review changes.";
-            cloneButton.setAttribute("aria-label", "Clone locally to test and review changes.");
-
-            const cloneLogo = createTaskCloneIcon();
-            cloneButton.appendChild(cloneLogo);
-
-            cloneButton.addEventListener("click", (event) => {
-              event.stopPropagation();
-              void copyTaskCloneCommand(task, cloneButton);
-            });
-            topActions.appendChild(cloneButton);
-          }
+        const githubAction = renderTaskPullRequestAction(task);
+        if (githubAction) {
+          topActions.appendChild(githubAction);
         }
 
         const close = renderTaskCloseButton(task, requestID);
@@ -7961,9 +7959,6 @@
         }
 
         node.classList.toggle("task-has-side-actions", showTaskSideActions);
-        if (inlineHistoryActions) {
-          node.classList.remove("task-has-side-actions");
-        }
         if (collapsed) {
           const compactState = renderTaskCurrentStateBadge(task);
           if (compactState) {
@@ -7975,7 +7970,7 @@
           node.appendChild(badge);
         }
         node.appendChild(body);
-        if (showTaskSideActions && !inlineHistoryActions) {
+        if (showTaskSideActions) {
           const sideActions = document.createElement("div");
           sideActions.className = "task-side-actions";
 
