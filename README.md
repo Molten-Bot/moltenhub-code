@@ -22,8 +22,9 @@ The runtime image includes:
 
 - Go `1.26.1`
 - Python 3, `pip`, `virtualenv`, and the latest OpenAI Python SDK (`openai`)
-- `git`, `gh`, `jq`, `openssh-client`, `rg`
+- `git`, `gh`, `jq`, `openssh-client`, `rg`, `file`
 - `@openai/codex`, `@anthropic-ai/claude-code`, `@augmentcode/auggie`, `@mariozechner/pi-coding-agent`, and `@playwright/test`
+- Playwright Chromium browser binaries and system dependencies for screenshots and UI checks
 
 ### Local Build
 

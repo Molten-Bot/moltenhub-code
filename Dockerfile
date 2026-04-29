@@ -1,4 +1,4 @@
-FROM golang:1.26.1-alpine3.23 AS build
+FROM golang:1.26.1-bookworm AS build
 WORKDIR /src
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
@@ -13,7 +13,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -o /out/harness ./cmd/harness
 
-FROM node:25.8.1-alpine3.23 AS runtime
+FROM node:25.8.1-bookworm-slim AS runtime
 ENV GIT_TERMINAL_PROMPT=0 \
     HARNESS_AGENT_HARNESS="" \
     HARNESS_AGENT_COMMAND="" \
@@ -21,16 +21,21 @@ ENV GIT_TERMINAL_PROMPT=0 \
     HARNESS_WORKSPACE_RAM_BASE=/workspace \
     HARNESS_WORKSPACE_DISK_BASE=/workspace \
     HOME=/workspace/config/home \
+    NODE_PATH=/usr/local/lib/node_modules \
+    PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
+    PLAYWRIGHT_SKIP_BROWSER_GC=1 \
     PATH="/usr/local/go/bin:${PATH}"
 
-RUN apk add --no-cache \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
         ca-certificates \
+        file \
         git \
-        github-cli \
+        gh \
         jq \
-        openssh-client-default \
-        py3-pip \
-        py3-virtualenv \
+        openssh-client \
+        python3-pip \
+        python3-venv \
         python3 \
         ripgrep \
     && ln -sf /usr/bin/python3 /usr/local/bin/python \
@@ -41,10 +46,13 @@ RUN apk add --no-cache \
       @anthropic-ai/claude-code@latest \
       @augmentcode/auggie@latest \
       @mariozechner/pi-coding-agent@latest \
+      playwright@latest \
       @playwright/test@latest \
+    && playwright install --with-deps chromium \
     && npm cache clean --force \
+    && rm -rf /var/lib/apt/lists/* /tmp/* \
     && mkdir -p /workspace/config/home /workspace/moltenhub-code/tasks \
-    && chown -R node:node /workspace
+    && chown -R node:node /workspace /opt/ms-playwright
 WORKDIR /workspace
 
 COPY --from=build --chmod=755 /out/harness /usr/local/bin/harness
@@ -53,7 +61,9 @@ COPY library /opt/moltenhub/library
 COPY skills /opt/moltenhub/skills
 COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/entrypoint
 COPY --chmod=755 docker/with-config.sh /usr/local/bin/with-config
-RUN ln -s /opt/moltenhub/library /workspace/library \
+RUN ln -sf /usr/local/go/bin/go /usr/local/bin/go \
+    && ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt \
+    && ln -s /opt/moltenhub/library /workspace/library \
     && ln -s /opt/moltenhub/skills /workspace/skills
 
 VOLUME ["/workspace/config"]
