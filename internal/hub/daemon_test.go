@@ -942,8 +942,11 @@ func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
 	if got := fmt.Sprint(publishedMsgs[0]["status"]); got != "error" {
 		t.Fatalf("first publish status = %q, want error", got)
 	}
-	if got := fmt.Sprint(publishedMsgs[1]["request_id"]); got != "req-fail-rerun" {
-		t.Fatalf("rerun request_id = %q, want req-fail-rerun", got)
+	if got := fmt.Sprint(publishedMsgs[1]["request_id"]); got != "req-fail-failure-review" {
+		t.Fatalf("follow-up request_id = %q, want req-fail-failure-review", got)
+	}
+	if got := fmt.Sprint(publishedMsgs[1]["config"]); !strings.Contains(got, config.DefaultRepositoryURL) {
+		t.Fatalf("follow-up config = %q, want moltenhub-code repo", got)
 	}
 	if got := len(offlineReasons); got != 1 {
 		t.Fatalf("offline requests = %d, want 1", got)
@@ -1078,8 +1081,11 @@ func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
 	if got := fmt.Sprint(publishedMsgs[0]["error"]); !strings.Contains(got, "dispatch acquire: dispatch controller is closed") {
 		t.Fatalf("message.error = %q", got)
 	}
-	if got := fmt.Sprint(publishedMsgs[1]["request_id"]); got != "req-closed-controller-rerun" {
-		t.Fatalf("rerun request_id = %q, want req-closed-controller-rerun", got)
+	if got := fmt.Sprint(publishedMsgs[1]["request_id"]); got != "req-closed-controller-failure-review" {
+		t.Fatalf("follow-up request_id = %q, want req-closed-controller-failure-review", got)
+	}
+	if got := fmt.Sprint(publishedMsgs[1]["config"]); !strings.Contains(got, config.DefaultRepositoryURL) {
+		t.Fatalf("follow-up config = %q, want moltenhub-code repo", got)
 	}
 	if got := len(offlineReasons); got != 1 {
 		t.Fatalf("offline requests = %d, want 1", got)

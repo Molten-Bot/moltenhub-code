@@ -781,11 +781,8 @@ func TestShouldQueueFailureFollowUpSkipsNestedFailureFollowUpSource(t *testing.T
 	}
 
 	ok, reason = shouldQueueFailureFollowUp(localSubmitSource, harness.Result{Err: errors.New("clone failed")})
-	if ok {
-		t.Fatal("shouldQueueFailureFollowUp(local_submit,error) = true, want false")
-	}
-	if reason != automaticFailureFollowUpDisabledReason {
-		t.Fatalf("reason = %q, want %q", reason, automaticFailureFollowUpDisabledReason)
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureFollowUp(local_submit,error) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
 	ok, reason = shouldQueueFailureFollowUp("hub_dispatch", harness.Result{Err: errors.New("clone failed")})
@@ -817,8 +814,8 @@ func TestShouldQueueFailureRerunSkipsNestedFailureRerunSource(t *testing.T) {
 	}
 
 	ok, reason = shouldQueueFailureRerun(localSubmitSource, harness.Result{Err: errors.New("clone failed")})
-	if !ok || reason != "" {
-		t.Fatalf("shouldQueueFailureRerun(local_submit,error) = (%v, %q), want (true, \"\")", ok, reason)
+	if ok || reason != automaticFailureRerunDisabledReason {
+		t.Fatalf("shouldQueueFailureRerun(local_submit,error) = (%v, %q), want (false, %q)", ok, reason, automaticFailureRerunDisabledReason)
 	}
 
 	ok, reason = shouldQueueFailureRerun("hub_dispatch", harness.Result{Err: errors.New("clone failed")})
@@ -1180,7 +1177,7 @@ func TestFollowUpTaskLogPathsArchivesLocalTaskLogs(t *testing.T) {
 	}
 }
 
-func TestShouldQueueFailureFollowUpSkipsAutomaticFailureReviewForNoDeltaFailures(t *testing.T) {
+func TestShouldQueueFailureFollowUpQueuesNoDeltaFailures(t *testing.T) {
 	t.Parallel()
 
 	result := harness.Result{
@@ -1188,11 +1185,8 @@ func TestShouldQueueFailureFollowUpSkipsAutomaticFailureReviewForNoDeltaFailures
 	}
 
 	ok, reason := shouldQueueFailureFollowUp("local_submit", result)
-	if ok {
-		t.Fatal("shouldQueueFailureFollowUp() = true, want false")
-	}
-	if reason != automaticFailureFollowUpDisabledReason {
-		t.Fatalf("reason = %q, want %q", reason, automaticFailureFollowUpDisabledReason)
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureFollowUp() = (%v, %q), want (true, \"\")", ok, reason)
 	}
 }
 
@@ -1220,42 +1214,42 @@ func TestTaskLogDirAndTaskLogPathsValidateInputs(t *testing.T) {
 	}
 }
 
-func TestShouldQueueFailureFollowUpSkipsAutomaticFailureReviewForRuntimeFailures(t *testing.T) {
+func TestShouldQueueFailureFollowUpSkipsNonRemediableFailureReasons(t *testing.T) {
 	t.Parallel()
 
 	ok, reason := shouldQueueFailureFollowUp("local_submit", harness.Result{
 		Err: errors.New("codex: ERROR: Quota exceeded. Check your plan and billing details."),
 	})
-	if ok || reason != automaticFailureFollowUpDisabledReason {
-		t.Fatalf("shouldQueueFailureFollowUp(quota exceeded) = (%v, %q), want (false, %q)", ok, reason, automaticFailureFollowUpDisabledReason)
+	if ok || !strings.Contains(reason, "quota exceeded") {
+		t.Fatalf("shouldQueueFailureFollowUp(quota exceeded) = (%v, %q), want non-remediable quota skip", ok, reason)
 	}
 
 	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{
 		Err: errors.New("codex: unexpected status 401 Unauthorized: Missing bearer or basic authentication in header"),
 	})
-	if ok || reason != automaticFailureFollowUpDisabledReason {
-		t.Fatalf("shouldQueueFailureFollowUp(auth failure) = (%v, %q), want (false, %q)", ok, reason, automaticFailureFollowUpDisabledReason)
+	if ok || !strings.Contains(reason, "401 unauthorized") {
+		t.Fatalf("shouldQueueFailureFollowUp(auth failure) = (%v, %q), want non-remediable auth skip", ok, reason)
 	}
 
 	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{
 		Err: errors.New("clone: run git [clone ...]: exit status 128"),
 	})
-	if ok || reason != automaticFailureFollowUpDisabledReason {
-		t.Fatalf("shouldQueueFailureFollowUp(clone failure) = (%v, %q), want (false, %q)", ok, reason, automaticFailureFollowUpDisabledReason)
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueFailureFollowUp(clone failure) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
 	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{
 		Err: errors.New("git: verify remote write access for repo https://github.com/acme/repo.git branch \"moltenhub-fix\": exit status 128: remote: Write access to repository not granted. fatal: unable to access 'https://github.com/acme/repo.git/': The requested URL returned error: 403"),
 	})
-	if ok || reason != automaticFailureFollowUpDisabledReason {
-		t.Fatalf("shouldQueueFailureFollowUp(repo write access failure) = (%v, %q), want (false, %q)", ok, reason, automaticFailureFollowUpDisabledReason)
+	if ok || !strings.Contains(reason, "write access to repository not granted") {
+		t.Fatalf("shouldQueueFailureFollowUp(repo write access failure) = (%v, %q), want non-remediable repo access skip", ok, reason)
 	}
 
 	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{
 		Err: errors.New("git: run git [push -u origin moltenhub-branch]: exit status 1: remote: refusing to allow an OAuth App to create or update workflow `.github/workflows/docker-release.yml` without `workflow` scope"),
 	})
-	if ok || reason != automaticFailureFollowUpDisabledReason {
-		t.Fatalf("shouldQueueFailureFollowUp(workflow scope failure) = (%v, %q), want (false, %q)", ok, reason, automaticFailureFollowUpDisabledReason)
+	if ok || !strings.Contains(reason, "refusing to allow an oauth app to create or update workflow") {
+		t.Fatalf("shouldQueueFailureFollowUp(workflow scope failure) = (%v, %q), want non-remediable workflow-scope skip", ok, reason)
 	}
 }
 

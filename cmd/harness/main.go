@@ -49,7 +49,7 @@ const rerunSource = "rerun"
 const failureFollowUpSource = "failure_followup"
 const noChangesFollowUpSource = "no_changes_followup"
 const noChangesEscalationSource = "no_changes_escalation"
-const automaticFailureFollowUpDisabledReason = "automatic failure follow-up disabled; queue single rerun only"
+const automaticFailureRerunDisabledReason = "automatic failure rerun disabled; queue failure follow-up in moltenhub-code"
 
 const hubBootDiagnosticTimeout = 10 * time.Second
 const hubPingDiagnosticTimeout = 5 * time.Second
@@ -1328,7 +1328,10 @@ func shouldQueueFailureFollowUp(source string, failedResult harness.Result) (boo
 	if source == "hub_dispatch" {
 		return false, "hub dispatch failures are already escalated by hub transport"
 	}
-	return false, automaticFailureFollowUpDisabledReason
+	if reason := failurefollowup.NonRemediableFailureReason(failedResult.Err); reason != "" {
+		return false, "failure is not remediable by code changes: " + reason
+	}
+	return true, ""
 }
 
 func shouldQueueFailureRerun(source string, failedResult harness.Result) (bool, string) {
@@ -1347,7 +1350,7 @@ func shouldQueueFailureRerun(source string, failedResult harness.Result) (bool, 
 	case rerunSource:
 		return false, "run is already a failure rerun"
 	}
-	return true, ""
+	return false, automaticFailureRerunDisabledReason
 }
 
 type localRunEnqueueFunc func(context.Context, config.Config, bool, string, bool) (string, error)
