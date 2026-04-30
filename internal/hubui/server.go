@@ -45,6 +45,9 @@ type Server struct {
 	ForceRunTask            func(context.Context, string) error
 	StopTask                func(context.Context, string) error
 	ResolveTaskControls     func(string) TaskControls
+	ListScheduledPrompts    func(context.Context) ([]ScheduledPrompt, error)
+	CreateScheduledPrompt   func(context.Context, ScheduledPromptCreateRequest) (ScheduledPrompt, error)
+	DeleteScheduledPrompt   func(context.Context, string) error
 	LoadLibraryTasks        func() ([]library.TaskSummary, error)
 	AgentAuthStatus         func(context.Context) (AgentAuthState, error)
 	StartAgentAuth          func(context.Context) (AgentAuthState, error)
@@ -107,6 +110,26 @@ type HubSetupStep struct {
 	Label  string `json:"label,omitempty"`
 	Status string `json:"status,omitempty"`
 	Detail string `json:"detail,omitempty"`
+}
+
+// ScheduledPrompt is the UI/API shape for one persisted prompt schedule.
+type ScheduledPrompt struct {
+	ID            string          `json:"id"`
+	Name          string          `json:"name,omitempty"`
+	EveryMinutes  int             `json:"every_minutes"`
+	CreatedAt     string          `json:"created_at,omitempty"`
+	NextRunAt     string          `json:"next_run_at,omitempty"`
+	LastRunAt     string          `json:"last_run_at,omitempty"`
+	LastRequestID string          `json:"last_request_id,omitempty"`
+	LastError     string          `json:"last_error,omitempty"`
+	Config        json.RawMessage `json:"config,omitempty"`
+}
+
+// ScheduledPromptCreateRequest captures a local schedule request.
+type ScheduledPromptCreateRequest struct {
+	Name         string          `json:"name"`
+	EveryMinutes int             `json:"every_minutes"`
+	Config       json.RawMessage `json:"config"`
 }
 
 // HubSetupRequest captures the late-stage Hub connect modal payload.
@@ -190,6 +213,8 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/api/library/run", s.handleLibraryRun)
 	mux.HandleFunc("/api/stream", s.handleStream)
 	mux.HandleFunc("/api/local-prompt", s.handleLocalPrompt)
+	mux.HandleFunc("/api/schedules", s.handleSchedules)
+	mux.HandleFunc("/api/schedules/", s.handleScheduleAction)
 	mux.HandleFunc("/api/github/profile", s.handleGitHubProfile)
 	mux.HandleFunc("/api/hub-setup", s.handleHubSetup)
 	mux.HandleFunc("/api/hub-setup/connect", s.handleHubSetupConnect)
@@ -888,6 +913,106 @@ func resolveAuthenticatedGitHubProfileURL(ctx context.Context, client *http.Clie
 
 func (s Server) handleLocalPrompt(w http.ResponseWriter, r *http.Request) {
 	s.handlePromptSubmit(w, r, s.SubmitLocalPrompt, "studio submit is unavailable")
+}
+
+func (s Server) handleSchedules(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		if s.ListScheduledPrompts == nil {
+			writeJSON(w, http.StatusOK, map[string]any{
+				"ok":        true,
+				"schedules": []ScheduledPrompt{},
+			})
+			return
+		}
+		schedules, err := s.ListScheduledPrompts(r.Context())
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{
+				"ok":    false,
+				"error": fmt.Sprintf("load schedules: %v", err),
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":        true,
+			"schedules": schedules,
+		})
+	case http.MethodPost:
+		if s.CreateScheduledPrompt == nil {
+			writeJSON(w, http.StatusNotImplemented, map[string]any{
+				"ok":    false,
+				"error": "scheduled prompts are unavailable",
+			})
+			return
+		}
+		body, err := io.ReadAll(io.LimitReader(r.Body, maxLocalPromptBodyBytes))
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"ok":    false,
+				"error": fmt.Sprintf("read request body: %v", err),
+			})
+			return
+		}
+		var req ScheduledPromptCreateRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"ok":    false,
+				"error": fmt.Sprintf("decode request body: %v", err),
+			})
+			return
+		}
+		schedule, err := s.CreateScheduledPrompt(r.Context(), req)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"ok":    false,
+				"error": err.Error(),
+			})
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"ok":       true,
+			"schedule": schedule,
+		})
+	default:
+		w.Header().Set("Allow", strings.Join([]string{http.MethodGet, http.MethodPost}, ", "))
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s Server) handleScheduleAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		w.Header().Set("Allow", http.MethodDelete)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.DeleteScheduledPrompt == nil {
+		writeJSON(w, http.StatusNotImplemented, map[string]any{
+			"ok":    false,
+			"error": "scheduled prompts are unavailable",
+		})
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/api/schedules/")
+	if id == r.URL.Path || id == "" {
+		http.NotFound(w, r)
+		return
+	}
+	decoded, err := url.PathUnescape(strings.Trim(id, "/"))
+	if err != nil || strings.TrimSpace(decoded) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": "schedule id is required",
+		})
+		return
+	}
+	if err := s.DeleteScheduledPrompt(r.Context(), strings.TrimSpace(decoded)); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": err.Error(),
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (s Server) handleLibraryRun(w http.ResponseWriter, r *http.Request) {

@@ -348,6 +348,45 @@
   ]
 }'></textarea>
               </div>
+              <div class="prompt-grid">
+                <label class="prompt-field prompt-field-schedule-interval">
+                  <span class="prompt-label">Schedule</span>
+                  <span class="prompt-select-action-wrap">
+                    <select id="schedule-interval-select" class="prompt-control">
+                      <option value="15">Every 15 minutes</option>
+                      <option value="30">Every 30 minutes</option>
+                      <option value="60">Every hour</option>
+                      <option value="360">Every 6 hours</option>
+                      <option value="1440">Every day</option>
+                    </select>
+                    <button
+                      id="schedule-create"
+                      class="prompt-history-delete"
+                      type="button"
+                      aria-label="Schedule current prompt"
+                      title="Schedule current prompt">
+                      <i data-lucide="calendar-plus" class="prompt-history-delete-icon" aria-hidden="true"></i>
+                    </button>
+                  </span>
+                </label>
+                <label class="prompt-field prompt-field-scheduled-prompts">
+                  <span class="prompt-label">Scheduled Tasks</span>
+                  <span class="prompt-select-action-wrap">
+                    <select id="scheduled-prompt-select" class="prompt-control">
+                      <option value="">No scheduled tasks</option>
+                    </select>
+                    <button
+                      id="scheduled-prompt-delete"
+                      class="prompt-history-delete"
+                      type="button"
+                      aria-label="Delete selected schedule"
+                      title="Select scheduled task to delete"
+                      disabled>
+                      <i data-lucide="trash-2" class="prompt-history-delete-icon" aria-hidden="true"></i>
+                    </button>
+                  </span>
+                </label>
+              </div>
               <div class="prompt-actions">
                 <div class="prompt-actions-start">
                   <div
@@ -1683,6 +1722,8 @@
       reviewerHistory: loadReviewerHistory(),
       promptMode: loadPromptMode(),
       selectedLibraryTask: "",
+      scheduledPrompts: [],
+      scheduleBusy: false,
       promptVisible: loadPromptVisibility(),
       taskPanelView: loadTaskPanelView(),
       taskStatusFilter: loadTaskStatusFilter(),
@@ -1828,6 +1869,10 @@
     const libraryReviewerField = document.getElementById("library-reviewer-field");
     const libraryReviewerInput = document.getElementById("library-reviewer-input");
     const libraryTaskList = document.getElementById("library-task-list");
+    const scheduleIntervalSelect = document.getElementById("schedule-interval-select");
+    const scheduleCreate = document.getElementById("schedule-create");
+    const scheduledPromptSelect = document.getElementById("scheduled-prompt-select");
+    const scheduledPromptDelete = document.getElementById("scheduled-prompt-delete");
     const rightCol = document.querySelector(".right-col");
     const promptWrap = document.querySelector(".prompt-wrap");
     const promptVisibilityToggle = document.getElementById("prompt-visibility-toggle");
@@ -5153,6 +5198,131 @@
       };
     }
 
+    function scheduleDisplayName(schedule) {
+      const name = String(schedule?.name || "").trim();
+      if (name) {
+        return name;
+      }
+      const cfg = schedule?.config || {};
+      const prompt = String(cfg.prompt || cfg.libraryTaskName || "").replace(/\s+/g, " ").trim();
+      if (prompt) {
+        return prompt.length > 48 ? `${prompt.slice(0, 45)}...` : prompt;
+      }
+      return String(schedule?.id || "Scheduled task").trim();
+    }
+
+    function renderScheduledPromptOptions() {
+      if (!scheduledPromptSelect || !scheduledPromptDelete) {
+        return;
+      }
+      const previous = String(scheduledPromptSelect.value || "").trim();
+      scheduledPromptSelect.innerHTML = "";
+      const schedules = Array.isArray(state.scheduledPrompts) ? state.scheduledPrompts : [];
+      if (!schedules.length) {
+        scheduledPromptSelect.append(new Option("No scheduled tasks", ""));
+      } else {
+        scheduledPromptSelect.append(new Option("Select scheduled task", ""));
+        for (const schedule of schedules) {
+          const minutes = Number(schedule?.every_minutes || schedule?.everyMinutes || 0);
+          const label = `${scheduleDisplayName(schedule)} (${minutes}m)`;
+          scheduledPromptSelect.append(new Option(label, String(schedule?.id || "")));
+        }
+      }
+      if (previous && schedules.some((schedule) => String(schedule?.id || "") === previous)) {
+        scheduledPromptSelect.value = previous;
+      }
+      scheduledPromptDelete.disabled = !String(scheduledPromptSelect.value || "").trim() || state.scheduleBusy;
+      if (scheduleCreate) {
+        scheduleCreate.disabled = state.scheduleBusy;
+      }
+    }
+
+    async function loadScheduledPrompts() {
+      try {
+        const response = await fetch("/api/schedules", { cache: "no-store" });
+        const body = await response.json();
+        if (!response.ok || body?.ok === false) {
+          throw new Error(body?.error || `schedules http ${response.status}`);
+        }
+        state.scheduledPrompts = Array.isArray(body?.schedules) ? body.schedules : [];
+      } catch (err) {
+        state.scheduledPrompts = [];
+        setLocalPromptStatus("error", `Schedule load failed: ${err.message}`);
+      }
+      renderScheduledPromptOptions();
+    }
+
+    async function createScheduledPrompt() {
+      if (state.scheduleBusy) {
+        return;
+      }
+      let normalized = null;
+      try {
+        normalized = currentPromptPayload();
+      } catch (err) {
+        setLocalPromptStatus("error", `Invalid input: ${err.message}`);
+        return;
+      }
+      const everyMinutes = Number(scheduleIntervalSelect?.value || 0);
+      if (!Number.isFinite(everyMinutes) || everyMinutes < 1) {
+        setLocalPromptStatus("error", "Schedule interval is required.");
+        return;
+      }
+      state.scheduleBusy = true;
+      renderScheduledPromptOptions();
+      try {
+        const configPayload = JSON.parse(normalized.compact);
+        const response = await fetch("/api/schedules", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            every_minutes: everyMinutes,
+            name: scheduleDisplayName({ config: configPayload }),
+            config: configPayload,
+          }),
+        });
+        const body = await response.json();
+        if (!response.ok || body?.ok === false) {
+          throw new Error(body?.error || `schedule http ${response.status}`);
+        }
+        await loadScheduledPrompts();
+        setLocalPromptStatus("ok", `Scheduled ${body?.schedule?.id || "task"}`);
+      } catch (err) {
+        setLocalPromptStatus("error", `Schedule failed: ${err.message}`);
+      } finally {
+        state.scheduleBusy = false;
+        renderScheduledPromptOptions();
+      }
+    }
+
+    async function deleteSelectedScheduledPrompt() {
+      const id = String(scheduledPromptSelect?.value || "").trim();
+      if (!id || state.scheduleBusy) {
+        return;
+      }
+      state.scheduleBusy = true;
+      renderScheduledPromptOptions();
+      try {
+        const response = await fetch(`/api/schedules/${encodeURIComponent(id)}`, { method: "DELETE" });
+        let body = null;
+        try {
+          body = await response.json();
+        } catch (_err) {
+          body = null;
+        }
+        if (!response.ok || body?.ok === false) {
+          throw new Error(body?.error || `delete schedule http ${response.status}`);
+        }
+        state.scheduledPrompts = state.scheduledPrompts.filter((schedule) => String(schedule?.id || "") !== id);
+        setLocalPromptStatus("ok", `Deleted schedule ${id}`);
+      } catch (err) {
+        setLocalPromptStatus("error", `Delete failed: ${err.message}`);
+      } finally {
+        state.scheduleBusy = false;
+        renderScheduledPromptOptions();
+      }
+    }
+
     function resetBuilderTargetSubdir() {
       builderTargetSubdir.value = ".";
       libraryTargetSubdir.value = ".";
@@ -8325,6 +8495,7 @@
         await loadAgentAuthStatus();
         await loadGitHubProfileLink();
         await loadLibraryTasks();
+        await loadScheduledPrompts();
         const response = await fetch("/api/state", { cache: "no-store" });
         if (!response.ok) {
           throw new Error(`state http ${response.status}`);
@@ -8490,6 +8661,21 @@
       trackAnalyticsEvent("repo_history_removed", { prompt_mode: "library" });
       removeSelectedRepoFromHistory(libraryRepoSelect);
     });
+    if (scheduleCreate) {
+      scheduleCreate.addEventListener("click", () => {
+        trackAnalyticsEvent("schedule_created", { prompt_mode: state.promptMode });
+        void createScheduledPrompt();
+      });
+    }
+    if (scheduledPromptSelect) {
+      scheduledPromptSelect.addEventListener("change", renderScheduledPromptOptions);
+    }
+    if (scheduledPromptDelete) {
+      scheduledPromptDelete.addEventListener("click", () => {
+        trackAnalyticsEvent("schedule_deleted", { prompt_mode: state.promptMode });
+        void deleteSelectedScheduledPrompt();
+      });
+    }
 
     builderReviewerSelect.addEventListener("change", () => {
       const rawValue = String(builderReviewerSelect.value || "").trim();
