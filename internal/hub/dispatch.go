@@ -25,6 +25,7 @@ func ParseSkillDispatch(msg map[string]any, expectedType, expectedSkill string) 
 	if len(msg) == 0 {
 		return SkillDispatch{}, false, nil
 	}
+	msg = normalizeA2ADispatchMessage(msg, expectedType, expectedSkill)
 
 	eventType := firstNonEmpty(
 		stringAt(msg, "type"),
@@ -278,14 +279,22 @@ func applySkillSpecificRunConfigDefaults(parsed map[string]any, skillName string
 func extractConfigValue(msg map[string]any) (any, bool) {
 	paths := [][]string{
 		{"config"},
+		{"run_config"},
+		{"runConfig"},
 		{"input", "config"},
+		{"input", "run_config"},
+		{"input", "runConfig"},
 		{"input", "input"},
 		{"input"},
 		{"payload", "config"},
+		{"payload", "run_config"},
+		{"payload", "runConfig"},
 		{"payload", "input", "config"},
 		{"payload", "input", "input"},
 		{"payload", "input"},
 		{"data", "config"},
+		{"data", "run_config"},
+		{"data", "runConfig"},
 		{"data", "input", "config"},
 		{"data", "input", "input"},
 		{"data", "input"},
@@ -324,6 +333,268 @@ func looksLikeRunConfigMap(v map[string]any) bool {
 	return prompt != "" && (repo != "" || hasNonEmptyStringArray(v["repos"]))
 }
 
+func normalizeA2ADispatchMessage(msg map[string]any, expectedType, expectedSkill string) map[string]any {
+	if len(msg) == 0 || looksLikeDispatchEnvelope(msg) {
+		return msg
+	}
+	if normalized, ok := a2aTextDispatchMessage(msg, expectedType, expectedSkill); ok {
+		return normalized
+	}
+
+	a2aMsg := extractA2AMessage(msg)
+	if len(a2aMsg) == 0 {
+		return msg
+	}
+	if nested, ok := a2aDispatchEnvelopeFromParts(a2aMsg); ok {
+		return mergeA2ADispatchMetadata(nested, msg, a2aMsg, expectedType, expectedSkill, nil)
+	}
+	configValue, ok := a2aRunConfigFromMessage(msg, a2aMsg)
+	if !ok {
+		return msg
+	}
+	return mergeA2ADispatchMetadata(nil, msg, a2aMsg, expectedType, expectedSkill, configValue)
+}
+
+func a2aTextDispatchMessage(msg map[string]any, expectedType, expectedSkill string) (map[string]any, bool) {
+	kind := strings.ToLower(strings.TrimSpace(stringAt(msg, "kind")))
+	if kind != "text_message" {
+		return nil, false
+	}
+	text := strings.TrimSpace(stringAt(msg, "text"))
+	if text == "" {
+		return nil, false
+	}
+	parsed := toMap(text)
+	if len(parsed) == 0 {
+		return nil, false
+	}
+	if looksLikeDispatchEnvelope(parsed) {
+		return mergeA2ADispatchMetadata(parsed, msg, nil, expectedType, expectedSkill, nil), true
+	}
+	if !looksLikeRunConfigMap(parsed) {
+		if nested, ok := extractConfigValue(parsed); ok {
+			if nestedMap := toMap(nested); len(nestedMap) > 0 && looksLikeRunConfigMap(nestedMap) {
+				parsed = nestedMap
+			} else {
+				return nil, false
+			}
+		} else {
+			return nil, false
+		}
+	}
+	return mergeA2ADispatchMetadata(nil, msg, nil, expectedType, expectedSkill, parsed), true
+}
+
+func extractA2AMessage(msg map[string]any) map[string]any {
+	for _, candidate := range []map[string]any{
+		msg,
+		toMap(valueAtPathAny(msg, "message")),
+		toMap(valueAtPathAny(msg, "request", "message")),
+		toMap(valueAtPathAny(msg, "params", "message")),
+	} {
+		if looksLikeA2AMessage(candidate) {
+			return candidate
+		}
+	}
+
+	for _, task := range []map[string]any{
+		msg,
+		toMap(valueAtPathAny(msg, "task")),
+		toMap(valueAtPathAny(msg, "result", "task")),
+	} {
+		if history, ok := task["history"].([]any); ok {
+			for _, item := range history {
+				if candidate := toMap(item); looksLikeA2AMessage(candidate) {
+					return candidate
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func looksLikeA2AMessage(msg map[string]any) bool {
+	if len(msg) == 0 {
+		return false
+	}
+	if _, ok := msg["parts"]; !ok {
+		return false
+	}
+	return firstNonEmpty(
+		stringAt(msg, "messageId"),
+		stringAt(msg, "message_id"),
+		stringAt(msg, "taskId"),
+		stringAt(msg, "task_id"),
+		stringAt(msg, "contextId"),
+		stringAt(msg, "context_id"),
+		stringAt(msg, "role"),
+	) != "" || len(toMap(msg["metadata"])) > 0
+}
+
+func a2aDispatchEnvelopeFromParts(a2aMsg map[string]any) (map[string]any, bool) {
+	for _, part := range a2aParts(a2aMsg) {
+		for _, raw := range []any{
+			part["data"],
+			part["text"],
+			part["raw"],
+		} {
+			candidate := toMap(raw)
+			if len(candidate) == 0 || !looksLikeDispatchEnvelope(candidate) {
+				continue
+			}
+			return candidate, true
+		}
+	}
+	return nil, false
+}
+
+func a2aRunConfigFromMessage(envelope, a2aMsg map[string]any) (any, bool) {
+	for _, source := range []map[string]any{
+		toMap(a2aMsg["metadata"]),
+		toMap(envelope["metadata"]),
+		toMap(valueAtPathAny(envelope, "request", "metadata")),
+		toMap(valueAtPathAny(envelope, "params", "metadata")),
+	} {
+		if len(source) == 0 {
+			continue
+		}
+		if value, ok := extractConfigValue(source); ok {
+			return value, true
+		}
+	}
+
+	for _, part := range a2aParts(a2aMsg) {
+		if value, ok := extractConfigValue(part); ok {
+			return value, true
+		}
+		for _, raw := range []any{part["data"], part["text"], part["raw"]} {
+			if candidate := toMap(raw); len(candidate) > 0 {
+				if looksLikeRunConfigMap(candidate) {
+					return candidate, true
+				}
+				if value, ok := extractConfigValue(candidate); ok {
+					return value, true
+				}
+			}
+		}
+	}
+	return nil, false
+}
+
+func mergeA2ADispatchMetadata(
+	base map[string]any,
+	transport map[string]any,
+	a2aMsg map[string]any,
+	expectedType string,
+	expectedSkill string,
+	configValue any,
+) map[string]any {
+	out := cloneMetadataMap(base)
+	if out == nil {
+		out = map[string]any{}
+	}
+
+	setStringIfMissing(out, "type", firstNonEmpty(expectedType, defaultRuntimeDispatchType))
+	skill := firstNonEmpty(
+		stringAt(out, "skill"),
+		stringAt(out, "skill_name"),
+		stringAt(toMap(a2aMsg["metadata"]), "skill"),
+		stringAt(toMap(a2aMsg["metadata"]), "skill_name"),
+		stringAt(toMap(transport["metadata"]), "skill"),
+		stringAt(toMap(transport["metadata"]), "skill_name"),
+		expectedSkill,
+	)
+	setStringIfMissing(out, "skill", normalizeSkillName(skill))
+	if configValue != nil {
+		if _, exists := out["config"]; !exists {
+			out["config"] = configValue
+		}
+	}
+
+	messageID := firstNonEmpty(
+		stringAt(out, "request_id"),
+		stringAt(a2aMsg, "messageId"),
+		stringAt(a2aMsg, "message_id"),
+		stringAt(transport, "message_id"),
+		stringAt(transport, "messageId"),
+		stringAt(transport, "client_msg_id"),
+		stringAt(transport, "clientMsgId"),
+	)
+	setStringIfMissing(out, "request_id", messageID)
+
+	taskID := firstNonEmpty(
+		stringAt(out, "hub_task_id"),
+		stringAt(out, "a2a_task_id"),
+		stringAt(a2aMsg, "taskId"),
+		stringAt(a2aMsg, "task_id"),
+		stringAt(transport, "taskId"),
+		stringAt(transport, "task_id"),
+		stringAt(transport, "a2a_task_id"),
+		stringAt(transport, "a2aTaskId"),
+	)
+	setStringIfMissing(out, "hub_task_id", taskID)
+	setStringIfMissing(out, "a2a_task_id", taskID)
+
+	contextID := firstNonEmpty(stringAt(a2aMsg, "contextId"), stringAt(a2aMsg, "context_id"))
+	setStringIfMissing(out, "context_id", contextID)
+	setStringIfMissing(out, "a2a_context_id", contextID)
+
+	for _, key := range []string{
+		"reply_to",
+		"from",
+		"from_agent_uri",
+		"from_agent_uuid",
+		"from_agent_id",
+		"source_agent_uri",
+		"source_agent_uuid",
+		"source_agent_id",
+		"to_agent_uri",
+		"to_agent_uuid",
+		"to_agent_id",
+		"client_msg_id",
+		"clientMsgId",
+		"message_id",
+		"messageId",
+	} {
+		setStringIfMissing(out, key, stringAt(transport, key))
+	}
+	return out
+}
+
+func a2aParts(msg map[string]any) []map[string]any {
+	switch parts := msg["parts"].(type) {
+	case []any:
+		out := make([]map[string]any, 0, len(parts))
+		for _, part := range parts {
+			if partMap := toMap(part); len(partMap) > 0 {
+				out = append(out, partMap)
+			}
+		}
+		return out
+	case []map[string]any:
+		return parts
+	default:
+		return nil
+	}
+}
+
+func setStringIfMissing(target map[string]any, key, value string) {
+	if target == nil || strings.TrimSpace(key) == "" || strings.TrimSpace(value) == "" {
+		return
+	}
+	if strings.TrimSpace(stringAt(target, key)) == "" {
+		target[key] = strings.TrimSpace(value)
+	}
+}
+
+func valueAtPathAny(root map[string]any, path ...string) any {
+	value, ok := valueAtPath(root, path...)
+	if !ok {
+		return nil
+	}
+	return value
+}
+
 func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames []string) map[string]any {
 	dispatchType = strings.TrimSpace(dispatchType)
 	if dispatchType == "" {
@@ -341,14 +612,22 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 		},
 		"accepted_payload_paths": []string{
 			"config",
+			"run_config",
+			"runConfig",
 			"input.config",
+			"input.run_config",
+			"input.runConfig",
 			"input.input",
 			"input",
 			"payload.config",
+			"payload.run_config",
+			"payload.runConfig",
 			"payload.input.config",
 			"payload.input.input",
 			"payload.input",
 			"data.config",
+			"data.run_config",
+			"data.runConfig",
 			"data.input.config",
 			"data.input.input",
 			"data.input",

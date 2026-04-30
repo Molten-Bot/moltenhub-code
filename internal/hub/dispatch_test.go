@@ -208,6 +208,113 @@ func TestParseSkillDispatchAcceptsJSONStringInputAndSourceRouting(t *testing.T) 
 	}
 }
 
+func TestParseSkillDispatchAcceptsA2AEnvelopeDataPart(t *testing.T) {
+	t.Parallel()
+
+	msg := map[string]any{
+		"protocol":       "a2a.v1",
+		"from_agent_uri": "https://na.hub.molten.bot/acme/sender",
+		"message": map[string]any{
+			"messageId": "a2a-msg-1",
+			"contextId": "a2a-context-1",
+			"taskId":    "a2a-task-1",
+			"role":      "ROLE_USER",
+			"parts": []any{
+				map[string]any{
+					"data": map[string]any{
+						"repo":   "git@github.com:acme/repo.git",
+						"prompt": "ship a2a data",
+					},
+				},
+			},
+		},
+	}
+
+	dispatch, matched, err := ParseSkillDispatch(msg, "skill_request", "code_for_me")
+	if err != nil {
+		t.Fatalf("ParseSkillDispatch() error = %v", err)
+	}
+	if !matched {
+		t.Fatal("matched = false, want true")
+	}
+	if dispatch.RequestID != "a2a-msg-1" {
+		t.Fatalf("RequestID = %q", dispatch.RequestID)
+	}
+	if dispatch.HubTaskID != "a2a-task-1" {
+		t.Fatalf("HubTaskID = %q", dispatch.HubTaskID)
+	}
+	if dispatch.ReplyTo != "https://na.hub.molten.bot/acme/sender" {
+		t.Fatalf("ReplyTo = %q", dispatch.ReplyTo)
+	}
+	if dispatch.Config.RepoURL != "git@github.com:acme/repo.git" {
+		t.Fatalf("RepoURL = %q", dispatch.Config.RepoURL)
+	}
+	if dispatch.Config.Prompt != "ship a2a data" {
+		t.Fatalf("Prompt = %q", dispatch.Config.Prompt)
+	}
+}
+
+func TestParseSkillDispatchAcceptsA2ATextPartRunConfig(t *testing.T) {
+	t.Parallel()
+
+	msg := map[string]any{
+		"message": map[string]any{
+			"messageId": "a2a-msg-text",
+			"role":      "ROLE_USER",
+			"metadata": map[string]any{
+				"skill_name": "code_for_me",
+			},
+			"parts": []any{
+				map[string]any{
+					"text": `{"repo":"git@github.com:acme/repo.git","prompt":"ship a2a text"}`,
+				},
+			},
+		},
+	}
+
+	dispatch, matched, err := ParseSkillDispatch(msg, "skill_request", "code_for_me")
+	if err != nil {
+		t.Fatalf("ParseSkillDispatch() error = %v", err)
+	}
+	if !matched {
+		t.Fatal("matched = false, want true")
+	}
+	if dispatch.RequestID != "a2a-msg-text" {
+		t.Fatalf("RequestID = %q", dispatch.RequestID)
+	}
+	if dispatch.Config.Prompt != "ship a2a text" {
+		t.Fatalf("Prompt = %q", dispatch.Config.Prompt)
+	}
+}
+
+func TestParseSkillDispatchAcceptsOpenClawTextMessageRunConfig(t *testing.T) {
+	t.Parallel()
+
+	msg := map[string]any{
+		"kind":           "text_message",
+		"text":           `{"repo":"git@github.com:acme/repo.git","prompt":"ship text message"}`,
+		"from_agent_uri": "https://na.hub.molten.bot/acme/sender",
+		"message_id":     "msg-text",
+	}
+
+	dispatch, matched, err := ParseSkillDispatch(msg, "skill_request", "code_for_me")
+	if err != nil {
+		t.Fatalf("ParseSkillDispatch() error = %v", err)
+	}
+	if !matched {
+		t.Fatal("matched = false, want true")
+	}
+	if dispatch.RequestID != "msg-text" {
+		t.Fatalf("RequestID = %q", dispatch.RequestID)
+	}
+	if dispatch.ReplyTo != "https://na.hub.molten.bot/acme/sender" {
+		t.Fatalf("ReplyTo = %q", dispatch.ReplyTo)
+	}
+	if dispatch.Config.Prompt != "ship text message" {
+		t.Fatalf("Prompt = %q", dispatch.Config.Prompt)
+	}
+}
+
 func TestParseSkillDispatchMatchesLegacyCurrentAndRenamedSkillAliases(t *testing.T) {
 	t.Parallel()
 
