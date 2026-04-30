@@ -2058,6 +2058,8 @@ func TestHandlerIndexIncludesClaudeBrowserCodeFlow(t *testing.T) {
 		`Paste ~/.pi/agent/auth.json contents...`,
 		`agent-auth-configure-input-single-line`,
 		`function clearAgentAuthConfigureInputIfSensitive()`,
+		"state.agentAuth.configureCommand}|${state.agentAuth.configurePlaceholder}",
+		`agentAuthConfigureInput.value = "";`,
 		`GitHub token does not belong in PI auth JSON`,
 		`const useClaudeLogoLink = authHarness(state.agentAuth) === "claude" && authURL !== "" && !useClaudeCommandFlow;`,
 		`const code = claudeBrowserCodeValue();`,
