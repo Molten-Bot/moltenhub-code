@@ -7373,6 +7373,10 @@
           marker.rel = "noopener noreferrer";
           marker.addEventListener("click", (event) => {
             event.stopPropagation();
+            trackAnalyticsEvent("task_github_step_opened", {
+              request_id: taskRequestID(task),
+              progress_step: step.label,
+            });
           });
         }
 

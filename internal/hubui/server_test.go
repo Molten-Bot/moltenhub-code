@@ -1842,6 +1842,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	for _, want := range []string{
 		`trackAnalyticsEvent("task_view_changed", { task_view: nextView });`,
 		`trackAnalyticsEvent("task_pull_request_opened", { request_id: taskRequestID(task) });`,
+		`trackAnalyticsEvent("task_github_step_opened", {`,
 		`trackAnalyticsEvent("hub_setup_started", hubSetupAnalyticsParams({ auto_submit: autoSubmit }));`,
 		`trackAnalyticsEvent("agent_auth_configure_started", agentAuthAnalyticsParams({ auth_method: "github_token" }));`,
 		`trackAnalyticsEvent("prompt_screenshots_attached", {`,
@@ -2089,6 +2090,15 @@ func TestHandlerServesReleasesWithIconStatuses(t *testing.T) {
 	}
 
 	markup := resp.Body.String()
+	if !strings.Contains(markup, `src="https://www.googletagmanager.com/gtag/js?id=G-BY33RFG2WB"`) {
+		t.Fatalf("expected releases html to load the google analytics tag script")
+	}
+	if !strings.Contains(markup, `window.gtag("config", "G-BY33RFG2WB");`) {
+		t.Fatalf("expected releases html to configure google analytics with the moltenhub measurement id")
+	}
+	if !strings.Contains(markup, `trackAnalyticsEvent("releases_home_opened", { source: "releases_header" });`) {
+		t.Fatalf("expected releases html to track header home CTA clicks")
+	}
 	if !strings.Contains(markup, `class="release-change-status release-change-status-improved" title="Improved" aria-label="Improved"`) ||
 		!strings.Contains(markup, `data-lucide="trending-up"`) {
 		t.Fatalf("expected improved release changes to use icon status with hover text")
