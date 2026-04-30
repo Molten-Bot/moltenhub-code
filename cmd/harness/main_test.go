@@ -445,6 +445,27 @@ func TestLoadHubBootConfigAppliesEnvTokensToDefaultConfig(t *testing.T) {
 	}
 }
 
+func TestEffectiveHubSetupConfigKeepsBootstrapGitHubToken(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{"base_url":"https://na.hub.molten.bot/v1","agent_token":"agent_saved","agent_harness":"codex"}`), 0o600); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+
+	cfg, err := effectiveHubSetupConfig(hub.InitConfig{
+		RuntimeConfigPath: configPath,
+		GitHubToken:       "github_token_env_token",
+	})
+	if err != nil {
+		t.Fatalf("effectiveHubSetupConfig() error = %v", err)
+	}
+	if got, want := cfg.GitHubToken, "github_token_env_token"; got != want {
+		t.Fatalf("GitHubToken = %q, want %q", got, want)
+	}
+}
+
 func TestLoadHubBootConfigWithBadRuntimeConfigFallsBackToDefaults(t *testing.T) {
 	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
 	t.Setenv("HARNESS_ALLOW_NON_MOLTEN_HUB_BASE_URL", "")
