@@ -491,6 +491,7 @@ func TestDispatchResultPayloadIncludesRepoResults(t *testing.T) {
 	}
 	dispatch := SkillDispatch{
 		RequestID: "req-22",
+		HubTaskID: "hub-task-22",
 		Skill:     "code_for_me",
 	}
 	res := harness.Result{
@@ -520,6 +521,18 @@ func TestDispatchResultPayloadIncludesRepoResults(t *testing.T) {
 	result, ok := payload["result"].(map[string]any)
 	if !ok {
 		t.Fatalf("result missing or wrong type: %#v", payload["result"])
+	}
+	if got := payload["hub_task_id"]; got != "hub-task-22" {
+		t.Fatalf("hub_task_id = %#v", got)
+	}
+	if got := payload["a2a_task_id"]; got != "hub-task-22" {
+		t.Fatalf("a2a_task_id = %#v", got)
+	}
+	if got := result["hubTaskId"]; got != "hub-task-22" {
+		t.Fatalf("result.hubTaskId = %#v", got)
+	}
+	if got := result["a2aTaskId"]; got != "hub-task-22" {
+		t.Fatalf("result.a2aTaskId = %#v", got)
 	}
 	prURLs, ok := result["prUrls"].([]string)
 	if !ok {

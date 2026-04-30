@@ -974,6 +974,10 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 		result["error"] = errText
 		addExplicitFailureFields(result, errText)
 	}
+	if hubTaskID := strings.TrimSpace(dispatch.HubTaskID); hubTaskID != "" {
+		result["hubTaskId"] = hubTaskID
+		result["a2aTaskId"] = hubTaskID
+	}
 
 	payload := map[string]any{
 		"type":       cfg.Skill.ResultType,
@@ -984,6 +988,10 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 		"ok":         res.Err == nil,
 		"message":    message,
 		"result":     result,
+	}
+	if hubTaskID := strings.TrimSpace(dispatch.HubTaskID); hubTaskID != "" {
+		payload["hub_task_id"] = hubTaskID
+		payload["a2a_task_id"] = hubTaskID
 	}
 	if res.Err != nil {
 		errText := res.Err.Error()
