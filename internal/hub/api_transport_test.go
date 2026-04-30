@@ -312,11 +312,12 @@ func TestPullOpenClawMessageEmptyResultIsNoMessage(t *testing.T) {
 	}
 }
 
-func TestPublishResultUsesOpenClawEnvelope(t *testing.T) {
+func TestPublishResultUsesA2ASendMessage(t *testing.T) {
 	t.Parallel()
 
 	type captured struct {
 		Path string
+		Auth string
 		Body map[string]any
 	}
 	var got captured
@@ -326,7 +327,96 @@ func TestPublishResultUsesOpenClawEnvelope(t *testing.T) {
 		data, _ := io.ReadAll(r.Body)
 		var body map[string]any
 		_ = json.Unmarshal(data, &body)
-		got = captured{Path: r.URL.Path, Body: body}
+		got = captured{Path: r.URL.Path, Auth: r.Header.Get("Authorization"), Body: body}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      body["id"],
+			"result": map[string]any{
+				"task": map[string]any{
+					"id":        "a2a-task-1",
+					"contextId": "req-7",
+					"status": map[string]any{
+						"state": "TASK_STATE_SUBMITTED",
+					},
+				},
+			},
+		})
+	}))
+	defer ts.Close()
+
+	client := NewAPIClient(ts.URL + "/v1")
+	payload := map[string]any{
+		"type":       "skill_result",
+		"request_id": "req-7",
+		"reply_to":   "agent-123",
+		"status":     "ok",
+		"result":     map[string]any{"ok": true},
+	}
+	if err := client.PublishResult(context.Background(), "token", payload); err != nil {
+		t.Fatalf("PublishResult() error = %v", err)
+	}
+
+	if got.Path != "/v1/a2a" {
+		t.Fatalf("path = %q", got.Path)
+	}
+	if got.Auth != "Bearer token" {
+		t.Fatalf("Authorization = %q", got.Auth)
+	}
+	params, ok := got.Body["params"].(map[string]any)
+	if !ok {
+		t.Fatalf("params missing: %#v", got.Body)
+	}
+	if target := readMapString(params["metadata"], "to_agent_uuid"); target != "agent-123" {
+		t.Fatalf("metadata.to_agent_uuid = %#v", target)
+	}
+	msg, ok := params["message"].(map[string]any)
+	if !ok {
+		t.Fatalf("message missing: %#v", params)
+	}
+	if msg["messageId"] != "req-7" {
+		t.Fatalf("messageId = %#v", msg["messageId"])
+	}
+	if target := readMapString(msg["metadata"], "to_agent_uuid"); target != "agent-123" {
+		t.Fatalf("message.metadata.to_agent_uuid = %#v", target)
+	}
+	parts, _ := msg["parts"].([]any)
+	if len(parts) != 1 {
+		t.Fatalf("parts = %#v", msg["parts"])
+	}
+	part, _ := parts[0].(map[string]any)
+	if part["mediaType"] != a2aResultPartMediaType {
+		t.Fatalf("part.mediaType = %#v", part["mediaType"])
+	}
+	var resultPayload map[string]any
+	if err := json.Unmarshal([]byte(readMapString(part, "text")), &resultPayload); err != nil {
+		t.Fatalf("part.text JSON decode error = %v", err)
+	}
+	if resultPayload["type"] != "skill_result" {
+		t.Fatalf("result payload type = %#v", resultPayload["type"])
+	}
+}
+
+func TestPublishResultFallsBackToOpenClaw(t *testing.T) {
+	t.Parallel()
+
+	type captured struct {
+		Path string
+		Body map[string]any
+	}
+	var calls []captured
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		data, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(data, &body)
+		calls = append(calls, captured{Path: r.URL.Path, Body: body})
+		if r.URL.Path == "/v1/a2a" {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"not found"}`))
+			return
+		}
 		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write([]byte(`{"ok":true,"result":{"status":"queued"}}`))
 	}))
@@ -344,18 +434,24 @@ func TestPublishResultUsesOpenClawEnvelope(t *testing.T) {
 		t.Fatalf("PublishResult() error = %v", err)
 	}
 
-	if got.Path != "/v1/openclaw/messages/publish" {
-		t.Fatalf("path = %q", got.Path)
+	if len(calls) != 2 {
+		t.Fatalf("calls = %d, want 2", len(calls))
 	}
-	if got.Body["to_agent_uuid"] != "agent-123" {
-		t.Fatalf("to_agent_uuid = %#v", got.Body["to_agent_uuid"])
+	if calls[0].Path != "/v1/a2a" {
+		t.Fatalf("first path = %q", calls[0].Path)
 	}
-	if got.Body["client_msg_id"] != "req-7" {
-		t.Fatalf("client_msg_id = %#v", got.Body["client_msg_id"])
+	if calls[1].Path != "/v1/openclaw/messages/publish" {
+		t.Fatalf("second path = %q", calls[1].Path)
 	}
-	msg, ok := got.Body["message"].(map[string]any)
+	if calls[1].Body["to_agent_uuid"] != "agent-123" {
+		t.Fatalf("to_agent_uuid = %#v", calls[1].Body["to_agent_uuid"])
+	}
+	if calls[1].Body["client_msg_id"] != "req-7" {
+		t.Fatalf("client_msg_id = %#v", calls[1].Body["client_msg_id"])
+	}
+	msg, ok := calls[1].Body["message"].(map[string]any)
 	if !ok {
-		t.Fatalf("message missing: %#v", got.Body)
+		t.Fatalf("message missing: %#v", calls[1].Body)
 	}
 	if msg["type"] != "skill_result" {
 		t.Fatalf("message.type = %#v", msg["type"])
@@ -377,8 +473,19 @@ func TestPublishResultUsesURIReplyTarget(t *testing.T) {
 		var body map[string]any
 		_ = json.Unmarshal(data, &body)
 		got = captured{Path: r.URL.Path, Body: body}
-		w.WriteHeader(http.StatusAccepted)
-		_, _ = w.Write([]byte(`{"ok":true,"result":{"status":"queued"}}`))
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      body["id"],
+			"result": map[string]any{
+				"task": map[string]any{
+					"id": "a2a-task-uri",
+					"status": map[string]any{
+						"state": "TASK_STATE_SUBMITTED",
+					},
+				},
+			},
+		})
 	}))
 	defer ts.Close()
 
@@ -394,14 +501,18 @@ func TestPublishResultUsesURIReplyTarget(t *testing.T) {
 		t.Fatalf("PublishResult() error = %v", err)
 	}
 
-	if got.Path != "/v1/openclaw/messages/publish" {
+	if got.Path != "/v1/a2a" {
 		t.Fatalf("path = %q", got.Path)
 	}
-	if got.Body["to_agent_uri"] != "https://na.hub.molten.bot/acme/sender" {
-		t.Fatalf("to_agent_uri = %#v", got.Body["to_agent_uri"])
+	params, ok := got.Body["params"].(map[string]any)
+	if !ok {
+		t.Fatalf("params missing: %#v", got.Body)
 	}
-	if _, hasUUID := got.Body["to_agent_uuid"]; hasUUID {
-		t.Fatalf("unexpected to_agent_uuid in body: %#v", got.Body["to_agent_uuid"])
+	if target := readMapString(params["metadata"], "to_agent_uri"); target != "https://na.hub.molten.bot/acme/sender" {
+		t.Fatalf("metadata.to_agent_uri = %#v", target)
+	}
+	if _, hasUUID := params["metadata"].(map[string]any)["to_agent_uuid"]; hasUUID {
+		t.Fatalf("unexpected to_agent_uuid in metadata: %#v", params["metadata"])
 	}
 }
 
@@ -539,6 +650,12 @@ func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
 	if _, exists := secondConfig["prNumber"]; exists {
 		t.Fatalf("skill_catalog[1].activation.input.config.prNumber unexpectedly present: %#v", secondConfig["prNumber"])
 	}
+}
+
+func readMapString(v any, key string) string {
+	m, _ := v.(map[string]any)
+	value, _ := m[key].(string)
+	return value
 }
 
 func TestRecordGitHubTaskCompleteActivityMergesExistingMetadata(t *testing.T) {
