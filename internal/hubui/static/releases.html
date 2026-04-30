@@ -4,6 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Molten Hub Code Releases</title>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-BY33RFG2WB"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { window.dataLayer.push(arguments); }
+    window.gtag = window.gtag || gtag;
+    window.gtag("js", new Date());
+    window.gtag("config", "G-BY33RFG2WB");
+  </script>
   <script src="/static/lucide.min.js"></script>
   <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -39,6 +47,50 @@
     </section>
   </main>
   <script>
+    const GOOGLE_ANALYTICS_MEASUREMENT_ID = "G-BY33RFG2WB";
+
+    function trackAnalyticsEvent(name, params = {}) {
+      if (typeof window.gtag !== "function") {
+        return;
+      }
+
+      const eventName = String(name || "").trim();
+      if (!eventName) {
+        return;
+      }
+
+      const payload = { send_to: GOOGLE_ANALYTICS_MEASUREMENT_ID };
+      for (const [key, value] of Object.entries(params || {})) {
+        if (typeof value === "string") {
+          const trimmed = value.trim();
+          if (trimmed) {
+            payload[key] = trimmed;
+          }
+          continue;
+        }
+        if (typeof value === "number" && Number.isFinite(value)) {
+          payload[key] = value;
+          continue;
+        }
+        if (typeof value === "boolean") {
+          payload[key] = value;
+        }
+      }
+
+      try {
+        window.gtag("event", eventName, payload);
+      } catch (_err) {
+        // Keep release navigation working even if analytics dispatch fails.
+      }
+    }
+
+    const releasesBrand = document.querySelector(".releases-brand");
+    if (releasesBrand) {
+      releasesBrand.addEventListener("click", () => {
+        trackAnalyticsEvent("releases_home_opened", { source: "releases_header" });
+      });
+    }
+
     if (window.lucide) {
       window.lucide.createIcons();
     }
