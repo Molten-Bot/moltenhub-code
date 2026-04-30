@@ -2985,10 +2985,14 @@ html.pink .task-progress-step.current .task-progress-step-icon.is-agent-logo {
 
 .task-fullscreen-close-icon {
   display: block;
-  font-size: 1.6rem;
-  font-weight: 500;
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   line-height: 1;
-  transform: translateY(-1px);
 }
 
 .task-fullscreen-close:hover,
@@ -3010,6 +3014,14 @@ html.pink .task-progress-step.current .task-progress-step-icon.is-agent-logo {
     max(20px, env(safe-area-inset-right))
     max(20px, env(safe-area-inset-bottom))
     max(20px, env(safe-area-inset-left));
+}
+
+.task-fullscreen[data-mode="work"] .task-fullscreen-body {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.task-fullscreen[data-mode="work"] .task-fullscreen-task-panel .scroll {
+  max-height: none;
 }
 
 .task-fullscreen-panel {

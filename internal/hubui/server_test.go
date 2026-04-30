@@ -631,8 +631,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to skip hidden fullscreen task-list renders")
 	}
 	if !strings.Contains(markup, "function clearFullscreenTerminalRender()") ||
-		!strings.Contains(markup, "if (!state.taskFullscreenOpen) {\n        clearFullscreenTerminalRender();\n        return;\n      }") {
-		t.Fatalf("expected index html to clear and skip hidden fullscreen terminal renders")
+		!strings.Contains(markup, "if (!state.taskFullscreenOpen || state.taskFullscreenMode !== \"console\") {\n        clearFullscreenTerminalRender();\n        return;\n      }") {
+		t.Fatalf("expected index html to clear and skip terminal renders outside console fullscreen mode")
 	}
 	if !strings.Contains(markup, "const taskPanelNodes = state.taskFullscreenOpen ? [taskList, taskFullscreenList] : [taskList];") {
 		t.Fatalf("expected deferred task-panel flushes to ignore hidden fullscreen nodes")
@@ -943,8 +943,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="task-fullscreen-close"`) {
 		t.Fatalf("expected index html to include a dedicated full screen close control")
 	}
-	if !strings.Contains(markup, `class="task-fullscreen-close-icon"`) || !strings.Contains(markup, "&times;") {
-		t.Fatalf("expected index html to render the full screen close control as an X icon button")
+	if !strings.Contains(markup, `class="task-fullscreen-close-icon"`) || !strings.Contains(markup, `data-lucide="x"`) {
+		t.Fatalf("expected index html to render the full screen close control as a lucide X icon button")
 	}
 	if !strings.Contains(markup, `<span class="sr-only">Close full screen tasks</span>`) {
 		t.Fatalf("expected index html to preserve an accessible close label for the full screen icon button")

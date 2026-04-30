@@ -428,7 +428,7 @@
   <div id="task-fullscreen" class="task-fullscreen hidden" aria-hidden="true">
     <div class="task-fullscreen-shell">
       <button id="task-fullscreen-close" class="task-fullscreen-close hidden" type="button" aria-label="Close full screen tasks" title="Close full screen tasks">
-        <span class="task-fullscreen-close-icon" aria-hidden="true">&times;</span>
+        <i data-lucide="x" class="task-fullscreen-close-icon" aria-hidden="true"></i>
         <span class="sr-only">Close full screen tasks</span>
       </button>
       <div id="task-fullscreen-body" class="task-fullscreen-body">
@@ -440,7 +440,7 @@
             <div id="task-fullscreen-list" class="task-list"></div>
           </div>
         </section>
-        <section id="task-fullscreen-output-panel" class="panel log-wrap task-fullscreen-panel task-fullscreen-output-panel" aria-hidden="false">
+        <section id="task-fullscreen-output-panel" class="panel log-wrap task-fullscreen-panel task-fullscreen-output-panel hidden" aria-hidden="true">
           <div class="task-head">
             <span id="task-fullscreen-head-label" class="task-fullscreen-head-label">Task output</span>
           </div>
@@ -1727,6 +1727,7 @@
       promptVisible: loadPromptVisibility(),
       taskPanelView: loadTaskPanelView(),
       taskStatusFilter: loadTaskStatusFilter(),
+      taskFullscreenMode: "work",
       promptImages: [],
       rerunInFlight: new Set(),
       closeInFlight: new Set(),
@@ -1816,6 +1817,7 @@
     const taskFullscreenHeadLabel = document.getElementById("task-fullscreen-head-label");
     const taskFullscreenResult = document.getElementById("task-fullscreen-result");
     const taskFullscreenTerminal = document.getElementById("task-fullscreen-terminal");
+    const taskFullscreenOutputPanel = document.getElementById("task-fullscreen-output-panel");
     const libraryPromptModal = document.getElementById("library-prompt-modal");
     const libraryPromptModalTitle = document.getElementById("library-prompt-modal-title");
     const libraryPromptModalBody = document.getElementById("library-prompt-modal-body");
@@ -6438,27 +6440,60 @@
       if (!requestID) return;
       state.selectedTaskId = requestID;
       trackAnalyticsEvent("task_output_opened", { request_id: requestID });
-      setTaskFullscreen(true);
+      setTaskFullscreen(true, "console");
     }
 
-    function setTaskFullscreen(open) {
+    function taskFullscreenMode(mode) {
+      return String(mode || "").trim().toLowerCase() === "console" ? "console" : "work";
+    }
+
+    function renderTaskFullscreenCloseIcon(mode) {
+      if (!taskFullscreenClose) return;
+      const normalizedMode = taskFullscreenMode(mode);
+      const label = normalizedMode === "console" ? "Close console view" : "Exit full screen work";
+      const icon = normalizedMode === "console" ? "x" : "ellipsis";
+      taskFullscreenClose.setAttribute("aria-label", label);
+      taskFullscreenClose.setAttribute("title", label);
+      const glyph = document.createElement("i");
+      glyph.className = "task-fullscreen-close-icon";
+      glyph.setAttribute("data-lucide", icon);
+      glyph.setAttribute("aria-hidden", "true");
+      taskFullscreenClose.replaceChildren(glyph);
+      const sr = document.createElement("span");
+      sr.className = "sr-only";
+      sr.textContent = label;
+      taskFullscreenClose.appendChild(sr);
+      replaceLucideIcons(taskFullscreenClose);
+    }
+
+    function setTaskFullscreen(open, mode = state.taskFullscreenMode) {
       if (open && !displayTasks(state.snapshot).length) {
         open = false;
+      }
+      if (open) {
+        state.taskFullscreenMode = taskFullscreenMode(mode);
       }
       state.taskFullscreenOpen = Boolean(open);
       if (taskFullscreen) {
         taskFullscreen.classList.toggle("hidden", !state.taskFullscreenOpen);
         taskFullscreen.setAttribute("aria-hidden", state.taskFullscreenOpen ? "false" : "true");
+        taskFullscreen.dataset.mode = state.taskFullscreenMode;
       }
       if (taskFullscreenToggle) {
         const hasTasks = displayTasks(state.snapshot).length > 0;
         taskFullscreenToggle.disabled = !hasTasks;
         taskFullscreenToggle.setAttribute("aria-expanded", state.taskFullscreenOpen ? "true" : "false");
-        taskFullscreenToggle.setAttribute("aria-label", "Open full screen tasks");
+        taskFullscreenToggle.setAttribute("aria-label", state.taskFullscreenOpen && state.taskFullscreenMode === "work" ? "Exit full screen work" : "Open full screen work");
       }
       if (taskFullscreenClose) {
         taskFullscreenClose.classList.toggle("hidden", !state.taskFullscreenOpen);
         taskFullscreenClose.setAttribute("aria-hidden", state.taskFullscreenOpen ? "false" : "true");
+        renderTaskFullscreenCloseIcon(state.taskFullscreenMode);
+      }
+      if (taskFullscreenOutputPanel) {
+        const showConsole = state.taskFullscreenOpen && state.taskFullscreenMode === "console";
+        taskFullscreenOutputPanel.classList.toggle("hidden", !showConsole);
+        taskFullscreenOutputPanel.setAttribute("aria-hidden", showConsole ? "false" : "true");
       }
       if (state.taskFullscreenOpen) {
         document.body.classList.add("task-fullscreen-open");
@@ -8242,15 +8277,22 @@
       if (taskFullscreenToggle) {
         taskFullscreenToggle.disabled = !hasTaskPanelTasks;
         taskFullscreenToggle.setAttribute("aria-expanded", state.taskFullscreenOpen ? "true" : "false");
-        taskFullscreenToggle.setAttribute("aria-label", "Open full screen tasks");
+        taskFullscreenToggle.setAttribute("aria-label", state.taskFullscreenOpen && state.taskFullscreenMode === "work" ? "Exit full screen work" : "Open full screen work");
       }
       if (taskFullscreenClose) {
         taskFullscreenClose.classList.toggle("hidden", !state.taskFullscreenOpen);
         taskFullscreenClose.setAttribute("aria-hidden", state.taskFullscreenOpen ? "false" : "true");
+        renderTaskFullscreenCloseIcon(state.taskFullscreenMode);
       }
       if (taskFullscreen) {
         taskFullscreen.classList.toggle("hidden", !state.taskFullscreenOpen);
         taskFullscreen.setAttribute("aria-hidden", state.taskFullscreenOpen ? "false" : "true");
+        taskFullscreen.dataset.mode = state.taskFullscreenMode;
+      }
+      if (taskFullscreenOutputPanel) {
+        const showConsole = state.taskFullscreenOpen && state.taskFullscreenMode === "console";
+        taskFullscreenOutputPanel.classList.toggle("hidden", !showConsole);
+        taskFullscreenOutputPanel.setAttribute("aria-hidden", showConsole ? "false" : "true");
       }
       const taskStatusFilter = normalizeTaskStatusFilter(state.taskStatusFilter);
       const emptyEyebrow = promptOnly
@@ -8305,8 +8347,7 @@
           ? "Prompt-only view keeps each task compact. Completed runs keep their pull request links."
           : "New runs will appear here with their progress, replay controls, local clone actions, and PR links.";
       renderTaskCollection(tasks, taskFullscreenList, null, {
-        showOutputAction: false,
-        allowCollapse: false,
+        showOutputAction: state.taskFullscreenMode !== "console",
         emptyEyebrow,
         emptyTitle,
         emptyCopy,
@@ -8371,15 +8412,8 @@
         return;
       }
 
-      const start = Math.max(0, logs.length - MAX_TERMINAL_LINES);
       const frag = document.createDocumentFragment();
-      if (start > 0) {
-        const truncated = document.createElement("div");
-        truncated.className = "meta-line";
-        truncated.textContent = `... showing latest ${MAX_TERMINAL_LINES} of ${logs.length} lines ...`;
-        frag.appendChild(truncated);
-      }
-      for (let i = start; i < logs.length; i += 1) {
+      for (let i = 0; i < logs.length; i += 1) {
         const row = logs[i];
         const line = document.createElement("div");
         const stream = row.stream || "meta";
@@ -8394,7 +8428,7 @@
     }
 
     function renderFullscreenTerminal(snapshot) {
-      if (!state.taskFullscreenOpen) {
+      if (!state.taskFullscreenOpen || state.taskFullscreenMode !== "console") {
         clearFullscreenTerminalRender();
         return;
       }
@@ -9057,8 +9091,8 @@
     });
     taskFullscreenToggle.addEventListener("click", () => {
       const nextOpen = !state.taskFullscreenOpen;
-      setTaskFullscreen(nextOpen);
-      trackAnalyticsEvent("task_fullscreen_toggled", { open: nextOpen, source: "button" });
+      setTaskFullscreen(nextOpen, "work");
+      trackAnalyticsEvent("task_fullscreen_toggled", { open: nextOpen, source: "button", mode: "work" });
     });
     taskFullscreenClose.addEventListener("click", () => {
       setTaskFullscreen(false);
