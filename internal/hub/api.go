@@ -458,24 +458,15 @@ func (c APIClient) RegisterRuntime(ctx context.Context, token string, cfg InitCo
 	})
 }
 
-// PublishResult posts a skill result using OpenClaw publish transport.
+// PublishResult posts a skill result using A2A SendMessage with OpenClaw fallback.
 func (c APIClient) PublishResult(ctx context.Context, token string, payload map[string]any) error {
-	body := map[string]any{
-		"message": payload,
-	}
-	if toAgentURI := firstString(payload["to_agent_uri"]); toAgentURI != "" {
-		body["to_agent_uri"] = toAgentURI
-	} else if toAgentUUID := firstString(payload["to_agent_uuid"]); toAgentUUID != "" {
-		body["to_agent_uuid"] = toAgentUUID
-	} else if routeTarget := firstString(payload["to"], payload["reply_to"]); routeTarget != "" {
-		if looksLikeAgentURI(routeTarget) {
-			body["to_agent_uri"] = routeTarget
+	body, routed := publishResultOpenClawBody(payload)
+	if routed {
+		if err := c.publishResultA2A(ctx, token, payload); err == nil {
+			return nil
 		} else {
-			body["to_agent_uuid"] = routeTarget
+			c.logf("hub.a2a status=warn action=publish_result_fallback err=%q", err)
 		}
-	}
-	if requestID := firstString(payload["request_id"]); requestID != "" {
-		body["client_msg_id"] = requestID
 	}
 
 	ok, trace := c.tryAny(ctx, token, []apiAttempt{

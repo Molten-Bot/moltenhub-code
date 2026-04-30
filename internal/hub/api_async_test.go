@@ -87,7 +87,7 @@ func TestAsyncAPIClientAsyncMethodsUseStoredToken(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	if got, want := strings.Join(paths, ","), "/v1/openclaw/messages/publish,/v1/openclaw/messages/ack,/v1/openclaw/messages/nack"; got != want {
+	if got, want := strings.Join(paths, ","), "/v1/a2a,/v1/openclaw/messages/publish,/v1/openclaw/messages/ack,/v1/openclaw/messages/nack"; got != want {
 		t.Fatalf("paths = %q, want %q", got, want)
 	}
 	for i, header := range authz {

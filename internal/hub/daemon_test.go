@@ -875,6 +875,9 @@ func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
 		case "/v1/agents/me/metadata", "/v1/agents/me/activities":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
+		case "/v1/a2a":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"not found"}`))
 		case "/v1/openclaw/messages/publish":
 			defer r.Body.Close()
 			var body map[string]any
@@ -986,6 +989,9 @@ func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
 		case "/v1/agents/me/metadata", "/v1/agents/me/activities":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
+		case "/v1/a2a":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"not found"}`))
 		case "/v1/openclaw/messages/publish":
 			defer r.Body.Close()
 
@@ -1119,6 +1125,9 @@ func TestProcessInboundMessageInvokesOnDispatchFailedForAcquireFailure(t *testin
 		case "/v1/agents/me/metadata", "/v1/agents/me/activities":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
+		case "/v1/a2a":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"not found"}`))
 		case "/v1/openclaw/messages/publish":
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"ok":true,"result":{"status":"queued"}}`))
