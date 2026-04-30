@@ -180,6 +180,22 @@ func TestHarnessRuntimeAndCheckSnapshotHelpers(t *testing.T) {
 	if got := workflowDispatchConclusionBucket("completed", "failure"); got != "fail" {
 		t.Fatalf("workflowDispatchConclusionBucket(failure) = %q, want fail", got)
 	}
+	names, err := parseRequiredStatusCheckNames(`{"contexts":["ci/test","lint"],"checks":[{"context":"ci/test"},{"context":"build"}]}`)
+	if err != nil {
+		t.Fatalf("parseRequiredStatusCheckNames() error = %v", err)
+	}
+	if got := strings.Join(names, ","); got != "build,ci/test,lint" {
+		t.Fatalf("parseRequiredStatusCheckNames() = %q, want sorted unique names", got)
+	}
+	if !isRequiredStatusChecksNotConfigured(execx.Result{Stderr: "HTTP 404: Branch not protected"}, errors.New("not found")) {
+		t.Fatal("isRequiredStatusChecksNotConfigured(branch not protected) = false, want true")
+	}
+	if got := requiredStatusChecksRepo(repoWorkspace{URL: "git@github.com:acme/repo.git"}); got != "acme/repo" {
+		t.Fatalf("requiredStatusChecksRepo(url) = %q, want acme/repo", got)
+	}
+	if got := requiredStatusChecksRepo(repoWorkspace{URL: "git@github.com:acme/repo.git", PRTargetRepo: "fork/repo"}); got != "fork/repo" {
+		t.Fatalf("requiredStatusChecksRepo(target) = %q, want fork/repo", got)
+	}
 }
 
 func TestHarnessContextSleepHelper(t *testing.T) {
