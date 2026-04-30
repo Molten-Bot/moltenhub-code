@@ -2726,6 +2726,9 @@ func effectiveHubSetupConfig(cfg hub.InitConfig) (hub.InitConfig, error) {
 	if strings.TrimSpace(storedCfg.AgentToken) == "" {
 		storedCfg.AgentToken = strings.TrimSpace(activeCfg.AgentToken)
 	}
+	if strings.TrimSpace(storedCfg.GitHubToken) == "" {
+		storedCfg.GitHubToken = strings.TrimSpace(activeCfg.GitHubToken)
+	}
 	if strings.TrimSpace(storedCfg.Handle) == "" {
 		storedCfg.Handle = strings.TrimSpace(activeCfg.Handle)
 	}
