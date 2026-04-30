@@ -3383,7 +3383,7 @@
       const selectionOptionsKey = state.agentAuth.configureOptions
         .map((option) => `${option.value}:${option.label}`)
         .join(",");
-      const challengeKey = `${state.agentAuth.state}|${state.agentAuth.deviceCode}|${state.agentAuth.authURL}|${selectionOptionsKey}`;
+      const challengeKey = `${state.agentAuth.state}|${state.agentAuth.configureCommand}|${state.agentAuth.configurePlaceholder}|${state.agentAuth.deviceCode}|${state.agentAuth.authURL}|${selectionOptionsKey}`;
       const requiresManualConfigure = isManualConfigureState(state.agentAuth);
       const needsHarnessSelection = isHarnessSelectionState(state.agentAuth);
       const needsAuggieConfigure = isAuggieConfigureState(state.agentAuth);
@@ -3399,6 +3399,9 @@
         if (agentAuthBrowserCodeInput) {
           agentAuthBrowserCodeInput.value = "";
         }
+        if (agentAuthConfigureInput) {
+          agentAuthConfigureInput.value = "";
+        }
         setAgentAuthBrowserCodeError("");
         state.agentHarnessSelectionPending = "";
       }
@@ -3410,6 +3413,9 @@
         clearAgentAuthAutoSubmitTimer();
         if (agentAuthBrowserCodeInput) {
           agentAuthBrowserCodeInput.value = "";
+        }
+        if (agentAuthConfigureInput) {
+          agentAuthConfigureInput.value = "";
         }
         setAgentAuthBrowserCodeError("");
       }
