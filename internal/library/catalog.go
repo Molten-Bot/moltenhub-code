@@ -18,6 +18,7 @@ const DefaultDir = "library"
 const (
 	catalogDirEnv = "HARNESS_LIBRARY_DIR"
 	agentsSeedEnv = "HARNESS_AGENTS_SEED_PATH"
+	prTitlePrefix = "Molten Hub Code: "
 )
 
 // TaskDefinition is one callable library entry loaded from ./library/*.json.
@@ -301,8 +302,19 @@ func decodeTaskDefinition(path, key string, data []byte) (TaskDefinition, error)
 	if task.TargetSubdir == "" {
 		task.TargetSubdir = "."
 	}
+	task.PRTitle = libraryTaskPRTitle(task)
 
 	return task, nil
+}
+
+func libraryTaskPRTitle(task TaskDefinition) string {
+	if task.DisplayName != "" {
+		return prTitlePrefix + task.DisplayName
+	}
+	if task.PRTitle != "" {
+		return task.PRTitle
+	}
+	return prTitlePrefix + task.Name
 }
 
 func resolveCatalogDir(dir string) string {
