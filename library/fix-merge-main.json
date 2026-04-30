@@ -5,6 +5,6 @@
     "targetSubdir": ".",
     "prompt": "Before proceeding, confirm the current branch is not main.\n\nSafety:\n- If the current branch is main, stop immediately and report an error.\n- Fail out if you are on main at any point.\n\nTask:\n- Fix the conflict between this branch and main.\n- Merge the latest main into the current branch.\n- Resolve all conflicts.\n\nValidation:\n- Validate locally where possible.\n- Use git status to confirm no conflicts remain.\n- Ensure there are no remaining merge conflicts with main.\n- If local test or validation tooling is unavailable in this runtime, for example `command not found`, do not fail solely for that. Continue with any alternative checks available and clearly report the validation gap.\n\nFailure reporting:\n- If failures occur, send a response back to the calling agent with these fields:\n  Failure: <short failure summary>\n  Error details: <concrete command error, merge conflict blocker, or validation detail>.",
     "commitMessage": "fix: resolve merge conflicts with main",
-    "prTitle": "Molten Hub Code: fix-merge-main"
+    "prTitle": "Molten Hub Code: Fix Merge Conflicts With Main"
   }
 }

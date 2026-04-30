@@ -5,6 +5,6 @@
     "targetSubdir": ".",
     "prompt": "You are performing a pull-request code review.\n\nContext:\n- Use the prepared PR context provided by the harness.\n- Verify important details using git and GitHub tools as needed.\n- Before finalizing any conclusions, read the existing PR discussion.\n\nDeliverable:\n- Produce a review artifact under docs/reviews/.\n- Include a summary of the PR.\n- Include findings ordered by severity with concrete file and line references.\n- Include open questions.\n- Include an explicit statement if no material issues were found.\n\nFailure reporting:\n- If failures occur, send a response back to the calling agent with these fields:\n  Failure: <short failure summary>\n  Error details: <concrete command error, job, log detail, or blocker>.\n\nValidation:\n- Validate locally where possible.\n- If local test or validation tooling is unavailable in this runtime, for example `command not found`, do not fail solely for that. Continue with any alternative checks available and clearly report the validation gap.",
     "commitMessage": "docs: add PR review report",
-    "prTitle": "Molten Hub Code: code-review-report"
+    "prTitle": "Molten Hub Code: Pull Request Code Review"
   }
 }

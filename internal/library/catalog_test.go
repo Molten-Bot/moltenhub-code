@@ -72,6 +72,20 @@ func TestDefaultLibraryJSONFilesHaveCanonicalShape(t *testing.T) {
 				t.Errorf("%s: field %q must not be empty", path, field)
 			}
 		}
+
+		var displayName string
+		if err := json.Unmarshal(fields["displayName"], &displayName); err != nil {
+			t.Errorf("%s: displayName must be a string: %v", path, err)
+			continue
+		}
+		var prTitle string
+		if err := json.Unmarshal(fields["prTitle"], &prTitle); err != nil {
+			t.Errorf("%s: prTitle must be a string: %v", path, err)
+			continue
+		}
+		if got, want := strings.TrimSpace(prTitle), prTitlePrefix+strings.TrimSpace(displayName); got != want {
+			t.Errorf("%s: prTitle = %q, want %q", path, got, want)
+		}
 	}
 }
 
@@ -289,6 +303,37 @@ func TestExpandRunConfigUsesRepoAndBranchInputs(t *testing.T) {
 	}
 }
 
+func TestDecodeTaskDefinitionBuildsPRTitleFromDisplayName(t *testing.T) {
+	t.Parallel()
+
+	task, err := decodeTaskDefinition("tasks.json", "reduce-codebase-centralize-classes", []byte(`{
+  "displayName": "Reduce Codebase And Centralize Classes",
+  "prompt": "Reduce the codebase.",
+  "prTitle": "Molten Hub Code: reduce-codebase-centralize-classes"
+}`))
+	if err != nil {
+		t.Fatalf("decodeTaskDefinition() error = %v", err)
+	}
+	if got, want := task.PRTitle, "Molten Hub Code: Reduce Codebase And Centralize Classes"; got != want {
+		t.Fatalf("PRTitle = %q, want %q", got, want)
+	}
+}
+
+func TestDecodeTaskDefinitionKeepsExplicitPRTitleWithoutDisplayName(t *testing.T) {
+	t.Parallel()
+
+	task, err := decodeTaskDefinition("tasks.json", "custom-task", []byte(`{
+  "prompt": "Do work.",
+  "prTitle": "Custom PR title"
+}`))
+	if err != nil {
+		t.Fatalf("decodeTaskDefinition() error = %v", err)
+	}
+	if got, want := task.PRTitle, "Custom PR title"; got != want {
+		t.Fatalf("PRTitle = %q, want %q", got, want)
+	}
+}
+
 func TestOrderSummariesByUsageSortsDescendingAndPreservesTies(t *testing.T) {
 	t.Parallel()
 
@@ -356,7 +401,7 @@ func TestDefaultCatalogIncludesReduceCodebaseCentralizeClassesTask(t *testing.T)
 	if !strings.Contains(strings.ToLower(task.Prompt), "avoid regressions") {
 		t.Fatalf("prompt = %q, want regression-prevention guidance", task.Prompt)
 	}
-	if got, want := task.PRTitle, "Molten Hub Code: reduce-codebase-centralize-classes"; got != want {
+	if got, want := task.PRTitle, "Molten Hub Code: Reduce Codebase And Centralize Classes"; got != want {
 		t.Fatalf("PRTitle = %q, want %q", got, want)
 	}
 }
@@ -389,7 +434,7 @@ func TestDefaultCatalogIncludesFixPRCITestsTask(t *testing.T) {
 			t.Fatalf("prompt = %q, want %q guidance", task.Prompt, want)
 		}
 	}
-	if got, want := task.PRTitle, "Molten Hub Code: fix-pr-ci-tests"; got != want {
+	if got, want := task.PRTitle, "Molten Hub Code: Fix PR CI Test Failures"; got != want {
 		t.Fatalf("PRTitle = %q, want %q", got, want)
 	}
 }
