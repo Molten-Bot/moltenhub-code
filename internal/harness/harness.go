@@ -584,6 +584,30 @@ func (h Harness) processChangedRepo(
 				}
 			}
 			if noChecksReported && noReportRetry >= maxPRChecksNoReportRetries {
+				if noRequired, noRequiredSummary, requiredErr := h.reconcileNoChecksWithRequiredStatusChecks(ctx, *repo); requiredErr == nil {
+					if noRequired {
+						if noRequiredSummary != "" {
+							checkSummary = noRequiredSummary
+						}
+						h.logf(
+							"stage=checks status=ok reason=no_required_status_checks repo=%s repo_dir=%s pr_url=%s attempt=%d",
+							repo.URL,
+							repo.RelDir,
+							repo.PRURL,
+							attempt+1,
+						)
+						return ExitSuccess, "", nil
+					}
+				} else {
+					h.logf(
+						"stage=checks status=warn action=required_status_checks reason=query_failed repo=%s repo_dir=%s pr_url=%s attempt=%d err=%q",
+						repo.URL,
+						repo.RelDir,
+						repo.PRURL,
+						attempt+1,
+						requiredErr,
+					)
+				}
 				if reconciled, workflowSummary, reconcileErr := h.reconcileNoChecksWithWorkflowDispatch(ctx, *repo); reconcileErr == nil {
 					if workflowSummary != "" {
 						checkSummary = workflowSummary
@@ -4132,6 +4156,20 @@ func workflowDispatchRunsCommand(repoDir, branch string) execx.Command {
 	}
 }
 
+func requiredStatusChecksCommand(repoDir, repoNameWithOwner, branch string) execx.Command {
+	branch = normalizeBranchRef(branch)
+	route := fmt.Sprintf(
+		"repos/%s/branches/%s/protection/required_status_checks",
+		strings.Trim(strings.TrimSpace(repoNameWithOwner), "/"),
+		url.PathEscape(branch),
+	)
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: []string{"api", route},
+	}
+}
+
 func withCompletionGatePrompt(prompt string) string {
 	base := strings.TrimSpace(prompt)
 	if base == "" {
@@ -4192,6 +4230,15 @@ type ghWorkflowRun struct {
 	WorkflowName string `json:"workflowName"`
 	DisplayTitle string `json:"displayTitle"`
 	HeadSHA      string `json:"headSha"`
+}
+
+type ghRequiredStatusChecks struct {
+	Contexts []string                `json:"contexts"`
+	Checks   []ghRequiredStatusCheck `json:"checks"`
+}
+
+type ghRequiredStatusCheck struct {
+	Context string `json:"context"`
 }
 
 type latestCheckState struct {
@@ -4282,6 +4329,34 @@ func shouldReplaceCheckSnapshot(prev, candidate latestCheckState) bool {
 	return candidate.Index > prev.Index
 }
 
+func (h Harness) reconcileNoChecksWithRequiredStatusChecks(ctx context.Context, repo repoWorkspace) (bool, string, error) {
+	targetRepo := requiredStatusChecksRepo(repo)
+	if targetRepo == "" {
+		return false, "", nil
+	}
+	baseBranch := pickFirstNonEmpty(repo.BaseBranch, repo.Branch)
+	if baseBranch == "" {
+		return false, "", nil
+	}
+
+	res, err := h.runCommand(ctx, "checks", requiredStatusChecksCommand(repo.Dir, targetRepo, baseBranch))
+	if err != nil {
+		if isRequiredStatusChecksNotConfigured(res, err) {
+			return true, fmt.Sprintf("No required status checks are configured for branch %s.", baseBranch), nil
+		}
+		return false, "", err
+	}
+
+	names, parseErr := parseRequiredStatusCheckNames(res.Stdout)
+	if parseErr != nil {
+		return false, "", parseErr
+	}
+	if len(names) == 0 {
+		return true, fmt.Sprintf("No required status checks are configured for branch %s.", baseBranch), nil
+	}
+	return false, strings.Join(names, "\n"), nil
+}
+
 func (h Harness) reconcileNoChecksWithWorkflowDispatch(ctx context.Context, repo repoWorkspace) (bool, string, error) {
 	headRes, headErr := h.runCommand(ctx, "checks", headCommitSHACommand(repo.Dir))
 	if headErr != nil {
@@ -4328,6 +4403,64 @@ func (h Harness) reconcileNoChecksWithWorkflowDispatch(ctx context.Context, repo
 	}
 	summary := fmt.Sprintf("%s\t%s", workflowName, bucket)
 	return bucket == "pass" || bucket == "skipping", summary, nil
+}
+
+func requiredStatusChecksRepo(repo repoWorkspace) string {
+	if targetRepo := strings.TrimSpace(repo.PRTargetRepo); targetRepo != "" {
+		return targetRepo
+	}
+	ref, ok := parseGitHubRepoRef(repo.URL)
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf("%s/%s", ref.owner, ref.name)
+}
+
+func parseRequiredStatusCheckNames(raw string) ([]string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+
+	var statusChecks ghRequiredStatusChecks
+	if err := json.Unmarshal([]byte(raw), &statusChecks); err != nil {
+		return nil, fmt.Errorf("decode required status checks: %w", err)
+	}
+
+	seen := make(map[string]struct{})
+	var names []string
+	add := func(name string) {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return
+		}
+		if _, exists := seen[name]; exists {
+			return
+		}
+		seen[name] = struct{}{}
+		names = append(names, name)
+	}
+	for _, context := range statusChecks.Contexts {
+		add(context)
+	}
+	for _, check := range statusChecks.Checks {
+		add(check.Context)
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+func isRequiredStatusChecksNotConfigured(res execx.Result, err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
+	if strings.Contains(text, "branch not protected") ||
+		strings.Contains(text, "required status checks are not enabled") ||
+		strings.Contains(text, "required_status_checks not found") {
+		return true
+	}
+	return strings.Contains(text, "http 404") && strings.Contains(text, "required_status_checks")
 }
 
 func workflowDispatchConclusionBucket(status, conclusion string) string {
