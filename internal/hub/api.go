@@ -1500,11 +1500,52 @@ func buildSupportedSkillsMetadata() []map[string]any {
 		{
 			"name":        normalizeSkillName(runtimeSkill.Name),
 			"description": "Prompt-driven repository task run. Defaults to `caveman-full`; set `responseMode=off` for normal prose.",
+			"parameters": runtimeSkillParameters(
+				[]map[string]any{
+					skillParameter("repos", "One or more Git repository URLs."),
+					skillParameter("prompt", "Requested code change or investigation."),
+				},
+				[]map[string]any{
+					skillParameter("baseBranch", "Branch to clone before creating the work branch."),
+					skillParameter("targetSubdir", "Repository subdirectory where the agent should work."),
+					skillParameter("responseMode", "Agent prose mode such as off, caveman-full, or default."),
+					skillParameter("reviewers", "GitHub handles to request on created pull requests."),
+					skillParameter("images", "Base64 prompt images for supported agents."),
+				},
+			),
 		},
 		{
 			"name":        normalizeSkillName(codeReviewSkillName),
 			"description": "Repository code review run that targets the checked-in review workflow. Defaults to `caveman-full`; set `responseMode=off` for normal prose.",
+			"parameters": runtimeSkillParameters(
+				[]map[string]any{
+					skillParameter("repo", "Git repository URL containing the pull request."),
+				},
+				[]map[string]any{
+					skillParameter("branch", "Pull request head branch; required when prNumber or review.prUrl is omitted."),
+					skillParameter("prNumber", "Pull request number; required when branch or review.prUrl is omitted."),
+					skillParameter("review.prUrl", "Pull request URL; required when branch or prNumber is omitted."),
+					skillParameter("responseMode", "Agent prose mode such as off, caveman-full, or default."),
+				},
+			),
 		},
+	}
+}
+
+func runtimeSkillParameters(required, optional []map[string]any) map[string]any {
+	return map[string]any{
+		"format":            "json",
+		"required":          required,
+		"optional":          optional,
+		"secret_policy":     "forbidden",
+		"secrets_forbidden": true,
+	}
+}
+
+func skillParameter(name, description string) map[string]any {
+	return map[string]any{
+		"name":        name,
+		"description": description,
 	}
 }
 
