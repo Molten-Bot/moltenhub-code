@@ -13,6 +13,7 @@ import (
 // SkillDispatch represents one inbound skill request ready for execution.
 type SkillDispatch struct {
 	RequestID string
+	HubTaskID string
 	Skill     string
 	ReplyTo   string
 	RouteTo   string
@@ -79,6 +80,26 @@ func ParseSkillDispatch(msg map[string]any, expectedType, expectedSkill string) 
 			stringAtPath(msg, "data", "messageId"),
 			stringAtPath(msg, "data", "delivery_id"),
 			stringAtPath(msg, "data", "deliveryId"),
+		),
+		HubTaskID: firstNonEmpty(
+			stringAt(msg, "hub_task_id"),
+			stringAt(msg, "hubTaskId"),
+			stringAt(msg, "a2a_task_id"),
+			stringAt(msg, "a2aTaskId"),
+			stringAt(msg, "message_id"),
+			stringAt(msg, "messageId"),
+			stringAtPath(msg, "payload", "hub_task_id"),
+			stringAtPath(msg, "payload", "hubTaskId"),
+			stringAtPath(msg, "payload", "a2a_task_id"),
+			stringAtPath(msg, "payload", "a2aTaskId"),
+			stringAtPath(msg, "payload", "message_id"),
+			stringAtPath(msg, "payload", "messageId"),
+			stringAtPath(msg, "data", "hub_task_id"),
+			stringAtPath(msg, "data", "hubTaskId"),
+			stringAtPath(msg, "data", "a2a_task_id"),
+			stringAtPath(msg, "data", "a2aTaskId"),
+			stringAtPath(msg, "data", "message_id"),
+			stringAtPath(msg, "data", "messageId"),
 		),
 		Skill: firstNonEmpty(skillName, strings.TrimSpace(expectedSkill)),
 		RouteTo: firstNonEmpty(

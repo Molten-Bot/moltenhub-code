@@ -12,6 +12,7 @@ func TestParseSkillDispatchFromPayloadConfig(t *testing.T) {
 		"type":       "skill_request",
 		"skill":      "moltenhub_code_run",
 		"request_id": "req-1",
+		"message_id": "hub-task-1",
 		"from":       "agent-alpha",
 		"payload": map[string]any{
 			"config": map[string]any{
@@ -32,6 +33,9 @@ func TestParseSkillDispatchFromPayloadConfig(t *testing.T) {
 	}
 	if dispatch.RequestID != "req-1" {
 		t.Fatalf("RequestID = %q", dispatch.RequestID)
+	}
+	if dispatch.HubTaskID != "hub-task-1" {
+		t.Fatalf("HubTaskID = %q", dispatch.HubTaskID)
 	}
 	if dispatch.ReplyTo != "agent-alpha" {
 		t.Fatalf("ReplyTo = %q", dispatch.ReplyTo)
