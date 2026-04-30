@@ -93,9 +93,9 @@ If no repository changes remain after the agent runs, the task exits successfull
 
 The Docker entrypoint looks for config in this order:
 
-1. `/workspace/config/config.json`
-2. `/workspace/config/init.json`
-3. `MOLTEN_HUB_TOKEN` bootstrap
+1. `MOLTEN_HUB_TOKEN` bootstrap
+2. `/workspace/config/config.json`
+3. `/workspace/config/init.json`
 4. Local onboarding UI
 
 Useful environment variables:
@@ -106,6 +106,8 @@ Useful environment variables:
 - `MOLTEN_HUB_URL`: explicit Hub API URL, either `https://na.hub.molten.bot/v1` or `https://eu.hub.molten.bot/v1`.
 - `MOLTEN_HUB_SESSION_KEY`: generated init config session key. Defaults to `main`.
 - `OPENAI_API_KEY`, `AUGMENT_SESSION_AUTH`, `PI_PROVIDER_AUTH`, `PI_AUTH_JSON`: optional agent auth values loaded by the entrypoint or persisted config.
+
+Docker Compose list syntax must use `KEY=value`, for example `MOLTEN_HUB_TOKEN=t_XXX`; mapping syntax must use `MOLTEN_HUB_TOKEN: t_XXX`.
 
 Hub OpenAPI:
 

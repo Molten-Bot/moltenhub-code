@@ -190,6 +190,10 @@ try_run_hub_from_env() {
     exec_hub --init "${generated_init_path}"
 }
 
+if try_run_hub_from_env; then
+    :
+fi
+
 if [ -f "${run_config_path}" ]; then
     if hub_config_status "${run_config_path}"; then
         exec_hub --config "${run_config_path}"
@@ -205,10 +209,6 @@ fi
 
 if [ -f "${init_config_path}" ]; then
     exec_hub --init "${init_config_path}"
-fi
-
-if try_run_hub_from_env; then
-    :
 fi
 
 if [ "${HARNESS_RUNTIME_CONFIG_PATH:-}" = "" ]; then
