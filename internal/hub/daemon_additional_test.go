@@ -365,7 +365,7 @@ func TestProcessInboundMessageDoesNotDedupeDistinctClientMsgIDWithSharedEnvelope
 	api.mu.Lock()
 	defer api.mu.Unlock()
 
-	// Each failing dispatch publishes one failure result and one rerun request.
+	// Each failing dispatch publishes one failure result and one failure review request.
 	if got, want := len(api.published), 4; got != want {
 		t.Fatalf("published payload count = %d, want %d", got, want)
 	}
@@ -378,9 +378,9 @@ func TestProcessInboundMessageDoesNotDedupeDistinctClientMsgIDWithSharedEnvelope
 	}
 	for _, expected := range []string{
 		"msg-a",
-		"msg-a-rerun",
+		"msg-a-failure-review",
 		"msg-b",
-		"msg-b-rerun",
+		"msg-b-failure-review",
 	} {
 		if !gotRequestIDs[expected] {
 			t.Fatalf("missing request_id %q in published payloads: %#v", expected, gotRequestIDs)
@@ -445,7 +445,7 @@ func TestProcessInboundMessageDedupesIdenticalConfigAcrossRequestIDs(t *testing.
 			gotRequestIDs[requestID] = payload
 		}
 	}
-	for _, expected := range []string{"req-a", "req-a-rerun"} {
+	for _, expected := range []string{"req-a", "req-a-failure-review"} {
 		if gotRequestIDs[expected] == nil {
 			t.Fatalf("missing request_id %q in published payloads: %#v", expected, gotRequestIDs)
 		}
@@ -673,34 +673,32 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 		t.Fatalf("result payload reply_to = %#v", got)
 	}
 
-	rerunPayload := api.published[1]
-	if got := rerunPayload["type"]; got != "skill_request" {
-		t.Fatalf("rerun payload type = %#v", got)
+	followUpPayload := api.published[1]
+	if got := followUpPayload["type"]; got != "skill_request" {
+		t.Fatalf("follow-up payload type = %#v", got)
 	}
-	if got := rerunPayload["request_id"]; got != "req-follow-up-rerun" {
-		t.Fatalf("rerun request_id = %#v", got)
+	if got := followUpPayload["request_id"]; got != "req-follow-up-failure-review" {
+		t.Fatalf("follow-up request_id = %#v", got)
 	}
-	if got := rerunPayload["rerun_of"]; got != "req-follow-up" {
-		t.Fatalf("rerun rerun_of = %#v", got)
+	if got := followUpPayload["to"]; got != "worker-agent-uuid" {
+		t.Fatalf("follow-up to = %#v, want worker-agent-uuid", got)
 	}
-	if got := rerunPayload["to"]; got != "worker-agent-uuid" {
-		t.Fatalf("rerun to = %#v, want worker-agent-uuid", got)
+	if got := followUpPayload["reply_to"]; got != "agent-123" {
+		t.Fatalf("follow-up reply_to = %#v, want agent-123", got)
 	}
-	if got := rerunPayload["reply_to"]; got != "agent-123" {
-		t.Fatalf("rerun reply_to = %#v, want agent-123", got)
+	followUpConfig, _ := followUpPayload["config"].(map[string]any)
+	if followUpConfig == nil {
+		t.Fatalf("follow-up config missing: %#v", followUpPayload)
 	}
-	rerunConfig, _ := rerunPayload["config"].(map[string]any)
-	if rerunConfig == nil {
-		t.Fatalf("rerun config missing: %#v", rerunPayload)
+	repos, _ := followUpConfig["repos"].([]string)
+	if len(repos) != 1 || repos[0] != config.DefaultRepositoryURL {
+		t.Fatalf("follow-up repos = %#v", followUpConfig["repos"])
 	}
-	if got := rerunConfig["baseBranch"]; got != "release" {
-		t.Fatalf("rerun baseBranch = %#v, want release", got)
+	if got := followUpConfig["targetSubdir"]; got != "." {
+		t.Fatalf("follow-up targetSubdir = %#v, want .", got)
 	}
-	if got := rerunConfig["targetSubdir"]; got != "internal/hub" {
-		t.Fatalf("rerun targetSubdir = %#v, want internal/hub", got)
-	}
-	if got := rerunConfig["responseMode"]; got != config.DefaultResponseMode {
-		t.Fatalf("rerun responseMode = %#v, want %q", got, config.DefaultResponseMode)
+	if got := followUpConfig["responseMode"]; got != nil {
+		t.Fatalf("follow-up responseMode = %#v, want omitted", got)
 	}
 
 	if got, want := len(api.offlineCalls), 1; got != want {
@@ -812,7 +810,7 @@ func TestHandleDispatchLibraryTaskUsesDedicatedActivitySignal(t *testing.T) {
 	}
 }
 
-func TestHandleDispatchQueuesFailureRerunWithExplicitResponseModeOptOut(t *testing.T) {
+func TestHandleDispatchQueuesFailureFollowUpWithExplicitResponseModeOptOut(t *testing.T) {
 	t.Parallel()
 
 	d := NewDaemon(failingRunner{err: errors.New("runner exploded")})
@@ -854,13 +852,13 @@ func TestHandleDispatchQueuesFailureRerunWithExplicitResponseModeOptOut(t *testi
 		t.Fatalf("published payload count = %d, want %d", got, want)
 	}
 
-	rerunPayload := api.published[1]
-	rerunConfig, _ := rerunPayload["config"].(map[string]any)
-	if rerunConfig == nil {
-		t.Fatalf("rerun config missing: %#v", rerunPayload)
+	followUpPayload := api.published[1]
+	followUpConfig, _ := followUpPayload["config"].(map[string]any)
+	if followUpConfig == nil {
+		t.Fatalf("follow-up config missing: %#v", followUpPayload)
 	}
-	if got := rerunConfig["responseMode"]; got != config.DisabledResponseMode {
-		t.Fatalf("rerun responseMode = %#v, want %q", got, config.DisabledResponseMode)
+	if got := followUpConfig["responseMode"]; got != nil {
+		t.Fatalf("follow-up responseMode = %#v, want omitted", got)
 	}
 }
 
@@ -1037,8 +1035,8 @@ func TestHandleDispatchQueuesFailureFollowUpForNoDeltaFailures(t *testing.T) {
 	if got := api.published[0]["status"]; got != "error" {
 		t.Fatalf("result payload status = %#v, want error", got)
 	}
-	if got := api.published[1]["request_id"]; got != "req-no-delta-rerun" {
-		t.Fatalf("rerun request_id = %#v, want req-no-delta-rerun", got)
+	if got := api.published[1]["request_id"]; got != "req-no-delta-failure-review" {
+		t.Fatalf("follow-up request_id = %#v, want req-no-delta-failure-review", got)
 	}
 }
 
@@ -1062,22 +1060,22 @@ func TestShouldQueueFailureRerunSkipsNestedRerunRequests(t *testing.T) {
 	}
 }
 
-func TestShouldQueueFailureFollowUpSkipsAutomaticFailureReview(t *testing.T) {
+func TestShouldQueueFailureFollowUpSkipsNonRemediableFailures(t *testing.T) {
 	t.Parallel()
 
 	dispatch := SkillDispatch{RequestID: "req-123"}
 	ok, reason := shouldQueueFailureFollowUp(dispatch, harness.Result{
 		Err: errors.New("git: verify remote write access for repo https://github.com/acme/repo.git branch \"moltenhub-fix\": exit status 128: remote: Write access to repository not granted. fatal: unable to access 'https://github.com/acme/repo.git/': The requested URL returned error: 403"),
 	})
-	if ok || reason != automaticFailureFollowUpDisabledReason {
-		t.Fatalf("shouldQueueFailureFollowUp(repo access) = (%v, %q), want (false, %q)", ok, reason, automaticFailureFollowUpDisabledReason)
+	if ok || !strings.Contains(reason, "write access to repository not granted") {
+		t.Fatalf("shouldQueueFailureFollowUp(repo access) = (%v, %q), want non-remediable repo access skip", ok, reason)
 	}
 
 	ok, reason = shouldQueueFailureFollowUp(dispatch, harness.Result{
 		Err: errors.New("git: run git [push -u origin moltenhub-branch]: exit status 1: remote: refusing to allow an OAuth App to create or update workflow `.github/workflows/docker-release.yml` without `workflow` scope"),
 	})
-	if ok || reason != automaticFailureFollowUpDisabledReason {
-		t.Fatalf("shouldQueueFailureFollowUp(workflow scope) = (%v, %q), want (false, %q)", ok, reason, automaticFailureFollowUpDisabledReason)
+	if ok || !strings.Contains(reason, "refusing to allow an oauth app to create or update workflow") {
+		t.Fatalf("shouldQueueFailureFollowUp(workflow scope) = (%v, %q), want non-remediable workflow-scope skip", ok, reason)
 	}
 }
 

@@ -389,6 +389,7 @@ func TestLoadHubBootConfigWithoutFlagsAllowsDefaultRuntimeConfigWithoutCredentia
 func TestLoadHubBootConfigUsesMoltenHubTokenEnvWhenRuntimeConfigOmitsCredentials(t *testing.T) {
 	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
 	t.Setenv("MOLTEN_HUB_TOKEN", "t_env_agent_token")
+	t.Setenv("MOLTEN_HUB_URL", "")
 	t.Setenv("MOLTEN_HUB_REGION", "eu")
 
 	configPath := filepath.Join(t.TempDir(), "config.json")
@@ -417,7 +418,9 @@ func TestLoadHubBootConfigUsesMoltenHubTokenEnvWhenRuntimeConfigOmitsCredentials
 func TestLoadHubBootConfigAppliesEnvTokensToDefaultConfig(t *testing.T) {
 	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
 	t.Setenv("MOLTEN_HUB_TOKEN", "t_env_agent_token")
+	t.Setenv("GH_TOKEN", "")
 	t.Setenv("GITHUB_TOKEN", "github_token_env_token")
+	t.Setenv("MOLTEN_HUB_URL", "")
 	t.Setenv("MOLTEN_HUB_REGION", "eu")
 
 	configPath := filepath.Join(t.TempDir(), "missing.json")

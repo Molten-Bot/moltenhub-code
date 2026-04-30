@@ -49,7 +49,7 @@ const dispatchDedupTTL = 2 * time.Hour
 const agentStatusUpdateTimeout = 5 * time.Second
 const failureFollowUpRequestIDSuffix = "-failure-review"
 const failureRerunRequestIDSuffix = "-rerun"
-const automaticFailureFollowUpDisabledReason = "automatic failure follow-up disabled; queue single rerun only"
+const automaticFailureRerunDisabledReason = "automatic failure rerun disabled; queue failure follow-up in moltenhub-code"
 const failureFollowUpPromptBase = failurefollowup.RequiredPrompt
 const failureFollowUpNoPathGuidance = "No workspace or log path was captured before the failure. Investigate the task history and runtime error details first."
 const failureFollowUpTargetSubdir = "."
@@ -1152,7 +1152,7 @@ func shouldQueueFailureRerun(dispatch SkillDispatch, res harness.Result) (bool, 
 	if isFailureRerunRequestID(dispatch.RequestID) {
 		return false, "run is already a failure rerun"
 	}
-	return true, ""
+	return false, automaticFailureRerunDisabledReason
 }
 
 func shouldQueueFailureFollowUp(dispatch SkillDispatch, res harness.Result) (bool, string) {
@@ -1162,7 +1162,10 @@ func shouldQueueFailureFollowUp(dispatch SkillDispatch, res harness.Result) (boo
 	if isFailureFollowUpRequestID(dispatch.RequestID) {
 		return false, "run is already a failure follow-up"
 	}
-	return false, automaticFailureFollowUpDisabledReason
+	if reason := failurefollowup.NonRemediableFailureReason(res.Err); reason != "" {
+		return false, "failure is not remediable by code changes: " + reason
+	}
+	return true, ""
 }
 
 func queueFailureRerun(ctx context.Context, api MoltenHubAPI, cfg InitConfig, dispatch SkillDispatch) error {
