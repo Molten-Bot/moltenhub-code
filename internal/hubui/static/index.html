@@ -7061,10 +7061,15 @@
     }
 
     function hasTaskPanelContent(snapshot) {
-      if (runningTasks(snapshot).length > 0) {
+      const runningCount = runningTasks(snapshot).length;
+      const completedCount = completedTasks(snapshot).length;
+      if (runningCount > 0) {
         return true;
       }
-      return completedTasks(snapshot).length > 0;
+      if (completedCount > 0) {
+        return true;
+      }
+      return normalizeTaskStatusFilter(state.taskStatusFilter) === "completed" && runningCount === 0 && completedCount === 0;
     }
 
     function fullscreenTasks(snapshot) {
@@ -8036,39 +8041,6 @@
       replaceLucideIcons(listNode);
     }
 
-    function runningTaskCelebrationTitle(count) {
-      const safeCount = Math.max(0, Number(count) || 0);
-      const taskWord = safeCount === 1 ? "task" : "tasks";
-      return `Amazing job: ${safeCount} ${taskWord} running.`;
-    }
-
-    function runningTaskCelebrationCopy() {
-      return "No completed tasks yet, but this session already has work in flight.";
-    }
-
-    function runningTaskCelebrationItems(count) {
-      const safeCount = Math.max(0, Number(count) || 0);
-      const taskWord = safeCount === 1 ? "task" : "tasks";
-      return [
-        `Nice momentum. ${safeCount} ${taskWord} moving through the queue.`,
-        "Keep shipping small fixes while results land.",
-        "Queue another focused task when ready.",
-      ];
-    }
-
-    function completedHistoryEmptyState(snapshot) {
-      const runningCount = runningTasks(snapshot).length;
-      if (runningCount <= 0) {
-        return null;
-      }
-      return {
-        eyebrow: "History",
-        title: runningTaskCelebrationTitle(runningCount),
-        copy: runningTaskCelebrationCopy(),
-        items: runningTaskCelebrationItems(runningCount),
-      };
-    }
-
     function renderTasks(snapshot) {
       const tasks = displayTasks(snapshot);
       const hasTasks = tasks.length > 0;
@@ -8101,10 +8073,6 @@
         taskFullscreen.setAttribute("aria-hidden", state.taskFullscreenOpen ? "false" : "true");
       }
       const taskStatusFilter = normalizeTaskStatusFilter(state.taskStatusFilter);
-      const completedCount = completedTasks(snapshot).length;
-      const leadingEmptyState = taskStatusFilter === "completed" && completedCount === 0
-        ? completedHistoryEmptyState(snapshot)
-        : null;
       const emptyEyebrow = promptOnly
         ? "Prompt View"
         : taskStatusFilter === "completed"
@@ -8126,7 +8094,6 @@
         emptyEyebrow,
         emptyTitle,
         emptyCopy,
-        leadingEmptyState,
       });
     }
 
@@ -8140,10 +8107,6 @@
       const tasks = fullscreenTasks(snapshot);
       const promptOnly = normalizeTaskPanelView(state.taskPanelView) === "prompt";
       const taskStatusFilter = normalizeTaskStatusFilter(state.taskStatusFilter);
-      const completedCount = completedTasks(snapshot).length;
-      const leadingEmptyState = taskStatusFilter === "completed" && completedCount === 0
-        ? completedHistoryEmptyState(snapshot)
-        : null;
       const emptyEyebrow = promptOnly
         ? "Prompt View"
         : taskStatusFilter === "completed"
@@ -8167,7 +8130,6 @@
         emptyEyebrow,
         emptyTitle,
         emptyCopy,
-        leadingEmptyState,
       });
     }
 

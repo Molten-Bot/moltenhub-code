@@ -821,19 +821,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function runningTasks(snapshot)") || !strings.Contains(markup, "function completedTasks(snapshot)") {
 		t.Fatalf("expected index html to derive running and completed task lists independently")
 	}
-	if !strings.Contains(markup, "function completedHistoryEmptyState(snapshot)") ||
-		!strings.Contains(markup, "const runningCount = runningTasks(snapshot).length;") ||
-		!strings.Contains(markup, "if (runningCount <= 0) {\n        return null;\n      }") {
-		t.Fatalf("expected completed-history empty state to count running session tasks and preserve the default empty card when no work has run")
+	if strings.Contains(markup, "function completedHistoryEmptyState(snapshot)") ||
+		strings.Contains(markup, "return `Amazing job: ${safeCount} ${taskWord} running.`;") ||
+		strings.Contains(markup, "No completed tasks yet, but this session already has work in flight.") ||
+		strings.Contains(markup, "Queue another focused task when ready.") {
+		t.Fatalf("expected completed-history empty state to avoid running-task status prompts during active runs")
 	}
-	if !strings.Contains(markup, "return `Amazing job: ${safeCount} ${taskWord} running.`;") ||
-		!strings.Contains(markup, "Nice momentum. ${safeCount} ${taskWord} moving through the queue.") ||
-		!strings.Contains(markup, "Queue another focused task when ready.") {
-		t.Fatalf("expected completed-history empty state to include celebratory coding prompts")
-	}
-	if !strings.Contains(markup, "const leadingEmptyState = taskStatusFilter === \"completed\" && completedCount === 0") ||
-		strings.Count(markup, "leadingEmptyState,") < 2 {
-		t.Fatalf("expected completed-history empty state to render in panel and fullscreen views")
+	if strings.Contains(markup, "const leadingEmptyState = taskStatusFilter === \"completed\" && completedCount === 0") ||
+		strings.Contains(markup, "leadingEmptyState,") {
+		t.Fatalf("expected completed-history empty state to render only when the displayed task list is empty")
 	}
 	if !strings.Contains(markup, "function historyFilterTasks(snapshot)") ||
 		!strings.Contains(markup, "return [...runningTasks(snapshot), ...completedTasks(snapshot)];") {
@@ -1056,10 +1052,13 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to remove standard layout output hiding")
 	}
 	if !strings.Contains(markup, "rightCol.classList.toggle(\"task-list-hidden\", !hasTaskPanelTasks);") {
-		t.Fatalf("expected index html to hide the task layout when current work and history are both empty")
+		t.Fatalf("expected index html to toggle the task layout from task panel content state")
 	}
-	if !strings.Contains(markup, "function hasTaskPanelContent(snapshot) {") {
-		t.Fatalf("expected index html to define task panel visibility from both running work and completed history")
+	if !strings.Contains(markup, "function hasTaskPanelContent(snapshot) {") ||
+		!strings.Contains(markup, "const runningCount = runningTasks(snapshot).length;") ||
+		!strings.Contains(markup, "const completedCount = completedTasks(snapshot).length;") ||
+		!strings.Contains(markup, "return normalizeTaskStatusFilter(state.taskStatusFilter) === \"completed\" && runningCount === 0 && completedCount === 0;") {
+		t.Fatalf("expected index html to keep completed-history empty state visible only in completed-history view")
 	}
 	if !strings.Contains(markup, "taskPanel.classList.toggle(\"hidden\", !hasTaskPanelTasks);") {
 		t.Fatalf("expected index html to hide the task queue panel when current work and history are both empty")
