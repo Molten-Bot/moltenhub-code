@@ -978,6 +978,10 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 		result["hubTaskId"] = hubTaskID
 		result["a2aTaskId"] = hubTaskID
 	}
+	if contextID := strings.TrimSpace(dispatch.ContextID); contextID != "" {
+		result["contextId"] = contextID
+		result["a2aContextId"] = contextID
+	}
 
 	payload := map[string]any{
 		"type":       cfg.Skill.ResultType,
@@ -992,6 +996,10 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 	if hubTaskID := strings.TrimSpace(dispatch.HubTaskID); hubTaskID != "" {
 		payload["hub_task_id"] = hubTaskID
 		payload["a2a_task_id"] = hubTaskID
+	}
+	if contextID := strings.TrimSpace(dispatch.ContextID); contextID != "" {
+		payload["context_id"] = contextID
+		payload["a2a_context_id"] = contextID
 	}
 	if res.Err != nil {
 		errText := res.Err.Error()

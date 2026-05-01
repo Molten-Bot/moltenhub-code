@@ -243,6 +243,9 @@ func TestParseSkillDispatchAcceptsA2AEnvelopeDataPart(t *testing.T) {
 	if dispatch.HubTaskID != "a2a-task-1" {
 		t.Fatalf("HubTaskID = %q", dispatch.HubTaskID)
 	}
+	if dispatch.ContextID != "a2a-context-1" {
+		t.Fatalf("ContextID = %q", dispatch.ContextID)
+	}
 	if dispatch.ReplyTo != "https://na.hub.molten.bot/acme/sender" {
 		t.Fatalf("ReplyTo = %q", dispatch.ReplyTo)
 	}

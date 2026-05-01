@@ -14,6 +14,7 @@ import (
 type SkillDispatch struct {
 	RequestID string
 	HubTaskID string
+	ContextID string
 	Skill     string
 	ReplyTo   string
 	RouteTo   string
@@ -101,6 +102,20 @@ func ParseSkillDispatch(msg map[string]any, expectedType, expectedSkill string) 
 			stringAtPath(msg, "data", "a2aTaskId"),
 			stringAtPath(msg, "data", "message_id"),
 			stringAtPath(msg, "data", "messageId"),
+		),
+		ContextID: firstNonEmpty(
+			stringAt(msg, "context_id"),
+			stringAt(msg, "contextId"),
+			stringAt(msg, "a2a_context_id"),
+			stringAt(msg, "a2aContextId"),
+			stringAtPath(msg, "payload", "context_id"),
+			stringAtPath(msg, "payload", "contextId"),
+			stringAtPath(msg, "payload", "a2a_context_id"),
+			stringAtPath(msg, "payload", "a2aContextId"),
+			stringAtPath(msg, "data", "context_id"),
+			stringAtPath(msg, "data", "contextId"),
+			stringAtPath(msg, "data", "a2a_context_id"),
+			stringAtPath(msg, "data", "a2aContextId"),
 		),
 		Skill: firstNonEmpty(skillName, strings.TrimSpace(expectedSkill)),
 		RouteTo: firstNonEmpty(

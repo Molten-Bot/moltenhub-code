@@ -397,6 +397,72 @@ func TestPublishResultUsesA2ASendMessage(t *testing.T) {
 	}
 }
 
+func TestPublishResultUsesTargetedA2AEndpointAndTaskFields(t *testing.T) {
+	t.Parallel()
+
+	type captured struct {
+		Path string
+		Body map[string]any
+	}
+	var got captured
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		data, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(data, &body)
+		got = captured{Path: r.URL.Path, Body: body}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      body["id"],
+			"result": map[string]any{
+				"task": map[string]any{
+					"id":        "reply-task",
+					"contextId": "a2a-context-1",
+					"status": map[string]any{
+						"state": "TASK_STATE_SUBMITTED",
+					},
+				},
+			},
+		})
+	}))
+	defer ts.Close()
+
+	targetUUID := "123e4567-e89b-12d3-a456-426614174000"
+	client := NewAPIClient(ts.URL + "/v1")
+	payload := map[string]any{
+		"type":           "skill_result",
+		"request_id":     "req-7",
+		"to_agent_uuid":  targetUUID,
+		"a2a_task_id":    "a2a-task-1",
+		"a2a_context_id": "a2a-context-1",
+		"status":         "ok",
+		"result":         map[string]any{"ok": true},
+	}
+	if err := client.PublishResult(context.Background(), "token", payload); err != nil {
+		t.Fatalf("PublishResult() error = %v", err)
+	}
+
+	if got.Path != "/v1/a2a/agents/"+targetUUID {
+		t.Fatalf("path = %q", got.Path)
+	}
+	params, ok := got.Body["params"].(map[string]any)
+	if !ok {
+		t.Fatalf("params missing: %#v", got.Body)
+	}
+	msg, ok := params["message"].(map[string]any)
+	if !ok {
+		t.Fatalf("message missing: %#v", params)
+	}
+	if msg["taskId"] != "a2a-task-1" {
+		t.Fatalf("message.taskId = %#v", msg["taskId"])
+	}
+	if msg["contextId"] != "a2a-context-1" {
+		t.Fatalf("message.contextId = %#v", msg["contextId"])
+	}
+}
+
 func TestPublishResultFallsBackToOpenClaw(t *testing.T) {
 	t.Parallel()
 

@@ -633,6 +633,11 @@ func (c APIClient) verifyToken(ctx context.Context, token string) bool {
 	if token == "" {
 		return false
 	}
+	if ok, err := c.verifyTokenA2A(ctx, token); err == nil {
+		return ok
+	} else {
+		c.logf("hub.auth verify_a2a status=fallback err=%q", err)
+	}
 	status, _, err := c.doJSON(ctx, http.MethodGet, "/agents/me", token, nil)
 	if err != nil {
 		c.logf("hub.auth verify status=network_error err=%q", err)

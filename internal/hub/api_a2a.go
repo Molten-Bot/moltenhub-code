@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -20,10 +21,11 @@ func (c APIClient) publishResultA2A(ctx context.Context, token string, payload m
 	if err != nil {
 		return err
 	}
-	metadata := publishResultA2ARoutingMetadata(payload)
-	if len(metadata) == 0 {
+	target, ok := publishResultA2ARouteTarget(payload)
+	if !ok {
 		return fmt.Errorf("publish result over a2a requires target agent")
 	}
+	metadata := target.Metadata()
 
 	encoded, err := json.Marshal(payload)
 	if err != nil {
@@ -35,22 +37,39 @@ func (c APIClient) publishResultA2A(ctx context.Context, token string, payload m
 	if requestID := firstString(payload["request_id"]); requestID != "" {
 		msg.ID = requestID
 	}
+	if taskID := firstString(payload["a2a_task_id"], payload["hub_task_id"]); taskID != "" {
+		msg.TaskID = a2a.TaskID(taskID)
+	}
+	if contextID := firstString(payload["a2a_context_id"], payload["context_id"]); contextID != "" {
+		msg.ContextID = contextID
+	}
 	msg.Metadata = metadata
 
-	httpClient := c.HTTPClient
-	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 35 * time.Second}
+	endpoint := c.a2aEndpointURLForTarget(target)
+	err = c.sendResultA2A(ctx, normalizedToken, endpoint, msg, metadata)
+	if err == nil {
+		return nil
 	}
-	client, err := a2aclient.NewFromEndpoints(ctx, []*a2a.AgentInterface{
-		a2a.NewAgentInterface(c.a2aEndpointURL(), a2a.TransportProtocolJSONRPC),
-	}, a2aclient.WithJSONRPCTransport(httpClient))
+	if endpoint != c.a2aEndpointURL() {
+		c.logf("hub.a2a status=warn action=target_endpoint_fallback err=%q", err)
+		return c.sendResultA2A(ctx, normalizedToken, c.a2aEndpointURL(), msg, metadata)
+	}
+	return err
+}
+
+func (c APIClient) sendResultA2A(
+	ctx context.Context,
+	token string,
+	endpoint string,
+	msg *a2a.Message,
+	metadata map[string]any,
+) error {
+	client, err := c.newA2AClient(ctx, endpoint)
 	if err != nil {
 		return fmt.Errorf("create a2a client: %w", err)
 	}
 
-	callCtx := a2aclient.AttachServiceParams(ctx, a2aclient.ServiceParams{
-		"Authorization": []string{"Bearer " + normalizedToken},
-	})
+	callCtx := a2aAuthorizedContext(ctx, token)
 	_, sendErr := client.SendMessage(callCtx, &a2a.SendMessageRequest{
 		Config: &a2a.SendMessageConfig{
 			ReturnImmediately: true,
@@ -68,28 +87,120 @@ func (c APIClient) publishResultA2A(ctx context.Context, token string, payload m
 	return nil
 }
 
+func (c APIClient) verifyTokenA2A(ctx context.Context, token string) (bool, error) {
+	normalizedToken, err := requireHubToken(token, "verify token over a2a")
+	if err != nil {
+		return false, err
+	}
+	client, err := c.newA2AClient(ctx, c.a2aEndpointURL())
+	if err != nil {
+		return false, fmt.Errorf("create a2a client: %w", err)
+	}
+	_, cardErr := client.GetExtendedAgentCard(
+		a2aAuthorizedContext(ctx, normalizedToken),
+		&a2a.GetExtendedAgentCardRequest{},
+	)
+	destroyErr := client.Destroy()
+	if cardErr != nil {
+		return false, errors.Join(fmt.Errorf("a2a GetExtendedAgentCard: %w", cardErr), destroyErr)
+	}
+	if destroyErr != nil {
+		return false, fmt.Errorf("destroy a2a client: %w", destroyErr)
+	}
+	return true, nil
+}
+
+func (c APIClient) newA2AClient(ctx context.Context, endpoint string) (*a2aclient.Client, error) {
+	return a2aclient.NewFromEndpoints(ctx, []*a2a.AgentInterface{
+		a2a.NewAgentInterface(endpoint, a2a.TransportProtocolJSONRPC),
+	}, a2aclient.WithJSONRPCTransport(c.a2aHTTPClient()))
+}
+
+func (c APIClient) a2aHTTPClient() *http.Client {
+	if c.HTTPClient != nil {
+		return c.HTTPClient
+	}
+	return &http.Client{Timeout: 35 * time.Second}
+}
+
+func a2aAuthorizedContext(ctx context.Context, token string) context.Context {
+	return a2aclient.AttachServiceParams(ctx, a2aclient.ServiceParams{
+		"Authorization": []string{"Bearer " + strings.TrimSpace(token)},
+	})
+}
+
 func (c APIClient) a2aEndpointURL() string {
 	return strings.TrimRight(strings.TrimSpace(c.BaseURL), "/") + "/a2a"
 }
 
-func publishResultA2ARoutingMetadata(payload map[string]any) map[string]any {
-	_, routed := publishResultOpenClawBody(payload)
-	if !routed {
-		return nil
+func (c APIClient) a2aEndpointURLForTarget(target a2aRouteTarget) string {
+	base := c.a2aEndpointURL()
+	if target.AgentUUID == "" || !looksLikeUUID(target.AgentUUID) {
+		return base
 	}
+	return base + "/agents/" + url.PathEscape(target.AgentUUID)
+}
+
+type a2aRouteTarget struct {
+	AgentUUID string
+	AgentURI  string
+}
+
+func (t a2aRouteTarget) Metadata() map[string]any {
 	metadata := map[string]any{}
-	if toAgentURI := firstString(payload["to_agent_uri"]); toAgentURI != "" {
-		metadata["to_agent_uri"] = toAgentURI
-	} else if toAgentUUID := firstString(payload["to_agent_uuid"]); toAgentUUID != "" {
-		metadata["to_agent_uuid"] = toAgentUUID
-	} else if routeTarget := firstString(payload["to"], payload["reply_to"]); routeTarget != "" {
-		if looksLikeAgentURI(routeTarget) {
-			metadata["to_agent_uri"] = routeTarget
-		} else {
-			metadata["to_agent_uuid"] = routeTarget
-		}
+	if t.AgentURI != "" {
+		metadata["to_agent_uri"] = t.AgentURI
+	} else if t.AgentUUID != "" {
+		metadata["to_agent_uuid"] = t.AgentUUID
 	}
 	return metadata
+}
+
+func publishResultA2ARoutingMetadata(payload map[string]any) map[string]any {
+	target, ok := publishResultA2ARouteTarget(payload)
+	if !ok {
+		return nil
+	}
+	return target.Metadata()
+}
+
+func publishResultA2ARouteTarget(payload map[string]any) (a2aRouteTarget, bool) {
+	_, routed := publishResultOpenClawBody(payload)
+	if !routed {
+		return a2aRouteTarget{}, false
+	}
+	if toAgentURI := firstString(payload["to_agent_uri"]); toAgentURI != "" {
+		return a2aRouteTarget{AgentURI: toAgentURI}, true
+	} else if toAgentUUID := firstString(payload["to_agent_uuid"]); toAgentUUID != "" {
+		return a2aRouteTarget{AgentUUID: toAgentUUID}, true
+	} else if routeTarget := firstString(payload["to"], payload["reply_to"]); routeTarget != "" {
+		if looksLikeAgentURI(routeTarget) {
+			return a2aRouteTarget{AgentURI: routeTarget}, true
+		} else {
+			return a2aRouteTarget{AgentUUID: routeTarget}, true
+		}
+	}
+	return a2aRouteTarget{}, false
+}
+
+func looksLikeUUID(value string) bool {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if len(value) != 36 {
+		return false
+	}
+	for i, r := range value {
+		switch i {
+		case 8, 13, 18, 23:
+			if r != '-' {
+				return false
+			}
+		default:
+			if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f')) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func publishResultOpenClawBody(payload map[string]any) (map[string]any, bool) {
