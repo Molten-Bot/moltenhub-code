@@ -1327,24 +1327,40 @@ func promptFromRunConfigJSON(runConfigJSON []byte) string {
 	if err := json.Unmarshal(runConfigJSON, &raw); err != nil {
 		return ""
 	}
+	taskName := strings.TrimSpace(raw.LibraryTaskName)
+	if taskName != "" {
+		catalog, err := library.LoadCatalog(library.DefaultDir)
+		if err == nil {
+			for _, task := range catalog.Summaries() {
+				if strings.TrimSpace(task.Name) != taskName {
+					continue
+				}
+				return libraryTaskDisplayText(task)
+			}
+		}
+	}
 	if prompt := strings.TrimSpace(raw.Prompt); prompt != "" {
 		return prompt
 	}
-	taskName := strings.TrimSpace(raw.LibraryTaskName)
-	if taskName == "" {
-		return ""
+	return ""
+}
+
+func libraryTaskDisplayText(task library.TaskSummary) string {
+	title := strings.TrimSpace(task.DisplayName)
+	if title == "" {
+		title = strings.TrimSpace(task.Name)
 	}
-	catalog, err := library.LoadCatalog(library.DefaultDir)
-	if err != nil {
-		return ""
-	}
-	for _, task := range catalog.Summaries() {
-		if strings.TrimSpace(task.Name) != taskName {
-			continue
-		}
+	description := strings.TrimSpace(task.Description)
+	switch {
+	case title != "" && description != "":
+		return title + "\n\n" + description
+	case title != "":
+		return title
+	case description != "":
+		return description
+	default:
 		return strings.TrimSpace(task.Prompt)
 	}
-	return ""
 }
 
 func promptIsUserInputForTask(requestID, prompt string) bool {
