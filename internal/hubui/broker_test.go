@@ -909,7 +909,7 @@ func TestBrokerMarksFailureFollowUpPromptAsSystemGenerated(t *testing.T) {
 	}
 }
 
-func TestBrokerResolvesLibraryTaskPromptFromRunConfig(t *testing.T) {
+func TestBrokerResolvesLibraryTaskDisplayTextFromRunConfig(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HARNESS_LIBRARY_DIR", tmp)
 	if err := os.WriteFile(filepath.Join(tmp, "coverage.json"), []byte(`{
@@ -930,7 +930,7 @@ func TestBrokerResolvesLibraryTaskPromptFromRunConfig(t *testing.T) {
 	if len(snap.Tasks) != 1 {
 		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
 	}
-	if got, want := snap.Tasks[0].Prompt, "Raise coverage."; got != want {
+	if got, want := snap.Tasks[0].Prompt, "100% Unit Test Coverage\n\nRaise coverage."; got != want {
 		t.Fatalf("task.Prompt = %q, want %q", got, want)
 	}
 	if !snap.Tasks[0].PromptIsUserInput {
@@ -1014,9 +1014,19 @@ func TestPromptFromRunConfigJSON(t *testing.T) {
 			want: "refactor api",
 		},
 		{
-			name: "library task prompt",
+			name: "library task display text",
 			raw:  []byte(`{"libraryTaskName":"unit-test-coverage"}`),
-			want: "Raise coverage.",
+			want: "100% Unit Test Coverage\n\nRaise coverage.",
+		},
+		{
+			name: "library task display text wins over expanded prompt",
+			raw:  []byte(`{"libraryTaskName":"unit-test-coverage","prompt":"Full execution prompt."}`),
+			want: "100% Unit Test Coverage\n\nRaise coverage.",
+		},
+		{
+			name: "library task falls back to prompt when metadata missing",
+			raw:  []byte(`{"libraryTaskName":"missing-task","prompt":"Full execution prompt."}`),
+			want: "Full execution prompt.",
 		},
 	}
 
