@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +19,7 @@ import (
 	"github.com/Molten-Bot/moltenhub-code/internal/failurefollowup"
 	"github.com/Molten-Bot/moltenhub-code/internal/harness"
 	"github.com/Molten-Bot/moltenhub-code/internal/library"
+	"github.com/a2aproject/a2a-go/v2/a2a"
 )
 
 // DispatchTaskControl exposes per-request runtime controls shared with the UI.
@@ -54,6 +57,7 @@ const failureFollowUpPromptBase = failurefollowup.RequiredPrompt
 const failureFollowUpNoPathGuidance = "No workspace or log path was captured before the failure. Investigate the task history and runtime error details first."
 const failureFollowUpTargetSubdir = "."
 const transportOfflineReasonExecutionFailure = "task_execution_failure"
+const dispatchTaskStatusType = "task_status_update"
 
 // NewDaemon returns a hub daemon with defaults.
 func NewDaemon(runner execx.Runner) Daemon {
@@ -401,8 +405,22 @@ func (d Daemon) processInboundMessage(
 		}
 		return
 	}
+	fallbackRequestID := dedupeKeyForDispatchFallback(dispatch, messageID, deliveryID)
+	if strings.TrimSpace(dispatch.RequestID) == "" {
+		dispatch.RequestID = strings.TrimSpace(fallbackRequestID)
+	}
 	if parseErr != nil {
 		d.logf("dispatch status=invalid request_id=%s err=%q", dispatch.RequestID, parseErr)
+		d.publishDispatchStatus(
+			ctx,
+			api,
+			cfg,
+			dispatch,
+			"error",
+			a2a.TaskStateFailed,
+			failureResponseMessage("dispatch parse: "+parseErr.Error()),
+			map[string]any{"error": "dispatch parse: " + parseErr.Error()},
+		)
 		payload := dispatchParseErrorPayload(cfg, dispatch, parseErr)
 		if err := api.PublishResult(ctx, payload); err != nil {
 			d.logf("dispatch status=publish_error request_id=%s err=%q", dispatch.RequestID, err)
@@ -422,7 +440,6 @@ func (d Daemon) processInboundMessage(
 	}
 
 	dupKey := dedupeKeyForDispatch(dispatch, messageID, deliveryID)
-	fallbackRequestID := dedupeKeyForDispatchFallback(dispatch, messageID, deliveryID)
 	if strings.TrimSpace(dispatch.RequestID) == "" {
 		dispatch.RequestID = firstNonEmpty(strings.TrimSpace(fallbackRequestID), strings.TrimSpace(dupKey))
 	}
@@ -434,6 +451,20 @@ func (d Daemon) processInboundMessage(
 				requestID,
 				state,
 				duplicateOf,
+			)
+			d.publishDispatchStatus(
+				ctx,
+				api,
+				cfg,
+				dispatch,
+				"duplicate",
+				a2a.TaskStateRejected,
+				duplicateDispatchErrorText(duplicateOf, state),
+				map[string]any{
+					"duplicate":    true,
+					"state":        strings.TrimSpace(state),
+					"duplicate_of": strings.TrimSpace(duplicateOf),
+				},
 			)
 			payload := duplicateDispatchResultPayload(cfg, dispatch, state, duplicateOf)
 			if err := api.PublishResult(ctx, payload); err != nil {
@@ -466,6 +497,7 @@ func (d Daemon) processInboundMessage(
 	if d.OnDispatchQueued != nil {
 		d.OnDispatchQueued(dispatch.RequestID, dispatch.Config)
 	}
+	d.publishDispatchStatus(ctx, api, cfg, dispatch, "queued", a2a.TaskStateSubmitted, "Task queued.", nil)
 
 	ackedEarly := false
 	if strings.TrimSpace(deliveryID) != "" {
@@ -516,6 +548,20 @@ func (d Daemon) processInboundMessage(
 			if triggerFollowUps && d.OnDispatchFailed != nil {
 				d.OnDispatchFailed(dispatch.RequestID, dispatch.Config, failRes)
 			}
+			taskState := a2a.TaskStateFailed
+			if firstNonEmpty(status, "error") == "stopped" {
+				taskState = a2a.TaskStateCanceled
+			}
+			d.publishDispatchStatus(
+				runCtx,
+				api,
+				cfg,
+				dispatch,
+				firstNonEmpty(status, "error"),
+				taskState,
+				dispatchResultMessage("error", failRes),
+				map[string]any{"error": failErr.Error()},
+			)
 			payload := dispatchResultPayload(cfg, dispatch, failRes)
 			if publishErr := api.PublishResult(runCtx, payload); publishErr != nil {
 				d.logf("dispatch status=publish_error request_id=%s err=%q", dispatch.RequestID, publishErr)
@@ -548,6 +594,7 @@ func (d Daemon) processInboundMessage(
 
 		for {
 			if taskControl != nil {
+				d.publishDispatchStatus(runCtx, api, cfg, dispatch, "waiting", a2a.TaskStateSubmitted, "Task waiting for local controls.", nil)
 				if waitErr := taskControl.WaitUntilRunnable(runCtx); waitErr != nil {
 					if taskControl.IsStopped() || isStoppedByOperatorErr(context.Cause(runCtx)) {
 						stopErr := context.Cause(runCtx)
@@ -780,6 +827,16 @@ func (d Daemon) handleDispatch(
 		if d.OnDispatchFailed != nil {
 			d.OnDispatchFailed(dispatch.RequestID, dispatch.Config, failRes)
 		}
+		d.publishDispatchStatus(
+			ctx,
+			api,
+			cfg,
+			dispatch,
+			"error",
+			a2a.TaskStateFailed,
+			dispatchResultMessage("error", failRes),
+			map[string]any{"error": failRes.Err.Error()},
+		)
 		payload := dispatchResultPayload(cfg, dispatch, failRes)
 		if err := api.PublishResult(ctx, payload); err != nil {
 			d.logf("dispatch status=publish_error request_id=%s err=%q", dispatch.RequestID, err)
@@ -815,6 +872,7 @@ func (d Daemon) handleDispatch(
 		dispatch.Config.RepoURL,
 		strings.Join(dispatch.Config.RepoList(), ","),
 	)
+	d.publishDispatchStatus(ctx, api, cfg, dispatch, "working", a2a.TaskStateWorking, "Task running.", nil)
 	if api != nil {
 		if err := api.RecordRunStartedActivity(ctx, dispatch.Config); err != nil {
 			d.logf("dispatch status=warn action=record_run_started_activity request_id=%s err=%q", dispatch.RequestID, err)
@@ -831,6 +889,9 @@ func (d Daemon) handleDispatch(
 		line := fmt.Sprintf(format, args...)
 		if dispatch.RequestID != "" {
 			d.logf("dispatch request_id=%s %s", dispatch.RequestID, line)
+			if status, state, message, details, ok := dispatchStatusFromHarnessLogLine(line); ok {
+				d.publishDispatchStatus(ctx, api, cfg, dispatch, status, state, message, details)
+			}
 			return
 		}
 		d.logf("dispatch %s", line)
@@ -848,6 +909,31 @@ func (d Daemon) handleDispatch(
 	if res.Err != nil && !stoppedByOperator && d.OnDispatchFailed != nil {
 		d.OnDispatchFailed(dispatch.RequestID, dispatch.Config, res)
 	}
+	status := "completed"
+	taskState := a2a.TaskStateCompleted
+	if res.Err != nil {
+		status = "error"
+		taskState = a2a.TaskStateFailed
+		if stoppedByOperator {
+			status = "stopped"
+			taskState = a2a.TaskStateCanceled
+		}
+	} else if res.NoChanges && !resultHasPR(res) {
+		status = "no_changes"
+	}
+	statusDetails := map[string]any{
+		"exitCode":     res.ExitCode,
+		"workspaceDir": res.WorkspaceDir,
+		"branch":       res.Branch,
+		"prUrl":        res.PRURL,
+		"prUrls":       splitNonEmptyCSV(completedPRURLs(res)),
+		"changedRepos": countChangedRepoResults(res.RepoResults),
+		"noChanges":    res.NoChanges,
+	}
+	if res.Err != nil {
+		statusDetails["error"] = res.Err.Error()
+	}
+	d.publishDispatchStatus(ctx, api, cfg, dispatch, status, taskState, dispatchResultMessage(status, res), statusDetails)
 	payload := dispatchResultPayload(cfg, dispatch, res)
 	if err := api.PublishResult(ctx, payload); err != nil {
 		d.logf("dispatch status=publish_error request_id=%s err=%q", dispatch.RequestID, err)
@@ -945,6 +1031,400 @@ func (d Daemon) recordCodingActivityRunning(ctx context.Context, api MoltenHubAP
 	}
 }
 
+func (d Daemon) publishDispatchStatus(
+	ctx context.Context,
+	api MoltenHubAPI,
+	cfg InitConfig,
+	dispatch SkillDispatch,
+	status string,
+	state a2a.TaskState,
+	message string,
+	details map[string]any,
+) {
+	if api == nil {
+		return
+	}
+	payload := dispatchStatusPayload(cfg, dispatch, status, state, message, details)
+	if err := api.PublishResult(ctx, payload); err != nil {
+		d.logf(
+			"dispatch status=warn action=publish_status_update request_id=%s task_status=%s err=%q",
+			dispatch.RequestID,
+			strings.TrimSpace(status),
+			err,
+		)
+	}
+}
+
+func dispatchStatusPayload(
+	cfg InitConfig,
+	dispatch SkillDispatch,
+	status string,
+	state a2a.TaskState,
+	message string,
+	details map[string]any,
+) map[string]any {
+	status = strings.TrimSpace(status)
+	if status == "" {
+		status = "working"
+	}
+	if state == a2a.TaskStateUnspecified {
+		state = a2a.TaskStateWorking
+	}
+	message = strings.TrimSpace(message)
+	if message == "" {
+		message = "Task status updated."
+	}
+
+	taskID := dispatchStatusTaskID(dispatch)
+	contextID := dispatchStatusContextID(dispatch)
+	skill := firstNonEmpty(dispatch.Skill, cfg.Skill.Name)
+	metadata := map[string]any{
+		"request_id": dispatch.RequestID,
+		"skill":      skill,
+		"status":     status,
+	}
+	if stage := firstString(details["stage"]); stage != "" {
+		metadata["stage"] = stage
+	}
+	if stageStatus := firstString(details["stage_status"], details["status"]); stageStatus != "" {
+		metadata["stage_status"] = stageStatus
+	}
+	if originator := dispatchOriginatorPayload(dispatch); originator != nil {
+		metadata["originator"] = originator
+	}
+
+	payload := map[string]any{
+		"type":          dispatchTaskStatusType,
+		"protocol":      "a2a.v1",
+		"skill":         skill,
+		"request_id":    dispatch.RequestID,
+		"client_msg_id": dispatchStatusMessageID(dispatch, status, details),
+		"status":        status,
+		"a2a_state":     state.String(),
+		"task_state":    state.String(),
+		"message":       message,
+		"statusUpdate":  a2aStatusUpdatePayload(taskID, contextID, state, message, metadata),
+	}
+	if taskID != "" {
+		payload["a2a_task_id"] = taskID
+		payload["task_id"] = taskID
+	}
+	if hubTaskID := strings.TrimSpace(dispatch.HubTaskID); hubTaskID != "" {
+		payload["hub_task_id"] = hubTaskID
+	}
+	if contextID != "" {
+		payload["a2a_context_id"] = contextID
+		payload["context_id"] = contextID
+	}
+	if len(details) > 0 {
+		payload["details"] = cloneMetadataMap(details)
+	}
+	if originator := dispatchOriginatorPayload(dispatch); originator != nil {
+		payload["originator"] = originator
+		if id := firstString(originator["id"]); id != "" {
+			payload["originator_id"] = id
+		}
+	}
+	if state == a2a.TaskStateFailed || state == a2a.TaskStateRejected {
+		payload["failed"] = true
+		errText := firstNonEmpty(firstString(details["error"]), message)
+		payload["error"] = errText
+		addExplicitFailureFields(payload, errText)
+	} else {
+		payload["failed"] = false
+	}
+	payload["ok"] = a2aTaskStateOK(state)
+	applyDispatchResponseRouting(payload, dispatch)
+	return payload
+}
+
+func dispatchStatusFromHarnessLogLine(line string) (string, a2a.TaskState, string, map[string]any, bool) {
+	line = strings.TrimSpace(line)
+	if line == "" || !strings.Contains(line, "stage=") || !strings.Contains(line, "status=") {
+		return "", a2a.TaskStateUnspecified, "", nil, false
+	}
+	fields := parseDispatchLogKVFields(line)
+	stage := strings.TrimSpace(fields["stage"])
+	stageStatus := strings.TrimSpace(fields["status"])
+	if stage == "" || stageStatus == "" {
+		return "", a2a.TaskStateUnspecified, "", nil, false
+	}
+
+	details := map[string]any{
+		"stage":        stage,
+		"stage_status": stageStatus,
+	}
+	for key, value := range fields {
+		if strings.TrimSpace(key) == "" || strings.TrimSpace(value) == "" {
+			continue
+		}
+		details[key] = value
+	}
+
+	status := "working"
+	state := a2a.TaskStateWorking
+	message := dispatchStageStatusMessage(stage, stageStatus)
+	if stageStatus == "error" || stageStatus == "failed" {
+		status = "error"
+		state = a2a.TaskStateFailed
+		errText := firstNonEmpty(fields["err"], fields["error"], message)
+		details["error"] = errText
+		message = failureResponseMessage(errText)
+	}
+	return status, state, message, details, true
+}
+
+func dispatchStageStatusMessage(stage, status string) string {
+	stage = strings.TrimSpace(stage)
+	status = strings.TrimSpace(status)
+	if stage == "" {
+		return "Task status updated."
+	}
+	if status == "" {
+		return "Task stage updated: " + stage + "."
+	}
+	return "Task stage updated: " + stage + " " + status + "."
+}
+
+func parseDispatchLogKVFields(line string) map[string]string {
+	if !strings.Contains(line, "=") {
+		return nil
+	}
+	out := make(map[string]string, 8)
+	for idx := 0; idx < len(line); {
+		for idx < len(line) && isDispatchLogKVSpace(line[idx]) {
+			idx++
+		}
+		if idx >= len(line) {
+			break
+		}
+
+		keyStart := idx
+		for idx < len(line) && !isDispatchLogKVSpace(line[idx]) && line[idx] != '=' {
+			idx++
+		}
+		if idx >= len(line) || line[idx] != '=' {
+			for idx < len(line) && !isDispatchLogKVSpace(line[idx]) {
+				idx++
+			}
+			continue
+		}
+
+		key := strings.TrimSpace(line[keyStart:idx])
+		idx++
+		if key == "" {
+			continue
+		}
+
+		value, next := parseDispatchLogKVValue(line, idx)
+		out[key] = value
+		idx = next
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func parseDispatchLogKVValue(line string, idx int) (string, int) {
+	if idx >= len(line) {
+		return "", idx
+	}
+	if line[idx] == '"' {
+		if token, ok := parseDispatchLogQuotedToken(line[idx:]); ok {
+			if decoded, err := strconv.Unquote(token); err == nil {
+				return strings.TrimSpace(decoded), idx + len(token)
+			}
+			return strings.TrimSpace(strings.Trim(token, `"`)), idx + len(token)
+		}
+	}
+
+	start := idx
+	for idx < len(line) && !isDispatchLogKVSpace(line[idx]) {
+		idx++
+	}
+	return strings.TrimSpace(line[start:idx]), idx
+}
+
+func parseDispatchLogQuotedToken(text string) (string, bool) {
+	if !strings.HasPrefix(text, "\"") {
+		return "", false
+	}
+	for i := 1; i < len(text); i++ {
+		if text[i] != '"' {
+			continue
+		}
+		backslashes := 0
+		for j := i - 1; j >= 0 && text[j] == '\\'; j-- {
+			backslashes++
+		}
+		if backslashes%2 == 0 {
+			return text[:i+1], true
+		}
+	}
+	return "", false
+}
+
+func isDispatchLogKVSpace(ch byte) bool {
+	return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
+}
+
+func a2aStatusUpdatePayload(taskID, contextID string, state a2a.TaskState, message string, metadata map[string]any) map[string]any {
+	taskInfo := a2a.TaskInfo{TaskID: a2a.TaskID(taskID), ContextID: contextID}
+	msg := a2a.NewMessageForTask(a2a.MessageRoleAgent, taskInfo, a2a.NewTextPart(message))
+	event := a2a.NewStatusUpdateEvent(taskInfo, state, msg)
+	event.Metadata = cloneMetadataMap(metadata)
+
+	encoded, err := json.Marshal(a2a.StreamResponse{Event: event})
+	if err == nil {
+		var envelope map[string]any
+		if json.Unmarshal(encoded, &envelope) == nil {
+			if statusUpdate, ok := envelope["statusUpdate"].(map[string]any); ok {
+				return statusUpdate
+			}
+		}
+	}
+	return map[string]any{
+		"taskId":    taskID,
+		"contextId": contextID,
+		"status": map[string]any{
+			"state": state.String(),
+		},
+		"metadata": cloneMetadataMap(metadata),
+	}
+}
+
+func dispatchStatusTaskID(dispatch SkillDispatch) string {
+	return firstNonEmpty(dispatch.HubTaskID, dispatch.RequestID)
+}
+
+func dispatchStatusContextID(dispatch SkillDispatch) string {
+	return firstNonEmpty(dispatch.ContextID, dispatch.RequestID)
+}
+
+func dispatchStatusMessageID(dispatch SkillDispatch, status string, details map[string]any) string {
+	base := firstNonEmpty(dispatch.RequestID, dispatch.HubTaskID)
+	status = strings.TrimSpace(status)
+	if base == "" {
+		base = "task"
+	}
+	if status == "" {
+		status = "status"
+	}
+	parts := []string{base, "status", status}
+	if stage := firstString(details["stage"]); stage != "" {
+		parts = append(parts, sanitizeDispatchStatusMessageIDPart(stage))
+	}
+	if stageStatus := firstString(details["stage_status"], details["status"]); stageStatus != "" {
+		parts = append(parts, sanitizeDispatchStatusMessageIDPart(stageStatus))
+	}
+	if len(details) > 0 {
+		encoded, err := json.Marshal(details)
+		if err == nil {
+			hash := fnv.New32a()
+			_, _ = hash.Write(encoded)
+			parts = append(parts, fmt.Sprintf("%08x", hash.Sum32()))
+		}
+	}
+	return strings.Join(parts, "-")
+}
+
+func sanitizeDispatchStatusMessageIDPart(value string) string {
+	value = strings.TrimSpace(strings.ToLower(value))
+	var b strings.Builder
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '-' || r == '_':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('-')
+		}
+	}
+	out := strings.Trim(b.String(), "-")
+	if out == "" {
+		return "status"
+	}
+	if len(out) > 40 {
+		out = strings.Trim(out[:40], "-")
+		if out == "" {
+			return "status"
+		}
+	}
+	return out
+}
+
+func a2aTaskStateOK(state a2a.TaskState) bool {
+	return state != a2a.TaskStateFailed &&
+		state != a2a.TaskStateRejected &&
+		state != a2a.TaskStateCanceled
+}
+
+func applyDispatchResponseRouting(payload map[string]any, dispatch SkillDispatch) {
+	if payload == nil {
+		return
+	}
+	if replyTo := strings.TrimSpace(dispatch.ReplyTo); replyTo != "" {
+		payload["reply_to"] = replyTo
+		payload["to"] = replyTo
+	}
+}
+
+func applyDispatchOriginator(payload map[string]any, dispatch SkillDispatch) {
+	if payload == nil {
+		return
+	}
+	originator := dispatchOriginatorPayload(dispatch)
+	if originator == nil {
+		return
+	}
+	payload["originator"] = originator
+	if id := firstString(originator["id"]); id != "" {
+		payload["originator_id"] = id
+	}
+}
+
+func dispatchOriginatorPayload(dispatch SkillDispatch) map[string]any {
+	originatorID := firstNonEmpty(
+		dispatch.Originator,
+		dispatch.OriginatorAgentURI,
+		dispatch.OriginatorAgentUUID,
+		dispatch.OriginatorAgentID,
+		dispatch.OriginatorHumanID,
+	)
+	originator := map[string]any{}
+	if originatorID != "" {
+		originator["id"] = originatorID
+	}
+	if agentURI := strings.TrimSpace(dispatch.OriginatorAgentURI); agentURI != "" {
+		originator["agent_uri"] = agentURI
+	}
+	if agentUUID := strings.TrimSpace(dispatch.OriginatorAgentUUID); agentUUID != "" {
+		originator["agent_uuid"] = agentUUID
+	}
+	if agentID := strings.TrimSpace(dispatch.OriginatorAgentID); agentID != "" {
+		originator["agent_id"] = agentID
+	}
+	if humanID := strings.TrimSpace(dispatch.OriginatorHumanID); humanID != "" {
+		originator["human_id"] = humanID
+	}
+	switch {
+	case strings.TrimSpace(dispatch.OriginatorAgentURI) != "" ||
+		strings.TrimSpace(dispatch.OriginatorAgentUUID) != "" ||
+		strings.TrimSpace(dispatch.OriginatorAgentID) != "":
+		originator["type"] = "agent"
+	case strings.TrimSpace(dispatch.OriginatorHumanID) != "":
+		originator["type"] = "human"
+	}
+	if len(originator) == 0 {
+		return nil
+	}
+	return originator
+}
+
 func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.Result) map[string]any {
 	status := "completed"
 	if res.Err != nil {
@@ -1014,9 +1494,13 @@ func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.R
 		addExplicitFailureFields(failure, errText)
 		payload["failure"] = failure
 	}
-	if dispatch.ReplyTo != "" {
-		payload["reply_to"] = dispatch.ReplyTo
-		payload["to"] = dispatch.ReplyTo
+	applyDispatchResponseRouting(payload, dispatch)
+	applyDispatchOriginator(payload, dispatch)
+	if originator := dispatchOriginatorPayload(dispatch); originator != nil {
+		result["originator"] = originator
+		if failure, ok := payload["failure"].(map[string]any); ok {
+			failure["originator"] = originator
+		}
 	}
 	return payload
 }
