@@ -8,8 +8,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/Molten-Bot/moltenhub-code/internal/config"
 )
 
 func TestSaveRuntimeConfigWritesExpectedShape(t *testing.T) {
@@ -204,44 +202,6 @@ func TestLoadRuntimeConfigRoundTrip(t *testing.T) {
 	}
 	if got.TimeoutMs != 20000 {
 		t.Fatalf("TimeoutMs = %d", got.TimeoutMs)
-	}
-}
-
-func TestSaveRuntimeConfigScheduledPromptsPreservesRuntimeConfig(t *testing.T) {
-	t.Parallel()
-
-	path := filepath.Join(t.TempDir(), "moltenhub", "config.json")
-	initCfg := InitConfig{
-		BaseURL:      "https://na.hub.molten.bot/v1",
-		AgentHarness: "codex",
-	}
-	if err := SaveRuntimeConfig(path, initCfg, "agent_abc"); err != nil {
-		t.Fatalf("SaveRuntimeConfig() error = %v", err)
-	}
-
-	prompt := ScheduledPrompt{
-		ID:           "schedule-1",
-		Name:         "daily tests",
-		EveryMinutes: 1440,
-		Config: config.Config{
-			Repos:        []string{"git@github.com:acme/repo.git"},
-			TargetSubdir: ".",
-			Prompt:       "run tests",
-		},
-	}
-	if err := SaveRuntimeConfigScheduledPrompts(path, initCfg, []ScheduledPrompt{prompt}); err != nil {
-		t.Fatalf("SaveRuntimeConfigScheduledPrompts() error = %v", err)
-	}
-
-	runtimeCfg, err := LoadRuntimeConfig(path)
-	if err != nil {
-		t.Fatalf("LoadRuntimeConfig() error = %v", err)
-	}
-	if runtimeCfg.AgentToken != "agent_abc" {
-		t.Fatalf("AgentToken = %q, want preserved agent token", runtimeCfg.AgentToken)
-	}
-	if got := runtimeCfg.ScheduledPrompts; len(got) != 1 || got[0].ID != "schedule-1" || got[0].Config.Prompt != "run tests" {
-		t.Fatalf("ScheduledPrompts = %#v", got)
 	}
 }
 

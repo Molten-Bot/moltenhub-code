@@ -675,9 +675,6 @@ func runHub(args []string) int {
 		)
 	}
 
-	scheduledPrompts := newScheduledPromptStore(cfg.RuntimeConfigPath, cfg)
-	startScheduledPromptRunner(ctx, scheduledPrompts, enqueueLocalRun, daemonLogger)
-
 	hubController := newHubDaemonController(ctx, runner)
 	hubRuntimeConnected = hubController.Running
 	hubController.logf = daemonLogger
@@ -822,33 +819,6 @@ func runHub(args []string) int {
 			}
 			recordLibraryUsage(runCfg)
 			return enqueueLocalRun(reqCtx, runCfg, true, rerunSource, force)
-		}
-		uiServer.ListScheduledPrompts = func(context.Context) ([]hubui.ScheduledPrompt, error) {
-			items := scheduledPrompts.List()
-			out := make([]hubui.ScheduledPrompt, 0, len(items))
-			for _, item := range items {
-				out = append(out, scheduledPromptToUI(item))
-			}
-			return out, nil
-		}
-		uiServer.CreateScheduledPrompt = func(_ context.Context, req hubui.ScheduledPromptCreateRequest) (hubui.ScheduledPrompt, error) {
-			runCfg, err := hub.ParseRunConfigJSON(req.Config)
-			if err != nil {
-				return hubui.ScheduledPrompt{}, fmt.Errorf("invalid run config: %w", err)
-			}
-			item, err := scheduledPrompts.Add(time.Now().UTC(), req.Name, req.EveryMinutes, runCfg)
-			if err != nil {
-				return hubui.ScheduledPrompt{}, err
-			}
-			daemonLogger("schedule status=created id=%s every_minutes=%d", item.ID, item.EveryMinutes)
-			return scheduledPromptToUI(item), nil
-		}
-		uiServer.DeleteScheduledPrompt = func(_ context.Context, id string) error {
-			if err := scheduledPrompts.Delete(id); err != nil {
-				return err
-			}
-			daemonLogger("schedule status=deleted id=%s", id)
-			return nil
 		}
 		uiServer.CloseTask = cleanupTaskLogs
 		uiServer.ResolveTaskControls = localTaskController.Controls
