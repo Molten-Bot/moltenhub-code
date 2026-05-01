@@ -955,6 +955,14 @@ func enrichInboundMessageRouting(message, result, root map[string]any) map[strin
 	copyIfMissing("source_agent_uuid", "from_agent_uuid")
 	copyIfMissing("source_agent_id", "from_agent_id")
 	copyIfMissing("reply_to", "from_agent_uri", "from_agent_uuid", "from_agent_id")
+	copyIfMissing("from_human_id", "from_human_id", "source_human_id", "human_id", "created_by", "createdBy")
+	copyIfMissing("source_human_id", "source_human_id", "from_human_id", "human_id", "created_by", "createdBy")
+	copyIfMissing("human_id", "human_id", "from_human_id", "source_human_id", "created_by", "createdBy")
+	copyIfMissing("created_by", "created_by", "createdBy")
+	copyIfMissing("createdBy", "createdBy", "created_by")
+	copyIfMissing("originator", "originator", "originator_id", "originatorId", "sender", "sender_id", "senderId")
+	copyIfMissing("originator_id", "originator_id", "originatorId", "sender_id", "senderId")
+	copyIfMissing("originatorId", "originatorId", "originator_id", "senderId", "sender_id")
 	return message
 }
 

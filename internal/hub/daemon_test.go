@@ -18,6 +18,7 @@ import (
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/harness"
+	"github.com/a2aproject/a2a-go/v2/a2a"
 )
 
 func TestApplyStoredRuntimeConfigSkipsWhenInitBindTokenProvided(t *testing.T) {
@@ -550,6 +551,128 @@ func TestDispatchResultPayloadIncludesRepoResults(t *testing.T) {
 	}
 }
 
+func TestDispatchStatusPayloadUsesA2AStatusUpdateAndOriginator(t *testing.T) {
+	t.Parallel()
+
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:       "code_for_me",
+			ResultType: "skill_result",
+		},
+	}
+	dispatch := SkillDispatch{
+		RequestID:           "req-status",
+		HubTaskID:           "hub-task-status",
+		ContextID:           "ctx-status",
+		Skill:               "code_for_me",
+		ReplyTo:             "https://na.hub.molten.bot/acme/caller",
+		Originator:          "https://na.hub.molten.bot/acme/caller",
+		OriginatorAgentURI:  "https://na.hub.molten.bot/acme/caller",
+		OriginatorAgentUUID: "caller-uuid",
+	}
+
+	payload := dispatchStatusPayload(cfg, dispatch, "working", a2a.TaskStateWorking, "Task running.", nil)
+	if got := payload["type"]; got != dispatchTaskStatusType {
+		t.Fatalf("type = %#v, want %q", got, dispatchTaskStatusType)
+	}
+	if got := payload["reply_to"]; got != "https://na.hub.molten.bot/acme/caller" {
+		t.Fatalf("reply_to = %#v", got)
+	}
+	if got := payload["to"]; got != "https://na.hub.molten.bot/acme/caller" {
+		t.Fatalf("to = %#v", got)
+	}
+	if got := payload["a2a_task_id"]; got != "hub-task-status" {
+		t.Fatalf("a2a_task_id = %#v", got)
+	}
+	if got := payload["client_msg_id"]; got != "req-status-status-working" {
+		t.Fatalf("client_msg_id = %#v", got)
+	}
+	originator, _ := payload["originator"].(map[string]any)
+	if originator == nil {
+		t.Fatalf("originator missing: %#v", payload)
+	}
+	if got := originator["type"]; got != "agent" {
+		t.Fatalf("originator.type = %#v, want agent", got)
+	}
+	if got := originator["agent_uri"]; got != "https://na.hub.molten.bot/acme/caller" {
+		t.Fatalf("originator.agent_uri = %#v", got)
+	}
+
+	statusUpdate, _ := payload["statusUpdate"].(map[string]any)
+	if statusUpdate == nil {
+		t.Fatalf("statusUpdate missing: %#v", payload)
+	}
+	if got := statusUpdate["taskId"]; got != "hub-task-status" {
+		t.Fatalf("statusUpdate.taskId = %#v", got)
+	}
+	if got := statusUpdate["contextId"]; got != "ctx-status" {
+		t.Fatalf("statusUpdate.contextId = %#v", got)
+	}
+	status, _ := statusUpdate["status"].(map[string]any)
+	if got := status["state"]; got != "TASK_STATE_WORKING" {
+		t.Fatalf("statusUpdate.status.state = %#v", got)
+	}
+	message, _ := status["message"].(map[string]any)
+	parts, _ := message["parts"].([]any)
+	if len(parts) != 1 {
+		t.Fatalf("status message parts = %#v", message["parts"])
+	}
+	part, _ := parts[0].(map[string]any)
+	if got := part["text"]; got != "Task running." {
+		t.Fatalf("status message text = %#v", got)
+	}
+}
+
+func TestDispatchStatusPayloadIncludesStageMetadata(t *testing.T) {
+	t.Parallel()
+
+	status, state, message, details, ok := dispatchStatusFromHarnessLogLine(
+		`stage=clone status=warn action=fallback_repo_owner err="repository \"missing\" not found"`,
+	)
+	if !ok {
+		t.Fatal("dispatchStatusFromHarnessLogLine() ok = false, want true")
+	}
+	if status != "working" {
+		t.Fatalf("status = %q, want working", status)
+	}
+	if state != a2a.TaskStateWorking {
+		t.Fatalf("state = %s, want TASK_STATE_WORKING", state)
+	}
+	if message != "Task stage updated: clone warn." {
+		t.Fatalf("message = %q", message)
+	}
+	if got := details["stage"]; got != "clone" {
+		t.Fatalf("details.stage = %#v", got)
+	}
+	if got := details["stage_status"]; got != "warn" {
+		t.Fatalf("details.stage_status = %#v", got)
+	}
+	if got := details["err"]; got != `repository "missing" not found` {
+		t.Fatalf("details.err = %#v", got)
+	}
+
+	payload := dispatchStatusPayload(
+		InitConfig{Skill: SkillConfig{Name: "code_for_me"}},
+		SkillDispatch{RequestID: "req-stage", HubTaskID: "task-stage", ContextID: "ctx-stage", Skill: "code_for_me"},
+		status,
+		state,
+		message,
+		details,
+	)
+	statusUpdate, _ := payload["statusUpdate"].(map[string]any)
+	metadata, _ := statusUpdate["metadata"].(map[string]any)
+	if got := metadata["stage"]; got != "clone" {
+		t.Fatalf("statusUpdate.metadata.stage = %#v", got)
+	}
+	if got := metadata["stage_status"]; got != "warn" {
+		t.Fatalf("statusUpdate.metadata.stage_status = %#v", got)
+	}
+	clientMsgID := fmt.Sprint(payload["client_msg_id"])
+	if !strings.Contains(clientMsgID, "clone-warn") {
+		t.Fatalf("client_msg_id = %q, want stage-specific id", clientMsgID)
+	}
+}
+
 func TestDispatchResultPayloadNoChangesIncludesExistingPRURLs(t *testing.T) {
 	t.Parallel()
 
@@ -863,9 +986,8 @@ func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
 	t.Parallel()
 
 	var (
-		publishRequests int
-		publishedMsgs   []map[string]any
-		offlineReasons  []string
+		publishedMsgs  []map[string]any
+		offlineReasons []string
 	)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -885,7 +1007,6 @@ func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
 				t.Fatalf("decode publish body: %v", err)
 			}
 			message, _ := body["message"].(map[string]any)
-			publishRequests++
 			publishedMsgs = append(publishedMsgs, message)
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"ok":true,"result":{"status":"queued"}}`))
@@ -952,16 +1073,17 @@ func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
 		t.Fatal("timed out waiting for OnDispatchFailed callback")
 	}
 
-	if publishRequests != 2 {
-		t.Fatalf("publish requests = %d, want 2", publishRequests)
+	publishedResults := nonStatusPayloads(publishedMsgs)
+	if len(publishedResults) != 2 {
+		t.Fatalf("published result requests = %d, want 2", len(publishedResults))
 	}
-	if got := fmt.Sprint(publishedMsgs[0]["status"]); got != "error" {
+	if got := fmt.Sprint(publishedResults[0]["status"]); got != "error" {
 		t.Fatalf("first publish status = %q, want error", got)
 	}
-	if got := fmt.Sprint(publishedMsgs[1]["request_id"]); got != "req-fail-failure-review" {
+	if got := fmt.Sprint(publishedResults[1]["request_id"]); got != "req-fail-failure-review" {
 		t.Fatalf("follow-up request_id = %q, want req-fail-failure-review", got)
 	}
-	if got := fmt.Sprint(publishedMsgs[1]["config"]); !strings.Contains(got, config.DefaultRepositoryURL) {
+	if got := fmt.Sprint(publishedResults[1]["config"]); !strings.Contains(got, config.DefaultRepositoryURL) {
 		t.Fatalf("follow-up config = %q, want moltenhub-code repo", got)
 	}
 	if got := len(offlineReasons); got != 1 {
@@ -978,7 +1100,6 @@ func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
 	var (
 		mu             sync.Mutex
 		publishedMsgs  []map[string]any
-		publishRequest int
 		offlineReasons []string
 	)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1002,7 +1123,6 @@ func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
 			message, _ := body["message"].(map[string]any)
 
 			mu.Lock()
-			publishRequest++
 			publishedMsgs = append(publishedMsgs, message)
 			mu.Unlock()
 
@@ -1088,22 +1208,23 @@ func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	if publishRequest != 2 {
-		t.Fatalf("publish requests = %d, want 2", publishRequest)
+	publishedResults := nonStatusPayloads(publishedMsgs)
+	if len(publishedResults) != 2 {
+		t.Fatalf("published result requests = %d, want 2", len(publishedResults))
 	}
-	if got := fmt.Sprint(publishedMsgs[0]["status"]); got != "error" {
-		t.Fatalf("message.status = %v, want error", publishedMsgs[0]["status"])
+	if got := fmt.Sprint(publishedResults[0]["status"]); got != "error" {
+		t.Fatalf("message.status = %v, want error", publishedResults[0]["status"])
 	}
-	if got := fmt.Sprint(publishedMsgs[0]["message"]); !strings.Contains(got, "Failure: task failed. Error details: dispatch acquire: dispatch controller is closed") {
+	if got := fmt.Sprint(publishedResults[0]["message"]); !strings.Contains(got, "Failure: task failed. Error details: dispatch acquire: dispatch controller is closed") {
 		t.Fatalf("message.message = %q", got)
 	}
-	if got := fmt.Sprint(publishedMsgs[0]["error"]); !strings.Contains(got, "dispatch acquire: dispatch controller is closed") {
+	if got := fmt.Sprint(publishedResults[0]["error"]); !strings.Contains(got, "dispatch acquire: dispatch controller is closed") {
 		t.Fatalf("message.error = %q", got)
 	}
-	if got := fmt.Sprint(publishedMsgs[1]["request_id"]); got != "req-closed-controller-failure-review" {
+	if got := fmt.Sprint(publishedResults[1]["request_id"]); got != "req-closed-controller-failure-review" {
 		t.Fatalf("follow-up request_id = %q, want req-closed-controller-failure-review", got)
 	}
-	if got := fmt.Sprint(publishedMsgs[1]["config"]); !strings.Contains(got, config.DefaultRepositoryURL) {
+	if got := fmt.Sprint(publishedResults[1]["config"]); !strings.Contains(got, config.DefaultRepositoryURL) {
 		t.Fatalf("follow-up config = %q, want moltenhub-code repo", got)
 	}
 	if got := len(offlineReasons); got != 1 {

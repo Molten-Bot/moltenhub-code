@@ -34,8 +34,14 @@ func (c APIClient) publishResultA2A(ctx context.Context, token string, payload m
 	part := a2a.NewTextPart(string(encoded))
 	part.MediaType = a2aResultPartMediaType
 	msg := a2a.NewMessage(a2a.MessageRoleAgent, part)
-	if requestID := firstString(payload["request_id"]); requestID != "" {
-		msg.ID = requestID
+	if messageID := firstString(
+		payload["client_msg_id"],
+		payload["clientMsgId"],
+		payload["message_id"],
+		payload["messageId"],
+		payload["request_id"],
+	); messageID != "" {
+		msg.ID = messageID
 	}
 	if taskID := firstString(payload["a2a_task_id"], payload["hub_task_id"]); taskID != "" {
 		msg.TaskID = a2a.TaskID(taskID)
@@ -222,8 +228,14 @@ func publishResultOpenClawBody(payload map[string]any) (map[string]any, bool) {
 		}
 		routed = true
 	}
-	if requestID := firstString(payload["request_id"]); requestID != "" {
-		body["client_msg_id"] = requestID
+	if clientMsgID := firstString(
+		payload["client_msg_id"],
+		payload["clientMsgId"],
+		payload["message_id"],
+		payload["messageId"],
+		payload["request_id"],
+	); clientMsgID != "" {
+		body["client_msg_id"] = clientMsgID
 	}
 	return body, routed
 }

@@ -12,13 +12,18 @@ import (
 
 // SkillDispatch represents one inbound skill request ready for execution.
 type SkillDispatch struct {
-	RequestID string
-	HubTaskID string
-	ContextID string
-	Skill     string
-	ReplyTo   string
-	RouteTo   string
-	Config    config.Config
+	RequestID           string
+	HubTaskID           string
+	ContextID           string
+	Skill               string
+	ReplyTo             string
+	RouteTo             string
+	Originator          string
+	OriginatorAgentURI  string
+	OriginatorAgentUUID string
+	OriginatorAgentID   string
+	OriginatorHumanID   string
+	Config              config.Config
 }
 
 // ParseSkillDispatch parses an inbound transport JSON message into a runnable dispatch.
@@ -171,6 +176,45 @@ func ParseSkillDispatch(msg map[string]any, expectedType, expectedSkill string) 
 			stringAtPath(msg, "data", "to_agent_uuid"),
 			stringAtPath(msg, "data", "to_agent_id"),
 		),
+		Originator: dispatchStringAtAnyRoot(
+			msg,
+			"originator",
+			"originator_id",
+			"originatorId",
+			"sender",
+			"sender_id",
+			"senderId",
+			"from",
+			"source",
+			"reply_to",
+			"replyTo",
+			"from_agent_uri",
+			"from_agent_uuid",
+			"from_agent_id",
+			"source_agent_uri",
+			"source_agent_uuid",
+			"source_agent_id",
+			"from_human_id",
+			"source_human_id",
+			"human_id",
+			"created_by",
+			"createdBy",
+		),
+		OriginatorAgentURI: dispatchStringAtAnyRoot(msg, "from_agent_uri", "source_agent_uri"),
+		OriginatorAgentUUID: dispatchStringAtAnyRoot(
+			msg,
+			"from_agent_uuid",
+			"source_agent_uuid",
+		),
+		OriginatorAgentID: dispatchStringAtAnyRoot(msg, "from_agent_id", "source_agent_id"),
+		OriginatorHumanID: dispatchStringAtAnyRoot(
+			msg,
+			"from_human_id",
+			"source_human_id",
+			"human_id",
+			"created_by",
+			"createdBy",
+		),
 	}
 
 	expectedType = strings.TrimSpace(expectedType)
@@ -194,6 +238,22 @@ func ParseSkillDispatch(msg map[string]any, expectedType, expectedSkill string) 
 	}
 	dispatch.Config = cfg
 	return dispatch, true, nil
+}
+
+func dispatchStringAtAnyRoot(msg map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if value := stringAt(msg, key); value != "" {
+			return value
+		}
+	}
+	for _, root := range []string{"payload", "data"} {
+		for _, key := range keys {
+			if value := stringAtPath(msg, root, key); value != "" {
+				return value
+			}
+		}
+	}
+	return ""
 }
 
 // ParseRunConfigJSON parses one inline run config JSON object into a validated config.
@@ -566,6 +626,17 @@ func mergeA2ADispatchMetadata(
 		"to_agent_uri",
 		"to_agent_uuid",
 		"to_agent_id",
+		"from_human_id",
+		"source_human_id",
+		"human_id",
+		"created_by",
+		"createdBy",
+		"originator",
+		"originator_id",
+		"originatorId",
+		"sender",
+		"sender_id",
+		"senderId",
 		"client_msg_id",
 		"clientMsgId",
 		"message_id",

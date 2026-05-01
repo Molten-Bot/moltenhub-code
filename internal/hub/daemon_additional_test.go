@@ -183,6 +183,27 @@ func (s *stubMoltenHubAPI) NackOpenClawDeliveryAsync(ctx context.Context, delive
 	return ch
 }
 
+func nonStatusPayloads(payloads []map[string]any) []map[string]any {
+	out := make([]map[string]any, 0, len(payloads))
+	for _, payload := range payloads {
+		if payload["type"] == dispatchTaskStatusType {
+			continue
+		}
+		out = append(out, payload)
+	}
+	return out
+}
+
+func statusPayloads(payloads []map[string]any) []map[string]any {
+	out := make([]map[string]any, 0, len(payloads))
+	for _, payload := range payloads {
+		if payload["type"] == dispatchTaskStatusType {
+			out = append(out, payload)
+		}
+	}
+	return out
+}
+
 func TestRunPullLoopEarlyExitAndUnauthorizedError(t *testing.T) {
 	t.Parallel()
 
@@ -295,10 +316,21 @@ func TestProcessInboundMessageDuplicateDeliveryPublishesFailureToCallerAndAcks(t
 	if len(api.acked) != 1 || api.acked[0] != "delivery-dup" {
 		t.Fatalf("acked deliveries = %v, want [delivery-dup]", api.acked)
 	}
-	if len(api.published) != 1 {
-		t.Fatalf("published results = %d, want 1 for duplicate dispatch", len(api.published))
+	statusUpdates := statusPayloads(api.published)
+	if len(statusUpdates) != 1 {
+		t.Fatalf("published status updates = %d, want 1 for duplicate dispatch", len(statusUpdates))
 	}
-	resultPayload := api.published[0]
+	if got := statusUpdates[0]["status"]; got != "duplicate" {
+		t.Fatalf("status update status = %#v, want duplicate", got)
+	}
+	if got := statusUpdates[0]["a2a_state"]; got != "TASK_STATE_REJECTED" {
+		t.Fatalf("status update a2a_state = %#v, want rejected", got)
+	}
+	resultPayloads := nonStatusPayloads(api.published)
+	if len(resultPayloads) != 1 {
+		t.Fatalf("published results = %d, want 1 for duplicate dispatch", len(resultPayloads))
+	}
+	resultPayload := resultPayloads[0]
 	if got := resultPayload["status"]; got != "duplicate" {
 		t.Fatalf("result status = %#v, want duplicate", got)
 	}
@@ -366,11 +398,12 @@ func TestProcessInboundMessageDoesNotDedupeDistinctClientMsgIDWithSharedEnvelope
 	defer api.mu.Unlock()
 
 	// Each failing dispatch publishes one failure result and one failure review request.
-	if got, want := len(api.published), 4; got != want {
+	publishedResults := nonStatusPayloads(api.published)
+	if got, want := len(publishedResults), 4; got != want {
 		t.Fatalf("published payload count = %d, want %d", got, want)
 	}
 	gotRequestIDs := map[string]bool{}
-	for _, payload := range api.published {
+	for _, payload := range publishedResults {
 		requestID, _ := payload["request_id"].(string)
 		if requestID != "" {
 			gotRequestIDs[requestID] = true
@@ -435,11 +468,12 @@ func TestProcessInboundMessageDedupesIdenticalConfigAcrossRequestIDs(t *testing.
 
 	api.mu.Lock()
 	defer api.mu.Unlock()
-	if got, want := len(api.published), 3; got != want {
+	publishedResults := nonStatusPayloads(api.published)
+	if got, want := len(publishedResults), 3; got != want {
 		t.Fatalf("published payload count = %d, want %d", got, want)
 	}
 	gotRequestIDs := map[string]map[string]any{}
-	for _, payload := range api.published {
+	for _, payload := range publishedResults {
 		requestID, _ := payload["request_id"].(string)
 		if requestID != "" {
 			gotRequestIDs[requestID] = payload
@@ -533,16 +567,17 @@ func TestProcessInboundMessagePublishesStoppedFailureWhenTaskControlStopsDispatc
 
 	api.mu.Lock()
 	defer api.mu.Unlock()
-	if got, want := len(api.published), 1; got != want {
+	publishedResults := nonStatusPayloads(api.published)
+	if got, want := len(publishedResults), 1; got != want {
 		t.Fatalf("published payload count = %d, want %d", got, want)
 	}
-	if got, want := fmt.Sprint(api.published[0]["status"]), "error"; got != want {
+	if got, want := fmt.Sprint(publishedResults[0]["status"]), "error"; got != want {
 		t.Fatalf("result status = %q, want %q", got, want)
 	}
-	if got := fmt.Sprint(api.published[0]["message"]); !strings.Contains(got, "Failure: task failed. Error details: task was stopped by operator") {
+	if got := fmt.Sprint(publishedResults[0]["message"]); !strings.Contains(got, "Failure: task failed. Error details: task was stopped by operator") {
 		t.Fatalf("result message = %q", got)
 	}
-	if got := fmt.Sprint(api.published[0]["error"]); got != "task was stopped by operator" {
+	if got := fmt.Sprint(publishedResults[0]["error"]); got != "task was stopped by operator" {
 		t.Fatalf("result error = %q, want %q", got, "task was stopped by operator")
 	}
 	if got := len(api.offlineCalls); got != 0 {
@@ -611,13 +646,14 @@ func TestProcessInboundMessageFallsBackToDeliveryIDForTaskControlRequestID(t *te
 
 	api.mu.Lock()
 	defer api.mu.Unlock()
-	if got, want := len(api.published), 1; got != want {
+	publishedResults := nonStatusPayloads(api.published)
+	if got, want := len(publishedResults), 1; got != want {
 		t.Fatalf("published payload count = %d, want %d", got, want)
 	}
-	if got := fmt.Sprint(api.published[0]["request_id"]); got != "delivery-fallback" {
+	if got := fmt.Sprint(publishedResults[0]["request_id"]); got != "delivery-fallback" {
 		t.Fatalf("result request_id = %q, want %q", got, "delivery-fallback")
 	}
-	if got := fmt.Sprint(api.published[0]["message"]); !strings.Contains(got, "Failure: task failed. Error details: task was stopped by operator") {
+	if got := fmt.Sprint(publishedResults[0]["message"]); !strings.Contains(got, "Failure: task failed. Error details: task was stopped by operator") {
 		t.Fatalf("result message = %q", got)
 	}
 }
@@ -661,11 +697,12 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 	api.mu.Lock()
 	defer api.mu.Unlock()
 
-	if got, want := len(api.published), 2; got != want {
+	publishedResults := nonStatusPayloads(api.published)
+	if got, want := len(publishedResults), 2; got != want {
 		t.Fatalf("published payload count = %d, want %d", got, want)
 	}
 
-	resultPayload := api.published[0]
+	resultPayload := publishedResults[0]
 	if got := resultPayload["type"]; got != "skill_result" {
 		t.Fatalf("result payload type = %#v", got)
 	}
@@ -673,7 +710,7 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 		t.Fatalf("result payload reply_to = %#v", got)
 	}
 
-	followUpPayload := api.published[1]
+	followUpPayload := publishedResults[1]
 	if got := followUpPayload["type"]; got != "skill_request" {
 		t.Fatalf("follow-up payload type = %#v", got)
 	}
@@ -709,6 +746,80 @@ func TestHandleDispatchQueuesFailureFollowUpAfterPublishingFailureResult(t *test
 	}
 	if got := api.codingEvents; got != 1 {
 		t.Fatalf("coding activity events = %d, want 1", got)
+	}
+}
+
+func TestHandleDispatchPublishesHarnessStageStatusUpdates(t *testing.T) {
+	t.Parallel()
+
+	d := NewDaemon(failingRunner{err: errors.New("preflight exploded")})
+	api := &stubMoltenHubAPI{token: "t"}
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:         "code_for_me",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+	}
+	runCfg := config.Config{
+		Repo:         "git@github.com:acme/repo.git",
+		BaseBranch:   "main",
+		TargetSubdir: ".",
+		Prompt:       "fix preflight",
+	}
+	runCfg.ApplyDefaults()
+
+	d.handleDispatch(
+		context.Background(),
+		api,
+		cfg,
+		SkillDispatch{
+			RequestID: "req-stage-updates",
+			Skill:     "code_for_me",
+			ReplyTo:   "caller-agent",
+			Config:    runCfg,
+		},
+		"",
+		false,
+	)
+
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	statusUpdates := statusPayloads(api.published)
+	if len(statusUpdates) < 3 {
+		t.Fatalf("status update count = %d, want at least 3", len(statusUpdates))
+	}
+
+	var stageStart, stageError map[string]any
+	for _, payload := range statusUpdates {
+		details, _ := payload["details"].(map[string]any)
+		if details == nil || details["stage"] != "preflight" {
+			continue
+		}
+		switch details["stage_status"] {
+		case "start":
+			stageStart = payload
+		case "error":
+			stageError = payload
+		}
+	}
+	if stageStart == nil {
+		t.Fatalf("preflight start status update missing: %#v", statusUpdates)
+	}
+	if got := stageStart["to"]; got != "caller-agent" {
+		t.Fatalf("preflight start to = %#v, want caller-agent", got)
+	}
+	if stageError == nil {
+		t.Fatalf("preflight error status update missing: %#v", statusUpdates)
+	}
+	if got := stageError["a2a_state"]; got != "TASK_STATE_FAILED" {
+		t.Fatalf("preflight error a2a_state = %#v, want TASK_STATE_FAILED", got)
+	}
+	if got := fmt.Sprint(stageError["message"]); !strings.Contains(got, "Failure: task failed. Error details:") {
+		t.Fatalf("preflight error message = %q", got)
+	}
+	if got := fmt.Sprint(stageError["Error details"]); !strings.Contains(got, "preflight exploded") {
+		t.Fatalf("preflight error details = %q, want runner error", got)
 	}
 }
 
@@ -753,10 +864,11 @@ func TestHandleDispatchRejectsRunConfigAgentHarnessOverride(t *testing.T) {
 
 	api.mu.Lock()
 	defer api.mu.Unlock()
-	if got, want := len(api.published), 1; got != want {
+	publishedResults := nonStatusPayloads(api.published)
+	if got, want := len(publishedResults), 1; got != want {
 		t.Fatalf("published payload count = %d, want %d", got, want)
 	}
-	message := fmt.Sprint(api.published[0]["message"])
+	message := fmt.Sprint(publishedResults[0]["message"])
 	if !strings.Contains(message, "conflicts with bound agent") {
 		t.Fatalf("result message = %q, want bound-runtime conflict details", message)
 	}
@@ -848,11 +960,12 @@ func TestHandleDispatchQueuesFailureFollowUpWithExplicitResponseModeOptOut(t *te
 	api.mu.Lock()
 	defer api.mu.Unlock()
 
-	if got, want := len(api.published), 2; got != want {
+	publishedResults := nonStatusPayloads(api.published)
+	if got, want := len(publishedResults), 2; got != want {
 		t.Fatalf("published payload count = %d, want %d", got, want)
 	}
 
-	followUpPayload := api.published[1]
+	followUpPayload := publishedResults[1]
 	followUpConfig, _ := followUpPayload["config"].(map[string]any)
 	if followUpConfig == nil {
 		t.Fatalf("follow-up config missing: %#v", followUpPayload)
@@ -900,7 +1013,8 @@ func TestHandleDispatchQueuesFailureFollowUpWithTaskLogPaths(t *testing.T) {
 	api.mu.Lock()
 	defer api.mu.Unlock()
 
-	if got, want := len(api.published), 2; got != want {
+	publishedResults := nonStatusPayloads(api.published)
+	if got, want := len(publishedResults), 2; got != want {
 		t.Fatalf("published payload count = %d, want %d", got, want)
 	}
 }
@@ -1029,13 +1143,14 @@ func TestHandleDispatchQueuesFailureFollowUpForNoDeltaFailures(t *testing.T) {
 	api.mu.Lock()
 	defer api.mu.Unlock()
 
-	if got, want := len(api.published), 2; got != want {
+	publishedResults := nonStatusPayloads(api.published)
+	if got, want := len(publishedResults), 2; got != want {
 		t.Fatalf("published payload count = %d, want %d", got, want)
 	}
-	if got := api.published[0]["status"]; got != "error" {
+	if got := publishedResults[0]["status"]; got != "error" {
 		t.Fatalf("result payload status = %#v, want error", got)
 	}
-	if got := api.published[1]["request_id"]; got != "req-no-delta-failure-review" {
+	if got := publishedResults[1]["request_id"]; got != "req-no-delta-failure-review" {
 		t.Fatalf("follow-up request_id = %#v, want req-no-delta-failure-review", got)
 	}
 }
