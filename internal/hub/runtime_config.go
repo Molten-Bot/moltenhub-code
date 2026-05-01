@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
-	"github.com/Molten-Bot/moltenhub-code/internal/config"
 )
 
 const (
@@ -25,22 +24,8 @@ const (
 // start directly from config.json without requiring init.json again.
 type RuntimeConfig struct {
 	InitConfig
-	TimeoutMs        int               `json:"timeout_ms,omitempty"`
-	LibraryTaskUsage map[string]int    `json:"library_task_usage,omitempty"`
-	ScheduledPrompts []ScheduledPrompt `json:"scheduled_prompts,omitempty"`
-}
-
-// ScheduledPrompt is one persisted local prompt schedule.
-type ScheduledPrompt struct {
-	ID            string        `json:"id"`
-	Name          string        `json:"name,omitempty"`
-	EveryMinutes  int           `json:"every_minutes"`
-	CreatedAt     string        `json:"created_at,omitempty"`
-	NextRunAt     string        `json:"next_run_at,omitempty"`
-	LastRunAt     string        `json:"last_run_at,omitempty"`
-	LastRequestID string        `json:"last_request_id,omitempty"`
-	LastError     string        `json:"last_error,omitempty"`
-	Config        config.Config `json:"config"`
+	TimeoutMs        int            `json:"timeout_ms,omitempty"`
+	LibraryTaskUsage map[string]int `json:"library_task_usage,omitempty"`
 }
 
 // UnmarshalJSON accepts the current init-style snake_case config and the legacy
@@ -150,7 +135,6 @@ func SaveRuntimeConfig(path string, initCfg InitConfig, token string) error {
 	cfg.RuntimeConfigPath = path
 	cfg.AgentToken = token
 	cfg.LibraryTaskUsage = ReadRuntimeConfigLibraryTaskUsage(path)
-	cfg.ScheduledPrompts = ReadRuntimeConfigScheduledPrompts(path)
 	cfg.ApplyDefaults()
 	if strings.TrimSpace(cfg.AgentHarness) == "" {
 		return fmt.Errorf(unboundAgentRuntimeErrorMessage)
@@ -456,101 +440,6 @@ func IncrementRuntimeConfigLibraryTaskUsage(path string, initCfg InitConfig, tas
 	ensureRuntimeConfigLogLevel(doc, initCfg.LogLevel)
 
 	return writeRuntimeConfigDoc(path, doc)
-}
-
-// ReadRuntimeConfigScheduledPrompts returns persisted local prompt schedules
-// from config.json.
-func ReadRuntimeConfigScheduledPrompts(path string) []ScheduledPrompt {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return nil
-	}
-
-	doc, err := readRuntimeConfigDoc(path)
-	if err != nil {
-		return nil
-	}
-	return runtimeConfigScheduledPrompts(doc["scheduled_prompts"])
-}
-
-// SaveRuntimeConfigScheduledPrompts replaces the persisted local prompt
-// schedule list while preserving unrelated runtime config fields.
-func SaveRuntimeConfigScheduledPrompts(path string, initCfg InitConfig, prompts []ScheduledPrompt) error {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		path = defaultRuntimeConfigPath()
-	}
-
-	normalized, err := normalizeScheduledPrompts(prompts)
-	if err != nil {
-		return err
-	}
-
-	doc, err := loadRuntimeConfigDoc(path, initCfg)
-	if err != nil {
-		return err
-	}
-	if len(normalized) == 0 {
-		delete(doc, "scheduled_prompts")
-	} else {
-		doc["scheduled_prompts"] = normalized
-	}
-	ensureRuntimeConfigLogLevel(doc, initCfg.LogLevel)
-
-	return writeRuntimeConfigDoc(path, doc)
-}
-
-func runtimeConfigScheduledPrompts(v any) []ScheduledPrompt {
-	if v == nil {
-		return nil
-	}
-	encoded, err := json.Marshal(v)
-	if err != nil {
-		return nil
-	}
-	var prompts []ScheduledPrompt
-	if err := json.Unmarshal(encoded, &prompts); err != nil {
-		return nil
-	}
-	normalized, err := normalizeScheduledPrompts(prompts)
-	if err != nil {
-		return nil
-	}
-	return normalized
-}
-
-func normalizeScheduledPrompts(prompts []ScheduledPrompt) ([]ScheduledPrompt, error) {
-	if len(prompts) == 0 {
-		return nil, nil
-	}
-
-	seen := map[string]struct{}{}
-	normalized := make([]ScheduledPrompt, 0, len(prompts))
-	for _, prompt := range prompts {
-		prompt.ID = strings.TrimSpace(prompt.ID)
-		prompt.Name = strings.TrimSpace(prompt.Name)
-		prompt.CreatedAt = strings.TrimSpace(prompt.CreatedAt)
-		prompt.NextRunAt = strings.TrimSpace(prompt.NextRunAt)
-		prompt.LastRunAt = strings.TrimSpace(prompt.LastRunAt)
-		prompt.LastRequestID = strings.TrimSpace(prompt.LastRequestID)
-		prompt.LastError = strings.TrimSpace(prompt.LastError)
-		if prompt.ID == "" {
-			return nil, fmt.Errorf("scheduled prompt id is required")
-		}
-		if _, exists := seen[prompt.ID]; exists {
-			return nil, fmt.Errorf("duplicate scheduled prompt id %q", prompt.ID)
-		}
-		if prompt.EveryMinutes < 1 {
-			return nil, fmt.Errorf("scheduled prompt %q every_minutes must be > 0", prompt.ID)
-		}
-		prompt.Config.ApplyDefaults()
-		if err := prompt.Config.Validate(); err != nil {
-			return nil, fmt.Errorf("scheduled prompt %q config: %w", prompt.ID, err)
-		}
-		seen[prompt.ID] = struct{}{}
-		normalized = append(normalized, prompt)
-	}
-	return normalized, nil
 }
 
 func saveRuntimeConfigStringField(
