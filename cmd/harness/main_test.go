@@ -41,6 +41,16 @@ func fakeHubSetupToken(prefix string) string {
 	return prefix + strings.Repeat("x", 40-len(prefix))
 }
 
+func handleHubSetupA2AVerifyFallback(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodPost || r.URL.Path != "/v1/a2a" {
+		return false
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusNotFound)
+	_, _ = w.Write([]byte(`{"error":"a2a not configured in test"}`))
+	return true
+}
+
 func TestRunUsageMissingSubcommand(t *testing.T) {
 	orig := os.Args
 	t.Cleanup(func() { os.Args = orig })
@@ -1153,6 +1163,9 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if handleHubSetupA2AVerifyFallback(w, r) {
+			return
+		}
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/bind-tokens":
 			bodyBytes, _ := io.ReadAll(r.Body)
@@ -1250,6 +1263,9 @@ func TestConfigureHubSetupExistingAgentUsesAgentTokenFlow(t *testing.T) {
 	var liveCfg hub.InitConfig
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if handleHubSetupA2AVerifyFallback(w, r) {
+			return
+		}
 		if r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me" {
 			getCalls++
 			if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != agentToken {
@@ -1514,6 +1530,9 @@ func TestConfigureHubSetupExistingAgentIgnoresStatusUpdateFailuresDuringVerifica
 	)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if handleHubSetupA2AVerifyFallback(w, r) {
+			return
+		}
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me":
 			getCalls++
@@ -1567,6 +1586,9 @@ func TestConfigureHubSetupExistingAgentReturnsLoginVerificationFailure(t *testin
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if handleHubSetupA2AVerifyFallback(w, r) {
+			return
+		}
 		switch {
 		case r.Method == http.MethodPost && (r.URL.Path == "/v1/agents/bind-tokens" || r.URL.Path == "/v1/agents/bind"):
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
@@ -1614,6 +1636,9 @@ func TestConfigureHubSetupExistingAgentProfileEditSkipsSyncWhenRemoteAlreadyMatc
 	)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if handleHubSetupA2AVerifyFallback(w, r) {
+			return
+		}
 		if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != savedToken {
 			t.Fatalf("%s %s token = %q, want %q", r.Method, r.URL.Path, got, savedToken)
 		}
@@ -1689,6 +1714,9 @@ func TestConfigureHubSetupSavedCredentialsWithoutProfileChangesSkipsProfileSync(
 	)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if handleHubSetupA2AVerifyFallback(w, r) {
+			return
+		}
 		if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != savedToken {
 			t.Fatalf("%s %s token = %q, want %q", r.Method, r.URL.Path, got, savedToken)
 		}
@@ -1758,6 +1786,9 @@ func TestConfigureHubSetupExistingAgentProfileEditKeepsRequestedValuesWhenReadba
 	var syncCalls int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if handleHubSetupA2AVerifyFallback(w, r) {
+			return
+		}
 		if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != savedToken {
 			t.Fatalf("%s %s token = %q, want %q", r.Method, r.URL.Path, got, savedToken)
 		}
@@ -1837,6 +1868,9 @@ func TestConfigureHubSetupExistingAgentLoadsProfileTextFromProfileMarkdown(t *te
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if handleHubSetupA2AVerifyFallback(w, r) {
+			return
+		}
 		if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != savedToken {
 			t.Fatalf("%s %s token = %q, want %q", r.Method, r.URL.Path, got, savedToken)
 		}
@@ -1890,6 +1924,9 @@ func TestConfigureHubSetupReturnsSavedStateWhenLiveApplyFails(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if handleHubSetupA2AVerifyFallback(w, r) {
+			return
+		}
 		if r.Method == http.MethodGet && r.URL.Path == "/v1/agents/me" {
 			_, _ = w.Write([]byte(`{"handle":"existing-agent","profile":{"display_name":"Existing Agent","emoji":"🤖","profile":"Owns automation"}}`))
 			return
@@ -2063,6 +2100,9 @@ func TestConfigureHubSetupFallsBackToLiveInitCredentialsWhenRuntimeConfigOmitsTo
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if handleHubSetupA2AVerifyFallback(w, r) {
+			return
+		}
 		if got := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer")); got != liveToken {
 			t.Fatalf("%s %s token = %q, want %q", r.Method, r.URL.Path, got, liveToken)
 		}

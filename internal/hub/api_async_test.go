@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -25,12 +26,30 @@ func TestAsyncAPIClientStoresBaseURLAndToken(t *testing.T) {
 
 func TestAsyncAPIClientResolveAgentTokenStoresToken(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/agents/me" {
+		if r.URL.Path != "/v1/a2a" {
 			t.Fatalf("path = %s", r.URL.Path)
+		}
+		defer r.Body.Close()
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"ok":true}`))
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      body["id"],
+			"result": map[string]any{
+				"name":                "MoltenHub A2A Gateway",
+				"description":         "test",
+				"version":             "1.0.0",
+				"defaultInputModes":   []string{"application/json"},
+				"defaultOutputModes":  []string{"application/json"},
+				"supportedInterfaces": []any{},
+				"capabilities":        map[string]any{},
+				"skills":              []any{},
+			},
+		})
 	}))
 	defer server.Close()
 

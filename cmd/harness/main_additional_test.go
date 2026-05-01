@@ -621,6 +621,9 @@ func TestConfigureHubSetupTracksCompletedOnboardingSteps(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if handleHubSetupA2AVerifyFallback(w, r) {
+			return
+		}
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/bind-tokens":
 			_, _ = w.Write([]byte(`{"agent_token":"agent_bound"}`))
@@ -690,6 +693,9 @@ func TestConfigureHubSetupMarksFailingOnboardingStep(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if handleHubSetupA2AVerifyFallback(w, r) {
+			return
+		}
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/bind-tokens":
 			_, _ = w.Write([]byte(`{"agent_token":"agent_bound"}`))

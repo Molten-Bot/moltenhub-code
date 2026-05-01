@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -43,6 +44,59 @@ func TestResolveAgentToken_UsesConfiguredAgentTokenWhenVerified(t *testing.T) {
 	}
 	if bindCalls != 0 {
 		t.Fatalf("expected bind flow not to run, bindCalls=%d", bindCalls)
+	}
+}
+
+func TestResolveAgentToken_VerifiesConfiguredAgentTokenWithA2A(t *testing.T) {
+	t.Parallel()
+
+	var agentMeCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/a2a":
+			if r.Header.Get("Authorization") != "Bearer agent_saved" {
+				t.Fatalf("Authorization = %q", r.Header.Get("Authorization"))
+			}
+			defer r.Body.Close()
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      body["id"],
+				"result": map[string]any{
+					"name":                "MoltenHub A2A Gateway",
+					"description":         "test",
+					"version":             "1.0.0",
+					"defaultInputModes":   []string{"application/json"},
+					"defaultOutputModes":  []string{"application/json"},
+					"supportedInterfaces": []any{},
+					"capabilities":        map[string]any{},
+					"skills":              []any{},
+				},
+			})
+		case "/v1/agents/me":
+			agentMeCalls++
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := NewAPIClient(server.URL + "/v1")
+	token, err := client.ResolveAgentToken(context.Background(), InitConfig{AgentToken: "agent_saved"})
+	if err != nil {
+		t.Fatalf("ResolveAgentToken() error = %v", err)
+	}
+	if token != "agent_saved" {
+		t.Fatalf("ResolveAgentToken() token = %q, want %q", token, "agent_saved")
+	}
+	if agentMeCalls != 0 {
+		t.Fatalf("agentMeCalls = %d, want 0", agentMeCalls)
 	}
 }
 
