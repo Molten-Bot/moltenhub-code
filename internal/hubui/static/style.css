@@ -1264,6 +1264,14 @@ body .right-col.prompt-collapsed.task-list-hidden {
   color: var(--text);
 }
 
+.agent-auth-secret-input {
+  -webkit-text-security: disc;
+}
+
+.agent-auth-secret-input::placeholder {
+  -webkit-text-security: none;
+}
+
 .prompt-control:focus,
 .prompt-text:focus,
 .prompt-action-paste:focus-visible,
