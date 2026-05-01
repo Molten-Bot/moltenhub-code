@@ -7284,7 +7284,15 @@
     }
 
     function fullscreenTasks(snapshot) {
-      return displayTasks(snapshot);
+      const tasks = displayTasks(snapshot);
+      if (state.taskFullscreenMode === "console") {
+        const selectedRequestID = String(state.selectedTaskId || "").trim();
+        if (!selectedRequestID) {
+          return [];
+        }
+        return tasks.filter((task) => String(task?.request_id || "").trim() === selectedRequestID);
+      }
+      return tasks;
     }
 
     function taskProgressEntryStepID(task) {

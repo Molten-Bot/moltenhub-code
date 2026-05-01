@@ -624,6 +624,10 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function fullscreenTasks(") {
 		t.Fatalf("expected index html to include full screen task list renderer")
 	}
+	if !strings.Contains(markup, "if (state.taskFullscreenMode === \"console\") {\n        const selectedRequestID = String(state.selectedTaskId || \"\").trim();") ||
+		!strings.Contains(markup, "return tasks.filter((task) => String(task?.request_id || \"\").trim() === selectedRequestID);") {
+		t.Fatalf("expected console fullscreen task list to show only the selected task")
+	}
 	if !strings.Contains(markup, "function taskCollectionRenderSig(tasks, options = {})") {
 		t.Fatalf("expected index html to compute stable task collection render signatures")
 	}
