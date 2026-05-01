@@ -2202,6 +2202,10 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".agent-auth-shell {\n  padding: clamp(24px, 3vw, 32px);\n  border: 1px solid var(--surface-auth-panel-border);\n  border-radius: var(--radius-card);\n  background: var(--surface-auth-panel-bg);\n  box-shadow: var(--surface-auth-panel-shadow);\n}") {
 		t.Fatalf("expected stylesheet to render onboarding content inside a readable auth panel")
 	}
+	if !strings.Contains(css, ".agent-auth-secret-input {\n  -webkit-text-security: disc;\n}") ||
+		!strings.Contains(css, ".agent-auth-secret-input::placeholder {\n  -webkit-text-security: none;\n}") {
+		t.Fatalf("expected auth credential text boxes to mask entered secret values")
+	}
 	if !strings.Contains(css, ".agent-auth-github-shell {\n  max-width: calc(46ch + 2px);\n}") {
 		t.Fatalf("expected stylesheet to keep the GitHub token setup shell no wider than the token input")
 	}

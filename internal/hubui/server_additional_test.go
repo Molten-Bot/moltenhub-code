@@ -1294,6 +1294,12 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	if !strings.Contains(html, "id=\"agent-auth-browser-code-input\"") {
 		t.Fatalf("expected auth gate to include Claude browser-code input")
 	}
+	if !strings.Contains(html, `id="agent-auth-browser-code-input"`) ||
+		!strings.Contains(html, `class="prompt-text agent-auth-secret-input min-h-[96px] font-mono text-[0.9rem]"`) ||
+		!strings.Contains(html, `id="agent-auth-configure-input" class="prompt-text agent-auth-secret-input font-mono text-[0.9rem]"`) ||
+		!strings.Contains(html, `autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"`) {
+		t.Fatalf("expected init auth credential text boxes to hide pasted secrets and disable browser text helpers")
+	}
 	if !strings.Contains(html, "id=\"agent-auth-browser-command-primary\"") ||
 		!strings.Contains(html, "id=\"agent-auth-browser-command-primary-copy\"") {
 		t.Fatalf("expected auth gate to include Claude primary command copy controls")

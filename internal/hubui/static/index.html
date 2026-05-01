@@ -490,9 +490,12 @@
           </div>
           <textarea
             id="agent-auth-browser-code-input"
-            class="prompt-text min-h-[96px] font-mono text-[0.9rem]"
+            class="prompt-text agent-auth-secret-input min-h-[96px] font-mono text-[0.9rem]"
             aria-label="Authentication code or token input"
             placeholder="Paste browser code, token, or output of: cat ~/.claude/.credentials.json"
+            autocomplete="off"
+            autocapitalize="off"
+            autocorrect="off"
             spellcheck="false"></textarea>
           <p id="agent-auth-browser-code-error" class="hidden text-sm text-rose-200"></p>
         </div>
@@ -512,7 +515,7 @@
           </button>
         </div>
         <label id="agent-auth-configure-label" class="text-sm font-medium text-hub-text/85" for="agent-auth-configure-input">Paste configuration value</label>
-        <textarea id="agent-auth-configure-input" class="prompt-text font-mono text-[0.9rem]" placeholder='{"accessToken":"XXX","tenantURL":"https://YYY/","scopes":["email"]}' spellcheck="false" rows="5" wrap="off"></textarea>
+        <textarea id="agent-auth-configure-input" class="prompt-text agent-auth-secret-input font-mono text-[0.9rem]" placeholder='{"accessToken":"XXX","tenantURL":"https://YYY/","scopes":["email"]}' autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" rows="5" wrap="off"></textarea>
         <p id="agent-auth-configure-error" class="hidden text-sm text-rose-200"></p>
       </div>
 
