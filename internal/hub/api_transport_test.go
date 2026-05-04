@@ -158,6 +158,60 @@ func TestExtractInboundOpenClawMessageForWebsocketEnvelope(t *testing.T) {
 	}
 }
 
+func TestExtractInboundOpenClawMessageForRuntimeEventDataEnvelope(t *testing.T) {
+	t.Parallel()
+
+	root := map[string]any{
+		"type":    "runtime_event",
+		"status":  "received",
+		"message": "Hub received dispatch message.",
+		"data": map[string]any{
+			"delivery_id":    "delivery-runtime-event",
+			"client_msg_id":  "client-runtime-event",
+			"from_agent_uri": "https://na.hub.molten.bot/acme/sender",
+			"openclaw_message": map[string]any{
+				"kind":       "skill_activation",
+				"skill_name": "code_for_me",
+				"payload": map[string]any{
+					"repo":   "git@github.com:acme/repo.git",
+					"prompt": "activate from runtime event",
+				},
+			},
+		},
+	}
+
+	got := extractInboundOpenClawMessage(root)
+	if got.DeliveryID != "delivery-runtime-event" {
+		t.Fatalf("DeliveryID = %q, want delivery-runtime-event", got.DeliveryID)
+	}
+	if got.MessageID != "client-runtime-event" {
+		t.Fatalf("MessageID = %q, want client-runtime-event", got.MessageID)
+	}
+	if got.Message["type"] == "runtime_event" {
+		t.Fatalf("message should be nested skill dispatch, got wrapper: %#v", got.Message)
+	}
+	if got.Message["skill_name"] != "code_for_me" {
+		t.Fatalf("message.skill_name = %#v, want code_for_me", got.Message["skill_name"])
+	}
+
+	dispatch, matched, err := ParseSkillDispatch(got.Message, "skill_request", "code_for_me")
+	if err != nil {
+		t.Fatalf("ParseSkillDispatch() error = %v", err)
+	}
+	if !matched {
+		t.Fatal("matched = false, want true")
+	}
+	if got, want := dispatch.RequestID, "client-runtime-event"; got != want {
+		t.Fatalf("RequestID = %q, want %q", got, want)
+	}
+	if got, want := dispatch.ReplyTo, "https://na.hub.molten.bot/acme/sender"; got != want {
+		t.Fatalf("ReplyTo = %q, want %q", got, want)
+	}
+	if got, want := dispatch.Config.Prompt, "activate from runtime event"; got != want {
+		t.Fatalf("Prompt = %q, want %q", got, want)
+	}
+}
+
 func TestExtractInboundOpenClawMessageKeepsRawA2AJSONRPCEnvelope(t *testing.T) {
 	t.Parallel()
 
