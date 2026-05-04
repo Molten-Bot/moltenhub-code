@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"sync"
 
 	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
@@ -22,14 +21,7 @@ const (
 )
 
 type auggieAuthGate struct {
-	mu sync.Mutex
-
-	runner execx.Runner
-
-	runtimeConfigPath string
-	initCfg           hub.InitConfig
-
-	authState configurableAgentAuthState
+	configurableAgentAuthGateBase
 }
 
 type auggieSessionAuth struct {
@@ -44,9 +36,11 @@ func newAuggieAuthGate(runtimeConfigPath string, initCfg hub.InitConfig) *auggie
 
 func newAuggieAuthGateWithRunner(runner execx.Runner, runtimeConfigPath string, initCfg hub.InitConfig) *auggieAuthGate {
 	g := &auggieAuthGate{
-		runner:            runner,
-		runtimeConfigPath: strings.TrimSpace(runtimeConfigPath),
-		initCfg:           initCfg,
+		configurableAgentAuthGateBase: configurableAgentAuthGateBase{
+			runner:            runner,
+			runtimeConfigPath: strings.TrimSpace(runtimeConfigPath),
+			initCfg:           initCfg,
+		},
 	}
 	applyAuggieConfigureUIState(&g.authState, "")
 
@@ -188,7 +182,7 @@ func (g *auggieAuthGate) refreshLocked() {
 }
 
 func (g *auggieAuthGate) snapshotLocked() hubui.AgentAuthState {
-	return g.authState.snapshot(agentruntime.HarnessAuggie)
+	return g.configurableAgentAuthGateBase.snapshotLocked(agentruntime.HarnessAuggie)
 }
 
 func (g *auggieAuthGate) refreshAndSnapshot() (hubui.AgentAuthState, error) {
