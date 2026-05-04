@@ -6,20 +6,14 @@
     "description": "Prompt-driven repository task run. Omitted or `default` `responseMode` uses bundled `caveman-full`; set `off` for normal prose.",
     "activation": {
       "type": "skill_request",
-      "skill": "code_for_me",
-      "input": {
-        "config": {
-          "repos": [
-            "<git@github.com:owner/repo.git>"
-          ],
-          "prompt": "<describe the requested change>",
-          "responseMode": "<default|off|caveman-lite|caveman-full|caveman-ultra|caveman-wenyan-lite|caveman-wenyan-full|caveman-wenyan-ultra>",
-          "reviewers": [
-            "<githubhandle>"
-          ],
-          "images": []
-        }
-      }
+      "skill_name": "code_for_me",
+      "payload": {
+        "repos": [
+          "<git@github.com:owner/repo.git>"
+        ],
+        "prompt": "<describe the requested change>"
+      },
+      "payload_format": "json"
     }
   },
   {
@@ -30,16 +24,12 @@
     "description": "Runs the code-review workflow using repo + either branch or prNumber context. Omitted or `default` `responseMode` uses bundled `caveman-full`; set `off` for normal prose.",
     "activation": {
       "type": "skill_request",
-      "skill": "code_review",
-      "input": {
-        "config": {
-          "repos": [
-            "<git@github.com:owner/repo.git>"
-          ],
-          "branch": "<pull-request-head-branch>",
-          "responseMode": "<default|off|caveman-lite|caveman-full|caveman-ultra|caveman-wenyan-lite|caveman-wenyan-full|caveman-wenyan-ultra>"
-        }
-      }
+      "skill_name": "code_review",
+      "payload": {
+        "repo": "<git@github.com:owner/repo.git>",
+        "branch": "<pull-request-head-branch>"
+      },
+      "payload_format": "json"
     }
   }
 ]

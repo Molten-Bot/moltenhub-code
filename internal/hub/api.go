@@ -1459,11 +1459,10 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 
 	buildActivation := func(skillName string, runConfig map[string]any) map[string]any {
 		return map[string]any{
-			"type":  dispatchType,
-			"skill": normalizeSkillName(skillName),
-			"input": map[string]any{
-				"config": runConfig,
-			},
+			"type":           dispatchType,
+			"skill_name":     normalizeSkillName(skillName),
+			"payload_format": "json",
+			"payload":        runConfig,
 		}
 	}
 
@@ -1474,11 +1473,8 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 		"mode":        "prompt",
 		"description": "Prompt-driven repository task run. Omitted or `default` `responseMode` uses bundled `caveman-full`; set `off` for normal prose.",
 		"activation": buildActivation(skillCfg.Name, map[string]any{
-			"repos":        []string{"<git@github.com:owner/repo.git>"},
-			"prompt":       "<describe the requested change>",
-			"responseMode": responseModePlaceholder(),
-			"reviewers":    []string{"<githubhandle>"},
-			"images":       []any{},
+			"repos":  []string{"<git@github.com:owner/repo.git>"},
+			"prompt": "<describe the requested change>",
 		}),
 	})
 
@@ -1489,9 +1485,8 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 		"displayName": "Pull Request Code Review",
 		"description": fmt.Sprintf("Runs the %s workflow using repo + either branch or prNumber context. Omitted or `default` `responseMode` uses bundled `caveman-full`; set `off` for normal prose.", codeReviewLibraryTaskName),
 		"activation": buildActivation(codeReviewSkillName, map[string]any{
-			"repos":        []string{"<git@github.com:owner/repo.git>"},
-			"branch":       "<pull-request-head-branch>",
-			"responseMode": responseModePlaceholder(),
+			"repo":   "<git@github.com:owner/repo.git>",
+			"branch": "<pull-request-head-branch>",
 		}),
 	})
 
