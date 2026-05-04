@@ -1019,6 +1019,11 @@ func TestPromptFromRunConfigJSON(t *testing.T) {
 			want: "100% Unit Test Coverage\n\nRaise coverage.",
 		},
 		{
+			name: "canonical library task display text",
+			raw:  []byte(`{"librarytaskname":"unit-test-coverage"}`),
+			want: "100% Unit Test Coverage\n\nRaise coverage.",
+		},
+		{
 			name: "library task display text wins over expanded prompt",
 			raw:  []byte(`{"libraryTaskName":"unit-test-coverage","prompt":"Full execution prompt."}`),
 			want: "100% Unit Test Coverage\n\nRaise coverage.",

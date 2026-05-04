@@ -664,11 +664,11 @@ func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
 	if got := parameters["format"]; got != "json" {
 		t.Fatalf("skills[0].parameters.format = %#v, want json", got)
 	}
-	if got, want := parameterNames(parameters["required"]), []string{"repo", "prompt"}; !reflect.DeepEqual(got, want) {
+	if got, want := parameterNames(parameters["required"]), []string{}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("skills[0].parameters.required names = %#v, want %#v", got, want)
 	}
 	optionalNames := parameterNames(parameters["optional"])
-	for _, want := range []string{"repos", "repoUrl", "baseBranch", "targetSubdir", "responseMode"} {
+	for _, want := range []string{"repo", "prompt", "repos", "repourl", "librarytaskname", "basebranch", "targetsubdir", "responsemode"} {
 		if !containsParameterName(optionalNames, want) {
 			t.Fatalf("skills[0].parameters.optional names = %#v, want %q present", optionalNames, want)
 		}

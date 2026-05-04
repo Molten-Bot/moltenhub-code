@@ -346,20 +346,20 @@ func applySkillSpecificRunConfigDefaults(parsed map[string]any, skillName string
 	switch normalizeNamedSkill(skillName) {
 	case codeReviewSkillName:
 		if firstNonEmpty(stringAt(parsed, "prompt")) != "" {
-			return fmt.Errorf("%s skill does not accept prompt; send repo + branch or prNumber", codeReviewSkillName)
+			return fmt.Errorf("%s skill does not accept prompt; send repo + branch or prnumber", codeReviewSkillName)
 		}
 		if !ensureReviewSelector(parsed) {
-			return fmt.Errorf("%s skill requires branch, prNumber, or review.prUrl", codeReviewSkillName)
+			return fmt.Errorf("%s skill requires branch, prnumber, or review.prurl", codeReviewSkillName)
 		}
 		if firstNonEmpty(stringAt(parsed, "libraryTaskName")) == "" {
 			parsed["libraryTaskName"] = codeReviewLibraryTaskName
 		}
 	case libraryTaskSkillName:
 		if firstNonEmpty(stringAt(parsed, "prompt")) != "" {
-			return fmt.Errorf("%s skill does not accept prompt; send repo + branch + libraryTaskName", libraryTaskSkillName)
+			return fmt.Errorf("%s skill does not accept prompt; send repo + branch + librarytaskname", libraryTaskSkillName)
 		}
 		if firstNonEmpty(stringAt(parsed, "libraryTaskName")) == "" {
-			return fmt.Errorf("%s skill requires libraryTaskName", libraryTaskSkillName)
+			return fmt.Errorf("%s skill requires librarytaskname", libraryTaskSkillName)
 		}
 	}
 	return nil
@@ -413,12 +413,12 @@ func extractConfigValue(msg map[string]any) (any, bool) {
 }
 
 func looksLikeRunConfigMap(v map[string]any) bool {
-	if firstNonEmpty(stringAt(v, "libraryTaskName")) != "" {
-		repo := firstNonEmpty(stringAtAny(v, "repo", "repoUrl"))
+	if firstNonEmpty(stringAtAny(v, "libraryTaskName", "librarytaskname")) != "" {
+		repo := firstNonEmpty(stringAtAny(v, "repo", "repoUrl", "repourl"))
 		return repo != "" || hasSingleNonEmptyStringArray(v["repos"])
 	}
 	prompt := firstNonEmpty(stringAt(v, "prompt"))
-	repo := firstNonEmpty(stringAtAny(v, "repo", "repoUrl"))
+	repo := firstNonEmpty(stringAtAny(v, "repo", "repoUrl", "repourl"))
 	return prompt != "" && (repo != "" || hasNonEmptyStringArray(v["repos"]))
 }
 
@@ -762,17 +762,17 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 			"additionalProperties": true,
 			"oneOf": []map[string]any{
 				{"required": []string{"repo"}},
-				{"required": []string{"repoUrl"}},
+				{"required": []string{"repourl"}},
 				{"required": []string{"repos"}},
 			},
 			"anyOf": []map[string]any{
 				{"required": []string{"prompt"}},
-				{"required": []string{"libraryTaskName"}},
+				{"required": []string{"librarytaskname"}},
 			},
 			"properties": map[string]any{
 				"version": propertyStringEnum("v1"),
 				"repo":    propertyNonEmptyString(),
-				"repoUrl": propertyNonEmptyString(),
+				"repourl": propertyNonEmptyString(),
 				"repos": map[string]any{
 					"type":     "array",
 					"minItems": 1,
@@ -781,17 +781,17 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 						"minLength": 1,
 					},
 				},
-				"baseBranch": propertyNonEmptyString(),
+				"basebranch": propertyNonEmptyString(),
 				"branch":     propertyNonEmptyString(),
-				"prNumber": map[string]any{
+				"prnumber": map[string]any{
 					"type":    "integer",
 					"minimum": 1,
 				},
-				"targetSubdir": propertyNonEmptyString(),
-				"agentHarness": propertyStringEnum("codex", "claude", "auggie", "pi"),
-				"agentCommand": propertyNonEmptyString(),
+				"targetsubdir": propertyNonEmptyString(),
+				"agentharness": propertyStringEnum("codex", "claude", "auggie", "pi"),
+				"agentcommand": propertyNonEmptyString(),
 				"prompt":       propertyNonEmptyString(),
-				"responseMode": propertyStringEnum(config.SupportedResponseModesWithDefault()...),
+				"responsemode": propertyStringEnum(config.SupportedResponseModesWithDefault()...),
 				"images": map[string]any{
 					"type": "array",
 					"items": map[string]any{
@@ -803,17 +803,17 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 						},
 					},
 				},
-				"libraryTaskName": propertyStringEnum(libraryTaskNames...),
-				"commitMessage":   propertyNonEmptyString(),
-				"prTitle":         propertyNonEmptyString(),
-				"prBody":          propertyNonEmptyString(),
+				"librarytaskname": propertyStringEnum(libraryTaskNames...),
+				"commitmessage":   propertyNonEmptyString(),
+				"prtitle":         propertyNonEmptyString(),
+				"prbody":          propertyNonEmptyString(),
 				"labels": map[string]any{
 					"type": "array",
 					"items": map[string]any{
 						"type": "string",
 					},
 				},
-				"githubHandle": propertyNonEmptyString(),
+				"githubhandle": propertyNonEmptyString(),
 				"reviewers": map[string]any{
 					"type": "array",
 					"items": map[string]any{
@@ -824,17 +824,17 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 					"type":                 "object",
 					"additionalProperties": false,
 					"properties": map[string]any{
-						"prNumber": map[string]any{
+						"prnumber": map[string]any{
 							"type":    "integer",
 							"minimum": 1,
 						},
-						"prUrl":      propertyNonEmptyString(),
-						"headBranch": propertyNonEmptyString(),
+						"prurl":      propertyNonEmptyString(),
+						"headbranch": propertyNonEmptyString(),
 					},
 					"anyOf": []map[string]any{
-						{"required": []string{"prNumber"}},
-						{"required": []string{"prUrl"}},
-						{"required": []string{"headBranch"}},
+						{"required": []string{"prnumber"}},
+						{"required": []string{"prurl"}},
+						{"required": []string{"headbranch"}},
 					},
 				},
 			},
@@ -942,6 +942,11 @@ func normalizeRunConfigAliases(m map[string]any) error {
 	copyRunConfigAlias(m, "libraryTaskName", "librarytaskname")
 	copyRunConfigAlias(m, "prNumber", "prnumber")
 	copyRunConfigAlias(m, "githubHandle", "githubhandle")
+	copyRunConfigAlias(m, "agentHarness", "agentharness")
+	copyRunConfigAlias(m, "agentCommand", "agentcommand")
+	copyRunConfigAlias(m, "commitMessage", "commitmessage")
+	copyRunConfigAlias(m, "prTitle", "prtitle")
+	copyRunConfigAlias(m, "prBody", "prbody")
 	normalizeReviewRunConfigAliases(m)
 
 	if firstNonEmpty(stringAt(m, "baseBranch")) == "" {
@@ -950,7 +955,7 @@ func normalizeRunConfigAliases(m map[string]any) error {
 		}
 	}
 	if firstNonEmpty(stringAt(m, "prompt")) != "" && firstNonEmpty(stringAt(m, "libraryTaskName")) != "" {
-		return fmt.Errorf("run config payload cannot include both prompt and libraryTaskName")
+		return fmt.Errorf("run config payload cannot include both prompt and librarytaskname")
 	}
 	if prNumber, ok := positiveIntValue(m["prNumber"]); ok {
 		review := ensureReviewMap(m)
@@ -988,6 +993,7 @@ func normalizeReviewRunConfigAliases(m map[string]any) {
 	}
 	review, hasReview := m["review"].(map[string]any)
 	if hasReview {
+		copyRunConfigAlias(review, "prNumber", "prnumber")
 		copyRunConfigAlias(review, "prUrl", "prurl")
 		copyRunConfigAlias(review, "headBranch", "headbranch")
 	}
@@ -995,6 +1001,7 @@ func normalizeReviewRunConfigAliases(m map[string]any) {
 		alias     string
 		canonical string
 	}{
+		{alias: "review.prnumber", canonical: "prNumber"},
 		{alias: "review.prurl", canonical: "prUrl"},
 		{alias: "review.headbranch", canonical: "headBranch"},
 	} {

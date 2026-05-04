@@ -638,7 +638,7 @@ func TestParseRunConfigJSONRejectsAmbiguousPromptAndLibraryTask(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "cannot include both prompt and libraryTaskName") {
+	if !strings.Contains(err.Error(), "cannot include both prompt and librarytaskname") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

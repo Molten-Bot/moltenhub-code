@@ -164,7 +164,7 @@ func TestDispatchAndProfileHelperBranches(t *testing.T) {
 	runConfigPayload := requiredSkillPayloadSchema("", "", []string{"unit-test-coverage"})
 	runConfigSchema, _ := runConfigPayload["run_config_schema"].(map[string]any)
 	properties, _ := runConfigSchema["properties"].(map[string]any)
-	responseMode, _ := properties["responseMode"].(map[string]any)
+	responseMode, _ := properties["responsemode"].(map[string]any)
 	enumValues, ok := responseMode["enum"].([]string)
 	if !ok {
 		rawEnum, rawOK := responseMode["enum"].([]any)
@@ -181,7 +181,7 @@ func TestDispatchAndProfileHelperBranches(t *testing.T) {
 		}
 	}
 	if !ok || len(enumValues) == 0 || enumValues[0] != "default" {
-		t.Fatalf("requiredSkillPayloadSchema().responseMode = %#v, want enum with default", responseMode)
+		t.Fatalf("requiredSkillPayloadSchema().responsemode = %#v, want enum with default", responseMode)
 	}
 }
 

@@ -1473,7 +1473,7 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 		"name":        normalizeSkillName(skillCfg.Name),
 		"handle":      normalizeSkillName(skillCfg.Name),
 		"mode":        "prompt",
-		"description": "Prompt-driven repository task run. Omitted or `default` `responseMode` uses bundled `caveman-full`; set `off` for normal prose.",
+		"description": "Repository task run. Send repo+prompt for ad hoc work, or repos+librarytaskname for a checked-in library task. Omitted or `default` `responsemode` uses bundled `caveman-full`; set `off` for normal prose.",
 		"activation": buildActivation(skillCfg.Name, map[string]any{
 			"repo":   "<git@github.com:owner/repo.git>",
 			"prompt": "<describe the requested change>",
@@ -1485,7 +1485,7 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 		"handle":      normalizeSkillName(codeReviewSkillName),
 		"mode":        "review",
 		"displayName": "Pull Request Code Review",
-		"description": fmt.Sprintf("Runs the %s workflow using repo + either branch or prNumber context. Omitted or `default` `responseMode` uses bundled `caveman-full`; set `off` for normal prose.", codeReviewLibraryTaskName),
+		"description": fmt.Sprintf("Runs the %s workflow using repo + either branch or prnumber context. Omitted or `default` `responsemode` uses bundled `caveman-full`; set `off` for normal prose.", codeReviewLibraryTaskName),
 		"activation": buildActivation(codeReviewSkillName, map[string]any{
 			"repo":   "<git@github.com:owner/repo.git>",
 			"branch": "<pull-request-head-branch>",
@@ -1500,18 +1500,18 @@ func buildSupportedSkillsMetadata() []map[string]any {
 	return []map[string]any{
 		{
 			"name":        normalizeSkillName(runtimeSkill.Name),
-			"description": "Prompt-driven repository task run. Defaults to `caveman-full`; set `responseMode=off` for normal prose.",
+			"description": "Repository task run. Send repo+prompt for ad hoc work, or repos+librarytaskname for a checked-in library task. Defaults to `caveman-full`; set `responsemode=off` for normal prose.",
 			"parameters": runtimeSkillParameters(
+				[]map[string]any{},
 				[]map[string]any{
-					skillParameter("repo", "Git repository URL."),
-					skillParameter("prompt", "Requested code change or investigation."),
-				},
-				[]map[string]any{
-					skillParameter("repos", "One or more Git repository URLs for direct multi-repository activations."),
-					skillParameter("repoUrl", "Legacy alias for repo."),
-					skillParameter("baseBranch", "Branch to clone before creating the work branch."),
-					skillParameter("targetSubdir", "Repository subdirectory where the agent should work."),
-					skillParameter("responseMode", "Agent prose mode such as off, caveman-full, or default."),
+					skillParameter("repo", "Git repository URL for ad hoc prompt runs."),
+					skillParameter("repos", "One or more Git repository URLs for library task or multi-repository runs."),
+					skillParameter("repourl", "Legacy lowercase alias for repo."),
+					skillParameter("prompt", "Requested ad hoc code change or investigation."),
+					skillParameter("librarytaskname", "Checked-in library task name to run."),
+					skillParameter("basebranch", "Branch to clone before creating the work branch."),
+					skillParameter("targetsubdir", "Repository subdirectory where the agent should work."),
+					skillParameter("responsemode", "Agent prose mode such as off, caveman-full, or default."),
 					skillParameter("reviewers", "GitHub handles to request on created pull requests."),
 					skillParameter("images", "Base64 prompt images for supported agents."),
 				},
@@ -1519,16 +1519,16 @@ func buildSupportedSkillsMetadata() []map[string]any {
 		},
 		{
 			"name":        normalizeSkillName(codeReviewSkillName),
-			"description": "Repository code review run that targets the checked-in review workflow. Defaults to `caveman-full`; set `responseMode=off` for normal prose.",
+			"description": "Repository code review run that targets the checked-in review workflow. Defaults to `caveman-full`; set `responsemode=off` for normal prose.",
 			"parameters": runtimeSkillParameters(
 				[]map[string]any{
 					skillParameter("repo", "Git repository URL containing the pull request."),
 				},
 				[]map[string]any{
-					skillParameter("branch", "Pull request head branch; required when prNumber or review.prUrl is omitted."),
-					skillParameter("prNumber", "Pull request number; required when branch or review.prUrl is omitted."),
-					skillParameter("review.prUrl", "Pull request URL; required when branch or prNumber is omitted."),
-					skillParameter("responseMode", "Agent prose mode such as off, caveman-full, or default."),
+					skillParameter("branch", "Pull request head branch; required when prnumber or review.prurl is omitted."),
+					skillParameter("prnumber", "Pull request number; required when branch or review.prurl is omitted."),
+					skillParameter("review.prurl", "Pull request URL; required when branch or prnumber is omitted."),
+					skillParameter("responsemode", "Agent prose mode such as off, caveman-full, or default."),
 				},
 			),
 		},
@@ -1536,6 +1536,12 @@ func buildSupportedSkillsMetadata() []map[string]any {
 }
 
 func runtimeSkillParameters(required, optional []map[string]any) map[string]any {
+	if required == nil {
+		required = []map[string]any{}
+	}
+	if optional == nil {
+		optional = []map[string]any{}
+	}
 	return map[string]any{
 		"format":            "json",
 		"required":          required,

@@ -1320,14 +1320,23 @@ func promptFromRunConfigJSON(runConfigJSON []byte) string {
 	if len(runConfigJSON) == 0 {
 		return ""
 	}
-	var raw struct {
-		Prompt          string `json:"prompt"`
-		LibraryTaskName string `json:"libraryTaskName"`
-	}
+	var raw map[string]any
 	if err := json.Unmarshal(runConfigJSON, &raw); err != nil {
 		return ""
 	}
-	taskName := strings.TrimSpace(raw.LibraryTaskName)
+	stringAt := func(keys ...string) string {
+		for _, key := range keys {
+			value, ok := raw[key].(string)
+			if !ok {
+				continue
+			}
+			if trimmed := strings.TrimSpace(value); trimmed != "" {
+				return trimmed
+			}
+		}
+		return ""
+	}
+	taskName := stringAt("librarytaskname", "libraryTaskName")
 	if taskName != "" {
 		catalog, err := library.LoadCatalog(library.DefaultDir)
 		if err == nil {
@@ -1339,7 +1348,7 @@ func promptFromRunConfigJSON(runConfigJSON []byte) string {
 			}
 		}
 	}
-	if prompt := strings.TrimSpace(raw.Prompt); prompt != "" {
+	if prompt := stringAt("prompt"); prompt != "" {
 		return prompt
 	}
 	return ""

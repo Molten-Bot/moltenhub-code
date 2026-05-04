@@ -3,7 +3,7 @@
     "name": "code_for_me",
     "handle": "code_for_me",
     "mode": "prompt",
-    "description": "Prompt-driven repository task run. Omitted or `default` `responseMode` uses bundled `caveman-full`; set `off` for normal prose.",
+    "description": "Repository task run. Send repo+prompt for ad hoc work, or repos+librarytaskname for a checked-in library task. Omitted or `default` `responsemode` uses bundled `caveman-full`; set `off` for normal prose.",
     "activation": {
       "type": "skill_request",
       "request_id": "<caller-generated-request-id>",
@@ -21,7 +21,7 @@
     "handle": "code_review",
     "mode": "review",
     "displayName": "Pull Request Code Review",
-    "description": "Runs the code-review workflow using repo + either branch or prNumber context. Omitted or `default` `responseMode` uses bundled `caveman-full`; set `off` for normal prose.",
+    "description": "Runs the code-review workflow using repo + either branch or prnumber context. Omitted or `default` `responsemode` uses bundled `caveman-full`; set `off` for normal prose.",
     "activation": {
       "type": "skill_request",
       "request_id": "<caller-generated-request-id>",

@@ -1484,7 +1484,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `function promptImageSummary(images)`) {
 		t.Fatalf("expected index html to summarize screenshot names inline in the prompt action row")
 	}
-	if !strings.Contains(markup, `libraryTaskName: libraryTaskName,
+	if !strings.Contains(markup, `librarytaskname: libraryTaskName,
         images: normalizePromptImages(state.promptImages),`) {
 		t.Fatalf("expected index html to include pasted screenshots in library mode payloads")
 	}
@@ -1687,7 +1687,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "No saved reviewers yet") ||
 		!strings.Contains(markup, "function reviewerListFromValue(") ||
 		!strings.Contains(markup, "payload.reviewers = reviewers;") ||
-		!strings.Contains(markup, "const reviewers = dedupeReviewerValues([...(Array.isArray(parsed?.reviewers) ? parsed.reviewers : []), parsed?.githubHandle]);") ||
+		!strings.Contains(markup, "const reviewers = dedupeReviewerValues([...(Array.isArray(parsed?.reviewers) ? parsed.reviewers : []), parsed?.githubHandle, parsed?.githubhandle]);") ||
 		!strings.Contains(markup, "rememberReviewers(reviewers);") ||
 		!strings.Contains(markup, "selectSubmittedReviewer(reviewers);") ||
 		!strings.Contains(markup, "return /^none$/i.test(normalized) ? \"\" : normalized;") {
@@ -1709,7 +1709,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "const repo = normalizeRepoValue(libraryRepoInput.value) || defaultRepository();") {
 		t.Fatalf("expected index html payload builders to fall back to the configured default repository")
 	}
-	if !strings.Contains(markup, "const payload = {\n        repos: [repo],\n        targetSubdir:") ||
+	if !strings.Contains(markup, "const payload = {\n        repos: [repo],\n        targetsubdir:") ||
 		!strings.Contains(markup, "if (branch) {\n        payload.branch = branch;\n      }") {
 		t.Fatalf("expected index html library payload to emit selected repositories through repos[]")
 	}
@@ -2628,8 +2628,8 @@ func TestIndexLibraryModeUsesDedicatedRunEndpointAndShowsLoadErrors(t *testing.T
 	if !strings.Contains(markup, `id="library-target-subdir"`) {
 		t.Fatalf("expected index html to render a directory input in library mode")
 	}
-	if !strings.Contains(markup, `targetSubdir: String(libraryTargetSubdir.value || "").trim() || ".",`) {
-		t.Fatalf("expected index html to include targetSubdir in the library payload")
+	if !strings.Contains(markup, `targetsubdir: String(libraryTargetSubdir.value || "").trim() || ".",`) {
+		t.Fatalf("expected index html to include targetsubdir in the library payload")
 	}
 	if !strings.Contains(markup, `libraryTargetSubdir.value = targetSubdir;`) {
 		t.Fatalf("expected index html to restore the library directory when syncing from JSON payloads")

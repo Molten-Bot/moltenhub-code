@@ -341,7 +341,7 @@
     "git@github.com:org/repo.git",
     "git@github.com:org/repo-two.git"
   ],
-  "libraryTaskName": "unit-test-coverage",
+  "librarytaskname": "unit-test-coverage",
   "reviewers": [
     "octocat",
     "hubot"
@@ -5083,12 +5083,12 @@
       }
       const payload = {
         repos: [repo],
-        targetSubdir: String(builderTargetSubdir.value || "").trim() || ".",
+        targetsubdir: String(builderTargetSubdir.value || "").trim() || ".",
         prompt,
         images: normalizePromptImages(state.promptImages),
       };
       if (branch) {
-        payload.baseBranch = branch;
+        payload.basebranch = branch;
       }
       const reviewers = reviewerListFromValue(builderReviewerInput.value);
       if (reviewers.length) {
@@ -5111,8 +5111,8 @@
       const branch = String(libraryBaseBranch.value || "").trim();
       const payload = {
         repos: [repo],
-        targetSubdir: String(libraryTargetSubdir.value || "").trim() || ".",
-        libraryTaskName: libraryTaskName,
+        targetsubdir: String(libraryTargetSubdir.value || "").trim() || ".",
+        librarytaskname: libraryTaskName,
         images: normalizePromptImages(state.promptImages),
       };
       if (branch) {
@@ -5140,13 +5140,15 @@
         ...(Array.isArray(payload.repos) ? payload.repos : []),
         payload.repo,
         payload.repoUrl,
+        payload.repourl,
       ]);
 
       const repo = repos[0] || "";
-      const branch = String(payload.baseBranch || payload.branch || "").trim();
+      const branch = String(payload.basebranch || payload.baseBranch || payload.branch || "").trim();
       const reviewers = dedupeReviewerValues([
         ...(Array.isArray(payload.reviewers) ? payload.reviewers : []),
         payload.githubHandle,
+        payload.githubhandle,
       ]);
       builderRepoInput.value = repo;
       builderBaseBranch.value = branch;
@@ -5155,13 +5157,13 @@
       builderReviewerInput.value = reviewers.join(", ");
       libraryReviewerInput.value = reviewers.join(", ");
       syncBaseBranchClearState();
-      const targetSubdir = String(payload.targetSubdir || ".").trim() || ".";
+      const targetSubdir = String(payload.targetsubdir || payload.targetSubdir || ".").trim() || ".";
       builderTargetSubdir.value = targetSubdir;
       libraryTargetSubdir.value = targetSubdir;
       builderPromptInput.value = String(payload.prompt || "").trim();
       setPromptImages(payload.images);
       syncBuilderDraftClearState();
-      state.selectedLibraryTask = String(payload.libraryTaskName || "").trim();
+      state.selectedLibraryTask = String(payload.librarytaskname || payload.libraryTaskName || "").trim();
       renderRepoHistoryOptions();
       renderReviewerHistoryOptions();
       renderLibraryTaskOptions();
@@ -8492,8 +8494,8 @@
         const requestID = body?.request_id || "(unknown)";
         try {
           const parsed = JSON.parse(normalized.compact);
-          rememberRepos(dedupeRepoValues([...(Array.isArray(parsed?.repos) ? parsed.repos : []), parsed?.repo, parsed?.repoUrl]));
-          const reviewers = dedupeReviewerValues([...(Array.isArray(parsed?.reviewers) ? parsed.reviewers : []), parsed?.githubHandle]);
+          rememberRepos(dedupeRepoValues([...(Array.isArray(parsed?.repos) ? parsed.repos : []), parsed?.repo, parsed?.repoUrl, parsed?.repourl]));
+          const reviewers = dedupeReviewerValues([...(Array.isArray(parsed?.reviewers) ? parsed.reviewers : []), parsed?.githubHandle, parsed?.githubhandle]);
           rememberReviewers(reviewers);
           selectSubmittedReviewer(reviewers);
         } catch (_err) {
