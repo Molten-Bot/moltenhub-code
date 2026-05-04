@@ -367,8 +367,8 @@ func TestPublishResultUsesA2ASendMessage(t *testing.T) {
 	if !ok {
 		t.Fatalf("params missing: %#v", got.Body)
 	}
-	if target := readMapString(params["metadata"], "to_agent_uuid"); target != "agent-123" {
-		t.Fatalf("metadata.to_agent_uuid = %#v", target)
+	if target := readMapString(params["metadata"], "to_agent_id"); target != "agent-123" {
+		t.Fatalf("metadata.to_agent_id = %#v", target)
 	}
 	msg, ok := params["message"].(map[string]any)
 	if !ok {
@@ -377,8 +377,8 @@ func TestPublishResultUsesA2ASendMessage(t *testing.T) {
 	if msg["messageId"] != "req-7" {
 		t.Fatalf("messageId = %#v", msg["messageId"])
 	}
-	if target := readMapString(msg["metadata"], "to_agent_uuid"); target != "agent-123" {
-		t.Fatalf("message.metadata.to_agent_uuid = %#v", target)
+	if target := readMapString(msg["metadata"], "to_agent_id"); target != "agent-123" {
+		t.Fatalf("message.metadata.to_agent_id = %#v", target)
 	}
 	parts, _ := msg["parts"].([]any)
 	if len(parts) != 1 {
@@ -509,8 +509,8 @@ func TestPublishResultFallsBackToOpenClaw(t *testing.T) {
 	if calls[1].Path != "/v1/openclaw/messages/publish" {
 		t.Fatalf("second path = %q", calls[1].Path)
 	}
-	if calls[1].Body["to_agent_uuid"] != "agent-123" {
-		t.Fatalf("to_agent_uuid = %#v", calls[1].Body["to_agent_uuid"])
+	if calls[1].Body["to_agent_id"] != "agent-123" {
+		t.Fatalf("to_agent_id = %#v", calls[1].Body["to_agent_id"])
 	}
 	if calls[1].Body["client_msg_id"] != "req-7" {
 		t.Fatalf("client_msg_id = %#v", calls[1].Body["client_msg_id"])

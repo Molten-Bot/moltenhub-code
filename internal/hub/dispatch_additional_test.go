@@ -364,6 +364,55 @@ func TestParseSkillDispatchPrefersSenderRoutingOverRecipientTarget(t *testing.T)
 	}
 }
 
+func TestParseSkillDispatchUsesA2AParamsMetadataForReplyRouting(t *testing.T) {
+	t.Parallel()
+
+	msg := map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "message/send",
+		"params": map[string]any{
+			"metadata": map[string]any{
+				"from_agent_uri": "https://na.hub.molten.bot/acme/caller",
+				"to_agent_uuid":  "receiver-agent-uuid",
+			},
+			"message": map[string]any{
+				"role":      "user",
+				"messageId": "req-a2a-routing",
+				"parts": []any{
+					map[string]any{
+						"kind": "data",
+						"data": map[string]any{
+							"type":  "skill_request",
+							"skill": "code_for_me",
+							"config": map[string]any{
+								"repo":   "git@github.com:acme/repo.git",
+								"prompt": "fix issue",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	dispatch, matched, err := ParseSkillDispatch(msg, "skill_request", "code_for_me")
+	if err != nil {
+		t.Fatalf("ParseSkillDispatch() error = %v", err)
+	}
+	if !matched {
+		t.Fatal("matched = false, want true")
+	}
+	if got, want := dispatch.ReplyTo, "https://na.hub.molten.bot/acme/caller"; got != want {
+		t.Fatalf("ReplyTo = %q, want %q", got, want)
+	}
+	if got, want := dispatch.RouteTo, "receiver-agent-uuid"; got != want {
+		t.Fatalf("RouteTo = %q, want %q", got, want)
+	}
+	if got, want := dispatch.OriginatorAgentURI, "https://na.hub.molten.bot/acme/caller"; got != want {
+		t.Fatalf("OriginatorAgentURI = %q, want %q", got, want)
+	}
+}
+
 func TestParseSkillDispatchFallsBackToRecipientTargetWhenSenderMissing(t *testing.T) {
 	t.Parallel()
 

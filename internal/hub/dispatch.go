@@ -614,7 +614,30 @@ func mergeA2ADispatchMetadata(
 	setStringIfMissing(out, "context_id", contextID)
 	setStringIfMissing(out, "a2a_context_id", contextID)
 
-	for _, key := range []string{
+	setA2ADispatchRoutingMetadataIfMissing(
+		out,
+		transport,
+		toMap(transport["metadata"]),
+		toMap(valueAtPathAny(transport, "params", "metadata")),
+		toMap(valueAtPathAny(transport, "request", "metadata")),
+		toMap(a2aMsg["metadata"]),
+	)
+	return out
+}
+
+func setA2ADispatchRoutingMetadataIfMissing(out map[string]any, sources ...map[string]any) {
+	for _, source := range sources {
+		if len(source) == 0 {
+			continue
+		}
+		for _, key := range a2aDispatchRoutingMetadataKeys() {
+			setStringIfMissing(out, key, stringAt(source, key))
+		}
+	}
+}
+
+func a2aDispatchRoutingMetadataKeys() []string {
+	return []string{
 		"reply_to",
 		"from",
 		"from_agent_uri",
@@ -641,10 +664,7 @@ func mergeA2ADispatchMetadata(
 		"clientMsgId",
 		"message_id",
 		"messageId",
-	} {
-		setStringIfMissing(out, key, stringAt(transport, key))
 	}
-	return out
 }
 
 func a2aParts(msg map[string]any) []map[string]any {

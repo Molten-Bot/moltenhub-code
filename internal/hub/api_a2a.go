@@ -150,6 +150,7 @@ func (c APIClient) a2aEndpointURLForTarget(target a2aRouteTarget) string {
 type a2aRouteTarget struct {
 	AgentUUID string
 	AgentURI  string
+	AgentID   string
 }
 
 func (t a2aRouteTarget) Metadata() map[string]any {
@@ -158,6 +159,8 @@ func (t a2aRouteTarget) Metadata() map[string]any {
 		metadata["to_agent_uri"] = t.AgentURI
 	} else if t.AgentUUID != "" {
 		metadata["to_agent_uuid"] = t.AgentUUID
+	} else if t.AgentID != "" {
+		metadata["to_agent_id"] = t.AgentID
 	}
 	return metadata
 }
@@ -179,11 +182,15 @@ func publishResultA2ARouteTarget(payload map[string]any) (a2aRouteTarget, bool) 
 		return a2aRouteTarget{AgentURI: toAgentURI}, true
 	} else if toAgentUUID := firstString(payload["to_agent_uuid"]); toAgentUUID != "" {
 		return a2aRouteTarget{AgentUUID: toAgentUUID}, true
+	} else if toAgentID := firstString(payload["to_agent_id"]); toAgentID != "" {
+		return a2aRouteTarget{AgentID: toAgentID}, true
 	} else if routeTarget := firstString(payload["to"], payload["reply_to"]); routeTarget != "" {
 		if looksLikeAgentURI(routeTarget) {
 			return a2aRouteTarget{AgentURI: routeTarget}, true
-		} else {
+		} else if looksLikeUUID(routeTarget) {
 			return a2aRouteTarget{AgentUUID: routeTarget}, true
+		} else {
+			return a2aRouteTarget{AgentID: routeTarget}, true
 		}
 	}
 	return a2aRouteTarget{}, false
@@ -220,11 +227,16 @@ func publishResultOpenClawBody(payload map[string]any) (map[string]any, bool) {
 	} else if toAgentUUID := firstString(payload["to_agent_uuid"]); toAgentUUID != "" {
 		body["to_agent_uuid"] = toAgentUUID
 		routed = true
+	} else if toAgentID := firstString(payload["to_agent_id"]); toAgentID != "" {
+		body["to_agent_id"] = toAgentID
+		routed = true
 	} else if routeTarget := firstString(payload["to"], payload["reply_to"]); routeTarget != "" {
 		if looksLikeAgentURI(routeTarget) {
 			body["to_agent_uri"] = routeTarget
-		} else {
+		} else if looksLikeUUID(routeTarget) {
 			body["to_agent_uuid"] = routeTarget
+		} else {
+			body["to_agent_id"] = routeTarget
 		}
 		routed = true
 	}
