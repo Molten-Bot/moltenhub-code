@@ -50,6 +50,7 @@ const failureFollowUpSource = "failure_followup"
 const noChangesFollowUpSource = "no_changes_followup"
 const noChangesEscalationSource = "no_changes_escalation"
 const automaticFailureRerunDisabledReason = "automatic failure rerun disabled; queue failure follow-up in moltenhub-code"
+const localTransportOfflineReasonExecutionFailure = "task_execution_failure"
 
 const hubBootDiagnosticTimeout = 10 * time.Second
 const hubPingDiagnosticTimeout = 5 * time.Second
@@ -518,6 +519,7 @@ func runHub(args []string) int {
 				finalState = outcome.State
 				switch outcome.State {
 				case "error":
+					markLocalRunOpenClawOffline(runCtx, activeCfg, requestID, hubRuntimeConnected, daemonLogger)
 					if allowFailureFollowUp {
 						if queueFailureRerun != nil {
 							queueFailureRerun(requestID, outcome.Result, runCfg, source)
@@ -2039,6 +2041,31 @@ func recordLocalRunActivity(
 	client := hub.NewAPIClient(baseURL)
 	if err := record(activityCtx, client, token, runCfg); err != nil {
 		logf("dispatch status=warn action=%s request_id=%s err=%q", action, requestID, err)
+	}
+}
+
+func markLocalRunOpenClawOffline(ctx context.Context, cfg hub.InitConfig, requestID string, hubConnected func() bool, logf func(string, ...any)) {
+	if hubConnected == nil || !hubConnected() {
+		return
+	}
+	token := strings.TrimSpace(cfg.AgentToken)
+	if token == "" {
+		return
+	}
+	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
+	if baseURL == "" {
+		return
+	}
+	if logf == nil {
+		logf = func(string, ...any) {}
+	}
+
+	offlineCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	client := hub.NewAPIClient(baseURL)
+	if err := client.MarkOpenClawOffline(offlineCtx, token, cfg.SessionKey, localTransportOfflineReasonExecutionFailure); err != nil {
+		logf("dispatch status=warn action=mark_offline request_id=%s err=%q", requestID, err)
 	}
 }
 
