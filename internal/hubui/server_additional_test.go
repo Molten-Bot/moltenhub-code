@@ -1297,6 +1297,8 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	if !strings.Contains(html, `id="agent-auth-browser-code-input"`) ||
 		!strings.Contains(html, `class="prompt-text agent-auth-secret-input min-h-[96px] font-mono text-[0.9rem]"`) ||
 		!strings.Contains(html, `id="agent-auth-configure-input" class="prompt-text agent-auth-secret-input font-mono text-[0.9rem]"`) ||
+		!strings.Contains(html, `id="agent-auth-configure-secret-input" class="prompt-text agent-auth-configure-input-github agent-auth-configure-input-single-line font-mono text-[0.9rem] hidden" type="password"`) ||
+		!strings.Contains(html, `agentAuthConfigureInput.classList.toggle("hidden", needsClaudeGitHubConfigure);`) ||
 		!strings.Contains(html, `autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"`) {
 		t.Fatalf("expected init auth credential text boxes to hide pasted secrets and disable browser text helpers")
 	}
