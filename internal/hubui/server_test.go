@@ -2058,6 +2058,8 @@ func TestHandlerIndexIncludesClaudeBrowserCodeFlow(t *testing.T) {
 		`id="agent-auth-browser-command-secondary-copy"`,
 		`id="agent-auth-configure-copy"`,
 		`aria-label="Copy configure command"`,
+		`id="agent-auth-configure-secret-input" class="prompt-text agent-auth-configure-input-github agent-auth-configure-input-single-line font-mono text-[0.9rem] hidden" type="password"`,
+		`agentAuthConfigureSecretInput.value = "";`,
 		`cat ~/.pi/agent/auth.json`,
 		`Paste ~/.pi/agent/auth.json contents...`,
 		`agent-auth-configure-input-single-line`,

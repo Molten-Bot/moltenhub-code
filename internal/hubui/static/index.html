@@ -516,6 +516,7 @@
         </div>
         <label id="agent-auth-configure-label" class="text-sm font-medium text-hub-text/85" for="agent-auth-configure-input">Paste configuration value</label>
         <textarea id="agent-auth-configure-input" class="prompt-text agent-auth-secret-input font-mono text-[0.9rem]" placeholder='{"accessToken":"XXX","tenantURL":"https://YYY/","scopes":["email"]}' autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" rows="5" wrap="off"></textarea>
+        <input id="agent-auth-configure-secret-input" class="prompt-text agent-auth-configure-input-github agent-auth-configure-input-single-line font-mono text-[0.9rem] hidden" type="password" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Paste GitHub token" placeholder="ghp_xxx">
         <p id="agent-auth-configure-error" class="hidden text-sm text-rose-200"></p>
       </div>
 
@@ -1890,6 +1891,7 @@
     const agentAuthConfigureLabel = document.getElementById("agent-auth-configure-label");
     const agentAuthConfigureCopy = document.getElementById("agent-auth-configure-copy");
     const agentAuthConfigureInput = document.getElementById("agent-auth-configure-input");
+    const agentAuthConfigureSecretInput = document.getElementById("agent-auth-configure-secret-input");
     const agentAuthConfigureError = document.getElementById("agent-auth-configure-error");
     const agentAuthVerify = document.getElementById("agent-auth-verify");
     const themeToggleButton = document.getElementById("theme-toggle");
@@ -3041,6 +3043,9 @@
       if (agentAuthConfigureInput) {
         agentAuthConfigureInput.disabled = state.agentAuthBusy;
       }
+      if (agentAuthConfigureSecretInput) {
+        agentAuthConfigureSecretInput.disabled = state.agentAuthBusy;
+      }
       if (agentAuthBrowserCodeInput) {
         agentAuthBrowserCodeInput.disabled = state.agentAuthBusy;
       }
@@ -3407,6 +3412,9 @@
         if (agentAuthConfigureInput) {
           agentAuthConfigureInput.value = "";
         }
+        if (agentAuthConfigureSecretInput) {
+          agentAuthConfigureSecretInput.value = "";
+        }
         setAgentAuthBrowserCodeError("");
         state.agentHarnessSelectionPending = "";
       }
@@ -3421,6 +3429,9 @@
         }
         if (agentAuthConfigureInput) {
           agentAuthConfigureInput.value = "";
+        }
+        if (agentAuthConfigureSecretInput) {
+          agentAuthConfigureSecretInput.value = "";
         }
         setAgentAuthBrowserCodeError("");
       }
@@ -3566,6 +3577,15 @@
         agentAuthConfigureInput.classList.toggle("agent-auth-configure-input-github", needsClaudeGitHubConfigure);
         agentAuthConfigureInput.classList.toggle("agent-auth-configure-input-single-line", needsClaudeGitHubConfigure || (needsPiConfigure && hasPiConfigureOptions));
         agentAuthConfigureInput.rows = needsClaudeGitHubConfigure || (needsPiConfigure && hasPiConfigureOptions) ? 1 : 5;
+        agentAuthConfigureInput.classList.toggle("hidden", needsClaudeGitHubConfigure);
+      }
+      if (agentAuthConfigureSecretInput) {
+        const githubPlaceholder = state.agentAuth.configurePlaceholder || "ghp_xxx";
+        agentAuthConfigureSecretInput.placeholder = githubPlaceholder;
+        agentAuthConfigureSecretInput.classList.toggle("hidden", !needsClaudeGitHubConfigure);
+        if (!needsClaudeGitHubConfigure) {
+          agentAuthConfigureSecretInput.value = "";
+        }
       }
       if (agentAuthConfigureOption) {
         const options = Array.isArray(state.agentAuth.configureOptions) ? state.agentAuth.configureOptions : [];
@@ -3776,8 +3796,10 @@
     }
 
     function clearAgentAuthConfigureInputIfSensitive() {
-      if (!agentAuthConfigureInput) return;
-      if (isLikelyGitHubTokenValue(agentAuthConfigureInput.value)) {
+      if (agentAuthConfigureSecretInput) {
+        agentAuthConfigureSecretInput.value = "";
+      }
+      if (agentAuthConfigureInput && isLikelyGitHubTokenValue(agentAuthConfigureInput.value)) {
         agentAuthConfigureInput.value = "";
       }
     }
@@ -3967,7 +3989,7 @@
       setAuggieConfigureError("");
       let token = "";
       try {
-        token = normalizeGitHubTokenPayload(agentAuthConfigureInput ? agentAuthConfigureInput.value : "");
+        token = normalizeGitHubTokenPayload(agentAuthConfigureSecretInput ? agentAuthConfigureSecretInput.value : "");
       } catch (err) {
         const message = err && err.message ? err.message : "Invalid GitHub token.";
         setAuggieConfigureError(message);
@@ -3985,11 +4007,10 @@
         await loadGitHubProfileLink();
         if (auth.ready) {
           setAuggieConfigureError("");
-          if (agentAuthConfigureInput) {
-            agentAuthConfigureInput.value = "";
-          }
+          clearAgentAuthConfigureInputIfSensitive();
           setLocalPromptStatus("ok", `${currentAgentLabel()} auth is ready.`);
         } else {
+          clearAgentAuthConfigureInputIfSensitive();
           setAgentAuthVerifyPending(false);
         }
         trackAnalyticsEvent("agent_auth_configure_succeeded", agentAuthAnalyticsParams({ auth_method: "github_token", ready: Boolean(auth.ready) }));
@@ -8685,6 +8706,11 @@
     }
     if (agentAuthConfigureInput) {
       agentAuthConfigureInput.addEventListener("input", () => {
+        setAuggieConfigureError("");
+      });
+    }
+    if (agentAuthConfigureSecretInput) {
+      agentAuthConfigureSecretInput.addEventListener("input", () => {
         setAuggieConfigureError("");
       });
     }
