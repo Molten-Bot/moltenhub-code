@@ -6,11 +6,11 @@
     "description": "Prompt-driven repository task run. Omitted or `default` `responseMode` uses bundled `caveman-full`; set `off` for normal prose.",
     "activation": {
       "type": "skill_request",
+      "request_id": "<caller-generated-request-id>",
       "skill_name": "code_for_me",
+      "reply_required": true,
       "payload": {
-        "repos": [
-          "<git@github.com:owner/repo.git>"
-        ],
+        "repo": "<git@github.com:owner/repo.git>",
         "prompt": "<describe the requested change>"
       },
       "payload_format": "json"
@@ -24,7 +24,9 @@
     "description": "Runs the code-review workflow using repo + either branch or prNumber context. Omitted or `default` `responseMode` uses bundled `caveman-full`; set `off` for normal prose.",
     "activation": {
       "type": "skill_request",
+      "request_id": "<caller-generated-request-id>",
       "skill_name": "code_review",
+      "reply_required": true,
       "payload": {
         "repo": "<git@github.com:owner/repo.git>",
         "branch": "<pull-request-head-branch>"

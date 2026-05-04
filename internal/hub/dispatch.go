@@ -728,7 +728,9 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 	return map[string]any{
 		"dispatch_envelope": map[string]any{
 			"type":           dispatchType,
+			"request_id":     "<caller-generated-request-id>",
 			"skill_name":     skillName,
+			"reply_required": true,
 			"payload_format": "json",
 		},
 		"accepted_payload_paths": []string{
@@ -933,6 +935,15 @@ func normalizeRunConfigAliases(m map[string]any) error {
 		return fmt.Errorf("run config payload must be a JSON object")
 	}
 
+	copyRunConfigAlias(m, "repoUrl", "repourl")
+	copyRunConfigAlias(m, "baseBranch", "basebranch")
+	copyRunConfigAlias(m, "targetSubdir", "targetsubdir")
+	copyRunConfigAlias(m, "responseMode", "responsemode")
+	copyRunConfigAlias(m, "libraryTaskName", "librarytaskname")
+	copyRunConfigAlias(m, "prNumber", "prnumber")
+	copyRunConfigAlias(m, "githubHandle", "githubhandle")
+	normalizeReviewRunConfigAliases(m)
+
 	if firstNonEmpty(stringAt(m, "baseBranch")) == "" {
 		if branch := firstNonEmpty(stringAt(m, "branch")); branch != "" {
 			m["baseBranch"] = branch
@@ -948,6 +959,69 @@ func normalizeRunConfigAliases(m map[string]any) error {
 		}
 	}
 	return nil
+}
+
+func copyRunConfigAlias(m map[string]any, canonical string, aliases ...string) {
+	if m == nil || strings.TrimSpace(canonical) == "" {
+		return
+	}
+	if runConfigAliasValueSet(m[canonical]) {
+		return
+	}
+	for _, alias := range aliases {
+		alias = strings.TrimSpace(alias)
+		if alias == "" {
+			continue
+		}
+		value, exists := m[alias]
+		if !exists || !runConfigAliasValueSet(value) {
+			continue
+		}
+		m[canonical] = value
+		return
+	}
+}
+
+func normalizeReviewRunConfigAliases(m map[string]any) {
+	if m == nil {
+		return
+	}
+	review, hasReview := m["review"].(map[string]any)
+	if hasReview {
+		copyRunConfigAlias(review, "prUrl", "prurl")
+		copyRunConfigAlias(review, "headBranch", "headbranch")
+	}
+	for _, source := range []struct {
+		alias     string
+		canonical string
+	}{
+		{alias: "review.prurl", canonical: "prUrl"},
+		{alias: "review.headbranch", canonical: "headBranch"},
+	} {
+		value, exists := m[source.alias]
+		if !exists || !runConfigAliasValueSet(value) {
+			continue
+		}
+		review := ensureReviewMap(m)
+		if !runConfigAliasValueSet(review[source.canonical]) {
+			review[source.canonical] = value
+		}
+	}
+}
+
+func runConfigAliasValueSet(value any) bool {
+	switch typed := value.(type) {
+	case nil:
+		return false
+	case string:
+		return strings.TrimSpace(typed) != ""
+	case []string:
+		return len(typed) > 0
+	case []any:
+		return len(typed) > 0
+	default:
+		return true
+	}
 }
 
 func ensureReviewSelector(m map[string]any) bool {

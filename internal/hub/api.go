@@ -1460,7 +1460,9 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 	buildActivation := func(skillName string, runConfig map[string]any) map[string]any {
 		return map[string]any{
 			"type":           dispatchType,
+			"request_id":     "<caller-generated-request-id>",
 			"skill_name":     normalizeSkillName(skillName),
+			"reply_required": true,
 			"payload_format": "json",
 			"payload":        runConfig,
 		}
@@ -1473,7 +1475,7 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 		"mode":        "prompt",
 		"description": "Prompt-driven repository task run. Omitted or `default` `responseMode` uses bundled `caveman-full`; set `off` for normal prose.",
 		"activation": buildActivation(skillCfg.Name, map[string]any{
-			"repos":  []string{"<git@github.com:owner/repo.git>"},
+			"repo":   "<git@github.com:owner/repo.git>",
 			"prompt": "<describe the requested change>",
 		}),
 	})
@@ -1501,10 +1503,12 @@ func buildSupportedSkillsMetadata() []map[string]any {
 			"description": "Prompt-driven repository task run. Defaults to `caveman-full`; set `responseMode=off` for normal prose.",
 			"parameters": runtimeSkillParameters(
 				[]map[string]any{
-					skillParameter("repos", "One or more Git repository URLs."),
+					skillParameter("repo", "Git repository URL."),
 					skillParameter("prompt", "Requested code change or investigation."),
 				},
 				[]map[string]any{
+					skillParameter("repos", "One or more Git repository URLs for direct multi-repository activations."),
+					skillParameter("repoUrl", "Legacy alias for repo."),
 					skillParameter("baseBranch", "Branch to clone before creating the work branch."),
 					skillParameter("targetSubdir", "Repository subdirectory where the agent should work."),
 					skillParameter("responseMode", "Agent prose mode such as off, caveman-full, or default."),

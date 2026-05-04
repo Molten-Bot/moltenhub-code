@@ -498,6 +498,75 @@ func TestParseSkillDispatchAcceptsSkillActivationKind(t *testing.T) {
 	}
 }
 
+func TestParseSkillDispatchAcceptsHubNormalizedParameterNames(t *testing.T) {
+	t.Parallel()
+
+	msg := map[string]any{
+		"type":       "skill_request",
+		"skill_name": "code_for_me",
+		"request_id": "req-normalized-params",
+		"payload": map[string]any{
+			"repo":         "git@github.com:acme/repo.git",
+			"prompt":       "ship normalized parameter aliases",
+			"basebranch":   "release",
+			"targetsubdir": "cmd/harness",
+			"responsemode": "off",
+		},
+	}
+
+	dispatch, matched, err := ParseSkillDispatch(msg, "skill_request", "code_for_me")
+	if err != nil {
+		t.Fatalf("ParseSkillDispatch() error = %v", err)
+	}
+	if !matched {
+		t.Fatal("matched = false, want true")
+	}
+	if got, want := dispatch.Config.BaseBranch, "release"; got != want {
+		t.Fatalf("BaseBranch = %q, want %q", got, want)
+	}
+	if got, want := dispatch.Config.TargetSubdir, "cmd/harness"; got != want {
+		t.Fatalf("TargetSubdir = %q, want %q", got, want)
+	}
+	if got, want := dispatch.Config.ResponseMode, "off"; got != want {
+		t.Fatalf("ResponseMode = %q, want %q", got, want)
+	}
+}
+
+func TestParseSkillDispatchAcceptsHubNormalizedReviewParameters(t *testing.T) {
+	t.Parallel()
+
+	msg := map[string]any{
+		"type":       "skill_request",
+		"skill_name": "code_review",
+		"request_id": "req-normalized-review",
+		"payload": map[string]any{
+			"repo":         "git@github.com:acme/repo.git",
+			"prnumber":     42,
+			"responsemode": "off",
+		},
+	}
+
+	dispatch, matched, err := ParseSkillDispatch(msg, "skill_request", "code_review")
+	if err != nil {
+		t.Fatalf("ParseSkillDispatch() error = %v", err)
+	}
+	if !matched {
+		t.Fatal("matched = false, want true")
+	}
+	if got, want := dispatch.Config.LibraryTaskName, codeReviewLibraryTaskName; got != want {
+		t.Fatalf("LibraryTaskName = %q, want %q", got, want)
+	}
+	if dispatch.Config.Review == nil {
+		t.Fatal("Review = nil, want populated review config")
+	}
+	if got, want := dispatch.Config.Review.PRNumber, 42; got != want {
+		t.Fatalf("Review.PRNumber = %d, want %d", got, want)
+	}
+	if got, want := dispatch.Config.ResponseMode, "off"; got != want {
+		t.Fatalf("ResponseMode = %q, want %q", got, want)
+	}
+}
+
 func TestParseSkillDispatchAcceptsNestedConfigWrappers(t *testing.T) {
 	t.Parallel()
 

@@ -133,7 +133,8 @@ func TestDispatchAndProfileHelperBranches(t *testing.T) {
 
 	schema := requiredSkillPayloadSchema("", "", []string{"unit-test-coverage"})
 	envelope, ok := schema["dispatch_envelope"].(map[string]any)
-	if !ok || envelope["type"] != "skill_request" || envelope["skill_name"] != "code_for_me" || envelope["payload_format"] != "json" {
+	if !ok || envelope["type"] != "skill_request" || envelope["skill_name"] != "code_for_me" || envelope["payload_format"] != "json" ||
+		envelope["request_id"] == "" || envelope["reply_required"] != true {
 		t.Fatalf("requiredSkillPayloadSchema() envelope = %#v", envelope)
 	}
 

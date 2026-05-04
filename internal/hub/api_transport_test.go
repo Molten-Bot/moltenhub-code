@@ -664,6 +664,15 @@ func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
 	if got := parameters["format"]; got != "json" {
 		t.Fatalf("skills[0].parameters.format = %#v, want json", got)
 	}
+	if got, want := parameterNames(parameters["required"]), []string{"repo", "prompt"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("skills[0].parameters.required names = %#v, want %#v", got, want)
+	}
+	optionalNames := parameterNames(parameters["optional"])
+	for _, want := range []string{"repos", "repoUrl", "baseBranch", "targetSubdir", "responseMode"} {
+		if !containsParameterName(optionalNames, want) {
+			t.Fatalf("skills[0].parameters.optional names = %#v, want %q present", optionalNames, want)
+		}
+	}
 	if gotNames, want := meta["library_task_names"], []any{"security-review", "unit-test-coverage"}; !reflect.DeepEqual(gotNames, want) {
 		t.Fatalf("library_task_names = %#v, want %#v", gotNames, want)
 	}
@@ -691,8 +700,14 @@ func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
 	if got := activation["type"]; got != "skill_request" {
 		t.Fatalf("skill_catalog[0].activation.type = %#v, want skill_request", got)
 	}
+	if got := activation["request_id"]; got != "<caller-generated-request-id>" {
+		t.Fatalf("skill_catalog[0].activation.request_id = %#v, want request id placeholder", got)
+	}
 	if got := activation["skill_name"]; got != "code_for_me" {
 		t.Fatalf("skill_catalog[0].activation.skill_name = %#v, want code_for_me", got)
+	}
+	if got := activation["reply_required"]; got != true {
+		t.Fatalf("skill_catalog[0].activation.reply_required = %#v, want true", got)
 	}
 	if got := activation["payload_format"]; got != "json" {
 		t.Fatalf("skill_catalog[0].activation.payload_format = %#v, want json", got)
@@ -702,6 +717,16 @@ func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
 	}
 	if _, exists := activation["input"]; exists {
 		t.Fatalf("skill_catalog[0].activation.input unexpectedly present: %#v", activation["input"])
+	}
+	firstPayload, ok := activation["payload"].(map[string]any)
+	if !ok {
+		t.Fatalf("skill_catalog[0].activation.payload = %#v, want map[string]any", activation["payload"])
+	}
+	if got := firstPayload["repo"]; got != "<git@github.com:owner/repo.git>" {
+		t.Fatalf("skill_catalog[0].activation.payload.repo = %#v, want repository placeholder", got)
+	}
+	if _, exists := firstPayload["repos"]; exists {
+		t.Fatalf("skill_catalog[0].activation.payload.repos unexpectedly present: %#v", firstPayload["repos"])
 	}
 	second, ok := skillCatalog[1].(map[string]any)
 	if !ok || second["handle"] != "code_review" {
@@ -718,6 +743,9 @@ func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
 	if got := secondActivation["skill_name"]; got != "code_review" {
 		t.Fatalf("skill_catalog[1].activation.skill_name = %#v, want code_review", got)
 	}
+	if got := secondActivation["reply_required"]; got != true {
+		t.Fatalf("skill_catalog[1].activation.reply_required = %#v, want true", got)
+	}
 	if got := secondPayload["repo"]; got != "<git@github.com:owner/repo.git>" {
 		t.Fatalf("skill_catalog[1].activation.payload.repo = %#v, want repository placeholder", got)
 	}
@@ -730,6 +758,32 @@ func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
 	if _, exists := secondPayload["prNumber"]; exists {
 		t.Fatalf("skill_catalog[1].activation.payload.prNumber unexpectedly present: %#v", secondPayload["prNumber"])
 	}
+}
+
+func parameterNames(raw any) []string {
+	items, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	names := make([]string, 0, len(items))
+	for _, item := range items {
+		entry, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := entry["name"].(string)
+		names = append(names, name)
+	}
+	return names
+}
+
+func containsParameterName(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func readMapString(v any, key string) string {
