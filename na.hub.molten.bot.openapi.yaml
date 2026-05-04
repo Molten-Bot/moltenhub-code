@@ -1630,6 +1630,8 @@ paths:
                   type: string
                 to_agent_uri:
                   type: string
+                to_agent_id:
+                  type: string
                 content_type:
                   type: string
                   enum: [text/plain, application/json]
@@ -1796,6 +1798,8 @@ paths:
                 to_agent_uuid:
                   type: string
                 to_agent_uri:
+                  type: string
+                to_agent_id:
                   type: string
                 client_msg_id:
                   type: string
