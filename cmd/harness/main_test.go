@@ -455,6 +455,25 @@ func TestLoadHubBootConfigAppliesEnvTokensToDefaultConfig(t *testing.T) {
 	}
 }
 
+func TestLoadHubBootConfigAcceptsMalformedDockerComposeGitHubEnv(t *testing.T) {
+	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN:github_token_env_token", "")
+
+	configPath := filepath.Join(t.TempDir(), "missing.json")
+	cfg, exitCode, err := loadHubBootConfig("", configPath)
+	if err != nil {
+		t.Fatalf("loadHubBootConfig() error = %v", err)
+	}
+	if exitCode != harness.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	}
+	if got, want := cfg.GitHubToken, "github_token_env_token"; got != want {
+		t.Fatalf("GitHubToken = %q, want %q", got, want)
+	}
+}
+
 func TestEffectiveHubSetupConfigKeepsBootstrapGitHubToken(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {

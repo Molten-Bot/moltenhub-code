@@ -128,10 +128,7 @@ func firstConfiguredGitHubToken(runtimeConfigPath string, initCfg hub.InitConfig
 	if init := strings.TrimSpace(initCfg.GitHubToken); init != "" {
 		return init, "init config"
 	}
-	if env := strings.TrimSpace(os.Getenv("GH_TOKEN")); env != "" {
-		return env, "environment"
-	}
-	if env := strings.TrimSpace(os.Getenv("GITHUB_TOKEN")); env != "" {
+	if env := configuredGitHubTokenFromEnv(); env != "" {
 		return env, "environment"
 	}
 	return "", ""
@@ -146,6 +143,7 @@ func configuredGitHubTokens(runtimeConfigPath string, initCfg hub.InitConfig) []
 	candidates := []configuredGitHubToken{
 		{value: strings.TrimSpace(os.Getenv("GH_TOKEN")), source: "environment"},
 		{value: strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), source: "environment"},
+		{value: malformedDockerComposeGitHubTokenFromEnv(), source: "environment"},
 		{value: hub.ReadRuntimeConfigString(runtimeConfigPath, "github_token", "githubToken", "GITHUB_TOKEN"), source: "runtime config"},
 		{value: strings.TrimSpace(initCfg.GitHubToken), source: "init config"},
 	}
