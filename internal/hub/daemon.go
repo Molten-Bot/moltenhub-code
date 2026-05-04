@@ -59,16 +59,6 @@ const failureFollowUpTargetSubdir = "."
 const transportOfflineReasonExecutionFailure = "task_execution_failure"
 const dispatchTaskStatusType = "task_status_update"
 
-type hubActivationState struct {
-	profileSynced     bool
-	runtimeRegistered bool
-	agentOnline       bool
-}
-
-func (s hubActivationState) complete() bool {
-	return s.profileSynced && s.runtimeRegistered && s.agentOnline
-}
-
 // NewDaemon returns a hub daemon with defaults.
 func NewDaemon(runner execx.Runner) Daemon {
 	return Daemon{
@@ -153,7 +143,23 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 		)
 		d.logf("hub.library status=loaded tasks=%d", len(libraryCatalog.Tasks))
 	}
-	activationState := d.ensureHubActivation(ctx, api, cfg, orderedLibrarySummaries, len(libraryCatalog.Tasks), hubActivationState{})
+	if err := api.SyncProfile(ctx, cfg); err != nil {
+		d.logf("hub.profile status=warn err=%q", err)
+	} else {
+		d.logf("hub.profile status=ok")
+	}
+
+	if err := api.RegisterRuntime(ctx, cfg, orderedLibrarySummaries); err != nil {
+		d.logf("hub.runtime status=warn action=register err=%q", err)
+	} else {
+		d.logf("hub.runtime status=registered skills=%d library_tasks=%d", len(supportedProfileSkills()), len(libraryCatalog.Tasks))
+	}
+
+	if err := api.UpdateAgentStatus(ctx, "online"); err != nil {
+		d.logf("hub.agent status=warn state=online err=%q", err)
+	} else {
+		d.logf("hub.agent status=online")
+	}
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), agentStatusUpdateTimeout)
 		defer cancel()
@@ -167,19 +173,6 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 			return
 		}
 		d.logf("hub.agent status=offline")
-	}()
-	activationRetryCtx, stopActivationRetries := context.WithCancel(ctx)
-	var activationRetries sync.WaitGroup
-	if !activationState.complete() {
-		activationRetries.Add(1)
-		go func(state hubActivationState) {
-			defer activationRetries.Done()
-			d.runHubActivationRetryLoop(activationRetryCtx, api, cfg, orderedLibrarySummaries, len(libraryCatalog.Tasks), state)
-		}(activationState)
-	}
-	defer func() {
-		stopActivationRetries()
-		activationRetries.Wait()
 	}()
 
 	d.logf("hub.transport primary=openclaw_ws fallback=openclaw_pull")
@@ -231,87 +224,6 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 			if !sleepWithContext(ctx, d.ReconnectDelay) {
 				return nil
 			}
-		}
-	}
-}
-
-func (d Daemon) ensureHubActivation(
-	ctx context.Context,
-	api MoltenHubAPI,
-	cfg InitConfig,
-	libraryTasks []library.TaskSummary,
-	libraryTaskCount int,
-	state hubActivationState,
-) hubActivationState {
-	if api == nil {
-		return state
-	}
-	if ctx.Err() != nil {
-		return state
-	}
-
-	if !state.profileSynced {
-		if err := api.SyncProfile(ctx, cfg); err != nil {
-			if ctx.Err() == nil {
-				d.logf("hub.profile status=warn err=%q", err)
-			}
-		} else {
-			state.profileSynced = true
-			d.logf("hub.profile status=ok")
-		}
-	}
-	if ctx.Err() != nil {
-		return state
-	}
-
-	if !state.runtimeRegistered {
-		if err := api.RegisterRuntime(ctx, cfg, libraryTasks); err != nil {
-			if ctx.Err() == nil {
-				d.logf("hub.runtime status=warn action=register err=%q", err)
-			}
-		} else {
-			state.runtimeRegistered = true
-			d.logf("hub.runtime status=registered skills=%d library_tasks=%d", len(supportedProfileSkills()), libraryTaskCount)
-		}
-	}
-	if ctx.Err() != nil {
-		return state
-	}
-
-	if !state.agentOnline {
-		if err := api.UpdateAgentStatus(ctx, "online"); err != nil {
-			if ctx.Err() == nil {
-				d.logf("hub.agent status=warn state=online err=%q", err)
-			}
-		} else {
-			state.agentOnline = true
-			d.logf("hub.agent status=online")
-		}
-	}
-	return state
-}
-
-func (d Daemon) runHubActivationRetryLoop(
-	ctx context.Context,
-	api MoltenHubAPI,
-	cfg InitConfig,
-	libraryTasks []library.TaskSummary,
-	libraryTaskCount int,
-	state hubActivationState,
-) {
-	delay := d.ReconnectDelay
-	if delay <= 0 {
-		delay = 3 * time.Second
-	}
-	ticker := time.NewTicker(delay)
-	defer ticker.Stop()
-
-	for !state.complete() {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			state = d.ensureHubActivation(ctx, api, cfg, libraryTasks, libraryTaskCount, state)
 		}
 	}
 }
