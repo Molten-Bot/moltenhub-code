@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en" class="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -709,14 +709,14 @@
         </button>
       </div>
       <span class="prompt-mode-divider" aria-hidden="true"></span>
-      <button id="theme-toggle" class="prompt-mode-link theme-toggle theme-toggle-dock" type="button" aria-label="Switch theme. Currently: Dark" title="Dark">
+      <button id="theme-toggle" class="prompt-mode-link theme-toggle theme-toggle-dock" type="button" aria-label="Switch theme. Currently: Light" title="Light">
         <span class="prompt-mode-link-shell" aria-hidden="true"></span>
-        <span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true"><i data-lucide="moon" class="theme-toggle-icon-glyph" aria-hidden="true"></i></span>
+        <span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true"><i data-lucide="sun" class="theme-toggle-icon-glyph" aria-hidden="true"></i></span>
         <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
         <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
         <span class="prompt-mode-mobile-label" aria-hidden="true">Theme</span>
-        <span class="prompt-mode-link-tooltip" id="theme-toggle-tooltip" aria-hidden="true">Dark</span>
-        <span id="theme-toggle-label">Dark</span>
+        <span class="prompt-mode-link-tooltip" id="theme-toggle-tooltip" aria-hidden="true">Light</span>
+        <span id="theme-toggle-label">Light</span>
       </button>
     </div>
   </div>
@@ -735,7 +735,7 @@
     const THEME_KEY = "hubui.theme";
     const HOVER_MODE_KEY = "hubui.hoverMode";
     const THEME_MODES = ["light", "dark", "night", "pink"];
-    const DEFAULT_THEME_MODE = "dark";
+    const DEFAULT_THEME_MODE = "light";
     const HOVER_MODES = ["auto", "on", "off"];
     const CLOSE_TASK_FADE_MS = 2000;
     const QUEUED_STATUS_TIMEOUT_MS = 12_000;
