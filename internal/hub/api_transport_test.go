@@ -158,6 +158,63 @@ func TestExtractInboundOpenClawMessageForWebsocketEnvelope(t *testing.T) {
 	}
 }
 
+func TestExtractInboundOpenClawMessageKeepsRawA2AJSONRPCEnvelope(t *testing.T) {
+	t.Parallel()
+
+	root := map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "message/send",
+		"params": map[string]any{
+			"metadata": map[string]any{
+				"from_agent_uri": "https://na.hub.molten.bot/acme/sender",
+			},
+			"message": map[string]any{
+				"messageId": "a2a-msg-ws",
+				"contextId": "a2a-context-ws",
+				"taskId":    "a2a-task-ws",
+				"role":      "user",
+				"parts": []any{
+					map[string]any{
+						"kind": "data",
+						"data": map[string]any{
+							"repo":   "git@github.com:acme/repo.git",
+							"prompt": "fix websocket dispatch",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	got := extractInboundOpenClawMessage(root)
+	if got.DeliveryID != "" {
+		t.Fatalf("DeliveryID = %q, want empty", got.DeliveryID)
+	}
+	if got.MessageID != "" {
+		t.Fatalf("MessageID = %q, want empty", got.MessageID)
+	}
+	if got.Message["jsonrpc"] != "2.0" {
+		t.Fatalf("message jsonrpc = %#v, want raw a2a envelope", got.Message["jsonrpc"])
+	}
+
+	dispatch, matched, err := ParseSkillDispatch(got.Message, "skill_request", "code_for_me")
+	if err != nil {
+		t.Fatalf("ParseSkillDispatch() error = %v", err)
+	}
+	if !matched {
+		t.Fatal("matched = false, want true")
+	}
+	if got, want := dispatch.RequestID, "a2a-msg-ws"; got != want {
+		t.Fatalf("RequestID = %q, want %q", got, want)
+	}
+	if got, want := dispatch.HubTaskID, "a2a-task-ws"; got != want {
+		t.Fatalf("HubTaskID = %q, want %q", got, want)
+	}
+	if got, want := dispatch.ReplyTo, "https://na.hub.molten.bot/acme/sender"; got != want {
+		t.Fatalf("ReplyTo = %q, want %q", got, want)
+	}
+}
+
 func TestExtractInboundOpenClawMessageCopiesReplyRoutingFromTransportMessage(t *testing.T) {
 	t.Parallel()
 
