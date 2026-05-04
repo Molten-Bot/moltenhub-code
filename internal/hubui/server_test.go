@@ -1097,14 +1097,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "const prompt = taskPromptText(task);") || !strings.Contains(markup, "return prompt;") {
 		t.Fatalf("expected index html to pass full task prompt text to task title truncation")
 	}
-	if !strings.Contains(markup, `if (!task || task.prompt_is_user_input !== true || typeof task.prompt !== "string") return "";`) {
-		t.Fatalf("expected index html to hide system-generated prompts from Current Work labels")
+	if !strings.Contains(markup, `if (!task || typeof task.prompt !== "string") return "";`) {
+		t.Fatalf("expected index html to display available task prompt text")
 	}
 	if !strings.Contains(markup, `if (requestID.endsWith("-failure-review")) {`) || !strings.Contains(markup, `return "Failure review";`) {
 		t.Fatalf("expected index html to give failure follow-up tasks a neutral Current Work label")
 	}
-	if !strings.Contains(markup, "return taskSystemLabel(task) || \"(prompt unavailable)\";") {
-		t.Fatalf("expected index html to provide task labels with a system-task fallback")
+	if !strings.Contains(markup, `return taskSystemLabel(task) || "Task";`) {
+		t.Fatalf("expected index html to provide task labels without unavailable prompt copy")
 	}
 	if !strings.Contains(markup, "id.title = prompt;") {
 		t.Fatalf("expected index html task title tooltip to contain prompt text only")
@@ -1318,7 +1318,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `promptLink.className = "library-task-option-link";`) ||
 		!strings.Contains(markup, `promptLink.title = "Open full prompt";`) ||
 		!strings.Contains(markup, `openLibraryPromptModal(entry);`) ||
-		!strings.Contains(markup, `libraryPromptModalBody.textContent = entry.prompt || "Prompt unavailable.";`) {
+		!strings.Contains(markup, `libraryPromptModalBody.textContent = entry.prompt || "No prompt text provided.";`) {
 		t.Fatalf("expected index html to show full library prompts in a modal from each task link button")
 	}
 	if strings.Contains(markup, "library-task-option-name") {
