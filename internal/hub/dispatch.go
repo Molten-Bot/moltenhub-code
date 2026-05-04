@@ -222,7 +222,7 @@ func ParseSkillDispatch(msg map[string]any, expectedType, expectedSkill string) 
 		if eventType == "" {
 			return dispatch, true, fmt.Errorf("missing dispatch type")
 		}
-		if !strings.EqualFold(eventType, expectedType) {
+		if !dispatchTypesEqual(eventType, expectedType) {
 			return dispatch, true, fmt.Errorf("unexpected dispatch type %q", eventType)
 		}
 	}
@@ -238,6 +238,20 @@ func ParseSkillDispatch(msg map[string]any, expectedType, expectedSkill string) 
 	}
 	dispatch.Config = cfg
 	return dispatch, true, nil
+}
+
+func dispatchTypesEqual(got, expected string) bool {
+	return normalizeDispatchType(got) == normalizeDispatchType(expected)
+}
+
+func normalizeDispatchType(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	switch normalized {
+	case "skill_activation", "skill-activation":
+		return defaultRuntimeDispatchType
+	default:
+		return normalized
+	}
 }
 
 func dispatchStringAtAnyRoot(msg map[string]any, keys ...string) string {
@@ -713,10 +727,12 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 
 	return map[string]any{
 		"dispatch_envelope": map[string]any{
-			"type":  dispatchType,
-			"skill": skillName,
+			"type":           dispatchType,
+			"skill_name":     skillName,
+			"payload_format": "json",
 		},
 		"accepted_payload_paths": []string{
+			"payload",
 			"config",
 			"run_config",
 			"runConfig",
@@ -737,6 +753,7 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 			"data.input.config",
 			"data.input.input",
 			"data.input",
+			"data",
 		},
 		"run_config_schema": map[string]any{
 			"type":                 "object",

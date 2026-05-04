@@ -470,6 +470,34 @@ func TestParseSkillDispatchAcceptsJSONStringPayload(t *testing.T) {
 	}
 }
 
+func TestParseSkillDispatchAcceptsSkillActivationKind(t *testing.T) {
+	t.Parallel()
+
+	msg := map[string]any{
+		"kind":           "skill_activation",
+		"skill_name":     "code_for_me",
+		"payload_format": "json",
+		"payload": map[string]any{
+			"repo":   "git@github.com:acme/repo.git",
+			"prompt": "ship openclaw activation",
+		},
+	}
+
+	dispatch, matched, err := ParseSkillDispatch(msg, "skill_request", "code_for_me")
+	if err != nil {
+		t.Fatalf("ParseSkillDispatch() error = %v", err)
+	}
+	if !matched {
+		t.Fatal("matched = false, want true")
+	}
+	if got, want := dispatch.Config.RepoURL, "git@github.com:acme/repo.git"; got != want {
+		t.Fatalf("RepoURL = %q, want %q", got, want)
+	}
+	if got, want := dispatch.Config.Prompt, "ship openclaw activation"; got != want {
+		t.Fatalf("Prompt = %q, want %q", got, want)
+	}
+}
+
 func TestParseSkillDispatchAcceptsNestedConfigWrappers(t *testing.T) {
 	t.Parallel()
 

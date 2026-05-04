@@ -691,6 +691,18 @@ func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
 	if got := activation["type"]; got != "skill_request" {
 		t.Fatalf("skill_catalog[0].activation.type = %#v, want skill_request", got)
 	}
+	if got := activation["skill_name"]; got != "code_for_me" {
+		t.Fatalf("skill_catalog[0].activation.skill_name = %#v, want code_for_me", got)
+	}
+	if got := activation["payload_format"]; got != "json" {
+		t.Fatalf("skill_catalog[0].activation.payload_format = %#v, want json", got)
+	}
+	if _, exists := activation["skill"]; exists {
+		t.Fatalf("skill_catalog[0].activation.skill unexpectedly present: %#v", activation["skill"])
+	}
+	if _, exists := activation["input"]; exists {
+		t.Fatalf("skill_catalog[0].activation.input unexpectedly present: %#v", activation["input"])
+	}
 	second, ok := skillCatalog[1].(map[string]any)
 	if !ok || second["handle"] != "code_review" {
 		t.Fatalf("skill_catalog[1] = %#v, want handle code_review", skillCatalog[1])
@@ -699,22 +711,24 @@ func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
 	if !ok {
 		t.Fatalf("skill_catalog[1].activation = %#v, want map[string]any", second["activation"])
 	}
-	secondInput, ok := secondActivation["input"].(map[string]any)
+	secondPayload, ok := secondActivation["payload"].(map[string]any)
 	if !ok {
-		t.Fatalf("skill_catalog[1].activation.input = %#v, want map[string]any", secondActivation["input"])
+		t.Fatalf("skill_catalog[1].activation.payload = %#v, want map[string]any", secondActivation["payload"])
 	}
-	secondConfig, ok := secondInput["config"].(map[string]any)
-	if !ok {
-		t.Fatalf("skill_catalog[1].activation.input.config = %#v, want map[string]any", secondInput["config"])
+	if got := secondActivation["skill_name"]; got != "code_review" {
+		t.Fatalf("skill_catalog[1].activation.skill_name = %#v, want code_review", got)
 	}
-	if got := secondConfig["branch"]; got != "<pull-request-head-branch>" {
-		t.Fatalf("skill_catalog[1].activation.input.config.branch = %#v, want pull request head placeholder", got)
+	if got := secondPayload["repo"]; got != "<git@github.com:owner/repo.git>" {
+		t.Fatalf("skill_catalog[1].activation.payload.repo = %#v, want repository placeholder", got)
 	}
-	if got := secondConfig["responseMode"]; got != responseModePlaceholder() {
-		t.Fatalf("skill_catalog[1].activation.input.config.responseMode = %#v, want %q", got, responseModePlaceholder())
+	if got := secondPayload["branch"]; got != "<pull-request-head-branch>" {
+		t.Fatalf("skill_catalog[1].activation.payload.branch = %#v, want pull request head placeholder", got)
 	}
-	if _, exists := secondConfig["prNumber"]; exists {
-		t.Fatalf("skill_catalog[1].activation.input.config.prNumber unexpectedly present: %#v", secondConfig["prNumber"])
+	if _, exists := secondPayload["responseMode"]; exists {
+		t.Fatalf("skill_catalog[1].activation.payload.responseMode unexpectedly present: %#v", secondPayload["responseMode"])
+	}
+	if _, exists := secondPayload["prNumber"]; exists {
+		t.Fatalf("skill_catalog[1].activation.payload.prNumber unexpectedly present: %#v", secondPayload["prNumber"])
 	}
 }
 
