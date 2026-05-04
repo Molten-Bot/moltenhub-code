@@ -474,6 +474,32 @@ func TestLoadHubBootConfigAcceptsMalformedDockerComposeGitHubEnv(t *testing.T) {
 	}
 }
 
+func TestLoadHubBootConfigAcceptsMalformedDockerComposeMoltenHubEnv(t *testing.T) {
+	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
+	t.Setenv("MOLTEN_HUB_TOKEN", "")
+	t.Setenv("MOLTEN_HUB_REGION", "")
+	t.Setenv("MOLTEN_HUB_TOKEN:t_env_agent_token", "")
+	t.Setenv("MOLTEN_HUB_REGION:eu", "")
+
+	configPath := filepath.Join(t.TempDir(), "missing.json")
+	cfg, exitCode, err := loadHubBootConfig("", configPath)
+	if err != nil {
+		t.Fatalf("loadHubBootConfig() error = %v", err)
+	}
+	if exitCode != harness.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	}
+	if got, want := cfg.AgentToken, "t_env_agent_token"; got != want {
+		t.Fatalf("AgentToken = %q, want %q", got, want)
+	}
+	if got, want := cfg.BaseURL, "https://eu.hub.molten.bot/v1"; got != want {
+		t.Fatalf("BaseURL = %q, want %q", got, want)
+	}
+	if got, want := cfg.AgentHarness, agentruntime.HarnessCodex; got != want {
+		t.Fatalf("AgentHarness = %q, want %q", got, want)
+	}
+}
+
 func TestEffectiveHubSetupConfigKeepsBootstrapGitHubToken(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {

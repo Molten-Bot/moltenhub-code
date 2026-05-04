@@ -979,7 +979,7 @@ func applyMoltenHubEnvBootstrap(cfg *hub.InitConfig) error {
 		cfg.GitHubToken = token
 	}
 
-	token := strings.TrimSpace(os.Getenv(moltenHubTokenEnv))
+	token := moltenHubEnvValue(moltenHubTokenEnv)
 	if token == "" {
 		return nil
 	}
@@ -1018,8 +1018,13 @@ func configuredGitHubTokenFromEnv() string {
 }
 
 func malformedDockerComposeGitHubTokenFromEnv() string {
+	return malformedDockerComposeEnvValue("GH_TOKEN", "GITHUB_TOKEN")
+}
+
+func malformedDockerComposeEnvValue(names ...string) string {
 	for _, entry := range os.Environ() {
-		for _, prefix := range []string{"GH_TOKEN:", "GITHUB_TOKEN:"} {
+		for _, name := range names {
+			prefix := name + ":"
 			if !strings.HasPrefix(entry, prefix) {
 				continue
 			}
@@ -1032,8 +1037,15 @@ func malformedDockerComposeGitHubTokenFromEnv() string {
 	return ""
 }
 
+func moltenHubEnvValue(name string) string {
+	if value := strings.TrimSpace(os.Getenv(name)); value != "" {
+		return value
+	}
+	return malformedDockerComposeEnvValue(name)
+}
+
 func moltenHubEnvBaseURL() (string, error) {
-	if rawURL := strings.TrimSpace(os.Getenv(moltenHubURLEnv)); rawURL != "" {
+	if rawURL := moltenHubEnvValue(moltenHubURLEnv); rawURL != "" {
 		baseURL, err := hub.CanonicalHubBaseURL(rawURL)
 		if err != nil {
 			return "", fmt.Errorf("%s: %w", moltenHubURLEnv, err)
@@ -1041,7 +1053,7 @@ func moltenHubEnvBaseURL() (string, error) {
 		return baseURL, nil
 	}
 
-	region := strings.ToLower(strings.TrimSpace(os.Getenv(moltenHubRegionEnv)))
+	region := strings.ToLower(moltenHubEnvValue(moltenHubRegionEnv))
 	switch region {
 	case "":
 		return "", nil
