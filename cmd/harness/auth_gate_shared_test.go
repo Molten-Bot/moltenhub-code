@@ -84,6 +84,20 @@ func TestFirstConfiguredGitHubTokenFallsBackToGHAndGITHUBEnv(t *testing.T) {
 	}
 }
 
+func TestFirstConfiguredGitHubTokenAcceptsMalformedDockerComposeEnv(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN:github_token_env_token", "")
+
+	got, source := firstConfiguredGitHubToken(filepath.Join(t.TempDir(), "missing.json"), hub.InitConfig{})
+	if want := "github_token_env_token"; got != want {
+		t.Fatalf("firstConfiguredGitHubToken() value = %q, want %q", got, want)
+	}
+	if want := "environment"; source != want {
+		t.Fatalf("firstConfiguredGitHubToken() source = %q, want %q", source, want)
+	}
+}
+
 func TestConfigurableAgentAuthStateSharedTransitions(t *testing.T) {
 	var state configurableAgentAuthState
 	options := []hubui.AgentAuthOption{{Value: "OPENAI_API_KEY", Label: "OpenAI"}}

@@ -1004,10 +1004,32 @@ func applyMoltenHubEnvBootstrap(cfg *hub.InitConfig) error {
 }
 
 func githubTokenFromEnv() string {
+	return configuredGitHubTokenFromEnv()
+}
+
+func configuredGitHubTokenFromEnv() string {
 	if token := strings.TrimSpace(os.Getenv("GH_TOKEN")); token != "" {
 		return token
 	}
-	return strings.TrimSpace(os.Getenv("GITHUB_TOKEN"))
+	if token := strings.TrimSpace(os.Getenv("GITHUB_TOKEN")); token != "" {
+		return token
+	}
+	return malformedDockerComposeGitHubTokenFromEnv()
+}
+
+func malformedDockerComposeGitHubTokenFromEnv() string {
+	for _, entry := range os.Environ() {
+		for _, prefix := range []string{"GH_TOKEN:", "GITHUB_TOKEN:"} {
+			if !strings.HasPrefix(entry, prefix) {
+				continue
+			}
+			token := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(entry, prefix), "="))
+			if token != "" {
+				return token
+			}
+		}
+	}
+	return ""
 }
 
 func moltenHubEnvBaseURL() (string, error) {
