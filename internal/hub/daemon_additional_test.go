@@ -1402,3 +1402,95 @@ func TestRunWebsocketLoopReadsMessageThenReturnsOnDisconnect(t *testing.T) {
 		t.Fatalf("websocket server error = %v", serverErr)
 	}
 }
+
+func TestRunWebsocketLoopProcessesRawA2AJSONRPCFrame(t *testing.T) {
+	t.Parallel()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen() error = %v", err)
+	}
+	defer listener.Close()
+
+	serverDone := make(chan error, 1)
+	go func() {
+		conn, acceptErr := listener.Accept()
+		if acceptErr != nil {
+			serverDone <- acceptErr
+			return
+		}
+		defer conn.Close()
+
+		reader := bufio.NewReader(conn)
+		req, readErr := http.ReadRequest(reader)
+		if readErr != nil {
+			serverDone <- readErr
+			return
+		}
+		key := strings.TrimSpace(req.Header.Get("Sec-WebSocket-Key"))
+		if _, writeErr := fmt.Fprintf(
+			conn,
+			"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n",
+			websocketAccept(key),
+		); writeErr != nil {
+			serverDone <- writeErr
+			return
+		}
+		frame := `{
+			"jsonrpc":"2.0",
+			"method":"message/send",
+			"params":{
+				"metadata":{"from_agent_uri":"https://na.hub.molten.bot/acme/sender"},
+				"message":{
+					"messageId":"a2a-msg-ws-invalid",
+					"contextId":"a2a-context-ws-invalid",
+					"taskId":"a2a-task-ws-invalid",
+					"role":"user",
+					"parts":[{"kind":"data","data":{"repo":"git@github.com:acme/repo.git"}}]
+				}
+			}
+		}`
+		if writeErr := writeFrameToConn(conn, true, opcodeText, []byte(frame), false); writeErr != nil {
+			serverDone <- writeErr
+			return
+		}
+		serverDone <- nil
+	}()
+
+	d := NewDaemon(nil)
+	api := &stubMoltenHubAPI{token: "token"}
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:         "code_for_me",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+	}
+	var workers sync.WaitGroup
+
+	wsURL := "ws://" + listener.Addr().String() + "/openclaw/messages/ws"
+	err = d.runWebsocketLoop(context.Background(), wsURL, api, cfg, nil, &workers, nil)
+	if err == nil {
+		t.Fatal("runWebsocketLoop() error = nil, want disconnect error")
+	}
+	workers.Wait()
+
+	if serverErr := <-serverDone; serverErr != nil {
+		t.Fatalf("websocket server error = %v", serverErr)
+	}
+
+	results := nonStatusPayloads(api.published)
+	if len(results) != 1 {
+		t.Fatalf("non-status payloads = %d, want 1; payloads=%#v", len(results), api.published)
+	}
+	payload := results[0]
+	if got, want := payload["request_id"], "a2a-msg-ws-invalid"; got != want {
+		t.Fatalf("request_id = %#v, want %q", got, want)
+	}
+	if got, want := payload["status"], "error"; got != want {
+		t.Fatalf("status = %#v, want %q", got, want)
+	}
+	if got, want := payload["to"], "https://na.hub.molten.bot/acme/sender"; got != want {
+		t.Fatalf("to = %#v, want %q", got, want)
+	}
+}

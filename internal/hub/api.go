@@ -850,9 +850,9 @@ func extractInboundOpenClawMessage(root map[string]any) PulledOpenClawMessage {
 	message := extractPulledMessage(result, root)
 	if len(message) == 0 {
 		switch {
-		case looksLikeDispatchEnvelope(result):
+		case looksLikeInboundDispatchMessage(result):
 			message = result
-		case looksLikeDispatchEnvelope(root):
+		case looksLikeInboundDispatchMessage(root):
 			message = root
 		}
 	}
@@ -964,6 +964,24 @@ func enrichInboundMessageRouting(message, result, root map[string]any) map[strin
 	copyIfMissing("originator_id", "originator_id", "originatorId", "sender_id", "senderId")
 	copyIfMissing("originatorId", "originatorId", "originator_id", "senderId", "sender_id")
 	return message
+}
+
+func looksLikeInboundDispatchMessage(msg map[string]any) bool {
+	if len(msg) == 0 {
+		return false
+	}
+	if looksLikeDispatchEnvelope(msg) || looksLikeA2AMessage(msg) {
+		return true
+	}
+	if len(extractA2AMessage(msg)) > 0 {
+		return true
+	}
+	switch normalizeDispatchType(stringAt(msg, "kind")) {
+	case defaultRuntimeDispatchType, "text_message":
+		return true
+	default:
+		return false
+	}
 }
 
 func looksLikeDispatchEnvelope(msg map[string]any) bool {
