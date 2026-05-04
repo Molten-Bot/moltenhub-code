@@ -74,6 +74,9 @@ func TestHarnessURLCloneAndSandboxHelpers(t *testing.T) {
 	if !shouldFallbackCloneToDefaultBranch("moltenhub-topic", execx.Result{Stderr: "remote branch moltenhub-topic not found"}, errors.New("missing")) {
 		t.Fatal("shouldFallbackCloneToDefaultBranch() = false, want true")
 	}
+	if !shouldFallbackCloneToDefaultBranch("moltenbot000:moltenhub-topic", execx.Result{Stderr: "remote branch moltenbot000:moltenhub-topic not found"}, errors.New("missing")) {
+		t.Fatal("shouldFallbackCloneToDefaultBranch(owner-qualified moltenhub branch) = false, want true")
+	}
 	if !shouldFallbackCloneToDefaultBranch("main", execx.Result{Stderr: "remote branch main not found"}, errors.New("missing")) {
 		t.Fatal("shouldFallbackCloneToDefaultBranch(main) = false, want true")
 	}
@@ -82,6 +85,9 @@ func TestHarnessURLCloneAndSandboxHelpers(t *testing.T) {
 	}
 	if shouldFallbackCloneToDefaultBranch("release", execx.Result{Stderr: "remote branch release not found"}, errors.New("missing")) {
 		t.Fatal("shouldFallbackCloneToDefaultBranch(non-moltenhub) = true, want false")
+	}
+	if shouldFallbackCloneToDefaultBranch("octocat:release", execx.Result{Stderr: "remote branch octocat:release not found"}, errors.New("missing")) {
+		t.Fatal("shouldFallbackCloneToDefaultBranch(owner-qualified non-moltenhub) = true, want false")
 	}
 	if !shouldBootstrapUninitializedMainBranch("main", execx.Result{Stderr: "remote branch main not found"}, errors.New("missing")) {
 		t.Fatal("shouldBootstrapUninitializedMainBranch(main) = false, want true")

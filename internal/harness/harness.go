@@ -2449,7 +2449,7 @@ func shouldFallbackCloneToDefaultBranch(baseBranch string, res execx.Result, err
 	if err == nil {
 		return false
 	}
-	normalized := normalizeBranchRef(baseBranch)
+	normalized := cloneFallbackBranchName(baseBranch)
 	if !strings.HasPrefix(normalized, "moltenhub-") && !isKnownDefaultBranchName(normalized) {
 		return false
 	}
@@ -3465,6 +3465,15 @@ func normalizeBranchRef(branch string) string {
 	branch = strings.TrimPrefix(branch, "refs/heads/")
 	branch = strings.TrimPrefix(branch, "origin/")
 	return branch
+}
+
+func cloneFallbackBranchName(branch string) string {
+	branch = normalizeBranchRef(branch)
+	owner, head, ok := strings.Cut(branch, ":")
+	if !ok || strings.TrimSpace(owner) == "" || strings.TrimSpace(head) == "" {
+		return branch
+	}
+	return strings.TrimSpace(head)
 }
 
 func branchCommand(repoDir, branch string) execx.Command {

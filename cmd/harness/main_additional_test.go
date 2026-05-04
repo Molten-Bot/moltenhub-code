@@ -223,6 +223,53 @@ func TestRecordLocalRunActivitySkipsWhenHubDisconnected(t *testing.T) {
 	}, runCfg, "req-local-activity", func() bool { return false }, nil)
 }
 
+func TestMarkLocalRunOpenClawOfflinePublishesWhenHubConnected(t *testing.T) {
+	t.Parallel()
+
+	var offlineBody map[string]any
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/openclaw/messages/offline":
+			if err := json.NewDecoder(r.Body).Decode(&offlineBody); err != nil {
+				t.Fatalf("decode offline body: %v", err)
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer ts.Close()
+
+	markLocalRunOpenClawOffline(context.Background(), hub.InitConfig{
+		BaseURL:    ts.URL + "/v1",
+		AgentToken: "token",
+		SessionKey: "local-session",
+	}, "req-local-offline", func() bool { return true }, nil)
+
+	if got, want := fmt.Sprint(offlineBody["session_key"]), "local-session"; got != want {
+		t.Fatalf("session_key = %s, want %s", got, want)
+	}
+	if got, want := fmt.Sprint(offlineBody["reason"]), localTransportOfflineReasonExecutionFailure; got != want {
+		t.Fatalf("reason = %s, want %s", got, want)
+	}
+}
+
+func TestMarkLocalRunOpenClawOfflineSkipsWhenHubDisconnected(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request while hub disconnected: %s %s", r.Method, r.URL.Path)
+	}))
+	defer ts.Close()
+
+	markLocalRunOpenClawOffline(context.Background(), hub.InitConfig{
+		BaseURL:    ts.URL + "/v1",
+		AgentToken: "token",
+		SessionKey: "local-session",
+	}, "req-local-offline", func() bool { return false }, nil)
+}
+
 func TestShouldFallbackToLocalOnlyMode(t *testing.T) {
 	t.Parallel()
 
