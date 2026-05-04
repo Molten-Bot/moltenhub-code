@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
@@ -86,16 +85,11 @@ type piProviderAuth struct {
 }
 
 type piAuthGate struct {
-	mu sync.Mutex
+	configurableAgentAuthGateBase
 
-	runner  execx.Runner
 	command string
 	logf    func(string, ...any)
 
-	runtimeConfigPath string
-	initCfg           hub.InitConfig
-
-	authState     configurableAgentAuthState
 	validatedAuth string
 }
 
@@ -122,11 +116,13 @@ func newPiAuthGateWithRuntime(
 	}
 
 	g := &piAuthGate{
-		runner:            runner,
-		command:           command,
-		logf:              logf,
-		runtimeConfigPath: strings.TrimSpace(runtimeConfigPath),
-		initCfg:           initCfg,
+		configurableAgentAuthGateBase: configurableAgentAuthGateBase{
+			runner:            runner,
+			runtimeConfigPath: strings.TrimSpace(runtimeConfigPath),
+			initCfg:           initCfg,
+		},
+		command: command,
+		logf:    logf,
 	}
 	applyPiConfigureUIState(&g.authState, piAuthConfigureMessage)
 	g.mu.Lock()
@@ -336,7 +332,7 @@ func (g *piAuthGate) refreshLocked() {
 }
 
 func (g *piAuthGate) snapshotLocked() hubui.AgentAuthState {
-	return g.authState.snapshot(agentruntime.HarnessPi)
+	return g.configurableAgentAuthGateBase.snapshotLocked(agentruntime.HarnessPi)
 }
 
 func piAgentAuthOptions() []hubui.AgentAuthOption {

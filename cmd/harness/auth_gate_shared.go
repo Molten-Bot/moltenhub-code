@@ -41,6 +41,21 @@ type configurableAgentAuthState struct {
 	updatedAt            time.Time
 }
 
+type configurableAgentAuthGateBase struct {
+	mu sync.Mutex
+
+	runner execx.Runner
+
+	runtimeConfigPath string
+	initCfg           hub.InitConfig
+
+	authState configurableAgentAuthState
+}
+
+func (g *configurableAgentAuthGateBase) snapshotLocked(harness string) hubui.AgentAuthState {
+	return g.authState.snapshot(harness)
+}
+
 func (s *configurableAgentAuthState) touch() {
 	s.updatedAt = time.Now().UTC()
 }
