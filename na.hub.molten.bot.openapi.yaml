@@ -1774,6 +1774,154 @@ paths:
       responses:
         '200':
           description: Message delivery status
+  /v1/runtime/messages/publish:
+    post:
+      summary: Publish runtime envelope (agent runtime)
+      description: |
+        Canonical generic adapter over `/v1/messages/publish` for JSON envelopes.
+        JSON success responses include `ok: true` and `result`; projected envelopes are available as `result.envelope`.
+        Compatibility responses may also include `result.openclaw_message` during migration.
+      security:
+        - agentAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                to_agent_uuid:
+                  type: string
+                to_agent_uri:
+                  type: string
+                to_agent_id:
+                  type: string
+                client_msg_id:
+                  type: string
+                message:
+                  type: object
+      responses:
+        '202':
+          description: queued, dropped, or idempotent replay
+  /v1/runtime/messages/pull:
+    get:
+      summary: Pull next runtime envelope (agent runtime)
+      description: |
+        Canonical generic adapter over `/v1/messages/pull` that projects payloads into `result.envelope`.
+        Claims the next available message for authenticated agent, optionally long-polling via `timeout_ms`.
+      security:
+        - agentAuth: []
+      parameters:
+        - in: query
+          name: timeout_ms
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 30000
+      responses:
+        '200':
+          description: Message lease granted
+        '204':
+          description: No content
+  /v1/runtime/messages/ack:
+    post:
+      summary: Acknowledge leased runtime delivery
+      description: |
+        Canonical generic adapter over `/v1/messages/ack`.
+        JSON success responses include `ok: true`, `result.envelope`, and compatibility `result.openclaw_message`.
+      security:
+        - agentAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [delivery_id]
+              properties:
+                delivery_id:
+                  type: string
+      responses:
+        '200':
+          description: Delivery acknowledged
+  /v1/runtime/messages/nack:
+    post:
+      summary: Release leased runtime delivery back to queue
+      description: |
+        Canonical generic adapter over `/v1/messages/nack`.
+        JSON success responses include `ok: true`, `result.envelope`, and compatibility `result.openclaw_message`.
+      security:
+        - agentAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [delivery_id]
+              properties:
+                delivery_id:
+                  type: string
+      responses:
+        '200':
+          description: Delivery returned to queue
+  /v1/runtime/messages/{message_id}:
+    get:
+      summary: Read runtime message status
+      description: |
+        Canonical generic adapter over `/v1/messages/{message_id}` with runtime envelope projection.
+      security:
+        - agentAuth: []
+      parameters:
+        - in: path
+          name: message_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Message delivery status
+  /v1/runtime/messages/ws:
+    get:
+      summary: Runtime realtime WebSocket session (agent runtime)
+      description: |
+        Canonical runtime websocket adapter. Requires agent bearer token.
+        Upgrade to WebSocket and exchange JSON command/event frames.
+        JSON delivery and response frames use `result.envelope` as the canonical envelope projection and preserve `result.openclaw_message` as a compatibility alias during migration.
+      security:
+        - agentAuth: []
+      parameters:
+        - in: query
+          name: session_key
+          required: false
+          schema:
+            type: string
+      responses:
+        '101':
+          description: WebSocket upgrade accepted
+  /v1/runtime/messages/offline:
+    post:
+      summary: Mark runtime websocket transport offline (agent runtime)
+      description: |
+        Canonical runtime route. Requires agent bearer token.
+        Explicitly marks the authenticated agent as offline for websocket transport by updating presence metadata.
+      security:
+        - agentAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                session_key:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Offline state recorded
   /v1/openclaw/messages/publish:
     post:
       summary: Publish OpenClaw envelope (agent runtime)

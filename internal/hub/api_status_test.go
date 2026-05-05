@@ -145,7 +145,7 @@ func TestUpdateAgentStatusValidation(t *testing.T) {
 	}
 }
 
-func TestMarkOpenClawOfflineUsesOfflineEndpoint(t *testing.T) {
+func TestMarkRuntimeOfflineUsesOfflineEndpoint(t *testing.T) {
 	t.Parallel()
 
 	type captured struct {
@@ -168,7 +168,7 @@ func TestMarkOpenClawOfflineUsesOfflineEndpoint(t *testing.T) {
 		calls = append(calls, captured{Method: r.Method, Path: r.URL.Path, Body: body})
 		mu.Unlock()
 
-		if r.Method == http.MethodPost && r.URL.Path == "/v1/openclaw/messages/offline" {
+		if r.Method == http.MethodPost && r.URL.Path == "/v1/runtime/messages/offline" {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
 			return
@@ -178,8 +178,8 @@ func TestMarkOpenClawOfflineUsesOfflineEndpoint(t *testing.T) {
 	defer ts.Close()
 
 	client := NewAPIClient(ts.URL + "/v1")
-	if err := client.MarkOpenClawOffline(context.Background(), "token", "main", "harness_shutdown"); err != nil {
-		t.Fatalf("MarkOpenClawOffline() error = %v", err)
+	if err := client.MarkRuntimeOffline(context.Background(), "token", "main", "harness_shutdown"); err != nil {
+		t.Fatalf("MarkRuntimeOffline() error = %v", err)
 	}
 
 	mu.Lock()
@@ -190,7 +190,7 @@ func TestMarkOpenClawOfflineUsesOfflineEndpoint(t *testing.T) {
 	if calls[0].Method != http.MethodPost {
 		t.Fatalf("method = %q, want POST", calls[0].Method)
 	}
-	if calls[0].Path != "/v1/openclaw/messages/offline" {
+	if calls[0].Path != "/v1/runtime/messages/offline" {
 		t.Fatalf("path = %q", calls[0].Path)
 	}
 	if calls[0].Body["session_key"] != "main" {

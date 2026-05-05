@@ -126,10 +126,10 @@ func TestDaemonRunRepeatsPingHealthPullBeforeEachWebsocketAttempt(t *testing.T) 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"status":"ok"}`))
-		case "/v1/openclaw/messages/pull":
+		case "/v1/runtime/messages/pull":
 			record("pull")
 			w.WriteHeader(http.StatusNoContent)
-		case "/v1/openclaw/messages/ws":
+		case "/v1/runtime/messages/ws":
 			record("ws")
 			mu.Lock()
 			wsAttempts++
@@ -144,7 +144,7 @@ func TestDaemonRunRepeatsPingHealthPullBeforeEachWebsocketAttempt(t *testing.T) 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
-		case "/v1/openclaw/messages/offline":
+		case "/v1/runtime/messages/offline":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		default:
