@@ -2830,11 +2830,22 @@ func codexReportedCompactPlainFailure(output string) (bool, string) {
 }
 
 func isNoImplementationTargetLine(lowerLine string) bool {
-	lowerLine = strings.TrimSpace(lowerLine)
-	return strings.Contains(lowerLine, "no implementation target given") ||
-		strings.Contains(lowerLine, "no implementation target was given") ||
-		strings.Contains(lowerLine, "no implementation target provided") ||
-		strings.Contains(lowerLine, "no implementation target was provided")
+	lowerLine = strings.Trim(strings.TrimSpace(lowerLine), "`\"'")
+	for _, marker := range []string{
+		"no implementation target given",
+		"no implementation target was given",
+		"no implementation target provided",
+		"no implementation target was provided",
+		"no implementation task given",
+		"no implementation task was given",
+		"no implementation task provided",
+		"no implementation task was provided",
+	} {
+		if strings.Contains(lowerLine, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func codexFailureDetailWithErrorDetails(res execx.Result, failureDetail string) string {
