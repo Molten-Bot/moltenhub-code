@@ -183,6 +183,55 @@ func (s *stubMoltenHubAPI) NackOpenClawDeliveryAsync(ctx context.Context, delive
 	return ch
 }
 
+func TestQueueFailureRerunPublishesNormalizedRunConfig(t *testing.T) {
+	t.Parallel()
+
+	api := &stubMoltenHubAPI{}
+	dispatch := SkillDispatch{
+		Skill:     "code_for_me",
+		RequestID: "req-1",
+		RouteTo:   "agent-next",
+		ReplyTo:   "agent-source",
+		Config: config.Config{
+			Repo:   "git@github.com:acme/repo.git",
+			Prompt: "fix failing tests",
+		},
+	}
+
+	if err := queueFailureRerun(context.Background(), api, InitConfig{}, dispatch); err != nil {
+		t.Fatalf("queueFailureRerun() error = %v", err)
+	}
+	if len(api.published) != 1 {
+		t.Fatalf("published payload count = %d, want 1", len(api.published))
+	}
+	payload := api.published[0]
+	if got, want := payload["request_id"], "req-1-rerun"; got != want {
+		t.Fatalf("request_id = %#v, want %q", got, want)
+	}
+	if got, want := payload["to"], "agent-next"; got != want {
+		t.Fatalf("to = %#v, want %q", got, want)
+	}
+	configPayload, ok := payload["config"].(map[string]any)
+	if !ok {
+		t.Fatalf("config payload = %#v, want map", payload["config"])
+	}
+	if got, want := configPayload["repo"], "git@github.com:acme/repo.git"; got != want {
+		t.Fatalf("config.repo = %#v, want %q", got, want)
+	}
+	if got, want := configPayload["prompt"], "fix failing tests"; got != want {
+		t.Fatalf("config.prompt = %#v, want %q", got, want)
+	}
+}
+
+func TestDispatchRunConfigPayloadRejectsInvalidConfig(t *testing.T) {
+	t.Parallel()
+
+	_, err := dispatchRunConfigPayload(config.Config{Repo: "git@github.com:acme/repo.git"})
+	if err == nil || !strings.Contains(err.Error(), "normalize run config payload") {
+		t.Fatalf("dispatchRunConfigPayload(invalid) error = %v, want normalization failure", err)
+	}
+}
+
 func nonStatusPayloads(payloads []map[string]any) []map[string]any {
 	out := make([]map[string]any, 0, len(payloads))
 	for _, payload := range payloads {

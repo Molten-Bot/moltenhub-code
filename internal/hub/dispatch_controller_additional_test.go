@@ -3,6 +3,7 @@ package hub
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -184,5 +185,29 @@ echo '"(PDH-CSV 4.0)","\\Processor(_Total)\\% Processor Time"'
 	sampler := &defaultResourceSampler{}
 	if _, err := sampler.sampleWindows(); err == nil {
 		t.Fatal("sampleWindows() error = nil, want non-nil")
+	}
+}
+
+func TestReadLinuxDiskIOBytesSumsWholeDiskSectors(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "diskstats")
+	data := strings.Join([]string{
+		"   8       0 sda 157698 0 4096 0 25000 0 8192 0 0 0 0 0 0 0 0 0 0",
+		"   8       1 sda1 157698 0 9999 0 25000 0 9999 0 0 0 0 0 0 0 0 0 0",
+		"   7       0 loop0 1 0 4096 0 1 0 4096 0 0 0 0 0 0 0 0 0 0",
+		" 259       0 nvme0n1 1 0 bad 0 2 0 20 0 0 0 0 0 0 0 0 0 0",
+	}, "\n")
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile(diskstats) error = %v", err)
+	}
+
+	got, err := readLinuxDiskIOBytes(path)
+	if err != nil {
+		t.Fatalf("readLinuxDiskIOBytes() error = %v", err)
+	}
+	const want = (4096 + 8192) * 512
+	if got != want {
+		t.Fatalf("readLinuxDiskIOBytes() = %d, want %d", got, want)
 	}
 }

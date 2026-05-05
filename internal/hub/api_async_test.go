@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/Molten-Bot/moltenhub-code/internal/config"
 )
 
 func TestAsyncAPIClientImplementsMoltenHubAPI(t *testing.T) {
@@ -124,5 +126,37 @@ func TestAsyncAPIClientReturnsClearErrorWhenTokenMissing(t *testing.T) {
 	}
 	if got := err.Error(); !strings.Contains(got, "moltenhub api token is required") {
 		t.Fatalf("PublishResultAsync() err = %q", got)
+	}
+}
+
+func TestAsyncAPIClientRecordRunCompletedActivityUsesStoredToken(t *testing.T) {
+	t.Parallel()
+
+	var (
+		gotPath string
+		gotAuth string
+	)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	client := NewAsyncAPIClient(server.URL+"/v1", "agent-token")
+	err := client.RecordRunCompletedActivity(context.Background(), config.Config{
+		Repo:   "git@github.com:acme/repo.git",
+		Prompt: "fix bug",
+	})
+	if err != nil {
+		t.Fatalf("RecordRunCompletedActivity() error = %v", err)
+	}
+	if gotPath != "/v1/agents/me/activities" {
+		t.Fatalf("path = %q, want /v1/agents/me/activities", gotPath)
+	}
+	if gotAuth != "Bearer agent-token" {
+		t.Fatalf("Authorization = %q, want Bearer agent-token", gotAuth)
 	}
 }
