@@ -997,9 +997,10 @@ func TestRecordRunCompletedActivityPublishesAgentActivity(t *testing.T) {
 	defer ts.Close()
 
 	runCfg := config.Config{
-		Repo:            "git@github.com:acme/repo.git",
-		BaseBranch:      "main",
-		LibraryTaskName: "security-review",
+		Repo:                   "git@github.com:acme/repo.git",
+		BaseBranch:             "main",
+		LibraryTaskName:        "security-review",
+		LibraryTaskDisplayName: "Security Boundary Review",
 	}
 	runCfg.ApplyDefaults()
 
@@ -1008,7 +1009,7 @@ func TestRecordRunCompletedActivityPublishesAgentActivity(t *testing.T) {
 		t.Fatalf("RecordRunCompletedActivity() error = %v", err)
 	}
 
-	if body["activity"] != "completed library task: security-review" {
+	if body["activity"] != "completed library task: Security Boundary Review" {
 		t.Fatalf("activity = %#v", body["activity"])
 	}
 	if body["category"] != "coding" || body["status"] != "completed" {

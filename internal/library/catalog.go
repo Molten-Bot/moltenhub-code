@@ -173,17 +173,18 @@ func (c Catalog) ExpandRunConfig(taskName, repo, branch string) (config.Config, 
 	}
 
 	cfg := config.Config{
-		RepoURL:         repo,
-		LibraryTaskName: task.Name,
-		BaseBranch:      strings.TrimSpace(branch),
-		TargetSubdir:    task.TargetSubdir,
-		Prompt:          task.Prompt,
-		CommitMessage:   task.CommitMessage,
-		PRTitle:         task.PRTitle,
-		PRBody:          task.PRBody,
-		Labels:          append([]string(nil), task.Labels...),
-		GitHubHandle:    task.GitHubHandle,
-		Reviewers:       append([]string(nil), task.Reviewers...),
+		RepoURL:                repo,
+		LibraryTaskName:        task.Name,
+		LibraryTaskDisplayName: task.DisplayName,
+		BaseBranch:             strings.TrimSpace(branch),
+		TargetSubdir:           task.TargetSubdir,
+		Prompt:                 task.Prompt,
+		CommitMessage:          task.CommitMessage,
+		PRTitle:                task.PRTitle,
+		PRBody:                 task.PRBody,
+		Labels:                 append([]string(nil), task.Labels...),
+		GitHubHandle:           task.GitHubHandle,
+		Reviewers:              append([]string(nil), task.Reviewers...),
 	}
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {

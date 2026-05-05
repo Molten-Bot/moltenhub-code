@@ -872,7 +872,7 @@ func (d Daemon) handleDispatch(
 		dispatch.Config.RepoURL,
 		strings.Join(dispatch.Config.RepoList(), ","),
 	)
-	d.publishDispatchStatus(ctx, api, cfg, dispatch, "working", a2a.TaskStateWorking, "Task running.", nil)
+	d.publishDispatchStatus(ctx, api, cfg, dispatch, "working", a2a.TaskStateWorking, dispatchStartStatusMessage(dispatch.Config), nil)
 	if api != nil {
 		if err := api.RecordRunStartedActivity(ctx, dispatch.Config); err != nil {
 			d.logf("dispatch status=warn action=record_run_started_activity request_id=%s err=%q", dispatch.RequestID, err)
@@ -1083,6 +1083,12 @@ func dispatchStatusPayload(
 		"skill":      skill,
 		"status":     status,
 	}
+	if taskName := strings.TrimSpace(dispatch.Config.LibraryTaskName); taskName != "" {
+		metadata["library_task_name"] = taskName
+	}
+	if displayName := strings.TrimSpace(dispatch.Config.LibraryTaskDisplayName); displayName != "" {
+		metadata["library_task_display_name"] = displayName
+	}
 	if stage := firstString(details["stage"]); stage != "" {
 		metadata["stage"] = stage
 	}
@@ -1136,6 +1142,13 @@ func dispatchStatusPayload(
 	payload["ok"] = a2aTaskStateOK(state)
 	applyDispatchResponseRouting(payload, dispatch)
 	return payload
+}
+
+func dispatchStartStatusMessage(runCfg config.Config) string {
+	if activity := RunStartedActivity(runCfg); activity != "" {
+		return activity
+	}
+	return "Task running."
 }
 
 func dispatchStatusFromHarnessLogLine(line string) (string, a2a.TaskState, string, map[string]any, bool) {
