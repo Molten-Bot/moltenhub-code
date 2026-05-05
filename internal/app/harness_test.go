@@ -308,6 +308,128 @@ func TestRunPRCreateAlreadyExistsReusesExistingPR(t *testing.T) {
 	}
 }
 
+func TestRunPRCreateTransientFailureRetriesAndSucceeds(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+	prURL := "https://github.com/acme/repo/pull/42"
+	transientErr := errors.New("error checking for existing pull request: HTTP 504: We couldn't respond to your request in time. Sorry about that. Please try resubmitting your request and contact us if the problem persists. (https://api.github.com/graphql)")
+
+	fake := &fakeRunner{t: t, allowUnorderedClones: true, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stderr: transientErr.Error()}, err: transientErr},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch), res: execx.Result{Stdout: "abc123\trefs/heads/" + branch + "\n"}},
+		{cmd: prLookupByHeadCommand(repoDir, branch), res: execx.Result{Stdout: "[]\n"}},
+		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL)},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+	var sleeps int
+	h.Sleep = func(_ context.Context, d time.Duration) error {
+		sleeps++
+		if d != prCreateRetryDelay {
+			t.Fatalf("sleep delay = %s, want %s", d, prCreateRetryDelay)
+		}
+		return nil
+	}
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if res.PRURL != prURL {
+		t.Fatalf("PRURL = %q, want %q", res.PRURL, prURL)
+	}
+	if sleeps != 1 {
+		t.Fatalf("sleep calls = %d, want 1", sleeps)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunPRCreateTransientFailureReusesLookupResult(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+	prURL := "https://github.com/acme/repo/pull/42"
+	transientErr := errors.New("error checking for existing pull request: HTTP 504: We couldn't respond to your request in time. (https://api.github.com/graphql)")
+
+	fake := &fakeRunner{t: t, allowUnorderedClones: true, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stderr: transientErr.Error()}, err: transientErr},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch), res: execx.Result{Stdout: "abc123\trefs/heads/" + branch + "\n"}},
+		{cmd: prLookupByHeadCommand(repoDir, branch), res: execx.Result{Stdout: `[{"url":"` + prURL + `"}]`}},
+		{cmd: prChecksCommand(repoDir, prURL)},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+	h.Sleep = func(context.Context, time.Duration) error {
+		t.Fatal("Sleep() called; lookup result should avoid retry delay")
+		return nil
+	}
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if res.PRURL != prURL {
+		t.Fatalf("PRURL = %q, want %q", res.PRURL, prURL)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
 func TestRunCommitNoOpReturnsNoChanges(t *testing.T) {
 	t.Parallel()
 
