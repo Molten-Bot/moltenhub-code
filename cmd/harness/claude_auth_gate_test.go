@@ -97,7 +97,7 @@ func TestClaudeAuthGateRequiresClaudeCredentialsAfterValidatedGITHUBTOKEN(t *tes
 			if got, want := cmd.Name, "gh"; got != want {
 				t.Fatalf("command = %q, want %q", got, want)
 			}
-			if got, want := strings.Join(cmd.Args, " "), "auth status"; got != want {
+			if got, want := strings.Join(cmd.Args, " "), gitHubTokenValidationArgsStringForTest(); got != want {
 				t.Fatalf("args = %q, want %q", got, want)
 			}
 			if got, want := os.Getenv("GITHUB_TOKEN"), "github_token_ready"; got != want {

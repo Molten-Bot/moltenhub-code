@@ -327,12 +327,16 @@ func validateGitHubToken(ctx context.Context, runner execx.Runner, token string)
 	defer cancel()
 
 	if err := withTemporaryGitHubTokenEnvironment(token, func() error {
-		_, runErr := runner.Run(probeCtx, execx.Command{Name: "gh", Args: []string{"auth", "status"}})
+		_, runErr := runner.Run(probeCtx, gitHubTokenValidationCommand())
 		return runErr
 	}); err != nil {
 		return fmt.Errorf("validate github token: %w", err)
 	}
 	return nil
+}
+
+func gitHubTokenValidationCommand() execx.Command {
+	return execx.Command{Name: "gh", Args: []string{"auth", "status", "--active", "--hostname", "github.com"}}
 }
 
 func withTemporaryGitHubTokenEnvironment(token string, run func() error) error {
