@@ -398,6 +398,8 @@ func TestLoadHubBootConfigWithoutFlagsAllowsDefaultRuntimeConfigWithoutCredentia
 
 func TestLoadHubBootConfigUsesMoltenHubTokenEnvWhenRuntimeConfigOmitsCredentials(t *testing.T) {
 	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
 	t.Setenv("MOLTEN_HUB_TOKEN", "t_env_agent_token")
 	t.Setenv("MOLTEN_HUB_URL", "")
 	t.Setenv("MOLTEN_HUB_REGION", "eu")
@@ -422,6 +424,65 @@ func TestLoadHubBootConfigUsesMoltenHubTokenEnvWhenRuntimeConfigOmitsCredentials
 	}
 	if got, want := cfg.GitHubToken, "github_token_saved"; got != want {
 		t.Fatalf("GitHubToken = %q, want %q", got, want)
+	}
+}
+
+func TestLoadHubBootConfigEnvOverridesAndPersistsRuntimeConfig(t *testing.T) {
+	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "github_token_env_token")
+	t.Setenv("MOLTEN_HUB_TOKEN", "t_env_agent_token")
+	t.Setenv("MOLTEN_HUB_URL", "")
+	t.Setenv("MOLTEN_HUB_REGION", "eu")
+
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	configJSON := `{
+  "base_url": "https://na.hub.molten.bot/v1",
+  "agent_token": "t_saved_agent_token",
+  "github_token": "github_token_saved",
+  "agent_harness": "codex",
+  "session_key": "saved-session"
+}`
+	if err := os.WriteFile(configPath, []byte(configJSON), 0o600); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+
+	cfg, exitCode, err := loadHubBootConfig("", configPath)
+	if err != nil {
+		t.Fatalf("loadHubBootConfig() error = %v", err)
+	}
+	if exitCode != app.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, app.ExitSuccess)
+	}
+	if got, want := cfg.AgentToken, "t_env_agent_token"; got != want {
+		t.Fatalf("AgentToken = %q, want %q", got, want)
+	}
+	if got, want := cfg.GitHubToken, "github_token_env_token"; got != want {
+		t.Fatalf("GitHubToken = %q, want %q", got, want)
+	}
+	if got, want := cfg.BaseURL, "https://eu.hub.molten.bot/v1"; got != want {
+		t.Fatalf("BaseURL = %q, want %q", got, want)
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read runtime config: %v", err)
+	}
+	var persisted map[string]any
+	if err := json.Unmarshal(data, &persisted); err != nil {
+		t.Fatalf("parse runtime config: %v", err)
+	}
+	if got, want := persisted["agent_token"], any("t_env_agent_token"); got != want {
+		t.Fatalf("persisted agent_token = %#v, want %q", got, want)
+	}
+	if got, want := persisted["github_token"], any("github_token_env_token"); got != want {
+		t.Fatalf("persisted github_token = %#v, want %q", got, want)
+	}
+	if got, want := persisted["base_url"], any("https://eu.hub.molten.bot/v1"); got != want {
+		t.Fatalf("persisted base_url = %#v, want %q", got, want)
+	}
+	if _, ok := persisted["bind_token"]; ok {
+		t.Fatalf("persisted bind_token present, want absent")
 	}
 }
 

@@ -4,61 +4,11 @@ set -eu
 config_dir="${HARNESS_CONFIG_DIR:-/workspace/config}"
 run_config_path="${HARNESS_RUN_CONFIG_PATH:-${config_dir}/config.json}"
 init_config_path="${HARNESS_INIT_CONFIG_PATH:-${config_dir}/init.json}"
-generated_init_path="${HARNESS_GENERATED_INIT_PATH:-/tmp/harness-init-from-env.json}"
 template_dir="${HARNESS_TEMPLATE_DIR:-/workspace/templates}"
 hub_ui_listen="${HARNESS_HUB_UI_LISTEN-:7777}"
 
 exec_hub() {
     exec harness hub "$@" --ui-listen "${hub_ui_listen}"
-}
-
-json_escape() {
-    printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
-}
-
-normalize_hub_region() {
-    region=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
-    case "${region}" in
-        ""|na)
-            printf 'na'
-            ;;
-        eu)
-            printf 'eu'
-            ;;
-        *)
-            return 1
-            ;;
-    esac
-}
-
-hub_base_url_from_region() {
-    region="$1"
-    printf 'https://%s.hub.molten.bot/v1' "${region}"
-}
-
-resolve_hub_bootstrap_base_url() {
-    if [ "${MOLTEN_HUB_URL:-}" != "" ]; then
-        case "$(printf '%s' "${MOLTEN_HUB_URL}" | tr -d '[:space:]')" in
-            "https://na.hub.molten.bot/v1")
-                printf 'https://na.hub.molten.bot/v1'
-                return 0
-                ;;
-            "https://eu.hub.molten.bot/v1")
-                printf 'https://eu.hub.molten.bot/v1'
-                return 0
-                ;;
-            *)
-                echo "invalid MOLTEN_HUB_URL; expected https://na.hub.molten.bot/v1 or https://eu.hub.molten.bot/v1" >&2
-                return 1
-                ;;
-        esac
-    fi
-
-    if ! hub_region=$(normalize_hub_region "${MOLTEN_HUB_REGION:-na}"); then
-        echo "invalid MOLTEN_HUB_REGION; expected na or eu" >&2
-        return 1
-    fi
-    hub_base_url_from_region "${hub_region}"
 }
 
 hub_config_status() {
@@ -154,40 +104,191 @@ try {
 }
 
 try_run_hub_from_env() {
-    token="${MOLTEN_HUB_TOKEN:-}"
-    if [ "${token}" = "" ]; then
+    if ! node - "${run_config_path}" <<'NODE'
+const fs = require("node:fs");
+const path = require("node:path");
+
+const [, , filePath] = process.argv;
+
+function rawEnvironmentEntries() {
+  const entries = Object.entries(process.env).map(([key, value]) => `${key}=${value}`);
+  try {
+    const parentEnv = fs.readFileSync(`/proc/${process.ppid}/environ`, "utf8");
+    entries.push(...parentEnv.split("\0").filter(Boolean));
+  } catch (_) {
+  }
+  return entries;
+}
+
+function envValue(...names) {
+  for (const name of names) {
+    const value = typeof process.env[name] === "string" ? process.env[name].trim() : "";
+    if (value !== "") {
+      return value;
+    }
+  }
+  for (const entry of rawEnvironmentEntries()) {
+    for (const name of names) {
+      const prefix = `${name}:`;
+      if (!entry.startsWith(prefix)) {
+        continue;
+      }
+      const suffix = entry.slice(prefix.length).replace(/=$/, "").trim();
+      if (suffix !== "") {
+        return suffix;
+      }
+    }
+  }
+  return "";
+}
+
+function stripLineComments(data) {
+  let out = "";
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < data.length; i++) {
+    const ch = data[i];
+    if (inString) {
+      out += ch;
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (ch === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === "\"") {
+      inString = true;
+      out += ch;
+      continue;
+    }
+    if (ch === "/" && i + 1 < data.length && data[i + 1] === "/") {
+      while (i < data.length && data[i] !== "\n") {
+        i++;
+      }
+      if (i < data.length && data[i] === "\n") {
+        out += "\n";
+      }
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+function normalizedRegion(value) {
+  const region = String(value || "").trim().toLowerCase();
+  if (region === "" || region === "na") {
+    return "na";
+  }
+  if (region === "eu") {
+    return "eu";
+  }
+  return "";
+}
+
+function resolveBaseURL() {
+  const explicitURL = envValue("MOLTEN_HUB_URL").replace(/\s+/g, "");
+  if (explicitURL !== "") {
+    if (explicitURL === "https://na.hub.molten.bot/v1" || explicitURL === "https://eu.hub.molten.bot/v1") {
+      return explicitURL;
+    }
+    console.error("invalid MOLTEN_HUB_URL; expected https://na.hub.molten.bot/v1 or https://eu.hub.molten.bot/v1");
+    process.exit(2);
+  }
+
+  const region = normalizedRegion(envValue("MOLTEN_HUB_REGION") || "na");
+  if (region === "") {
+    console.error("invalid MOLTEN_HUB_REGION; expected na or eu");
+    process.exit(2);
+  }
+  return `https://${region}.hub.molten.bot/v1`;
+}
+
+function isHubConfig(doc) {
+  if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
+    return false;
+  }
+  const hubKeys = [
+    "base_url",
+    "bind_token",
+    "agent_token",
+    "session_key",
+    "agent_harness",
+    "agent_command",
+    "profile",
+    "dispatcher",
+    "github_token",
+    "openai_api_key",
+    "baseUrl",
+    "token",
+    "sessionKey",
+    "timeoutMs",
+  ];
+  return hubKeys.some((key) => Object.prototype.hasOwnProperty.call(doc, key));
+}
+
+function readExistingHubConfig(targetPath) {
+  try {
+    const raw = fs.readFileSync(targetPath, "utf8");
+    const parsed = JSON.parse(stripLineComments(raw));
+    return isHubConfig(parsed) ? parsed : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function stringValue(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+const token = envValue("MOLTEN_HUB_TOKEN");
+if (token === "") {
+  process.exit(1);
+}
+
+const doc = readExistingHubConfig(filePath);
+doc.version = stringValue(doc.version) || "v1";
+doc.base_url = resolveBaseURL();
+doc.agent_token = token;
+delete doc.bind_token;
+delete doc.bindToken;
+
+const githubToken = envValue("GH_TOKEN", "GITHUB_TOKEN");
+if (githubToken !== "") {
+  doc.github_token = githubToken;
+}
+
+const envHarness = envValue("HARNESS_AGENT_HARNESS");
+const existingHarness = stringValue(doc.agent_harness) || stringValue(doc.agentHarness);
+doc.agent_harness = (envHarness || existingHarness || "codex").trim().toLowerCase();
+
+const envCommand = envValue("HARNESS_AGENT_COMMAND");
+const existingCommand = stringValue(doc.agent_command) || stringValue(doc.agentCommand);
+if (envCommand !== "" || existingCommand !== "") {
+  doc.agent_command = envCommand || existingCommand;
+}
+
+const sessionKey = envValue("MOLTEN_HUB_SESSION_KEY") || stringValue(doc.session_key) || stringValue(doc.sessionKey) || "main";
+doc.session_key = sessionKey;
+
+fs.mkdirSync(path.dirname(filePath), { recursive: true });
+fs.writeFileSync(filePath, `${JSON.stringify(doc, null, 2)}\n`, { mode: 0o600 });
+NODE
+    then
         return 1
     fi
 
-    if ! hub_base_url="$(resolve_hub_bootstrap_base_url)"; then
-        return 1
+    if [ "${HARNESS_RUNTIME_CONFIG_PATH:-}" = "" ]; then
+        export HARNESS_RUNTIME_CONFIG_PATH="${run_config_path}"
     fi
-    session_key="${MOLTEN_HUB_SESSION_KEY:-main}"
-    github_token="${GH_TOKEN:-}"
-    if [ "${github_token}" = "" ]; then
-        github_token="${GITHUB_TOKEN:-}"
-    fi
-    agent_harness="${HARNESS_AGENT_HARNESS:-codex}"
-    agent_command="${HARNESS_AGENT_COMMAND:-}"
-    generated_init_dir=$(dirname "${generated_init_path}")
-    mkdir -p "${generated_init_dir}"
-
-    {
-        printf '{\n'
-        printf '  "base_url": "%s",\n' "$(json_escape "${hub_base_url}")"
-        printf '  "agent_token": "%s",\n' "$(json_escape "${token}")"
-        if [ "${github_token}" != "" ]; then
-            printf '  "github_token": "%s",\n' "$(json_escape "${github_token}")"
-        fi
-        printf '  "agent_harness": "%s",\n' "$(json_escape "${agent_harness}")"
-        if [ "${agent_command}" != "" ]; then
-            printf '  "agent_command": "%s",\n' "$(json_escape "${agent_command}")"
-        fi
-        printf '  "session_key": "%s"\n' "$(json_escape "${session_key}")"
-        printf '}\n'
-    } > "${generated_init_path}"
-
-    exec_hub --init "${generated_init_path}"
+    exec_hub --config "${run_config_path}"
 }
 
 if try_run_hub_from_env; then
