@@ -32,6 +32,7 @@
   --muted: #5a6f95;
   --meta: #7188b1;
   --good: #2bb673;
+  --online: var(--good);
   --warn: #f59e0b;
   --bad: #ef4444;
   --running: #0a84ff;
@@ -501,8 +502,8 @@ textarea {
 }
 
 .status-item-action-online {
-  border-color: rgba(43, 182, 115, 0.26);
-  box-shadow: 0 14px 34px rgba(43, 182, 115, 0.14);
+  border-color: color-mix(in srgb, var(--online) 32%, transparent);
+  box-shadow: 0 14px 34px color-mix(in srgb, var(--online) 18%, transparent);
 }
 
 .status-item-action-offline {
@@ -563,7 +564,7 @@ textarea {
 }
 
 .metric-icon-good {
-  color: var(--good);
+  color: var(--online);
 }
 
 .metric-icon-warn {
@@ -652,8 +653,8 @@ textarea {
 }
 
 .dot.online {
-  background: var(--good);
-  box-shadow: 0 0 0 0 rgba(43, 182, 115, 0.3);
+  background: var(--online);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--online) 32%, transparent);
 }
 
 .dot.http {
@@ -4797,7 +4798,7 @@ html.pink {
   --hub-muted-rgb: 241 164 205;
   --hub-meta-rgb: 214 118 166;
   --hub-good-rgb: 43 182 115;
-  --hub-online-rgb: 236 72 153;
+  --hub-online-rgb: 34 211 238;
   --hub-warn-rgb: 245 158 11;
   --hub-bad-rgb: 239 68 68;
   --hub-running-rgb: 236 72 153;
@@ -4815,7 +4816,7 @@ html.pink {
   --muted: #e998c2;
   --meta: #d676a6;
   --good: #2bb673;
-  --online: #ec4899;
+  --online: #22d3ee;
   --warn: #f59e0b;
   --bad: #ef4444;
   --running: #ec4899;
