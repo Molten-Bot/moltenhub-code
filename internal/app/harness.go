@@ -40,6 +40,8 @@ const (
 	ExitPR        = 70
 
 	maxPRCheckRemediationAttempts = 3
+	maxPRCreateAttempts           = 3
+	prCreateRetryDelay            = 2 * time.Second
 	prChecksWatchIntervalSeconds  = 10
 	// Allow up to ~3 minutes for newly-created PR checks to appear before remediation.
 	maxPRChecksNoReportRetries       = 18
@@ -448,45 +450,11 @@ func (h Harness) processChangedRepo(
 	}
 
 	if repo.PRURL == "" {
-		var (
-			prRes execx.Result
-			err   error
-		)
-		if createWorkBranch {
-			prRes, err = h.runCommand(ctx, "pr", prCreateWithOptionsCommand(repo.Dir, cfg, repo.BaseBranch, headRef, targetRepo))
-		} else {
-			prRes, err = h.runCommand(ctx, "pr", prCreateWithoutBaseWithOptionsCommand(repo.Dir, cfg, headRef, targetRepo))
-		}
+		prURL, err := h.createPullRequestURL(ctx, *repo, cfg, createWorkBranch, headRef, targetRepo)
 		if err != nil {
-			if existingPRURL, ok := existingPRURLFromCreateFailure(prRes, err); ok {
-				repo.PRURL = existingPRURL
-				h.logf(
-					"stage=pr status=warn action=reuse_existing reason=already_exists repo=%s repo_dir=%s branch=%s pr_url=%s",
-					repo.URL,
-					repo.RelDir,
-					repo.Branch,
-					repo.PRURL,
-				)
-			} else {
-				return ExitPR, "pr", err
-			}
+			return ExitPR, "pr", err
 		}
-		if repo.PRURL == "" {
-			repo.PRURL = extractFirstURL(prRes.Stdout)
-		}
-		if repo.PRURL == "" {
-			repo.PRURL = extractFirstURL(prRes.Stderr)
-		}
-		if repo.PRURL == "" {
-			prURL, verifyErr := h.lookupOpenPRURLByHead(ctx, *repo)
-			if verifyErr != nil {
-				return ExitPR, "pr", fmt.Errorf("verify open pull request for repo %s: %w", repo.URL, verifyErr)
-			}
-			repo.PRURL = prURL
-		}
-		if repo.PRURL == "" {
-			return ExitPR, "pr", fmt.Errorf("gh pr create did not return a PR URL for repo %s", repo.URL)
-		}
+		repo.PRURL = prURL
 	}
 	h.logf("stage=pr status=ok repo=%s repo_dir=%s pr_url=%s", repo.URL, repo.RelDir, repo.PRURL)
 	if err := h.commentPRScreenshots(ctx, *repo, repo.PRCommentScreenshotFiles); err != nil {
@@ -1136,6 +1104,98 @@ func (h Harness) populateNoChangePRURLs(ctx context.Context, repos []repoWorkspa
 			repos[i].Branch,
 			repos[i].PRURL,
 		)
+	}
+}
+
+func (h Harness) createPullRequestURL(
+	ctx context.Context,
+	repo repoWorkspace,
+	cfg config.Config,
+	createWorkBranch bool,
+	headRef,
+	targetRepo string,
+) (string, error) {
+	var cmd execx.Command
+	if createWorkBranch {
+		cmd = prCreateWithOptionsCommand(repo.Dir, cfg, repo.BaseBranch, headRef, targetRepo)
+	} else {
+		cmd = prCreateWithoutBaseWithOptionsCommand(repo.Dir, cfg, headRef, targetRepo)
+	}
+
+	for attempt := 1; ; attempt++ {
+		prRes, err := h.runCommand(ctx, "pr", cmd)
+		if err != nil {
+			if ctx.Err() != nil {
+				return "", err
+			}
+			if existingPRURL, ok := existingPRURLFromCreateFailure(prRes, err); ok {
+				h.logf(
+					"stage=pr status=warn action=reuse_existing reason=already_exists repo=%s repo_dir=%s branch=%s pr_url=%s",
+					repo.URL,
+					repo.RelDir,
+					repo.Branch,
+					existingPRURL,
+				)
+				return existingPRURL, nil
+			}
+
+			retryable := shouldRetryPRCreate(prRes, err)
+			if retryable {
+				prURL, lookupErr := h.lookupOpenPRURLByHead(ctx, repo)
+				if lookupErr == nil && prURL != "" {
+					h.logf(
+						"stage=pr status=warn action=reuse_existing reason=create_transient_failed repo=%s repo_dir=%s branch=%s pr_url=%s",
+						repo.URL,
+						repo.RelDir,
+						repo.Branch,
+						prURL,
+					)
+					return prURL, nil
+				}
+				if lookupErr != nil {
+					h.logf(
+						"stage=pr status=warn action=lookup_existing reason=create_transient_lookup_failed repo=%s repo_dir=%s branch=%s err=%q",
+						repo.URL,
+						repo.RelDir,
+						repo.Branch,
+						lookupErr,
+					)
+				}
+			}
+
+			if !retryable || attempt >= maxPRCreateAttempts {
+				return "", err
+			}
+			h.logf(
+				"stage=pr status=retry reason=transient_create_error repo=%s repo_dir=%s branch=%s retry=%d/%d err=%q",
+				repo.URL,
+				repo.RelDir,
+				repo.Branch,
+				attempt,
+				maxPRCreateAttempts-1,
+				err,
+			)
+			if sleepErr := h.Sleep(ctx, prCreateRetryDelay); sleepErr != nil {
+				return "", fmt.Errorf("pr create retry interrupted: %w", sleepErr)
+			}
+			continue
+		}
+
+		if prURL := extractFirstURL(prRes.Stdout); prURL != "" {
+			return prURL, nil
+		}
+		if prURL := extractFirstURL(prRes.Stderr); prURL != "" {
+			return prURL, nil
+		}
+
+		prURL, verifyErr := h.lookupOpenPRURLByHead(ctx, repo)
+		if verifyErr != nil {
+			return "", fmt.Errorf("verify open pull request for repo %s: %w", repo.URL, verifyErr)
+		}
+		if prURL != "" {
+			return prURL, nil
+		}
+		return "", fmt.Errorf("gh pr create did not return a PR URL for repo %s", repo.URL)
 	}
 }
 
@@ -2224,6 +2284,35 @@ func existingPRURLFromCreateFailure(res execx.Result, err error) (string, bool) 
 		}
 	}
 	return "", false
+}
+
+func shouldRetryPRCreate(res execx.Result, err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
+	transientMarkers := []string{
+		"http 500",
+		"http 502",
+		"http 503",
+		"http 504",
+		"we couldn't respond to your request in time",
+		"try resubmitting your request",
+		"context deadline exceeded",
+		"client.timeout exceeded",
+		"tls handshake timeout",
+		"i/o timeout",
+		"connection reset by peer",
+		"econnreset",
+		"etimedout",
+		"temporary failure in name resolution",
+	}
+	for _, marker := range transientMarkers {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func isNonFastForwardPush(res execx.Result, err error) bool {
