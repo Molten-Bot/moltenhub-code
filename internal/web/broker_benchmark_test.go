@@ -1,4 +1,4 @@
-package hubui
+package web
 
 import (
 	"encoding/base64"

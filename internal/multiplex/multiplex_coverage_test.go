@@ -7,17 +7,17 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/Molten-Bot/moltenhub-code/internal/app"
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
-	"github.com/Molten-Bot/moltenhub-code/internal/harness"
 )
 
 func TestResultExitCodeReturnsFirstPositiveOrSuccess(t *testing.T) {
 	t.Parallel()
 
-	if got := (Result{Sessions: []Session{{ExitCode: harness.ExitSuccess}, {ExitCode: 7}, {ExitCode: 9}}}).ExitCode(); got != 7 {
+	if got := (Result{Sessions: []Session{{ExitCode: app.ExitSuccess}, {ExitCode: 7}, {ExitCode: 9}}}).ExitCode(); got != 7 {
 		t.Fatalf("ExitCode() = %d, want 7", got)
 	}
-	if got := (Result{Sessions: []Session{{ExitCode: harness.ExitSuccess}}}).ExitCode(); got != harness.ExitSuccess {
+	if got := (Result{Sessions: []Session{{ExitCode: app.ExitSuccess}}}).ExitCode(); got != app.ExitSuccess {
 		t.Fatalf("ExitCode() = %d, want success", got)
 	}
 }
@@ -34,8 +34,8 @@ func TestRunDefaultsAndErrorStateFallbacks(t *testing.T) {
 		Logf: func(format string, args ...any) {
 			logs = append(logs, format)
 		},
-		RunSession: func(context.Context, config.Config, logFn) harness.Result {
-			return harness.Result{ExitCode: harness.ExitCodex, Err: errors.New("boom")}
+		RunSession: func(context.Context, config.Config, logFn) app.Result {
+			return app.Result{ExitCode: app.ExitCodex, Err: errors.New("boom")}
 		},
 	}
 
@@ -64,8 +64,8 @@ func TestNewDefaultLogfAndRunNilLogf(t *testing.T) {
 	path := writeMuxConfig(t, dir, "task.json", "prompt")
 	m := Multiplexer{
 		MaxParallel: 1,
-		RunSession: func(context.Context, config.Config, logFn) harness.Result {
-			return harness.Result{ExitCode: harness.ExitSuccess}
+		RunSession: func(context.Context, config.Config, logFn) app.Result {
+			return app.Result{ExitCode: app.ExitSuccess}
 		},
 	}
 	res := m.Run(context.Background(), []string{path})
@@ -79,7 +79,7 @@ func TestRunInitializesDefaultSessionRunnerWithoutCallingItOnConfigError(t *test
 
 	m := Multiplexer{Logf: func(string, ...any) {}}
 	res := m.Run(context.Background(), []string{"/missing/config.json"})
-	if len(res.Sessions) != 1 || res.Sessions[0].State != SessionError || res.Sessions[0].ExitCode != harness.ExitConfig {
+	if len(res.Sessions) != 1 || res.Sessions[0].State != SessionError || res.Sessions[0].ExitCode != app.ExitConfig {
 		t.Fatalf("Run(default session runner with bad config) = %+v, want config error", res.Sessions)
 	}
 }
@@ -91,9 +91,9 @@ func TestRunOneIgnoresLogLinesWithoutStageStatus(t *testing.T) {
 	path := writeMuxConfig(t, dir, "task.json", "prompt")
 	m := Multiplexer{
 		Logf: func(string, ...any) {},
-		RunSession: func(_ context.Context, _ config.Config, logf logFn) harness.Result {
+		RunSession: func(_ context.Context, _ config.Config, logf logFn) app.Result {
 			logf("message without stage or status")
-			return harness.Result{ExitCode: harness.ExitSuccess}
+			return app.Result{ExitCode: app.ExitSuccess}
 		},
 	}
 	res := m.Run(context.Background(), []string{path})
@@ -112,8 +112,8 @@ func TestRunOnePreservesInitialStageStatusWhenCalledDirectly(t *testing.T) {
 	errorSessions := []Session{{ID: "task-error"}}
 	errorMux := Multiplexer{
 		Logf: func(string, ...any) {},
-		RunSession: func(context.Context, config.Config, logFn) harness.Result {
-			return harness.Result{ExitCode: harness.ExitCodex, Err: errors.New("boom")}
+		RunSession: func(context.Context, config.Config, logFn) app.Result {
+			return app.Result{ExitCode: app.ExitCodex, Err: errors.New("boom")}
 		},
 	}
 	errorMux.runOne(context.Background(), &mu, errorSessions, 0, path)
@@ -124,8 +124,8 @@ func TestRunOnePreservesInitialStageStatusWhenCalledDirectly(t *testing.T) {
 	okSessions := []Session{{ID: "task-ok"}}
 	okMux := Multiplexer{
 		Logf: func(string, ...any) {},
-		RunSession: func(context.Context, config.Config, logFn) harness.Result {
-			return harness.Result{ExitCode: harness.ExitSuccess}
+		RunSession: func(context.Context, config.Config, logFn) app.Result {
+			return app.Result{ExitCode: app.ExitSuccess}
 		},
 	}
 	okMux.runOne(context.Background(), &mu, okSessions, 0, path)

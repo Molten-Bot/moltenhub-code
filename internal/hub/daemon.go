@@ -14,10 +14,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Molten-Bot/moltenhub-code/internal/app"
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/failurefollowup"
-	"github.com/Molten-Bot/moltenhub-code/internal/harness"
 	"github.com/Molten-Bot/moltenhub-code/internal/library"
 	"github.com/a2aproject/a2a-go/v2/a2a"
 )
@@ -39,7 +39,7 @@ type Daemon struct {
 	Runner              execx.Runner
 	Logf                func(string, ...any)
 	OnDispatchQueued    func(requestID string, runCfg config.Config)
-	OnDispatchFailed    func(requestID string, runCfg config.Config, result harness.Result)
+	OnDispatchFailed    func(requestID string, runCfg config.Config, result app.Result)
 	RegisterTaskControl func(requestID string, cancel context.CancelCauseFunc) DispatchTaskControl
 	CompleteTaskControl func(requestID string)
 	DispatchController  *AdaptiveDispatchController
@@ -550,8 +550,8 @@ func (d Daemon) processInboundMessage(
 			if strings.TrimSpace(stage) != "" {
 				failErr = fmt.Errorf("%s: %w", stage, err)
 			}
-			failRes := harness.Result{
-				ExitCode: harness.ExitPreflight,
+			failRes := app.Result{
+				ExitCode: app.ExitPreflight,
 				Err:      failErr,
 			}
 			if triggerFollowUps && d.OnDispatchFailed != nil {
@@ -869,8 +869,8 @@ func (d Daemon) handleDispatch(
 ) string {
 	boundRunCfg, bindErr := ApplyBoundAgentRuntime(dispatch.Config, cfg)
 	if bindErr != nil {
-		failRes := harness.Result{
-			ExitCode: harness.ExitConfig,
+		failRes := app.Result{
+			ExitCode: app.ExitConfig,
 			Err:      fmt.Errorf("apply bound agent runtime: %w", bindErr),
 		}
 		if d.OnDispatchFailed != nil {
@@ -933,7 +933,7 @@ func (d Daemon) handleDispatch(
 		}
 	}
 
-	h := harness.New(d.Runner)
+	h := app.New(d.Runner)
 	h.Logf = func(format string, args ...any) {
 		line := fmt.Sprintf(format, args...)
 		if dispatch.RequestID != "" {
@@ -950,8 +950,8 @@ func (d Daemon) handleDispatch(
 	stoppedByOperator := false
 	if stopErr := context.Cause(ctx); isStoppedByOperatorErr(stopErr) {
 		stoppedByOperator = true
-		if res.ExitCode == harness.ExitSuccess {
-			res.ExitCode = harness.ExitPreflight
+		if res.ExitCode == app.ExitSuccess {
+			res.ExitCode = app.ExitPreflight
 		}
 		res.Err = stopErr
 	}
@@ -1487,7 +1487,7 @@ func dispatchOriginatorPayload(dispatch SkillDispatch) map[string]any {
 	return originator
 }
 
-func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res harness.Result) map[string]any {
+func dispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, res app.Result) map[string]any {
 	status := "completed"
 	if res.Err != nil {
 		status = "error"
@@ -1581,14 +1581,14 @@ func addExplicitFailureFields(payload map[string]any, errText string) {
 	payload["Error details:"] = errText
 }
 
-func dispatchResultDetailStatus(status string, res harness.Result) string {
+func dispatchResultDetailStatus(status string, res app.Result) string {
 	if res.Err != nil || status == "error" {
 		return "failed"
 	}
 	return status
 }
 
-func dispatchResultMessage(status string, res harness.Result) string {
+func dispatchResultMessage(status string, res app.Result) string {
 	if res.Err != nil || status == "error" {
 		return failureResponseMessage(res.Err.Error())
 	}
@@ -1610,8 +1610,8 @@ func duplicateDispatchResultPayload(cfg InitConfig, dispatch SkillDispatch, stat
 	state = strings.TrimSpace(state)
 	duplicateOf = strings.TrimSpace(duplicateOf)
 
-	payload := dispatchResultPayload(cfg, dispatch, harness.Result{
-		ExitCode: harness.ExitPreflight,
+	payload := dispatchResultPayload(cfg, dispatch, app.Result{
+		ExitCode: app.ExitPreflight,
 		Err:      errors.New(duplicateDispatchErrorText(duplicateOf, state)),
 	})
 	payload["status"] = "duplicate"
@@ -1676,7 +1676,7 @@ func (d Daemon) handleFailedDispatchAfterPublish(
 	api MoltenHubAPI,
 	cfg InitConfig,
 	dispatch SkillDispatch,
-	res harness.Result,
+	res app.Result,
 ) {
 	if api == nil {
 		return
@@ -1704,7 +1704,7 @@ func (d Daemon) handleFailedDispatchAfterPublish(
 	}
 }
 
-func shouldQueueFailureRerun(dispatch SkillDispatch, res harness.Result) (bool, string) {
+func shouldQueueFailureRerun(dispatch SkillDispatch, res app.Result) (bool, string) {
 	if res.Err == nil {
 		return false, "failed task did not include an error"
 	}
@@ -1717,7 +1717,7 @@ func shouldQueueFailureRerun(dispatch SkillDispatch, res harness.Result) (bool, 
 	return false, automaticFailureRerunDisabledReason
 }
 
-func shouldQueueFailureFollowUp(dispatch SkillDispatch, res harness.Result) (bool, string) {
+func shouldQueueFailureFollowUp(dispatch SkillDispatch, res app.Result) (bool, string) {
 	if res.Err == nil {
 		return false, "failed task did not include an error"
 	}
@@ -1751,7 +1751,7 @@ func queueFailureRerun(ctx context.Context, api MoltenHubAPI, cfg InitConfig, di
 	return api.PublishResult(ctx, payload)
 }
 
-func queueFailureFollowUp(ctx context.Context, api MoltenHubAPI, cfg InitConfig, dispatch SkillDispatch, res harness.Result, taskLogRoot string) error {
+func queueFailureFollowUp(ctx context.Context, api MoltenHubAPI, cfg InitConfig, dispatch SkillDispatch, res app.Result, taskLogRoot string) error {
 	if api == nil {
 		return fmt.Errorf("moltenhub api client is required")
 	}
@@ -1809,14 +1809,14 @@ func dispatchRunConfigPayload(runCfg config.Config) (map[string]any, error) {
 	return payload, nil
 }
 
-func failureFollowUpRepos(_ harness.Result, _ config.Config) []string {
+func failureFollowUpRepos(_ app.Result, _ config.Config) []string {
 	if repo := strings.TrimSpace(failurefollowup.FollowUpRepositoryURL); repo != "" {
 		return []string{repo}
 	}
 	return nil
 }
 
-func failureFollowUpPrompt(logRoot string, dispatch SkillDispatch, res harness.Result) string {
+func failureFollowUpPrompt(logRoot string, dispatch SkillDispatch, res app.Result) string {
 	paths := failureLogPaths(logRoot, dispatch.RequestID, dispatch.Config, res)
 	return failurefollowup.ComposePrompt(
 		failureFollowUpPromptBase,
@@ -1827,7 +1827,7 @@ func failureFollowUpPrompt(logRoot string, dispatch SkillDispatch, res harness.R
 	)
 }
 
-func failureFollowUpContext(dispatch SkillDispatch, res harness.Result) string {
+func failureFollowUpContext(dispatch SkillDispatch, res app.Result) string {
 	lines := []string{
 		"Observed failure context:",
 		fmt.Sprintf("- request_id=%s", strings.TrimSpace(dispatch.RequestID)),
@@ -1858,7 +1858,7 @@ func failureFollowUpContext(dispatch SkillDispatch, res harness.Result) string {
 	return strings.Join(lines, "\n")
 }
 
-func failureLogPaths(logRoot, requestID string, runCfg config.Config, res harness.Result) []string {
+func failureLogPaths(logRoot, requestID string, runCfg config.Config, res app.Result) []string {
 	seen := map[string]struct{}{}
 	paths := make([]string, 0, len(res.RepoResults)+5)
 	appendPath := func(path string) {
@@ -1921,7 +1921,7 @@ func isFailureRerunRequestID(requestID string) bool {
 	return strings.HasSuffix(requestID, failureRerunRequestIDSuffix)
 }
 
-func joinRepoPRURLs(results []harness.RepoResult) string {
+func joinRepoPRURLs(results []app.RepoResult) string {
 	if len(results) == 0 {
 		return ""
 	}
@@ -1939,7 +1939,7 @@ func joinRepoPRURLs(results []harness.RepoResult) string {
 	return strings.Join(urls, ",")
 }
 
-func joinAllRepoPRURLs(results []harness.RepoResult) string {
+func joinAllRepoPRURLs(results []app.RepoResult) string {
 	if len(results) == 0 {
 		return ""
 	}
@@ -1954,21 +1954,21 @@ func joinAllRepoPRURLs(results []harness.RepoResult) string {
 	return strings.Join(urls, ",")
 }
 
-func resultHasPR(result harness.Result) bool {
+func resultHasPR(result app.Result) bool {
 	if strings.TrimSpace(result.PRURL) != "" {
 		return true
 	}
 	return strings.TrimSpace(joinAllRepoPRURLs(result.RepoResults)) != ""
 }
 
-func completedPRURLs(result harness.Result) string {
+func completedPRURLs(result app.Result) string {
 	if result.NoChanges {
 		return joinAllRepoPRURLs(result.RepoResults)
 	}
 	return joinRepoPRURLs(result.RepoResults)
 }
 
-func countChangedRepoResults(results []harness.RepoResult) int {
+func countChangedRepoResults(results []app.RepoResult) int {
 	count := 0
 	for _, result := range results {
 		if result.Changed {
@@ -1978,7 +1978,7 @@ func countChangedRepoResults(results []harness.RepoResult) int {
 	return count
 }
 
-func repoResultPayloads(results []harness.RepoResult) []map[string]any {
+func repoResultPayloads(results []app.RepoResult) []map[string]any {
 	if len(results) == 0 {
 		return nil
 	}
@@ -2089,8 +2089,8 @@ func loadStoredRuntimeConfig(primaryPath string) (RuntimeConfig, string, error) 
 }
 
 func dispatchParseErrorPayload(cfg InitConfig, dispatch SkillDispatch, parseErr error) map[string]any {
-	payload := dispatchResultPayload(cfg, dispatch, harness.Result{
-		ExitCode: harness.ExitConfig,
+	payload := dispatchResultPayload(cfg, dispatch, app.Result{
+		ExitCode: app.ExitConfig,
 		Err:      fmt.Errorf("dispatch parse: %w", parseErr),
 	})
 	result := payload["result"].(map[string]any)

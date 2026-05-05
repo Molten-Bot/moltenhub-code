@@ -15,26 +15,26 @@ import (
 	"time"
 
 	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
+	"github.com/Molten-Bot/moltenhub-code/internal/app"
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
-	"github.com/Molten-Bot/moltenhub-code/internal/harness"
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
-	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
+	"github.com/Molten-Bot/moltenhub-code/internal/web"
 )
 
 type stubAgentAuthGate struct {
-	statusState hubui.AgentAuthState
+	statusState web.AgentAuthState
 	statusErr   error
-	startState  hubui.AgentAuthState
+	startState  web.AgentAuthState
 	startErr    error
 	startCalls  int
 }
 
-func (g *stubAgentAuthGate) Status(context.Context) (hubui.AgentAuthState, error) {
+func (g *stubAgentAuthGate) Status(context.Context) (web.AgentAuthState, error) {
 	return g.statusState, g.statusErr
 }
 
-func (g *stubAgentAuthGate) StartDeviceAuth(context.Context) (hubui.AgentAuthState, error) {
+func (g *stubAgentAuthGate) StartDeviceAuth(context.Context) (web.AgentAuthState, error) {
 	g.startCalls++
 	if g.startState.State == "" {
 		g.startState = g.statusState
@@ -42,11 +42,11 @@ func (g *stubAgentAuthGate) StartDeviceAuth(context.Context) (hubui.AgentAuthSta
 	return g.startState, g.startErr
 }
 
-func (g *stubAgentAuthGate) Verify(context.Context) (hubui.AgentAuthState, error) {
+func (g *stubAgentAuthGate) Verify(context.Context) (web.AgentAuthState, error) {
 	return g.statusState, nil
 }
 
-func (g *stubAgentAuthGate) Configure(context.Context, string) (hubui.AgentAuthState, error) {
+func (g *stubAgentAuthGate) Configure(context.Context, string) (web.AgentAuthState, error) {
 	return g.statusState, nil
 }
 
@@ -96,11 +96,11 @@ func TestHubExitCodeMappings(t *testing.T) {
 		err  error
 		want int
 	}{
-		{err: fmt.Errorf("init config: invalid"), want: harness.ExitConfig},
-		{err: fmt.Errorf("hub auth: invalid token"), want: harness.ExitAuth},
-		{err: fmt.Errorf("hub profile: invalid handle"), want: harness.ExitAuth},
-		{err: fmt.Errorf("hub websocket url: malformed"), want: harness.ExitConfig},
-		{err: fmt.Errorf("something else"), want: harness.ExitPreflight},
+		{err: fmt.Errorf("init config: invalid"), want: app.ExitConfig},
+		{err: fmt.Errorf("hub auth: invalid token"), want: app.ExitAuth},
+		{err: fmt.Errorf("hub profile: invalid handle"), want: app.ExitAuth},
+		{err: fmt.Errorf("hub websocket url: malformed"), want: app.ExitConfig},
+		{err: fmt.Errorf("something else"), want: app.ExitPreflight},
 	}
 	for _, tt := range tests {
 		if got := hubExitCode(tt.err); got != tt.want {
@@ -167,20 +167,20 @@ func TestRecordLocalRunActivityPublishesWhenHubConnected(t *testing.T) {
 func TestRunResultPRHelpers(t *testing.T) {
 	t.Parallel()
 
-	withTopLevelPR := harness.Result{PRURL: " https://github.com/acme/repo/pull/1 "}
+	withTopLevelPR := app.Result{PRURL: " https://github.com/acme/repo/pull/1 "}
 	if !resultHasPR(withTopLevelPR) {
 		t.Fatal("resultHasPR(top-level PR) = false, want true")
 	}
-	withRepoPR := harness.Result{RepoResults: []harness.RepoResult{{PRURL: "https://github.com/acme/repo/pull/2"}}}
+	withRepoPR := app.Result{RepoResults: []app.RepoResult{{PRURL: "https://github.com/acme/repo/pull/2"}}}
 	if !resultHasPR(withRepoPR) {
 		t.Fatal("resultHasPR(repo PR) = false, want true")
 	}
-	if resultHasPR(harness.Result{}) {
+	if resultHasPR(app.Result{}) {
 		t.Fatal("resultHasPR(empty) = true, want false")
 	}
-	noChanges := harness.Result{
+	noChanges := app.Result{
 		NoChanges: true,
-		RepoResults: []harness.RepoResult{
+		RepoResults: []app.RepoResult{
 			{Changed: false, PRURL: "https://github.com/acme/repo/pull/1"},
 			{Changed: true, PRURL: "https://github.com/acme/repo/pull/2"},
 		},
@@ -416,13 +416,13 @@ func TestMaybeStartAgentAuthStartsClaudeLoginWhenBrowserAuthIsNeeded(t *testing.
 	t.Parallel()
 
 	gate := &stubAgentAuthGate{
-		statusState: hubui.AgentAuthState{
+		statusState: web.AgentAuthState{
 			Required: true,
 			Ready:    false,
 			State:    "needs_browser_login",
 			Message:  "Claude login required",
 		},
-		startState: hubui.AgentAuthState{
+		startState: web.AgentAuthState{
 			Required: true,
 			Ready:    false,
 			State:    "pending_browser_login",
@@ -451,13 +451,13 @@ func TestMaybeStartAgentAuthStartsWhenClaudeCredentialsNeedConfigure(t *testing.
 	t.Parallel()
 
 	gate := &stubAgentAuthGate{
-		statusState: hubui.AgentAuthState{
+		statusState: web.AgentAuthState{
 			Required:         true,
 			Ready:            false,
 			State:            "needs_configure",
 			ConfigureCommand: claudeCredentialsConfigureCommand,
 		},
-		startState: hubui.AgentAuthState{
+		startState: web.AgentAuthState{
 			Required: true,
 			Ready:    false,
 			State:    "pending_browser_login",
@@ -480,7 +480,7 @@ func TestMaybeStartAgentAuthSkipsWhenClaudeNeedsGitHubTokenConfigure(t *testing.
 	t.Parallel()
 
 	gate := &stubAgentAuthGate{
-		statusState: hubui.AgentAuthState{
+		statusState: web.AgentAuthState{
 			Required:         true,
 			Ready:            false,
 			State:            "needs_configure",
@@ -504,13 +504,13 @@ func TestMaybeStartAgentAuthLogsStartErrors(t *testing.T) {
 	t.Parallel()
 
 	gate := &stubAgentAuthGate{
-		statusState: hubui.AgentAuthState{
+		statusState: web.AgentAuthState{
 			Required: true,
 			Ready:    false,
 			State:    "unexpected_auth_state",
 			Message:  "Claude login required",
 		},
-		startState: hubui.AgentAuthState{
+		startState: web.AgentAuthState{
 			Required: true,
 			Ready:    false,
 			State:    "error",
@@ -568,7 +568,7 @@ func TestShouldEnableAgentAuthConfigure(t *testing.T) {
 func TestJoinPRURLsAndCountChangedRepos(t *testing.T) {
 	t.Parallel()
 
-	results := []harness.RepoResult{
+	results := []app.RepoResult{
 		{Changed: true, PRURL: " https://github.com/acme/repo-a/pull/1 "},
 		{Changed: false, PRURL: "https://github.com/acme/repo-b/pull/2"},
 		{Changed: true, PRURL: ""},
@@ -608,7 +608,7 @@ func TestMarshalRunConfigJSONReturnsJSONPayload(t *testing.T) {
 func TestFailureFollowUpPromptDefaultWhenNoPaths(t *testing.T) {
 	t.Parallel()
 
-	got := failureFollowUpPrompt(nil, harness.Result{}, config.Config{})
+	got := failureFollowUpPrompt(nil, app.Result{}, config.Config{})
 	if !strings.Contains(got, failureFollowUpRequiredPrompt) {
 		t.Fatalf("prompt missing required instructions: %q", got)
 	}
@@ -649,8 +649,8 @@ func TestFailureFollowUpPromptIncludesFailureContext(t *testing.T) {
 
 	got := failureFollowUpPrompt(
 		[]string{"/workspace/.log/local/1775600653/000013/terminal.log"},
-		harness.Result{
-			ExitCode:     harness.ExitClone,
+		app.Result{
+			ExitCode:     app.ExitClone,
 			Err:          errors.New("clone: repository not found"),
 			WorkspaceDir: "/tmp/run-123",
 			Branch:       "moltenhub-fix-clone",
@@ -709,7 +709,7 @@ func TestConfigureHubSetupTracksCompletedOnboardingSteps(t *testing.T) {
 		BaseURL:           server.URL + "/v1",
 		AgentHarness:      "codex",
 		RuntimeConfigPath: filepath.Join(t.TempDir(), ".moltenhub", "config.json"),
-	}, hubui.HubSetupRequest{
+	}, web.HubSetupRequest{
 		AgentMode: "new",
 		Token:     bindToken,
 		Handle:    "saved-agent",
@@ -786,7 +786,7 @@ func TestConfigureHubSetupMarksFailingOnboardingStep(t *testing.T) {
 		BaseURL:           server.URL + "/v1",
 		AgentHarness:      "codex",
 		RuntimeConfigPath: filepath.Join(t.TempDir(), ".moltenhub", "config.json"),
-	}, hubui.HubSetupRequest{
+	}, web.HubSetupRequest{
 		AgentMode: "new",
 		Token:     bindToken,
 	}, func(context.Context, hub.InitConfig) error {
@@ -815,12 +815,12 @@ func TestConfigureHubSetupMarksFailingOnboardingStep(t *testing.T) {
 func TestShouldQueueUnexpectedNoChangesFollowUpRequiresMissingPR(t *testing.T) {
 	t.Parallel()
 
-	ok, reason := shouldQueueUnexpectedNoChangesFollowUp(harness.Result{NoChanges: true})
+	ok, reason := shouldQueueUnexpectedNoChangesFollowUp(app.Result{NoChanges: true})
 	if !ok || reason != "" {
 		t.Fatalf("shouldQueueUnexpectedNoChangesFollowUp(no PR) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
-	ok, reason = shouldQueueUnexpectedNoChangesFollowUp(harness.Result{
+	ok, reason = shouldQueueUnexpectedNoChangesFollowUp(app.Result{
 		NoChanges: true,
 		PRURL:     "https://github.com/acme/repo/pull/1",
 	})
@@ -835,7 +835,7 @@ func TestShouldQueueUnexpectedNoChangesFollowUpRequiresMissingPR(t *testing.T) {
 func TestShouldQueueFailureFollowUpSkipsNestedFailureFollowUpSource(t *testing.T) {
 	t.Parallel()
 
-	ok, reason := shouldQueueFailureFollowUp(failureFollowUpSource, harness.Result{Err: errors.New("still failing")})
+	ok, reason := shouldQueueFailureFollowUp(failureFollowUpSource, app.Result{Err: errors.New("still failing")})
 	if ok {
 		t.Fatal("shouldQueueFailureFollowUp(failure_followup) = true, want false")
 	}
@@ -843,7 +843,7 @@ func TestShouldQueueFailureFollowUpSkipsNestedFailureFollowUpSource(t *testing.T
 		t.Fatalf("reason = %q, want %q", reason, "run is already a failure follow-up")
 	}
 
-	ok, reason = shouldQueueFailureFollowUp(noChangesEscalationSource, harness.Result{Err: errors.New("still failing")})
+	ok, reason = shouldQueueFailureFollowUp(noChangesEscalationSource, app.Result{Err: errors.New("still failing")})
 	if ok {
 		t.Fatal("shouldQueueFailureFollowUp(no_changes_escalation) = true, want false")
 	}
@@ -851,12 +851,12 @@ func TestShouldQueueFailureFollowUpSkipsNestedFailureFollowUpSource(t *testing.T
 		t.Fatalf("reason = %q, want %q", reason, "run is already a failure follow-up")
 	}
 
-	ok, reason = shouldQueueFailureFollowUp(localSubmitSource, harness.Result{Err: errors.New("clone failed")})
+	ok, reason = shouldQueueFailureFollowUp(localSubmitSource, app.Result{Err: errors.New("clone failed")})
 	if !ok || reason != "" {
 		t.Fatalf("shouldQueueFailureFollowUp(local_submit,error) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
-	ok, reason = shouldQueueFailureFollowUp("hub_dispatch", harness.Result{Err: errors.New("clone failed")})
+	ok, reason = shouldQueueFailureFollowUp("hub_dispatch", app.Result{Err: errors.New("clone failed")})
 	if ok {
 		t.Fatal("shouldQueueFailureFollowUp(hub_dispatch,error) = true, want false")
 	}
@@ -864,7 +864,7 @@ func TestShouldQueueFailureFollowUpSkipsNestedFailureFollowUpSource(t *testing.T
 		t.Fatalf("reason = %q, want %q", reason, "hub dispatch failures are already escalated by hub transport")
 	}
 
-	ok, reason = shouldQueueFailureFollowUp(localSubmitSource, harness.Result{})
+	ok, reason = shouldQueueFailureFollowUp(localSubmitSource, app.Result{})
 	if ok {
 		t.Fatal("shouldQueueFailureFollowUp(local_submit,nil error) = true, want false")
 	}
@@ -876,7 +876,7 @@ func TestShouldQueueFailureFollowUpSkipsNestedFailureFollowUpSource(t *testing.T
 func TestShouldQueueFailureRerunSkipsNestedFailureRerunSource(t *testing.T) {
 	t.Parallel()
 
-	ok, reason := shouldQueueFailureRerun(rerunSource, harness.Result{Err: errors.New("still failing")})
+	ok, reason := shouldQueueFailureRerun(rerunSource, app.Result{Err: errors.New("still failing")})
 	if ok {
 		t.Fatal("shouldQueueFailureRerun(rerun) = true, want false")
 	}
@@ -884,12 +884,12 @@ func TestShouldQueueFailureRerunSkipsNestedFailureRerunSource(t *testing.T) {
 		t.Fatalf("reason = %q, want %q", reason, "run is already a failure rerun")
 	}
 
-	ok, reason = shouldQueueFailureRerun(localSubmitSource, harness.Result{Err: errors.New("clone failed")})
+	ok, reason = shouldQueueFailureRerun(localSubmitSource, app.Result{Err: errors.New("clone failed")})
 	if ok || reason != automaticFailureRerunDisabledReason {
 		t.Fatalf("shouldQueueFailureRerun(local_submit,error) = (%v, %q), want (false, %q)", ok, reason, automaticFailureRerunDisabledReason)
 	}
 
-	ok, reason = shouldQueueFailureRerun("hub_dispatch", harness.Result{Err: errors.New("clone failed")})
+	ok, reason = shouldQueueFailureRerun("hub_dispatch", app.Result{Err: errors.New("clone failed")})
 	if ok {
 		t.Fatal("shouldQueueFailureRerun(hub_dispatch,error) = true, want false")
 	}
@@ -897,7 +897,7 @@ func TestShouldQueueFailureRerunSkipsNestedFailureRerunSource(t *testing.T) {
 		t.Fatalf("reason = %q, want %q", reason, "hub dispatch failures are already rerun by hub transport")
 	}
 
-	ok, reason = shouldQueueFailureRerun(failureFollowUpSource, harness.Result{Err: errors.New("clone failed")})
+	ok, reason = shouldQueueFailureRerun(failureFollowUpSource, app.Result{Err: errors.New("clone failed")})
 	if ok {
 		t.Fatal("shouldQueueFailureRerun(failure_followup,error) = true, want false")
 	}
@@ -905,7 +905,7 @@ func TestShouldQueueFailureRerunSkipsNestedFailureRerunSource(t *testing.T) {
 		t.Fatalf("reason = %q, want %q", reason, "run is already a failure follow-up")
 	}
 
-	ok, reason = shouldQueueFailureRerun(noChangesEscalationSource, harness.Result{Err: errors.New("clone failed")})
+	ok, reason = shouldQueueFailureRerun(noChangesEscalationSource, app.Result{Err: errors.New("clone failed")})
 	if ok {
 		t.Fatal("shouldQueueFailureRerun(no_changes_escalation,error) = true, want false")
 	}
@@ -913,7 +913,7 @@ func TestShouldQueueFailureRerunSkipsNestedFailureRerunSource(t *testing.T) {
 		t.Fatalf("reason = %q, want %q", reason, "run is already a failure follow-up")
 	}
 
-	ok, reason = shouldQueueFailureRerun(localSubmitSource, harness.Result{})
+	ok, reason = shouldQueueFailureRerun(localSubmitSource, app.Result{})
 	if ok {
 		t.Fatal("shouldQueueFailureRerun(local_submit,nil error) = true, want false")
 	}
@@ -969,7 +969,7 @@ func TestShouldEscalateNoChangesFollowUpRequiresFollowUpSourceAndMissingPR(t *te
 
 	runCfg := config.Config{Prompt: "change the website to pink"}
 
-	ok, reason := shouldEscalateNoChangesFollowUp(localSubmitSource, harness.Result{NoChanges: true}, runCfg)
+	ok, reason := shouldEscalateNoChangesFollowUp(localSubmitSource, app.Result{NoChanges: true}, runCfg)
 	if ok {
 		t.Fatal("shouldEscalateNoChangesFollowUp(local_submit) = true, want false")
 	}
@@ -977,12 +977,12 @@ func TestShouldEscalateNoChangesFollowUpRequiresFollowUpSourceAndMissingPR(t *te
 		t.Fatalf("reason = %q, want %q", reason, "run is not a no-changes follow-up")
 	}
 
-	ok, reason = shouldEscalateNoChangesFollowUp(noChangesFollowUpSource, harness.Result{NoChanges: true}, runCfg)
+	ok, reason = shouldEscalateNoChangesFollowUp(noChangesFollowUpSource, app.Result{NoChanges: true}, runCfg)
 	if !ok || reason != "" {
 		t.Fatalf("shouldEscalateNoChangesFollowUp(no_changes_followup,actionable) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
-	ok, reason = shouldEscalateNoChangesFollowUp(noChangesFollowUpSource, harness.Result{
+	ok, reason = shouldEscalateNoChangesFollowUp(noChangesFollowUpSource, app.Result{
 		NoChanges: true,
 		PRURL:     "https://github.com/acme/repo/pull/1",
 	}, runCfg)
@@ -993,7 +993,7 @@ func TestShouldEscalateNoChangesFollowUpRequiresFollowUpSourceAndMissingPR(t *te
 		t.Fatalf("reason = %q, want %q", reason, "task already has a pull request")
 	}
 
-	ok, reason = shouldEscalateNoChangesFollowUp(noChangesFollowUpSource, harness.Result{NoChanges: true}, config.Config{
+	ok, reason = shouldEscalateNoChangesFollowUp(noChangesFollowUpSource, app.Result{NoChanges: true}, config.Config{
 		Prompt: "review the latest logs and explain what happened",
 	})
 	if ok {
@@ -1023,7 +1023,7 @@ func TestUnexpectedNoChangesFollowUpRunConfigPreservesTaskTargetingAndAddsContex
 		TargetSubdir: "cmd/harness",
 		Prompt:       "fix the broken local no changes task handling",
 	}
-	result := harness.Result{
+	result := app.Result{
 		NoChanges:    true,
 		WorkspaceDir: "/tmp/run-123",
 		Branch:       "release/2026.04-hotfix",
@@ -1070,7 +1070,7 @@ func TestUnexpectedNoChangesFollowUpRunConfigKeepsConfiguredMainBranch(t *testin
 
 	cfg := unexpectedNoChangesFollowUpRunConfig(
 		"local-1712345678-000001",
-		harness.Result{
+		app.Result{
 			NoChanges: true,
 			Branch:    "moltenhub-add-the-emoji-picker-to-the-agent-profil",
 		},
@@ -1098,7 +1098,7 @@ func TestUnexpectedNoChangesFollowUpRunConfigRetainsOriginalRepoList(t *testing.
 	}
 	cfg := unexpectedNoChangesFollowUpRunConfig(
 		"local-1712345678-000001",
-		harness.Result{NoChanges: true},
+		app.Result{NoChanges: true},
 		runCfg,
 		t.TempDir(),
 	)
@@ -1113,7 +1113,7 @@ func TestUnexpectedNoChangesFollowUpRunConfigFallsBackToMoltenHubRepoWhenNoOrigi
 
 	cfg := unexpectedNoChangesFollowUpRunConfig(
 		"local-1712345678-000001",
-		harness.Result{NoChanges: true},
+		app.Result{NoChanges: true},
 		config.Config{},
 		t.TempDir(),
 	)
@@ -1133,7 +1133,7 @@ func TestUnexpectedNoChangesFollowUpRunConfigUsesNoPathGuidanceWhenTaskLogsMissi
 		TargetSubdir: ".",
 		Prompt:       "investigate missing changes",
 	}
-	result := harness.Result{
+	result := app.Result{
 		NoChanges: true,
 		Branch:    "main",
 	}
@@ -1164,11 +1164,11 @@ func TestEscalatedNoChangesFollowUpRunConfigAddsStricterPrompt(t *testing.T) {
 	runCfg := config.Config{
 		Repos:        []string{"git@github.com:acme/repo.git"},
 		BaseBranch:   "main",
-		TargetSubdir: "internal/hubui",
+		TargetSubdir: "internal/web",
 		Prompt:       "change the website to pink",
 	}
 
-	cfg := escalatedNoChangesFollowUpRunConfig("local-1712345678-000001", harness.Result{NoChanges: true}, runCfg, logRoot)
+	cfg := escalatedNoChangesFollowUpRunConfig("local-1712345678-000001", app.Result{NoChanges: true}, runCfg, logRoot)
 	for _, want := range []string{
 		"The original task and the no-changes follow-up both completed without file changes or a pull request.",
 		"do not return another no-op unless you can cite exact file paths",
@@ -1251,7 +1251,7 @@ func TestFollowUpTaskLogPathsArchivesLocalTaskLogs(t *testing.T) {
 func TestShouldQueueFailureFollowUpQueuesNoDeltaFailures(t *testing.T) {
 	t.Parallel()
 
-	result := harness.Result{
+	result := app.Result{
 		Err: errors.New("task failed to meet completion requirements because this branch has no delta from `main`; No commits between main and moltenhub-fix"),
 	}
 
@@ -1288,35 +1288,35 @@ func TestTaskLogDirAndTaskLogPathsValidateInputs(t *testing.T) {
 func TestShouldQueueFailureFollowUpSkipsNonRemediableFailureReasons(t *testing.T) {
 	t.Parallel()
 
-	ok, reason := shouldQueueFailureFollowUp("local_submit", harness.Result{
+	ok, reason := shouldQueueFailureFollowUp("local_submit", app.Result{
 		Err: errors.New("codex: ERROR: Quota exceeded. Check your plan and billing details."),
 	})
 	if ok || !strings.Contains(reason, "quota exceeded") {
 		t.Fatalf("shouldQueueFailureFollowUp(quota exceeded) = (%v, %q), want non-remediable quota skip", ok, reason)
 	}
 
-	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{
+	ok, reason = shouldQueueFailureFollowUp("local_submit", app.Result{
 		Err: errors.New("codex: unexpected status 401 Unauthorized: Missing bearer or basic authentication in header"),
 	})
 	if ok || !strings.Contains(reason, "401 unauthorized") {
 		t.Fatalf("shouldQueueFailureFollowUp(auth failure) = (%v, %q), want non-remediable auth skip", ok, reason)
 	}
 
-	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{
+	ok, reason = shouldQueueFailureFollowUp("local_submit", app.Result{
 		Err: errors.New("clone: run git [clone ...]: exit status 128"),
 	})
 	if !ok || reason != "" {
 		t.Fatalf("shouldQueueFailureFollowUp(clone failure) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 
-	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{
+	ok, reason = shouldQueueFailureFollowUp("local_submit", app.Result{
 		Err: errors.New("git: verify remote write access for repo https://github.com/acme/repo.git branch \"moltenhub-fix\": exit status 128: remote: Write access to repository not granted. fatal: unable to access 'https://github.com/acme/repo.git/': The requested URL returned error: 403"),
 	})
 	if ok || !strings.Contains(reason, "write access to repository not granted") {
 		t.Fatalf("shouldQueueFailureFollowUp(repo write access failure) = (%v, %q), want non-remediable repo access skip", ok, reason)
 	}
 
-	ok, reason = shouldQueueFailureFollowUp("local_submit", harness.Result{
+	ok, reason = shouldQueueFailureFollowUp("local_submit", app.Result{
 		Err: errors.New("git: run git [push -u origin moltenhub-branch]: exit status 1: remote: refusing to allow an OAuth App to create or update workflow `.github/workflows/docker-release.yml` without `workflow` scope"),
 	})
 	if ok || !strings.Contains(reason, "refusing to allow an oauth app to create or update workflow") {

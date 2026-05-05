@@ -20,14 +20,14 @@ import (
 	"time"
 
 	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
+	"github.com/Molten-Bot/moltenhub-code/internal/app"
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/failurefollowup"
-	"github.com/Molten-Bot/moltenhub-code/internal/harness"
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
-	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
 	"github.com/Molten-Bot/moltenhub-code/internal/library"
 	"github.com/Molten-Bot/moltenhub-code/internal/multiplex"
+	"github.com/Molten-Bot/moltenhub-code/internal/web"
 	"github.com/Molten-Bot/moltenhub-code/internal/workspace"
 )
 
@@ -84,31 +84,31 @@ func main() {
 func run() int {
 	if len(os.Args) < 2 {
 		printUsage()
-		return harness.ExitUsage
+		return app.ExitUsage
 	}
 
 	switch os.Args[1] {
 	case "run":
 		if err := workspace.PrepareDefaultRoots(); err != nil {
 			fmt.Fprintf(os.Stderr, "workspace init error: %v\n", err)
-			return harness.ExitWorkspace
+			return app.ExitWorkspace
 		}
 		return runSingle(os.Args[2:])
 	case "multiplex":
 		if err := workspace.PrepareDefaultRoots(); err != nil {
 			fmt.Fprintf(os.Stderr, "workspace init error: %v\n", err)
-			return harness.ExitWorkspace
+			return app.ExitWorkspace
 		}
 		return runMultiplex(os.Args[2:])
 	case "hub":
 		if err := workspace.PrepareDefaultRoots(); err != nil {
 			fmt.Fprintf(os.Stderr, "workspace init error: %v\n", err)
-			return harness.ExitWorkspace
+			return app.ExitWorkspace
 		}
 		return runHub(os.Args[2:])
 	default:
 		printUsage()
-		return harness.ExitUsage
+		return app.ExitUsage
 	}
 }
 
@@ -123,22 +123,22 @@ func runSingle(args []string) int {
 	fs.SetOutput(os.Stderr)
 	configPath := fs.String("config", "", "Path to run configuration JSON")
 	if err := fs.Parse(args); err != nil {
-		return harness.ExitUsage
+		return app.ExitUsage
 	}
 	if *configPath == "" {
 		fmt.Fprintln(os.Stderr, "missing required --config flag")
-		return harness.ExitUsage
+		return app.ExitUsage
 	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "config error: %v\n", err)
-		return harness.ExitConfig
+		return app.ExitConfig
 	}
 
 	logger := newDefaultTerminalLogger()
 	defer logger.Close()
-	h := harness.New(execx.OSRunner{})
+	h := app.New(execx.OSRunner{})
 	h.Logf = logger.Printf
 
 	result := h.Run(context.Background(), cfg)
@@ -160,7 +160,7 @@ func runSingle(args []string) int {
 			line.WriteString(fmt.Sprintf(" pr_urls=%s", prURLs))
 		}
 		writeStdoutLine(logger, line.String())
-		return harness.ExitSuccess
+		return app.ExitSuccess
 	}
 	var line strings.Builder
 	line.WriteString(fmt.Sprintf("status=completed workspace=%s branch=%s", result.WorkspaceDir, result.Branch))
@@ -175,7 +175,7 @@ func runSingle(args []string) int {
 	}
 	writeStdoutLine(logger, line.String())
 
-	return harness.ExitSuccess
+	return app.ExitSuccess
 }
 
 type stringListFlag []string
@@ -198,22 +198,22 @@ func runMultiplex(args []string) int {
 	parallel := fs.Int("parallel", 2, "Maximum number of parallel sessions")
 
 	if err := fs.Parse(args); err != nil {
-		return harness.ExitUsage
+		return app.ExitUsage
 	}
 	configInputs = append(configInputs, fs.Args()...)
 	if len(configInputs) == 0 {
 		fmt.Fprintln(os.Stderr, "missing required --config flag")
-		return harness.ExitUsage
+		return app.ExitUsage
 	}
 
 	configPaths, err := collectConfigPaths(configInputs)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "config discovery error: %v\n", err)
-		return harness.ExitConfig
+		return app.ExitConfig
 	}
 	if len(configPaths) == 0 {
 		fmt.Fprintln(os.Stderr, "no task config files found")
-		return harness.ExitConfig
+		return app.ExitConfig
 	}
 
 	logger := newDefaultTerminalLogger()
@@ -226,7 +226,7 @@ func runMultiplex(args []string) int {
 	for _, s := range result.Sessions {
 		var line strings.Builder
 		line.WriteString(fmt.Sprintf("session=%s status=%s config=%s stage=%s", s.ID, s.State, s.ConfigPath, s.Stage))
-		if s.ExitCode != harness.ExitSuccess {
+		if s.ExitCode != app.ExitSuccess {
 			line.WriteString(fmt.Sprintf(" exit_code=%d", s.ExitCode))
 		}
 		if s.WorkspaceDir != "" {
@@ -258,7 +258,7 @@ func runHub(args []string) int {
 	uiAutomatic := fs.Bool("ui-automatic", false, "Hide the browser Studio form and run the monitor UI in automatic mode")
 
 	if err := fs.Parse(args); err != nil {
-		return harness.ExitUsage
+		return app.ExitUsage
 	}
 	cfg, exitCode, err := loadHubBootConfig(*initPath, *configPath)
 	if err != nil {
@@ -272,7 +272,7 @@ func runHub(args []string) int {
 	logger := newDefaultTerminalLogger()
 	defer logger.Close()
 	runner := execx.OSRunner{}
-	monitorBroker := hubui.NewBroker()
+	monitorBroker := web.NewBroker()
 	logLevel, err := hub.ParseLogLevel(cfg.LogLevel)
 	if err != nil {
 		logLevel = hub.LogLevelInfo
@@ -321,10 +321,10 @@ func runHub(args []string) int {
 		logRoot = strings.TrimSpace(mirror.rootDir)
 	}
 
-	var queueFailureRerun func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config, source string)
-	var queueFailureFollowUp func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config, source string)
-	var queueUnexpectedNoChangesFollowUp func(requestID string, result harness.Result, runCfg config.Config)
-	var queueEscalatedNoChangesFollowUp func(requestID string, result harness.Result, runCfg config.Config)
+	var queueFailureRerun func(failedRequestID string, failedResult app.Result, failedRunCfg config.Config, source string)
+	var queueFailureFollowUp func(failedRequestID string, failedResult app.Result, failedRunCfg config.Config, source string)
+	var queueUnexpectedNoChangesFollowUp func(requestID string, result app.Result, runCfg config.Config)
+	var queueEscalatedNoChangesFollowUp func(requestID string, result app.Result, runCfg config.Config)
 	hubRuntimeConnected := func() bool { return false }
 	var enqueueLocalRun func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string, force bool) (string, error)
 	enqueueLocalRun = func(reqCtx context.Context, runCfg config.Config, allowFailureFollowUp bool, source string, force bool) (string, error) {
@@ -439,8 +439,8 @@ func runHub(args []string) int {
 						finalState = "error"
 						daemonLogger("dispatch status=error request_id=%s err=%q", requestID, waitErr)
 						if !errors.Is(waitErr, context.Canceled) && allowFailureFollowUp {
-							failedResult := harness.Result{
-								ExitCode: harness.ExitPreflight,
+							failedResult := app.Result{
+								ExitCode: app.ExitPreflight,
 								Err:      fmt.Errorf("dispatch wait: %w", waitErr),
 							}
 							if queueFailureRerun != nil {
@@ -487,8 +487,8 @@ func runHub(args []string) int {
 					finalState = "error"
 					daemonLogger("dispatch status=error request_id=%s err=%q", requestID, acquireErr)
 					if !errors.Is(acquireErr, context.Canceled) && allowFailureFollowUp {
-						failedResult := harness.Result{
-							ExitCode: harness.ExitPreflight,
+						failedResult := app.Result{
+							ExitCode: app.ExitPreflight,
 							Err:      fmt.Errorf("dispatch acquire: %w", acquireErr),
 						}
 						if queueFailureRerun != nil {
@@ -547,7 +547,7 @@ func runHub(args []string) int {
 
 		return requestID, nil
 	}
-	queueFailureRerun = func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config, source string) {
+	queueFailureRerun = func(failedRequestID string, failedResult app.Result, failedRunCfg config.Config, source string) {
 		if ok, reason := shouldQueueFailureRerun(source, failedResult); !ok {
 			daemonLogger(
 				"dispatch status=warn action=skip_failure_rerun request_id=%s err=%q",
@@ -572,7 +572,7 @@ func runHub(args []string) int {
 			rerunRequestID,
 		)
 	}
-	queueFailureFollowUp = func(failedRequestID string, failedResult harness.Result, failedRunCfg config.Config, source string) {
+	queueFailureFollowUp = func(failedRequestID string, failedResult app.Result, failedRunCfg config.Config, source string) {
 		if ok, reason := shouldQueueFailureFollowUp(source, failedResult); !ok {
 			daemonLogger(
 				"dispatch status=warn action=skip_failure_followup request_id=%s err=%q",
@@ -606,7 +606,7 @@ func runHub(args []string) int {
 			followUpRequestID,
 		)
 	}
-	queueUnexpectedNoChangesFollowUp = func(requestID string, result harness.Result, runCfg config.Config) {
+	queueUnexpectedNoChangesFollowUp = func(requestID string, result app.Result, runCfg config.Config) {
 		if ok, reason := shouldQueueUnexpectedNoChangesFollowUp(result); !ok {
 			daemonLogger(
 				"dispatch status=warn action=skip_no_changes_followup request_id=%s err=%q",
@@ -641,7 +641,7 @@ func runHub(args []string) int {
 			followUpRequestID,
 		)
 	}
-	queueEscalatedNoChangesFollowUp = func(requestID string, result harness.Result, runCfg config.Config) {
+	queueEscalatedNoChangesFollowUp = func(requestID string, result app.Result, runCfg config.Config) {
 		if ok, reason := shouldEscalateNoChangesFollowUp(noChangesFollowUpSource, result, runCfg); !ok {
 			daemonLogger(
 				"dispatch status=warn action=skip_no_changes_escalation request_id=%s err=%q",
@@ -691,7 +691,7 @@ func runHub(args []string) int {
 			monitorBroker.RecordTaskRunConfig(requestID, runConfigJSON)
 		}
 	}
-	hubController.onDispatchFailed = func(requestID string, runCfg config.Config, result harness.Result) {
+	hubController.onDispatchFailed = func(requestID string, runCfg config.Config, result app.Result) {
 		if queueFailureFollowUp != nil {
 			queueFailureFollowUp(requestID, result, runCfg, "hub_dispatch")
 		}
@@ -704,7 +704,7 @@ func runHub(args []string) int {
 		for {
 			select {
 			case <-ctx.Done():
-				return harness.ExitSuccess
+				return app.ExitSuccess
 			case <-pingLive:
 				pingLive = nil
 				if !hubConfigured {
@@ -739,7 +739,7 @@ func runHub(args []string) int {
 	}
 
 	if strings.TrimSpace(*uiListen) != "" {
-		uiServer := hubui.NewServer(*uiListen, monitorBroker)
+		uiServer := web.NewServer(*uiListen, monitorBroker)
 		uiServer.AutomaticMode = *uiAutomatic
 		uiServer.ConfiguredHarness = cfg.AgentHarness
 		uiServer.Logf = daemonLogger
@@ -786,16 +786,16 @@ func runHub(args []string) int {
 				uiServer.ConfigureAgentAuth = authGate.Configure
 			}
 		}
-		uiServer.HubSetupStatus = func(reqCtx context.Context) (hubui.HubSetupState, error) {
+		uiServer.HubSetupStatus = func(reqCtx context.Context) (web.HubSetupState, error) {
 			return currentHubSetupStateWithRemoteProfile(reqCtx, cfg), nil
 		}
-		uiServer.ConfigureHubSetup = func(reqCtx context.Context, req hubui.HubSetupRequest) (hubui.HubSetupState, error) {
+		uiServer.ConfigureHubSetup = func(reqCtx context.Context, req web.HubSetupRequest) (web.HubSetupState, error) {
 			return configureHubSetup(reqCtx, cfg, req, hubController.Update)
 		}
-		uiServer.ConnectHubSetup = func(reqCtx context.Context) (hubui.HubSetupState, error) {
+		uiServer.ConnectHubSetup = func(reqCtx context.Context) (web.HubSetupState, error) {
 			return connectHubSetup(reqCtx, cfg, hubController.Update)
 		}
-		uiServer.DisconnectHubSetup = func(reqCtx context.Context) (hubui.HubSetupState, error) {
+		uiServer.DisconnectHubSetup = func(reqCtx context.Context) (web.HubSetupState, error) {
 			return disconnectHubSetup(reqCtx, cfg, hubController.Stop)
 		}
 		recordLibraryUsage := func(runCfg config.Config) {
@@ -853,7 +853,7 @@ func runHub(args []string) int {
 			return nil
 		}
 		daemonLogger("hub.ui status=ready url=%s", monitorURL(*uiListen))
-		prMonitor := &hubui.PRMergeMonitor{
+		prMonitor := &web.PRMergeMonitor{
 			Runner:      runner,
 			Broker:      monitorBroker,
 			Logf:        daemonLogger,
@@ -874,7 +874,7 @@ func runHub(args []string) int {
 	if forceLocalOnlyMode {
 		if strings.TrimSpace(*uiListen) == "" {
 			daemonLogger("hub.auth status=local_only detail=%q", hubPingFailureDetail(hubPingHeadlessNoopDetail, bootDiag.PingErr))
-			return harness.ExitSuccess
+			return app.ExitSuccess
 		}
 		return waitForHubRuntime()
 	}
@@ -889,7 +889,7 @@ func runHub(args []string) int {
 				logger,
 				"error: hub auth not configured and UI disabled; set bind_token/agent_token (or persisted runtime config) or enable --ui-listen",
 			)
-			return harness.ExitAuth
+			return app.ExitAuth
 		}
 		return waitForHubRuntime()
 	}
@@ -917,7 +917,7 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 	configPath = strings.TrimSpace(configPath)
 
 	if initPath != "" && configPath != "" {
-		return hub.InitConfig{}, harness.ExitUsage, fmt.Errorf("provide only one of --init or --config")
+		return hub.InitConfig{}, app.ExitUsage, fmt.Errorf("provide only one of --init or --config")
 	}
 
 	if configPath != "" {
@@ -933,15 +933,15 @@ func loadHubBootConfig(initPath, configPath string) (hub.InitConfig, int, error)
 				if runtimeErr == nil {
 					cfg := runtimeCfg.Init()
 					cfg.RuntimeConfigPath = runtimeCfg.RuntimeConfigPath
-					return finalizeHubBootConfig(cfg, harness.ExitSuccess, nil)
+					return finalizeHubBootConfig(cfg, app.ExitSuccess, nil)
 				}
 				return finalizeHubBootConfig(loadHubBootRuntimeConfigOrDefault(runtimePath))
 			}
-			return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("init config error: %w", err)
+			return hub.InitConfig{}, app.ExitConfig, fmt.Errorf("init config error: %w", err)
 		}
 		cfg.RuntimeConfigPath = hub.ResolveRuntimeConfigPath(initPath)
 		cfg.LogLevel = configuredHubLogLevel(cfg.LogLevel, cfg.RuntimeConfigPath)
-		return finalizeHubBootConfig(cfg, harness.ExitSuccess, nil)
+		return finalizeHubBootConfig(cfg, app.ExitSuccess, nil)
 	}
 
 	return finalizeHubBootConfig(loadHubBootRuntimeConfigOrDefault(""))
@@ -959,7 +959,7 @@ func loadHubBootRuntimeConfigOrDefault(path string) (hub.InitConfig, int, error)
 
 	cfg := runtimeCfg.Init()
 	cfg.RuntimeConfigPath = runtimeCfg.RuntimeConfigPath
-	return cfg, harness.ExitSuccess, nil
+	return cfg, app.ExitSuccess, nil
 }
 
 func finalizeHubBootConfig(cfg hub.InitConfig, exitCode int, err error) (hub.InitConfig, int, error) {
@@ -967,7 +967,7 @@ func finalizeHubBootConfig(cfg hub.InitConfig, exitCode int, err error) (hub.Ini
 		return cfg, exitCode, err
 	}
 	if err := applyMoltenHubEnvBootstrap(&cfg); err != nil {
-		return hub.InitConfig{}, harness.ExitConfig, err
+		return hub.InitConfig{}, app.ExitConfig, err
 	}
 	return cfg, exitCode, nil
 }
@@ -1097,18 +1097,18 @@ func defaultHubBootConfig(runtimeConfigPath string) (hub.InitConfig, int, error)
 	}
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
-		return hub.InitConfig{}, harness.ExitConfig, fmt.Errorf("init config error: %w", err)
+		return hub.InitConfig{}, app.ExitConfig, fmt.Errorf("init config error: %w", err)
 	}
-	return cfg, harness.ExitSuccess, nil
+	return cfg, app.ExitSuccess, nil
 }
 
 type hubLogRouter struct {
 	logger *terminalLogger
-	broker *hubui.Broker
+	broker *web.Broker
 	level  hub.LogLevel
 }
 
-func newHubLogRouter(logger *terminalLogger, broker *hubui.Broker, level hub.LogLevel) hubLogRouter {
+func newHubLogRouter(logger *terminalLogger, broker *web.Broker, level hub.LogLevel) hubLogRouter {
 	return hubLogRouter{
 		logger: logger,
 		broker: broker,
@@ -1235,7 +1235,7 @@ func writeStderrLine(logger *terminalLogger, line string) {
 
 type localDispatchOutcome struct {
 	State  string
-	Result harness.Result
+	Result app.Result
 }
 
 func runLocalDispatch(
@@ -1255,7 +1255,7 @@ func runLocalDispatch(
 		strings.Join(runCfg.RepoList(), ","),
 	)
 
-	h := harness.New(runner)
+	h := app.New(runner)
 	h.Logf = func(format string, args ...any) {
 		line := fmt.Sprintf(format, args...)
 		logf("dispatch request_id=%s %s", requestID, line)
@@ -1315,7 +1315,7 @@ func runLocalDispatch(
 
 func failureFollowUpRunConfig(
 	failedRequestID string,
-	failedResult harness.Result,
+	failedResult app.Result,
 	failedRunCfg config.Config,
 	logRoot string,
 ) config.Config {
@@ -1335,7 +1335,7 @@ func failureFollowUpRunConfig(
 
 func unexpectedNoChangesFollowUpRunConfig(
 	requestID string,
-	result harness.Result,
+	result app.Result,
 	runCfg config.Config,
 	logRoot string,
 ) config.Config {
@@ -1350,7 +1350,7 @@ func unexpectedNoChangesFollowUpRunConfig(
 	}
 }
 
-func shouldQueueFailureFollowUp(source string, failedResult harness.Result) (bool, string) {
+func shouldQueueFailureFollowUp(source string, failedResult app.Result) (bool, string) {
 	source = strings.TrimSpace(source)
 	if failedResult.Err == nil {
 		return false, "failed task did not include an error"
@@ -1370,7 +1370,7 @@ func shouldQueueFailureFollowUp(source string, failedResult harness.Result) (boo
 	return true, ""
 }
 
-func shouldQueueFailureRerun(source string, failedResult harness.Result) (bool, string) {
+func shouldQueueFailureRerun(source string, failedResult app.Result) (bool, string) {
 	source = strings.TrimSpace(source)
 	if failedResult.Err == nil {
 		return false, "failed task did not include an error"
@@ -1400,7 +1400,7 @@ func enqueueFailureRerun(ctx context.Context, enqueue localRunEnqueueFunc, faile
 	return enqueue(ctx, failedRunCfg, false, rerunSource, true)
 }
 
-func shouldQueueUnexpectedNoChangesFollowUp(result harness.Result) (bool, string) {
+func shouldQueueUnexpectedNoChangesFollowUp(result app.Result) (bool, string) {
 	if !result.NoChanges {
 		return false, "task did not complete with no changes"
 	}
@@ -1410,7 +1410,7 @@ func shouldQueueUnexpectedNoChangesFollowUp(result harness.Result) (bool, string
 	return true, ""
 }
 
-func shouldEscalateNoChangesFollowUp(source string, result harness.Result, runCfg config.Config) (bool, string) {
+func shouldEscalateNoChangesFollowUp(source string, result app.Result, runCfg config.Config) (bool, string) {
 	if strings.TrimSpace(source) != noChangesFollowUpSource {
 		return false, "run is not a no-changes follow-up"
 	}
@@ -1426,7 +1426,7 @@ func shouldEscalateNoChangesFollowUp(source string, result harness.Result, runCf
 	return true, ""
 }
 
-func failureFollowUpRepos(_ harness.Result, _ config.Config) []string {
+func failureFollowUpRepos(_ app.Result, _ config.Config) []string {
 	if repo := strings.TrimSpace(failurefollowup.FollowUpRepositoryURL); repo != "" {
 		return []string{repo}
 	}
@@ -1438,10 +1438,10 @@ func unexpectedNoChangesFollowUpRepos(runCfg config.Config) []string {
 	if len(repos) > 0 {
 		return repos
 	}
-	return failureFollowUpRepos(harness.Result{}, runCfg)
+	return failureFollowUpRepos(app.Result{}, runCfg)
 }
 
-func unexpectedNoChangesFollowUpPrompt(logPaths []string, requestID string, result harness.Result, runCfg config.Config) string {
+func unexpectedNoChangesFollowUpPrompt(logPaths []string, requestID string, result app.Result, runCfg config.Config) string {
 	const requiredPrompt = "Review the previous local task logs first. The prior run completed with no file changes and no pull request, which is unexpected for this task. Identify why the task produced no repository changes, fix the underlying issue, complete the requested work, validate locally where possible, and summarize the verified results. Only return a no-op if you can cite concrete repository evidence that the request is already satisfied; otherwise produce the smallest correct diff or return an explicit failure with blocker details."
 
 	var contextLines []string
@@ -1485,7 +1485,7 @@ func unexpectedNoChangesFollowUpPrompt(logPaths []string, requestID string, resu
 
 func escalatedNoChangesFollowUpRunConfig(
 	requestID string,
-	result harness.Result,
+	result app.Result,
 	runCfg config.Config,
 	logRoot string,
 ) config.Config {
@@ -1500,7 +1500,7 @@ func escalatedNoChangesFollowUpRunConfig(
 	}
 }
 
-func escalatedNoChangesFollowUpPrompt(logPaths []string, requestID string, result harness.Result, runCfg config.Config) string {
+func escalatedNoChangesFollowUpPrompt(logPaths []string, requestID string, result app.Result, runCfg config.Config) string {
 	const requiredPrompt = "Review the previous local task logs first. The original task and the no-changes follow-up both completed without file changes or a pull request. For this escalation, do not return another no-op unless you can cite exact file paths and concrete repository evidence proving the requested outcome already exists. Otherwise make the smallest correct repository change that satisfies the request. If a real diff is blocked, return an explicit failure with the precise blocker details instead of another ambiguous no-op."
 
 	var contextLines []string
@@ -1585,7 +1585,7 @@ func promptRequestsRepositoryChange(prompt string) bool {
 	return true
 }
 
-func failureFollowUpPrompt(logPaths []string, failedResult harness.Result, failedRunCfg config.Config) string {
+func failureFollowUpPrompt(logPaths []string, failedResult app.Result, failedRunCfg config.Config) string {
 	return failurefollowup.ComposePrompt(
 		failureFollowUpRequiredPrompt,
 		logPaths,
@@ -1599,7 +1599,7 @@ func failureFollowUpPrompt(logPaths []string, failedResult harness.Result, faile
 	)
 }
 
-func failureFollowUpFailureContext(failedResult harness.Result, failedRunCfg config.Config) string {
+func failureFollowUpFailureContext(failedResult app.Result, failedRunCfg config.Config) string {
 	lines := []string{
 		"Observed failure context:",
 		fmt.Sprintf("- exit_code=%d", failedResult.ExitCode),
@@ -1632,7 +1632,7 @@ func failureFollowUpFailureContext(failedResult harness.Result, failedRunCfg con
 	return strings.Join(lines, "\n")
 }
 
-func failureFollowUpContextRepos(failedResult harness.Result, failedRunCfg config.Config) []string {
+func failureFollowUpContextRepos(failedResult app.Result, failedRunCfg config.Config) []string {
 	var repos []string
 	seen := make(map[string]struct{})
 	appendRepo := func(repo string) {
@@ -1905,15 +1905,15 @@ func hubExitCode(err error) int {
 	text := strings.ToLower(strings.TrimSpace(err.Error()))
 	switch {
 	case strings.HasPrefix(text, "init config:"):
-		return harness.ExitConfig
+		return app.ExitConfig
 	case strings.HasPrefix(text, "hub auth:"):
-		return harness.ExitAuth
+		return app.ExitAuth
 	case strings.HasPrefix(text, "hub profile:"):
-		return harness.ExitAuth
+		return app.ExitAuth
 	case strings.HasPrefix(text, "hub websocket url:"):
-		return harness.ExitConfig
+		return app.ExitConfig
 	default:
-		return harness.ExitPreflight
+		return app.ExitPreflight
 	}
 }
 
@@ -1921,7 +1921,7 @@ func shouldFallbackToLocalOnlyMode(uiListen string, err error) bool {
 	if strings.TrimSpace(uiListen) == "" || err == nil {
 		return false
 	}
-	return hubExitCode(err) == harness.ExitAuth
+	return hubExitCode(err) == app.ExitAuth
 }
 
 func shouldRunHubInLocalOnlyMode(pingPrecheckChecked bool, pingPrecheckOK bool, uiListen string, hubConfigured bool) bool {
@@ -1945,7 +1945,7 @@ func hubPingFailureDetail(base string, pingErr error) string {
 	return fmt.Sprintf("%s Error: %v", base, pingErr)
 }
 
-func joinPRURLs(results []harness.RepoResult) string {
+func joinPRURLs(results []app.RepoResult) string {
 	if len(results) == 0 {
 		return ""
 	}
@@ -1959,7 +1959,7 @@ func joinPRURLs(results []harness.RepoResult) string {
 	return strings.Join(urls, ",")
 }
 
-func joinAllPRURLs(results []harness.RepoResult) string {
+func joinAllPRURLs(results []app.RepoResult) string {
 	if len(results) == 0 {
 		return ""
 	}
@@ -1973,7 +1973,7 @@ func joinAllPRURLs(results []harness.RepoResult) string {
 	return strings.Join(urls, ",")
 }
 
-func resultHasPR(result harness.Result) bool {
+func resultHasPR(result app.Result) bool {
 	if strings.TrimSpace(result.PRURL) != "" {
 		return true
 	}
@@ -2069,14 +2069,14 @@ func markLocalRunOpenClawOffline(ctx context.Context, cfg hub.InitConfig, reques
 	}
 }
 
-func completedPRURLs(result harness.Result) string {
+func completedPRURLs(result app.Result) string {
 	if result.NoChanges {
 		return joinAllPRURLs(result.RepoResults)
 	}
 	return joinPRURLs(result.RepoResults)
 }
 
-func countChangedRepos(results []harness.RepoResult) int {
+func countChangedRepos(results []app.RepoResult) int {
 	count := 0
 	for _, result := range results {
 		if result.Changed {
@@ -2617,14 +2617,14 @@ func resetHubSetupLocationsCache() {
 	hubSetupLocationsCache.fetchedAt = time.Time{}
 }
 
-func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
-	state := hubui.HubSetupState{
+func currentHubSetupState(cfg hub.InitConfig) web.HubSetupState {
+	state := web.HubSetupState{
 		ConnectURL:      "https://app.molten.bot/signin?target=hub",
 		DashboardURL:    "https://app.molten.bot/hub",
 		AgentMode:       "existing",
 		TokenType:       "agent",
 		Region:          "na",
-		Onboarding:      hubui.DefaultHubSetupOnboarding("existing"),
+		Onboarding:      web.DefaultHubSetupOnboarding("existing"),
 		OnboardingStage: "bind",
 	}
 	locations := currentHubSetupLocations()
@@ -2666,7 +2666,7 @@ func currentHubSetupState(cfg hub.InitConfig) hubui.HubSetupState {
 			state.TokenType = "agent"
 		}
 	}
-	state.Onboarding = hubui.DefaultHubSetupOnboarding(state.AgentMode)
+	state.Onboarding = web.DefaultHubSetupOnboarding(state.AgentMode)
 	state.ActivationReady = state.Configured
 	return state
 }
@@ -2696,7 +2696,7 @@ func loadHubSetupRuntimeConfig(path string) (hub.InitConfig, bool, error) {
 	return initCfg, true, nil
 }
 
-func currentHubSetupStateWithRemoteProfile(ctx context.Context, cfg hub.InitConfig) hubui.HubSetupState {
+func currentHubSetupStateWithRemoteProfile(ctx context.Context, cfg hub.InitConfig) web.HubSetupState {
 	state := currentHubSetupState(cfg)
 	if !hubSetupProfileNeedsRemoteHydration(state) {
 		return state
@@ -2734,7 +2734,7 @@ func currentHubSetupStateWithRemoteProfile(ctx context.Context, cfg hub.InitConf
 	return state
 }
 
-func hubSetupProfileNeedsRemoteHydration(state hubui.HubSetupState) bool {
+func hubSetupProfileNeedsRemoteHydration(state web.HubSetupState) bool {
 	if !state.Configured {
 		return false
 	}
@@ -2807,7 +2807,7 @@ func effectiveHubSetupConfig(cfg hub.InitConfig) (hub.InitConfig, error) {
 	return storedCfg, nil
 }
 
-func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSetupRequest, applyLive func(context.Context, hub.InitConfig) error) (hubui.HubSetupState, error) {
+func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req web.HubSetupRequest, applyLive func(context.Context, hub.InitConfig) error) (web.HubSetupState, error) {
 	state := currentHubSetupState(cfg)
 	token := strings.TrimSpace(req.Token)
 	requestedRegion := strings.TrimSpace(req.Region)
@@ -2820,9 +2820,9 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 	state.Profile.ProfileText = strings.TrimSpace(req.Profile.ProfileText)
 	state.Profile.DisplayName = strings.TrimSpace(req.Profile.DisplayName)
 	state.Profile.Emoji = strings.TrimSpace(req.Profile.Emoji)
-	state.Onboarding = hubui.DefaultHubSetupOnboarding(state.AgentMode)
+	state.Onboarding = web.DefaultHubSetupOnboarding(state.AgentMode)
 	hubSetupMarkStep(&state, "bind", "current", "")
-	bindError := func(err error) (hubui.HubSetupState, error) {
+	bindError := func(err error) (web.HubSetupState, error) {
 		hubSetupMarkStep(&state, "bind", "error", err.Error())
 		return state, err
 	}
@@ -2963,7 +2963,7 @@ func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req hubui.HubSet
 	return state, nil
 }
 
-func connectHubSetup(ctx context.Context, cfg hub.InitConfig, applyLive func(context.Context, hub.InitConfig) error) (hubui.HubSetupState, error) {
+func connectHubSetup(ctx context.Context, cfg hub.InitConfig, applyLive func(context.Context, hub.InitConfig) error) (web.HubSetupState, error) {
 	state := currentHubSetupState(cfg)
 	if !state.Configured {
 		return state, fmt.Errorf("molten hub is not configured")
@@ -2990,7 +2990,7 @@ func connectHubSetup(ctx context.Context, cfg hub.InitConfig, applyLive func(con
 	return state, nil
 }
 
-func disconnectHubSetup(ctx context.Context, cfg hub.InitConfig, stopLive func(context.Context) error) (hubui.HubSetupState, error) {
+func disconnectHubSetup(ctx context.Context, cfg hub.InitConfig, stopLive func(context.Context) error) (web.HubSetupState, error) {
 	state := currentHubSetupState(cfg)
 	if !state.Configured {
 		return state, fmt.Errorf("molten hub is not configured")
@@ -3015,7 +3015,7 @@ func disconnectHubSetup(ctx context.Context, cfg hub.InitConfig, stopLive func(c
 	return state, nil
 }
 
-func hubSetupMarkStep(state *hubui.HubSetupState, stepID, status, detail string) {
+func hubSetupMarkStep(state *web.HubSetupState, stepID, status, detail string) {
 	if state == nil {
 		return
 	}

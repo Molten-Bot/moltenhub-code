@@ -31,11 +31,11 @@ func newHubRuntimeConfigReloader(
 	logf func(string, ...any),
 ) *hubRuntimeConfigReloader {
 	return &hubRuntimeConfigReloader{
-		baseCfg:        baseCfg,
-		loadEffective:  effectiveHubSetupConfig,
-		apply:          apply,
-		stop:           stop,
-		logf:           logf,
+		baseCfg:       baseCfg,
+		loadEffective: effectiveHubSetupConfig,
+		apply:         apply,
+		stop:          stop,
+		logf:          logf,
 	}
 }
 

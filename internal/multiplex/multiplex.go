@@ -6,9 +6,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Molten-Bot/moltenhub-code/internal/app"
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
-	"github.com/Molten-Bot/moltenhub-code/internal/harness"
 )
 
 type logFn func(string, ...any)
@@ -47,17 +47,17 @@ type Result struct {
 // ExitCode returns the first non-zero exit code, if any.
 func (r Result) ExitCode() int {
 	for _, s := range r.Sessions {
-		if s.ExitCode != harness.ExitSuccess {
+		if s.ExitCode != app.ExitSuccess {
 			if s.ExitCode > 0 {
 				return s.ExitCode
 			}
 			return 1
 		}
 	}
-	return harness.ExitSuccess
+	return app.ExitSuccess
 }
 
-type runSessionFn func(context.Context, config.Config, logFn) harness.Result
+type runSessionFn func(context.Context, config.Config, logFn) app.Result
 
 // Multiplexer runs many harness sessions concurrently.
 type Multiplexer struct {
@@ -89,8 +89,8 @@ func (m Multiplexer) Run(ctx context.Context, configPaths []string) Result {
 	}
 	if m.RunSession == nil {
 		runner := m.Runner
-		m.RunSession = func(ctx context.Context, cfg config.Config, logf logFn) harness.Result {
-			h := harness.New(runner)
+		m.RunSession = func(ctx context.Context, cfg config.Config, logf logFn) app.Result {
+			h := app.New(runner)
 			h.Logf = func(format string, args ...any) {
 				logf(format, args...)
 			}
@@ -163,7 +163,7 @@ func (m Multiplexer) runOne(ctx context.Context, mu *sync.Mutex, sessions []Sess
 		s.State = SessionError
 		s.Stage = "config"
 		s.StageStatus = "error"
-		s.ExitCode = harness.ExitConfig
+		s.ExitCode = app.ExitConfig
 		s.Error = err.Error()
 		sessions[idx] = s
 		mu.Unlock()

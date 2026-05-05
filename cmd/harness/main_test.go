@@ -16,11 +16,11 @@ import (
 	"testing"
 
 	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
+	"github.com/Molten-Bot/moltenhub-code/internal/app"
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
-	"github.com/Molten-Bot/moltenhub-code/internal/harness"
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
-	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
+	"github.com/Molten-Bot/moltenhub-code/internal/web"
 )
 
 func useHubSetupLocationsLoaderForTest(t *testing.T, loader func(context.Context) ([]hubSetupLocation, error)) {
@@ -124,8 +124,8 @@ func TestLoadHubBootConfigWithoutFlagsUsesDefaultsWhenRuntimeConfigMissing(t *te
 	if err != nil {
 		t.Fatalf("loadHubBootConfig() error = %v", err)
 	}
-	if exitCode != harness.ExitSuccess {
-		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	if exitCode != app.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, app.ExitSuccess)
 	}
 	if got, want := cfg.BaseURL, "https://na.hub.molten.bot/v1"; got != want {
 		t.Fatalf("BaseURL = %q, want %q", got, want)
@@ -145,8 +145,8 @@ func TestLoadHubBootConfigWithMissingInitFlagFallsBackToRuntimeDefaults(t *testi
 	if err != nil {
 		t.Fatalf("loadHubBootConfig() error = %v", err)
 	}
-	if exitCode != harness.ExitSuccess {
-		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	if exitCode != app.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, app.ExitSuccess)
 	}
 	if got, want := cfg.BaseURL, "https://na.hub.molten.bot/v1"; got != want {
 		t.Fatalf("BaseURL = %q, want %q", got, want)
@@ -178,8 +178,8 @@ func TestLoadHubBootConfigWithMissingInitFlagUsesSiblingRuntimeConfigWhenAvailab
 	if err != nil {
 		t.Fatalf("loadHubBootConfig() error = %v", err)
 	}
-	if exitCode != harness.ExitSuccess {
-		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	if exitCode != app.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, app.ExitSuccess)
 	}
 	if got, want := cfg.RuntimeConfigPath, runtimeConfigPath; got != want {
 		t.Fatalf("RuntimeConfigPath = %q, want %q", got, want)
@@ -207,8 +207,8 @@ func TestLoadHubBootConfigWithInitUsesRuntimeConfigLogLevelWhenPresent(t *testin
 	if err != nil {
 		t.Fatalf("loadHubBootConfig() error = %v", err)
 	}
-	if exitCode != harness.ExitSuccess {
-		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	if exitCode != app.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, app.ExitSuccess)
 	}
 	if got, want := cfg.LogLevel, hub.LogLevelDebug.String(); got != want {
 		t.Fatalf("LogLevel = %q, want %q", got, want)
@@ -233,8 +233,8 @@ func TestLoadHubBootConfigWithInitBackfillsMissingRuntimeConfigLogLevel(t *testi
 	if err != nil {
 		t.Fatalf("loadHubBootConfig() error = %v", err)
 	}
-	if exitCode != harness.ExitSuccess {
-		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	if exitCode != app.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, app.ExitSuccess)
 	}
 	if got, want := cfg.LogLevel, hub.DefaultLogLevel; got != want {
 		t.Fatalf("LogLevel = %q, want %q", got, want)
@@ -263,8 +263,8 @@ func TestLoadHubBootConfigWithMissingConfigFlagFallsBackToRuntimeDefaults(t *tes
 	if err != nil {
 		t.Fatalf("loadHubBootConfig() error = %v", err)
 	}
-	if exitCode != harness.ExitSuccess {
-		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	if exitCode != app.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, app.ExitSuccess)
 	}
 	if got, want := cfg.BaseURL, "https://na.hub.molten.bot/v1"; got != want {
 		t.Fatalf("BaseURL = %q, want %q", got, want)
@@ -288,8 +288,8 @@ func TestLoadHubBootConfigWithInvalidConfigFlagFallsBackToRuntimeDefaults(t *tes
 	if err != nil {
 		t.Fatalf("loadHubBootConfig() error = %v", err)
 	}
-	if exitCode != harness.ExitSuccess {
-		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	if exitCode != app.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, app.ExitSuccess)
 	}
 	if got, want := cfg.BaseURL, "https://na.hub.molten.bot/v1"; got != want {
 		t.Fatalf("BaseURL = %q, want %q", got, want)
@@ -342,8 +342,8 @@ func TestLoadHubBootConfigUsesDefaultRuntimeConfigWhenFlagsOmitted(t *testing.T)
 	if err != nil {
 		t.Fatalf("loadHubBootConfig() error = %v", err)
 	}
-	if exitCode != harness.ExitSuccess {
-		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	if exitCode != app.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, app.ExitSuccess)
 	}
 	if cfg.RuntimeConfigPath != "./.moltenhub/config.json" {
 		t.Fatalf("RuntimeConfigPath = %q, want %q", cfg.RuntimeConfigPath, "./.moltenhub/config.json")
@@ -385,8 +385,8 @@ func TestLoadHubBootConfigWithoutFlagsAllowsDefaultRuntimeConfigWithoutCredentia
 	if err != nil {
 		t.Fatalf("loadHubBootConfig() error = %v", err)
 	}
-	if exitCode != harness.ExitSuccess {
-		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	if exitCode != app.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, app.ExitSuccess)
 	}
 	if got, want := cfg.BaseURL, "https://na.hub.molten.bot/v1"; got != want {
 		t.Fatalf("BaseURL = %q, want %q", got, want)
@@ -411,8 +411,8 @@ func TestLoadHubBootConfigUsesMoltenHubTokenEnvWhenRuntimeConfigOmitsCredentials
 	if err != nil {
 		t.Fatalf("loadHubBootConfig() error = %v", err)
 	}
-	if exitCode != harness.ExitSuccess {
-		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	if exitCode != app.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, app.ExitSuccess)
 	}
 	if got, want := cfg.AgentToken, "t_env_agent_token"; got != want {
 		t.Fatalf("AgentToken = %q, want %q", got, want)
@@ -438,8 +438,8 @@ func TestLoadHubBootConfigAppliesEnvTokensToDefaultConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadHubBootConfig() error = %v", err)
 	}
-	if exitCode != harness.ExitSuccess {
-		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	if exitCode != app.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, app.ExitSuccess)
 	}
 	if got, want := cfg.AgentToken, "t_env_agent_token"; got != want {
 		t.Fatalf("AgentToken = %q, want %q", got, want)
@@ -466,8 +466,8 @@ func TestLoadHubBootConfigAcceptsMalformedDockerComposeGitHubEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadHubBootConfig() error = %v", err)
 	}
-	if exitCode != harness.ExitSuccess {
-		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	if exitCode != app.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, app.ExitSuccess)
 	}
 	if got, want := cfg.GitHubToken, "github_token_env_token"; got != want {
 		t.Fatalf("GitHubToken = %q, want %q", got, want)
@@ -486,8 +486,8 @@ func TestLoadHubBootConfigAcceptsMalformedDockerComposeMoltenHubEnv(t *testing.T
 	if err != nil {
 		t.Fatalf("loadHubBootConfig() error = %v", err)
 	}
-	if exitCode != harness.ExitSuccess {
-		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	if exitCode != app.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, app.ExitSuccess)
 	}
 	if got, want := cfg.AgentToken, "t_env_agent_token"; got != want {
 		t.Fatalf("AgentToken = %q, want %q", got, want)
@@ -534,8 +534,8 @@ func TestLoadHubBootConfigWithBadRuntimeConfigFallsBackToDefaults(t *testing.T) 
 	if err != nil {
 		t.Fatalf("loadHubBootConfig() error = %v", err)
 	}
-	if exitCode != harness.ExitSuccess {
-		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, harness.ExitSuccess)
+	if exitCode != app.ExitSuccess {
+		t.Fatalf("loadHubBootConfig() exitCode = %d, want %d", exitCode, app.ExitSuccess)
 	}
 	if got, want := cfg.BaseURL, "https://na.hub.molten.bot/v1"; got != want {
 		t.Fatalf("BaseURL = %q, want %q", got, want)
@@ -622,7 +622,7 @@ func TestFailureFollowUpRunConfigIncludesNonLocalRequestLogPaths(t *testing.T) {
 	t.Parallel()
 
 	logRoot := filepath.Join(t.TempDir(), ".log")
-	failedResult := harness.Result{Err: fmt.Errorf("checks failed")}
+	failedResult := app.Result{Err: fmt.Errorf("checks failed")}
 	failedRunCfg := config.Config{Repos: []string{"git@github.com:acme/repo.git"}}
 
 	cfg := failureFollowUpRunConfig("req-123-abc", failedResult, failedRunCfg, logRoot)
@@ -647,7 +647,7 @@ func TestFailureFollowUpRunConfigUsesRequiredPayloadShapeAndLogContext(t *testin
 	if err := os.WriteFile(logPath, []byte("stage=checks status=failed\ncmd phase=checks text=\"go test failed\"\n"), 0o644); err != nil {
 		t.Fatalf("write log file: %v", err)
 	}
-	failedResult := harness.Result{
+	failedResult := app.Result{
 		Err:          fmt.Errorf("clone: repository not found"),
 		WorkspaceDir: "/tmp/run-123",
 	}
@@ -686,14 +686,14 @@ func TestFailureFollowUpRunConfigForcesRemoteDefaultBranchAndRootTarget(t *testi
 	t.Parallel()
 
 	logRoot := filepath.Join(t.TempDir(), ".log")
-	failedResult := harness.Result{
+	failedResult := app.Result{
 		Err:    fmt.Errorf("git: nothing to commit, working tree clean"),
 		Branch: "moltenhub-add-slight-padding-between-prompt-and-lo",
 	}
 	failedRunCfg := config.Config{
 		Repos:        []string{"git@github.com:acme/repo.git"},
 		BaseBranch:   "moltenhub-add-slight-padding-between-prompt-and-lo",
-		TargetSubdir: "internal/hubui",
+		TargetSubdir: "internal/web",
 		Prompt:       "add slight padding between prompt and lower items",
 	}
 
@@ -705,7 +705,7 @@ func TestFailureFollowUpRunConfigForcesRemoteDefaultBranchAndRootTarget(t *testi
 		t.Fatalf("TargetSubdir = %q, want %q", cfg.TargetSubdir, ".")
 	}
 	for _, want := range []string{
-		"- target_subdir=internal/hubui",
+		"- target_subdir=internal/web",
 		"Original task prompt:",
 		"add slight padding between prompt and lower items",
 	} {
@@ -718,8 +718,8 @@ func TestFailureFollowUpRunConfigForcesRemoteDefaultBranchAndRootTarget(t *testi
 func TestFailureFollowUpReposAlwaysUsesMoltenHubRepositoryWhenResultHasSingleRepo(t *testing.T) {
 	t.Parallel()
 
-	failedResult := harness.Result{
-		RepoResults: []harness.RepoResult{
+	failedResult := app.Result{
+		RepoResults: []app.RepoResult{
 			{RepoURL: "git@github.com:acme/failed-result.git"},
 			{RepoURL: "git@github.com:acme/failed-result.git"},
 		},
@@ -737,8 +737,8 @@ func TestFailureFollowUpReposAlwaysUsesMoltenHubRepositoryWhenResultHasSingleRep
 func TestFailureFollowUpReposAlwaysUsesMoltenHubRepositoryWhenResultAndConfigDiffer(t *testing.T) {
 	t.Parallel()
 
-	failedResult := harness.Result{
-		RepoResults: []harness.RepoResult{
+	failedResult := app.Result{
+		RepoResults: []app.RepoResult{
 			{RepoURL: "git@github.com:acme/from-result.git"},
 			{RepoURL: "git@github.com:acme/from-result.git"},
 		},
@@ -757,8 +757,8 @@ func TestFailureFollowUpReposAlwaysUsesMoltenHubRepositoryWhenResultAndConfigDif
 func TestFailureFollowUpReposAlwaysUsesMoltenHubRepositoryWhenOnlyResultRepoExists(t *testing.T) {
 	t.Parallel()
 
-	failedResult := harness.Result{
-		RepoResults: []harness.RepoResult{
+	failedResult := app.Result{
+		RepoResults: []app.RepoResult{
 			{RepoURL: "git@github.com:acme/from-result.git"},
 		},
 	}
@@ -770,8 +770,8 @@ func TestFailureFollowUpReposAlwaysUsesMoltenHubRepositoryWhenOnlyResultRepoExis
 func TestFailureFollowUpReposAlwaysUsesMoltenHubRepositoryWhenResultIsAmbiguous(t *testing.T) {
 	t.Parallel()
 
-	failedResult := harness.Result{
-		RepoResults: []harness.RepoResult{
+	failedResult := app.Result{
+		RepoResults: []app.RepoResult{
 			{RepoURL: "git@github.com:acme/repo-a.git"},
 			{RepoURL: "git@github.com:acme/repo-b.git"},
 		},
@@ -791,7 +791,7 @@ func TestFailureFollowUpReposAlwaysUsesMoltenHubRepositoryWhenResultIsAmbiguous(
 func TestFailureFollowUpReposUsesMoltenHubRepositoryWhenNoRepoFound(t *testing.T) {
 	t.Parallel()
 
-	if got, want := failureFollowUpRepos(harness.Result{}, config.Config{}), []string{config.DefaultRepositoryURL}; !reflect.DeepEqual(got, want) {
+	if got, want := failureFollowUpRepos(app.Result{}, config.Config{}), []string{config.DefaultRepositoryURL}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("failureFollowUpRepos() = %v, want %v", got, want)
 	}
 }
@@ -1244,7 +1244,7 @@ func TestConfigureHubSetupNewAgentUsesBindTokenFlow(t *testing.T) {
 		BaseURL:           server.URL + "/v1",
 		AgentHarness:      "codex",
 		RuntimeConfigPath: configPath,
-	}, hubui.HubSetupRequest{
+	}, web.HubSetupRequest{
 		Token:  bindToken,
 		Handle: "new-builder",
 		Profile: struct {
@@ -1345,7 +1345,7 @@ func TestConfigureHubSetupExistingAgentUsesAgentTokenFlow(t *testing.T) {
 		BaseURL:           server.URL + "/v1",
 		AgentHarness:      "codex",
 		RuntimeConfigPath: configPath,
-	}, hubui.HubSetupRequest{
+	}, web.HubSetupRequest{
 		Token: agentToken,
 	}, func(_ context.Context, cfg hub.InitConfig) error {
 		liveCfg = cfg
@@ -1525,7 +1525,7 @@ func TestConfigureHubSetupRejectsShortToken(t *testing.T) {
 
 	state, err := configureHubSetup(context.Background(), hub.InitConfig{
 		RuntimeConfigPath: filepath.Join(t.TempDir(), ".moltenhub", "config.json"),
-	}, hubui.HubSetupRequest{
+	}, web.HubSetupRequest{
 		AgentMode: "existing",
 		Token:     "too-short",
 	}, nil)
@@ -1546,7 +1546,7 @@ func TestConfigureHubSetupRejectsUnboundAgentWithoutWritingConfig(t *testing.T) 
 	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	state, err := configureHubSetup(context.Background(), hub.InitConfig{
 		RuntimeConfigPath: configPath,
-	}, hubui.HubSetupRequest{
+	}, web.HubSetupRequest{
 		AgentMode: "existing",
 		Token:     fakeHubSetupToken("t_"),
 	}, nil)
@@ -1603,7 +1603,7 @@ func TestConfigureHubSetupExistingAgentIgnoresStatusUpdateFailuresDuringVerifica
 		BaseURL:           server.URL + "/v1",
 		AgentHarness:      "codex",
 		RuntimeConfigPath: configPath,
-	}, hubui.HubSetupRequest{
+	}, web.HubSetupRequest{
 		AgentMode: "existing",
 		Token:     agentToken,
 	}, nil)
@@ -1652,7 +1652,7 @@ func TestConfigureHubSetupExistingAgentReturnsLoginVerificationFailure(t *testin
 		BaseURL:           server.URL + "/v1",
 		AgentHarness:      "codex",
 		RuntimeConfigPath: filepath.Join(t.TempDir(), ".moltenhub", "config.json"),
-	}, hubui.HubSetupRequest{
+	}, web.HubSetupRequest{
 		AgentMode: "existing",
 		Token:     agentToken,
 	}, nil)
@@ -1715,7 +1715,7 @@ func TestConfigureHubSetupExistingAgentProfileEditSkipsSyncWhenRemoteAlreadyMatc
 		BaseURL:           server.URL + "/v1",
 		AgentHarness:      "codex",
 		RuntimeConfigPath: configPath,
-	}, hubui.HubSetupRequest{
+	}, web.HubSetupRequest{
 		AgentMode: "existing",
 		Profile: struct {
 			ProfileText string `json:"profile"`
@@ -1794,7 +1794,7 @@ func TestConfigureHubSetupSavedCredentialsWithoutProfileChangesSkipsProfileSync(
 		BaseURL:           server.URL + "/v1",
 		AgentHarness:      "codex",
 		RuntimeConfigPath: configPath,
-	}, hubui.HubSetupRequest{
+	}, web.HubSetupRequest{
 		AgentMode: "existing",
 	}, nil)
 	if err != nil {
@@ -1876,7 +1876,7 @@ func TestConfigureHubSetupExistingAgentProfileEditKeepsRequestedValuesWhenReadba
 		BaseURL:           server.URL + "/v1",
 		AgentHarness:      "codex",
 		RuntimeConfigPath: configPath,
-	}, hubui.HubSetupRequest{
+	}, web.HubSetupRequest{
 		AgentMode: "existing",
 		Handle:    "existing-agent",
 		Profile: struct {
@@ -1945,7 +1945,7 @@ func TestConfigureHubSetupExistingAgentLoadsProfileTextFromProfileMarkdown(t *te
 		BaseURL:           server.URL + "/v1",
 		AgentHarness:      "codex",
 		RuntimeConfigPath: configPath,
-	}, hubui.HubSetupRequest{
+	}, web.HubSetupRequest{
 		AgentMode: "existing",
 	}, nil)
 	if err != nil {
@@ -1989,7 +1989,7 @@ func TestConfigureHubSetupReturnsSavedStateWhenLiveApplyFails(t *testing.T) {
 		BaseURL:           server.URL + "/v1",
 		AgentHarness:      "codex",
 		RuntimeConfigPath: configPath,
-	}, hubui.HubSetupRequest{
+	}, web.HubSetupRequest{
 		AgentMode: "existing",
 		Token:     agentToken,
 	}, func(context.Context, hub.InitConfig) error {
@@ -2181,7 +2181,7 @@ func TestConfigureHubSetupFallsBackToLiveInitCredentialsWhenRuntimeConfigOmitsTo
 		AgentToken:        liveToken,
 		AgentHarness:      "codex",
 		RuntimeConfigPath: configPath,
-	}, hubui.HubSetupRequest{
+	}, web.HubSetupRequest{
 		AgentMode: "existing",
 		Profile: struct {
 			ProfileText string `json:"profile"`

@@ -10,7 +10,7 @@ import (
 
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
-	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
+	"github.com/Molten-Bot/moltenhub-code/internal/web"
 )
 
 type sharedAuthGateRunnerStub struct {
@@ -100,7 +100,7 @@ func TestFirstConfiguredGitHubTokenAcceptsMalformedDockerComposeEnv(t *testing.T
 
 func TestConfigurableAgentAuthStateSharedTransitions(t *testing.T) {
 	var state configurableAgentAuthState
-	options := []hubui.AgentAuthOption{{Value: "OPENAI_API_KEY", Label: "OpenAI"}}
+	options := []web.AgentAuthOption{{Value: "OPENAI_API_KEY", Label: "OpenAI"}}
 
 	state.setError(" failed ")
 	if !state.required || state.ready || state.state != "error" || state.message != "failed" {

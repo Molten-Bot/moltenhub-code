@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/harness"
+	"github.com/Molten-Bot/moltenhub-code/internal/app"
 )
 
 func TestRunSingleReturnsPreflightWhenToolingUnavailable(t *testing.T) {
@@ -22,8 +22,8 @@ func TestRunSingleReturnsPreflightWhenToolingUnavailable(t *testing.T) {
 	t.Setenv("PATH", "")
 	os.Args = []string{"harness", "run", "--config", configPath}
 
-	if code := run(); code != harness.ExitPreflight {
-		t.Fatalf("run() = %d, want %d", code, harness.ExitPreflight)
+	if code := run(); code != app.ExitPreflight {
+		t.Fatalf("run() = %d, want %d", code, app.ExitPreflight)
 	}
 }
 
@@ -41,8 +41,8 @@ func TestRunMultiplexReturnsFirstSessionFailureExitCode(t *testing.T) {
 	t.Setenv("PATH", "")
 	os.Args = []string{"harness", "multiplex", "--config", configPath}
 
-	if code := run(); code != harness.ExitPreflight {
-		t.Fatalf("run() = %d, want %d", code, harness.ExitPreflight)
+	if code := run(); code != app.ExitPreflight {
+		t.Fatalf("run() = %d, want %d", code, app.ExitPreflight)
 	}
 }
 
@@ -61,7 +61,7 @@ func TestRunHubReturnsSuccessWhenPingPrecheckFailsInHeadlessNoHubMode(t *testing
 	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
 	os.Args = []string{"harness", "hub", "--init", initPath, "--ui-listen", ""}
 
-	if code := run(); code != harness.ExitSuccess {
-		t.Fatalf("run() = %d, want %d", code, harness.ExitSuccess)
+	if code := run(); code != app.ExitSuccess {
+		t.Fatalf("run() = %d, want %d", code, app.ExitSuccess)
 	}
 }

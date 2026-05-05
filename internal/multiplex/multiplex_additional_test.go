@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Molten-Bot/moltenhub-code/internal/app"
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
-	"github.com/Molten-Bot/moltenhub-code/internal/harness"
 )
 
 func TestResultExitCodeHandlesNegativeExitCodes(t *testing.T) {
@@ -17,7 +17,7 @@ func TestResultExitCodeHandlesNegativeExitCodes(t *testing.T) {
 
 	result := Result{
 		Sessions: []Session{
-			{ExitCode: harness.ExitSuccess},
+			{ExitCode: app.ExitSuccess},
 			{ExitCode: -1},
 		},
 	}
@@ -44,9 +44,9 @@ func TestRunMarksSessionAsContextErrorWhenBlockedBySemaphore(t *testing.T) {
 	m := New(nil)
 	m.MaxParallel = 1
 	m.Logf = func(string, ...any) {}
-	m.RunSession = func(ctx context.Context, _ config.Config, _ logFn) harness.Result {
+	m.RunSession = func(ctx context.Context, _ config.Config, _ logFn) app.Result {
 		<-ctx.Done()
-		return harness.Result{ExitCode: harness.ExitSuccess}
+		return app.Result{ExitCode: app.ExitSuccess}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

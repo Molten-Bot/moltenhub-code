@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
+	"github.com/Molten-Bot/moltenhub-code/internal/web"
 )
 
 func TestLocalTaskControllerCompleteRemovesTask(t *testing.T) {
@@ -170,14 +170,14 @@ func TestLocalTaskControllerControlsReflectHandleState(t *testing.T) {
 		t.Fatal("Register() returned nil handle")
 	}
 
-	assertControls := func(label string, got, want hubui.TaskControls) {
+	assertControls := func(label string, got, want web.TaskControls) {
 		t.Helper()
 		if got != want {
 			t.Fatalf("%s controls = %#v, want %#v", label, got, want)
 		}
 	}
 
-	assertControls("pending", controller.Controls("local-controls"), hubui.TaskControls{
+	assertControls("pending", controller.Controls("local-controls"), web.TaskControls{
 		Pause:    true,
 		ForceRun: true,
 		Stop:     true,
@@ -186,7 +186,7 @@ func TestLocalTaskControllerControlsReflectHandleState(t *testing.T) {
 	if err := controller.Pause("local-controls"); err != nil {
 		t.Fatalf("Pause() error = %v", err)
 	}
-	assertControls("paused", controller.Controls("local-controls"), hubui.TaskControls{
+	assertControls("paused", controller.Controls("local-controls"), web.TaskControls{
 		Run:  true,
 		Stop: true,
 	})
@@ -195,7 +195,7 @@ func TestLocalTaskControllerControlsReflectHandleState(t *testing.T) {
 	}
 
 	handle.SetRunning(true)
-	assertControls("running", controller.Controls("local-controls"), hubui.TaskControls{
+	assertControls("running", controller.Controls("local-controls"), web.TaskControls{
 		Pause: true,
 		Stop:  true,
 	})
@@ -203,7 +203,7 @@ func TestLocalTaskControllerControlsReflectHandleState(t *testing.T) {
 	if err := controller.Pause("local-controls"); err != nil {
 		t.Fatalf("Pause(running) error = %v", err)
 	}
-	assertControls("running paused", controller.Controls("local-controls"), hubui.TaskControls{
+	assertControls("running paused", controller.Controls("local-controls"), web.TaskControls{
 		Run:  true,
 		Stop: true,
 	})
@@ -211,6 +211,6 @@ func TestLocalTaskControllerControlsReflectHandleState(t *testing.T) {
 	if !handle.Stop() {
 		t.Fatal("Stop() = false, want true")
 	}
-	assertControls("stopped", controller.Controls("local-controls"), hubui.TaskControls{})
-	assertControls("missing", controller.Controls("missing"), hubui.TaskControls{})
+	assertControls("stopped", controller.Controls("local-controls"), web.TaskControls{})
+	assertControls("missing", controller.Controls("missing"), web.TaskControls{})
 }

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Molten-Bot/moltenhub-code/internal/app"
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
-	"github.com/Molten-Bot/moltenhub-code/internal/harness"
 )
 
 func TestRunTracksStatusesFromHarnessLogs(t *testing.T) {
@@ -25,14 +25,14 @@ func TestRunTracksStatusesFromHarnessLogs(t *testing.T) {
 	m := New(nil)
 	m.MaxParallel = 3
 	m.Logf = func(string, ...any) {}
-	m.RunSession = func(_ context.Context, cfg config.Config, logf logFn) harness.Result {
+	m.RunSession = func(_ context.Context, cfg config.Config, logf logFn) app.Result {
 		switch cfg.Prompt {
 		case "build feature":
 			logf("stage=preflight status=start")
 			logf("stage=preflight status=ok")
 			logf("stage=pr status=ok pr_url=https://github.com/acme/repo/pull/12")
-			return harness.Result{
-				ExitCode:     harness.ExitSuccess,
+			return app.Result{
+				ExitCode:     app.ExitSuccess,
 				WorkspaceDir: "/tmp/run-ok",
 				Branch:       "moltenhub-build-feature",
 				PRURL:        "https://github.com/acme/repo/pull/12",
@@ -41,8 +41,8 @@ func TestRunTracksStatusesFromHarnessLogs(t *testing.T) {
 			logf("stage=preflight status=start")
 			logf("stage=preflight status=ok")
 			logf("stage=git status=no_changes")
-			return harness.Result{
-				ExitCode:     harness.ExitSuccess,
+			return app.Result{
+				ExitCode:     app.ExitSuccess,
 				WorkspaceDir: "/tmp/run-nochanges",
 				Branch:       "moltenhub-nochange",
 				NoChanges:    true,
@@ -50,8 +50,8 @@ func TestRunTracksStatusesFromHarnessLogs(t *testing.T) {
 		default:
 			logf("stage=codex status=start")
 			logf("stage=codex status=error err=%q", "codex exploded")
-			return harness.Result{
-				ExitCode:     harness.ExitCodex,
+			return app.Result{
+				ExitCode:     app.ExitCodex,
 				Err:          errors.New("codex: codex exploded"),
 				WorkspaceDir: "/tmp/run-fail",
 			}
@@ -94,8 +94,8 @@ func TestRunTracksStatusesFromHarnessLogs(t *testing.T) {
 	if fail.State != SessionError {
 		t.Fatalf("fail state = %q, want %q", fail.State, SessionError)
 	}
-	if fail.ExitCode != harness.ExitCodex {
-		t.Fatalf("fail exit code = %d, want %d", fail.ExitCode, harness.ExitCodex)
+	if fail.ExitCode != app.ExitCodex {
+		t.Fatalf("fail exit code = %d, want %d", fail.ExitCode, app.ExitCodex)
 	}
 	if fail.Stage != "codex" || fail.StageStatus != "error" {
 		t.Fatalf("fail stage/status = %q/%q, want codex/error", fail.Stage, fail.StageStatus)
@@ -104,8 +104,8 @@ func TestRunTracksStatusesFromHarnessLogs(t *testing.T) {
 		t.Fatal("fail error is empty")
 	}
 
-	if code := res.ExitCode(); code != harness.ExitCodex {
-		t.Fatalf("ExitCode() = %d, want %d", code, harness.ExitCodex)
+	if code := res.ExitCode(); code != app.ExitCodex {
+		t.Fatalf("ExitCode() = %d, want %d", code, app.ExitCodex)
 	}
 }
 
@@ -124,7 +124,7 @@ func TestRunRespectsMaxParallel(t *testing.T) {
 	m := New(nil)
 	m.MaxParallel = 2
 	m.Logf = func(string, ...any) {}
-	m.RunSession = func(_ context.Context, _ config.Config, _ logFn) harness.Result {
+	m.RunSession = func(_ context.Context, _ config.Config, _ logFn) app.Result {
 		n := atomic.AddInt32(&current, 1)
 		for {
 			old := atomic.LoadInt32(&maxSeen)
@@ -134,7 +134,7 @@ func TestRunRespectsMaxParallel(t *testing.T) {
 		}
 		time.Sleep(25 * time.Millisecond)
 		atomic.AddInt32(&current, -1)
-		return harness.Result{ExitCode: harness.ExitSuccess}
+		return app.Result{ExitCode: app.ExitSuccess}
 	}
 
 	res := m.Run(context.Background(), paths)
@@ -161,9 +161,9 @@ func TestRunConfigLoadFailureDoesNotCallSessionRunner(t *testing.T) {
 	m := New(nil)
 	m.MaxParallel = 1
 	m.Logf = func(string, ...any) {}
-	m.RunSession = func(_ context.Context, _ config.Config, _ logFn) harness.Result {
+	m.RunSession = func(_ context.Context, _ config.Config, _ logFn) app.Result {
 		atomic.AddInt32(&called, 1)
-		return harness.Result{ExitCode: harness.ExitSuccess}
+		return app.Result{ExitCode: app.ExitSuccess}
 	}
 
 	res := m.Run(context.Background(), []string{missing, valid})
@@ -180,8 +180,8 @@ func TestRunConfigLoadFailureDoesNotCallSessionRunner(t *testing.T) {
 	if first.State != SessionError {
 		t.Fatalf("first state = %q, want %q", first.State, SessionError)
 	}
-	if first.ExitCode != harness.ExitConfig {
-		t.Fatalf("first exit code = %d, want %d", first.ExitCode, harness.ExitConfig)
+	if first.ExitCode != app.ExitConfig {
+		t.Fatalf("first exit code = %d, want %d", first.ExitCode, app.ExitConfig)
 	}
 	if first.Stage != "config" || first.StageStatus != "error" {
 		t.Fatalf("first stage/status = %q/%q, want config/error", first.Stage, first.StageStatus)
@@ -189,8 +189,8 @@ func TestRunConfigLoadFailureDoesNotCallSessionRunner(t *testing.T) {
 	if first.Error == "" {
 		t.Fatal("first error is empty")
 	}
-	if code := res.ExitCode(); code != harness.ExitConfig {
-		t.Fatalf("ExitCode() = %d, want %d", code, harness.ExitConfig)
+	if code := res.ExitCode(); code != app.ExitConfig {
+		t.Fatalf("ExitCode() = %d, want %d", code, app.ExitConfig)
 	}
 }
 

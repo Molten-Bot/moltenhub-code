@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Molten-Bot/moltenhub-code/internal/app"
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
-	"github.com/Molten-Bot/moltenhub-code/internal/harness"
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
 )
 
@@ -23,7 +23,7 @@ type hubDaemonController struct {
 	dispatchController  *hub.AdaptiveDispatchController
 	taskLogRoot         string
 	onDispatchQueued    func(string, config.Config)
-	onDispatchFailed    func(string, config.Config, harness.Result)
+	onDispatchFailed    func(string, config.Config, app.Result)
 	registerTaskControl func(string, context.CancelCauseFunc) hub.DispatchTaskControl
 	completeTaskControl func(string)
 	startGracePeriod    time.Duration

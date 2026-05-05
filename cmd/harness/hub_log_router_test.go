@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
-	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
+	"github.com/Molten-Bot/moltenhub-code/internal/web"
 )
 
 func TestClassifyHubLogLine(t *testing.T) {
@@ -43,7 +43,7 @@ func TestHubLogRouterFiltersByConfiguredLevel(t *testing.T) {
 	var rendered strings.Builder
 	logger := newTerminalLogger(&rendered, false)
 	logger.sink = sink
-	broker := hubui.NewBroker()
+	broker := web.NewBroker()
 	router := newHubLogRouter(logger, broker, hub.LogLevelInfo)
 
 	router.Log(`cmd phase=git name=git stream=stdout b64=SGVsbG8=`)
@@ -81,7 +81,7 @@ func TestHubLogRouterWarnLevelSuppressesInfoAndKeepsErrors(t *testing.T) {
 	var rendered strings.Builder
 	logger := newTerminalLogger(&rendered, false)
 	logger.sink = sink
-	broker := hubui.NewBroker()
+	broker := web.NewBroker()
 	router := newHubLogRouter(logger, broker, hub.LogLevelWarn)
 
 	router.Log(`hub.auth status=ok`)
@@ -112,7 +112,7 @@ func TestHubLogRouterInfoLevelSuppressesHighVolumeDebugLifecycleLogs(t *testing.
 	var rendered strings.Builder
 	logger := newTerminalLogger(&rendered, false)
 	logger.sink = sink
-	broker := hubui.NewBroker()
+	broker := web.NewBroker()
 	router := newHubLogRouter(logger, broker, hub.LogLevelInfo)
 
 	router.Log(`dispatch request_id=req-1 stage=clone status=start repo=git@github.com:acme/repo.git`)
