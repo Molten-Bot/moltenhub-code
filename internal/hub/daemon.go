@@ -1181,6 +1181,9 @@ func dispatchStatusPayload(
 		"message":       message,
 		"statusUpdate":  a2aStatusUpdatePayload(taskID, contextID, state, message, metadata),
 	}
+	if action := firstString(details["status_action"]); action != "" {
+		payload["action"] = action
+	}
 	if taskID != "" {
 		payload["a2a_task_id"] = taskID
 		payload["task_id"] = taskID
@@ -1246,7 +1249,8 @@ func dispatchStatusFromHarnessLogLine(line string) (string, a2a.TaskState, strin
 
 	status := "working"
 	state := a2a.TaskStateWorking
-	message := dispatchStageStatusMessage(stage, stageStatus)
+	message := "Task status updated."
+	details["status_action"] = dispatchStageStatusMessage(stage, stageStatus)
 	if stageStatus == "error" || stageStatus == "failed" {
 		status = "error"
 		state = a2a.TaskStateFailed
