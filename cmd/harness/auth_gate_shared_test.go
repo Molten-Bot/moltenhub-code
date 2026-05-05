@@ -28,6 +28,14 @@ func fakeGitHubPAT(suffix string) string {
 	return "ghp_" + suffix
 }
 
+func gitHubTokenValidationArgsStringForTest() string {
+	return strings.Join(gitHubTokenValidationCommand().Args, " ")
+}
+
+func isGitHubTokenValidationCommandForTest(cmd execx.Command) bool {
+	return cmd.Name == "gh" && strings.Join(cmd.Args, " ") == gitHubTokenValidationArgsStringForTest()
+}
+
 func TestFirstConfiguredGitHubTokenPrefersRuntimeConfig(t *testing.T) {
 	t.Setenv("GH_TOKEN", "github_token_env_token")
 	t.Setenv("GITHUB_TOKEN", "github_token_env_token_alt")
@@ -155,7 +163,7 @@ func TestGitHubTokenRequirementStateAcceptsValidatedStartupToken(t *testing.T) {
 			if got, want := cmd.Name, "gh"; got != want {
 				t.Fatalf("command = %q, want %q", got, want)
 			}
-			if got, want := strings.Join(cmd.Args, " "), "auth status"; got != want {
+			if got, want := strings.Join(cmd.Args, " "), gitHubTokenValidationArgsStringForTest(); got != want {
 				t.Fatalf("args = %q, want %q", got, want)
 			}
 			return execx.Result{Stdout: "github.com logged in"}, nil
@@ -180,7 +188,7 @@ func TestGitHubTokenRequirementStateRejectsInvalidStartupToken(t *testing.T) {
 
 	runner := &sharedAuthGateRunnerStub{
 		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
-			if got, want := strings.Join(cmd.Args, " "), "auth status"; got != want {
+			if got, want := strings.Join(cmd.Args, " "), gitHubTokenValidationArgsStringForTest(); got != want {
 				t.Fatalf("args = %q, want %q", got, want)
 			}
 			return execx.Result{Stderr: "bad credentials"}, errors.New("token invalid")

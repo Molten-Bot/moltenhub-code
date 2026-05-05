@@ -69,7 +69,7 @@ func TestNewCodexAuthGateUsesProbeResultWhenReady(t *testing.T) {
 	runner := &authGateRunnerStub{
 		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
 			if cmd.Name == "gh" {
-				if got, want := strings.Join(cmd.Args, " "), "auth status"; got != want {
+				if got, want := strings.Join(cmd.Args, " "), gitHubTokenValidationArgsStringForTest(); got != want {
 					t.Fatalf("github args = %q, want %q", got, want)
 				}
 				return execx.Result{Stdout: "github.com logged in"}, nil
@@ -102,7 +102,7 @@ func TestNewCodexAuthGateSetsErrorWhenCLIUnavailable(t *testing.T) {
 
 	runner := &authGateRunnerStub{
 		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
-			if cmd.Name == "gh" && strings.Join(cmd.Args, " ") == "auth status" {
+			if isGitHubTokenValidationCommandForTest(cmd) {
 				return execx.Result{Stdout: "github.com logged in"}, nil
 			}
 			return execx.Result{}, errors.New("executable file not found in $PATH")
@@ -211,7 +211,7 @@ func TestCodexAuthGateConfigureRejectsInvalidGitHubTokenBeforePersisting(t *test
 
 	runner := &authGateRunnerStub{
 		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
-			if cmd.Name == "gh" && strings.Join(cmd.Args, " ") == "auth status" {
+			if isGitHubTokenValidationCommandForTest(cmd) {
 				return execx.Result{Stderr: "X Failed to log in to github.com using token (GH_TOKEN)"}, errors.New("token invalid")
 			}
 			return execx.Result{}, nil
@@ -421,7 +421,7 @@ func TestVerifyTransitions(t *testing.T) {
 	t.Run("still-pending", func(t *testing.T) {
 		t.Parallel()
 		runner := &authGateRunnerStub{run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
-			if cmd.Name == "gh" && strings.Join(cmd.Args, " ") == "auth status" {
+			if isGitHubTokenValidationCommandForTest(cmd) {
 				return execx.Result{Stdout: "github.com logged in"}, nil
 			}
 			return execx.Result{}, errors.New("not logged in")
@@ -439,7 +439,7 @@ func TestVerifyTransitions(t *testing.T) {
 	t.Run("needs-device-auth", func(t *testing.T) {
 		t.Parallel()
 		runner := &authGateRunnerStub{run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
-			if cmd.Name == "gh" && strings.Join(cmd.Args, " ") == "auth status" {
+			if isGitHubTokenValidationCommandForTest(cmd) {
 				return execx.Result{Stdout: "github.com logged in"}, nil
 			}
 			return execx.Result{}, errors.New("not logged in")
@@ -745,7 +745,7 @@ func TestNewCodexAuthGateAutoStartsWhenNotLoggedIn(t *testing.T) {
 
 	runner := &authGateRunnerStub{
 		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
-			if cmd.Name == "gh" && strings.Join(cmd.Args, " ") == "auth status" {
+			if isGitHubTokenValidationCommandForTest(cmd) {
 				return execx.Result{Stdout: "github.com logged in"}, nil
 			}
 			return execx.Result{}, errors.New("not logged in")
@@ -803,7 +803,7 @@ func TestCodexAuthGateWithConfigConfigurePersistsGitHubTokenAndTransitionsState(
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	runner := &authGateRunnerStub{
 		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
-			if cmd.Name == "gh" && strings.Join(cmd.Args, " ") == "auth status" {
+			if isGitHubTokenValidationCommandForTest(cmd) {
 				return execx.Result{Stdout: "Logged in to github.com as octocat"}, nil
 			}
 			return execx.Result{}, errors.New("not logged in")

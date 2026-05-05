@@ -27,7 +27,7 @@ func clearPiAuthTestEnv(t *testing.T) {
 func piOKAuthGateRunner() *authGateRunnerStub {
 	return &authGateRunnerStub{
 		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
-			if cmd.Name == "gh" && strings.Join(cmd.Args, " ") == "auth status" {
+			if isGitHubTokenValidationCommandForTest(cmd) {
 				return execx.Result{Stdout: "github.com logged in"}, nil
 			}
 			return execx.Result{Stdout: "OK\n"}, nil
@@ -288,7 +288,7 @@ func TestPiAuthGateConfigurePiAuthJSONAcceptsOKOutputDespiteProbeExitError(t *te
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	runner := &authGateRunnerStub{
 		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
-			if cmd.Name == "gh" && strings.Join(cmd.Args, " ") == "auth status" {
+			if isGitHubTokenValidationCommandForTest(cmd) {
 				return execx.Result{Stdout: "github.com logged in"}, nil
 			}
 			return execx.Result{
@@ -316,7 +316,7 @@ func TestPiAuthGateConfigureProviderAcceptsPiOKOutputDespiteProbeExitError(t *te
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	runner := &authGateRunnerStub{
 		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
-			if cmd.Name == "gh" && strings.Join(cmd.Args, " ") == "auth status" {
+			if isGitHubTokenValidationCommandForTest(cmd) {
 				return execx.Result{Stdout: "github.com logged in"}, nil
 			}
 			return execx.Result{
@@ -436,7 +436,7 @@ func TestPiAuthGateConfigureOfflineModeAllowsEmptyTokenWithoutProbe(t *testing.T
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	runner := &authGateRunnerStub{
 		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
-			if cmd.Name == "gh" && strings.Join(cmd.Args, " ") == "auth status" {
+			if isGitHubTokenValidationCommandForTest(cmd) {
 				return execx.Result{Stdout: "github.com logged in"}, nil
 			}
 			t.Fatal("probe should not run for PI_OFFLINE provider configuration")

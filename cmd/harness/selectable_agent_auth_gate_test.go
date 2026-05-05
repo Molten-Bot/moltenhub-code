@@ -18,7 +18,7 @@ func selectableGitHubReadyRunner() *sharedAuthGateRunnerStub {
 			if got, want := cmd.Name, "gh"; got != want {
 				return execx.Result{}, nil
 			}
-			if got, want := strings.Join(cmd.Args, " "), "auth status"; got != want {
+			if got, want := strings.Join(cmd.Args, " "), gitHubTokenValidationArgsStringForTest(); got != want {
 				return execx.Result{}, nil
 			}
 			return execx.Result{Stdout: "github.com logged in"}, nil
@@ -114,7 +114,7 @@ func TestSelectableAgentAuthGateStatusRequiresHarnessSelectionAfterValidatedGITH
 			if got, want := cmd.Name, "gh"; got != want {
 				t.Fatalf("command = %q, want %q", got, want)
 			}
-			if got, want := strings.Join(cmd.Args, " "), "auth status"; got != want {
+			if got, want := strings.Join(cmd.Args, " "), gitHubTokenValidationArgsStringForTest(); got != want {
 				t.Fatalf("args = %q, want %q", got, want)
 			}
 			if got, want := os.Getenv("GITHUB_TOKEN"), "github_token_ready_token"; got != want {
