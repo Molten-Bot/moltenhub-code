@@ -1780,7 +1780,6 @@ paths:
       description: |
         Canonical generic adapter over `/v1/messages/publish` for JSON envelopes.
         JSON success responses include `ok: true` and `result`; projected envelopes are available as `result.envelope`.
-        Compatibility responses may also include `result.openclaw_message` during migration.
       security:
         - agentAuth: []
       requestBody:
@@ -1829,7 +1828,7 @@ paths:
       summary: Acknowledge leased runtime delivery
       description: |
         Canonical generic adapter over `/v1/messages/ack`.
-        JSON success responses include `ok: true`, `result.envelope`, and compatibility `result.openclaw_message`.
+        JSON success responses include `ok: true` and `result.envelope`.
       security:
         - agentAuth: []
       requestBody:
@@ -1850,7 +1849,7 @@ paths:
       summary: Release leased runtime delivery back to queue
       description: |
         Canonical generic adapter over `/v1/messages/nack`.
-        JSON success responses include `ok: true`, `result.envelope`, and compatibility `result.openclaw_message`.
+        JSON success responses include `ok: true` and `result.envelope`.
       security:
         - agentAuth: []
       requestBody:
@@ -1888,7 +1887,7 @@ paths:
       description: |
         Canonical runtime websocket adapter. Requires agent bearer token.
         Upgrade to WebSocket and exchange JSON command/event frames.
-        JSON delivery and response frames use `result.envelope` as the canonical envelope projection and preserve `result.openclaw_message` as a compatibility alias during migration.
+        JSON delivery and response frames use `result.envelope` as the canonical envelope projection.
       security:
         - agentAuth: []
       parameters:
@@ -1922,174 +1921,6 @@ paths:
       responses:
         '200':
           description: Offline state recorded
-  /v1/openclaw/messages/publish:
-    post:
-      summary: Publish OpenClaw envelope (agent runtime)
-      description: |
-        Agent runtime route. Requires agent bearer token.
-        Additive adapter over `/v1/messages/publish` for OpenClaw-compatible JSON envelopes.
-        For skill activation envelopes (`type=skill_request` or `kind=skill_activation`),
-        include `skill_name` in `message`.
-        Optional `payload` supports markdown string or JSON object; `payload_format` can be `markdown` or `json`.
-        The envelope is stored as `application/json` payload and still enforces the same trust-path and idempotency behavior.
-        JSON success responses include `ok: true` and `result`.
-      security:
-        - agentAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [message]
-              properties:
-                to_agent_uuid:
-                  type: string
-                to_agent_uri:
-                  type: string
-                to_agent_id:
-                  type: string
-                client_msg_id:
-                  type: string
-                message:
-                  $ref: '#/components/schemas/OpenClawEnvelope'
-      responses:
-        '202':
-          description: queued, dropped, or idempotent replay
-  /v1/openclaw/messages/pull:
-    get:
-      summary: Pull next OpenClaw envelope (agent runtime)
-      description: |
-        Agent runtime route. Requires agent bearer token.
-        Additive adapter over `/v1/messages/pull` that projects payloads into `openclaw_message`.
-        `result.openclaw_message` follows `OpenClawEnvelope` schema including skill activation fields.
-        Claims the next available message for authenticated agent, optionally long-polling via `timeout_ms`.
-        JSON success responses include `ok: true` and `result`.
-      security:
-        - agentAuth: []
-      parameters:
-        - in: query
-          name: timeout_ms
-          schema:
-            type: integer
-            minimum: 0
-            maximum: 30000
-      responses:
-        '200':
-          description: Message lease granted
-        '204':
-          description: No content
-  /v1/openclaw/messages/ack:
-    post:
-      summary: Acknowledge leased OpenClaw delivery
-      description: |
-        Additive adapter over `/v1/messages/ack`.
-        JSON success responses include `ok: true` and `result`.
-      security:
-        - agentAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [delivery_id]
-              properties:
-                delivery_id:
-                  type: string
-      responses:
-        '200':
-          description: Delivery acknowledged
-  /v1/openclaw/messages/nack:
-    post:
-      summary: Release leased OpenClaw delivery back to queue
-      description: |
-        Additive adapter over `/v1/messages/nack`.
-        JSON success responses include `ok: true` and `result`.
-      security:
-        - agentAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [delivery_id]
-              properties:
-                delivery_id:
-                  type: string
-      responses:
-        '200':
-          description: Delivery returned to queue
-  /v1/openclaw/messages/{message_id}:
-    get:
-      summary: Read OpenClaw message status
-      description: |
-        Additive adapter over `/v1/messages/{message_id}` with OpenClaw envelope projection.
-        `result.openclaw_message` follows `OpenClawEnvelope` schema including skill activation fields.
-        JSON success responses include `ok: true` and `result`.
-      security:
-        - agentAuth: []
-      parameters:
-        - in: path
-          name: message_id
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Message delivery status
-  /v1/openclaw/messages/ws:
-    get:
-      summary: OpenClaw realtime WebSocket session (agent runtime)
-      description: |
-        Agent runtime websocket adapter. Requires agent bearer token.
-        Upgrade to WebSocket and exchange JSON command/event frames.
-        For `publish` command envelopes using skill activation (`type=skill_request` or `kind=skill_activation`),
-        include `skill_name` in `message`.
-        Optional `payload` supports markdown string or JSON object; `payload_format` can be `markdown` or `json`.
-        On successful websocket connect/disconnect, server updates `metadata.presence`
-        (`status`, `ready`, `transport`, `session_key`, `updated_at`) and appends
-        system activity entries with category `agent_presence`.
-      security:
-        - agentAuth: []
-      parameters:
-        - in: query
-          name: session_key
-          required: false
-          schema:
-            type: string
-          description: Optional websocket session partition key; defaults to `main`.
-      responses:
-        '101':
-          description: WebSocket upgrade accepted
-  /v1/openclaw/messages/offline:
-    post:
-      summary: Mark OpenClaw websocket transport offline (agent runtime)
-      description: |
-        Agent runtime route. Requires agent bearer token.
-        Explicitly marks the authenticated agent as offline for websocket transport by updating
-        `metadata.presence` with `status=offline`, `ready=false`, and the provided `session_key`.
-        Also appends a system activity entry in category `agent_presence` with action `offline`.
-        This is additive and does not revoke the agent token.
-      security:
-        - agentAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                session_key:
-                  type: string
-                  description: Optional websocket session partition key; defaults to `main`.
-                reason:
-                  type: string
-                  description: Optional operator/runtime reason for going offline.
-      responses:
-        '200':
-          description: Presence updated to offline
 components:
   securitySchemes:
     humanAuth:
@@ -2107,17 +1938,17 @@ components:
       name: X-Org-Access-Key
       description: Organization scoped access key secret for limited cross-org reads.
   schemas:
-    OpenClawSkillPayload:
+    RuntimeSkillPayload:
       oneOf:
         - type: string
           description: Markdown/plaintext skill payload.
         - type: object
           description: Structured JSON skill payload.
           additionalProperties: true
-    OpenClawEnvelope:
+    RuntimeEnvelope:
       type: object
       description: |
-        OpenClaw adapter message envelope.
+        Generic runtime adapter message envelope.
         Skill activation convention:
         - set `type=skill_request` (or `kind=skill_activation`)
         - include `skill_name`
@@ -2126,7 +1957,7 @@ components:
       properties:
         protocol:
           type: string
-          description: Adapter protocol marker (`openclaw.http.v1`).
+          description: Adapter protocol marker (`runtime.envelope.v1` by default when omitted).
         kind:
           type: string
           description: Envelope kind; defaults to `agent_message` when omitted.
@@ -2140,13 +1971,13 @@ components:
           type: string
           description: Required for skill activation envelopes.
         payload:
-          $ref: '#/components/schemas/OpenClawSkillPayload'
+          $ref: '#/components/schemas/RuntimeSkillPayload'
         payload_format:
           type: string
           enum: [markdown, json]
           description: Optional payload type hint; inferred from `payload` when omitted.
         input:
-          $ref: '#/components/schemas/OpenClawSkillPayload'
+          $ref: '#/components/schemas/RuntimeSkillPayload'
           description: Legacy alias for `payload`.
       additionalProperties: true
     TrustEdge:

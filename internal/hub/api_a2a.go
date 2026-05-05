@@ -251,7 +251,3 @@ func publishResultRuntimeBody(payload map[string]any) (map[string]any, bool) {
 	}
 	return body, routed
 }
-
-func publishResultOpenClawBody(payload map[string]any) (map[string]any, bool) {
-	return publishResultRuntimeBody(payload)
-}

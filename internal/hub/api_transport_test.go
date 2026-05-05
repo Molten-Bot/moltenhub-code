@@ -48,7 +48,7 @@ func TestPullRuntimeMessageParsesResult(t *testing.T) {
 	}
 }
 
-func TestPullRuntimeMessageFallsBackToOpenClawCompatibility(t *testing.T) {
+func TestPullRuntimeMessageDoesNotFallbackToRetiredCompatibilityTransport(t *testing.T) {
 	t.Parallel()
 
 	var paths []string
@@ -57,9 +57,6 @@ func TestPullRuntimeMessageFallsBackToOpenClawCompatibility(t *testing.T) {
 		switch r.URL.Path {
 		case "/v1/runtime/messages/pull":
 			w.WriteHeader(http.StatusNotFound)
-		case "/v1/openclaw/messages/pull":
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"ok":true,"result":{"delivery_id":"d-compat","openclaw_message":{"type":"skill_request","skill":"code_for_me"}}}`))
 		default:
 			t.Fatalf("unexpected path = %s", r.URL.Path)
 		}
@@ -67,20 +64,11 @@ func TestPullRuntimeMessageFallsBackToOpenClawCompatibility(t *testing.T) {
 	defer ts.Close()
 
 	client := NewAPIClient(ts.URL + "/v1")
-	pulled, found, err := client.PullRuntimeMessage(context.Background(), "token", 1000)
-	if err != nil {
-		t.Fatalf("PullRuntimeMessage() error = %v", err)
+	_, _, err := client.PullRuntimeMessage(context.Background(), "token", 1000)
+	if err == nil {
+		t.Fatal("PullRuntimeMessage() error = nil, want status error")
 	}
-	if !found {
-		t.Fatal("found = false, want true")
-	}
-	if pulled.DeliveryID != "d-compat" {
-		t.Fatalf("DeliveryID = %q", pulled.DeliveryID)
-	}
-	if got := pulled.Message["skill"]; got != "code_for_me" {
-		t.Fatalf("message.skill = %#v", got)
-	}
-	want := []string{"/v1/runtime/messages/pull", "/v1/openclaw/messages/pull"}
+	want := []string{"/v1/runtime/messages/pull"}
 	if !reflect.DeepEqual(paths, want) {
 		t.Fatalf("paths = %#v, want %#v", paths, want)
 	}
@@ -171,23 +159,25 @@ func TestPullRuntimeMessageParsesNestedDeliveryAndPrefersRuntimeEnvelope(t *test
 	}
 }
 
-func TestExtractInboundOpenClawMessageForWebsocketEnvelope(t *testing.T) {
+func TestExtractInboundRuntimeMessageForWebsocketEnvelope(t *testing.T) {
 	t.Parallel()
 
 	root := map[string]any{
 		"status": "received",
-		"openclaw_message": map[string]any{
-			"kind":       "skill_request",
-			"skill_name": "code_for_me",
-			"request_id": "req-ws",
-			"input": map[string]any{
-				"repo":   "git@github.com:acme/repo.git",
-				"prompt": "x",
+		"result": map[string]any{
+			"envelope": map[string]any{
+				"kind":       "skill_request",
+				"skill_name": "code_for_me",
+				"request_id": "req-ws",
+				"input": map[string]any{
+					"repo":   "git@github.com:acme/repo.git",
+					"prompt": "x",
+				},
 			},
 		},
 	}
 
-	got := extractInboundOpenClawMessage(root)
+	got := extractInboundRuntimeMessage(root)
 	if got.DeliveryID != "" {
 		t.Fatalf("DeliveryID = %q, want empty", got.DeliveryID)
 	}
@@ -196,7 +186,7 @@ func TestExtractInboundOpenClawMessageForWebsocketEnvelope(t *testing.T) {
 	}
 }
 
-func TestExtractInboundOpenClawMessageForRuntimeEventDataEnvelope(t *testing.T) {
+func TestExtractInboundRuntimeMessageForRuntimeEventDataEnvelope(t *testing.T) {
 	t.Parallel()
 
 	root := map[string]any{
@@ -207,7 +197,7 @@ func TestExtractInboundOpenClawMessageForRuntimeEventDataEnvelope(t *testing.T) 
 			"delivery_id":    "delivery-runtime-event",
 			"client_msg_id":  "client-runtime-event",
 			"from_agent_uri": "https://na.hub.molten.bot/acme/sender",
-			"openclaw_message": map[string]any{
+			"envelope": map[string]any{
 				"kind":       "skill_activation",
 				"skill_name": "code_for_me",
 				"payload": map[string]any{
@@ -218,7 +208,7 @@ func TestExtractInboundOpenClawMessageForRuntimeEventDataEnvelope(t *testing.T) 
 		},
 	}
 
-	got := extractInboundOpenClawMessage(root)
+	got := extractInboundRuntimeMessage(root)
 	if got.DeliveryID != "delivery-runtime-event" {
 		t.Fatalf("DeliveryID = %q, want delivery-runtime-event", got.DeliveryID)
 	}
@@ -250,7 +240,7 @@ func TestExtractInboundOpenClawMessageForRuntimeEventDataEnvelope(t *testing.T) 
 	}
 }
 
-func TestExtractInboundOpenClawMessageKeepsRawA2AJSONRPCEnvelope(t *testing.T) {
+func TestExtractInboundRuntimeMessageKeepsRawA2AJSONRPCEnvelope(t *testing.T) {
 	t.Parallel()
 
 	root := map[string]any{
@@ -278,7 +268,7 @@ func TestExtractInboundOpenClawMessageKeepsRawA2AJSONRPCEnvelope(t *testing.T) {
 		},
 	}
 
-	got := extractInboundOpenClawMessage(root)
+	got := extractInboundRuntimeMessage(root)
 	if got.DeliveryID != "" {
 		t.Fatalf("DeliveryID = %q, want empty", got.DeliveryID)
 	}
@@ -307,7 +297,7 @@ func TestExtractInboundOpenClawMessageKeepsRawA2AJSONRPCEnvelope(t *testing.T) {
 	}
 }
 
-func TestExtractInboundOpenClawMessageCopiesReplyRoutingFromTransportMessage(t *testing.T) {
+func TestExtractInboundRuntimeMessageCopiesReplyRoutingFromTransportMessage(t *testing.T) {
 	t.Parallel()
 
 	root := map[string]any{
@@ -319,7 +309,7 @@ func TestExtractInboundOpenClawMessageCopiesReplyRoutingFromTransportMessage(t *
 				"from_agent_uri":  "https://na.hub.molten.bot/acme/sender",
 				"from_agent_uuid": "8b9bc0a9-3e36-49aa-a097-7ba8fe5f0b18",
 			},
-			"openclaw_message": map[string]any{
+			"envelope": map[string]any{
 				"kind":       "skill_request",
 				"skill_name": "code_for_me",
 				"request_id": "req-ws-2",
@@ -331,7 +321,7 @@ func TestExtractInboundOpenClawMessageCopiesReplyRoutingFromTransportMessage(t *
 		},
 	}
 
-	got := extractInboundOpenClawMessage(root)
+	got := extractInboundRuntimeMessage(root)
 	if got.DeliveryID != "d-22" {
 		t.Fatalf("DeliveryID = %q", got.DeliveryID)
 	}
@@ -343,7 +333,7 @@ func TestExtractInboundOpenClawMessageCopiesReplyRoutingFromTransportMessage(t *
 	}
 }
 
-func TestExtractInboundOpenClawMessageCopiesReplyRoutingFromOpenClawWrapper(t *testing.T) {
+func TestExtractInboundRuntimeMessageCopiesReplyRoutingFromEnvelopeWrapper(t *testing.T) {
 	t.Parallel()
 
 	root := map[string]any{
@@ -351,7 +341,7 @@ func TestExtractInboundOpenClawMessageCopiesReplyRoutingFromOpenClawWrapper(t *t
 			"delivery": map[string]any{
 				"delivery_id": "d-24",
 			},
-			"openclaw_message": map[string]any{
+			"envelope": map[string]any{
 				"from_agent_uri":  "https://na.hub.molten.bot/acme/wrapper-sender",
 				"from_agent_uuid": "de14de6e-c4f5-4f5c-9d83-fcb87d4d6dc4",
 				"message": map[string]any{
@@ -366,7 +356,7 @@ func TestExtractInboundOpenClawMessageCopiesReplyRoutingFromOpenClawWrapper(t *t
 		},
 	}
 
-	got := extractInboundOpenClawMessage(root)
+	got := extractInboundRuntimeMessage(root)
 	if got.DeliveryID != "d-24" {
 		t.Fatalf("DeliveryID = %q", got.DeliveryID)
 	}
@@ -389,7 +379,7 @@ func TestExtractInboundOpenClawMessageCopiesReplyRoutingFromOpenClawWrapper(t *t
 	}
 }
 
-func TestExtractInboundOpenClawMessageUsesClientMsgIDAndIgnoresGenericEnvelopeID(t *testing.T) {
+func TestExtractInboundRuntimeMessageUsesClientMsgIDAndIgnoresGenericEnvelopeID(t *testing.T) {
 	t.Parallel()
 
 	root := map[string]any{
@@ -400,7 +390,7 @@ func TestExtractInboundOpenClawMessageUsesClientMsgIDAndIgnoresGenericEnvelopeID
 			"message": map[string]any{
 				"client_msg_id": "client-msg-23",
 			},
-			"openclaw_message": map[string]any{
+			"envelope": map[string]any{
 				"type":  "skill_request",
 				"skill": "code_for_me",
 				"id":    "sender-agent-static-id",
@@ -412,7 +402,7 @@ func TestExtractInboundOpenClawMessageUsesClientMsgIDAndIgnoresGenericEnvelopeID
 		},
 	}
 
-	got := extractInboundOpenClawMessage(root)
+	got := extractInboundRuntimeMessage(root)
 	if got.DeliveryID != "d-23" {
 		t.Fatalf("DeliveryID = %q", got.DeliveryID)
 	}
@@ -673,7 +663,7 @@ func TestPublishResultFallsBackToRuntimeTransport(t *testing.T) {
 	}
 }
 
-func TestPublishResultFallsBackToOpenClawCompatibility(t *testing.T) {
+func TestPublishResultDoesNotFallbackToRetiredCompatibilityTransport(t *testing.T) {
 	t.Parallel()
 
 	type captured struct {
@@ -692,9 +682,6 @@ func TestPublishResultFallsBackToOpenClawCompatibility(t *testing.T) {
 		case "/v1/a2a", "/v1/runtime/messages/publish":
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"error":"not found"}`))
-		case "/v1/openclaw/messages/publish":
-			w.WriteHeader(http.StatusAccepted)
-			_, _ = w.Write([]byte(`{"ok":true,"result":{"status":"queued"}}`))
 		default:
 			t.Fatalf("unexpected path = %s", r.URL.Path)
 		}
@@ -708,14 +695,14 @@ func TestPublishResultFallsBackToOpenClawCompatibility(t *testing.T) {
 		"reply_to":   "agent-123",
 		"status":     "ok",
 	}
-	if err := client.PublishResult(context.Background(), "token", payload); err != nil {
-		t.Fatalf("PublishResult() error = %v", err)
+	if err := client.PublishResult(context.Background(), "token", payload); err == nil {
+		t.Fatal("PublishResult() error = nil, want failure")
 	}
 
-	if len(calls) != 3 {
-		t.Fatalf("calls = %d, want 3", len(calls))
+	if len(calls) != 2 {
+		t.Fatalf("calls = %d, want 2", len(calls))
 	}
-	wantPaths := []string{"/v1/a2a", "/v1/runtime/messages/publish", "/v1/openclaw/messages/publish"}
+	wantPaths := []string{"/v1/a2a", "/v1/runtime/messages/publish"}
 	for i, want := range wantPaths {
 		if calls[i].Path != want {
 			t.Fatalf("calls[%d].Path = %q, want %q", i, calls[i].Path, want)

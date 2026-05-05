@@ -551,7 +551,7 @@ func TestValidateRejectsNestedRepositoryURL(t *testing.T) {
 
 	cfg := Config{
 		Version:      "v1",
-		Repos:        []string{"git@github.com:Molten-Bot/git@github.com:Molten-Bot/moltenhub-openclaw-plugin.git"},
+		Repos:        []string{"git@github.com:Molten-Bot/git@github.com:Molten-Bot/runtime-plugin.git"},
 		BaseBranch:   "main",
 		TargetSubdir: ".",
 		Prompt:       "fix tests",
