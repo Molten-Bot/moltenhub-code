@@ -977,30 +977,52 @@ func applyMoltenHubEnvBootstrap(cfg *hub.InitConfig) error {
 		return nil
 	}
 
-	if token := githubTokenFromEnv(); token != "" && strings.TrimSpace(cfg.GitHubToken) == "" {
-		cfg.GitHubToken = token
+	githubToken := githubTokenFromEnv()
+	if githubToken != "" {
+		cfg.GitHubToken = githubToken
 	}
 
-	token := moltenHubEnvValue(moltenHubTokenEnv)
-	if token == "" {
-		return nil
-	}
-
-	if strings.TrimSpace(cfg.AgentToken) == "" && strings.TrimSpace(cfg.BindToken) == "" {
-		cfg.AgentToken = token
+	hubToken := moltenHubEnvValue(moltenHubTokenEnv)
+	if hubToken != "" {
+		cfg.AgentToken = hubToken
+		cfg.BindToken = ""
 		if baseURL, err := moltenHubEnvBaseURL(); err != nil {
 			return err
 		} else if baseURL != "" {
 			cfg.BaseURL = baseURL
 		}
 	}
-	if strings.TrimSpace(cfg.AgentHarness) == "" {
+	if hubToken != "" && strings.TrimSpace(cfg.AgentHarness) == "" {
 		cfg.AgentHarness = agentruntime.Default().Harness
 	}
 
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("init config error: %w", err)
+	}
+	if err := persistMoltenHubEnvBootstrap(*cfg, hubToken, githubToken); err != nil {
+		return err
+	}
+	return nil
+}
+
+func persistMoltenHubEnvBootstrap(cfg hub.InitConfig, hubToken, githubToken string) error {
+	runtimeConfigPath := strings.TrimSpace(cfg.RuntimeConfigPath)
+	if runtimeConfigPath == "" {
+		return nil
+	}
+
+	if strings.TrimSpace(hubToken) != "" {
+		if err := hub.SaveRuntimeConfigHubSettings(runtimeConfigPath, cfg, cfg.AgentToken); err != nil {
+			return fmt.Errorf("save runtime config from environment: %w", err)
+		}
+		return nil
+	}
+
+	if strings.TrimSpace(githubToken) != "" {
+		if err := hub.SaveRuntimeConfigGitHubToken(runtimeConfigPath, cfg, githubToken); err != nil {
+			return fmt.Errorf("save github token from environment: %w", err)
+		}
 	}
 	return nil
 }

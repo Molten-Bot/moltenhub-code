@@ -137,14 +137,14 @@ func githubTokenNeedsConfigureState(harness, message string) web.AgentAuthState 
 }
 
 func firstConfiguredGitHubToken(runtimeConfigPath string, initCfg hub.InitConfig) (value string, source string) {
+	if env := configuredGitHubTokenFromEnv(); env != "" {
+		return env, "environment"
+	}
 	if persisted := hub.ReadRuntimeConfigString(runtimeConfigPath, "github_token", "githubToken", "GITHUB_TOKEN"); persisted != "" {
 		return persisted, "runtime config"
 	}
 	if init := strings.TrimSpace(initCfg.GitHubToken); init != "" {
 		return init, "init config"
-	}
-	if env := configuredGitHubTokenFromEnv(); env != "" {
-		return env, "environment"
 	}
 	return "", ""
 }

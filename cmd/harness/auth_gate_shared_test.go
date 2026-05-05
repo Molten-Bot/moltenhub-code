@@ -36,9 +36,30 @@ func isGitHubTokenValidationCommandForTest(cmd execx.Command) bool {
 	return cmd.Name == "gh" && strings.Join(cmd.Args, " ") == gitHubTokenValidationArgsStringForTest()
 }
 
-func TestFirstConfiguredGitHubTokenPrefersRuntimeConfig(t *testing.T) {
+func TestFirstConfiguredGitHubTokenPrefersEnvironmentOverRuntimeConfig(t *testing.T) {
 	t.Setenv("GH_TOKEN", "github_token_env_token")
 	t.Setenv("GITHUB_TOKEN", "github_token_env_token_alt")
+
+	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(path, []byte(`{"github_token":"github_token_runtime_token"}`), 0o600); err != nil {
+		t.Fatalf("WriteFile(config) error = %v", err)
+	}
+
+	got, source := firstConfiguredGitHubToken(path, hub.InitConfig{GitHubToken: "github_token_init_token"})
+	if want := "github_token_env_token"; got != want {
+		t.Fatalf("firstConfiguredGitHubToken() value = %q, want %q", got, want)
+	}
+	if want := "environment"; source != want {
+		t.Fatalf("firstConfiguredGitHubToken() source = %q, want %q", source, want)
+	}
+}
+
+func TestFirstConfiguredGitHubTokenPrefersRuntimeConfigOverInitConfig(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
 
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -53,19 +74,6 @@ func TestFirstConfiguredGitHubTokenPrefersRuntimeConfig(t *testing.T) {
 		t.Fatalf("firstConfiguredGitHubToken() value = %q, want %q", got, want)
 	}
 	if want := "runtime config"; source != want {
-		t.Fatalf("firstConfiguredGitHubToken() source = %q, want %q", source, want)
-	}
-}
-
-func TestFirstConfiguredGitHubTokenPrefersInitConfigOverEnvironment(t *testing.T) {
-	t.Setenv("GH_TOKEN", "github_token_env_token")
-	t.Setenv("GITHUB_TOKEN", "github_token_env_token_alt")
-
-	got, source := firstConfiguredGitHubToken(filepath.Join(t.TempDir(), "missing.json"), hub.InitConfig{GitHubToken: "github_token_init_token"})
-	if want := "github_token_init_token"; got != want {
-		t.Fatalf("firstConfiguredGitHubToken() value = %q, want %q", got, want)
-	}
-	if want := "init config"; source != want {
 		t.Fatalf("firstConfiguredGitHubToken() source = %q, want %q", source, want)
 	}
 }
