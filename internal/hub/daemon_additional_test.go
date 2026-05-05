@@ -23,7 +23,7 @@ import (
 type stubMoltenHubAPI struct {
 	token string
 
-	pullFn           func(ctx context.Context, timeoutMs int) (PulledOpenClawMessage, bool, error)
+	pullFn           func(ctx context.Context, timeoutMs int) (PulledRuntimeMessage, bool, error)
 	recordFn         func(context.Context) error
 	recordCodingFn   func(context.Context) error
 	recordActivityFn func(context.Context, string) error
@@ -112,7 +112,7 @@ func (s *stubMoltenHubAPI) ResolveAgentToken(context.Context, InitConfig) (strin
 }
 func (s *stubMoltenHubAPI) SyncProfile(context.Context, InitConfig) error   { return nil }
 func (s *stubMoltenHubAPI) UpdateAgentStatus(context.Context, string) error { return nil }
-func (s *stubMoltenHubAPI) MarkOpenClawOffline(_ context.Context, sessionKey, reason string) error {
+func (s *stubMoltenHubAPI) MarkRuntimeOffline(_ context.Context, sessionKey, reason string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.offlineCalls = append(s.offlineCalls, struct {
@@ -173,33 +173,33 @@ func (s *stubMoltenHubAPI) PublishResultAsync(ctx context.Context, payload map[s
 	close(ch)
 	return ch
 }
-func (s *stubMoltenHubAPI) PullOpenClawMessage(ctx context.Context, timeoutMs int) (PulledOpenClawMessage, bool, error) {
+func (s *stubMoltenHubAPI) PullRuntimeMessage(ctx context.Context, timeoutMs int) (PulledRuntimeMessage, bool, error) {
 	if s.pullFn == nil {
-		return PulledOpenClawMessage{}, false, nil
+		return PulledRuntimeMessage{}, false, nil
 	}
 	return s.pullFn(ctx, timeoutMs)
 }
-func (s *stubMoltenHubAPI) AckOpenClawDelivery(_ context.Context, deliveryID string) error {
+func (s *stubMoltenHubAPI) AckRuntimeDelivery(_ context.Context, deliveryID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.acked = append(s.acked, deliveryID)
 	return nil
 }
-func (s *stubMoltenHubAPI) AckOpenClawDeliveryAsync(ctx context.Context, deliveryID string) <-chan error {
+func (s *stubMoltenHubAPI) AckRuntimeDeliveryAsync(ctx context.Context, deliveryID string) <-chan error {
 	ch := make(chan error, 1)
-	ch <- s.AckOpenClawDelivery(ctx, deliveryID)
+	ch <- s.AckRuntimeDelivery(ctx, deliveryID)
 	close(ch)
 	return ch
 }
-func (s *stubMoltenHubAPI) NackOpenClawDelivery(_ context.Context, deliveryID string) error {
+func (s *stubMoltenHubAPI) NackRuntimeDelivery(_ context.Context, deliveryID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.nacked = append(s.nacked, deliveryID)
 	return nil
 }
-func (s *stubMoltenHubAPI) NackOpenClawDeliveryAsync(ctx context.Context, deliveryID string) <-chan error {
+func (s *stubMoltenHubAPI) NackRuntimeDeliveryAsync(ctx context.Context, deliveryID string) <-chan error {
 	ch := make(chan error, 1)
-	ch <- s.NackOpenClawDelivery(ctx, deliveryID)
+	ch <- s.NackRuntimeDelivery(ctx, deliveryID)
 	close(ch)
 	return ch
 }
@@ -339,8 +339,8 @@ func TestRunPullLoopEarlyExitAndUnauthorizedError(t *testing.T) {
 
 	authAPI := &stubMoltenHubAPI{
 		token: "t",
-		pullFn: func(context.Context, int) (PulledOpenClawMessage, bool, error) {
-			return PulledOpenClawMessage{}, false, errors.New("pull status=401")
+		pullFn: func(context.Context, int) (PulledRuntimeMessage, bool, error) {
+			return PulledRuntimeMessage{}, false, errors.New("pull status=401")
 		},
 	}
 	err := d.runPullLoop(context.Background(), authAPI, InitConfig{}, nil, &sync.WaitGroup{}, nil, 1000)
@@ -1651,7 +1651,7 @@ func TestRunWebsocketLoopReadsMessageThenReturnsOnDisconnect(t *testing.T) {
 	}
 	var workers sync.WaitGroup
 
-	wsURL := "ws://" + listener.Addr().String() + "/openclaw/messages/ws"
+	wsURL := "ws://" + listener.Addr().String() + "/runtime/messages/ws"
 	err = d.runWebsocketLoop(context.Background(), wsURL, api, cfg, nil, &workers, nil)
 	if err == nil {
 		t.Fatal("runWebsocketLoop() error = nil, want disconnect error")
@@ -1727,7 +1727,7 @@ func TestRunWebsocketLoopProcessesRawA2AJSONRPCFrame(t *testing.T) {
 	}
 	var workers sync.WaitGroup
 
-	wsURL := "ws://" + listener.Addr().String() + "/openclaw/messages/ws"
+	wsURL := "ws://" + listener.Addr().String() + "/runtime/messages/ws"
 	err = d.runWebsocketLoop(context.Background(), wsURL, api, cfg, nil, &workers, nil)
 	if err == nil {
 		t.Fatal("runWebsocketLoop() error = nil, want disconnect error")

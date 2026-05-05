@@ -174,7 +174,7 @@ func publishResultA2ARoutingMetadata(payload map[string]any) map[string]any {
 }
 
 func publishResultA2ARouteTarget(payload map[string]any) (a2aRouteTarget, bool) {
-	_, routed := publishResultOpenClawBody(payload)
+	_, routed := publishResultRuntimeBody(payload)
 	if !routed {
 		return a2aRouteTarget{}, false
 	}
@@ -216,7 +216,7 @@ func looksLikeUUID(value string) bool {
 	return true
 }
 
-func publishResultOpenClawBody(payload map[string]any) (map[string]any, bool) {
+func publishResultRuntimeBody(payload map[string]any) (map[string]any, bool) {
 	body := map[string]any{
 		"message": payload,
 	}
@@ -250,4 +250,8 @@ func publishResultOpenClawBody(payload map[string]any) (map[string]any, bool) {
 		body["client_msg_id"] = clientMsgID
 	}
 	return body, routed
+}
+
+func publishResultOpenClawBody(payload map[string]any) (map[string]any, bool) {
+	return publishResultRuntimeBody(payload)
 }

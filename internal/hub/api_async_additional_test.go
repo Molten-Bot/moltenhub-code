@@ -169,7 +169,7 @@ func TestAsyncAPIClientTokenBoundMethods(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"ok":true,"result":{"agent":{"metadata":{}}}}`))
 			return
-		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/openclaw/messages/pull"):
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/runtime/messages/pull"):
 			w.WriteHeader(http.StatusNoContent)
 			return
 		default:
@@ -189,30 +189,30 @@ func TestAsyncAPIClientTokenBoundMethods(t *testing.T) {
 	if err := client.UpdateAgentStatus(context.Background(), "online"); err != nil {
 		t.Fatalf("UpdateAgentStatus() error = %v", err)
 	}
-	if err := client.MarkOpenClawOffline(context.Background(), "main", "harness_shutdown"); err != nil {
-		t.Fatalf("MarkOpenClawOffline() error = %v", err)
+	if err := client.MarkRuntimeOffline(context.Background(), "main", "harness_shutdown"); err != nil {
+		t.Fatalf("MarkRuntimeOffline() error = %v", err)
 	}
 	if err := client.RegisterRuntime(context.Background(), InitConfig{SessionKey: "main"}, nil); err != nil {
 		t.Fatalf("RegisterRuntime() error = %v", err)
 	}
-	if _, ok, err := client.PullOpenClawMessage(context.Background(), 1000); err != nil || ok {
-		t.Fatalf("PullOpenClawMessage() = (ok=%v, err=%v), want (false, nil)", ok, err)
+	if _, ok, err := client.PullRuntimeMessage(context.Background(), 1000); err != nil || ok {
+		t.Fatalf("PullRuntimeMessage() = (ok=%v, err=%v), want (false, nil)", ok, err)
 	}
-	if err := client.AckOpenClawDelivery(context.Background(), "delivery-1"); err != nil {
-		t.Fatalf("AckOpenClawDelivery() error = %v", err)
+	if err := client.AckRuntimeDelivery(context.Background(), "delivery-1"); err != nil {
+		t.Fatalf("AckRuntimeDelivery() error = %v", err)
 	}
-	if err := client.NackOpenClawDelivery(context.Background(), "delivery-2"); err != nil {
-		t.Fatalf("NackOpenClawDelivery() error = %v", err)
+	if err := client.NackRuntimeDelivery(context.Background(), "delivery-2"); err != nil {
+		t.Fatalf("NackRuntimeDelivery() error = %v", err)
 	}
 
 	sort.Strings(seen)
 	wantContains := []string{
 		"GET /v1/agents/me",
-		"GET /v1/openclaw/messages/pull",
+		"GET /v1/runtime/messages/pull",
 		"PATCH /v1/agents/me/status",
-		"POST /v1/openclaw/messages/ack",
-		"POST /v1/openclaw/messages/nack",
-		"POST /v1/openclaw/messages/offline",
+		"POST /v1/runtime/messages/ack",
+		"POST /v1/runtime/messages/nack",
+		"POST /v1/runtime/messages/offline",
 		"PATCH /v1/agents/me/metadata",
 	}
 	for _, want := range wantContains {
@@ -251,21 +251,21 @@ func TestAsyncAPIClientResolveAgentTokenPropagatesError(t *testing.T) {
 	}
 }
 
-func TestAsyncAPIClientPullOpenClawMessageRequiresToken(t *testing.T) {
+func TestAsyncAPIClientPullRuntimeMessageRequiresToken(t *testing.T) {
 	t.Parallel()
 
 	client := NewAsyncAPIClient("https://example.test/v1", "")
-	msg, ok, err := client.PullOpenClawMessage(context.Background(), 500)
+	msg, ok, err := client.PullRuntimeMessage(context.Background(), 500)
 	if err == nil {
-		t.Fatal("PullOpenClawMessage() error = nil, want non-nil")
+		t.Fatal("PullRuntimeMessage() error = nil, want non-nil")
 	}
 	if ok {
-		t.Fatalf("PullOpenClawMessage() ok = %v, want false", ok)
+		t.Fatalf("PullRuntimeMessage() ok = %v, want false", ok)
 	}
 	if msg.DeliveryID != "" || msg.MessageID != "" || msg.Message != nil {
-		t.Fatalf("PullOpenClawMessage() message = %#v, want zero value fields", msg)
+		t.Fatalf("PullRuntimeMessage() message = %#v, want zero value fields", msg)
 	}
 	if got := err.Error(); !strings.Contains(got, "moltenhub api token is required") {
-		t.Fatalf("PullOpenClawMessage() error = %q", got)
+		t.Fatalf("PullRuntimeMessage() error = %q", got)
 	}
 }

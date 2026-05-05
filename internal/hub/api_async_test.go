@@ -100,16 +100,16 @@ func TestAsyncAPIClientAsyncMethodsUseStoredToken(t *testing.T) {
 	if err := <-client.PublishResultAsync(context.Background(), payload); err != nil {
 		t.Fatalf("PublishResultAsync() error = %v", err)
 	}
-	if err := <-client.AckOpenClawDeliveryAsync(context.Background(), "delivery-1"); err != nil {
-		t.Fatalf("AckOpenClawDeliveryAsync() error = %v", err)
+	if err := <-client.AckRuntimeDeliveryAsync(context.Background(), "delivery-1"); err != nil {
+		t.Fatalf("AckRuntimeDeliveryAsync() error = %v", err)
 	}
-	if err := <-client.NackOpenClawDeliveryAsync(context.Background(), "delivery-2"); err != nil {
-		t.Fatalf("NackOpenClawDeliveryAsync() error = %v", err)
+	if err := <-client.NackRuntimeDeliveryAsync(context.Background(), "delivery-2"); err != nil {
+		t.Fatalf("NackRuntimeDeliveryAsync() error = %v", err)
 	}
 
 	mu.Lock()
 	defer mu.Unlock()
-	if got, want := strings.Join(paths, ","), "/v1/a2a,/v1/openclaw/messages/publish,/v1/openclaw/messages/ack,/v1/openclaw/messages/nack"; got != want {
+	if got, want := strings.Join(paths, ","), "/v1/a2a,/v1/runtime/messages/publish,/v1/runtime/messages/ack,/v1/runtime/messages/nack"; got != want {
 		t.Fatalf("paths = %q, want %q", got, want)
 	}
 	for i, header := range authz {

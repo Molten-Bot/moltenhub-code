@@ -519,7 +519,7 @@ func runHub(args []string) int {
 				finalState = outcome.State
 				switch outcome.State {
 				case "error":
-					markLocalRunOpenClawOffline(runCtx, activeCfg, requestID, hubRuntimeConnected, daemonLogger)
+					markLocalRunRuntimeOffline(runCtx, activeCfg, requestID, hubRuntimeConnected, daemonLogger)
 					if allowFailureFollowUp {
 						if queueFailureRerun != nil {
 							queueFailureRerun(requestID, outcome.Result, runCfg, source)
@@ -2044,7 +2044,7 @@ func recordLocalRunActivity(
 	}
 }
 
-func markLocalRunOpenClawOffline(ctx context.Context, cfg hub.InitConfig, requestID string, hubConnected func() bool, logf func(string, ...any)) {
+func markLocalRunRuntimeOffline(ctx context.Context, cfg hub.InitConfig, requestID string, hubConnected func() bool, logf func(string, ...any)) {
 	if hubConnected == nil || !hubConnected() {
 		return
 	}
@@ -2064,7 +2064,7 @@ func markLocalRunOpenClawOffline(ctx context.Context, cfg hub.InitConfig, reques
 	defer cancel()
 
 	client := hub.NewAPIClient(baseURL)
-	if err := client.MarkOpenClawOffline(offlineCtx, token, cfg.SessionKey, localTransportOfflineReasonExecutionFailure); err != nil {
+	if err := client.MarkRuntimeOffline(offlineCtx, token, cfg.SessionKey, localTransportOfflineReasonExecutionFailure); err != nil {
 		logf("dispatch status=warn action=mark_offline request_id=%s err=%q", requestID, err)
 	}
 }

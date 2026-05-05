@@ -38,18 +38,37 @@ const (
 	maxPullTimeoutMs     = 30000
 )
 
+const (
+	runtimeMessagesPublishPath   = "/runtime/messages/publish"
+	runtimeMessagesPullPath      = "/runtime/messages/pull"
+	runtimeMessagesAckPath       = "/runtime/messages/ack"
+	runtimeMessagesNackPath      = "/runtime/messages/nack"
+	runtimeMessagesWebSocketPath = "/runtime/messages/ws"
+	runtimeMessagesOfflinePath   = "/runtime/messages/offline"
+
+	openClawMessagesPublishPath   = "/openclaw/messages/publish"
+	openClawMessagesPullPath      = "/openclaw/messages/pull"
+	openClawMessagesAckPath       = "/openclaw/messages/ack"
+	openClawMessagesNackPath      = "/openclaw/messages/nack"
+	openClawMessagesWebSocketPath = "/openclaw/messages/ws"
+	openClawMessagesOfflinePath   = "/openclaw/messages/offline"
+)
+
 type agentActivityPublish struct {
 	Activity string
 	Category string
 	Status   string
 }
 
-// PulledOpenClawMessage is one leased inbound message from pull transport.
-type PulledOpenClawMessage struct {
+// PulledRuntimeMessage is one leased inbound message from runtime pull transport.
+type PulledRuntimeMessage struct {
 	DeliveryID string
 	MessageID  string
 	Message    map[string]any
 }
+
+// PulledOpenClawMessage is kept for callers still using the legacy transport name.
+type PulledOpenClawMessage = PulledRuntimeMessage
 
 // AgentProfile captures the profile fields this runtime needs to persist locally.
 type AgentProfile struct {
@@ -285,9 +304,9 @@ func (c APIClient) UpdateAgentStatus(ctx context.Context, token, status string) 
 	return nil
 }
 
-// MarkOpenClawOffline marks this runtime offline for OpenClaw websocket transport.
-func (c APIClient) MarkOpenClawOffline(ctx context.Context, token, sessionKey, reason string) error {
-	normalizedToken, err := requireHubToken(token, "mark openclaw offline")
+// MarkRuntimeOffline marks this runtime offline for websocket transport.
+func (c APIClient) MarkRuntimeOffline(ctx context.Context, token, sessionKey, reason string) error {
+	normalizedToken, err := requireHubToken(token, "mark runtime offline")
 	if err != nil {
 		return err
 	}
@@ -302,14 +321,20 @@ func (c APIClient) MarkOpenClawOffline(ctx context.Context, token, sessionKey, r
 		body["reason"] = strings.TrimSpace(reason)
 	}
 
-	ok, trace := c.tryAny(ctx, token, []apiAttempt{
-		{Method: http.MethodPost, Path: "/openclaw/messages/offline", Body: body},
+	ok, trace := c.tryRuntimeTransport(ctx, token, []apiAttempt{
+		{Method: http.MethodPost, Path: runtimeMessagesOfflinePath, Body: body},
+		{Method: http.MethodPost, Path: openClawMessagesOfflinePath, Body: body},
 	})
 	if !ok {
-		return fmt.Errorf("mark openclaw offline failed: %s", trace)
+		return fmt.Errorf("mark runtime offline failed: %s", trace)
 	}
 
 	return nil
+}
+
+// MarkOpenClawOffline keeps legacy callers on the runtime-first transport path.
+func (c APIClient) MarkOpenClawOffline(ctx context.Context, token, sessionKey, reason string) error {
+	return c.MarkRuntimeOffline(ctx, token, sessionKey, reason)
 }
 
 // RecordGitHubTaskCompleteActivity publishes a minimal completion activity.
@@ -458,9 +483,9 @@ func (c APIClient) RegisterRuntime(ctx context.Context, token string, cfg InitCo
 	})
 }
 
-// PublishResult posts a skill result using A2A SendMessage with OpenClaw fallback.
+// PublishResult posts a skill result using A2A SendMessage with runtime transport fallback.
 func (c APIClient) PublishResult(ctx context.Context, token string, payload map[string]any) error {
-	body, routed := publishResultOpenClawBody(payload)
+	body, routed := publishResultRuntimeBody(payload)
 	if routed {
 		if err := c.publishResultA2A(ctx, token, payload); err == nil {
 			return nil
@@ -469,8 +494,9 @@ func (c APIClient) PublishResult(ctx context.Context, token string, payload map[
 		}
 	}
 
-	ok, trace := c.tryAny(ctx, token, []apiAttempt{
-		{Method: http.MethodPost, Path: "/openclaw/messages/publish", Body: body},
+	ok, trace := c.tryRuntimeTransport(ctx, token, []apiAttempt{
+		{Method: http.MethodPost, Path: runtimeMessagesPublishPath, Body: body},
+		{Method: http.MethodPost, Path: openClawMessagesPublishPath, Body: body},
 	})
 	if !ok {
 		return fmt.Errorf("publish result failed: %s", trace)
@@ -478,27 +504,45 @@ func (c APIClient) PublishResult(ctx context.Context, token string, payload map[
 	return nil
 }
 
-// PullOpenClawMessage claims the next OpenClaw envelope using long-poll transport.
-func (c APIClient) PullOpenClawMessage(ctx context.Context, token string, timeoutMs int) (PulledOpenClawMessage, bool, error) {
-	status, body, err := c.doJSON(ctx, http.MethodGet, "/openclaw/messages/pull"+openClawPullQuery(timeoutMs), token, nil)
+// PullRuntimeMessage claims the next runtime envelope using long-poll transport.
+func (c APIClient) PullRuntimeMessage(ctx context.Context, token string, timeoutMs int) (PulledRuntimeMessage, bool, error) {
+	normalizedToken, err := requireHubToken(token, "pull runtime message")
 	if err != nil {
-		return PulledOpenClawMessage{}, false, err
+		return PulledRuntimeMessage{}, false, err
+	}
+	token = normalizedToken
+
+	query := runtimePullQuery(timeoutMs)
+	status, body, err := c.doJSON(ctx, http.MethodGet, runtimeMessagesPullPath+query, token, nil)
+	if err != nil {
+		return PulledRuntimeMessage{}, false, err
+	}
+	if isRuntimeTransportFallbackStatus(status) {
+		status, body, err = c.doJSON(ctx, http.MethodGet, openClawMessagesPullPath+query, token, nil)
+		if err != nil {
+			return PulledRuntimeMessage{}, false, err
+		}
 	}
 	switch status {
 	case http.StatusNoContent:
-		return PulledOpenClawMessage{}, false, nil
+		return PulledRuntimeMessage{}, false, nil
 	case http.StatusOK:
-		msg, err := parsePulledOpenClawMessage(body)
+		msg, err := parsePulledRuntimeMessage(body)
 		if err != nil {
 			if errors.Is(err, errNoPulledMessage) {
-				return PulledOpenClawMessage{}, false, nil
+				return PulledRuntimeMessage{}, false, nil
 			}
-			return PulledOpenClawMessage{}, false, err
+			return PulledRuntimeMessage{}, false, err
 		}
 		return msg, true, nil
 	default:
-		return PulledOpenClawMessage{}, false, fmt.Errorf("pull status=%d", status)
+		return PulledRuntimeMessage{}, false, fmt.Errorf("pull status=%d", status)
 	}
+}
+
+// PullOpenClawMessage keeps legacy callers on the runtime-first transport path.
+func (c APIClient) PullOpenClawMessage(ctx context.Context, token string, timeoutMs int) (PulledOpenClawMessage, bool, error) {
+	return c.PullRuntimeMessage(ctx, token, timeoutMs)
 }
 
 // Ping checks hub liveness at /ping.
@@ -511,17 +555,27 @@ func (c APIClient) Health(ctx context.Context) error {
 	return c.probeRootEndpoint(ctx, "/health")
 }
 
-// AckOpenClawDelivery acknowledges a leased pull delivery.
+// AckRuntimeDelivery acknowledges a leased pull delivery.
+func (c APIClient) AckRuntimeDelivery(ctx context.Context, token, deliveryID string) error {
+	return c.updateRuntimeDelivery(ctx, token, deliveryID, "ack", runtimeMessagesAckPath, openClawMessagesAckPath)
+}
+
+// AckOpenClawDelivery keeps legacy callers on the runtime-first transport path.
 func (c APIClient) AckOpenClawDelivery(ctx context.Context, token, deliveryID string) error {
-	return c.updateOpenClawDelivery(ctx, token, deliveryID, "ack", "/openclaw/messages/ack")
+	return c.AckRuntimeDelivery(ctx, token, deliveryID)
 }
 
-// NackOpenClawDelivery releases a leased pull delivery back to the queue.
+// NackRuntimeDelivery releases a leased pull delivery back to the queue.
+func (c APIClient) NackRuntimeDelivery(ctx context.Context, token, deliveryID string) error {
+	return c.updateRuntimeDelivery(ctx, token, deliveryID, "nack", runtimeMessagesNackPath, openClawMessagesNackPath)
+}
+
+// NackOpenClawDelivery keeps legacy callers on the runtime-first transport path.
 func (c APIClient) NackOpenClawDelivery(ctx context.Context, token, deliveryID string) error {
-	return c.updateOpenClawDelivery(ctx, token, deliveryID, "nack", "/openclaw/messages/nack")
+	return c.NackRuntimeDelivery(ctx, token, deliveryID)
 }
 
-func (c APIClient) updateOpenClawDelivery(ctx context.Context, token, deliveryID, action, path string) error {
+func (c APIClient) updateRuntimeDelivery(ctx context.Context, token, deliveryID, action, runtimePath, legacyPath string) error {
 	normalizedToken, err := requireHubToken(token, action+" delivery")
 	if err != nil {
 		return err
@@ -532,8 +586,9 @@ func (c APIClient) updateOpenClawDelivery(ctx context.Context, token, deliveryID
 	if deliveryID == "" {
 		return fmt.Errorf("delivery id is required")
 	}
-	ok, trace := c.tryAny(ctx, token, []apiAttempt{
-		{Method: http.MethodPost, Path: path, Body: map[string]any{"delivery_id": deliveryID}},
+	ok, trace := c.tryRuntimeTransport(ctx, token, []apiAttempt{
+		{Method: http.MethodPost, Path: runtimePath, Body: map[string]any{"delivery_id": deliveryID}},
+		{Method: http.MethodPost, Path: legacyPath, Body: map[string]any{"delivery_id": deliveryID}},
 	})
 	if !ok {
 		return fmt.Errorf("%s delivery failed: %s", action, trace)
@@ -541,7 +596,7 @@ func (c APIClient) updateOpenClawDelivery(ctx context.Context, token, deliveryID
 	return nil
 }
 
-func openClawPullQuery(timeoutMs int) string {
+func runtimePullQuery(timeoutMs int) string {
 	switch {
 	case timeoutMs < 0:
 		timeoutMs = 0
@@ -552,6 +607,10 @@ func openClawPullQuery(timeoutMs int) string {
 		return ""
 	}
 	return fmt.Sprintf("?timeout_ms=%d", timeoutMs)
+}
+
+func openClawPullQuery(timeoutMs int) string {
+	return runtimePullQuery(timeoutMs)
 }
 
 func (c APIClient) probeRootEndpoint(ctx context.Context, endpoint string) error {
@@ -604,8 +663,17 @@ func (c APIClient) rootEndpointURL(endpoint string) (string, error) {
 	return u.String(), nil
 }
 
-// WebsocketURL builds the websocket endpoint from API base URL.
+// WebsocketURL builds the canonical runtime websocket endpoint from API base URL.
 func WebsocketURL(baseURL, sessionKey string) (string, error) {
+	return websocketURLForPath(baseURL, sessionKey, runtimeMessagesWebSocketPath)
+}
+
+// OpenClawWebsocketURL builds the legacy websocket compatibility endpoint.
+func OpenClawWebsocketURL(baseURL, sessionKey string) (string, error) {
+	return websocketURLForPath(baseURL, sessionKey, openClawMessagesWebSocketPath)
+}
+
+func websocketURLForPath(baseURL, sessionKey, endpointPath string) (string, error) {
 	u, err := url.Parse(strings.TrimSpace(baseURL))
 	if err != nil {
 		return "", fmt.Errorf("parse base url: %w", err)
@@ -619,7 +687,7 @@ func WebsocketURL(baseURL, sessionKey string) (string, error) {
 		return "", fmt.Errorf("base url must use http or https")
 	}
 
-	u.Path = strings.TrimRight(u.Path, "/") + "/openclaw/messages/ws"
+	u.Path = strings.TrimRight(u.Path, "/") + "/" + strings.TrimLeft(endpointPath, "/")
 	q := u.Query()
 	if strings.TrimSpace(sessionKey) != "" {
 		q.Set("session_key", sessionKey)
@@ -711,6 +779,37 @@ func (c APIClient) tryAny(ctx context.Context, token string, attempts []apiAttem
 	return false, strings.Join(traces, "; ")
 }
 
+func (c APIClient) tryRuntimeTransport(ctx context.Context, token string, attempts []apiAttempt) (bool, string) {
+	if len(attempts) == 0 {
+		return false, "no attempts configured"
+	}
+	var traces []string
+	for i, attempt := range attempts {
+		status, _, err := c.doJSON(ctx, attempt.Method, attempt.Path, token, attempt.Body)
+		if err != nil {
+			traces = append(traces, fmt.Sprintf("%s %s network=%v", attempt.Method, attempt.Path, err))
+			return false, strings.Join(traces, "; ")
+		}
+		if status/100 == 2 {
+			return true, fmt.Sprintf("%s %s", attempt.Method, attempt.Path)
+		}
+		traces = append(traces, fmt.Sprintf("%s %s status=%d", attempt.Method, attempt.Path, status))
+		if i == 0 && !isRuntimeTransportFallbackStatus(status) {
+			break
+		}
+	}
+	return false, strings.Join(traces, "; ")
+}
+
+func isRuntimeTransportFallbackStatus(status int) bool {
+	switch status {
+	case http.StatusNotFound, http.StatusMethodNotAllowed, http.StatusNotImplemented:
+		return true
+	default:
+		return false
+	}
+}
+
 func requireHubToken(token, operation string) (string, error) {
 	normalizedToken := strings.TrimSpace(token)
 	if normalizedToken == "" {
@@ -788,34 +887,50 @@ func extractAPIBaseFromJSON(body []byte) string {
 	return extractAPIBaseFromAny(parsed)
 }
 
-func parsePulledOpenClawMessage(body []byte) (PulledOpenClawMessage, error) {
+func parsePulledRuntimeMessage(body []byte) (PulledRuntimeMessage, error) {
 	if len(bytes.TrimSpace(body)) == 0 {
-		return PulledOpenClawMessage{}, errNoPulledMessage
+		return PulledRuntimeMessage{}, errNoPulledMessage
 	}
 
 	var root map[string]any
 	if err := json.Unmarshal(body, &root); err != nil {
-		return PulledOpenClawMessage{}, fmt.Errorf("decode pull body: %w", err)
+		return PulledRuntimeMessage{}, fmt.Errorf("decode pull body: %w", err)
 	}
 
-	inbound := extractInboundOpenClawMessage(root)
+	inbound := extractInboundRuntimeMessage(root)
 	deliveryID := inbound.DeliveryID
 	message := inbound.Message
 	if deliveryID == "" {
 		if len(message) == 0 {
-			return PulledOpenClawMessage{}, errNoPulledMessage
+			return PulledRuntimeMessage{}, errNoPulledMessage
 		}
-		return PulledOpenClawMessage{}, fmt.Errorf("pull response missing delivery_id")
+		return PulledRuntimeMessage{}, fmt.Errorf("pull response missing delivery_id")
 	}
 	if len(message) == 0 {
-		return PulledOpenClawMessage{}, fmt.Errorf("pull response missing openclaw message")
+		return PulledRuntimeMessage{}, fmt.Errorf("pull response missing runtime message")
 	}
 
 	return inbound, nil
 }
 
+func parsePulledOpenClawMessage(body []byte) (PulledOpenClawMessage, error) {
+	return parsePulledRuntimeMessage(body)
+}
+
 func extractPulledMessage(result, root map[string]any) map[string]any {
 	candidates := []any{
+		valueAt(result, "envelope", "message"),
+		valueAt(result, "envelope"),
+		valueAt(result, "data", "envelope", "message"),
+		valueAt(result, "data", "envelope"),
+		valueAt(result, "payload", "envelope", "message"),
+		valueAt(result, "payload", "envelope"),
+		valueAt(root, "envelope", "message"),
+		valueAt(root, "envelope"),
+		valueAt(root, "data", "envelope", "message"),
+		valueAt(root, "data", "envelope"),
+		valueAt(root, "payload", "envelope", "message"),
+		valueAt(root, "payload", "envelope"),
 		valueAt(result, "openclaw_message", "message"),
 		valueAt(result, "openclaw_message"),
 		valueAt(result, "data", "openclaw_message", "message"),
@@ -853,7 +968,7 @@ func extractPulledMessage(result, root map[string]any) map[string]any {
 	return nil
 }
 
-func extractInboundOpenClawMessage(root map[string]any) PulledOpenClawMessage {
+func extractInboundRuntimeMessage(root map[string]any) PulledRuntimeMessage {
 	result := root
 	if nested := toMap(root["result"]); len(nested) > 0 {
 		result = nested
@@ -870,7 +985,7 @@ func extractInboundOpenClawMessage(root map[string]any) PulledOpenClawMessage {
 	}
 	message = enrichInboundMessageRouting(message, result, root)
 
-	return PulledOpenClawMessage{
+	return PulledRuntimeMessage{
 		DeliveryID: firstNonEmpty(
 			stringAt(result, "delivery_id"),
 			stringAt(result, "deliveryId"),
@@ -920,6 +1035,30 @@ func extractInboundOpenClawMessage(root map[string]any) PulledOpenClawMessage {
 			stringAtPath(root, "delivery", "clientMsgId"),
 			stringAtPath(root, "delivery", "message_id"),
 			stringAtPath(root, "delivery", "messageId"),
+			stringAtPath(result, "envelope", "client_msg_id"),
+			stringAtPath(result, "envelope", "clientMsgId"),
+			stringAtPath(result, "envelope", "message_id"),
+			stringAtPath(result, "envelope", "messageId"),
+			stringAtPath(root, "envelope", "client_msg_id"),
+			stringAtPath(root, "envelope", "clientMsgId"),
+			stringAtPath(root, "envelope", "message_id"),
+			stringAtPath(root, "envelope", "messageId"),
+			stringAtPath(result, "data", "envelope", "client_msg_id"),
+			stringAtPath(result, "data", "envelope", "clientMsgId"),
+			stringAtPath(result, "data", "envelope", "message_id"),
+			stringAtPath(result, "data", "envelope", "messageId"),
+			stringAtPath(root, "data", "envelope", "client_msg_id"),
+			stringAtPath(root, "data", "envelope", "clientMsgId"),
+			stringAtPath(root, "data", "envelope", "message_id"),
+			stringAtPath(root, "data", "envelope", "messageId"),
+			stringAtPath(result, "payload", "envelope", "client_msg_id"),
+			stringAtPath(result, "payload", "envelope", "clientMsgId"),
+			stringAtPath(result, "payload", "envelope", "message_id"),
+			stringAtPath(result, "payload", "envelope", "messageId"),
+			stringAtPath(root, "payload", "envelope", "client_msg_id"),
+			stringAtPath(root, "payload", "envelope", "clientMsgId"),
+			stringAtPath(root, "payload", "envelope", "message_id"),
+			stringAtPath(root, "payload", "envelope", "messageId"),
 			stringAtPath(result, "openclaw_message", "client_msg_id"),
 			stringAtPath(result, "openclaw_message", "clientMsgId"),
 			stringAtPath(result, "openclaw_message", "message_id"),
@@ -965,6 +1104,10 @@ func extractInboundOpenClawMessage(root map[string]any) PulledOpenClawMessage {
 	}
 }
 
+func extractInboundOpenClawMessage(root map[string]any) PulledRuntimeMessage {
+	return extractInboundRuntimeMessage(root)
+}
+
 func enrichInboundMessageRouting(message, result, root map[string]any) map[string]any {
 	if len(message) == 0 {
 		return message
@@ -973,6 +1116,10 @@ func enrichInboundMessageRouting(message, result, root map[string]any) map[strin
 	transportMessages := []map[string]any{
 		toMap(valueAt(result, "message")),
 		toMap(valueAt(root, "message")),
+		toMap(valueAt(result, "envelope")),
+		toMap(valueAt(root, "envelope")),
+		toMap(valueAt(result, "envelope", "message")),
+		toMap(valueAt(root, "envelope", "message")),
 		toMap(valueAt(result, "openclaw_message")),
 		toMap(valueAt(root, "openclaw_message")),
 		toMap(valueAt(result, "openclaw_message", "message")),
@@ -981,6 +1128,10 @@ func enrichInboundMessageRouting(message, result, root map[string]any) map[strin
 		toMap(valueAt(root, "data")),
 		toMap(valueAt(result, "data", "message")),
 		toMap(valueAt(root, "data", "message")),
+		toMap(valueAt(result, "data", "envelope")),
+		toMap(valueAt(root, "data", "envelope")),
+		toMap(valueAt(result, "data", "envelope", "message")),
+		toMap(valueAt(root, "data", "envelope", "message")),
 		toMap(valueAt(result, "data", "openclaw_message")),
 		toMap(valueAt(root, "data", "openclaw_message")),
 		toMap(valueAt(result, "data", "openclaw_message", "message")),
@@ -989,6 +1140,10 @@ func enrichInboundMessageRouting(message, result, root map[string]any) map[strin
 		toMap(valueAt(root, "payload")),
 		toMap(valueAt(result, "payload", "message")),
 		toMap(valueAt(root, "payload", "message")),
+		toMap(valueAt(result, "payload", "envelope")),
+		toMap(valueAt(root, "payload", "envelope")),
+		toMap(valueAt(result, "payload", "envelope", "message")),
+		toMap(valueAt(root, "payload", "envelope", "message")),
 		toMap(valueAt(result, "payload", "openclaw_message")),
 		toMap(valueAt(root, "payload", "openclaw_message")),
 		toMap(valueAt(result, "payload", "openclaw_message", "message")),
