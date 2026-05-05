@@ -41,6 +41,21 @@ type AsyncAPIClient struct {
 
 	tokenMu sync.RWMutex
 	token   string
+
+	publishQueueOnce sync.Once
+	publishQueue     *asyncPublishQueue
+}
+
+type asyncPublishJob struct {
+	ctx     context.Context
+	payload map[string]any
+	done    chan error
+}
+
+type asyncPublishQueue struct {
+	mu     sync.Mutex
+	notify chan struct{}
+	jobs   []asyncPublishJob
 }
 
 // NewAsyncAPIClient returns a token-bound async hub API wrapper.
@@ -159,9 +174,19 @@ func (c *AsyncAPIClient) PublishResult(ctx context.Context, payload map[string]a
 
 // PublishResultAsync publishes a result on a background goroutine.
 func (c *AsyncAPIClient) PublishResultAsync(ctx context.Context, payload map[string]any) <-chan error {
-	return c.runAsync(ctx, func(ctx context.Context) error {
-		return c.PublishResult(ctx, payload)
-	})
+	done := make(chan error, 1)
+	if c == nil {
+		done <- fmt.Errorf("moltenhub api client is required")
+		close(done)
+		return done
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	job := asyncPublishJob{ctx: ctx, payload: payload, done: done}
+	queue := c.publishResultQueue()
+	queue.enqueue(job)
+	return done
 }
 
 // PullOpenClawMessage pulls one inbound transport envelope.
@@ -238,4 +263,48 @@ func (c *AsyncAPIClient) runAsync(ctx context.Context, fn func(context.Context) 
 		done <- fn(ctx)
 	}()
 	return done
+}
+
+func (c *AsyncAPIClient) publishResultQueue() *asyncPublishQueue {
+	c.publishQueueOnce.Do(func() {
+		c.publishQueue = &asyncPublishQueue{
+			notify: make(chan struct{}, 1),
+		}
+		go c.runPublishResultQueue(c.publishQueue)
+	})
+	return c.publishQueue
+}
+
+func (c *AsyncAPIClient) runPublishResultQueue(queue *asyncPublishQueue) {
+	for {
+		job := queue.dequeue()
+		job.done <- c.PublishResult(job.ctx, job.payload)
+		close(job.done)
+	}
+}
+
+func (q *asyncPublishQueue) enqueue(job asyncPublishJob) {
+	q.mu.Lock()
+	q.jobs = append(q.jobs, job)
+	q.mu.Unlock()
+	select {
+	case q.notify <- struct{}{}:
+	default:
+	}
+}
+
+func (q *asyncPublishQueue) dequeue() asyncPublishJob {
+	for {
+		q.mu.Lock()
+		if len(q.jobs) > 0 {
+			job := q.jobs[0]
+			copy(q.jobs, q.jobs[1:])
+			q.jobs[len(q.jobs)-1] = asyncPublishJob{}
+			q.jobs = q.jobs[:len(q.jobs)-1]
+			q.mu.Unlock()
+			return job
+		}
+		q.mu.Unlock()
+		<-q.notify
+	}
 }

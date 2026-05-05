@@ -17,6 +17,7 @@ import (
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/harness"
 	"github.com/Molten-Bot/moltenhub-code/internal/library"
+	"github.com/a2aproject/a2a-go/v2/a2a"
 )
 
 type stubMoltenHubAPI struct {
@@ -37,6 +38,26 @@ type stubMoltenHubAPI struct {
 		SessionKey string
 		Reason     string
 	}
+}
+
+type blockingAsyncStatusAPI struct {
+	stubMoltenHubAPI
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (s *blockingAsyncStatusAPI) PublishResultAsync(ctx context.Context, payload map[string]any) <-chan error {
+	done := make(chan error, 1)
+	s.once.Do(func() {
+		close(s.started)
+	})
+	go func() {
+		<-s.release
+		done <- s.stubMoltenHubAPI.PublishResult(ctx, payload)
+		close(done)
+	}()
+	return done
 }
 
 type blockedRunner struct {
@@ -220,6 +241,58 @@ func TestQueueFailureRerunPublishesNormalizedRunConfig(t *testing.T) {
 	}
 	if got, want := configPayload["prompt"], "fix failing tests"; got != want {
 		t.Fatalf("config.prompt = %#v, want %q", got, want)
+	}
+}
+
+func TestPublishDispatchStatusReturnsBeforeAsyncPublishCompletes(t *testing.T) {
+	t.Parallel()
+
+	api := &blockingAsyncStatusAPI{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	daemon := NewDaemon(nil)
+
+	returned := make(chan struct{})
+	go func() {
+		daemon.publishDispatchStatus(
+			context.Background(),
+			api,
+			InitConfig{Skill: SkillConfig{Name: "code_for_me"}},
+			SkillDispatch{RequestID: "req-status-async", Skill: "code_for_me"},
+			"working",
+			a2a.TaskStateWorking,
+			"Task running.",
+			nil,
+		)
+		close(returned)
+	}()
+
+	select {
+	case <-api.started:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("PublishResultAsync was not called")
+	}
+	select {
+	case <-returned:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("publishDispatchStatus blocked on async publish")
+	}
+
+	close(api.release)
+	deadline := time.After(2 * time.Second)
+	for {
+		api.mu.Lock()
+		published := len(api.published)
+		api.mu.Unlock()
+		if published == 1 {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("published payload count = %d, want 1", published)
+		case <-time.After(10 * time.Millisecond):
+		}
 	}
 }
 

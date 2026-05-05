@@ -1094,14 +1094,22 @@ func (d Daemon) publishDispatchStatus(
 		return
 	}
 	payload := dispatchStatusPayload(cfg, dispatch, status, state, message, details)
-	if err := api.PublishResult(ctx, payload); err != nil {
-		d.logf(
-			"dispatch status=warn action=publish_status_update request_id=%s task_status=%s err=%q",
-			dispatch.RequestID,
-			strings.TrimSpace(status),
-			err,
-		)
+	if ctx == nil {
+		ctx = context.Background()
+	} else {
+		ctx = context.WithoutCancel(ctx)
 	}
+	errCh := api.PublishResultAsync(ctx, payload)
+	go func() {
+		if err := <-errCh; err != nil {
+			d.logf(
+				"dispatch status=warn action=publish_status_update request_id=%s task_status=%s err=%q",
+				dispatch.RequestID,
+				strings.TrimSpace(status),
+				err,
+			)
+		}
+	}()
 }
 
 func dispatchStatusPayload(
