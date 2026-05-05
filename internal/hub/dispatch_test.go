@@ -541,6 +541,9 @@ func TestParseRunConfigJSONExpandsLibraryTaskPayload(t *testing.T) {
 	if got, want := cfg.BaseBranch, "release"; got != want {
 		t.Fatalf("BaseBranch = %q, want %q", got, want)
 	}
+	if got, want := cfg.LibraryTaskDisplayName, "100% Unit Test Coverage"; got != want {
+		t.Fatalf("LibraryTaskDisplayName = %q, want %q", got, want)
+	}
 	if got := cfg.Prompt; !strings.Contains(got, "100% unit-test coverage") {
 		t.Fatalf("Prompt = %q", got)
 	}

@@ -9,20 +9,31 @@ const (
 
 // RunStartedActivity returns the custom task-start activity for runCfg.
 func RunStartedActivity(runCfg config.Config) string {
-	return libraryTaskStartActivity(runCfg.LibraryTaskName)
+	return libraryTaskStartActivity(runCfg)
 }
 
 // RunCompletedActivity returns the custom task-complete activity for runCfg.
 func RunCompletedActivity(runCfg config.Config) string {
-	return libraryTaskCompleteActivity(runCfg.LibraryTaskName)
+	return libraryTaskCompleteActivity(runCfg)
 }
 
-func libraryTaskStartActivity(taskName string) string {
-	return buildLibraryTaskActivity(libraryTaskActivityStartPrefix, taskName)
+func libraryTaskStartActivity(runCfg config.Config) string {
+	return buildLibraryTaskActivity(libraryTaskActivityStartPrefix, libraryTaskActivityName(runCfg))
 }
 
-func libraryTaskCompleteActivity(taskName string) string {
-	return buildLibraryTaskActivity(libraryTaskActivityCompletePrefix, taskName)
+func libraryTaskCompleteActivity(runCfg config.Config) string {
+	return buildLibraryTaskActivity(libraryTaskActivityCompletePrefix, libraryTaskActivityName(runCfg))
+}
+
+func libraryTaskActivityName(runCfg config.Config) string {
+	taskName := normalizeActivityEntry(runCfg.LibraryTaskName)
+	if taskName == "" {
+		return ""
+	}
+	if displayName := normalizeActivityEntry(runCfg.LibraryTaskDisplayName); displayName != "" {
+		return displayName
+	}
+	return taskName
 }
 
 func buildLibraryTaskActivity(prefix, taskName string) string {

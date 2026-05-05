@@ -938,9 +938,10 @@ func TestHandleDispatchLibraryTaskUsesDedicatedActivitySignal(t *testing.T) {
 	}
 
 	runCfg := config.Config{
-		Repo:            "git@github.com:acme/repo.git",
-		BaseBranch:      "release",
-		LibraryTaskName: "  unit-test-coverage ",
+		Repo:                   "git@github.com:acme/repo.git",
+		BaseBranch:             "release",
+		LibraryTaskName:        "  unit-test-coverage ",
+		LibraryTaskDisplayName: "  100% Unit Test Coverage  ",
 	}
 	runCfg.ApplyDefaults()
 
@@ -966,8 +967,36 @@ func TestHandleDispatchLibraryTaskUsesDedicatedActivitySignal(t *testing.T) {
 	if got, want := len(api.activities), 1; got != want {
 		t.Fatalf("activity count = %d, want %d", got, want)
 	}
-	if got, want := api.activities[0], "working on library task: unit-test-coverage"; got != want {
+	if got, want := api.activities[0], "working on library task: 100% Unit Test Coverage"; got != want {
 		t.Fatalf("library task activity = %q, want %q", got, want)
+	}
+
+	var startStatus map[string]any
+	for _, payload := range statusPayloads(api.published) {
+		if payload["status"] == "working" {
+			if _, hasDetails := payload["details"]; !hasDetails {
+				startStatus = payload
+				break
+			}
+		}
+	}
+	if startStatus == nil {
+		t.Fatalf("start status update missing: %#v", api.published)
+	}
+	if got, want := startStatus["message"], "working on library task: 100% Unit Test Coverage"; got != want {
+		t.Fatalf("start status message = %#v, want %q", got, want)
+	}
+	statusUpdate, _ := startStatus["statusUpdate"].(map[string]any)
+	status, _ := statusUpdate["status"].(map[string]any)
+	message, _ := status["message"].(map[string]any)
+	parts, _ := message["parts"].([]any)
+	part, _ := parts[0].(map[string]any)
+	if got, want := part["text"], "working on library task: 100% Unit Test Coverage"; got != want {
+		t.Fatalf("a2a status text = %#v, want %q", got, want)
+	}
+	metadata, _ := statusUpdate["metadata"].(map[string]any)
+	if got, want := metadata["library_task_display_name"], "100% Unit Test Coverage"; got != want {
+		t.Fatalf("a2a metadata library_task_display_name = %#v, want %q", got, want)
 	}
 }
 
@@ -1379,14 +1408,28 @@ func TestRecordActivityLogsWarningOnFailure(t *testing.T) {
 func TestLibraryTaskActivityBuilders(t *testing.T) {
 	t.Parallel()
 
-	if got, want := libraryTaskStartActivity("  security-review  "), "working on library task: security-review"; got != want {
+	if got, want := libraryTaskStartActivity(config.Config{
+		LibraryTaskName: "  security-review  ",
+	}), "working on library task: security-review"; got != want {
 		t.Fatalf("libraryTaskStartActivity() = %q, want %q", got, want)
 	}
-	if got, want := libraryTaskCompleteActivity("unit-test-coverage"), "completed library task: unit-test-coverage"; got != want {
+	if got, want := libraryTaskStartActivity(config.Config{
+		LibraryTaskName:        "readme-upkeep",
+		LibraryTaskDisplayName: " README Upkeep ",
+	}), "working on library task: README Upkeep"; got != want {
+		t.Fatalf("libraryTaskStartActivity(display) = %q, want %q", got, want)
+	}
+	if got, want := libraryTaskCompleteActivity(config.Config{
+		LibraryTaskName:        "unit-test-coverage",
+		LibraryTaskDisplayName: "100% Unit Test Coverage",
+	}), "completed library task: 100% Unit Test Coverage"; got != want {
 		t.Fatalf("libraryTaskCompleteActivity() = %q, want %q", got, want)
 	}
-	if got := libraryTaskStartActivity("   "); got != "" {
+	if got := libraryTaskStartActivity(config.Config{LibraryTaskName: "   "}); got != "" {
 		t.Fatalf("libraryTaskStartActivity(blank) = %q, want empty", got)
+	}
+	if got := libraryTaskStartActivity(config.Config{LibraryTaskDisplayName: "README Upkeep"}); got != "" {
+		t.Fatalf("libraryTaskStartActivity(display without name) = %q, want empty", got)
 	}
 }
 

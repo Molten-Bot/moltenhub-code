@@ -32,25 +32,26 @@ const prBodyPromptHeading = "Original task prompt:"
 
 // Config is the v1 public contract for a harness run.
 type Config struct {
-	Version         string        `json:"version"`
-	RepoURL         string        `json:"repoUrl"`
-	Repo            string        `json:"repo"`
-	Repos           []string      `json:"repos"`
-	LibraryTaskName string        `json:"libraryTaskName,omitempty"`
-	ResponseMode    string        `json:"responseMode,omitempty"`
-	AgentHarness    string        `json:"agentHarness,omitempty"`
-	AgentCommand    string        `json:"agentCommand,omitempty"`
-	BaseBranch      string        `json:"baseBranch"`
-	TargetSubdir    string        `json:"targetSubdir"`
-	Prompt          string        `json:"prompt"`
-	Images          []PromptImage `json:"images,omitempty"`
-	CommitMessage   string        `json:"commitMessage"`
-	PRTitle         string        `json:"prTitle"`
-	PRBody          string        `json:"prBody"`
-	Labels          []string      `json:"labels"`
-	GitHubHandle    string        `json:"githubHandle"`
-	Reviewers       []string      `json:"reviewers"`
-	Review          *ReviewConfig `json:"review,omitempty"`
+	Version                string        `json:"version"`
+	RepoURL                string        `json:"repoUrl"`
+	Repo                   string        `json:"repo"`
+	Repos                  []string      `json:"repos"`
+	LibraryTaskName        string        `json:"libraryTaskName,omitempty"`
+	LibraryTaskDisplayName string        `json:"libraryTaskDisplayName,omitempty"`
+	ResponseMode           string        `json:"responseMode,omitempty"`
+	AgentHarness           string        `json:"agentHarness,omitempty"`
+	AgentCommand           string        `json:"agentCommand,omitempty"`
+	BaseBranch             string        `json:"baseBranch"`
+	TargetSubdir           string        `json:"targetSubdir"`
+	Prompt                 string        `json:"prompt"`
+	Images                 []PromptImage `json:"images,omitempty"`
+	CommitMessage          string        `json:"commitMessage"`
+	PRTitle                string        `json:"prTitle"`
+	PRBody                 string        `json:"prBody"`
+	Labels                 []string      `json:"labels"`
+	GitHubHandle           string        `json:"githubHandle"`
+	Reviewers              []string      `json:"reviewers"`
+	Review                 *ReviewConfig `json:"review,omitempty"`
 }
 
 // PromptImage captures one prompt image attachment.
@@ -100,17 +101,18 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 
 func rejectSnakeCaseRunConfigFields(raw map[string]json.RawMessage) error {
 	forbidden := map[string]string{
-		"repo_url":          "repoUrl",
-		"base_branch":       "baseBranch",
-		"target_subdir":     "targetSubdir",
-		"agent_harness":     "agentHarness",
-		"agent_command":     "agentCommand",
-		"commit_message":    "commitMessage",
-		"pr_title":          "prTitle",
-		"pr_body":           "prBody",
-		"github_handle":     "githubHandle",
-		"library_task_name": "libraryTaskName",
-		"response_mode":     "responseMode",
+		"repo_url":                  "repoUrl",
+		"base_branch":               "baseBranch",
+		"target_subdir":             "targetSubdir",
+		"agent_harness":             "agentHarness",
+		"agent_command":             "agentCommand",
+		"commit_message":            "commitMessage",
+		"pr_title":                  "prTitle",
+		"pr_body":                   "prBody",
+		"github_handle":             "githubHandle",
+		"library_task_name":         "libraryTaskName",
+		"library_task_display_name": "libraryTaskDisplayName",
+		"response_mode":             "responseMode",
 	}
 	for legacy, canonical := range forbidden {
 		if _, ok := raw[legacy]; ok {
@@ -174,6 +176,7 @@ func (c *Config) ApplyDefaults() {
 		c.Repo = repos[0]
 	}
 	c.LibraryTaskName = strings.TrimSpace(c.LibraryTaskName)
+	c.LibraryTaskDisplayName = strings.TrimSpace(c.LibraryTaskDisplayName)
 	rawResponseMode := strings.TrimSpace(c.ResponseMode)
 	if normalized, ok := normalizeResponseMode(rawResponseMode); ok {
 		c.ResponseMode = normalized

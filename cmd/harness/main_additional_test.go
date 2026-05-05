@@ -130,9 +130,10 @@ func TestRecordLocalRunActivityPublishesWhenHubConnected(t *testing.T) {
 	defer ts.Close()
 
 	runCfg := config.Config{
-		Repo:            "git@github.com:acme/repo.git",
-		BaseBranch:      "main",
-		LibraryTaskName: "security-review",
+		Repo:                   "git@github.com:acme/repo.git",
+		BaseBranch:             "main",
+		LibraryTaskName:        "security-review",
+		LibraryTaskDisplayName: "Security Boundary Review",
 	}
 	runCfg.ApplyDefaults()
 	recordLocalRunStartedActivity(context.Background(), hub.InitConfig{
@@ -148,14 +149,14 @@ func TestRecordLocalRunActivityPublishesWhenHubConnected(t *testing.T) {
 		t.Fatalf("activity count = %d, want 2", len(activityBodies))
 	}
 	activityBody := activityBodies[0]
-	if got, want := fmt.Sprint(activityBody["activity"]), "working on library task: security-review"; got != want {
+	if got, want := fmt.Sprint(activityBody["activity"]), "working on library task: Security Boundary Review"; got != want {
 		t.Fatalf("activity = %s, want %s", got, want)
 	}
 	if activityBody["category"] != "coding" || activityBody["status"] != "started" {
 		t.Fatalf("activity state fields = %#v", activityBody)
 	}
 	completedBody := activityBodies[1]
-	if got, want := fmt.Sprint(completedBody["activity"]), "completed library task: security-review"; got != want {
+	if got, want := fmt.Sprint(completedBody["activity"]), "completed library task: Security Boundary Review"; got != want {
 		t.Fatalf("completed activity = %s, want %s", got, want)
 	}
 	if completedBody["category"] != "coding" || completedBody["status"] != "completed" {

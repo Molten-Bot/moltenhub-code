@@ -273,12 +273,14 @@ func TestExpandRunConfigUsesRepoAndBranchInputs(t *testing.T) {
 	catalog := Catalog{
 		Tasks: []TaskDefinition{{
 			Name:         "unit-test-coverage",
+			DisplayName:  "100% Unit Test Coverage",
 			TargetSubdir: ".",
 			Prompt:       "Raise coverage.",
 		}},
 		byName: map[string]TaskDefinition{
 			"unit-test-coverage": {
 				Name:         "unit-test-coverage",
+				DisplayName:  "100% Unit Test Coverage",
 				TargetSubdir: ".",
 				Prompt:       "Raise coverage.",
 			},
@@ -294,6 +296,9 @@ func TestExpandRunConfigUsesRepoAndBranchInputs(t *testing.T) {
 	}
 	if got, want := cfg.LibraryTaskName, "unit-test-coverage"; got != want {
 		t.Fatalf("LibraryTaskName = %q, want %q", got, want)
+	}
+	if got, want := cfg.LibraryTaskDisplayName, "100% Unit Test Coverage"; got != want {
+		t.Fatalf("LibraryTaskDisplayName = %q, want %q", got, want)
 	}
 	if got, want := cfg.BaseBranch, "release"; got != want {
 		t.Fatalf("BaseBranch = %q, want %q", got, want)
