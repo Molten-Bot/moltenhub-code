@@ -2,16 +2,16 @@ package hub
 
 import "testing"
 
-func TestWebsocketURLFromHTTPSBase(t *testing.T) {
+func TestRuntimeWebsocketURLFromHTTPSBase(t *testing.T) {
 	t.Parallel()
 
-	got, err := WebsocketURL("https://na.hub.molten.bot/v1", "main")
+	got, err := RuntimeWebsocketURL("https://na.hub.molten.bot/v1", "main")
 	if err != nil {
-		t.Fatalf("WebsocketURL() error = %v", err)
+		t.Fatalf("RuntimeWebsocketURL() error = %v", err)
 	}
-	want := "wss://na.hub.molten.bot/v1/openclaw/messages/ws?session_key=main"
+	want := "wss://na.hub.molten.bot/v1/runtime/messages/ws?session_key=main"
 	if got != want {
-		t.Fatalf("WebsocketURL() = %q, want %q", got, want)
+		t.Fatalf("RuntimeWebsocketURL() = %q, want %q", got, want)
 	}
 }
 

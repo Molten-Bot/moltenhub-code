@@ -16,10 +16,18 @@ var requiredRuntimeIntegrationRoutes = []string{
 	"/messages/pull:",
 	"/messages/ack:",
 	"/messages/nack:",
+	"/runtime/messages/publish:",
+	"/runtime/messages/pull:",
+	"/runtime/messages/ack:",
+	"/runtime/messages/nack:",
+	"/runtime/messages/{message_id}:",
+	"/runtime/messages/ws:",
+	"/runtime/messages/offline:",
 	"/openclaw/messages/publish:",
 	"/openclaw/messages/pull:",
 	"/openclaw/messages/ack:",
 	"/openclaw/messages/nack:",
+	"/openclaw/messages/{message_id}:",
 	"/openclaw/messages/ws:",
 	"/openclaw/messages/offline:",
 }
@@ -36,6 +44,9 @@ func TestOpenAPISnapshotIncludesRuntimeIntegrationRoutes(t *testing.T) {
 	assertOpenAPIRoutes(t, source, content)
 	if !strings.Contains(content, "/messages/pull:\n    get:") {
 		t.Fatalf("%s missing expected GET method for /messages/pull", source)
+	}
+	if !strings.Contains(content, "/runtime/messages/pull:\n    get:") {
+		t.Fatalf("%s missing expected GET method for /runtime/messages/pull", source)
 	}
 
 	if strings.Contains(content, "/openclaw/messages/register-plugin:") {

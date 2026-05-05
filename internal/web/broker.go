@@ -980,12 +980,12 @@ func (b *Broker) updateHubConnectionFromLineLocked(line string, fields map[strin
 		b.hubConnected = true
 		b.hubTransport = hubTransportWS
 		b.hubDetail = ""
-	case strings.HasPrefix(line, "hub.transport mode=openclaw_pull"):
+	case strings.HasPrefix(line, "hub.transport mode=runtime_pull") || strings.HasPrefix(line, "hub.transport mode=openclaw_pull"):
 		// Pull mode still means the daemon is connected to MoltenHub transport.
 		b.hubConnected = true
 		b.hubTransport = hubTransportHTTPLongPoll
 		b.hubDetail = ""
-	case strings.HasPrefix(line, "hub.transport mode=openclaw_ws"):
+	case strings.HasPrefix(line, "hub.transport mode=runtime_ws") || strings.HasPrefix(line, "hub.transport mode=openclaw_ws"):
 		b.hubConnected = true
 		b.hubTransport = hubTransportWS
 		b.hubDetail = ""

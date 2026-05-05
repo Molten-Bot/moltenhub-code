@@ -186,7 +186,7 @@ func TestDaemonRunUsesStoredRuntimeConfigBaseURLWhenInitBaseURLOmitted(t *testin
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
-		case "/v1/openclaw/messages/pull":
+		case "/v1/runtime/messages/pull":
 			reqMu.Lock()
 			pullTimeouts = append(pullTimeouts, r.URL.Query().Get("timeout_ms"))
 			reqMu.Unlock()
@@ -322,9 +322,9 @@ func TestDaemonRunUsesStoredRuntimeConfigPullTimeout(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
-		case "/v1/openclaw/messages/ws":
+		case "/v1/runtime/messages/ws":
 			http.Error(w, "upgrade required", http.StatusUpgradeRequired)
-		case "/v1/openclaw/messages/pull":
+		case "/v1/runtime/messages/pull":
 			reqMu.Lock()
 			pullQueries = append(pullQueries, r.URL.RawQuery)
 			reqMu.Unlock()
@@ -1000,7 +1000,7 @@ func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
 		case "/v1/a2a":
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"error":"not found"}`))
-		case "/v1/openclaw/messages/publish":
+		case "/v1/runtime/messages/publish":
 			defer r.Body.Close()
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -1010,7 +1010,7 @@ func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
 			publishedMsgs = append(publishedMsgs, message)
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"ok":true,"result":{"status":"queued"}}`))
-		case "/v1/openclaw/messages/offline":
+		case "/v1/runtime/messages/offline":
 			defer r.Body.Close()
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -1113,7 +1113,7 @@ func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
 		case "/v1/a2a":
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"error":"not found"}`))
-		case "/v1/openclaw/messages/publish":
+		case "/v1/runtime/messages/publish":
 			defer r.Body.Close()
 
 			var body map[string]any
@@ -1128,7 +1128,7 @@ func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
 
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"ok":true,"result":{"status":"queued"}}`))
-		case "/v1/openclaw/messages/offline":
+		case "/v1/runtime/messages/offline":
 			defer r.Body.Close()
 
 			var body map[string]any
@@ -1249,10 +1249,10 @@ func TestProcessInboundMessageInvokesOnDispatchFailedForAcquireFailure(t *testin
 		case "/v1/a2a":
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"error":"not found"}`))
-		case "/v1/openclaw/messages/publish":
+		case "/v1/runtime/messages/publish":
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"ok":true,"result":{"status":"queued"}}`))
-		case "/v1/openclaw/messages/offline":
+		case "/v1/runtime/messages/offline":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		default:

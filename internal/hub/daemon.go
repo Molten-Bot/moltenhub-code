@@ -163,10 +163,10 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), agentStatusUpdateTimeout)
 		defer cancel()
-		if err := api.MarkOpenClawOffline(shutdownCtx, cfg.SessionKey, transportOfflineReasonAgent); err != nil {
-			d.logf("hub.transport status=warn mode=openclaw_ws err=%q", err)
+		if err := api.MarkRuntimeOffline(shutdownCtx, cfg.SessionKey, transportOfflineReasonAgent); err != nil {
+			d.logf("hub.transport status=warn mode=runtime_ws err=%q", err)
 		} else {
-			d.logf("hub.transport status=offline mode=openclaw_ws")
+			d.logf("hub.transport status=offline mode=runtime_ws")
 		}
 		if err := api.UpdateAgentStatus(shutdownCtx, "offline"); err != nil {
 			d.logf("hub.agent status=warn state=offline err=%q", err)
@@ -175,7 +175,7 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 		d.logf("hub.agent status=offline")
 	}()
 
-	d.logf("hub.transport primary=openclaw_ws fallback=openclaw_pull")
+	d.logf("hub.transport primary=runtime_ws fallback=runtime_pull legacy_fallback=openclaw")
 
 	dispatchController := d.DispatchController
 	if dispatchController == nil {
@@ -187,12 +187,13 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	defer workers.Wait()
 	deduper := newDispatchDeduper(dispatchDedupTTL)
 
-	wsURL, wsURLErr := WebsocketURL(cfg.BaseURL, cfg.SessionKey)
+	wsURL, wsURLErr := RuntimeWebsocketURL(cfg.BaseURL, cfg.SessionKey)
 	if wsURLErr != nil {
 		d.logf("hub.ws status=disabled err=%q", wsURLErr)
-		d.logf("hub.transport mode=openclaw_pull")
+		d.logf("hub.transport mode=runtime_pull")
 		return d.runPullLoop(ctx, api, cfg, dispatchController, &workers, deduper, pullTimeoutMs)
 	}
+	legacyWSURL, legacyWSURLErr := openClawWebsocketURL(cfg.BaseURL, cfg.SessionKey)
 
 	for {
 		if ctx.Err() != nil {
@@ -205,6 +206,23 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 			return nil
 		} else if isUnauthorizedHubError(err) {
 			return fmt.Errorf("hub auth: %w", err)
+		} else if isUnsupportedEndpointError(err) && legacyWSURLErr == nil {
+			d.logf("hub.ws status=fallback adapter=openclaw err=%q", err)
+			if legacyErr := d.tryWebsocketUpgrade(ctx, transport, legacyWSURL, api, cfg, dispatchController, &workers, deduper); legacyErr == nil {
+				return nil
+			} else if ctx.Err() != nil {
+				return nil
+			} else if isUnauthorizedHubError(legacyErr) {
+				return fmt.Errorf("hub auth: %w", legacyErr)
+			} else if !shouldFallbackToPull(legacyErr) {
+				d.logf("hub.ws status=disconnected err=%q", legacyErr)
+				if !sleepWithContext(ctx, d.ReconnectDelay) {
+					return nil
+				}
+				continue
+			} else {
+				d.logf("hub.ws status=error err=%q", legacyErr)
+			}
 		} else if !shouldFallbackToPull(err) {
 			d.logf("hub.ws status=disconnected err=%q", err)
 			if !sleepWithContext(ctx, d.ReconnectDelay) {
@@ -215,7 +233,7 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 			d.logf("hub.ws status=error err=%q", err)
 		}
 
-		d.logf("hub.transport mode=openclaw_pull")
+		d.logf("hub.transport mode=runtime_pull")
 		if err := d.pullOnce(ctx, api, cfg, dispatchController, &workers, deduper, pullTimeoutMs); err != nil {
 			if isUnauthorizedHubError(err) {
 				return fmt.Errorf("hub auth: %w", err)
@@ -258,7 +276,7 @@ func (d Daemon) pullProbeOnce(
 	workers *sync.WaitGroup,
 	deduper *dispatchDeduper,
 ) error {
-	pulled, found, err := api.PullOpenClawMessage(ctx, wsUpgradePullProbeTimeoutMs)
+	pulled, found, err := api.PullRuntimeMessage(ctx, wsUpgradePullProbeTimeoutMs)
 	if err != nil {
 		return err
 	}
@@ -306,7 +324,7 @@ func (d Daemon) pullOnce(
 	if pullTimeoutMs <= 0 {
 		pullTimeoutMs = runtimeTimeoutMs
 	}
-	pulled, found, err := api.PullOpenClawMessage(ctx, pullTimeoutMs)
+	pulled, found, err := api.PullRuntimeMessage(ctx, pullTimeoutMs)
 	if err != nil {
 		return err
 	}
@@ -374,7 +392,7 @@ func (d Daemon) runWebsocketLoop(
 			return err
 		}
 
-		inbound := extractInboundOpenClawMessage(raw)
+		inbound := extractInboundRuntimeMessage(raw)
 		if len(inbound.Message) == 0 {
 			continue
 		}
@@ -395,7 +413,7 @@ func (d Daemon) processInboundMessage(
 ) {
 	if isNonDispatchHubEvent(msg, cfg) {
 		if strings.TrimSpace(deliveryID) != "" {
-			if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
+			if err := api.AckRuntimeDelivery(ctx, deliveryID); err != nil {
 				d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
 			}
 		}
@@ -408,7 +426,7 @@ func (d Daemon) processInboundMessage(
 			d.logf("dispatch status=ignored skill=%s", skill)
 		}
 		if strings.TrimSpace(deliveryID) != "" {
-			if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
+			if err := api.AckRuntimeDelivery(ctx, deliveryID); err != nil {
 				d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
 			}
 		}
@@ -434,14 +452,14 @@ func (d Daemon) processInboundMessage(
 		if err := api.PublishResult(ctx, payload); err != nil {
 			d.logf("dispatch status=publish_error request_id=%s err=%q", dispatch.RequestID, err)
 			if strings.TrimSpace(deliveryID) != "" {
-				if nackErr := api.NackOpenClawDelivery(ctx, deliveryID); nackErr != nil {
+				if nackErr := api.NackRuntimeDelivery(ctx, deliveryID); nackErr != nil {
 					d.logf("dispatch status=nack_error delivery_id=%s err=%q", deliveryID, nackErr)
 				}
 			}
 			return
 		}
 		if strings.TrimSpace(deliveryID) != "" {
-			if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
+			if err := api.AckRuntimeDelivery(ctx, deliveryID); err != nil {
 				d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
 			}
 		}
@@ -479,14 +497,14 @@ func (d Daemon) processInboundMessage(
 			if err := api.PublishResult(ctx, payload); err != nil {
 				d.logf("dispatch status=publish_error request_id=%s err=%q", requestID, err)
 				if strings.TrimSpace(deliveryID) != "" {
-					if nackErr := api.NackOpenClawDelivery(ctx, deliveryID); nackErr != nil {
+					if nackErr := api.NackRuntimeDelivery(ctx, deliveryID); nackErr != nil {
 						d.logf("dispatch status=nack_error delivery_id=%s err=%q", deliveryID, nackErr)
 					}
 				}
 				return
 			}
 			if strings.TrimSpace(deliveryID) != "" {
-				if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
+				if err := api.AckRuntimeDelivery(ctx, deliveryID); err != nil {
 					d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
 				}
 			}
@@ -510,7 +528,7 @@ func (d Daemon) processInboundMessage(
 
 	ackedEarly := false
 	if strings.TrimSpace(deliveryID) != "" {
-		if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
+		if err := api.AckRuntimeDelivery(ctx, deliveryID); err != nil {
 			d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
 		} else {
 			ackedEarly = true
@@ -575,7 +593,7 @@ func (d Daemon) processInboundMessage(
 			if publishErr := api.PublishResult(runCtx, payload); publishErr != nil {
 				d.logf("dispatch status=publish_error request_id=%s err=%q", dispatch.RequestID, publishErr)
 				if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
-					if nackErr := api.NackOpenClawDelivery(runCtx, deliveryID); nackErr != nil {
+					if nackErr := api.NackRuntimeDelivery(runCtx, deliveryID); nackErr != nil {
 						d.logf("dispatch status=nack_error delivery_id=%s err=%q", deliveryID, nackErr)
 					}
 				}
@@ -584,7 +602,7 @@ func (d Daemon) processInboundMessage(
 					d.handleFailedDispatchAfterPublish(runCtx, api, cfg, dispatch, failRes)
 				}
 				if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
-					if ackErr := api.AckOpenClawDelivery(runCtx, deliveryID); ackErr != nil {
+					if ackErr := api.AckRuntimeDelivery(runCtx, deliveryID); ackErr != nil {
 						d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, ackErr)
 					}
 				}
@@ -890,14 +908,14 @@ func (d Daemon) handleDispatch(
 		if err := api.PublishResult(ctx, payload); err != nil {
 			d.logf("dispatch status=publish_error request_id=%s err=%q", dispatch.RequestID, err)
 			if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
-				if nackErr := api.NackOpenClawDelivery(ctx, deliveryID); nackErr != nil {
+				if nackErr := api.NackRuntimeDelivery(ctx, deliveryID); nackErr != nil {
 					d.logf("dispatch status=nack_error delivery_id=%s err=%q", deliveryID, nackErr)
 				}
 			}
 			return "error"
 		}
 		if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
-			if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
+			if err := api.AckRuntimeDelivery(ctx, deliveryID); err != nil {
 				d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
 			}
 		}
@@ -987,7 +1005,7 @@ func (d Daemon) handleDispatch(
 	if err := api.PublishResult(ctx, payload); err != nil {
 		d.logf("dispatch status=publish_error request_id=%s err=%q", dispatch.RequestID, err)
 		if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
-			if nackErr := api.NackOpenClawDelivery(ctx, deliveryID); nackErr != nil {
+			if nackErr := api.NackRuntimeDelivery(ctx, deliveryID); nackErr != nil {
 				d.logf("dispatch status=nack_error delivery_id=%s err=%q", deliveryID, nackErr)
 			}
 		}
@@ -1003,7 +1021,7 @@ func (d Daemon) handleDispatch(
 		d.handleFailedDispatchAfterPublish(ctx, api, cfg, dispatch, res)
 	}
 	if !ackedEarly && strings.TrimSpace(deliveryID) != "" {
-		if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
+		if err := api.AckRuntimeDelivery(ctx, deliveryID); err != nil {
 			d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
 		}
 	}
@@ -1689,7 +1707,7 @@ func (d Daemon) handleFailedDispatchAfterPublish(
 	if api == nil {
 		return
 	}
-	if err := api.MarkOpenClawOffline(ctx, cfg.SessionKey, transportOfflineReasonExecutionFailure); err != nil {
+	if err := api.MarkRuntimeOffline(ctx, cfg.SessionKey, transportOfflineReasonExecutionFailure); err != nil {
 		d.logf("dispatch status=warn action=mark_offline request_id=%s err=%q", dispatch.RequestID, err)
 	}
 	if ok, reason := shouldQueueFailureRerun(dispatch, res); !ok {
