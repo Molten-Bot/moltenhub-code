@@ -51,16 +51,20 @@
 
     function trackAnalyticsEvent(name, params = {}) {
       if (typeof window.gtag !== "function") {
-        return;
+        return false;
       }
 
       const eventName = String(name || "").trim();
       if (!eventName) {
-        return;
+        return false;
       }
 
       const payload = { send_to: GOOGLE_ANALYTICS_MEASUREMENT_ID };
       for (const [key, value] of Object.entries(params || {})) {
+        if (key === "event_callback" && typeof value === "function") {
+          payload[key] = value;
+          continue;
+        }
         if (typeof value === "string") {
           const trimmed = value.trim();
           if (trimmed) {
@@ -79,15 +83,46 @@
 
       try {
         window.gtag("event", eventName, payload);
+        return true;
       } catch (_err) {
         // Keep release navigation working even if analytics dispatch fails.
+        return false;
+      }
+    }
+
+    function trackAnalyticsNavigation(event, name, params = {}) {
+      const target = event?.currentTarget;
+      const href = target?.href;
+      if (!href || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        trackAnalyticsEvent(name, params);
+        return;
+      }
+
+      event.preventDefault();
+      let completed = false;
+      let fallbackTimer = null;
+      const navigate = () => {
+        if (completed) {
+          return;
+        }
+        completed = true;
+        if (fallbackTimer !== null) {
+          window.clearTimeout(fallbackTimer);
+          fallbackTimer = null;
+        }
+        window.location.assign(href);
+      };
+
+      fallbackTimer = window.setTimeout(navigate, 1200);
+      if (!trackAnalyticsEvent(name, { ...params, event_callback: navigate, event_timeout: 1000 })) {
+        navigate();
       }
     }
 
     const releasesBrand = document.querySelector(".releases-brand");
     if (releasesBrand) {
-      releasesBrand.addEventListener("click", () => {
-        trackAnalyticsEvent("releases_home_opened", { source: "releases_header" });
+      releasesBrand.addEventListener("click", (event) => {
+        trackAnalyticsNavigation(event, "releases_home_opened", { source: "releases_header" });
       });
     }
 

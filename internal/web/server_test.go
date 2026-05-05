@@ -2102,8 +2102,11 @@ func TestHandlerServesReleasesWithIconStatuses(t *testing.T) {
 	if !strings.Contains(markup, `window.gtag("config", "G-BY33RFG2WB");`) {
 		t.Fatalf("expected releases html to configure google analytics with the moltenhub measurement id")
 	}
-	if !strings.Contains(markup, `trackAnalyticsEvent("releases_home_opened", { source: "releases_header" });`) {
-		t.Fatalf("expected releases html to track header home CTA clicks")
+	if !strings.Contains(markup, `trackAnalyticsNavigation(event, "releases_home_opened", { source: "releases_header" });`) ||
+		!strings.Contains(markup, `if (key === "event_callback" && typeof value === "function") {`) ||
+		!strings.Contains(markup, `event_timeout: 1000`) ||
+		!strings.Contains(markup, `fallbackTimer = window.setTimeout(navigate, 1200);`) {
+		t.Fatalf("expected releases html to track header home CTA clicks before navigation")
 	}
 	if !strings.Contains(markup, `class="release-change-status release-change-status-improved" title="Improved" aria-label="Improved"`) ||
 		!strings.Contains(markup, `data-lucide="trending-up"`) {
