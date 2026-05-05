@@ -4812,7 +4812,7 @@
         library_task: entry.name,
       });
       libraryPromptModalTitle.textContent = entry.displayName || "Library Prompt";
-      libraryPromptModalBody.textContent = entry.prompt || "Prompt unavailable.";
+      libraryPromptModalBody.textContent = entry.prompt || "No prompt text provided.";
       libraryPromptModal.classList.remove("hidden");
       libraryPromptModal.setAttribute("aria-hidden", "false");
       document.body.classList.add("library-prompt-modal-open");
@@ -5716,7 +5716,7 @@
     }
 
     function taskPromptText(task) {
-      if (!task || task.prompt_is_user_input !== true || typeof task.prompt !== "string") return "";
+      if (!task || typeof task.prompt !== "string") return "";
       return task.prompt.replace(/\s+/g, " ").trim();
     }
 
@@ -5731,7 +5731,7 @@
     function taskDisplayLabel(task) {
       const prompt = taskPromptText(task);
       if (!prompt) {
-        return taskSystemLabel(task) || "(prompt unavailable)";
+        return taskSystemLabel(task) || "Task";
       }
       return prompt;
     }
