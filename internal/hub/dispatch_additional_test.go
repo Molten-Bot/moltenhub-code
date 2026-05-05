@@ -479,7 +479,7 @@ func TestParseSkillDispatchAcceptsSkillActivationKind(t *testing.T) {
 		"payload_format": "json",
 		"payload": map[string]any{
 			"repo":   "git@github.com:acme/repo.git",
-			"prompt": "ship openclaw activation",
+			"prompt": "ship runtime activation",
 		},
 	}
 
@@ -493,7 +493,7 @@ func TestParseSkillDispatchAcceptsSkillActivationKind(t *testing.T) {
 	if got, want := dispatch.Config.RepoURL, "git@github.com:acme/repo.git"; got != want {
 		t.Fatalf("RepoURL = %q, want %q", got, want)
 	}
-	if got, want := dispatch.Config.Prompt, "ship openclaw activation"; got != want {
+	if got, want := dispatch.Config.Prompt, "ship runtime activation"; got != want {
 		t.Fatalf("Prompt = %q, want %q", got, want)
 	}
 }

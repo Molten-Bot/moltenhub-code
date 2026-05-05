@@ -290,7 +290,7 @@ func TestParseSkillDispatchAcceptsA2ATextPartRunConfig(t *testing.T) {
 	}
 }
 
-func TestParseSkillDispatchAcceptsOpenClawTextMessageRunConfig(t *testing.T) {
+func TestParseSkillDispatchAcceptsRuntimeTextMessageRunConfig(t *testing.T) {
 	t.Parallel()
 
 	msg := map[string]any{

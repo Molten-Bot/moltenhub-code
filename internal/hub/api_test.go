@@ -15,19 +15,6 @@ func TestWebsocketURLFromHTTPSBase(t *testing.T) {
 	}
 }
 
-func TestOpenClawWebsocketURLFromHTTPSBase(t *testing.T) {
-	t.Parallel()
-
-	got, err := OpenClawWebsocketURL("https://na.hub.molten.bot/v1", "main")
-	if err != nil {
-		t.Fatalf("OpenClawWebsocketURL() error = %v", err)
-	}
-	want := "wss://na.hub.molten.bot/v1/openclaw/messages/ws?session_key=main"
-	if got != want {
-		t.Fatalf("OpenClawWebsocketURL() = %q, want %q", got, want)
-	}
-}
-
 func TestExtractTokenFromJSONNested(t *testing.T) {
 	t.Parallel()
 

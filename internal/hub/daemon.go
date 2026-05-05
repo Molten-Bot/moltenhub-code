@@ -188,7 +188,6 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 	deduper := newDispatchDeduper(dispatchDedupTTL)
 
 	wsURL, wsURLErr := WebsocketURL(cfg.BaseURL, cfg.SessionKey)
-	legacyWSURL, legacyWSURLErr := OpenClawWebsocketURL(cfg.BaseURL, cfg.SessionKey)
 	if wsURLErr != nil {
 		d.logf("hub.ws status=disabled err=%q", wsURLErr)
 		d.logf("hub.transport mode=runtime_pull")
@@ -201,10 +200,6 @@ func (d Daemon) Run(ctx context.Context, cfg InitConfig) error {
 		}
 
 		err := d.tryWebsocketUpgrade(ctx, transport, wsURL, api, cfg, dispatchController, &workers, deduper)
-		if err != nil && isUnsupportedRuntimeWebsocketError(err) && legacyWSURLErr == nil {
-			d.logf("hub.ws status=fallback from=runtime_ws to=openclaw_ws err=%q", err)
-			err = d.tryWebsocketUpgrade(ctx, transport, legacyWSURL, api, cfg, dispatchController, &workers, deduper)
-		}
 		if err == nil {
 			return nil
 		} else if ctx.Err() != nil {
@@ -699,8 +694,7 @@ func isNonDispatchHubEvent(msg map[string]any, cfg InitConfig) bool {
 	switch eventType {
 	case "ack", "acks", "acknowledgement", "acknowledgment",
 		"message_ack", "message_acknowledgement", "message_acknowledgment",
-		"delivery_ack", "delivery_acknowledgement", "delivery_acknowledgment",
-		"openclaw_ack", "openclaw.ack":
+		"delivery_ack", "delivery_acknowledgement", "delivery_acknowledgment":
 		return true
 	case dispatchTaskStatusType, "task_status":
 		return true

@@ -162,7 +162,7 @@ func TestBrokerTracksMoltenHubConnectionTransitions(t *testing.T) {
 		t.Fatalf("connection.hub_transport = %q after websocket disconnect, want %q", snap.Connection.HubTransport, hubTransportDisconnected)
 	}
 
-	b.IngestLog("hub.transport mode=openclaw_pull")
+	b.IngestLog("hub.transport mode=runtime_pull")
 	snap = b.Snapshot()
 	if !snap.Connection.HubConnected {
 		t.Fatal("connection.hub_connected = false after pull transport fallback")

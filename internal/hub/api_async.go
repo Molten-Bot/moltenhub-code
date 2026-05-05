@@ -123,11 +123,6 @@ func (c *AsyncAPIClient) MarkRuntimeOffline(ctx context.Context, sessionKey, rea
 	})
 }
 
-// MarkOpenClawOffline keeps legacy callers on the runtime-first transport path.
-func (c *AsyncAPIClient) MarkOpenClawOffline(ctx context.Context, sessionKey, reason string) error {
-	return c.MarkRuntimeOffline(ctx, sessionKey, reason)
-}
-
 // RecordActivity publishes a custom agent activity.
 func (c *AsyncAPIClient) RecordActivity(ctx context.Context, activity string) error {
 	return c.withToken(func(token string) error {
@@ -201,11 +196,6 @@ func (c *AsyncAPIClient) PullRuntimeMessage(ctx context.Context, timeoutMs int) 
 	})
 }
 
-// PullOpenClawMessage keeps legacy callers on the runtime-first transport path.
-func (c *AsyncAPIClient) PullOpenClawMessage(ctx context.Context, timeoutMs int) (PulledOpenClawMessage, bool, error) {
-	return c.PullRuntimeMessage(ctx, timeoutMs)
-}
-
 // AckRuntimeDelivery acknowledges a leased delivery.
 func (c *AsyncAPIClient) AckRuntimeDelivery(ctx context.Context, deliveryID string) error {
 	return c.withToken(func(token string) error {
@@ -220,16 +210,6 @@ func (c *AsyncAPIClient) AckRuntimeDeliveryAsync(ctx context.Context, deliveryID
 	})
 }
 
-// AckOpenClawDelivery keeps legacy callers on the runtime-first transport path.
-func (c *AsyncAPIClient) AckOpenClawDelivery(ctx context.Context, deliveryID string) error {
-	return c.AckRuntimeDelivery(ctx, deliveryID)
-}
-
-// AckOpenClawDeliveryAsync keeps legacy callers on the runtime-first transport path.
-func (c *AsyncAPIClient) AckOpenClawDeliveryAsync(ctx context.Context, deliveryID string) <-chan error {
-	return c.AckRuntimeDeliveryAsync(ctx, deliveryID)
-}
-
 // NackRuntimeDelivery releases a leased delivery back to the queue.
 func (c *AsyncAPIClient) NackRuntimeDelivery(ctx context.Context, deliveryID string) error {
 	return c.withToken(func(token string) error {
@@ -242,16 +222,6 @@ func (c *AsyncAPIClient) NackRuntimeDeliveryAsync(ctx context.Context, deliveryI
 	return c.runAsync(ctx, func(ctx context.Context) error {
 		return c.NackRuntimeDelivery(ctx, deliveryID)
 	})
-}
-
-// NackOpenClawDelivery keeps legacy callers on the runtime-first transport path.
-func (c *AsyncAPIClient) NackOpenClawDelivery(ctx context.Context, deliveryID string) error {
-	return c.NackRuntimeDelivery(ctx, deliveryID)
-}
-
-// NackOpenClawDeliveryAsync keeps legacy callers on the runtime-first transport path.
-func (c *AsyncAPIClient) NackOpenClawDeliveryAsync(ctx context.Context, deliveryID string) <-chan error {
-	return c.NackRuntimeDeliveryAsync(ctx, deliveryID)
 }
 
 func (c *AsyncAPIClient) requireToken() (string, error) {

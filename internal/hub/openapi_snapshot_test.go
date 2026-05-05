@@ -23,13 +23,6 @@ var requiredRuntimeIntegrationRoutes = []string{
 	"/runtime/messages/{message_id}:",
 	"/runtime/messages/ws:",
 	"/runtime/messages/offline:",
-	"/openclaw/messages/publish:",
-	"/openclaw/messages/pull:",
-	"/openclaw/messages/ack:",
-	"/openclaw/messages/nack:",
-	"/openclaw/messages/{message_id}:",
-	"/openclaw/messages/ws:",
-	"/openclaw/messages/offline:",
 }
 
 func TestOpenAPISnapshotIncludesRuntimeIntegrationRoutes(t *testing.T) {
@@ -46,8 +39,14 @@ func TestOpenAPISnapshotIncludesRuntimeIntegrationRoutes(t *testing.T) {
 		t.Fatalf("%s missing expected GET method for /messages/pull", source)
 	}
 
-	if strings.Contains(content, "/openclaw/messages/register-plugin:") {
-		t.Fatalf("%s unexpectedly contains undocumented route /openclaw/messages/register-plugin", source)
+	if strings.Contains(content, "/openclaw/messages/") {
+		t.Fatalf("%s unexpectedly contains retired OpenClaw transport routes", source)
+	}
+	if strings.Contains(content, "openclaw_message") {
+		t.Fatalf("%s unexpectedly contains retired openclaw_message response alias", source)
+	}
+	if strings.Contains(content, "openclaw.http.v1") {
+		t.Fatalf("%s unexpectedly contains retired OpenClaw protocol", source)
 	}
 }
 
