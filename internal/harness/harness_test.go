@@ -4731,6 +4731,25 @@ func TestCodexReportedFailure(t *testing.T) {
 	}
 }
 
+func TestCodexReportedFailureDetectsNoImplementationTaskGiven(t *testing.T) {
+	t.Parallel()
+
+	res := execx.Result{
+		Stdout: strings.Join([]string{
+			"`AGENTS.md` read. Repo Go harness.",
+			"No implementation task given yet. Send target bug/feature/change.",
+		}, "\n"),
+	}
+
+	failed, detail := codexReportedFailure(res)
+	if !failed {
+		t.Fatal("codexReportedFailure(no implementation task) = false, want true")
+	}
+	if !strings.Contains(detail, "Failure: agent did not identify an implementation target") {
+		t.Fatalf("codexReportedFailure(no implementation task) detail = %q", detail)
+	}
+}
+
 func TestCodexReportedFailureDetectsCompactStderrFailure(t *testing.T) {
 	t.Parallel()
 
