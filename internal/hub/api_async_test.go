@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
 )
@@ -115,6 +116,49 @@ func TestAsyncAPIClientAsyncMethodsUseStoredToken(t *testing.T) {
 		if got, want := header, "Bearer agent-token"; got != want {
 			t.Fatalf("auth[%d] = %q, want %q", i, got, want)
 		}
+	}
+}
+
+func TestAsyncAPIClientPublishResultAsyncSerializesPublishes(t *testing.T) {
+	var (
+		mu        sync.Mutex
+		active    int
+		maxActive int
+	)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		active++
+		if active > maxActive {
+			maxActive = active
+		}
+		mu.Unlock()
+
+		time.Sleep(25 * time.Millisecond)
+
+		mu.Lock()
+		active--
+		mu.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	client := NewAsyncAPIClient(server.URL+"/v1", "agent-token")
+	first := client.PublishResultAsync(context.Background(), map[string]any{"status": "first"})
+	second := client.PublishResultAsync(context.Background(), map[string]any{"status": "second"})
+	if err := <-first; err != nil {
+		t.Fatalf("first PublishResultAsync() error = %v", err)
+	}
+	if err := <-second; err != nil {
+		t.Fatalf("second PublishResultAsync() error = %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if maxActive != 1 {
+		t.Fatalf("max concurrent publish requests = %d, want 1", maxActive)
 	}
 }
 
