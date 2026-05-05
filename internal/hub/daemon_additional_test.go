@@ -320,6 +320,100 @@ func TestProcessInboundMessageAcksIgnoredAndPublishesParseErrors(t *testing.T) {
 	}
 }
 
+func TestProcessInboundMessageIgnoresHubAcknowledgements(t *testing.T) {
+	t.Parallel()
+
+	d := NewDaemon(failingRunner{err: errors.New("runner should not be called")})
+	api := &stubMoltenHubAPI{token: "t"}
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:         "code_for_me",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+	}
+	var workers sync.WaitGroup
+
+	ack := map[string]any{
+		"type":  "acknowledgement",
+		"skill": "code_for_me",
+		"config": map[string]any{
+			"repo":   "git@github.com:acme/repo.git",
+			"prompt": "do not run",
+		},
+	}
+	d.processInboundMessage(context.Background(), api, cfg, ack, "delivery-ack", "message-ack", nil, &workers, nil)
+	workers.Wait()
+
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	if len(api.acked) != 1 || api.acked[0] != "delivery-ack" {
+		t.Fatalf("acked deliveries = %v, want [delivery-ack]", api.acked)
+	}
+	if len(api.published) != 0 {
+		t.Fatalf("published payload count = %d, want 0 for acknowledgement", len(api.published))
+	}
+	if len(api.activities) != 0 || api.codingEvents != 0 {
+		t.Fatalf("activity events = activities:%v coding:%d, want none", api.activities, api.codingEvents)
+	}
+}
+
+func TestProcessInboundMessageIgnoresA2AResponseEchoes(t *testing.T) {
+	t.Parallel()
+
+	d := NewDaemon(failingRunner{err: errors.New("runner should not be called")})
+	api := &stubMoltenHubAPI{token: "t"}
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:         "code_for_me",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+	}
+	var workers sync.WaitGroup
+
+	response := map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "send-ack-1",
+		"result": map[string]any{
+			"task": map[string]any{
+				"id": "task-echo",
+				"status": map[string]any{
+					"state": "submitted",
+				},
+				"history": []any{
+					map[string]any{
+						"messageId": "original-request",
+						"role":      "user",
+						"parts": []any{
+							map[string]any{
+								"data": map[string]any{
+									"repo":   "git@github.com:acme/repo.git",
+									"prompt": "do not run echoed task",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	d.processInboundMessage(context.Background(), api, cfg, response, "delivery-response", "message-response", nil, &workers, nil)
+	workers.Wait()
+
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	if len(api.acked) != 1 || api.acked[0] != "delivery-response" {
+		t.Fatalf("acked deliveries = %v, want [delivery-response]", api.acked)
+	}
+	if len(api.published) != 0 {
+		t.Fatalf("published payload count = %d, want 0 for A2A response echo", len(api.published))
+	}
+	if len(api.activities) != 0 || api.codingEvents != 0 {
+		t.Fatalf("activity events = activities:%v coding:%d, want none", api.activities, api.codingEvents)
+	}
+}
+
 func TestProcessInboundMessageDuplicateDeliveryPublishesFailureToCallerAndAcks(t *testing.T) {
 	t.Parallel()
 
