@@ -393,6 +393,15 @@ func (d Daemon) processInboundMessage(
 	workers *sync.WaitGroup,
 	deduper *dispatchDeduper,
 ) {
+	if isNonDispatchHubEvent(msg, cfg) {
+		if strings.TrimSpace(deliveryID) != "" {
+			if err := api.AckOpenClawDelivery(ctx, deliveryID); err != nil {
+				d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
+			}
+		}
+		return
+	}
+
 	dispatch, matched, parseErr := ParseSkillDispatch(msg, cfg.Skill.DispatchType, cfg.Skill.Name)
 	if !matched {
 		if skill := incomingSkillName(msg); skill != "unknown" {
@@ -663,6 +672,46 @@ func (d Daemon) processInboundMessage(
 			return
 		}
 	}(dispatch, deliveryID, dupKey, ackedEarly, runCtx, cancelRun, taskControl)
+}
+
+func isNonDispatchHubEvent(msg map[string]any, cfg InitConfig) bool {
+	if len(msg) == 0 {
+		return false
+	}
+
+	eventType := strings.ToLower(strings.TrimSpace(firstNonEmpty(
+		stringAt(msg, "type"),
+		stringAt(msg, "event"),
+		stringAt(msg, "kind"),
+		stringAt(msg, "message_type"),
+		stringAtPath(msg, "payload", "type"),
+		stringAtPath(msg, "payload", "event"),
+		stringAtPath(msg, "data", "type"),
+		stringAtPath(msg, "data", "event"),
+	)))
+	resultType := strings.ToLower(strings.TrimSpace(cfg.Skill.ResultType))
+	switch eventType {
+	case "ack", "acks", "acknowledgement", "acknowledgment",
+		"message_ack", "message_acknowledgement", "message_acknowledgment",
+		"delivery_ack", "delivery_acknowledgement", "delivery_acknowledgment",
+		"openclaw_ack", "openclaw.ack":
+		return true
+	case dispatchTaskStatusType, "task_status":
+		return true
+	}
+	if resultType != "" && eventType == resultType {
+		return true
+	}
+
+	method := strings.ToLower(strings.TrimSpace(stringAt(msg, "method")))
+	if method == "" && (toMap(msg["result"]) != nil || toMap(msg["task"]) != nil || toMap(msg["status"]) != nil || toMap(msg["statusUpdate"]) != nil) {
+		return true
+	}
+	if strings.TrimSpace(stringAtPath(msg, "params", "status", "state")) != "" ||
+		strings.TrimSpace(stringAtPath(msg, "result", "status", "state")) != "" {
+		return method == "" || method == "tasks/get" || method == "tasks/cancel"
+	}
+	return false
 }
 
 func shouldFallbackToPull(err error) bool {
