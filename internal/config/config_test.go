@@ -546,6 +546,26 @@ func TestValidateRejectsMixedSSHURLStyles(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsNestedRepositoryURL(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		Version:      "v1",
+		Repos:        []string{"git@github.com:Molten-Bot/git@github.com:Molten-Bot/moltenhub-openclaw-plugin.git"},
+		BaseBranch:   "main",
+		TargetSubdir: ".",
+		Prompt:       "fix tests",
+	}
+	cfg.ApplyDefaults()
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation error, got nil")
+	}
+	if !strings.Contains(err.Error(), "nested repository URL") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestApplyDefaultsKeepsDefaultPRTitleUnprefixed(t *testing.T) {
 	t.Parallel()
 

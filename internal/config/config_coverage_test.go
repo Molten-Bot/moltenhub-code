@@ -156,6 +156,9 @@ func TestNormalizationAndValidationHelpers(t *testing.T) {
 	if err := validateRepoRef("ssh://git@github.com:owner/repo.git"); err == nil {
 		t.Fatal("validateRepoRef(mixed ssh styles) error = nil, want non-nil")
 	}
+	if err := validateRepoRef("git@github.com:Molten-Bot/git@github.com:Molten-Bot/moltenhub-openclaw-plugin.git"); err == nil {
+		t.Fatal("validateRepoRef(nested repository URL) error = nil, want non-nil")
+	}
 	if err := validateRepoRef("https://[::1"); err == nil {
 		t.Fatal("validateRepoRef(parse error) error = nil, want non-nil")
 	}
