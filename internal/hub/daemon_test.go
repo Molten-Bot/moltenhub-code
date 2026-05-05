@@ -630,8 +630,11 @@ func TestDispatchStatusPayloadIncludesStageMetadata(t *testing.T) {
 	if state != a2a.TaskStateWorking {
 		t.Fatalf("state = %s, want TASK_STATE_WORKING", state)
 	}
-	if message != "Task stage updated: clone warn." {
+	if message != "Task status updated." {
 		t.Fatalf("message = %q", message)
+	}
+	if got := details["status_action"]; got != "Task stage updated: clone warn." {
+		t.Fatalf("details.status_action = %#v", got)
 	}
 	if got := details["stage"]; got != "clone" {
 		t.Fatalf("details.stage = %#v", got)
@@ -658,6 +661,9 @@ func TestDispatchStatusPayloadIncludesStageMetadata(t *testing.T) {
 	}
 	if got := metadata["stage_status"]; got != "warn" {
 		t.Fatalf("statusUpdate.metadata.stage_status = %#v", got)
+	}
+	if got := payload["action"]; got != "Task stage updated: clone warn." {
+		t.Fatalf("action = %#v", got)
 	}
 	clientMsgID := fmt.Sprint(payload["client_msg_id"])
 	if !strings.Contains(clientMsgID, "clone-warn") {
