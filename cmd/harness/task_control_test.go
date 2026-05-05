@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
+	"github.com/Molten-Bot/moltenhub-code/internal/web"
 )
 
 func TestLocalTaskControllerPauseAndRun(t *testing.T) {
@@ -128,8 +128,8 @@ func TestLocalTaskControllerMissingTaskReturnsNotFound(t *testing.T) {
 
 	controller := newLocalTaskController()
 	for _, action := range []func(string) error{controller.Pause, controller.Run, controller.ForceRun, controller.Stop} {
-		if err := action("missing"); !errors.Is(err, hubui.ErrTaskNotFound) {
-			t.Fatalf("action(missing) error = %v, want %v", err, hubui.ErrTaskNotFound)
+		if err := action("missing"); !errors.Is(err, web.ErrTaskNotFound) {
+			t.Fatalf("action(missing) error = %v, want %v", err, web.ErrTaskNotFound)
 		}
 	}
 }

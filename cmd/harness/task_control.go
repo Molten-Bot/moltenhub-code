@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
+	"github.com/Molten-Bot/moltenhub-code/internal/web"
 )
 
 var errTaskStoppedByOperator = errors.New("task was stopped by operator")
@@ -67,18 +67,18 @@ func (c *localTaskController) Complete(requestID string) {
 
 func (c *localTaskController) handleFor(requestID string) (*localTaskHandle, error) {
 	if c == nil {
-		return nil, hubui.ErrTaskNotFound
+		return nil, web.ErrTaskNotFound
 	}
 	requestID = strings.TrimSpace(requestID)
 	if requestID == "" {
-		return nil, hubui.ErrTaskNotFound
+		return nil, web.ErrTaskNotFound
 	}
 
 	c.mu.RLock()
 	handle, ok := c.tasks[requestID]
 	c.mu.RUnlock()
 	if !ok || handle == nil {
-		return nil, hubui.ErrTaskNotFound
+		return nil, web.ErrTaskNotFound
 	}
 	return handle, nil
 }
@@ -118,17 +118,17 @@ func (c *localTaskController) ForceRun(requestID string) error {
 	return handle.ForceRun()
 }
 
-func (c *localTaskController) Controls(requestID string) hubui.TaskControls {
+func (c *localTaskController) Controls(requestID string) web.TaskControls {
 	handle, err := c.handleFor(requestID)
 	if err != nil {
-		return hubui.TaskControls{}
+		return web.TaskControls{}
 	}
 	return handle.Controls()
 }
 
 func (h *localTaskHandle) Pause() error {
 	if h == nil {
-		return hubui.ErrTaskNotFound
+		return web.ErrTaskNotFound
 	}
 
 	var acquireCancel context.CancelFunc
@@ -156,7 +156,7 @@ func (h *localTaskHandle) Pause() error {
 
 func (h *localTaskHandle) Run() error {
 	if h == nil {
-		return hubui.ErrTaskNotFound
+		return web.ErrTaskNotFound
 	}
 
 	var pauseWait chan struct{}
@@ -183,7 +183,7 @@ func (h *localTaskHandle) Run() error {
 
 func (h *localTaskHandle) ForceRun() error {
 	if h == nil {
-		return hubui.ErrTaskNotFound
+		return web.ErrTaskNotFound
 	}
 
 	var (
@@ -218,39 +218,39 @@ func (h *localTaskHandle) ForceRun() error {
 	return nil
 }
 
-func (h *localTaskHandle) Controls() hubui.TaskControls {
+func (h *localTaskHandle) Controls() web.TaskControls {
 	if h == nil {
-		return hubui.TaskControls{}
+		return web.TaskControls{}
 	}
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	if h.stopped {
-		return hubui.TaskControls{}
+		return web.TaskControls{}
 	}
 
 	if h.running {
 		if h.paused {
-			return hubui.TaskControls{
+			return web.TaskControls{
 				Run:  true,
 				Stop: true,
 			}
 		}
-		return hubui.TaskControls{
+		return web.TaskControls{
 			Pause: true,
 			Stop:  true,
 		}
 	}
 
 	if h.paused {
-		return hubui.TaskControls{
+		return web.TaskControls{
 			Run:  true,
 			Stop: true,
 		}
 	}
 
-	return hubui.TaskControls{
+	return web.TaskControls{
 		Pause:    true,
 		ForceRun: true,
 		Stop:     true,
@@ -340,7 +340,7 @@ func (h *localTaskHandle) SetRunning(running bool) {
 
 func (h *localTaskHandle) WaitUntilRunnable(ctx context.Context) error {
 	if h == nil {
-		return hubui.ErrTaskNotFound
+		return web.ErrTaskNotFound
 	}
 
 	for {

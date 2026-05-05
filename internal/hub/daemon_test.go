@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Molten-Bot/moltenhub-code/internal/app"
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
-	"github.com/Molten-Bot/moltenhub-code/internal/harness"
 	"github.com/a2aproject/a2a-go/v2/a2a"
 )
 
@@ -495,12 +495,12 @@ func TestDispatchResultPayloadIncludesRepoResults(t *testing.T) {
 		HubTaskID: "hub-task-22",
 		Skill:     "code_for_me",
 	}
-	res := harness.Result{
-		ExitCode:     harness.ExitSuccess,
+	res := app.Result{
+		ExitCode:     app.ExitSuccess,
 		WorkspaceDir: "/tmp/run",
 		Branch:       "moltenhub-feature",
 		PRURL:        "https://github.com/acme/repo-a/pull/10",
-		RepoResults: []harness.RepoResult{
+		RepoResults: []app.RepoResult{
 			{
 				RepoURL: "git@github.com:acme/repo-a.git",
 				RepoDir: "/tmp/run/repo-01-repo-a",
@@ -686,11 +686,11 @@ func TestDispatchResultPayloadNoChangesIncludesExistingPRURLs(t *testing.T) {
 		RequestID: "req-no-change",
 		Skill:     "code_for_me",
 	}
-	res := harness.Result{
-		ExitCode:  harness.ExitSuccess,
+	res := app.Result{
+		ExitCode:  app.ExitSuccess,
 		NoChanges: true,
 		PRURL:     "https://github.com/acme/repo-a/pull/10",
-		RepoResults: []harness.RepoResult{
+		RepoResults: []app.RepoResult{
 			{
 				RepoURL: "git@github.com:acme/repo-a.git",
 				RepoDir: "/tmp/run/repo",
@@ -744,8 +744,8 @@ func TestDispatchResultPayloadNoChangesWithoutPRIncludesExplicitMessage(t *testi
 		Skill:     "code_for_me",
 		ReplyTo:   "agent-123",
 	}
-	res := harness.Result{
-		ExitCode:  harness.ExitSuccess,
+	res := app.Result{
+		ExitCode:  app.ExitSuccess,
 		NoChanges: true,
 	}
 
@@ -785,8 +785,8 @@ func TestDispatchResultPayloadCompletedIncludesExplicitMessage(t *testing.T) {
 		Skill:     "code_for_me",
 		ReplyTo:   "agent-123",
 	}
-	res := harness.Result{
-		ExitCode: harness.ExitSuccess,
+	res := app.Result{
+		ExitCode: app.ExitSuccess,
 		Branch:   "moltenhub-fix-success-response",
 	}
 
@@ -826,8 +826,8 @@ func TestDispatchResultPayloadIncludesTopLevelFailureMessage(t *testing.T) {
 		Skill:     "code_for_me",
 		ReplyTo:   "agent-123",
 	}
-	res := harness.Result{
-		ExitCode: harness.ExitCodex,
+	res := app.Result{
+		ExitCode: app.ExitCodex,
 		Err:      fmt.Errorf("codex: process exited with status 1"),
 	}
 
@@ -1032,8 +1032,8 @@ func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
 	runCfg.ApplyDefaults()
 
 	d := NewDaemon(failingRunner{err: errors.New("runner exploded")})
-	failed := make(chan harness.Result, 1)
-	d.OnDispatchFailed = func(requestID string, failedRunCfg config.Config, result harness.Result) {
+	failed := make(chan app.Result, 1)
+	d.OnDispatchFailed = func(requestID string, failedRunCfg config.Config, result app.Result) {
 		if requestID != "req-fail" {
 			t.Fatalf("requestID = %q, want %q", requestID, "req-fail")
 		}
@@ -1148,8 +1148,8 @@ func TestProcessInboundMessagePublishesAcquireFailurePayload(t *testing.T) {
 	defer server.Close()
 
 	d := NewDaemon(nil)
-	failed := make(chan harness.Result, 1)
-	d.OnDispatchFailed = func(requestID string, failedRunCfg config.Config, result harness.Result) {
+	failed := make(chan app.Result, 1)
+	d.OnDispatchFailed = func(requestID string, failedRunCfg config.Config, result app.Result) {
 		if requestID != "req-closed-controller" {
 			t.Fatalf("requestID = %q, want %q", requestID, "req-closed-controller")
 		}
@@ -1265,13 +1265,13 @@ func TestProcessInboundMessageInvokesOnDispatchFailedForAcquireFailure(t *testin
 	failed := make(chan struct {
 		requestID string
 		runCfg    config.Config
-		result    harness.Result
+		result    app.Result
 	}, 1)
-	d.OnDispatchFailed = func(requestID string, failedRunCfg config.Config, result harness.Result) {
+	d.OnDispatchFailed = func(requestID string, failedRunCfg config.Config, result app.Result) {
 		failed <- struct {
 			requestID string
 			runCfg    config.Config
-			result    harness.Result
+			result    app.Result
 		}{
 			requestID: requestID,
 			runCfg:    failedRunCfg,

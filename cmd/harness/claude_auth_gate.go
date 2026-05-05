@@ -18,7 +18,7 @@ import (
 	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
-	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
+	"github.com/Molten-Bot/moltenhub-code/internal/web"
 )
 
 const claudeAuthDocsURL = "https://code.claude.com/docs/en/authentication"
@@ -123,7 +123,7 @@ func newClaudeAuthGateWithContextAndConfigAndRunner(
 	return g
 }
 
-func (g *claudeAuthGate) Status(_ context.Context) (hubui.AgentAuthState, error) {
+func (g *claudeAuthGate) Status(_ context.Context) (web.AgentAuthState, error) {
 	if g == nil {
 		return readyAgentAuthState(), nil
 	}
@@ -160,7 +160,7 @@ func (g *claudeAuthGate) Status(_ context.Context) (hubui.AgentAuthState, error)
 	return state, nil
 }
 
-func (g *claudeAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthState, error) {
+func (g *claudeAuthGate) StartDeviceAuth(_ context.Context) (web.AgentAuthState, error) {
 	if g == nil {
 		return readyAgentAuthState(), nil
 	}
@@ -269,7 +269,7 @@ func (g *claudeAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthStat
 	return snap, nil
 }
 
-func (g *claudeAuthGate) Verify(ctx context.Context) (hubui.AgentAuthState, error) {
+func (g *claudeAuthGate) Verify(ctx context.Context) (web.AgentAuthState, error) {
 	if g == nil {
 		return readyAgentAuthState(), nil
 	}
@@ -293,7 +293,7 @@ func (g *claudeAuthGate) Verify(ctx context.Context) (hubui.AgentAuthState, erro
 	return g.StartDeviceAuth(ctx)
 }
 
-func (g *claudeAuthGate) Configure(ctx context.Context, rawInput string) (hubui.AgentAuthState, error) {
+func (g *claudeAuthGate) Configure(ctx context.Context, rawInput string) (web.AgentAuthState, error) {
 	status, _ := g.Status(context.Background())
 	if status.State == "pending_browser_login" || isClaudeCredentialsConfigureState(status) {
 		if credentialsJSON, looksLikeJSON, err := normalizeClaudeCredentialsJSON(rawInput); looksLikeJSON {
@@ -339,7 +339,7 @@ func (g *claudeAuthGate) Configure(ctx context.Context, rawInput string) (hubui.
 		runner,
 		rawInput,
 		nil,
-		func(token string) (hubui.AgentAuthState, error) {
+		func(token string) (web.AgentAuthState, error) {
 			g.mu.Lock()
 			g.initCfg.GitHubToken = token
 			g.mu.Unlock()
@@ -349,7 +349,7 @@ func (g *claudeAuthGate) Configure(ctx context.Context, rawInput string) (hubui.
 	)
 }
 
-func (g *claudeAuthGate) submitBrowserCode(rawInput string) (hubui.AgentAuthState, error) {
+func (g *claudeAuthGate) submitBrowserCode(rawInput string) (web.AgentAuthState, error) {
 	if g == nil {
 		return readyAgentAuthState(), nil
 	}
@@ -582,14 +582,14 @@ func extractClaudeAuthStateFromURL(raw string) string {
 	return strings.TrimSpace(parsed.Query().Get("state"))
 }
 
-func (g *claudeAuthGate) completePendingBrowserLoginIfReady() (hubui.AgentAuthState, bool) {
+func (g *claudeAuthGate) completePendingBrowserLoginIfReady() (web.AgentAuthState, bool) {
 	if g == nil {
-		return hubui.AgentAuthState{}, false
+		return web.AgentAuthState{}, false
 	}
 
 	ready, _ := g.probeClaude()
 	if !ready {
-		return hubui.AgentAuthState{}, false
+		return web.AgentAuthState{}, false
 	}
 
 	var (
@@ -692,7 +692,7 @@ func (g *claudeAuthGate) resubmitPendingBrowserCode() {
 	)
 }
 
-func (g *claudeAuthGate) snapshotLocked() hubui.AgentAuthState {
+func (g *claudeAuthGate) snapshotLocked() web.AgentAuthState {
 	state := strings.TrimSpace(g.state)
 	if state == "" {
 		if g.ready {
@@ -706,7 +706,7 @@ func (g *claudeAuthGate) snapshotLocked() hubui.AgentAuthState {
 	if !required {
 		required = true
 	}
-	return hubui.AgentAuthState{
+	return web.AgentAuthState{
 		Harness:              agentruntime.HarnessClaude,
 		Required:             required,
 		Ready:                g.ready,
@@ -720,7 +720,7 @@ func (g *claudeAuthGate) snapshotLocked() hubui.AgentAuthState {
 	}
 }
 
-func isClaudeCredentialsConfigureState(state hubui.AgentAuthState) bool {
+func isClaudeCredentialsConfigureState(state web.AgentAuthState) bool {
 	if strings.TrimSpace(strings.ToLower(state.Harness)) != agentruntime.HarnessClaude {
 		return false
 	}
@@ -771,7 +771,7 @@ func claudeAuthURLAcceptsBrowserCode(authURL string) bool {
 	return false
 }
 
-func (g *claudeAuthGate) githubTokenRequirementState() (bool, hubui.AgentAuthState) {
+func (g *claudeAuthGate) githubTokenRequirementState() (bool, web.AgentAuthState) {
 	g.mu.Lock()
 	baseCtx := g.baseCtx
 	runner := g.runner
@@ -1347,7 +1347,7 @@ func saveClaudeCredentialsJSON(raw string) (string, error) {
 	return path, nil
 }
 
-func (g *claudeAuthGate) pendingBrowserLoginFailure(message string, err error) (hubui.AgentAuthState, error) {
+func (g *claudeAuthGate) pendingBrowserLoginFailure(message string, err error) (web.AgentAuthState, error) {
 	if g == nil {
 		return readyAgentAuthState(), err
 	}

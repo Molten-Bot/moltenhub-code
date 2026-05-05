@@ -13,7 +13,7 @@ import (
 	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
-	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
+	"github.com/Molten-Bot/moltenhub-code/internal/web"
 )
 
 func TestClaudeAuthGateRequiresGitHubConfigureWhenTokenIsMissing(t *testing.T) {
@@ -913,7 +913,7 @@ sleep 30
 	})
 
 	var (
-		status hubui.AgentAuthState
+		status web.AgentAuthState
 		err    error
 	)
 	waitForCondition(t, 5*time.Second, func() bool {

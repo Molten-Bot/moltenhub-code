@@ -11,7 +11,7 @@ import (
 	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
-	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
+	"github.com/Molten-Bot/moltenhub-code/internal/web"
 )
 
 const agentHarnessSelectionState = "needs_harness_selection"
@@ -68,22 +68,22 @@ func newSelectableAgentAuthGate(
 	}
 }
 
-func (g *selectableAgentAuthGate) Status(ctx context.Context) (hubui.AgentAuthState, error) {
+func (g *selectableAgentAuthGate) Status(ctx context.Context) (web.AgentAuthState, error) {
 	return g.runDelegateAction(ctx, agentAuthGate.Status)
 }
 
-func (g *selectableAgentAuthGate) StartDeviceAuth(ctx context.Context) (hubui.AgentAuthState, error) {
+func (g *selectableAgentAuthGate) StartDeviceAuth(ctx context.Context) (web.AgentAuthState, error) {
 	return g.runDelegateAction(ctx, agentAuthGate.StartDeviceAuth)
 }
 
-func (g *selectableAgentAuthGate) Verify(ctx context.Context) (hubui.AgentAuthState, error) {
+func (g *selectableAgentAuthGate) Verify(ctx context.Context) (web.AgentAuthState, error) {
 	return g.runDelegateAction(ctx, agentAuthGate.Verify)
 }
 
 func (g *selectableAgentAuthGate) runDelegateAction(
 	ctx context.Context,
-	action func(agentAuthGate, context.Context) (hubui.AgentAuthState, error),
-) (hubui.AgentAuthState, error) {
+	action func(agentAuthGate, context.Context) (web.AgentAuthState, error),
+) (web.AgentAuthState, error) {
 	activeCfg, err := g.activeConfig()
 	if err != nil {
 		state := g.errorState(fmt.Sprintf("load runtime config: %v", err))
@@ -102,7 +102,7 @@ func (g *selectableAgentAuthGate) runDelegateAction(
 	return action(delegate, ctx)
 }
 
-func (g *selectableAgentAuthGate) Configure(ctx context.Context, rawInput string) (hubui.AgentAuthState, error) {
+func (g *selectableAgentAuthGate) Configure(ctx context.Context, rawInput string) (web.AgentAuthState, error) {
 	activeCfg, err := g.activeConfig()
 	if err != nil {
 		state := g.errorState(fmt.Sprintf("load runtime config: %v", err))
@@ -120,7 +120,7 @@ func (g *selectableAgentAuthGate) Configure(ctx context.Context, rawInput string
 				g.runner,
 				rawInput,
 				nil,
-				func(token string) (hubui.AgentAuthState, error) {
+				func(token string) (web.AgentAuthState, error) {
 					g.mu.Lock()
 					g.initCfg.GitHubToken = token
 					g.mu.Unlock()
@@ -179,10 +179,10 @@ func (g *selectableAgentAuthGate) Configure(ctx context.Context, rawInput string
 	return delegate.Configure(ctx, rawInput)
 }
 
-func (g *selectableAgentAuthGate) selectionState(activeCfg hub.InitConfig) (agentruntime.Runtime, bool, hubui.AgentAuthState) {
+func (g *selectableAgentAuthGate) selectionState(activeCfg hub.InitConfig) (agentruntime.Runtime, bool, web.AgentAuthState) {
 	runtime, err := hub.BoundAgentRuntime(activeCfg)
 	if err == nil {
-		return runtime, true, hubui.AgentAuthState{}
+		return runtime, true, web.AgentAuthState{}
 	}
 
 	blocked, blockedState := githubTokenRequirementState(g.baseCtx, g.runner, "", g.runtimeConfigPath, activeCfg)
@@ -238,12 +238,12 @@ func (g *selectableAgentAuthGate) activeConfig() (hub.InitConfig, error) {
 	return activeCfg, nil
 }
 
-func (g *selectableAgentAuthGate) harnessSelectionRequiredState(message string) hubui.AgentAuthState {
+func (g *selectableAgentAuthGate) harnessSelectionRequiredState(message string) web.AgentAuthState {
 	message = strings.TrimSpace(message)
 	if message == "" {
 		message = "Select the agent logo to continue."
 	}
-	return hubui.AgentAuthState{
+	return web.AgentAuthState{
 		Required:         true,
 		Ready:            false,
 		State:            agentHarnessSelectionState,
@@ -253,12 +253,12 @@ func (g *selectableAgentAuthGate) harnessSelectionRequiredState(message string) 
 	}
 }
 
-func (g *selectableAgentAuthGate) errorState(message string) hubui.AgentAuthState {
+func (g *selectableAgentAuthGate) errorState(message string) web.AgentAuthState {
 	message = strings.TrimSpace(message)
 	if message == "" {
 		message = "agent auth status failed"
 	}
-	return hubui.AgentAuthState{
+	return web.AgentAuthState{
 		Required:  true,
 		Ready:     false,
 		State:     "error",
@@ -273,7 +273,7 @@ func (g *selectableAgentAuthGate) resetDelegateLocked() {
 	g.delegateConfig = hub.InitConfig{}
 }
 
-func harnessSelectionOptions() []hubui.AgentAuthOption {
+func harnessSelectionOptions() []web.AgentAuthOption {
 	baseOrder := append([]string(nil), preferredHarnessSelectionOrder...)
 	supported := agentruntime.SupportedHarnesses()
 	seen := make(map[string]struct{}, len(baseOrder)+len(supported))
@@ -301,10 +301,10 @@ func harnessSelectionOptions() []hubui.AgentAuthOption {
 		ordered = append(ordered, harness)
 	}
 
-	options := make([]hubui.AgentAuthOption, 0, len(ordered))
+	options := make([]web.AgentAuthOption, 0, len(ordered))
 	for _, harness := range ordered {
 		display := agentruntime.DisplayName(harness)
-		options = append(options, hubui.AgentAuthOption{
+		options = append(options, web.AgentAuthOption{
 			Value:       harness,
 			Label:       display,
 			Description: fmt.Sprintf("Bind this runtime to %s.", display),

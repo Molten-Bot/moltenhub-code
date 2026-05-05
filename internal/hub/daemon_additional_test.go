@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Molten-Bot/moltenhub-code/internal/app"
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
-	"github.com/Molten-Bot/moltenhub-code/internal/harness"
 	"github.com/Molten-Bot/moltenhub-code/internal/library"
 	"github.com/a2aproject/a2a-go/v2/a2a"
 )
@@ -1284,9 +1284,9 @@ func TestQueueFailureFollowUpUsesDefaultRepository(t *testing.T) {
 			},
 		},
 	}
-	res := harness.Result{
+	res := app.Result{
 		Err: errors.New("task failed"),
-		RepoResults: []harness.RepoResult{
+		RepoResults: []app.RepoResult{
 			{RepoURL: "git@github.com:acme/repo-b.git"},
 			{RepoURL: "git@github.com:acme/repo-b.git"},
 		},
@@ -1333,7 +1333,7 @@ func TestQueueFailureFollowUpSkipsCallerRoutingWhenTargetMissing(t *testing.T) {
 		},
 	}
 	dispatch.Config.ApplyDefaults()
-	res := harness.Result{Err: errors.New("task failed")}
+	res := app.Result{Err: errors.New("task failed")}
 
 	if err := queueFailureFollowUp(context.Background(), api, cfg, dispatch, res, ""); err != nil {
 		t.Fatalf("queueFailureFollowUp() error = %v", err)
@@ -1404,7 +1404,7 @@ func TestShouldQueueFailureFollowUpSkipsNestedFailureReviewRequests(t *testing.T
 	t.Parallel()
 
 	dispatch := SkillDispatch{RequestID: "req-123-failure-review"}
-	ok, reason := shouldQueueFailureFollowUp(dispatch, harness.Result{Err: errors.New("still failing")})
+	ok, reason := shouldQueueFailureFollowUp(dispatch, app.Result{Err: errors.New("still failing")})
 	if ok || reason != "run is already a failure follow-up" {
 		t.Fatalf("shouldQueueFailureFollowUp() = (%v, %q), want (false, %q)", ok, reason, "run is already a failure follow-up")
 	}
@@ -1414,7 +1414,7 @@ func TestShouldQueueFailureRerunSkipsNestedRerunRequests(t *testing.T) {
 	t.Parallel()
 
 	dispatch := SkillDispatch{RequestID: "req-123-rerun"}
-	ok, reason := shouldQueueFailureRerun(dispatch, harness.Result{Err: errors.New("still failing")})
+	ok, reason := shouldQueueFailureRerun(dispatch, app.Result{Err: errors.New("still failing")})
 	if ok || reason != "run is already a failure rerun" {
 		t.Fatalf("shouldQueueFailureRerun() = (%v, %q), want (false, %q)", ok, reason, "run is already a failure rerun")
 	}
@@ -1424,14 +1424,14 @@ func TestShouldQueueFailureFollowUpSkipsNonRemediableFailures(t *testing.T) {
 	t.Parallel()
 
 	dispatch := SkillDispatch{RequestID: "req-123"}
-	ok, reason := shouldQueueFailureFollowUp(dispatch, harness.Result{
+	ok, reason := shouldQueueFailureFollowUp(dispatch, app.Result{
 		Err: errors.New("git: verify remote write access for repo https://github.com/acme/repo.git branch \"moltenhub-fix\": exit status 128: remote: Write access to repository not granted. fatal: unable to access 'https://github.com/acme/repo.git/': The requested URL returned error: 403"),
 	})
 	if ok || !strings.Contains(reason, "write access to repository not granted") {
 		t.Fatalf("shouldQueueFailureFollowUp(repo access) = (%v, %q), want non-remediable repo access skip", ok, reason)
 	}
 
-	ok, reason = shouldQueueFailureFollowUp(dispatch, harness.Result{
+	ok, reason = shouldQueueFailureFollowUp(dispatch, app.Result{
 		Err: errors.New("git: run git [push -u origin moltenhub-branch]: exit status 1: remote: refusing to allow an OAuth App to create or update workflow `.github/workflows/docker-release.yml` without `workflow` scope"),
 	})
 	if ok || !strings.Contains(reason, "refusing to allow an oauth app to create or update workflow") {
@@ -1450,9 +1450,9 @@ func TestFailureFollowUpPromptIncludesWorkspaceAndTargetPath(t *testing.T) {
 	}
 	runCfg.ApplyDefaults()
 
-	result := harness.Result{
+	result := app.Result{
 		WorkspaceDir: "/tmp/run-123",
-		RepoResults: []harness.RepoResult{{
+		RepoResults: []app.RepoResult{{
 			RepoURL: "git@github.com:acme/repo.git",
 			RepoDir: "/tmp/run-123/repo",
 		}},

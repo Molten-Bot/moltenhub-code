@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Molten-Bot/moltenhub-code/internal/app"
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
-	"github.com/Molten-Bot/moltenhub-code/internal/harness"
 )
 
 func TestFailureFollowUpHelperBranches(t *testing.T) {
@@ -30,32 +30,32 @@ func TestFailureFollowUpHelperBranches(t *testing.T) {
 	}
 
 	dispatch := SkillDispatch{RequestID: "req-1"}
-	if ok, reason := shouldQueueFailureFollowUp(dispatch, harness.Result{}); ok || !strings.Contains(reason, "did not include an error") {
+	if ok, reason := shouldQueueFailureFollowUp(dispatch, app.Result{}); ok || !strings.Contains(reason, "did not include an error") {
 		t.Fatalf("shouldQueueFailureFollowUp(no error) = (%v, %q)", ok, reason)
 	}
-	if ok, reason := shouldQueueFailureRerun(dispatch, harness.Result{}); ok || !strings.Contains(reason, "did not include an error") {
+	if ok, reason := shouldQueueFailureRerun(dispatch, app.Result{}); ok || !strings.Contains(reason, "did not include an error") {
 		t.Fatalf("shouldQueueFailureRerun(no error) = (%v, %q)", ok, reason)
 	}
-	if ok, reason := shouldQueueFailureFollowUp(SkillDispatch{RequestID: "req-1-failure-review"}, harness.Result{Err: errors.New("boom")}); ok || reason != "run is already a failure follow-up" {
+	if ok, reason := shouldQueueFailureFollowUp(SkillDispatch{RequestID: "req-1-failure-review"}, app.Result{Err: errors.New("boom")}); ok || reason != "run is already a failure follow-up" {
 		t.Fatalf("shouldQueueFailureFollowUp(nested) = (%v, %q), want (false, %q)", ok, reason, "run is already a failure follow-up")
 	}
-	if ok, reason := shouldQueueFailureFollowUp(SkillDispatch{RequestID: "req-1"}, harness.Result{Err: errors.New("boom")}); !ok || reason != "" {
+	if ok, reason := shouldQueueFailureFollowUp(SkillDispatch{RequestID: "req-1"}, app.Result{Err: errors.New("boom")}); !ok || reason != "" {
 		t.Fatalf("shouldQueueFailureFollowUp(default) = (%v, %q), want (true, \"\")", ok, reason)
 	}
-	if ok, reason := shouldQueueFailureRerun(SkillDispatch{RequestID: "req-1"}, harness.Result{Err: errors.New("boom")}); ok || reason != automaticFailureRerunDisabledReason {
+	if ok, reason := shouldQueueFailureRerun(SkillDispatch{RequestID: "req-1"}, app.Result{Err: errors.New("boom")}); ok || reason != automaticFailureRerunDisabledReason {
 		t.Fatalf("shouldQueueFailureRerun(default) = (%v, %q), want (false, %q)", ok, reason, automaticFailureRerunDisabledReason)
 	}
-	if ok, reason := shouldQueueFailureRerun(SkillDispatch{RequestID: "req-1-rerun"}, harness.Result{Err: errors.New("boom")}); ok || reason != "run is already a failure rerun" {
+	if ok, reason := shouldQueueFailureRerun(SkillDispatch{RequestID: "req-1-rerun"}, app.Result{Err: errors.New("boom")}); ok || reason != "run is already a failure rerun" {
 		t.Fatalf("shouldQueueFailureRerun(nested) = (%v, %q), want (false, %q)", ok, reason, "run is already a failure rerun")
 	}
 
-	res := harness.Result{
+	res := app.Result{
 		ExitCode:     7,
 		Err:          errors.New("boom"),
 		WorkspaceDir: "/tmp/work",
 		Branch:       "moltenhub-fix",
 		PRURL:        "https://github.com/acme/repo/pull/1",
-		RepoResults: []harness.RepoResult{
+		RepoResults: []app.RepoResult{
 			{RepoURL: "git@github.com:acme/repo.git", RepoDir: "/tmp/work/repo", Changed: true, PRURL: "https://github.com/acme/repo/pull/1"},
 			{RepoURL: "git@github.com:acme/repo.git", RepoDir: "/tmp/work/repo", Changed: false, PRURL: "https://github.com/acme/repo/pull/2"},
 		},

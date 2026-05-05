@@ -11,7 +11,7 @@ import (
 	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
-	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
+	"github.com/Molten-Bot/moltenhub-code/internal/web"
 )
 
 const (
@@ -50,28 +50,28 @@ func newAuggieAuthGateWithRunner(runner execx.Runner, runtimeConfigPath string, 
 	return g
 }
 
-func (g *auggieAuthGate) Status(_ context.Context) (hubui.AgentAuthState, error) {
+func (g *auggieAuthGate) Status(_ context.Context) (web.AgentAuthState, error) {
 	if g == nil {
 		return readyAgentAuthState(), nil
 	}
 	return g.refreshAndSnapshot()
 }
 
-func (g *auggieAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthState, error) {
+func (g *auggieAuthGate) StartDeviceAuth(_ context.Context) (web.AgentAuthState, error) {
 	if g == nil {
 		return readyAgentAuthState(), nil
 	}
 	return g.refreshAndSnapshot()
 }
 
-func (g *auggieAuthGate) Verify(_ context.Context) (hubui.AgentAuthState, error) {
+func (g *auggieAuthGate) Verify(_ context.Context) (web.AgentAuthState, error) {
 	if g == nil {
 		return readyAgentAuthState(), nil
 	}
 	return g.refreshAndSnapshot()
 }
 
-func (g *auggieAuthGate) Configure(ctx context.Context, rawInput string) (hubui.AgentAuthState, error) {
+func (g *auggieAuthGate) Configure(ctx context.Context, rawInput string) (web.AgentAuthState, error) {
 	if g == nil {
 		return readyAgentAuthState(), nil
 	}
@@ -97,14 +97,14 @@ func (g *auggieAuthGate) Configure(ctx context.Context, rawInput string) (hubui.
 			initCfg,
 			runner,
 			rawInput,
-			func(state hubui.AgentAuthState, err error) (hubui.AgentAuthState, error) {
+			func(state web.AgentAuthState, err error) (web.AgentAuthState, error) {
 				g.mu.Lock()
 				g.authState.applySnapshot(state)
 				snap := g.snapshotLocked()
 				g.mu.Unlock()
 				return snap, err
 			},
-			func(token string) (hubui.AgentAuthState, error) {
+			func(token string) (web.AgentAuthState, error) {
 				g.mu.Lock()
 				g.initCfg.GitHubToken = token
 				g.refreshLocked()
@@ -181,11 +181,11 @@ func (g *auggieAuthGate) refreshLocked() {
 	g.authState.setReady("Auggie session auth and GitHub token are ready.")
 }
 
-func (g *auggieAuthGate) snapshotLocked() hubui.AgentAuthState {
+func (g *auggieAuthGate) snapshotLocked() web.AgentAuthState {
 	return g.configurableAgentAuthGateBase.snapshotLocked(agentruntime.HarnessAuggie)
 }
 
-func (g *auggieAuthGate) refreshAndSnapshot() (hubui.AgentAuthState, error) {
+func (g *auggieAuthGate) refreshAndSnapshot() (web.AgentAuthState, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.refreshLocked()

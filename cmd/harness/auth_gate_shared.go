@@ -13,7 +13,7 @@ import (
 
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
-	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
+	"github.com/Molten-Bot/moltenhub-code/internal/web"
 )
 
 const githubTokenPasteConfigureMessage = "GitHub token is required."
@@ -21,8 +21,8 @@ const githubTokenValidationTimeout = 12 * time.Second
 
 var githubTokenValidationMu sync.Mutex
 
-func readyAgentAuthState() hubui.AgentAuthState {
-	return hubui.AgentAuthState{
+func readyAgentAuthState() web.AgentAuthState {
+	return web.AgentAuthState{
 		Required: false,
 		Ready:    true,
 		State:    "ready",
@@ -37,7 +37,7 @@ type configurableAgentAuthState struct {
 	message              string
 	configureCommand     string
 	configurePlaceholder string
-	configureOptions     []hubui.AgentAuthOption
+	configureOptions     []web.AgentAuthOption
 	updatedAt            time.Time
 }
 
@@ -52,7 +52,7 @@ type configurableAgentAuthGateBase struct {
 	authState configurableAgentAuthState
 }
 
-func (g *configurableAgentAuthGateBase) snapshotLocked(harness string) hubui.AgentAuthState {
+func (g *configurableAgentAuthGateBase) snapshotLocked(harness string) web.AgentAuthState {
 	return g.authState.snapshot(harness)
 }
 
@@ -76,11 +76,11 @@ func (s *configurableAgentAuthState) setError(message string) {
 	s.touch()
 }
 
-func (s *configurableAgentAuthState) setConfigureUI(message, command, placeholder string, options []hubui.AgentAuthOption) {
+func (s *configurableAgentAuthState) setConfigureUI(message, command, placeholder string, options []web.AgentAuthOption) {
 	s.setNeedsConfigure(message)
 	s.configureCommand = strings.TrimSpace(command)
 	s.configurePlaceholder = strings.TrimSpace(placeholder)
-	s.configureOptions = append([]hubui.AgentAuthOption(nil), options...)
+	s.configureOptions = append([]web.AgentAuthOption(nil), options...)
 }
 
 func (s *configurableAgentAuthState) setReady(message string) {
@@ -94,19 +94,19 @@ func (s *configurableAgentAuthState) setReady(message string) {
 	s.touch()
 }
 
-func (s *configurableAgentAuthState) applySnapshot(snapshot hubui.AgentAuthState) {
+func (s *configurableAgentAuthState) applySnapshot(snapshot web.AgentAuthState) {
 	s.required = snapshot.Required
 	s.ready = snapshot.Ready
 	s.state = strings.TrimSpace(snapshot.State)
 	s.message = strings.TrimSpace(snapshot.Message)
 	s.configureCommand = strings.TrimSpace(snapshot.ConfigureCommand)
 	s.configurePlaceholder = strings.TrimSpace(snapshot.ConfigurePlaceholder)
-	s.configureOptions = append([]hubui.AgentAuthOption(nil), snapshot.ConfigureOptions...)
+	s.configureOptions = append([]web.AgentAuthOption(nil), snapshot.ConfigureOptions...)
 	s.touch()
 }
 
-func (s *configurableAgentAuthState) snapshot(harness string) hubui.AgentAuthState {
-	return hubui.AgentAuthState{
+func (s *configurableAgentAuthState) snapshot(harness string) web.AgentAuthState {
+	return web.AgentAuthState{
 		Harness:              harness,
 		Required:             s.required,
 		Ready:                s.ready,
@@ -114,17 +114,17 @@ func (s *configurableAgentAuthState) snapshot(harness string) hubui.AgentAuthSta
 		Message:              strings.TrimSpace(s.message),
 		ConfigureCommand:     strings.TrimSpace(s.configureCommand),
 		ConfigurePlaceholder: strings.TrimSpace(s.configurePlaceholder),
-		ConfigureOptions:     append([]hubui.AgentAuthOption(nil), s.configureOptions...),
+		ConfigureOptions:     append([]web.AgentAuthOption(nil), s.configureOptions...),
 		UpdatedAt:            s.updatedAt.UTC().Format(time.RFC3339Nano),
 	}
 }
 
-func githubTokenNeedsConfigureState(harness, message string) hubui.AgentAuthState {
+func githubTokenNeedsConfigureState(harness, message string) web.AgentAuthState {
 	message = firstNonEmptyString(
 		message,
 		"GitHub token is required.",
 	)
-	return hubui.AgentAuthState{
+	return web.AgentAuthState{
 		Harness:              harness,
 		Required:             true,
 		Ready:                false,
@@ -221,7 +221,7 @@ func isLikelyGitHubToken(value string) bool {
 	return false
 }
 
-func githubTokenRequirementState(ctx context.Context, runner execx.Runner, harness, runtimeConfigPath string, initCfg hub.InitConfig) (bool, hubui.AgentAuthState) {
+func githubTokenRequirementState(ctx context.Context, runner execx.Runner, harness, runtimeConfigPath string, initCfg hub.InitConfig) (bool, web.AgentAuthState) {
 	_, state, blocked := githubTokenRequirement(ctx, runner, harness, runtimeConfigPath, initCfg)
 	return blocked, state
 }
@@ -235,7 +235,7 @@ func applyGitHubTokenRequirementState(ctx context.Context, runner execx.Runner, 
 	return githubToken, false
 }
 
-func githubTokenRequirement(ctx context.Context, runner execx.Runner, harness, runtimeConfigPath string, initCfg hub.InitConfig) (string, hubui.AgentAuthState, bool) {
+func githubTokenRequirement(ctx context.Context, runner execx.Runner, harness, runtimeConfigPath string, initCfg hub.InitConfig) (string, web.AgentAuthState, bool) {
 	githubToken, err := validatedGitHubToken(ctx, runner, runtimeConfigPath, initCfg)
 	if err != nil {
 		if strings.TrimSpace(err.Error()) == "github token is required" {
@@ -249,7 +249,7 @@ func githubTokenRequirement(ctx context.Context, runner execx.Runner, harness, r
 	if err := setGitHubTokenEnvironment(githubToken); err != nil {
 		return "", githubTokenNeedsConfigureState(harness, fmt.Sprintf("set github token env: %v", err)), true
 	}
-	return strings.TrimSpace(githubToken), hubui.AgentAuthState{}, false
+	return strings.TrimSpace(githubToken), web.AgentAuthState{}, false
 }
 
 func configureGitHubToken(
@@ -258,7 +258,7 @@ func configureGitHubToken(
 	initCfg hub.InitConfig,
 	runner execx.Runner,
 	rawInput, requiredMessage string,
-) (string, hubui.AgentAuthState, error) {
+) (string, web.AgentAuthState, error) {
 	token := strings.TrimSpace(rawInput)
 	requiredMessage = firstNonEmptyString(requiredMessage, githubTokenPasteConfigureMessage)
 	if token == "" {
@@ -279,7 +279,7 @@ func configureGitHubToken(
 		return "", state, err
 	}
 
-	return token, hubui.AgentAuthState{}, nil
+	return token, web.AgentAuthState{}, nil
 }
 
 func configureGitHubTokenAndApply(
@@ -288,9 +288,9 @@ func configureGitHubTokenAndApply(
 	initCfg hub.InitConfig,
 	runner execx.Runner,
 	rawInput string,
-	onFailure func(hubui.AgentAuthState, error) (hubui.AgentAuthState, error),
-	onSuccess func(string) (hubui.AgentAuthState, error),
-) (hubui.AgentAuthState, error) {
+	onFailure func(web.AgentAuthState, error) (web.AgentAuthState, error),
+	onSuccess func(string) (web.AgentAuthState, error),
+) (web.AgentAuthState, error) {
 	token, failureState, err := configureGitHubToken(
 		ctx,
 		harness,
@@ -307,7 +307,7 @@ func configureGitHubTokenAndApply(
 		return failureState, err
 	}
 	if onSuccess == nil {
-		return hubui.AgentAuthState{}, nil
+		return web.AgentAuthState{}, nil
 	}
 	return onSuccess(token)
 }

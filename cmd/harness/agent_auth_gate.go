@@ -6,14 +6,14 @@ import (
 	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
-	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
+	"github.com/Molten-Bot/moltenhub-code/internal/web"
 )
 
 type agentAuthGate interface {
-	Status(context.Context) (hubui.AgentAuthState, error)
-	StartDeviceAuth(context.Context) (hubui.AgentAuthState, error)
-	Verify(context.Context) (hubui.AgentAuthState, error)
-	Configure(context.Context, string) (hubui.AgentAuthState, error)
+	Status(context.Context) (web.AgentAuthState, error)
+	StartDeviceAuth(context.Context) (web.AgentAuthState, error)
+	Verify(context.Context) (web.AgentAuthState, error)
+	Configure(context.Context, string) (web.AgentAuthState, error)
 }
 
 func newConcreteAgentAuthGate(

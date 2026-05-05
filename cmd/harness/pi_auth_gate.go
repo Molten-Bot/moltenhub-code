@@ -13,7 +13,7 @@ import (
 	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
-	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
+	"github.com/Molten-Bot/moltenhub-code/internal/web"
 )
 
 const piAuthJSONField = "pi_auth_json"
@@ -131,22 +131,22 @@ func newPiAuthGateWithRuntime(
 	return g
 }
 
-func (g *piAuthGate) Status(ctx context.Context) (hubui.AgentAuthState, error) {
+func (g *piAuthGate) Status(ctx context.Context) (web.AgentAuthState, error) {
 	if g == nil {
 		return readyAgentAuthState(), nil
 	}
 	return g.refreshAndSnapshot(ctx)
 }
 
-func (g *piAuthGate) StartDeviceAuth(ctx context.Context) (hubui.AgentAuthState, error) {
+func (g *piAuthGate) StartDeviceAuth(ctx context.Context) (web.AgentAuthState, error) {
 	return g.refreshAndSnapshot(ctx)
 }
 
-func (g *piAuthGate) Verify(ctx context.Context) (hubui.AgentAuthState, error) {
+func (g *piAuthGate) Verify(ctx context.Context) (web.AgentAuthState, error) {
 	return g.refreshAndSnapshot(ctx)
 }
 
-func (g *piAuthGate) Configure(ctx context.Context, rawInput string) (hubui.AgentAuthState, error) {
+func (g *piAuthGate) Configure(ctx context.Context, rawInput string) (web.AgentAuthState, error) {
 	if g == nil {
 		return readyAgentAuthState(), nil
 	}
@@ -165,14 +165,14 @@ func (g *piAuthGate) Configure(ctx context.Context, rawInput string) (hubui.Agen
 			initCfg,
 			g.runner,
 			rawInput,
-			func(state hubui.AgentAuthState, err error) (hubui.AgentAuthState, error) {
+			func(state web.AgentAuthState, err error) (web.AgentAuthState, error) {
 				g.mu.Lock()
 				g.authState.applySnapshot(state)
 				snap := g.snapshotLocked()
 				g.mu.Unlock()
 				return snap, err
 			},
-			func(token string) (hubui.AgentAuthState, error) {
+			func(token string) (web.AgentAuthState, error) {
 				g.mu.Lock()
 				g.initCfg.GitHubToken = token
 				g.refreshLocked()
@@ -189,7 +189,7 @@ func (g *piAuthGate) Configure(ctx context.Context, rawInput string) (hubui.Agen
 	return g.configurePiAuthJSON(ctx, rawInput)
 }
 
-func (g *piAuthGate) refreshAndSnapshot(ctx context.Context) (hubui.AgentAuthState, error) {
+func (g *piAuthGate) refreshAndSnapshot(ctx context.Context) (web.AgentAuthState, error) {
 	if g == nil {
 		return readyAgentAuthState(), nil
 	}
@@ -331,14 +331,14 @@ func (g *piAuthGate) refreshLocked() {
 	}
 }
 
-func (g *piAuthGate) snapshotLocked() hubui.AgentAuthState {
+func (g *piAuthGate) snapshotLocked() web.AgentAuthState {
 	return g.configurableAgentAuthGateBase.snapshotLocked(agentruntime.HarnessPi)
 }
 
-func piAgentAuthOptions() []hubui.AgentAuthOption {
-	options := make([]hubui.AgentAuthOption, 0, len(piProviderOptions))
+func piAgentAuthOptions() []web.AgentAuthOption {
+	options := make([]web.AgentAuthOption, 0, len(piProviderOptions))
 	for _, option := range piProviderOptions {
-		options = append(options, hubui.AgentAuthOption{
+		options = append(options, web.AgentAuthOption{
 			Value:       option.EnvVar,
 			Label:       option.Label,
 			Description: option.Description,
@@ -560,7 +560,7 @@ func isLikelyPiProviderAuthInput(rawInput string) bool {
 	return hasEnvVar || hasValue
 }
 
-func (g *piAuthGate) configurePiAuthJSON(ctx context.Context, rawInput string) (hubui.AgentAuthState, error) {
+func (g *piAuthGate) configurePiAuthJSON(ctx context.Context, rawInput string) (web.AgentAuthState, error) {
 	if isLikelyGitHubToken(rawInput) {
 		err := fmt.Errorf("Failure: PI auth configure rejected. Error details: GitHub token was pasted into the PI auth.json field; paste %s instead", piAuthFileRelativePath)
 		g.mu.Lock()
@@ -610,7 +610,7 @@ func (g *piAuthGate) configurePiAuthJSON(ctx context.Context, rawInput string) (
 	return snap, nil
 }
 
-func (g *piAuthGate) configureProviderAuth(ctx context.Context, rawInput string) (hubui.AgentAuthState, error) {
+func (g *piAuthGate) configureProviderAuth(ctx context.Context, rawInput string) (web.AgentAuthState, error) {
 	canonical, err := normalizePiProviderAuth(rawInput)
 	if err != nil {
 		g.mu.Lock()

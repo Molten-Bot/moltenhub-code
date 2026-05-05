@@ -15,7 +15,7 @@ import (
 	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
-	"github.com/Molten-Bot/moltenhub-code/internal/hubui"
+	"github.com/Molten-Bot/moltenhub-code/internal/web"
 )
 
 const codexAuthProbeTimeout = 12 * time.Second
@@ -149,7 +149,7 @@ func newCodexAuthGateWithConfig(
 	return g
 }
 
-func (g *codexAuthGate) Status(_ context.Context) (hubui.AgentAuthState, error) {
+func (g *codexAuthGate) Status(_ context.Context) (web.AgentAuthState, error) {
 	if g == nil {
 		return readyAgentAuthState(), nil
 	}
@@ -213,7 +213,7 @@ func (g *codexAuthGate) Status(_ context.Context) (hubui.AgentAuthState, error) 
 	return g.snapshotLocked(), nil
 }
 
-func (g *codexAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthState, error) {
+func (g *codexAuthGate) StartDeviceAuth(_ context.Context) (web.AgentAuthState, error) {
 	if g == nil {
 		return readyAgentAuthState(), nil
 	}
@@ -300,7 +300,7 @@ func (g *codexAuthGate) StartDeviceAuth(_ context.Context) (hubui.AgentAuthState
 	return snap, nil
 }
 
-func (g *codexAuthGate) Verify(ctx context.Context) (hubui.AgentAuthState, error) {
+func (g *codexAuthGate) Verify(ctx context.Context) (web.AgentAuthState, error) {
 	if g == nil {
 		return readyAgentAuthState(), nil
 	}
@@ -352,7 +352,7 @@ func (g *codexAuthGate) Verify(ctx context.Context) (hubui.AgentAuthState, error
 	return g.snapshotLocked(), nil
 }
 
-func (g *codexAuthGate) Configure(ctx context.Context, rawInput string) (hubui.AgentAuthState, error) {
+func (g *codexAuthGate) Configure(ctx context.Context, rawInput string) (web.AgentAuthState, error) {
 	if g == nil {
 		return readyAgentAuthState(), nil
 	}
@@ -371,7 +371,7 @@ func (g *codexAuthGate) Configure(ctx context.Context, rawInput string) (hubui.A
 		runner,
 		rawInput,
 		nil,
-		func(token string) (hubui.AgentAuthState, error) {
+		func(token string) (web.AgentAuthState, error) {
 			g.mu.Lock()
 			g.initCfg.GitHubToken = token
 			g.mu.Unlock()
@@ -501,7 +501,7 @@ func (g *codexAuthGate) probe(ctx context.Context) (bool, string, error) {
 	return false, firstNonEmptyString(combined, "Unable to verify Codex authorization status."), nil
 }
 
-func (g *codexAuthGate) snapshotLocked() hubui.AgentAuthState {
+func (g *codexAuthGate) snapshotLocked() web.AgentAuthState {
 	state := strings.TrimSpace(g.state)
 	if state == "" {
 		if g.ready {
@@ -510,7 +510,7 @@ func (g *codexAuthGate) snapshotLocked() hubui.AgentAuthState {
 			state = "needs_device_auth"
 		}
 	}
-	return hubui.AgentAuthState{
+	return web.AgentAuthState{
 		Harness:    agentruntime.HarnessCodex,
 		Required:   g.required,
 		Ready:      g.ready,
@@ -522,9 +522,9 @@ func (g *codexAuthGate) snapshotLocked() hubui.AgentAuthState {
 	}
 }
 
-func (g *codexAuthGate) githubTokenRequirementState() (bool, hubui.AgentAuthState) {
+func (g *codexAuthGate) githubTokenRequirementState() (bool, web.AgentAuthState) {
 	if g == nil || !g.requireGitHubToken {
-		return false, hubui.AgentAuthState{}
+		return false, web.AgentAuthState{}
 	}
 
 	g.mu.Lock()
