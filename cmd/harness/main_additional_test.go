@@ -112,13 +112,15 @@ func TestHubExitCodeMappings(t *testing.T) {
 func TestRecordLocalRunActivityPublishesWhenHubConnected(t *testing.T) {
 	t.Parallel()
 
-	var activityBody map[string]any
+	var activityBodies []map[string]any
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/me/activities":
+			var activityBody map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&activityBody); err != nil {
 				t.Fatalf("decode activity body: %v", err)
 			}
+			activityBodies = append(activityBodies, activityBody)
 			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		default:
@@ -137,12 +139,27 @@ func TestRecordLocalRunActivityPublishesWhenHubConnected(t *testing.T) {
 		BaseURL:    ts.URL + "/v1",
 		AgentToken: "token",
 	}, runCfg, "req-local-activity", func() bool { return true }, nil)
+	recordLocalRunCompletedActivity(context.Background(), hub.InitConfig{
+		BaseURL:    ts.URL + "/v1",
+		AgentToken: "token",
+	}, runCfg, "req-local-activity", func() bool { return true }, nil)
 
+	if len(activityBodies) != 2 {
+		t.Fatalf("activity count = %d, want 2", len(activityBodies))
+	}
+	activityBody := activityBodies[0]
 	if got, want := fmt.Sprint(activityBody["activity"]), "working on library task: security-review"; got != want {
 		t.Fatalf("activity = %s, want %s", got, want)
 	}
 	if activityBody["category"] != "coding" || activityBody["status"] != "started" {
 		t.Fatalf("activity state fields = %#v", activityBody)
+	}
+	completedBody := activityBodies[1]
+	if got, want := fmt.Sprint(completedBody["activity"]), "completed library task: security-review"; got != want {
+		t.Fatalf("completed activity = %s, want %s", got, want)
+	}
+	if completedBody["category"] != "coding" || completedBody["status"] != "completed" {
+		t.Fatalf("completed activity state fields = %#v", completedBody)
 	}
 }
 

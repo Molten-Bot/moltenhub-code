@@ -1,6 +1,9 @@
 package hub
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestToMapParsesMapAndJSONString(t *testing.T) {
 	t.Parallel()
@@ -228,5 +231,19 @@ func TestExtractAgentProfileFromJSONMergesDirectProfileAndMetadata(t *testing.T)
 	}
 	if got, want := profile.Profile.ProfileText, "Running code updates quickly."; got != want {
 		t.Fatalf("ProfileText = %q, want %q", got, want)
+	}
+}
+
+func TestResponseModePlaceholderListsSupportedModes(t *testing.T) {
+	t.Parallel()
+
+	got := responseModePlaceholder()
+	if !strings.HasPrefix(got, "<") || !strings.HasSuffix(got, ">") {
+		t.Fatalf("responseModePlaceholder() = %q, want angle-bracket placeholder", got)
+	}
+	for _, mode := range []string{"default", "off", "caveman-full"} {
+		if !strings.Contains(got, mode) {
+			t.Fatalf("responseModePlaceholder() = %q, missing %q", got, mode)
+		}
 	}
 }
