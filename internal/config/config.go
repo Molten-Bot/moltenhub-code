@@ -443,6 +443,9 @@ func validateRepoRef(repo string) error {
 	// scp-like git SSH syntax is valid and intentionally does not parse as a URL:
 	// git@github.com:owner/repo.git
 	if !strings.Contains(repo, "://") {
+		if containsNestedSCPRepoRef(repo) {
+			return fmt.Errorf("invalid repository URL %q: nested repository URL is not allowed", repo)
+		}
 		return nil
 	}
 
@@ -466,6 +469,9 @@ func validateRepoRef(repo string) error {
 		if strings.TrimSpace(parsed.Path) == "" || parsed.Path == "/" {
 			return fmt.Errorf("invalid repository URL %q: missing repository path", repo)
 		}
+		if containsNestedSCPRepoRef(parsed.Path) {
+			return fmt.Errorf("invalid repository URL %q: nested repository URL is not allowed", repo)
+		}
 	case "file":
 		if strings.TrimSpace(parsed.Path) == "" {
 			return fmt.Errorf("invalid repository URL %q: missing filesystem path", repo)
@@ -473,6 +479,17 @@ func validateRepoRef(repo string) error {
 	}
 
 	return nil
+}
+
+var scpLikeRepoRefRE = regexp.MustCompile(`(?i)(^|/)[^/@:\s]+@[^/:\s]+:[^/\s]+/[^/\s]+`)
+
+func containsNestedSCPRepoRef(repo string) bool {
+	repo = strings.TrimSpace(repo)
+	search := repo
+	if colon := strings.Index(search, ":"); colon >= 0 && strings.Contains(search[:colon], "@") && !strings.Contains(search[:colon], "/") {
+		search = search[colon+1:]
+	}
+	return scpLikeRepoRefRE.MatchString(search)
 }
 
 func defaultCommitMessage(prompt string) string {
