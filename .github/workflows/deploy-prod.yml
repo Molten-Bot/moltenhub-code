@@ -11,8 +11,6 @@ on:
 
 permissions:
   contents: read
-  attestations: write
-  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}
@@ -22,11 +20,8 @@ jobs:
   promote:
     name: Promote image to latest
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -36,12 +31,17 @@ jobs:
           username: moltenai
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push latest
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          push: true
-          tags: moltenai/moltenhub-code:latest
-          provenance: mode=max
-          sbom: true
-          cache-from: type=registry,ref=moltenai/moltenhub-code:${{ github.event.inputs.source_tag }}
+      - name: Promote source tag to latest
+        env:
+          SOURCE_TAG: ${{ github.event.inputs.source_tag }}
+        run: |
+          case "${SOURCE_TAG}" in
+            ''|*[!A-Za-z0-9_.-]*)
+              echo "Invalid source_tag: ${SOURCE_TAG}" >&2
+              exit 1
+              ;;
+          esac
+
+          docker buildx imagetools create \
+            --tag moltenai/moltenhub-code:latest \
+            "moltenai/moltenhub-code:${SOURCE_TAG}"

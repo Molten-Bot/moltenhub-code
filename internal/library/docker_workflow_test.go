@@ -36,7 +36,7 @@ func TestDeployVnextPublishesSupplyChainAttestations(t *testing.T) {
 	}
 }
 
-func TestDeployProdPublishesSupplyChainAttestations(t *testing.T) {
+func TestDeployProdPromotesExistingImageTag(t *testing.T) {
 	t.Parallel()
 
 	_, file, _, ok := runtime.Caller(0)
@@ -54,16 +54,27 @@ func TestDeployProdPublishesSupplyChainAttestations(t *testing.T) {
 
 	content := string(data)
 	for _, want := range []string{
-		"uses: docker/build-push-action@v7",
-		"tags: moltenai/moltenhub-code:latest",
-		"provenance: mode=max",
-		"sbom: true",
+		"default: vnext",
+		"timeout-minutes: 5",
+		"SOURCE_TAG: ${{ github.event.inputs.source_tag }}",
+		"Invalid source_tag: ${SOURCE_TAG}",
+		"docker buildx imagetools create",
+		"--tag moltenai/moltenhub-code:latest",
+		"\"moltenai/moltenhub-code:${SOURCE_TAG}\"",
 	} {
 		if !strings.Contains(content, want) {
-			t.Fatalf("%s missing supply chain attestation setting %q", workflowPath, want)
+			t.Fatalf("%s missing promotion setting %q", workflowPath, want)
 		}
 	}
-	if strings.Contains(content, "docker buildx imagetools create") {
-		t.Fatalf("%s still promotes latest without build attestations", workflowPath)
+	for _, forbidden := range []string{
+		"uses: docker/build-push-action",
+		"uses: actions/checkout",
+		"cache-from:",
+		"provenance:",
+		"sbom:",
+	} {
+		if strings.Contains(content, forbidden) {
+			t.Fatalf("%s still rebuilds latest through %q", workflowPath, forbidden)
+		}
 	}
 }
