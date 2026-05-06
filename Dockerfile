@@ -1,4 +1,4 @@
-FROM golang:1.26.1-trixie AS build
+FROM golang:1.26.2-trixie AS build
 WORKDIR /src
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64

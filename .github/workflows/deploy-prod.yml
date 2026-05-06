@@ -11,6 +11,8 @@ on:
 
 permissions:
   contents: read
+  attestations: write
+  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}
@@ -20,8 +22,11 @@ jobs:
   promote:
     name: Promote image to latest
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -31,8 +36,12 @@ jobs:
           username: moltenai
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Promote existing image
-        run: |
-          docker buildx imagetools create \
-            --tag moltenai/moltenhub-code:latest \
-            moltenai/moltenhub-code:${{ github.event.inputs.source_tag }}
+      - name: Build and push latest
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: moltenai/moltenhub-code:latest
+          provenance: mode=max
+          sbom: true
+          cache-from: type=registry,ref=moltenai/moltenhub-code:${{ github.event.inputs.source_tag }}
