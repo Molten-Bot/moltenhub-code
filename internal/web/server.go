@@ -165,9 +165,11 @@ type GitHubRepo struct {
 }
 
 type gitHubRepoCache struct {
-	mu     sync.Mutex
-	loaded bool
-	repos  []GitHubRepo
+	mu      sync.Mutex
+	loaded  bool
+	loading bool
+	wait    chan struct{}
+	repos   []GitHubRepo
 }
 
 // HubSetupRequest captures the late-stage Hub connect modal payload.
@@ -565,6 +567,7 @@ func (s Server) injectIndexConfig(data []byte) []byte {
 	if configuredHarness != "" {
 		configuredAgentLabel = agentruntime.DisplayName(configuredHarness)
 	}
+	s.preloadGitHubRepos()
 	repos, reposReady := s.cachedGitHubRepos()
 	cfg, err := json.Marshal(indexConfig{
 		AutomaticMode:        s.AutomaticMode,
@@ -1138,6 +1141,19 @@ func (s Server) cachedGitHubRepos() ([]GitHubRepo, bool) {
 	return s.gitHubRepos.snapshot()
 }
 
+func (s Server) preloadGitHubRepos() {
+	if s.gitHubRepos == nil || s.gitHubRepos.active() {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if _, err := s.resolveGitHubRepos(ctx); err != nil {
+			s.logf("hub.ui status=warn event=preload_github_repos err=%q", err)
+		}
+	}()
+}
+
 func (c *gitHubRepoCache) snapshot() ([]GitHubRepo, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -1147,13 +1163,38 @@ func (c *gitHubRepoCache) snapshot() ([]GitHubRepo, bool) {
 	return append([]GitHubRepo(nil), c.repos...), true
 }
 
-func (c *gitHubRepoCache) resolve(ctx context.Context, load func(context.Context) ([]GitHubRepo, error)) ([]GitHubRepo, error) {
+func (c *gitHubRepoCache) active() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.loaded || c.loading
+}
+
+func (c *gitHubRepoCache) resolve(ctx context.Context, load func(context.Context) ([]GitHubRepo, error)) ([]GitHubRepo, error) {
+	c.mu.Lock()
 	if c.loaded {
+		defer c.mu.Unlock()
 		return append([]GitHubRepo(nil), c.repos...), nil
 	}
+	if c.loading {
+		wait := c.wait
+		c.mu.Unlock()
+		select {
+		case <-wait:
+			return c.resolve(ctx, load)
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	c.loading = true
+	c.wait = make(chan struct{})
+	wait := c.wait
+	c.mu.Unlock()
+
 	repos, err := load(ctx)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.loading = false
+	close(wait)
 	if err != nil {
 		return nil, err
 	}

@@ -1574,7 +1574,7 @@
       taskOrderLastSyncBucket: Math.floor(Date.now() / TASK_ORDER_SYNC_INTERVAL_MS),
       taskHistoryByID: loadTaskHistory(),
       taskHistoryUnseenIDs: loadTaskHistoryUnseenIDs(),
-      githubReposLoading: !stateUI.githubReposReady,
+      githubReposLoading: false,
       githubReposReady: Boolean(stateUI.githubReposReady),
       githubReposLoadError: "",
       githubRepos: stateUI.githubRepos,
@@ -7083,9 +7083,6 @@
 
     function currentTasks(snapshot) {
       const taskItems = [];
-      if (state.githubReposLoading) {
-        taskItems.push(githubReposLoadingTask());
-      }
       for (const task of snapshot?.tasks || []) {
         const requestID = String(task?.request_id || "").trim();
         if (!requestID) {

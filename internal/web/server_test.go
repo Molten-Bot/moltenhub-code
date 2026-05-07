@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
 	"github.com/Molten-Bot/moltenhub-code/internal/library"
@@ -1492,9 +1494,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `const response = await fetch("/api/github/repos", { cache: "no-store" });`) ||
 		!strings.Contains(markup, `state.githubRepos = Array.isArray(body.repos) ? body.repos : [];`) ||
 		!strings.Contains(markup, `const repos = Array.isArray(state.githubRepos) ? state.githubRepos : [];`) ||
-		!strings.Contains(markup, `repoRead.textContent = "repos: reading GitHub projects";`) ||
 		!strings.Contains(markup, `if (!state.githubReposReady) {`) {
-		t.Fatalf("expected index html to gate chat availability on GitHub repository loading and show that read as current work")
+		t.Fatalf("expected index html to gate chat availability on GitHub repository loading")
+	}
+	if strings.Contains(markup, `taskItems.push(githubReposLoadingTask())`) {
+		t.Fatalf("expected GitHub repository loading to stay out of Current Work task rendering")
 	}
 	if !strings.Contains(markup, `class="prompt-mode-link prompt-mode-link-logo"`) ||
 		!strings.Contains(markup, `src="/static/logos/github.svg"`) {
@@ -2318,6 +2322,64 @@ func TestHandlerIndexHydratesCachedGitHubRepos(t *testing.T) {
 	if !strings.Contains(markup, `"githubReposReady":true`) ||
 		!strings.Contains(markup, `"githubRepos":[{"name":"repo","full_name":"acme/repo"`) {
 		t.Fatalf("expected index html to hydrate cached github repositories, got %q", markup)
+	}
+}
+
+func TestHandlerIndexPreloadsGitHubReposOnce(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var calls atomic.Int32
+	srv.ResolveGitHubRepos = func(context.Context) ([]GitHubRepo, error) {
+		if calls.Add(1) == 1 {
+			close(started)
+		}
+		<-release
+		return []GitHubRepo{{
+			Name:     "repo",
+			FullName: "acme/repo",
+			HTMLURL:  "https://github.com/acme/repo",
+		}}, nil
+	}
+	handler := srv.Handler()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	resp := httptest.NewRecorder()
+	handler.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for github repo preload")
+	}
+	close(release)
+	deadline := time.After(2 * time.Second)
+	for {
+		if _, ready := srv.cachedGitHubRepos(); ready {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatal("timed out waiting for preloaded github repos to cache")
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+
+	resp = httptest.NewRecorder()
+	handler.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/", nil))
+	if resp.Code != http.StatusOK {
+		t.Fatalf("second status = %d", resp.Code)
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("ResolveGitHubRepos calls = %d, want 1", got)
+	}
+	if !strings.Contains(resp.Body.String(), `"githubReposReady":true`) {
+		t.Fatalf("expected second index render to hydrate preloaded github repositories")
 	}
 }
 
