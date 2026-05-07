@@ -979,6 +979,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function animateTaskReflow(listNode, previousRects)") {
 		t.Fatalf("expected index html to animate task reflow transitions")
 	}
+	if !strings.Contains(markup, "function captureTaskScrollAnchor(listNode)") ||
+		!strings.Contains(markup, "restoreTaskScrollAnchor(listNode, scrollAnchor);") ||
+		!strings.Contains(markup, "container.scrollTop += nextRect.top - containerRect.top - topOffset;") {
+		t.Fatalf("expected index html to preserve visible task scroll position while task order redraws")
+	}
 	if strings.Contains(markup, "taskFullscreenBody.classList.toggle(\"task-output-hidden\", !outputVisible);") {
 		t.Fatalf("expected index html to remove full screen output visibility toggling")
 	}
