@@ -2170,7 +2170,8 @@ func TestHandlerServesReleasesAsIndexDisplay(t *testing.T) {
 		strings.Contains(markup, `<!-- hub-bottom-dock -->`) {
 		t.Fatalf("expected index html to render shared dock component")
 	}
-	if !strings.Contains(markup, `id="releases-display" class="releases-display hidden" aria-label="Releases"`) ||
+	if !strings.Contains(markup, `id="releases-display" class="releases-display hidden panel brand-login-card-shell" aria-label="Releases"`) ||
+		!strings.Contains(markup, `<h1 class="panel-section-title releases-title">Releases</h1>`) ||
 		!strings.Contains(markup, `class="release-empty" aria-label="No releases"`) ||
 		!strings.Contains(markup, `No releases yet.`) {
 		t.Fatalf("expected index html to include releases display empty state")
