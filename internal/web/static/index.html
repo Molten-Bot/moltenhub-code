@@ -1606,6 +1606,7 @@
       githubReposLoading: true,
       githubReposReady: false,
       githubReposLoadError: "",
+      githubRepos: [],
       taskSoundMuted: loadTaskSoundMuted(),
       taskSoundInitialized: false,
       taskSoundSeenStatuses: new Map(),
@@ -1699,7 +1700,7 @@
     const chatRepoGrid = document.getElementById("chat-repo-grid");
     const chatStatus = document.getElementById("chat-status");
     const appDisplayLinks = Array.from(document.querySelectorAll("[data-app-display]"));
-    const chatDockLink = document.querySelector('[data-page-nav-link="/chat"]');
+    const chatDockLink = document.querySelector('[data-app-display="chat"]');
     const promptPanelTitle = document.getElementById("prompt-panel-title");
     const promptPanelCopy = document.getElementById("prompt-panel-copy");
     const githubProfileLink = document.getElementById("github-profile-link");
@@ -2068,7 +2069,7 @@
       chatDockLink.classList.toggle("is-disabled", !available);
       chatDockLink.setAttribute("aria-disabled", String(!available));
       chatDockLink.tabIndex = available ? 0 : -1;
-      chatDockLink.title = available ? "Chat" : "Reading GitHub projects";
+      chatDockLink.title = available ? "Chat" : (state.githubReposLoadError || "Loading repositories");
     }
 
     async function loadGitHubReposForChat() {
@@ -2088,10 +2089,12 @@
         if (!response.ok || !body || body.ok === false) {
           throw new Error(body?.error || `github repos http ${response.status}`);
         }
+        state.githubRepos = Array.isArray(body.repos) ? body.repos : [];
         state.githubReposReady = true;
       } catch (err) {
         state.githubReposLoadError = err && err.message ? err.message : "Unable to read GitHub projects.";
-        state.githubReposReady = true;
+        state.githubRepos = [];
+        state.githubReposReady = false;
       } finally {
         state.githubReposLoading = false;
         syncChatDockLinkAvailability();
@@ -5311,29 +5314,23 @@
       return card;
     }
 
-    async function loadChatRepos() {
+    function loadChatRepos() {
       if (!chatRepoGrid || !chatStatus || state.chatReposLoaded) {
         return;
       }
+      if (!state.githubReposReady) {
+        chatStatus.textContent = state.githubReposLoadError || "Loading repositories...";
+        return;
+      }
       state.chatReposLoaded = true;
-      try {
-        const response = await fetch("/api/github/repos", { cache: "no-store" });
-        const body = await response.json();
-        if (!response.ok || !body || body.ok === false) {
-          throw new Error(body && body.error ? body.error : "github repositories request failed");
-        }
-        const repos = Array.isArray(body.repos) ? body.repos : [];
-        chatRepoGrid.replaceChildren(...repos.map(renderChatRepoCard));
-        chatStatus.textContent = repos.length === 1 ? "1 repository" : `${repos.length} repositories`;
-        if (repos.length === 0) {
-          const empty = document.createElement("p");
-          empty.className = "chat-empty";
-          empty.textContent = "No repositories found.";
-          chatRepoGrid.appendChild(empty);
-        }
-      } catch (err) {
-        state.chatReposLoaded = false;
-        chatStatus.textContent = err && err.message ? err.message : "Unable to load repositories.";
+      const repos = Array.isArray(state.githubRepos) ? state.githubRepos : [];
+      chatRepoGrid.replaceChildren(...repos.map(renderChatRepoCard));
+      chatStatus.textContent = repos.length === 1 ? "1 repository" : `${repos.length} repositories`;
+      if (repos.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "chat-empty";
+        empty.textContent = "No repositories found.";
+        chatRepoGrid.appendChild(empty);
       }
     }
 
@@ -5384,7 +5381,10 @@
     }
 
     function setAppDisplay(display, options = {}) {
-      const mode = display === "releases" || display === "dashboard" || display === "chat" ? display : "studio";
+      let mode = display === "releases" || display === "dashboard" || display === "chat" ? display : "studio";
+      if (mode === "chat" && !state.githubReposReady) {
+        mode = "studio";
+      }
       const showReleases = mode === "releases";
       const showChat = mode === "chat";
       const showStudio = mode === "studio";
@@ -8641,6 +8641,9 @@
         const snapshot = await response.json();
         render(snapshot);
         await githubReposPromise;
+        if (appDisplayFromHash() === "chat") {
+          setAppDisplay("chat");
+        }
       } catch (err) {
         setLocalConnection(false, `Unable to load state: ${err.message}`);
       }
@@ -9023,6 +9026,7 @@
       chatDockLink.addEventListener("click", (event) => {
         if (!state.githubReposReady) {
           event.preventDefault();
+          event.stopImmediatePropagation();
           trackAnalyticsEvent("chat_open_blocked", { reason: "github_repos_loading" });
         }
       });

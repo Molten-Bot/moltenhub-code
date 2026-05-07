@@ -1450,7 +1450,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function promptModeTitle(mode)") {
 		t.Fatalf("expected index html to include promptModeTitle helper")
 	}
-	if !strings.Contains(markup, `const mode = display === "releases" || display === "dashboard" || display === "chat" ? display : "studio";`) ||
+	if !strings.Contains(markup, `let mode = display === "releases" || display === "dashboard" || display === "chat" ? display : "studio";`) ||
+		!strings.Contains(markup, `if (mode === "chat" && !state.githubReposReady) {`) ||
 		!strings.Contains(markup, `appLayout.hidden = false;`) ||
 		!strings.Contains(markup, `promptWrap.hidden = !showStudio;`) ||
 		!strings.Contains(markup, `const showTaskPanel = true;`) {
@@ -1482,10 +1483,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `fetch("/api/github/profile", { cache: "no-store" })`) {
 		t.Fatalf("expected index html to resolve the authenticated GitHub public profile through the hub ui api")
 	}
-	if !strings.Contains(markup, `const chatDockLink = document.querySelector('[data-page-nav-link="/chat"]');`) ||
+	if !strings.Contains(markup, `const chatDockLink = document.querySelector('[data-app-display="chat"]');`) ||
 		!strings.Contains(markup, `const GITHUB_REPOS_LOADING_TASK_ID = "github-repos-loading";`) ||
 		!strings.Contains(markup, `chatDockLink.setAttribute("aria-disabled", String(!available));`) ||
 		!strings.Contains(markup, `const response = await fetch("/api/github/repos", { cache: "no-store" });`) ||
+		!strings.Contains(markup, `state.githubRepos = Array.isArray(body.repos) ? body.repos : [];`) ||
+		!strings.Contains(markup, `const repos = Array.isArray(state.githubRepos) ? state.githubRepos : [];`) ||
 		!strings.Contains(markup, `repoRead.textContent = "repos: reading GitHub projects";`) ||
 		!strings.Contains(markup, `if (!state.githubReposReady) {`) {
 		t.Fatalf("expected index html to gate chat availability on GitHub repository loading and show that read as current work")
