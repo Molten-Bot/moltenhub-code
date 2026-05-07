@@ -2954,18 +2954,33 @@ select.prompt-control {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--running) 18%, transparent);
 }
 
+.chat-repo-image-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .chat-repo-image-paste {
+  flex: 0 1 auto;
+  width: max-content;
+  max-width: 100%;
   min-height: 36px;
-  padding-block: 0;
+  padding: 0 12px;
   font-size: 0.86rem;
 }
 
 .chat-repo-submit-status {
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 1.2em;
   color: var(--muted);
   font-size: 0.8rem;
   font-weight: 800;
   line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-repo-submit-status[data-tone="ok"] {

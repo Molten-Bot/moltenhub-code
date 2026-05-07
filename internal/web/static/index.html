@@ -5587,6 +5587,9 @@
       submitStatus.setAttribute("aria-live", "polite");
       submitStatus.textContent = "Press Enter to run.";
 
+      const imageActions = document.createElement("span");
+      imageActions.className = "chat-repo-image-actions";
+
       const handleChatRepoImagePaste = async (event) => {
         const files = clipboardPngFiles(event);
         if (!files.length) return;
@@ -5633,7 +5636,8 @@
       pasteTarget.addEventListener("pointerdown", (event) => {
         event.stopPropagation();
       });
-      panel.append(prompt, pasteTarget, submitStatus);
+      imageActions.append(pasteTarget, submitStatus);
+      panel.append(prompt, imageActions);
       card.appendChild(panel);
 
       card.addEventListener("click", () => {

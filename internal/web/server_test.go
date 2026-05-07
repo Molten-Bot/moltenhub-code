@@ -1946,7 +1946,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "function clipboardPngFiles(event)") ||
 		!strings.Contains(markup, "prompt.addEventListener(\"paste\", handleChatRepoImagePaste);") ||
-		!strings.Contains(markup, "pasteTarget.className = \"prompt-control prompt-action-paste chat-repo-image-paste\"") {
+		!strings.Contains(markup, "pasteTarget.className = \"prompt-control prompt-action-paste chat-repo-image-paste\"") ||
+		!strings.Contains(markup, "imageActions.className = \"chat-repo-image-actions\"") ||
+		!strings.Contains(markup, "imageActions.append(pasteTarget, submitStatus);") {
 		t.Fatalf("expected chat repository prompts to accept pasted screenshots")
 	}
 	if !strings.Contains(markup, "images: promptImages,") ||
