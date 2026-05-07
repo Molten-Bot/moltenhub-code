@@ -5683,7 +5683,7 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
 
   .prompt-titlebar-actions {
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-end;
   }
 
   .prompt-mode-tabs-panel {

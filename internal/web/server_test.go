@@ -1471,6 +1471,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `class="page-bottom-dock"`) || !strings.Contains(markup, `class="prompt-mode-tabs prompt-mode-tabs-dock"`) {
 		t.Fatalf("expected index html to render the mode toggles in the bottom dock")
 	}
+	if strings.Contains(markup, `class="prompt-mode-tabs prompt-mode-tabs-panel"`) {
+		t.Fatalf("expected Studio mode toggles to move out of the panel header")
+	}
 	if !strings.Contains(markup, `aria-label="Main menu"`) {
 		t.Fatalf("expected index html to expose the shared dock as the main menu")
 	}

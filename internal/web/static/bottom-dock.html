@@ -1,14 +1,34 @@
 <div class="page-bottom-dock" aria-hidden="false">
   <div class="prompt-mode-tabs prompt-mode-tabs-dock" aria-label="Main menu">
-    <a class="prompt-mode-link site-dock-link active" href="#studio-builder" data-app-display="studio" aria-current="true" aria-label="Studio" title="Studio">
+    <a id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true" title="Prompt">
       <span class="prompt-mode-link-shell" aria-hidden="true"></span>
       <span class="prompt-mode-link-icon" aria-hidden="true">
-        <i data-lucide="panel-bottom" aria-hidden="true"></i>
+        <i data-lucide="pencil" aria-hidden="true"></i>
       </span>
       <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
       <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
-      <span class="prompt-mode-link-tooltip" aria-hidden="true">Studio</span>
-      <span class="sr-only">Studio</span>
+      <span class="prompt-mode-link-tooltip" aria-hidden="true">Prompt</span>
+      <span class="sr-only">Prompt</span>
+    </a>
+    <a id="prompt-mode-library" class="prompt-mode-link" href="#studio-library" aria-selected="false" title="Library">
+      <span class="prompt-mode-link-shell" aria-hidden="true"></span>
+      <span class="prompt-mode-link-icon" aria-hidden="true">
+        <i data-lucide="book-open" aria-hidden="true"></i>
+      </span>
+      <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
+      <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
+      <span class="prompt-mode-link-tooltip" aria-hidden="true">Library</span>
+      <span class="sr-only">Library</span>
+    </a>
+    <a id="prompt-mode-json" class="prompt-mode-link" href="#studio-json" aria-selected="false" title="JSON">
+      <span class="prompt-mode-link-shell" aria-hidden="true"></span>
+      <span class="prompt-mode-link-icon" aria-hidden="true">
+        <i data-lucide="braces" aria-hidden="true"></i>
+      </span>
+      <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
+      <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
+      <span class="prompt-mode-link-tooltip" aria-hidden="true">JSON</span>
+      <span class="sr-only">JSON</span>
     </a>
     <span class="prompt-mode-divider" aria-hidden="true"></span>
     <a class="prompt-mode-link site-dock-link" href="#dashboard" data-app-display="dashboard" aria-label="Dashboard" title="Dashboard">
