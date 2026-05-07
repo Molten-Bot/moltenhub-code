@@ -1518,6 +1518,13 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="prompt-mode-json"`) {
 		t.Fatalf("expected index html to include json mode toggle")
 	}
+	if !strings.Contains(markup, "function activatePromptMode(mode)") ||
+		!strings.Contains(markup, `setPromptMode(nextMode);`) ||
+		!strings.Contains(markup, `setAppDisplay("studio", { updateHash: promptHashFromMode(nextMode) });`) ||
+		!strings.Contains(markup, `activatePromptMode("library");`) ||
+		!strings.Contains(markup, `activatePromptMode("json");`) {
+		t.Fatalf("expected bottom dock Library and JSON controls to activate their Studio views through the shared mode path")
+	}
 	if !strings.Contains(markup, "function promptModeTitle(mode)") {
 		t.Fatalf("expected index html to include promptModeTitle helper")
 	}

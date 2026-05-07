@@ -5786,6 +5786,26 @@
       }
     }
 
+    function activatePromptMode(mode) {
+      const nextMode = mode === "library" || mode === "json" ? mode : "builder";
+      if (state.appDisplay === "studio" && state.promptMode === nextMode && state.promptVisible) return;
+      if (nextMode === "json") {
+        try {
+          syncRawFromMode(state.promptMode === "library" ? "library" : "builder");
+        } catch (_err) {
+          // Leave raw editor unchanged if prompt fields are incomplete.
+        }
+      } else if (state.promptMode === "json") {
+        try {
+          syncFormsFromPayload(parseLocalPromptPayload(localPromptInput.value));
+        } catch (_err) {
+          // Keep current prompt inputs if raw JSON is empty or invalid.
+        }
+      }
+      setPromptMode(nextMode);
+      setAppDisplay("studio", { updateHash: promptHashFromMode(nextMode) });
+    }
+
     function clearLocalPromptStatusTimer() {
       if (!localPromptStatusTimer) {
         return;
@@ -9560,42 +9580,17 @@
 
     promptModeBuilder.addEventListener("click", (event) => {
       event.preventDefault();
-      if (state.appDisplay === "studio" && state.promptMode === "builder" && state.promptVisible) return;
-      if (state.promptMode === "json") {
-        try {
-          syncFormsFromPayload(parseLocalPromptPayload(localPromptInput.value));
-        } catch (_err) {
-          // Keep current builder inputs if raw JSON is empty or invalid.
-        }
-      }
-      setAppDisplay("studio", { updateHash: "#studio-builder" });
-      setPromptMode("builder");
+      activatePromptMode("builder");
     });
 
     promptModeLibrary.addEventListener("click", (event) => {
       event.preventDefault();
-      if (state.appDisplay === "studio" && state.promptMode === "library" && state.promptVisible) return;
-      if (state.promptMode === "json") {
-        try {
-          syncFormsFromPayload(parseLocalPromptPayload(localPromptInput.value));
-        } catch (_err) {
-          // Keep current library inputs if raw JSON is empty or invalid.
-        }
-      }
-      setAppDisplay("studio", { updateHash: "#studio-library" });
-      setPromptMode("library");
+      activatePromptMode("library");
     });
 
     promptModeJSON.addEventListener("click", (event) => {
       event.preventDefault();
-      if (state.appDisplay === "studio" && state.promptMode === "json" && state.promptVisible) return;
-      try {
-        syncRawFromMode(state.promptMode === "library" ? "library" : "builder");
-      } catch (_err) {
-        // Leave raw editor unchanged if prompt fields are incomplete.
-      }
-      setAppDisplay("studio", { updateHash: "#studio-json" });
-      setPromptMode("json");
+      activatePromptMode("json");
     });
 
     for (const link of appDisplayLinks) {
