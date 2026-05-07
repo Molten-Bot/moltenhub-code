@@ -494,7 +494,7 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
             <p class="eyebrow">GitHub</p>
             <h1 id="chat-title">Chat</h1>
           </div>
-          <p id="chat-status" class="chat-status" aria-live="polite">Loading repositories...</p>
+          <p id="chat-status" class="chat-status" aria-live="polite"></p>
         </div>
         <div id="chat-repo-grid" class="chat-repo-grid" aria-label="GitHub repositories"></div>
         <nav id="chat-repo-pagination" class="chat-repo-pagination hidden" aria-label="GitHub repository pages"></nav>

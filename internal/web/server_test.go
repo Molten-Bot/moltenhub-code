@@ -1571,20 +1571,23 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html startup to load validation and setup data in the background")
 	}
 	if !strings.Contains(markup, `const chatDockLink = document.querySelector('[data-app-display="chat"]');`) ||
-		!strings.Contains(markup, `const GITHUB_REPOS_LOADING_TASK_ID = "github-repos-loading";`) ||
 		!strings.Contains(markup, `chatDockLink.setAttribute("aria-disabled", String(!available));`) ||
+		!strings.Contains(markup, `chatDockLink.removeAttribute("href");`) ||
+		!strings.Contains(markup, `let githubReposLoadPromise = null;`) ||
 		!strings.Contains(markup, `const response = await fetch("/api/github/repos", { cache: "no-store" });`) ||
 		!strings.Contains(markup, `state.githubRepos = Array.isArray(body.repos) ? body.repos : [];`) ||
 		!strings.Contains(markup, `const repos = Array.isArray(state.githubRepos) ? state.githubRepos : [];`) ||
 		!strings.Contains(markup, `const CHAT_REPOS_PER_PAGE = 24;`) ||
 		!strings.Contains(markup, `const pageRepos = repos.slice(start, start + CHAT_REPOS_PER_PAGE);`) ||
 		!strings.Contains(markup, `function renderChatRepoPagination(totalRepos, totalPages)`) ||
-		!strings.Contains(markup, `repoRead.textContent = "repos: reading GitHub projects";`) ||
 		!strings.Contains(markup, `if (!state.githubReposReady) {`) {
 		t.Fatalf("expected index html to gate chat availability on GitHub repository loading")
 	}
-	if strings.Contains(markup, `taskItems.push(githubReposLoadingTask())`) {
-		t.Fatalf("expected GitHub repository loading to stay out of Current Work task rendering")
+	if strings.Contains(markup, `taskItems.push(githubReposLoadingTask())`) ||
+		strings.Contains(markup, `repoRead.textContent = "repos: reading GitHub projects";`) ||
+		strings.Contains(markup, `const GITHUB_REPOS_LOADING_TASK_ID = "github-repos-loading";`) ||
+		strings.Contains(markup, `Loading repositories...`) {
+		t.Fatalf("expected GitHub repository loading to stay out of Current Work and visible chat text")
 	}
 	if !strings.Contains(markup, `function submitChatRepoPrompt(repo, input, statusNode, images = [], setImages = null)`) ||
 		!strings.Contains(markup, `const card = document.createElement("div");`) ||
@@ -2342,6 +2345,9 @@ func TestHandlerServesChatView(t *testing.T) {
 			t.Fatalf("expected chat html to include %q", needle)
 		}
 	}
+	if strings.Contains(markup, `Loading repositories...`) {
+		t.Fatalf("expected chat html to avoid showing repository loading text before repositories are ready")
+	}
 	if strings.Contains(markup, bottomDockPlaceholder) {
 		t.Fatalf("expected chat page bottom dock placeholder to be replaced")
 	}
@@ -2783,8 +2789,8 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 		t.Fatalf("expected stylesheet to render completed-task GitHub pull request links as logo buttons")
 	}
 	if !strings.Contains(css, ".prompt-mode-link.is-disabled,\n.prompt-mode-link[aria-disabled=\"true\"] {") ||
-		!strings.Contains(css, ".task.task-github-repos-loading .task-id {") {
-		t.Fatalf("expected stylesheet to style unavailable chat dock link and repository-loading current work task")
+		strings.Contains(css, ".task.task-github-repos-loading .task-id {") {
+		t.Fatalf("expected stylesheet to style unavailable chat dock link without repository-loading current work task styles")
 	}
 	if !strings.Contains(css, ".chat-repo-pagination {") ||
 		!strings.Contains(css, ".chat-repo-page-button {") ||

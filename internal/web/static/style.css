@@ -2301,11 +2301,6 @@ select.prompt-control {
   transform: none;
 }
 
-.task.task-github-repos-loading .task-id {
-  font-family: var(--font-family);
-  font-weight: 800;
-}
-
 .task.task-collapsed {
   padding-top: 8px;
   padding-bottom: 8px;
