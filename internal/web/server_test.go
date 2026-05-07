@@ -836,6 +836,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `<html lang="en" class="light">`) {
 		t.Fatalf("expected index html to default to light theme class")
 	}
+	if strings.Contains(markup, `max-w-[1500px]`) {
+		t.Fatalf("expected index page width to be owned by the global app stylesheet")
+	}
 	if !strings.Contains(markup, "function isMinimizedTask(") {
 		t.Fatalf("expected index html to include completed-task minimization handler")
 	}
@@ -2238,6 +2241,11 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 		!strings.Contains(css, ".site-page-footer {") ||
 		!strings.Contains(css, ".dashboard-blank {") {
 		t.Fatalf("expected stylesheet to include shared site page shell and dashboard styles")
+	}
+	if !strings.Contains(css, "--hub-page-width: 1500px;") ||
+		!strings.Contains(css, "width: min(var(--hub-page-width), 100%);") ||
+		!strings.Contains(css, "width: min(var(--hub-page-width), calc(100vw - 32px));") {
+		t.Fatalf("expected stylesheet to define shared app and dashboard page widths")
 	}
 	if !strings.Contains(css, ".prompt-select-action-wrap") || !strings.Contains(css, ".prompt-history-delete") {
 		t.Fatalf("expected stylesheet to include inline delete controls for repository and reviewer history selects")

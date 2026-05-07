@@ -1047,7 +1047,7 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, "--hub-content-bottom-padding: calc(var(--hub-floating-bottom) + var(--hub-floating-stack-height) + var(--hub-studio-dock-gap) + 28px);") {
 		t.Fatalf("expected Studio shell to compute bottom content clearance from floating dock stack tokens")
 	}
-	if !strings.Contains(css, ".app {\n  width: min(1500px, 100%);\n  margin: 0 auto;\n  padding: 28px 20px var(--hub-content-bottom-padding);\n  display: grid;\n  gap: 24px;\n}") {
+	if !strings.Contains(css, ".app {\n  width: min(var(--hub-page-width), 100%);\n  margin: 0 auto;\n  padding: 28px 20px var(--hub-content-bottom-padding);\n  display: grid;\n  gap: 24px;\n}") {
 		t.Fatalf("expected app shell to reserve dynamic bottom space for the floating dock")
 	}
 	if !strings.Contains(css, ".prompt-mode-tabs-dock {\n  width: max-content;\n  max-width: calc(100vw - 28px);\n  overflow: visible;\n}") {

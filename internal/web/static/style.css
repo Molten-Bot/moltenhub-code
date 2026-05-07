@@ -7,6 +7,7 @@
   --hub-studio-dock-bottom: calc(var(--hub-floating-bottom) + var(--hub-floating-stack-height) + var(--hub-studio-dock-gap));
   --hub-studio-dock-height: clamp(280px, 34vh, 388px);
   --hub-studio-collapsed-height: 84px;
+  --hub-page-width: 1500px;
   --hub-bg-rgb: 244 248 255;
   --hub-panel-rgb: 255 255 255;
   --hub-panel-soft-rgb: 232 239 255;
@@ -334,7 +335,7 @@ button {
 }
 
 .app {
-  width: min(1500px, 100%);
+  width: min(var(--hub-page-width), 100%);
   margin: 0 auto;
   padding: 28px 20px var(--hub-content-bottom-padding);
   display: grid;
@@ -2586,7 +2587,7 @@ select.prompt-control {
 }
 
 .site-page {
-  width: min(1120px, calc(100vw - 32px));
+  width: min(var(--hub-page-width), calc(100vw - 32px));
   min-height: 100vh;
   margin: 0 auto;
   padding: 28px 0;
@@ -2662,7 +2663,7 @@ select.prompt-control {
 
 @media (max-width: 640px) {
   .site-page {
-    width: min(100% - 24px, 1120px);
+    width: min(100% - 24px, var(--hub-page-width));
     padding: 20px 0;
     gap: 18px;
   }
