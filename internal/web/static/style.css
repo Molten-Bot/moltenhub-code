@@ -1102,6 +1102,19 @@ body .right-col.prompt-collapsed.task-list-hidden {
   transform: translateY(-2px) scale(1.12);
 }
 
+.prompt-mode-link.is-disabled,
+.prompt-mode-link[aria-disabled="true"] {
+  opacity: 0.44;
+  pointer-events: auto;
+}
+
+.prompt-mode-link.is-disabled:hover,
+.prompt-mode-link.is-disabled:focus-visible,
+.prompt-mode-link[aria-disabled="true"]:hover,
+.prompt-mode-link[aria-disabled="true"]:focus-visible {
+  transform: none;
+}
+
 .prompt-mode-link:active {
   transform: scale(0.95);
 }
@@ -2204,6 +2217,19 @@ select.prompt-control {
 .task.active {
   border-color: rgba(10, 132, 255, 0.2);
   box-shadow: var(--shadow-sm);
+}
+
+.task.task-ui-only {
+  opacity: 0.86;
+}
+
+.task.task-ui-only:hover {
+  transform: none;
+}
+
+.task.task-github-repos-loading .task-id {
+  font-family: var(--font-family);
+  font-weight: 800;
 }
 
 .task.task-collapsed {

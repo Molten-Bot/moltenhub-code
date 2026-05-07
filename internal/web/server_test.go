@@ -1480,6 +1480,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `fetch("/api/github/profile", { cache: "no-store" })`) {
 		t.Fatalf("expected index html to resolve the authenticated GitHub public profile through the hub ui api")
 	}
+	if !strings.Contains(markup, `const chatDockLink = document.querySelector('[data-page-nav-link="/chat"]');`) ||
+		!strings.Contains(markup, `const GITHUB_REPOS_LOADING_TASK_ID = "github-repos-loading";`) ||
+		!strings.Contains(markup, `chatDockLink.setAttribute("aria-disabled", String(!available));`) ||
+		!strings.Contains(markup, `const response = await fetch("/api/github/repos", { cache: "no-store" });`) ||
+		!strings.Contains(markup, `repoRead.textContent = "repos: reading GitHub projects";`) ||
+		!strings.Contains(markup, `if (!state.githubReposReady) {`) {
+		t.Fatalf("expected index html to gate chat availability on GitHub repository loading and show that read as current work")
+	}
 	if !strings.Contains(markup, `class="prompt-mode-link prompt-mode-link-logo"`) ||
 		!strings.Contains(markup, `src="/static/logos/github.svg"`) {
 		t.Fatalf("expected index html to render GitHub as an icon-only item inside the shared segmented dock using the shared logo-link class")
@@ -2525,6 +2533,10 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".task-github-link {") ||
 		!strings.Contains(css, ".task-github-link img {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: contain;\n  filter: var(--agent-logo-filter);") {
 		t.Fatalf("expected stylesheet to render completed-task GitHub pull request links as logo buttons")
+	}
+	if !strings.Contains(css, ".prompt-mode-link.is-disabled,\n.prompt-mode-link[aria-disabled=\"true\"] {") ||
+		!strings.Contains(css, ".task.task-github-repos-loading .task-id {") {
+		t.Fatalf("expected stylesheet to style unavailable chat dock link and repository-loading current work task")
 	}
 	if !strings.Contains(css, ".task-result-github-link {") ||
 		!strings.Contains(css, ".task-result-link-logo {") {

@@ -568,6 +568,7 @@
     const TASK_ICON_IDLE_SPIN_MS = 16_000;
     const TASK_ICON_IDLE_REFRESH_MS = 1_000;
     const DEFERRED_SELECTION_RENDER_FLUSH_DELAY_MS = 32;
+    const GITHUB_REPOS_LOADING_TASK_ID = "github-repos-loading";
     const BACKGROUND_PARTICLE_ANIMATION_ENABLED = false;
     const TASK_HISTORY_LIMIT = 25;
     const TASK_HISTORY_MAX_AGE_MS = 20 * 60 * 60 * 1000;
@@ -1554,6 +1555,9 @@
       taskOrderLastSyncBucket: Math.floor(Date.now() / TASK_ORDER_SYNC_INTERVAL_MS),
       taskHistoryByID: loadTaskHistory(),
       taskHistoryUnseenIDs: loadTaskHistoryUnseenIDs(),
+      githubReposLoading: true,
+      githubReposReady: false,
+      githubReposLoadError: "",
       taskSoundMuted: loadTaskSoundMuted(),
       taskSoundInitialized: false,
       taskSoundSeenStatuses: new Map(),
@@ -1643,6 +1647,7 @@
     const appLayout = document.querySelector(".layout");
     const releasesDisplay = document.getElementById("releases-display");
     const appDisplayLinks = Array.from(document.querySelectorAll("[data-app-display]"));
+    const chatDockLink = document.querySelector('[data-page-nav-link="/chat"]');
     const promptPanelTitle = document.getElementById("prompt-panel-title");
     const promptPanelCopy = document.getElementById("prompt-panel-copy");
     const githubProfileLink = document.getElementById("github-profile-link");
@@ -2001,6 +2006,45 @@
         return;
       }
       githubProfileLink.href = normalized;
+    }
+
+    function syncChatDockLinkAvailability() {
+      if (!chatDockLink) {
+        return;
+      }
+      const available = Boolean(state.githubReposReady);
+      chatDockLink.classList.toggle("is-disabled", !available);
+      chatDockLink.setAttribute("aria-disabled", String(!available));
+      chatDockLink.tabIndex = available ? 0 : -1;
+      chatDockLink.title = available ? "Chat" : "Reading GitHub projects";
+    }
+
+    async function loadGitHubReposForChat() {
+      state.githubReposLoading = true;
+      state.githubReposReady = false;
+      state.githubReposLoadError = "";
+      syncChatDockLinkAvailability();
+      renderTasks(state.snapshot);
+      try {
+        const response = await fetch("/api/github/repos", { cache: "no-store" });
+        let body = null;
+        try {
+          body = await response.json();
+        } catch (_err) {
+          body = null;
+        }
+        if (!response.ok || !body || body.ok === false) {
+          throw new Error(body?.error || `github repos http ${response.status}`);
+        }
+        state.githubReposReady = true;
+      } catch (err) {
+        state.githubReposLoadError = err && err.message ? err.message : "Unable to read GitHub projects.";
+        state.githubReposReady = true;
+      } finally {
+        state.githubReposLoading = false;
+        syncChatDockLinkAvailability();
+        renderTasks(state.snapshot);
+      }
     }
 
     async function loadGitHubProfileLink() {
@@ -6548,6 +6592,20 @@
       return String(task?.request_id || "").trim();
     }
 
+    function isGitHubReposLoadingTask(task) {
+      return Boolean(task?.ui_only) && taskRequestID(task) === GITHUB_REPOS_LOADING_TASK_ID;
+    }
+
+    function githubReposLoadingTask() {
+      return {
+        request_id: GITHUB_REPOS_LOADING_TASK_ID,
+        prompt: "Reading GitHub projects",
+        status: "running",
+        ui_only: true,
+        github_repos_loading: true,
+      };
+    }
+
     function taskIconStateSignature(task) {
       const status = normalizedTaskStatus(task?.status) || "pending";
       const stage = String(task?.stage || "").trim().toLowerCase();
@@ -6930,6 +6988,9 @@
 
     function currentTasks(snapshot) {
       const taskItems = [];
+      if (state.githubReposLoading) {
+        taskItems.push(githubReposLoadingTask());
+      }
       for (const task of snapshot?.tasks || []) {
         const requestID = String(task?.request_id || "").trim();
         if (!requestID) {
@@ -7713,6 +7774,8 @@
             },
             taskControlBusy: isTaskControlInFlight(requestID),
             closePending: isTaskClosePending(requestID),
+            uiOnly: Boolean(task?.ui_only),
+            githubReposLoading: Boolean(task?.github_repos_loading),
           };
         }),
       });
@@ -7834,15 +7897,18 @@
 
       for (const task of tasks) {
         const requestID = taskRequestID(task);
+        const githubReposLoading = isGitHubReposLoadingTask(task);
         const collapsed = !promptOnly && allowCollapse && isMinimizedTask(task);
         const taskHistoryView = historyView && isCompletedTask(task);
         const closing = isTaskClosing(requestID);
         const node = document.createElement("article");
         node.className = "task";
+        node.classList.toggle("task-ui-only", Boolean(task?.ui_only));
+        node.classList.toggle("task-github-repos-loading", githubReposLoading);
         if (requestID) {
           node.dataset.requestId = requestID;
         }
-        if (requestID === state.selectedTaskId) {
+        if (!githubReposLoading && requestID === state.selectedTaskId) {
           node.classList.add("active");
         }
         if (collapsed) {
@@ -7865,6 +7931,26 @@
         const prompt = taskPromptText(task);
         if (prompt) {
           id.title = prompt;
+        }
+
+        if (githubReposLoading) {
+          top.append(id);
+          const body = document.createElement("div");
+          body.className = "task-body";
+          body.appendChild(top);
+
+          const footer = document.createElement("div");
+          footer.className = "task-footer";
+          const meta = document.createElement("div");
+          meta.className = "task-meta";
+          const repoRead = document.createElement("div");
+          repoRead.textContent = "repos: reading GitHub projects";
+          meta.appendChild(repoRead);
+          footer.appendChild(meta);
+          body.appendChild(footer);
+          node.appendChild(body);
+          listNode.appendChild(node);
+          continue;
         }
 
         const badge = renderTaskStatusBadge(task);
@@ -8416,6 +8502,7 @@
 
     async function loadInitial() {
       try {
+        const githubReposPromise = loadGitHubReposForChat();
         await loadHubSetupStatus();
         if (shouldOpenInitialHubProfileDialog()) {
           openHubProfileDialog("deep_link");
@@ -8429,6 +8516,7 @@
         }
         const snapshot = await response.json();
         render(snapshot);
+        await githubReposPromise;
       } catch (err) {
         setLocalConnection(false, `Unable to load state: ${err.message}`);
       }
@@ -8805,6 +8893,14 @@
     if (githubProfileLink) {
       githubProfileLink.addEventListener("click", () => {
         trackAnalyticsEvent("github_profile_opened", { source: "dock" });
+      });
+    }
+    if (chatDockLink) {
+      chatDockLink.addEventListener("click", (event) => {
+        if (!state.githubReposReady) {
+          event.preventDefault();
+          trackAnalyticsEvent("chat_open_blocked", { reason: "github_repos_loading" });
+        }
       });
     }
     if (hubConnItem) {
