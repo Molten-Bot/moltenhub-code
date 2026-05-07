@@ -7384,6 +7384,73 @@
       return rects;
     }
 
+    function taskScrollContainerForList(listNode) {
+      if (!listNode || typeof listNode.closest !== "function") {
+        return null;
+      }
+      return listNode.closest(".scroll");
+    }
+
+    function captureTaskScrollAnchor(listNode) {
+      const container = taskScrollContainerForList(listNode);
+      if (!container) {
+        return null;
+      }
+
+      const containerRect = container.getBoundingClientRect();
+      for (const node of listNode.querySelectorAll(".task[data-request-id]")) {
+        const requestID = String(node.dataset.requestId || "").trim();
+        if (!requestID) {
+          continue;
+        }
+        const rect = node.getBoundingClientRect();
+        if (rect.bottom <= containerRect.top + 1) {
+          continue;
+        }
+        return {
+          requestID,
+          scrollTop: container.scrollTop,
+          topOffset: rect.top - containerRect.top,
+        };
+      }
+
+      return {
+        requestID: "",
+        scrollTop: container.scrollTop,
+        topOffset: 0,
+      };
+    }
+
+    function restoreTaskScrollAnchor(listNode, anchor) {
+      if (!anchor) {
+        return;
+      }
+      const container = taskScrollContainerForList(listNode);
+      if (!container) {
+        return;
+      }
+
+      const requestID = String(anchor.requestID || "").trim();
+      let node = null;
+      if (requestID) {
+        for (const candidate of listNode.querySelectorAll(".task[data-request-id]")) {
+          if (String(candidate.dataset.requestId || "").trim() === requestID) {
+            node = candidate;
+            break;
+          }
+        }
+      }
+      if (!node) {
+        container.scrollTop = Number(anchor.scrollTop || 0);
+        return;
+      }
+
+      const containerRect = container.getBoundingClientRect();
+      const nextRect = node.getBoundingClientRect();
+      const topOffset = Number(anchor.topOffset || 0);
+      container.scrollTop += nextRect.top - containerRect.top - topOffset;
+    }
+
     function animateTaskReflow(listNode, previousRects) {
       if (!listNode || !(previousRects instanceof Map) || previousRects.size === 0) {
         return;
@@ -7513,6 +7580,7 @@
         return;
       }
       const previousTaskRects = captureTaskRects(listNode);
+      const scrollAnchor = captureTaskScrollAnchor(listNode);
       listNode.dataset.renderSig = renderSig;
       listNode.dataset.pendingRenderSig = "";
       listNode.replaceChildren();
@@ -7588,6 +7656,7 @@
 
       if (!tasks.length) {
         renderEmptyState();
+        restoreTaskScrollAnchor(listNode, scrollAnchor);
         replaceLucideIcons(listNode);
         return;
       }
@@ -7903,6 +7972,7 @@
         }
         listNode.appendChild(node);
       }
+      restoreTaskScrollAnchor(listNode, scrollAnchor);
       animateTaskReflow(listNode, previousTaskRects);
       applyTaskIdleSpinClasses(listNode, tasks);
       replaceLucideIcons(listNode);
