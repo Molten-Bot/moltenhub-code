@@ -177,7 +177,7 @@
 
   function syncPageNavLinks(root) {
     const hashDisplay = String(window.location.hash || "").replace(/^#/, "").trim();
-    const currentDisplay = hashDisplay === "releases" ? "releases" : "dashboard";
+    const currentDisplay = hashDisplay === "releases" || hashDisplay === "dashboard" ? hashDisplay : "studio";
     const links = root.querySelectorAll("[data-app-display]");
     links.forEach((link) => {
       const linkDisplay = String(link.getAttribute("data-app-display") || "").trim() || "dashboard";

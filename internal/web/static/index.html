@@ -1558,6 +1558,7 @@
       taskSoundInitialized: false,
       taskSoundSeenStatuses: new Map(),
       taskFullscreenOpen: false,
+      appDisplay: "studio",
       agentAuthBusy: false,
       agentAuthInteracted: false,
       agentAuthVerifyPending: false,
@@ -5188,18 +5189,66 @@
 
     function appDisplayFromHash() {
       const hash = String(window.location.hash || "").replace(/^#/, "").trim().toLowerCase();
-      return hash === "releases" ? "releases" : "dashboard";
+      if (hash === "releases" || hash === "dashboard") {
+        return hash;
+      }
+      return "studio";
+    }
+
+    function promptModeFromHash() {
+      const hash = String(window.location.hash || "").replace(/^#/, "").trim().toLowerCase();
+      switch (hash) {
+        case "studio-library":
+          return "library";
+        case "studio-json":
+          return "json";
+        case "studio-builder":
+          return "builder";
+        default:
+          return "";
+      }
+    }
+
+    function promptHashFromMode(mode) {
+      switch (mode) {
+        case "library":
+          return "#studio-library";
+        case "json":
+          return "#studio-json";
+        default:
+          return "#studio-builder";
+      }
+    }
+
+    function syncPromptModeLinks() {
+      const studioActive = state.appDisplay === "studio";
+      const isBuilder = state.promptMode === "builder";
+      const isLibrary = state.promptMode === "library";
+      const isJSON = state.promptMode === "json";
+      promptModeBuilder.classList.toggle("active", studioActive && isBuilder);
+      promptModeLibrary.classList.toggle("active", studioActive && isLibrary);
+      promptModeJSON.classList.toggle("active", studioActive && isJSON);
+      promptModeBuilder.setAttribute("aria-selected", String(studioActive && isBuilder));
+      promptModeLibrary.setAttribute("aria-selected", String(studioActive && isLibrary));
+      promptModeJSON.setAttribute("aria-selected", String(studioActive && isJSON));
     }
 
     function setAppDisplay(display, options = {}) {
-      const mode = display === "releases" ? "releases" : "dashboard";
+      const mode = display === "releases" || display === "dashboard" ? display : "studio";
       const showReleases = mode === "releases";
+      const showStudio = mode === "studio";
+      state.appDisplay = mode;
       if (appLayout) {
         appLayout.hidden = showReleases;
+        appLayout.dataset.appDisplay = mode;
       }
       if (releasesDisplay) {
         releasesDisplay.classList.toggle("hidden", !showReleases);
         releasesDisplay.setAttribute("aria-hidden", String(!showReleases));
+      }
+      if (promptWrap) {
+        promptWrap.hidden = !showStudio;
+        promptWrap.setAttribute("aria-hidden", String(!showStudio));
       }
       for (const link of appDisplayLinks) {
         const active = String(link.dataset.appDisplay || "").trim() === mode;
@@ -5210,8 +5259,16 @@
           link.removeAttribute("aria-current");
         }
       }
+      syncPromptModeLinks();
+      renderTasks(state.snapshot);
       if (options.updateHash) {
-        const nextHash = mode === "releases" ? "#releases" : "#dashboard";
+        const nextHash = typeof options.updateHash === "string"
+          ? options.updateHash
+          : mode === "releases"
+            ? "#releases"
+            : mode === "dashboard"
+              ? "#dashboard"
+              : promptHashFromMode(state.promptMode);
         if (window.location.hash !== nextHash) {
           window.history.pushState(null, "", nextHash);
         }
@@ -5229,12 +5286,7 @@
       const isBuilder = state.promptMode === "builder";
       const isLibrary = state.promptMode === "library";
       const isJSON = state.promptMode === "json";
-      promptModeBuilder.classList.toggle("active", isBuilder);
-      promptModeLibrary.classList.toggle("active", isLibrary);
-      promptModeJSON.classList.toggle("active", isJSON);
-      promptModeBuilder.setAttribute("aria-selected", String(isBuilder));
-      promptModeLibrary.setAttribute("aria-selected", String(isLibrary));
-      promptModeJSON.setAttribute("aria-selected", String(isJSON));
+      syncPromptModeLinks();
       if (promptPanelTitle) {
         promptPanelTitle.textContent = promptModeTitle(state.promptMode);
       }
@@ -8097,8 +8149,9 @@
       const tasks = displayTasks(snapshot);
       const hasTasks = tasks.length > 0;
       const hasTaskPanelTasks = hasTaskPanelContent(snapshot);
+      const showTaskPanel = hasTaskPanelTasks && state.appDisplay === "dashboard";
       const promptOnly = normalizeTaskPanelView(state.taskPanelView) === "prompt";
-      if (!hasTaskPanelTasks && state.taskFullscreenOpen) {
+      if (!showTaskPanel && state.taskFullscreenOpen) {
         state.taskFullscreenOpen = false;
         document.body.classList.remove("task-fullscreen-open");
       }
@@ -8107,13 +8160,13 @@
         rightCol.classList.toggle("task-list-hidden", !hasTaskPanelTasks);
       }
       if (taskPanel) {
-        taskPanel.classList.toggle("hidden", !hasTaskPanelTasks);
+        taskPanel.classList.toggle("hidden", !showTaskPanel);
         taskPanel.classList.toggle("is-empty", !hasTasks);
-        taskPanel.setAttribute("aria-hidden", hasTaskPanelTasks ? "false" : "true");
+        taskPanel.setAttribute("aria-hidden", showTaskPanel ? "false" : "true");
       }
       applyTaskVisibility();
       if (taskFullscreenToggle) {
-        taskFullscreenToggle.disabled = !hasTaskPanelTasks;
+        taskFullscreenToggle.disabled = !showTaskPanel;
         taskFullscreenToggle.setAttribute("aria-expanded", state.taskFullscreenOpen ? "true" : "false");
         taskFullscreenToggle.setAttribute("aria-label", state.taskFullscreenOpen && state.taskFullscreenMode === "work" ? "Exit full screen work" : "Open full screen work");
       }
@@ -8962,7 +9015,7 @@
 
     promptModeBuilder.addEventListener("click", (event) => {
       event.preventDefault();
-      if (state.promptMode === "builder" && state.promptVisible) return;
+      if (state.appDisplay === "studio" && state.promptMode === "builder" && state.promptVisible) return;
       if (state.promptMode === "json") {
         try {
           syncFormsFromPayload(parseLocalPromptPayload(localPromptInput.value));
@@ -8970,13 +9023,13 @@
           // Keep current builder inputs if raw JSON is empty or invalid.
         }
       }
-      setAppDisplay("dashboard", { updateHash: true });
+      setAppDisplay("studio", { updateHash: "#studio-builder" });
       setPromptMode("builder");
     });
 
     promptModeLibrary.addEventListener("click", (event) => {
       event.preventDefault();
-      if (state.promptMode === "library" && state.promptVisible) return;
+      if (state.appDisplay === "studio" && state.promptMode === "library" && state.promptVisible) return;
       if (state.promptMode === "json") {
         try {
           syncFormsFromPayload(parseLocalPromptPayload(localPromptInput.value));
@@ -8984,19 +9037,19 @@
           // Keep current library inputs if raw JSON is empty or invalid.
         }
       }
-      setAppDisplay("dashboard", { updateHash: true });
+      setAppDisplay("studio", { updateHash: "#studio-library" });
       setPromptMode("library");
     });
 
     promptModeJSON.addEventListener("click", (event) => {
       event.preventDefault();
-      if (state.promptMode === "json" && state.promptVisible) return;
+      if (state.appDisplay === "studio" && state.promptMode === "json" && state.promptVisible) return;
       try {
         syncRawFromMode(state.promptMode === "library" ? "library" : "builder");
       } catch (_err) {
         // Leave raw editor unchanged if prompt fields are incomplete.
       }
-      setAppDisplay("dashboard", { updateHash: true });
+      setAppDisplay("studio", { updateHash: "#studio-json" });
       setPromptMode("json");
     });
 
@@ -9006,7 +9059,13 @@
         setAppDisplay(link.dataset.appDisplay, { updateHash: true });
       });
     }
-    window.addEventListener("hashchange", () => setAppDisplay(appDisplayFromHash()));
+    window.addEventListener("hashchange", () => {
+      setAppDisplay(appDisplayFromHash());
+      const hashPromptMode = promptModeFromHash();
+      if (hashPromptMode) {
+        setPromptMode(hashPromptMode);
+      }
+    });
 
     localPromptForm.addEventListener("submit", submitLocalPrompt);
     libraryRepoInput.value = builderRepoInput.value;
@@ -9030,7 +9089,7 @@
     initAppearanceControls();
     initSnowfallBackground();
     setAppDisplay(appDisplayFromHash());
-    setPromptMode(state.promptMode);
+    setPromptMode(promptModeFromHash() || state.promptMode);
     applyPromptVisibility();
     if (normalizeTaskStatusFilter(state.taskStatusFilter) === "completed") {
       clearTaskHistoryUnseen();
