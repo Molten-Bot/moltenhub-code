@@ -4725,8 +4725,16 @@
     }
 
     function syncReviewerFieldVisibility() {
-      syncRepositoryVisibility(builderReviewerSelect, builderReviewerField);
-      syncRepositoryVisibility(libraryReviewerSelect, libraryReviewerField);
+      syncReviewerVisibility(builderReviewerSelect, builderReviewerField);
+      syncReviewerVisibility(libraryReviewerSelect, libraryReviewerField);
+    }
+
+    function syncReviewerVisibility(select, reviewerField) {
+      if (!select || !reviewerField) {
+        return;
+      }
+      const manualSelected = String(select.value || "").trim() === "";
+      reviewerField.classList.toggle("hidden", !manualSelected);
     }
 
     function canDeleteRepoSelection(select) {

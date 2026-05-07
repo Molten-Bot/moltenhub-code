@@ -1641,6 +1641,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `historyField.classList.remove("hidden");`) {
 		t.Fatalf("expected index html to keep reviewer selector visible even without saved reviewer history")
 	}
+	if !strings.Contains(markup, "function syncReviewerVisibility(select, reviewerField)") ||
+		!strings.Contains(markup, `const manualSelected = String(select.value || "").trim() === "";`) ||
+		!strings.Contains(markup, `reviewerField.classList.toggle("hidden", !manualSelected);`) {
+		t.Fatalf("expected reviewer manual input to show only when manual reviewer entry is selected")
+	}
 	if !strings.Contains(markup, "function defaultRepoSelection(") {
 		t.Fatalf("expected index html to include repo history default selection helper")
 	}
