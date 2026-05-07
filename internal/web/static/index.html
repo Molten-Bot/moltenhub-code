@@ -58,6 +58,7 @@
   </script>
   <script src="https://cdn.tailwindcss.com" defer></script>
   <script src="/static/lucide.min.js"></script>
+  <script src="/static/site-header.js"></script>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="min-h-screen antialiased">
@@ -70,66 +71,7 @@
   </div>
 
   <div class="app mx-auto grid w-full max-w-[1500px] gap-4 p-5">
-    <div class="header flex flex-wrap items-center justify-between gap-3">
-      <div class="brand-lockup flex items-center gap-3">
-        <div class="brand-logo-group">
-          <img
-            id="moltenhub-logo"
-            class="brand-logo rotating-brand-logo brand-logo-visible"
-            src="/static/logo.svg"
-            alt="MoltenHub logo">
-          <img
-            id="configured-agent-logo"
-            class="configured-agent-logo rotating-brand-logo"
-            src="/static/logos/codex-cli.svg"
-            alt="Codex logo">
-        </div>
-        <div>
-          <div class="title text-[1.4rem] font-bold uppercase tracking-[0.04em]">Molten Hub Code</div>
-          <div id="configured-agent-gorilla-subtitle" class="text-base font-semibold text-hub-meta">Codex is now a 600LB Gorilla!</div>
-        </div>
-      </div>
-      <div class="status-row flex flex-wrap items-center gap-2.5 text-sm text-hub-muted">
-        <div id="local-conn-item" class="status-item status-item-compact status-item-compact-expandable flex h-10 min-h-[40px] items-center rounded-full border border-hub-border bg-hub-panel/75" title="Local: Connecting..." aria-label="Local: Connecting..." tabindex="0">
-          <span id="local-conn-dot" class="dot"></span>
-          <span id="local-conn-text" class="status-tooltip text-xs leading-tight">Local: Connecting...</span>
-        </div>
-        <div id="hub-conn-item" class="status-item status-item-compact status-item-compact-expandable flex h-10 min-h-[40px] items-center rounded-full border border-hub-border bg-hub-panel/75" title="Molten Hub: Waiting for hub status..." aria-label="Molten Hub: Waiting for hub status..." tabindex="0">
-          <span id="hub-conn-dot" class="dot"></span>
-          <span id="hub-conn-text" class="status-tooltip text-xs leading-tight">Molten Hub: Waiting for hub status...</span>
-        </div>
-        <div id="resource-metrics-item" class="status-item status-item-metrics flex h-10 min-h-[40px] items-center rounded-full border border-hub-border bg-hub-panel/75 px-3 py-1" hidden>
-          <span id="resource-cpu-chip" class="metric-chip" hidden>
-            <span id="resource-cpu-icon" class="metric-icon metric-icon-neutral" aria-hidden="true">
-              <i data-lucide="cpu" class="metric-icon-glyph" aria-hidden="true"></i>
-            </span>
-            <span class="metric-copy">
-              <span class="metric-label text-xs leading-tight">CPU</span>
-              <span id="resource-cpu-text" class="status-value metric-value text-sm leading-tight">--</span>
-            </span>
-          </span>
-          <span id="resource-mem-chip" class="metric-chip" hidden>
-            <span id="resource-mem-icon" class="metric-icon metric-icon-neutral" aria-hidden="true">
-              <i data-lucide="memory-stick" class="metric-icon-glyph" aria-hidden="true"></i>
-            </span>
-            <span class="metric-copy">
-              <span class="metric-label text-xs leading-tight">MEM</span>
-              <span id="resource-mem-text" class="status-value metric-value text-sm leading-tight">--</span>
-            </span>
-          </span>
-          <span id="resource-disk-chip" class="metric-chip" hidden>
-            <span id="resource-disk-icon" class="metric-icon metric-icon-neutral" aria-hidden="true">
-              <i data-lucide="hard-drive" class="metric-icon-glyph" aria-hidden="true"></i>
-            </span>
-            <span class="metric-copy">
-              <span class="metric-label text-xs leading-tight">I/O</span>
-              <span id="resource-metrics-text" class="status-value metric-value text-sm leading-tight">--</span>
-              <span id="resource-metrics-unit" class="metric-unit text-xs leading-tight">MB/s</span>
-            </span>
-          </span>
-        </div>
-      </div>
-    </div>
+    <moltenhub-code-header agent-harness="codex" agent-label="Codex"></moltenhub-code-header>
 
     <div class="layout min-h-[calc(100vh-130px)] max-[980px]:min-h-0">
       <div class="right-col grid gap-4">
@@ -740,7 +682,6 @@
     const CLOSE_TASK_FADE_MS = 2000;
     const QUEUED_STATUS_TIMEOUT_MS = 12_000;
     const LOCAL_PROMPT_STATUS_FADE_MS = 240;
-    const LOGO_ROTATION_INTERVAL_MS = 8_000;
     const STREAM_RENDER_INTERVAL_MS = 120;
     const TASK_ORDER_TRANSITION_DELAY_MS = 2_000;
     const TASK_ORDER_SYNC_INTERVAL_MS = 4_000;
@@ -1860,9 +1801,6 @@
     const hubSetupStatus = document.getElementById("hub-setup-status");
     const hubSetupConnectionToggle = document.getElementById("hub-setup-connection-toggle");
     const hubSetupSubmit = document.getElementById("hub-setup-submit");
-    const moltenHubLogo = document.getElementById("moltenhub-logo");
-    const configuredAgentLogo = document.getElementById("configured-agent-logo");
-    const configuredAgentGorillaSubtitle = document.getElementById("configured-agent-gorilla-subtitle");
     const agentAuthTitle = document.getElementById("agent-auth-title");
     const agentAuthMessage = document.getElementById("agent-auth-message");
     const agentAuthHarnessPicker = document.getElementById("agent-auth-harness-picker");
@@ -1899,8 +1837,6 @@
     const themeToggleIcon = document.getElementById("theme-toggle-icon");
     const themeToggleTooltip = document.getElementById("theme-toggle-tooltip");
     const hoverSelect = document.getElementById("hover-select");
-    let brandLogoRotationTimer = null;
-    let brandLogoRotationPhase = 0;
     let closeActiveEmojiPicker = null;
 
     function eventIncludesNode(event, node) {
@@ -3321,63 +3257,12 @@
       updateAgentAuthDoneVisibility();
     }
 
-    function setBrandLogoVisibility(showConfiguredLogo) {
-      if (moltenHubLogo) {
-        moltenHubLogo.classList.toggle("brand-logo-visible", !showConfiguredLogo);
-      }
-      if (configuredAgentLogo) {
-        configuredAgentLogo.classList.toggle("brand-logo-visible", showConfiguredLogo);
-      }
-    }
-
-    function stopBrandLogoRotation() {
-      if (brandLogoRotationTimer !== null) {
-        clearInterval(brandLogoRotationTimer);
-        brandLogoRotationTimer = null;
-      }
-    }
-
-    function shouldRotateBrandLogos() {
-      if (!configuredAgentLogo || configuredAgentLogo.classList.contains("hidden")) {
-        return false;
-      }
-      if (typeof window.matchMedia === "function" &&
-          window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        return false;
-      }
-      return true;
-    }
-
-    function syncBrandLogoRotation() {
-      stopBrandLogoRotation();
-      if (!shouldRotateBrandLogos()) {
-        brandLogoRotationPhase = 0;
-        setBrandLogoVisibility(false);
-        return;
-      }
-      brandLogoRotationPhase = 0;
-      setBrandLogoVisibility(false);
-      brandLogoRotationTimer = window.setInterval(() => {
-        brandLogoRotationPhase = brandLogoRotationPhase === 0 ? 1 : 0;
-        setBrandLogoVisibility(brandLogoRotationPhase === 1);
-      }, LOGO_ROTATION_INTERVAL_MS);
-    }
-
     function renderConfiguredAgent() {
-      const label = configuredAgentLabel();
-      if (configuredAgentLogo) {
-        const logoURL = configuredAgentLogoURL();
-        configuredAgentLogo.classList.toggle("hidden", !logoURL);
-        if (logoURL) {
-          configuredAgentLogo.src = logoURL;
-          configuredAgentLogo.alt = `${label} logo`;
-        }
-      }
-      syncBrandLogoRotation();
-      if (configuredAgentGorillaSubtitle) {
-        configuredAgentGorillaSubtitle.textContent = label === "Agent"
-          ? "Select your agent to get started."
-          : `${label} is now a 600LB Gorilla!`;
+      if (window.MoltenHubHeader && typeof window.MoltenHubHeader.update === "function") {
+        window.MoltenHubHeader.update({
+          configuredHarness: state.ui.configuredHarness,
+          configuredAgentLabel: state.ui.configuredAgentLabel,
+        }, state.agentAuth);
       }
     }
 

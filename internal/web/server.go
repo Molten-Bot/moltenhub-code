@@ -39,21 +39,17 @@ var sitePageTemplate = template.Must(template.New("site-page").Parse(`<!doctype 
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{.Title}}</title>
   <script src="/static/lucide.min.js"></script>
+  <script src="/static/site-header.js"></script>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="min-h-screen antialiased site-page-body {{.BodyClass}}">
   <div class="site-page {{.PageClass}}">
-    <header class="site-page-header">
-      <a class="site-page-brand" href="/" aria-label="Molten Hub Code home">
-        <img class="site-page-brand-logo" src="/static/logo.svg" alt="" aria-hidden="true">
-        <span>Molten Hub Code</span>
-      </a>
-      <nav class="site-page-nav" aria-label="Primary">
-        <a href="/"{{if eq .ActivePath "/"}} aria-current="page"{{end}}>Home</a>
-        <a href="/releases"{{if eq .ActivePath "/releases"}} aria-current="page"{{end}}>Releases</a>
-        {{if .ShowDashboardNav}}<a href="/dashboard"{{if eq .ActivePath "/dashboard"}} aria-current="page"{{end}}>Dashboard</a>{{end}}
-      </nav>
-    </header>
+    <moltenhub-code-header agent-harness="codex" agent-label="Codex"></moltenhub-code-header>
+    <nav class="site-page-nav" aria-label="Primary">
+      <a href="/"{{if eq .ActivePath "/"}} aria-current="page"{{end}}>Home</a>
+      <a href="/releases"{{if eq .ActivePath "/releases"}} aria-current="page"{{end}}>Releases</a>
+      {{if .ShowDashboardNav}}<a href="/dashboard"{{if eq .ActivePath "/dashboard"}} aria-current="page"{{end}}>Dashboard</a>{{end}}
+    </nav>
     <main class="site-page-main {{.MainClass}}" aria-label="{{.Heading}}">
       {{.Content}}
     </main>

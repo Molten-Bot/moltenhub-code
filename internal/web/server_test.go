@@ -186,8 +186,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `<title>Molten Hub Code</title>`) {
 		t.Fatalf("expected index html to set app title to Molten Hub Code")
 	}
-	if !strings.Contains(markup, `>Molten Hub Code</div>`) {
-		t.Fatalf("expected index html to render app heading as Molten Hub Code")
+	if !strings.Contains(markup, `<moltenhub-code-header agent-harness="codex" agent-label="Codex"></moltenhub-code-header>`) {
+		t.Fatalf("expected index html to render app heading through the shared site header")
 	}
 	if !strings.Contains(markup, `Current Work</span>`) {
 		t.Fatalf("expected index html to render the task panel under a Current Work heading")
@@ -234,29 +234,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if strings.Contains(markup, `id="configured-agent-subtitle"`) || strings.Contains(markup, "Configured agent: Codex") {
 		t.Fatalf("expected index html to remove the configured agent subtitle copy")
 	}
-	if !strings.Contains(markup, `id="configured-agent-gorilla-subtitle"`) || !strings.Contains(markup, "Codex is now a 600LB Gorilla!") {
-		t.Fatalf("expected index html to include gorilla subtitle copy")
+	if !strings.Contains(markup, `src="/static/site-header.js"`) {
+		t.Fatalf("expected index html to load the shared site header component")
 	}
-	if !strings.Contains(markup, `id="configured-agent-gorilla-subtitle" class="text-base font-semibold text-hub-meta"`) {
-		t.Fatalf("expected index html to render a larger gorilla subtitle")
+	if !strings.Contains(markup, `<moltenhub-code-header agent-harness="codex" agent-label="Codex"></moltenhub-code-header>`) {
+		t.Fatalf("expected index html to render the shared site header component")
 	}
-	if !strings.Contains(markup, `src="/static/logo.svg"`) {
-		t.Fatalf("expected index html to include moltenhub logo")
-	}
-	if !strings.Contains(markup, `id="moltenhub-logo"`) {
-		t.Fatalf("expected index html to include moltenhub logo rotation anchor id")
-	}
-	if !strings.Contains(markup, `id="configured-agent-logo"`) {
-		t.Fatalf("expected index html to include configured agent logo element")
-	}
-	if !strings.Contains(markup, `class="configured-agent-logo rotating-brand-logo"`) {
-		t.Fatalf("expected configured agent logo to use transparent-only logo classes")
-	}
-	if strings.Contains(markup, `class="brand-logo configured-agent-logo`) {
-		t.Fatalf("expected configured agent logo to avoid inheriting the frosted brand tile styles")
-	}
-	if !strings.Contains(markup, `const LOGO_ROTATION_INTERVAL_MS = 8_000;`) {
-		t.Fatalf("expected index html to rotate brand logos every 8 seconds")
+	if strings.Contains(markup, `id="moltenhub-logo"`) || strings.Contains(markup, `id="configured-agent-logo"`) {
+		t.Fatalf("expected index html to isolate header logo markup inside the shared component")
 	}
 	if !strings.Contains(markup, `const BACKGROUND_PARTICLE_ANIMATION_ENABLED = false;`) ||
 		!strings.Contains(markup, "if (!BACKGROUND_PARTICLE_ANIMATION_ENABLED) {\n        canvas.hidden = true;\n        return;\n      }") {
@@ -486,11 +471,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if hubSetupStatusIndex == -1 || hubSetupSaveIndex == -1 || hubSetupStatusIndex > hubSetupSaveIndex {
 		t.Fatalf("expected the hub setup status line to render before the action buttons")
 	}
-	if !strings.Contains(markup, "function syncBrandLogoRotation()") {
-		t.Fatalf("expected index html to include brand logo rotation controller")
-	}
-	if !strings.Contains(markup, "window.setInterval(() => {") || !strings.Contains(markup, "LOGO_ROTATION_INTERVAL_MS") {
-		t.Fatalf("expected index html to rotate logos with interval-driven updates")
+	if !strings.Contains(markup, "window.MoltenHubHeader.update({") {
+		t.Fatalf("expected index html to update the shared site header component")
 	}
 	if !strings.Contains(markup, `"task-close"`) {
 		t.Fatalf("expected index html to include task close class usage")
@@ -1220,17 +1202,17 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "buttonNode.classList.add(\"is-copied\");") {
 		t.Fatalf("expected index html to preserve icon-only copy buttons while showing copied feedback")
 	}
-	if !strings.Contains(markup, `id="local-conn-text"`) {
-		t.Fatalf("expected index html to include local connection indicator")
+	if !strings.Contains(markup, `document.getElementById("local-conn-text")`) {
+		t.Fatalf("expected index html to bind the shared local connection indicator")
 	}
-	if !strings.Contains(markup, `title="Local: Connecting..."`) {
-		t.Fatalf("expected index html to initialize local indicator tooltip copy")
+	if !strings.Contains(markup, `setIndicator(localConnItem, localConnDot, localConnText, "Local", online, text);`) {
+		t.Fatalf("expected index html to update local indicator tooltip copy")
 	}
-	if !strings.Contains(markup, `id="hub-conn-text"`) {
-		t.Fatalf("expected index html to include moltenhub connection indicator")
+	if !strings.Contains(markup, `document.getElementById("hub-conn-text")`) {
+		t.Fatalf("expected index html to bind the shared moltenhub connection indicator")
 	}
-	if !strings.Contains(markup, `title="Molten Hub: Waiting for hub status..."`) {
-		t.Fatalf("expected index html to initialize hub indicator tooltip copy")
+	if !strings.Contains(markup, `setIndicator(hubConnItem, hubConnDot, hubConnText, "Molten Hub", online, text);`) {
+		t.Fatalf("expected index html to update hub indicator tooltip copy")
 	}
 	if !strings.Contains(markup, `setIndicator(localConnItem, localConnDot, localConnText, "Local", online, text);`) {
 		t.Fatalf("expected index html to render local indicator label as Local")
@@ -1324,21 +1306,21 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if strings.Contains(markup, "library-task-option-name") {
 		t.Fatalf("expected index html to stop rendering library task internal names")
 	}
-	if !strings.Contains(markup, `id="resource-metrics-text"`) {
-		t.Fatalf("expected index html to include resource metrics indicator")
+	if !strings.Contains(markup, `document.getElementById("resource-metrics-text")`) {
+		t.Fatalf("expected index html to bind the shared resource metrics indicator")
 	}
-	if !strings.Contains(markup, `id="resource-metrics-item"`) {
-		t.Fatalf("expected index html to include a dedicated metrics pill wrapper")
+	if !strings.Contains(markup, `document.getElementById("resource-metrics-item")`) {
+		t.Fatalf("expected index html to bind the shared metrics pill wrapper")
 	}
-	if !strings.Contains(markup, `id="resource-cpu-chip"`) ||
-		!strings.Contains(markup, `id="resource-mem-chip"`) ||
-		!strings.Contains(markup, `id="resource-disk-chip"`) {
-		t.Fatalf("expected index html to include dedicated cpu/mem/io metric chip wrappers")
+	if !strings.Contains(markup, `document.getElementById("resource-cpu-chip")`) ||
+		!strings.Contains(markup, `document.getElementById("resource-mem-chip")`) ||
+		!strings.Contains(markup, `document.getElementById("resource-disk-chip")`) {
+		t.Fatalf("expected index html to bind the shared cpu/mem/io metric chip wrappers")
 	}
-	if !strings.Contains(markup, `id="resource-cpu-chip" class="metric-chip" hidden`) ||
-		!strings.Contains(markup, `id="resource-mem-chip" class="metric-chip" hidden`) ||
-		!strings.Contains(markup, `id="resource-disk-chip" class="metric-chip" hidden`) {
-		t.Fatalf("expected index html to initialize metric chips hidden until valid samples are observed")
+	if !strings.Contains(markup, "resourceCPUChip.hidden = !showCPU;") ||
+		!strings.Contains(markup, "resourceMemChip.hidden = !showMem;") ||
+		!strings.Contains(markup, "resourceDiskChip.hidden = !showDisk;") {
+		t.Fatalf("expected index html to hide metric chips until valid samples are observed")
 	}
 	if strings.Contains(markup, `text-slate-200`) {
 		t.Fatalf("expected index html to remove hardcoded dark text utilities from studio and status surfaces")
@@ -1364,26 +1346,26 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function formatCompactMetricNumber(") {
 		t.Fatalf("expected index html to include compact metric formatter")
 	}
-	if !strings.Contains(markup, `class="metric-copy"`) || !strings.Contains(markup, `class="metric-label text-xs leading-tight">CPU</span>`) {
-		t.Fatalf("expected index html to render the CPU metric label inside the metrics copy wrapper")
+	if !strings.Contains(markup, `document.getElementById("resource-cpu-text")`) {
+		t.Fatalf("expected index html to bind the CPU metric value inside the shared metrics wrapper")
 	}
-	if !strings.Contains(markup, `id="local-conn-item" class="status-item status-item-compact status-item-compact-expandable`) {
-		t.Fatalf("expected local connection pill to remain the only expandable compact pill")
+	if !strings.Contains(markup, `document.getElementById("local-conn-item")`) {
+		t.Fatalf("expected index html to bind the shared local connection pill")
 	}
-	if !strings.Contains(markup, `id="hub-conn-item" class="status-item status-item-compact status-item-compact-expandable`) {
-		t.Fatalf("expected hub connection pill to remain the only expandable compact pill")
+	if !strings.Contains(markup, `document.getElementById("hub-conn-item")`) {
+		t.Fatalf("expected index html to bind the shared hub connection pill")
 	}
-	if !strings.Contains(markup, `class="metric-label text-xs leading-tight">MEM</span>`) {
-		t.Fatalf("expected index html to render the memory metric label inside the metrics copy wrapper")
+	if !strings.Contains(markup, `document.getElementById("resource-mem-text")`) {
+		t.Fatalf("expected index html to bind the memory metric value inside the shared metrics wrapper")
 	}
-	if !strings.Contains(markup, `class="metric-label text-xs leading-tight">I/O</span>`) {
-		t.Fatalf("expected index html to render the I/O metric label inside the metrics copy wrapper")
+	if !strings.Contains(markup, `document.getElementById("resource-metrics-text")`) {
+		t.Fatalf("expected index html to bind the I/O metric value inside the shared metrics wrapper")
 	}
-	if !strings.Contains(markup, `id="resource-metrics-unit"`) {
-		t.Fatalf("expected index html to include a dedicated disk throughput unit element")
+	if !strings.Contains(markup, `document.getElementById("resource-metrics-unit")`) {
+		t.Fatalf("expected index html to bind the shared disk throughput unit element")
 	}
-	if !strings.Contains(markup, `class="metric-unit text-xs leading-tight">MB/s</span>`) {
-		t.Fatalf("expected index html to initialize the disk throughput unit as MB/s")
+	if !strings.Contains(markup, `resourceMetricsUnit.textContent = "MB/s";`) {
+		t.Fatalf("expected index html to reset the disk throughput unit to MB/s when needed")
 	}
 	if strings.Contains(markup, "metric-label-visible") || strings.Contains(markup, "metric-unit-visible") {
 		t.Fatalf("expected index html to keep metric labels and units hidden until the status row is hovered")
@@ -1782,9 +1764,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `const PROMPT_VISIBILITY_KEY = "hubui.localPromptVisible";`) {
 		t.Fatalf("expected index html to persist prompt visibility preference")
 	}
-	if !strings.Contains(markup, "configuredAgentGorillaSubtitle.textContent = label === \"Agent\"") ||
-		!strings.Contains(markup, ": `${label} is now a 600LB Gorilla!`;") {
-		t.Fatalf("expected index html to render dynamic configured agent subtitle copy")
+	if !strings.Contains(markup, "function renderConfiguredAgent()") ||
+		!strings.Contains(markup, "window.MoltenHubHeader.update({") {
+		t.Fatalf("expected index html to delegate dynamic configured agent subtitle copy to the shared header")
 	}
 	if !strings.Contains(markup, "function handlePromptImagePaste(") {
 		t.Fatalf("expected index html to include screenshot paste handler")
@@ -2142,7 +2124,8 @@ func TestHandlerServesDashboardWhenEnabled(t *testing.T) {
 	markup := resp.Body.String()
 	required := []string{
 		`<title>Molten Hub Code Dashboard</title>`,
-		`class="site-page-header"`,
+		`src="/static/site-header.js"`,
+		`<moltenhub-code-header agent-harness="codex" agent-label="Codex"></moltenhub-code-header>`,
 		`class="site-page-footer"`,
 		`href="/static/style.css"`,
 		`href="/dashboard" aria-current="page"`,
@@ -2190,7 +2173,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".hub-emoji-picker-panel") || !strings.Contains(css, ".hub-emoji-picker-mart") {
 		t.Fatalf("expected stylesheet to include emoji picker styles")
 	}
-	if !strings.Contains(css, ".site-page-header,\n.site-page-footer") || !strings.Contains(css, ".dashboard-blank {") {
+	if !strings.Contains(css, "moltenhub-code-header {\n  display: block;") ||
+		!strings.Contains(css, ".site-page-footer {") ||
+		!strings.Contains(css, ".dashboard-blank {") {
 		t.Fatalf("expected stylesheet to include shared site page shell and dashboard styles")
 	}
 	if !strings.Contains(css, ".prompt-select-action-wrap") || !strings.Contains(css, ".prompt-history-delete") {
@@ -2546,6 +2531,45 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if strings.Contains(css, "cursor-not-allowed") {
 		t.Fatalf("expected stylesheet to avoid cursor utility classes")
+	}
+}
+
+func TestHandlerServesStaticSiteHeaderComponent(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodGet, "/static/site-header.js", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.Code)
+	}
+	if ct := resp.Header().Get("Content-Type"); !strings.Contains(ct, "javascript") {
+		t.Fatalf("content-type = %q", ct)
+	}
+
+	script := resp.Body.String()
+	required := []string{
+		`customElements.define("moltenhub-code-header", MoltenHubCodeHeader);`,
+		`const LOGO_ROTATION_INTERVAL_MS = 8_000;`,
+		`localStorage.getItem(THEME_KEY)`,
+		`<header class="header site-header">`,
+		`id="moltenhub-logo"`,
+		`id="configured-agent-logo"`,
+		`id="configured-agent-gorilla-subtitle" class="site-header-subtitle">Codex is now a 600LB Gorilla!</span>`,
+		`id="local-conn-item" class="status-item status-item-compact status-item-compact-expandable"`,
+		`id="hub-conn-item" class="status-item status-item-compact status-item-compact-expandable"`,
+		`id="resource-metrics-item" class="status-item status-item-metrics"`,
+		`data-lucide="cpu"`,
+		`data-lucide="memory-stick"`,
+		`data-lucide="hard-drive"`,
+		`${headerState.label} is now a 600LB Gorilla!`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("expected shared site header component to include %q", needle)
+		}
 	}
 }
 

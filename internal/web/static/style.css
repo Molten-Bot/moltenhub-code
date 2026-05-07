@@ -323,6 +323,12 @@ textarea {
   gap: 24px;
 }
 
+moltenhub-code-header {
+  display: block;
+  position: relative;
+  z-index: 5;
+}
+
 .header {
   position: relative;
   z-index: 5;
@@ -337,6 +343,17 @@ textarea {
   display: flex;
   align-items: center;
   gap: 14px;
+  min-width: 0;
+}
+
+.site-header-home {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.site-header-copy {
+  display: grid;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -398,6 +415,22 @@ textarea {
 .sub {
   color: var(--text-soft);
   font-size: 0.92rem;
+}
+
+.site-header-title {
+  display: block;
+  font-size: clamp(1.35rem, 1.8vw, 1.6rem);
+  line-height: 1.05;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.site-header-subtitle {
+  display: block;
+  color: var(--meta);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.3;
 }
 
 .status-row {
@@ -586,6 +619,12 @@ textarea {
   transition: max-width 180ms ease, opacity 180ms ease, transform 180ms ease;
   white-space: nowrap;
   color: var(--meta);
+}
+
+.metric-label,
+.metric-unit {
+  font-size: 0.72rem;
+  line-height: 1;
 }
 
 .status-row:hover .metric-label,
@@ -2460,33 +2499,11 @@ select.prompt-control {
   gap: 24px;
 }
 
-.site-page-header,
 .site-page-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-}
-
-.site-page-header {
-  min-height: 48px;
-}
-
-.site-page-brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  color: var(--text);
-  font-size: 1rem;
-  font-weight: 800;
-  text-decoration: none;
-}
-
-.site-page-brand-logo {
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
 }
 
 .site-page-nav {
@@ -2554,7 +2571,6 @@ select.prompt-control {
     gap: 18px;
   }
 
-  .site-page-header,
   .site-page-footer {
     align-items: flex-start;
     flex-direction: column;
@@ -2578,35 +2594,19 @@ select.prompt-control {
   color: var(--text);
 }
 
+.releases-app {
+  padding-bottom: 56px;
+}
+
 .releases-page {
-  width: min(920px, calc(100vw - 32px));
+  width: min(920px, 100%);
   margin: 0 auto;
-  padding: 28px 0 56px;
+  padding: 0;
 }
 
-.releases-header {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 18px;
-}
-
-.releases-brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  width: fit-content;
-  color: var(--text);
-  font-weight: 800;
-  text-decoration: none;
-}
-
-.releases-brand-logo {
-  width: 26px;
-  height: 26px;
-}
-
-.releases-header h1 {
+.releases-page h1 {
   margin: 0;
+  margin-bottom: 18px;
   font-size: clamp(1.55rem, 3vw, 2.3rem);
   line-height: 1.05;
   letter-spacing: 0;
