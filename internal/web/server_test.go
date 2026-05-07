@@ -2568,7 +2568,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 		t.Fatalf("expected expanded chat repository cards to span the full repository grid width")
 	}
 	if !strings.Contains(css, ".chat-repo-card-head {") ||
+		!strings.Contains(css, ".chat-repo-card {\n  position: relative;") ||
 		!strings.Contains(css, ".chat-repo-card-chat-icon {") ||
+		!strings.Contains(css, "  position: absolute;\n  top: 16px;\n  right: 16px;") ||
 		!strings.Contains(css, ".chat-repo-card:hover .chat-repo-card-chat-icon,") {
 		t.Fatalf("expected stylesheet to render chat icons inside repository cards")
 	}

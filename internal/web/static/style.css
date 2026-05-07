@@ -2904,6 +2904,7 @@ select.prompt-control {
 }
 
 .chat-repo-card {
+  position: relative;
   display: grid;
   grid-template-rows: auto minmax(42px, 1fr) auto;
   gap: 10px;
@@ -2927,10 +2928,8 @@ select.prompt-control {
 }
 
 .chat-repo-card-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 10px;
+  display: block;
+  padding-right: 42px;
   min-width: 0;
 }
 
@@ -2942,6 +2941,9 @@ select.prompt-control {
 }
 
 .chat-repo-card-chat-icon {
+  position: absolute;
+  top: 16px;
+  right: 16px;
   display: inline-grid;
   place-items: center;
   width: 32px;
