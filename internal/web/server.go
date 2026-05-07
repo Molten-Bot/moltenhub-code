@@ -32,6 +32,45 @@ const streamSnapshotInterval = 120 * time.Millisecond
 const maxStreamTaskLogs = 500
 const bottomDockPlaceholder = "<!-- hub-bottom-dock -->"
 
+var sitePageTemplate = template.Must(template.New("site-page").Parse(`<!doctype html>
+<html lang="en" class="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}}</title>
+  <script src="/static/lucide.min.js"></script>
+  <script src="/static/site-header.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="site-page-body {{.BodyClass}}">
+  <div class="site-page {{.PageClass}}">
+    <moltenhub-code-header agent-harness="codex" agent-label="Codex"></moltenhub-code-header>
+    <main class="site-page-main {{.MainClass}}" aria-label="{{.Heading}}">
+      {{.Content}}
+    </main>
+    {{.BottomDock}}
+  </div>
+  <script>
+    if (window.MoltenHubHeader && typeof window.MoltenHubHeader.startConnectionStatus === "function") {
+      window.MoltenHubHeader.startConnectionStatus();
+    }
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+  </script>
+</body>
+</html>`))
+
+type sitePageData struct {
+	Title      string
+	BodyClass  string
+	PageClass  string
+	MainClass  string
+	Heading    string
+	Content    template.HTML
+	BottomDock template.HTML
+}
+
 // Server provides an HTTP UI for live hub/task monitoring.
 type Server struct {
 	Addr                    string
@@ -57,6 +96,7 @@ type Server struct {
 	ConnectHubSetup         func(context.Context) (HubSetupState, error)
 	DisconnectHubSetup      func(context.Context) (HubSetupState, error)
 	ResolveGitHubProfileURL func(context.Context) (string, error)
+	ResolveGitHubRepos      func(context.Context) ([]GitHubRepo, error)
 }
 
 // AgentAuthState describes current runtime agent-auth readiness and device flow hints.
@@ -109,6 +149,17 @@ type HubSetupStep struct {
 	Label  string `json:"label,omitempty"`
 	Status string `json:"status,omitempty"`
 	Detail string `json:"detail,omitempty"`
+}
+
+// GitHubRepo captures the repository fields shown in the chat view.
+type GitHubRepo struct {
+	Name        string `json:"name"`
+	FullName    string `json:"full_name"`
+	Description string `json:"description,omitempty"`
+	HTMLURL     string `json:"html_url"`
+	Private     bool   `json:"private"`
+	Language    string `json:"language,omitempty"`
+	UpdatedAt   string `json:"updated_at,omitempty"`
 }
 
 // HubSetupRequest captures the late-stage Hub connect modal payload.
@@ -186,6 +237,7 @@ func (s Server) Handler() http.Handler {
 		mux.Handle("/static/", withCacheControl(staticHandler, "public, max-age=3600"))
 	}
 	mux.HandleFunc("/", s.handleIndex)
+	mux.HandleFunc("/chat", s.handleChat)
 	mux.HandleFunc("/api/state", s.handleState)
 	mux.HandleFunc("/api/status", s.handleState)
 	mux.HandleFunc("/api/library", s.handleLibrary)
@@ -193,6 +245,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/api/stream", s.handleStream)
 	mux.HandleFunc("/api/local-prompt", s.handleLocalPrompt)
 	mux.HandleFunc("/api/github/profile", s.handleGitHubProfile)
+	mux.HandleFunc("/api/github/repos", s.handleGitHubRepos)
 	mux.HandleFunc("/api/hub-setup", s.handleHubSetup)
 	mux.HandleFunc("/api/hub-setup/connect", s.handleHubSetupConnect)
 	mux.HandleFunc("/api/hub-setup/disconnect", s.handleHubSetupDisconnect)
@@ -266,6 +319,30 @@ func (s Server) handleGitHubProfile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":         true,
 		"profileUrl": profileURL,
+	})
+}
+
+func (s Server) handleGitHubRepos(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	repos, err := s.resolveGitHubRepos(r.Context())
+	if err != nil {
+		s.logf("hub.ui status=warn endpoint=github_repos err=%q", err)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":    false,
+			"error": err.Error(),
+			"repos": []GitHubRepo{},
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":    true,
+		"repos": repos,
 	})
 }
 
@@ -364,6 +441,104 @@ func (s Server) applyBottomDockHubState(ctx context.Context, dock []byte) []byte
 		1,
 	)
 	return dock
+}
+
+func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/chat" {
+		http.NotFound(w, r)
+		return
+	}
+
+	s.renderSitePage(r.Context(), w, sitePageData{
+		Title:     "Molten Hub Code Chat",
+		BodyClass: "chat-body",
+		PageClass: "chat-page",
+		MainClass: "chat-main",
+		Heading:   "Chat",
+		Content: template.HTML(`<section class="chat-shell" aria-labelledby="chat-title">
+        <div class="chat-head">
+          <div>
+            <p class="eyebrow">GitHub</p>
+            <h1 id="chat-title">Chat</h1>
+          </div>
+          <p id="chat-status" class="chat-status" aria-live="polite">Loading repositories...</p>
+        </div>
+        <div id="chat-repo-grid" class="chat-repo-grid" aria-label="GitHub repositories"></div>
+      </section>
+      <script>
+        (function initChatRepos() {
+          const grid = document.getElementById("chat-repo-grid");
+          const status = document.getElementById("chat-status");
+          if (!grid || !status) return;
+
+          function repoCard(repo) {
+            const card = document.createElement("a");
+            card.className = "chat-repo-card";
+            card.href = String(repo.html_url || "#");
+            card.target = "_blank";
+            card.rel = "noreferrer noopener";
+            card.setAttribute("aria-label", "Open " + String(repo.full_name || repo.name || "repository"));
+
+            const title = document.createElement("span");
+            title.className = "chat-repo-card-title";
+            title.textContent = String(repo.full_name || repo.name || "Unnamed repository");
+            card.appendChild(title);
+
+            const description = document.createElement("span");
+            description.className = "chat-repo-card-description";
+            description.textContent = String(repo.description || "No description.");
+            card.appendChild(description);
+
+            const meta = document.createElement("span");
+            meta.className = "chat-repo-card-meta";
+            const visibility = repo.private ? "Private" : "Public";
+            const language = String(repo.language || "").trim();
+            meta.textContent = language ? visibility + " | " + language : visibility;
+            card.appendChild(meta);
+
+            return card;
+          }
+
+          async function loadRepos() {
+            try {
+              const response = await fetch("/api/github/repos", { cache: "no-store" });
+              const body = await response.json();
+              if (!response.ok || !body || body.ok === false) {
+                throw new Error(body && body.error ? body.error : "github repositories request failed");
+              }
+              const repos = Array.isArray(body.repos) ? body.repos : [];
+              grid.replaceChildren(...repos.map(repoCard));
+              status.textContent = repos.length === 1 ? "1 repository" : repos.length + " repositories";
+              if (repos.length === 0) {
+                const empty = document.createElement("p");
+                empty.className = "chat-empty";
+                empty.textContent = "No repositories found.";
+                grid.appendChild(empty);
+              }
+            } catch (err) {
+              status.textContent = err && err.message ? err.message : "Unable to load repositories.";
+            }
+          }
+
+          void loadRepos();
+        })();
+      </script>`),
+	})
+}
+
+func (s Server) renderSitePage(ctx context.Context, w http.ResponseWriter, data sitePageData) {
+	data.BottomDock = template.HTML(bottomDockPlaceholder)
+	var page bytes.Buffer
+	if err := sitePageTemplate.Execute(&page, data); err != nil {
+		s.logf("hub.ui status=warn event=render_site_page err=%q", err)
+		http.Error(w, "page is unavailable", http.StatusInternalServerError)
+		return
+	}
+	rendered := s.injectBottomDockComponent(ctx, page.Bytes())
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(rendered)
 }
 
 func (s Server) injectIndexConfig(data []byte) []byte {
@@ -899,7 +1074,7 @@ func (s Server) resolveGitHubProfileURL(ctx context.Context) (string, error) {
 	return resolveAuthenticatedGitHubProfileURL(ctx, http.DefaultClient)
 }
 
-func resolveAuthenticatedGitHubProfileURL(ctx context.Context, client *http.Client) (string, error) {
+func githubTokenFromEnv() (string, error) {
 	token := strings.TrimSpace(os.Getenv("GH_TOKEN"))
 	if token == "" {
 		token = strings.TrimSpace(os.Getenv("GITHUB_TOKEN"))
@@ -907,18 +1082,44 @@ func resolveAuthenticatedGitHubProfileURL(ctx context.Context, client *http.Clie
 	if token == "" {
 		return "", fmt.Errorf("github token is not configured")
 	}
-	if client == nil {
-		client = http.DefaultClient
-	}
+	return token, nil
+}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/user", nil)
+func newGitHubAPIRequest(ctx context.Context, method, endpoint string) (*http.Request, error) {
+	token, err := githubTokenFromEnv()
 	if err != nil {
-		return "", fmt.Errorf("build github profile request: %w", err)
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, nil)
+	if err != nil {
+		return nil, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("User-Agent", "moltenhub-code")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	return req, nil
+}
+
+func (s Server) resolveGitHubRepos(ctx context.Context) ([]GitHubRepo, error) {
+	if s.ResolveGitHubRepos != nil {
+		return s.ResolveGitHubRepos(ctx)
+	}
+	return resolveAuthenticatedGitHubRepos(ctx, http.DefaultClient)
+}
+
+func resolveAuthenticatedGitHubProfileURL(ctx context.Context, client *http.Client) (string, error) {
+	if _, err := githubTokenFromEnv(); err != nil {
+		return "", err
+	}
+	if client == nil {
+		client = http.DefaultClient
+	}
+
+	req, err := newGitHubAPIRequest(ctx, http.MethodGet, "https://api.github.com/user")
+	if err != nil {
+		return "", fmt.Errorf("build github profile request: %w", err)
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -948,6 +1149,84 @@ func resolveAuthenticatedGitHubProfileURL(ctx context.Context, client *http.Clie
 		return "https://github.com/" + login, nil
 	}
 	return "", fmt.Errorf("github profile lookup failed: missing profile url")
+}
+
+func resolveAuthenticatedGitHubRepos(ctx context.Context, client *http.Client) ([]GitHubRepo, error) {
+	if client == nil {
+		client = http.DefaultClient
+	}
+
+	var repos []GitHubRepo
+	nextURL := "https://api.github.com/user/repos?per_page=100&affiliation=owner,collaborator,organization_member&sort=updated"
+	for nextURL != "" {
+		req, err := newGitHubAPIRequest(ctx, http.MethodGet, nextURL)
+		if err != nil {
+			return nil, fmt.Errorf("build github repositories request: %w", err)
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("load github repositories: %w", err)
+		}
+
+		bodyBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+		_ = resp.Body.Close()
+		if readErr != nil {
+			return nil, fmt.Errorf("read github repositories response: %w", readErr)
+		}
+		if resp.StatusCode/100 != 2 {
+			var errBody struct {
+				Message string `json:"message"`
+			}
+			_ = json.Unmarshal(bodyBytes, &errBody)
+			message := strings.TrimSpace(errBody.Message)
+			if message == "" {
+				message = fmt.Sprintf("github api status=%d", resp.StatusCode)
+			}
+			return nil, fmt.Errorf("github repositories lookup failed: %s", message)
+		}
+
+		var body []struct {
+			Name        string `json:"name"`
+			FullName    string `json:"full_name"`
+			Description string `json:"description"`
+			HTMLURL     string `json:"html_url"`
+			Private     bool   `json:"private"`
+			Language    string `json:"language"`
+			UpdatedAt   string `json:"updated_at"`
+		}
+		decodeErr := json.Unmarshal(bodyBytes, &body)
+		if decodeErr != nil && !errors.Is(decodeErr, io.EOF) {
+			return nil, fmt.Errorf("decode github repositories: %w", decodeErr)
+		}
+		for _, repo := range body {
+			repos = append(repos, GitHubRepo{
+				Name:        strings.TrimSpace(repo.Name),
+				FullName:    strings.TrimSpace(repo.FullName),
+				Description: strings.TrimSpace(repo.Description),
+				HTMLURL:     strings.TrimSpace(repo.HTMLURL),
+				Private:     repo.Private,
+				Language:    strings.TrimSpace(repo.Language),
+				UpdatedAt:   strings.TrimSpace(repo.UpdatedAt),
+			})
+		}
+		nextURL = nextGitHubPageURL(resp.Header.Get("Link"))
+	}
+	return repos, nil
+}
+
+func nextGitHubPageURL(linkHeader string) string {
+	for _, part := range strings.Split(linkHeader, ",") {
+		section := strings.TrimSpace(part)
+		if !strings.Contains(section, `rel="next"`) {
+			continue
+		}
+		start := strings.Index(section, "<")
+		end := strings.Index(section, ">")
+		if start >= 0 && end > start+1 {
+			return strings.TrimSpace(section[start+1 : end])
+		}
+	}
+	return ""
 }
 
 func (s Server) handleLocalPrompt(w http.ResponseWriter, r *http.Request) {

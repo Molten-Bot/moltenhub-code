@@ -2179,6 +2179,73 @@ func renderHandlerMarkup(t *testing.T, srv Server, path string) string {
 	return resp.Body.String()
 }
 
+func TestHandlerServesChatView(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodGet, "/chat", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+	if ct := resp.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		t.Fatalf("content-type = %q", ct)
+	}
+
+	markup := resp.Body.String()
+	required := []string{
+		`<title>Molten Hub Code Chat</title>`,
+		`src="/static/site-header.js"`,
+		`<moltenhub-code-header agent-harness="codex" agent-label="Codex"></moltenhub-code-header>`,
+		`class="page-bottom-dock"`,
+		`data-page-nav-link="/chat"`,
+		`<i data-lucide="message-circle" aria-hidden="true"></i>`,
+		`id="chat-repo-grid" class="chat-repo-grid" aria-label="GitHub repositories"`,
+		`fetch("/api/github/repos", { cache: "no-store" })`,
+		`window.MoltenHubHeader.startConnectionStatus();`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(markup, needle) {
+			t.Fatalf("expected chat html to include %q", needle)
+		}
+	}
+	if strings.Contains(markup, bottomDockPlaceholder) {
+		t.Fatalf("expected chat page bottom dock placeholder to be replaced")
+	}
+}
+
+func TestHandlerGitHubReposUsesOverride(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	srv.ResolveGitHubRepos = func(context.Context) ([]GitHubRepo, error) {
+		return []GitHubRepo{{
+			Name:        "repo",
+			FullName:    "acme/repo",
+			Description: "Docs",
+			HTMLURL:     "https://github.com/acme/repo",
+			Language:    "Go",
+			Private:     true,
+		}}, nil
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/github/repos", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+	body := resp.Body.String()
+	if !strings.Contains(body, `"ok":true`) ||
+		!strings.Contains(body, `"full_name":"acme/repo"`) ||
+		!strings.Contains(body, `"html_url":"https://github.com/acme/repo"`) ||
+		!strings.Contains(body, `"private":true`) {
+		t.Fatalf("unexpected github repos response %q", body)
+	}
+}
+
 func TestHandlerServesStaticCSS(t *testing.T) {
 	t.Parallel()
 

@@ -23,6 +23,17 @@ func githubProfileResponse(status int, body string) *http.Response {
 	}
 }
 
+func githubResponse(status int, body string, header http.Header) *http.Response {
+	if header == nil {
+		header = make(http.Header)
+	}
+	return &http.Response{
+		StatusCode: status,
+		Header:     header,
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}
+}
+
 func TestResolveAuthenticatedGitHubProfileURL(t *testing.T) {
 	t.Setenv("GH_TOKEN", "")
 	t.Setenv("GITHUB_TOKEN", "")
@@ -116,5 +127,65 @@ func TestServerResolveGitHubProfileURLUsesOverride(t *testing.T) {
 	}
 	if got != "https://github.com/custom-agent" {
 		t.Fatalf("resolveGitHubProfileURL() = %q, want custom URL", got)
+	}
+}
+
+func TestResolveAuthenticatedGitHubRepos(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+
+	if _, err := resolveAuthenticatedGitHubRepos(context.Background(), &http.Client{}); err == nil || !strings.Contains(err.Error(), "github token is not configured") {
+		t.Fatalf("resolveAuthenticatedGitHubRepos(no token) error = %v, want token configuration error", err)
+	}
+
+	t.Setenv("GH_TOKEN", "test-token")
+	requests := 0
+	client := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			requests++
+			if got, want := req.Method, http.MethodGet; got != want {
+				t.Fatalf("request method = %q, want %q", got, want)
+			}
+			if got, want := req.Header.Get("Authorization"), "Bearer test-token"; got != want {
+				t.Fatalf("authorization header = %q, want %q", got, want)
+			}
+			if got, want := req.Header.Get("Accept"), "application/vnd.github+json"; got != want {
+				t.Fatalf("accept header = %q, want %q", got, want)
+			}
+			switch requests {
+			case 1:
+				if got, want := req.URL.String(), "https://api.github.com/user/repos?per_page=100&affiliation=owner,collaborator,organization_member&sort=updated"; got != want {
+					t.Fatalf("request URL = %q, want %q", got, want)
+				}
+				header := make(http.Header)
+				header.Set("Link", `<https://api.github.com/user/repos?page=2>; rel="next"`)
+				return githubResponse(http.StatusOK, `[{"name":"repo","full_name":"acme/repo","description":"Docs","html_url":"https://github.com/acme/repo","private":true,"language":"Go","updated_at":"2026-05-01T00:00:00Z"}]`, header), nil
+			case 2:
+				if got, want := req.URL.String(), "https://api.github.com/user/repos?page=2"; got != want {
+					t.Fatalf("request URL = %q, want %q", got, want)
+				}
+				return githubResponse(http.StatusOK, `[{"name":"web","full_name":"acme/web","html_url":"https://github.com/acme/web","private":false}]`, nil), nil
+			default:
+				t.Fatalf("unexpected request %d", requests)
+			}
+			return nil, nil
+		}),
+	}
+
+	repos, err := resolveAuthenticatedGitHubRepos(context.Background(), client)
+	if err != nil {
+		t.Fatalf("resolveAuthenticatedGitHubRepos() error = %v", err)
+	}
+	if len(repos) != 2 || repos[0].FullName != "acme/repo" || !repos[0].Private || repos[0].Language != "Go" || repos[1].FullName != "acme/web" {
+		t.Fatalf("repos = %#v, want paged repository summaries", repos)
+	}
+
+	client = &http.Client{
+		Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return githubResponse(http.StatusForbidden, `{"message":"API rate limit exceeded"}`, nil), nil
+		}),
+	}
+	if _, err := resolveAuthenticatedGitHubRepos(context.Background(), client); err == nil || !strings.Contains(err.Error(), "API rate limit exceeded") {
+		t.Fatalf("resolveAuthenticatedGitHubRepos(non-2xx) error = %v, want API message", err)
 	}
 }

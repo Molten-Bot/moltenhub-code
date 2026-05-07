@@ -2724,6 +2724,137 @@ select.prompt-control {
   font-weight: 700;
 }
 
+.chat-main {
+  display: grid;
+  align-items: start;
+}
+
+.chat-shell {
+  min-height: clamp(360px, 58vh, 680px);
+  padding: clamp(18px, 3vw, 28px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-glass-solid);
+  box-shadow: var(--shadow-sm);
+}
+
+.chat-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.chat-head h1 {
+  margin: 2px 0 0;
+  color: var(--text);
+  font-size: clamp(1.7rem, 3vw, 2.35rem);
+  letter-spacing: 0;
+  line-height: 1.05;
+}
+
+.chat-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.chat-repo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+  padding-top: 18px;
+}
+
+.chat-repo-card {
+  display: grid;
+  grid-template-rows: auto minmax(42px, 1fr) auto;
+  gap: 10px;
+  min-height: 154px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface-control-bg-strong);
+  box-shadow: var(--surface-control-shadow);
+  text-decoration: none;
+}
+
+.chat-repo-card:hover,
+.chat-repo-card:focus-visible {
+  border-color: var(--border-strong);
+  outline: none;
+  box-shadow: var(--shadow-sm);
+}
+
+.chat-repo-card-title {
+  overflow-wrap: anywhere;
+  font-size: 1rem;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.chat-repo-card-description {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.chat-repo-card-meta {
+  color: var(--meta);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.chat-empty {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .site-page {
+    width: min(100% - 24px, var(--hub-page-width));
+    padding: 20px 0;
+    gap: 18px;
+  }
+
+  .site-page-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .site-page-nav {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .site-page-nav a {
+    flex: 1 1 94px;
+  }
+
+  .chat-shell {
+    min-height: 52vh;
+    padding: 16px;
+  }
+
+  .chat-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .chat-status {
+    text-align: left;
+  }
+}
+
 .releases-display {
   width: min(920px, 100%);
   margin: 0 auto;
