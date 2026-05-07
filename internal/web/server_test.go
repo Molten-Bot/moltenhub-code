@@ -764,6 +764,20 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="task-sound-toggle"`) {
 		t.Fatalf("expected index html to include task sound mute toggle in Current Work header")
 	}
+	taskHeaderActionsStart := strings.Index(markup, `<div class="task-panel-actions">`)
+	if taskHeaderActionsStart < 0 {
+		t.Fatalf("expected index html to include Current Work header actions")
+	}
+	taskHeaderActionsEnd := strings.Index(markup[taskHeaderActionsStart:], `</div>`)
+	if taskHeaderActionsEnd < 0 {
+		t.Fatalf("expected index html to close Current Work header actions")
+	}
+	taskHeaderActions := markup[taskHeaderActionsStart : taskHeaderActionsStart+taskHeaderActionsEnd]
+	taskVisibilityIndex := strings.Index(taskHeaderActions, `id="task-visibility-toggle"`)
+	taskFullscreenIndex := strings.Index(taskHeaderActions, `id="task-fullscreen-toggle"`)
+	if taskVisibilityIndex < 0 || taskFullscreenIndex < 0 || taskVisibilityIndex <= taskFullscreenIndex {
+		t.Fatalf("expected task minimize control to render to the right of the expanded-mode control")
+	}
 	if !strings.Contains(markup, `const TASK_STATUS_FILTER_KEY = "hubui.taskStatusFilter";`) {
 		t.Fatalf("expected index html to define a dedicated persisted task status filter storage key")
 	}
@@ -904,6 +918,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `promptWrap.classList.toggle("prompt-collapsed", !visible);`) {
 		t.Fatalf("expected index html to toggle collapsed studio state")
+	}
+	if !strings.Contains(markup, `const fullscreenOpen = Boolean(state.taskFullscreenOpen);`) ||
+		!strings.Contains(markup, `taskVisibilityToggle.hidden = fullscreenOpen;`) ||
+		!strings.Contains(markup, `taskVisibilityToggle.disabled = fullscreenOpen;`) ||
+		!strings.Contains(markup, `taskVisibilityToggle.setAttribute("aria-hidden", fullscreenOpen ? "true" : "false");`) {
+		t.Fatalf("expected task minimize control to be unavailable while Current Work is expanded")
 	}
 	if !strings.Contains(markup, `promptVisibilityToggle.hidden = automatic;`) {
 		t.Fatalf("expected index html to keep the studio toggle available outside automatic mode")

@@ -40,13 +40,6 @@
             </div>
             <div class="task-panel-actions">
               <button
-                id="task-visibility-toggle"
-                class="task-visibility-toggle prompt-visibility-toggle"
-                type="button"
-                aria-pressed="true"
-                aria-label="Minimize tasks panel"
-                title="Minimize tasks panel">▾</button>
-              <button
                 id="task-sound-toggle"
                 class="task-sound-toggle"
                 type="button"
@@ -83,6 +76,13 @@
                 title="Open full screen tasks">
                 <i data-lucide="maximize-2" class="task-fullscreen-toggle-icon" aria-hidden="true"></i>
               </button>
+              <button
+                id="task-visibility-toggle"
+                class="task-visibility-toggle prompt-visibility-toggle"
+                type="button"
+                aria-pressed="true"
+                aria-label="Minimize tasks panel"
+                title="Minimize tasks panel">▾</button>
             </div>
           </div>
           <div class="scroll task-scroll">
@@ -5318,10 +5318,14 @@
 
     function applyTaskVisibility() {
       const visible = Boolean(state.taskVisible);
+      const fullscreenOpen = Boolean(state.taskFullscreenOpen);
       if (taskPanel) {
         taskPanel.classList.toggle("task-panel-collapsed", !visible);
       }
       if (taskVisibilityToggle) {
+        taskVisibilityToggle.hidden = fullscreenOpen;
+        taskVisibilityToggle.disabled = fullscreenOpen;
+        taskVisibilityToggle.setAttribute("aria-hidden", fullscreenOpen ? "true" : "false");
         taskVisibilityToggle.textContent = visible ? "▾" : "▸";
         taskVisibilityToggle.setAttribute("aria-label", visible ? "Minimize tasks panel" : "Expand tasks panel");
         taskVisibilityToggle.title = visible ? "Minimize tasks panel" : "Expand tasks panel";
@@ -6254,6 +6258,7 @@
       } else {
         document.body.classList.remove("task-fullscreen-open");
       }
+      applyTaskVisibility();
       render(state.snapshot);
     }
 
