@@ -349,7 +349,7 @@ button {
 .app.dashboard-app {
   width: 100%;
   max-width: 1500px;
-  padding: 20px;
+  padding: 20px 20px var(--hub-content-bottom-padding);
   gap: 16px;
 }
 
@@ -2784,7 +2784,7 @@ select.prompt-control {
   width: min(var(--hub-page-width), calc(100vw - 32px));
   min-height: 100vh;
   margin: 0 auto;
-  padding: 28px 0;
+  padding: 28px 0 var(--hub-content-bottom-padding);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 24px;
@@ -3231,7 +3231,7 @@ select.prompt-control {
 @media (max-width: 640px) {
   .site-page {
     width: min(100% - 24px, var(--hub-page-width));
-    padding: 20px 0;
+    padding: 20px 0 var(--hub-content-bottom-padding);
     gap: 18px;
   }
 
