@@ -227,7 +227,7 @@ func TestGitHubTokenRequirementStateRejectsInvalidStartupToken(t *testing.T) {
 	}
 }
 
-func TestValidateGitHubTokenRetriesWithoutActiveFlagWhenUnsupported(t *testing.T) {
+func TestValidateGitHubTokenUsesLegacyCompatibleStatusCommand(t *testing.T) {
 	t.Setenv("GH_TOKEN", "")
 	t.Setenv("GITHUB_TOKEN", "")
 
@@ -235,23 +235,16 @@ func TestValidateGitHubTokenRetriesWithoutActiveFlagWhenUnsupported(t *testing.T
 	runner := &sharedAuthGateRunnerStub{
 		run: func(_ context.Context, cmd execx.Command) (execx.Result, error) {
 			calls = append(calls, strings.Join(cmd.Args, " "))
-			switch strings.Join(cmd.Args, " ") {
-			case gitHubTokenValidationArgsStringForTest():
-				return execx.Result{
-					Stderr: "unknown flag: --active\nFlags:\n  -h, --hostname string   Check a specific hostname's auth status\n  -t, --show-token         Display the auth token\n",
-				}, errors.New("exit status 1")
-			case gitHubTokenValidationFallbackArgsStringForTest():
-				if got, want := os.Getenv("GH_TOKEN"), "github_token_valid"; got != want {
-					t.Fatalf("GH_TOKEN during fallback = %q, want %q", got, want)
-				}
-				if got, want := os.Getenv("GITHUB_TOKEN"), "github_token_valid"; got != want {
-					t.Fatalf("GITHUB_TOKEN during fallback = %q, want %q", got, want)
-				}
-				return execx.Result{Stdout: "github.com logged in"}, nil
-			default:
-				t.Fatalf("unexpected validation command: %+v", cmd)
-				return execx.Result{}, nil
+			if got, want := strings.Join(cmd.Args, " "), "auth status --hostname github.com"; got != want {
+				t.Fatalf("args = %q, want %q", got, want)
 			}
+			if got, want := os.Getenv("GH_TOKEN"), "github_token_valid"; got != want {
+				t.Fatalf("GH_TOKEN during validation = %q, want %q", got, want)
+			}
+			if got, want := os.Getenv("GITHUB_TOKEN"), "github_token_valid"; got != want {
+				t.Fatalf("GITHUB_TOKEN during validation = %q, want %q", got, want)
+			}
+			return execx.Result{Stdout: "github.com logged in"}, nil
 		},
 	}
 
@@ -260,7 +253,6 @@ func TestValidateGitHubTokenRetriesWithoutActiveFlagWhenUnsupported(t *testing.T
 	}
 	wantCalls := []string{
 		gitHubTokenValidationArgsStringForTest(),
-		gitHubTokenValidationFallbackArgsStringForTest(),
 	}
 	if strings.Join(calls, "\n") != strings.Join(wantCalls, "\n") {
 		t.Fatalf("calls = %v, want %v", calls, wantCalls)

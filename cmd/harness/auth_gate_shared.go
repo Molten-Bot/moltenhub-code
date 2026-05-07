@@ -335,7 +335,7 @@ func validateGitHubToken(ctx context.Context, runner execx.Runner, token string)
 }
 
 func gitHubTokenValidationCommand() execx.Command {
-	return execx.Command{Name: "gh", Args: []string{"auth", "status", "--active", "--hostname", "github.com"}}
+	return execx.Command{Name: "gh", Args: []string{"auth", "status", "--hostname", "github.com"}}
 }
 
 func gitHubTokenValidationFallbackCommand() execx.Command {
