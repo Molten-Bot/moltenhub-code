@@ -1036,23 +1036,28 @@ body .right-col.prompt-collapsed.task-list-hidden {
   text-transform: uppercase;
 }
 
-.prompt-title-breadcrumb {
+.prompt-title-list {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
   justify-self: start;
   min-width: 0;
-  white-space: nowrap;
+  white-space: normal;
   font-size: 0.78rem;
   letter-spacing: 0.02em;
 }
 
 .prompt-title-separator {
-  margin-inline: 4px;
+  margin-inline: 2px;
   color: var(--muted);
   font-weight: 700;
 }
 
 .prompt-title-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: var(--muted);
 }
 
@@ -1060,10 +1065,11 @@ body .right-col.prompt-collapsed.task-list-hidden {
   color: var(--text);
 }
 
-.prompt-title-mode-divider {
-  color: var(--muted);
-  margin-inline: 0;
-  font-weight: 700;
+.prompt-title-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  stroke-width: 2.4;
 }
 
 .prompt-titlebar .panel-section-copy {

@@ -276,9 +276,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if strings.Contains(markup, `task-empty-chip`) {
 		t.Fatalf("expected index html to remove empty queue stage chips")
 	}
-	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title prompt-title-breadcrumb"`) ||
-		!strings.Contains(markup, `data-prompt-title-mode="builder">Prompt</span><span class="prompt-title-mode-divider" aria-hidden="true">|</span><span class="prompt-title-mode" data-prompt-title-mode="library">Library</span><span class="prompt-title-mode-divider" aria-hidden="true">|</span><span class="prompt-title-mode" data-prompt-title-mode="json">JSON</span>`) {
-		t.Fatalf("expected index html to label Studio modes as Prompt|Library|JSON")
+	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title prompt-title-list"`) ||
+		!strings.Contains(markup, `data-lucide="pencil" class="prompt-title-icon"`) ||
+		!strings.Contains(markup, `Studio <span class="prompt-title-separator" aria-hidden="true">/</span> Prompt`) ||
+		!strings.Contains(markup, `data-lucide="book-open" class="prompt-title-icon"`) ||
+		!strings.Contains(markup, `Studio <span class="prompt-title-separator" aria-hidden="true">/</span> Library`) ||
+		!strings.Contains(markup, `data-lucide="braces" class="prompt-title-icon"`) ||
+		!strings.Contains(markup, `Studio <span class="prompt-title-separator" aria-hidden="true">/</span> JSON`) {
+		t.Fatalf("expected index html to label Studio modes as separate icon titles")
 	}
 	if !strings.Contains(markup, `setPromptMode(promptModeFromHash() || "builder");`) {
 		t.Fatalf("expected index html to default Studio to the Prompt view")
@@ -1400,8 +1405,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `aria-label="Minimize Studio panel"`) || !strings.Contains(markup, `title="Minimize Studio panel">▾</button>`) {
 		t.Fatalf("expected index html to initialize the studio toggle as an arrow minimize control")
 	}
-	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title prompt-title-breadcrumb"`) {
-		t.Fatalf("expected index html to render compact Studio mode heading")
+	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title prompt-title-list"`) {
+		t.Fatalf("expected index html to render compact Studio mode title list")
 	}
 	if !strings.Contains(markup, "library-task-option-subtitle") {
 		t.Fatalf("expected index html to include library task subtitles")

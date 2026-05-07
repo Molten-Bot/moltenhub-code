@@ -94,10 +94,19 @@
         <section class="panel prompt-wrap brand-login-card-shell">
           <div class="panel-header prompt-titlebar">
             <div class="panel-header-copy">
-              <span id="prompt-panel-title" class="panel-section-title prompt-title-breadcrumb" aria-label="Studio / Prompt, Library, JSON">
-                <span>Studio</span>
-                <span class="prompt-title-separator" aria-hidden="true">/</span>
-                <span class="prompt-title-mode active" data-prompt-title-mode="builder">Prompt</span><span class="prompt-title-mode-divider" aria-hidden="true">|</span><span class="prompt-title-mode" data-prompt-title-mode="library">Library</span><span class="prompt-title-mode-divider" aria-hidden="true">|</span><span class="prompt-title-mode" data-prompt-title-mode="json">JSON</span>
+              <span id="prompt-panel-title" class="panel-section-title prompt-title-list" aria-label="Studio views">
+                <span class="prompt-title-mode active" data-prompt-title-mode="builder">
+                  <i data-lucide="pencil" class="prompt-title-icon" aria-hidden="true"></i>
+                  <span>Studio <span class="prompt-title-separator" aria-hidden="true">/</span> Prompt</span>
+                </span>
+                <span class="prompt-title-mode" data-prompt-title-mode="library">
+                  <i data-lucide="book-open" class="prompt-title-icon" aria-hidden="true"></i>
+                  <span>Studio <span class="prompt-title-separator" aria-hidden="true">/</span> Library</span>
+                </span>
+                <span class="prompt-title-mode" data-prompt-title-mode="json">
+                  <i data-lucide="braces" class="prompt-title-icon" aria-hidden="true"></i>
+                  <span>Studio <span class="prompt-title-separator" aria-hidden="true">/</span> JSON</span>
+                </span>
               </span>
               <p id="prompt-panel-copy" class="panel-section-copy">Compose a repository run, start from a library task, or edit the raw JSON payload.</p>
             </div>
