@@ -1016,7 +1016,7 @@ body .right-col.prompt-collapsed.task-list-hidden {
 }
 
 .prompt-titlebar .panel-header-copy {
-  grid-template-columns: max-content max-content;
+  grid-template-columns: minmax(0, 1fr);
   column-gap: 0;
 }
 
@@ -1036,11 +1036,34 @@ body .right-col.prompt-collapsed.task-list-hidden {
   text-transform: uppercase;
 }
 
-#prompt-panel-title::before {
-  content: "/";
-  margin-inline: 8px;
-  color: var(--text-muted);
-  font-weight: 600;
+.prompt-title-breadcrumb {
+  display: inline-flex;
+  align-items: baseline;
+  justify-self: start;
+  min-width: 0;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+}
+
+.prompt-title-separator {
+  margin-inline: 4px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.prompt-title-mode {
+  color: var(--muted);
+}
+
+.prompt-title-mode.active {
+  color: var(--text);
+}
+
+.prompt-title-mode-divider {
+  color: var(--muted);
+  margin-inline: 0;
+  font-weight: 700;
 }
 
 .prompt-titlebar .panel-section-copy {

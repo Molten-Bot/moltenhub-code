@@ -276,8 +276,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if strings.Contains(markup, `task-empty-chip`) {
 		t.Fatalf("expected index html to remove empty queue stage chips")
 	}
-	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title">Prompt</span>`) {
-		t.Fatalf("expected index html to label the builder mode as Prompt")
+	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title prompt-title-breadcrumb"`) ||
+		!strings.Contains(markup, `data-prompt-title-mode="builder">Prompt</span><span class="prompt-title-mode-divider" aria-hidden="true">|</span><span class="prompt-title-mode" data-prompt-title-mode="library">Library</span><span class="prompt-title-mode-divider" aria-hidden="true">|</span><span class="prompt-title-mode" data-prompt-title-mode="json">JSON</span>`) {
+		t.Fatalf("expected index html to label Studio modes as Prompt|Library|JSON")
 	}
 	if !strings.Contains(markup, `setPromptMode(promptModeFromHash() || "builder");`) {
 		t.Fatalf("expected index html to default Studio to the Prompt view")
@@ -1399,8 +1400,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `aria-label="Minimize Studio panel"`) || !strings.Contains(markup, `title="Minimize Studio panel">▾</button>`) {
 		t.Fatalf("expected index html to initialize the studio toggle as an arrow minimize control")
 	}
-	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title">Prompt</span>`) {
-		t.Fatalf("expected index html to render the prompt panel under a Prompt heading by default")
+	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title prompt-title-breadcrumb"`) {
+		t.Fatalf("expected index html to render compact Studio mode heading")
 	}
 	if !strings.Contains(markup, "library-task-option-subtitle") {
 		t.Fatalf("expected index html to include library task subtitles")
@@ -1528,9 +1529,6 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `activatePromptMode("json");`) {
 		t.Fatalf("expected bottom dock Library and JSON controls to activate their Studio views through the shared mode path")
 	}
-	if !strings.Contains(markup, "function promptModeTitle(mode)") {
-		t.Fatalf("expected index html to include promptModeTitle helper")
-	}
 	if !strings.Contains(markup, `let mode = display === "releases" || display === "dashboard" || display === "chat" ? display : "studio";`) ||
 		!strings.Contains(markup, `if (mode === "chat" && !state.githubReposReady) {`) ||
 		!strings.Contains(markup, `appLayout.hidden = false;`) ||
@@ -1538,8 +1536,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `const showTaskPanel = state.appDisplay === "studio" || state.appDisplay === "chat";`) {
 		t.Fatalf("expected index html to switch main views while hiding Current Work on dashboard and releases")
 	}
-	if !strings.Contains(markup, `promptPanelTitle.textContent = promptModeTitle(state.promptMode);`) {
-		t.Fatalf("expected index html to update the panel heading when the prompt mode changes")
+	if !strings.Contains(markup, `function syncPromptTitleModes()`) ||
+		!strings.Contains(markup, `item.classList.toggle("active", String(item.dataset.promptTitleMode || "") === state.promptMode);`) {
+		t.Fatalf("expected index html to update the compact Studio mode heading when the prompt mode changes")
 	}
 	if !strings.Contains(markup, `id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true"`) {
 		t.Fatalf("expected builder mode to render as an anchor-style control inside the shared segmented dock")
