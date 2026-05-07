@@ -1504,6 +1504,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true" title="Prompt"`) {
 		t.Fatalf("expected index html to render Prompt as the primary dock icon action")
 	}
+	chatDockIndex := strings.Index(markup, `data-app-display="chat"`)
+	promptDockIndex := strings.Index(markup, `id="prompt-mode-builder"`)
+	if chatDockIndex < 0 || promptDockIndex < 0 || chatDockIndex > promptDockIndex {
+		t.Fatalf("expected Chat to render before Prompt in the bottom dock")
+	}
 	if !strings.Contains(markup, `<span class="prompt-mode-link-tooltip" aria-hidden="true">Prompt</span>`) {
 		t.Fatalf("expected index html to expose Prompt through dock tooltip text")
 	}
