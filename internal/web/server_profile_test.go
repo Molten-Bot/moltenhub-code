@@ -159,7 +159,7 @@ func TestResolveAuthenticatedGitHubRepos(t *testing.T) {
 				}
 				header := make(http.Header)
 				header.Set("Link", `<https://api.github.com/user/repos?page=2>; rel="next"`)
-				return githubResponse(http.StatusOK, `[{"name":"repo","full_name":"acme/repo","description":"Docs","html_url":"https://github.com/acme/repo","private":true,"language":"Go","updated_at":"2026-05-01T00:00:00Z"}]`, header), nil
+				return githubResponse(http.StatusOK, `[{"name":"repo","full_name":"acme/repo","description":"Docs","html_url":"https://github.com/acme/repo","default_branch":"trunk","private":true,"language":"Go","updated_at":"2026-05-01T00:00:00Z"}]`, header), nil
 			case 2:
 				if got, want := req.URL.String(), "https://api.github.com/user/repos?page=2"; got != want {
 					t.Fatalf("request URL = %q, want %q", got, want)
@@ -176,7 +176,7 @@ func TestResolveAuthenticatedGitHubRepos(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveAuthenticatedGitHubRepos() error = %v", err)
 	}
-	if len(repos) != 2 || repos[0].FullName != "acme/repo" || !repos[0].Private || repos[0].Language != "Go" || repos[1].FullName != "acme/web" {
+	if len(repos) != 2 || repos[0].FullName != "acme/repo" || repos[0].DefaultBranch != "trunk" || !repos[0].Private || repos[0].Language != "Go" || repos[1].FullName != "acme/web" {
 		t.Fatalf("repos = %#v, want paged repository summaries", repos)
 	}
 

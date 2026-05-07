@@ -1575,6 +1575,7 @@
       githubReposReady: false,
       githubReposLoadError: "",
       githubRepos: [],
+      chatSubmittingRepos: new Set(),
       taskSoundMuted: loadTaskSoundMuted(),
       taskSoundInitialized: false,
       taskSoundSeenStatuses: new Map(),
@@ -5255,12 +5256,12 @@
     }
 
     function renderChatRepoCard(repo) {
-      const card = document.createElement("a");
+      const card = document.createElement("div");
       card.className = "chat-repo-card";
-      card.href = String(repo?.html_url || "#");
-      card.target = "_blank";
-      card.rel = "noreferrer noopener";
-      card.setAttribute("aria-label", "Open " + String(repo?.full_name || repo?.name || "repository"));
+      card.tabIndex = 0;
+      card.setAttribute("role", "button");
+      card.setAttribute("aria-expanded", "false");
+      card.setAttribute("aria-label", `Open ${String(repo?.full_name || repo?.name || "repository")} panel`);
 
       const title = document.createElement("span");
       title.className = "chat-repo-card-title";
@@ -5279,7 +5280,127 @@
       meta.textContent = language ? `${visibility} | ${language}` : visibility;
       card.appendChild(meta);
 
+      const panel = document.createElement("span");
+      panel.className = "chat-repo-panel";
+
+      const prompt = document.createElement("textarea");
+      prompt.className = "chat-repo-prompt";
+      prompt.rows = 3;
+      prompt.placeholder = "Prompt for default branch";
+      prompt.setAttribute("aria-label", `Prompt for ${String(repo?.full_name || repo?.name || "repository")}`);
+
+      const submitStatus = document.createElement("span");
+      submitStatus.className = "chat-repo-submit-status";
+      submitStatus.setAttribute("aria-live", "polite");
+      submitStatus.textContent = "Press Enter to run.";
+
+      prompt.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || event.shiftKey) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void submitChatRepoPrompt(repo, prompt, submitStatus);
+      });
+      prompt.addEventListener("click", (event) => {
+        event.stopPropagation();
+      });
+      prompt.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+      });
+      panel.append(prompt, submitStatus);
+      card.appendChild(panel);
+
+      card.addEventListener("click", () => {
+        const nextOpen = card.getAttribute("aria-expanded") !== "true";
+        chatRepoGrid?.querySelectorAll(".chat-repo-card[aria-expanded='true']").forEach((node) => {
+          if (node !== card) node.setAttribute("aria-expanded", "false");
+        });
+        card.setAttribute("aria-expanded", String(nextOpen));
+        if (nextOpen) {
+          prompt.focus();
+        }
+      });
+      card.addEventListener("keydown", (event) => {
+        if (event.target === prompt || (event.key !== "Enter" && event.key !== " ")) return;
+        event.preventDefault();
+        card.click();
+      });
+
       return card;
+    }
+
+    function chatRepoRunValue(repo) {
+      const htmlURL = String(repo?.html_url || "").trim();
+      if (htmlURL) return htmlURL;
+      const fullName = String(repo?.full_name || "").trim();
+      if (fullName) return `https://github.com/${fullName.replace(/^\/+/, "")}`;
+      return String(repo?.name || "").trim();
+    }
+
+    async function submitChatRepoPrompt(repo, input, statusNode) {
+      const repoValue = chatRepoRunValue(repo);
+      const prompt = String(input?.value || "").trim();
+      if (!repoValue) {
+        statusNode.textContent = "Repository is unavailable.";
+        statusNode.dataset.tone = "error";
+        return;
+      }
+      if (!prompt) {
+        statusNode.textContent = "Prompt is required.";
+        statusNode.dataset.tone = "error";
+        input?.focus();
+        return;
+      }
+
+      const submitKey = `${repoValue}\n${prompt}`;
+      if (state.chatSubmittingRepos.has(submitKey)) {
+        return;
+      }
+      state.chatSubmittingRepos.add(submitKey);
+      statusNode.textContent = "Submitting...";
+      statusNode.dataset.tone = "warn";
+
+      const payload = {
+        repo: repoValue,
+        prompt,
+      };
+      const branch = String(repo?.default_branch || "").trim();
+      if (branch) {
+        payload.baseBranch = branch;
+      }
+
+      try {
+        const response = await fetch("/api/local-prompt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        let body = null;
+        try {
+          body = await response.json();
+        } catch (_err) {
+          body = null;
+        }
+        if (!response.ok) {
+          if (response.status === 409 && body?.duplicate) {
+            statusNode.textContent = duplicateNotice(body);
+            statusNode.dataset.tone = "warn";
+            return;
+          }
+          throw new Error(body?.error || `submit http ${response.status}`);
+        }
+        const requestID = body?.request_id || "(unknown)";
+        input.value = "";
+        rememberRepos([repoValue]);
+        trackAnalyticsEvent("chat_repo_prompt_succeeded", { request_id: requestID });
+        statusNode.textContent = `Queued request ${requestID}`;
+        statusNode.dataset.tone = "ok";
+      } catch (err) {
+        trackAnalyticsEvent("chat_repo_prompt_failed");
+        statusNode.textContent = `Submit failed: ${err.message}`;
+        statusNode.dataset.tone = "error";
+      } finally {
+        state.chatSubmittingRepos.delete(submitKey);
+      }
     }
 
     function loadChatRepos() {

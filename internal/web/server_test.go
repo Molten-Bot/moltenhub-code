@@ -1499,6 +1499,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `if (!state.githubReposReady) {`) {
 		t.Fatalf("expected index html to gate chat availability on GitHub repository loading and show that read as current work")
 	}
+	if !strings.Contains(markup, `function submitChatRepoPrompt(repo, input, statusNode)`) ||
+		!strings.Contains(markup, `const card = document.createElement("div");`) ||
+		!strings.Contains(markup, `card.setAttribute("role", "button");`) ||
+		!strings.Contains(markup, `card.setAttribute("aria-expanded", "false");`) ||
+		!strings.Contains(markup, `fetch("/api/local-prompt", {`) ||
+		!strings.Contains(markup, `payload.baseBranch = branch;`) {
+		t.Fatalf("expected index chat repositories to open prompt panels and submit repository tasks")
+	}
 	if !strings.Contains(markup, `class="prompt-mode-link prompt-mode-link-logo"`) ||
 		!strings.Contains(markup, `src="/static/logos/github.svg"`) {
 		t.Fatalf("expected index html to render GitHub as an icon-only item inside the shared segmented dock using the shared logo-link class")
@@ -2223,6 +2231,10 @@ func TestHandlerServesChatView(t *testing.T) {
 		`<i data-lucide="message-circle" aria-hidden="true"></i>`,
 		`id="chat-repo-grid" class="chat-repo-grid" aria-label="GitHub repositories"`,
 		`fetch("/api/github/repos", { cache: "no-store" })`,
+		`const card = document.createElement("div");`,
+		`card.setAttribute("role", "button");`,
+		`fetch("/api/local-prompt", {`,
+		`payload.baseBranch = branch;`,
 		`window.MoltenHubHeader.startConnectionStatus();`,
 	}
 	for _, needle := range required {
@@ -2241,12 +2253,13 @@ func TestHandlerGitHubReposUsesOverride(t *testing.T) {
 	srv := NewServer("", NewBroker())
 	srv.ResolveGitHubRepos = func(context.Context) ([]GitHubRepo, error) {
 		return []GitHubRepo{{
-			Name:        "repo",
-			FullName:    "acme/repo",
-			Description: "Docs",
-			HTMLURL:     "https://github.com/acme/repo",
-			Language:    "Go",
-			Private:     true,
+			Name:          "repo",
+			FullName:      "acme/repo",
+			Description:   "Docs",
+			HTMLURL:       "https://github.com/acme/repo",
+			DefaultBranch: "main",
+			Language:      "Go",
+			Private:       true,
 		}}, nil
 	}
 	req := httptest.NewRequest(http.MethodGet, "/api/github/repos", nil)
@@ -2260,6 +2273,7 @@ func TestHandlerGitHubReposUsesOverride(t *testing.T) {
 	if !strings.Contains(body, `"ok":true`) ||
 		!strings.Contains(body, `"full_name":"acme/repo"`) ||
 		!strings.Contains(body, `"html_url":"https://github.com/acme/repo"`) ||
+		!strings.Contains(body, `"default_branch":"main"`) ||
 		!strings.Contains(body, `"private":true`) {
 		t.Fatalf("unexpected github repos response %q", body)
 	}

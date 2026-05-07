@@ -153,13 +153,14 @@ type HubSetupStep struct {
 
 // GitHubRepo captures the repository fields shown in the chat view.
 type GitHubRepo struct {
-	Name        string `json:"name"`
-	FullName    string `json:"full_name"`
-	Description string `json:"description,omitempty"`
-	HTMLURL     string `json:"html_url"`
-	Private     bool   `json:"private"`
-	Language    string `json:"language,omitempty"`
-	UpdatedAt   string `json:"updated_at,omitempty"`
+	Name          string `json:"name"`
+	FullName      string `json:"full_name"`
+	Description   string `json:"description,omitempty"`
+	HTMLURL       string `json:"html_url"`
+	DefaultBranch string `json:"default_branch,omitempty"`
+	Private       bool   `json:"private"`
+	Language      string `json:"language,omitempty"`
+	UpdatedAt     string `json:"updated_at,omitempty"`
 }
 
 // HubSetupRequest captures the late-stage Hub connect modal payload.
@@ -471,13 +472,64 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
           const status = document.getElementById("chat-status");
           if (!grid || !status) return;
 
+          function repoRunValue(repo) {
+            const htmlURL = String(repo.html_url || "").trim();
+            if (htmlURL) return htmlURL;
+            const fullName = String(repo.full_name || "").trim();
+            if (fullName) return "https://github.com/" + fullName.replace(/^\/+/, "");
+            return String(repo.name || "").trim();
+          }
+
+          async function submitRepoPrompt(repo, input, statusNode) {
+            const prompt = String(input.value || "").trim();
+            if (!prompt) {
+              statusNode.textContent = "Prompt is required.";
+              statusNode.dataset.tone = "error";
+              input.focus();
+              return;
+            }
+            const payload = {
+              repo: repoRunValue(repo),
+              prompt: prompt
+            };
+            const branch = String(repo.default_branch || "").trim();
+            if (branch) {
+              payload.baseBranch = branch;
+            }
+            statusNode.textContent = "Submitting...";
+            statusNode.dataset.tone = "warn";
+            try {
+              const response = await fetch("/api/local-prompt", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+              });
+              let body = null;
+              try {
+                body = await response.json();
+              } catch (_err) {
+                body = null;
+              }
+              if (!response.ok) {
+                throw new Error(body && body.error ? body.error : "submit http " + response.status);
+              }
+              const requestID = body && body.request_id ? body.request_id : "(unknown)";
+              input.value = "";
+              statusNode.textContent = "Queued request " + requestID;
+              statusNode.dataset.tone = "ok";
+            } catch (err) {
+              statusNode.textContent = "Submit failed: " + (err && err.message ? err.message : "unknown error");
+              statusNode.dataset.tone = "error";
+            }
+          }
+
           function repoCard(repo) {
-            const card = document.createElement("a");
+            const card = document.createElement("div");
             card.className = "chat-repo-card";
-            card.href = String(repo.html_url || "#");
-            card.target = "_blank";
-            card.rel = "noreferrer noopener";
-            card.setAttribute("aria-label", "Open " + String(repo.full_name || repo.name || "repository"));
+            card.tabIndex = 0;
+            card.setAttribute("role", "button");
+            card.setAttribute("aria-expanded", "false");
+            card.setAttribute("aria-label", "Open " + String(repo.full_name || repo.name || "repository") + " panel");
 
             const title = document.createElement("span");
             title.className = "chat-repo-card-title";
@@ -495,6 +547,49 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
             const language = String(repo.language || "").trim();
             meta.textContent = language ? visibility + " | " + language : visibility;
             card.appendChild(meta);
+
+            const panel = document.createElement("span");
+            panel.className = "chat-repo-panel";
+
+            const input = document.createElement("textarea");
+            input.className = "chat-repo-prompt";
+            input.rows = 3;
+            input.placeholder = "Prompt for default branch";
+            input.setAttribute("aria-label", "Prompt for " + String(repo.full_name || repo.name || "repository"));
+
+            const panelStatus = document.createElement("span");
+            panelStatus.className = "chat-repo-submit-status";
+            panelStatus.setAttribute("aria-live", "polite");
+            panelStatus.textContent = "Press Enter to run.";
+
+            input.addEventListener("keydown", (event) => {
+              if (event.key !== "Enter" || event.shiftKey) return;
+              event.preventDefault();
+              event.stopPropagation();
+              void submitRepoPrompt(repo, input, panelStatus);
+            });
+            input.addEventListener("click", (event) => {
+              event.stopPropagation();
+            });
+            input.addEventListener("pointerdown", (event) => {
+              event.stopPropagation();
+            });
+            panel.append(input, panelStatus);
+            card.appendChild(panel);
+
+            card.addEventListener("click", () => {
+              const nextOpen = card.getAttribute("aria-expanded") !== "true";
+              grid.querySelectorAll(".chat-repo-card[aria-expanded='true']").forEach((node) => {
+                if (node !== card) node.setAttribute("aria-expanded", "false");
+              });
+              card.setAttribute("aria-expanded", String(nextOpen));
+              if (nextOpen) input.focus();
+            });
+            card.addEventListener("keydown", (event) => {
+              if (event.target === input || (event.key !== "Enter" && event.key !== " ")) return;
+              event.preventDefault();
+              card.click();
+            });
 
             return card;
           }
@@ -1186,13 +1281,14 @@ func resolveAuthenticatedGitHubRepos(ctx context.Context, client *http.Client) (
 		}
 
 		var body []struct {
-			Name        string `json:"name"`
-			FullName    string `json:"full_name"`
-			Description string `json:"description"`
-			HTMLURL     string `json:"html_url"`
-			Private     bool   `json:"private"`
-			Language    string `json:"language"`
-			UpdatedAt   string `json:"updated_at"`
+			Name          string `json:"name"`
+			FullName      string `json:"full_name"`
+			Description   string `json:"description"`
+			HTMLURL       string `json:"html_url"`
+			DefaultBranch string `json:"default_branch"`
+			Private       bool   `json:"private"`
+			Language      string `json:"language"`
+			UpdatedAt     string `json:"updated_at"`
 		}
 		decodeErr := json.Unmarshal(bodyBytes, &body)
 		if decodeErr != nil && !errors.Is(decodeErr, io.EOF) {
@@ -1200,13 +1296,14 @@ func resolveAuthenticatedGitHubRepos(ctx context.Context, client *http.Client) (
 		}
 		for _, repo := range body {
 			repos = append(repos, GitHubRepo{
-				Name:        strings.TrimSpace(repo.Name),
-				FullName:    strings.TrimSpace(repo.FullName),
-				Description: strings.TrimSpace(repo.Description),
-				HTMLURL:     strings.TrimSpace(repo.HTMLURL),
-				Private:     repo.Private,
-				Language:    strings.TrimSpace(repo.Language),
-				UpdatedAt:   strings.TrimSpace(repo.UpdatedAt),
+				Name:          strings.TrimSpace(repo.Name),
+				FullName:      strings.TrimSpace(repo.FullName),
+				Description:   strings.TrimSpace(repo.Description),
+				HTMLURL:       strings.TrimSpace(repo.HTMLURL),
+				DefaultBranch: strings.TrimSpace(repo.DefaultBranch),
+				Private:       repo.Private,
+				Language:      strings.TrimSpace(repo.Language),
+				UpdatedAt:     strings.TrimSpace(repo.UpdatedAt),
 			})
 		}
 		nextURL = nextGitHubPageURL(resp.Header.Get("Link"))

@@ -2873,6 +2873,8 @@ select.prompt-control {
   color: var(--text);
   background: var(--surface-control-bg-strong);
   box-shadow: var(--surface-control-shadow);
+  font: inherit;
+  text-align: left;
   text-decoration: none;
 }
 
@@ -2902,6 +2904,61 @@ select.prompt-control {
   font-weight: 800;
   letter-spacing: 0;
   text-transform: uppercase;
+}
+
+.chat-repo-card[aria-expanded="true"] {
+  grid-template-rows: auto minmax(42px, 1fr) auto auto;
+  border-color: var(--border-strong);
+}
+
+.chat-repo-panel {
+  display: none;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.chat-repo-card[aria-expanded="true"] .chat-repo-panel {
+  display: grid;
+}
+
+.chat-repo-prompt {
+  width: 100%;
+  min-height: 88px;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface-control-bg);
+  font: inherit;
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+.chat-repo-prompt:focus {
+  border-color: var(--border-strong);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--running) 18%, transparent);
+}
+
+.chat-repo-submit-status {
+  min-height: 1.2em;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.chat-repo-submit-status[data-tone="ok"] {
+  color: var(--surface-success);
+}
+
+.chat-repo-submit-status[data-tone="warn"] {
+  color: var(--surface-warning);
+}
+
+.chat-repo-submit-status[data-tone="error"] {
+  color: var(--surface-danger);
 }
 
 .chat-empty {
