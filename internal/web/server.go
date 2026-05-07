@@ -54,10 +54,7 @@ var sitePageTemplate = template.Must(template.New("site-page").Parse(`<!doctype 
     <main class="site-page-main {{.MainClass}}" aria-label="{{.Heading}}">
       {{.Content}}
     </main>
-    <footer class="site-page-footer">
-      <span>Molten Hub Code</span>
-      <span>Local monitor</span>
-    </footer>
+    {{.BottomDock}}
   </div>
   <script>
     if (window.lucide) {
@@ -76,6 +73,7 @@ type sitePageData struct {
 	ActivePath       string
 	ShowDashboardNav bool
 	Content          template.HTML
+	BottomDock       template.HTML
 }
 
 // Server provides an HTTP UI for live hub/task monitoring.
@@ -384,16 +382,18 @@ func (s Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) renderSitePage(w http.ResponseWriter, data sitePageData) {
+	data.BottomDock = template.HTML(bottomDockPlaceholder)
 	var page bytes.Buffer
 	if err := sitePageTemplate.Execute(&page, data); err != nil {
 		s.logf("hub.ui status=warn event=render_site_page err=%q", err)
 		http.Error(w, "page is unavailable", http.StatusInternalServerError)
 		return
 	}
+	rendered := s.injectBottomDockComponent(page.Bytes())
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	_, _ = w.Write(page.Bytes())
+	_, _ = w.Write(rendered)
 }
 
 func dashboardEnabled() bool {

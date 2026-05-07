@@ -2175,7 +2175,9 @@ func TestHandlerServesDashboardWhenEnabled(t *testing.T) {
 		`<title>Molten Hub Code Dashboard</title>`,
 		`src="/static/site-header.js"`,
 		`<moltenhub-code-header agent-harness="codex" agent-label="Codex"></moltenhub-code-header>`,
-		`class="site-page-footer"`,
+		`class="page-bottom-dock"`,
+		`class="prompt-mode-tabs prompt-mode-tabs-dock"`,
+		`src="/static/bottom-dock.js"`,
 		`href="/static/style.css"`,
 		`href="/dashboard" aria-current="page"`,
 		`class="dashboard-blank" aria-label="Dashboard workspace"`,
@@ -2184,6 +2186,12 @@ func TestHandlerServesDashboardWhenEnabled(t *testing.T) {
 		if !strings.Contains(markup, needle) {
 			t.Fatalf("expected dashboard html to include %q", needle)
 		}
+	}
+	if strings.Contains(markup, `class="site-page-footer"`) ||
+		strings.Contains(markup, bottomDockPlaceholder) ||
+		!strings.Contains(markup, `id="prompt-mode-builder" class="prompt-mode-link active"`) ||
+		!strings.Contains(markup, `id="theme-toggle" class="prompt-mode-link theme-toggle theme-toggle-dock"`) {
+		t.Fatalf("expected dashboard footer to use shared bottom dock with default button states")
 	}
 }
 
