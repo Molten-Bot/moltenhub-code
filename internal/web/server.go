@@ -326,7 +326,7 @@ func (s Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data = s.injectIndexConfig(data)
-	data = s.injectBottomDockComponent(data)
+	data = s.injectBottomDockComponent(r.Context(), data)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
@@ -344,14 +344,14 @@ func (s Server) handleReleases(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "releases page is unavailable", http.StatusInternalServerError)
 		return
 	}
-	data = s.injectBottomDockComponent(data)
+	data = s.injectBottomDockComponent(r.Context(), data)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write(data)
 }
 
-func (s Server) injectBottomDockComponent(data []byte) []byte {
+func (s Server) injectBottomDockComponent(ctx context.Context, data []byte) []byte {
 	if !bytes.Contains(data, []byte(bottomDockPlaceholder)) {
 		return data
 	}
@@ -360,7 +360,68 @@ func (s Server) injectBottomDockComponent(data []byte) []byte {
 		s.logf("hub.ui status=warn event=load_bottom_dock_component err=%q", err)
 		return data
 	}
+	dock = s.applyBottomDockHubState(ctx, dock)
 	return bytes.Replace(data, []byte(bottomDockPlaceholder), bytes.TrimSpace(dock), 1)
+}
+
+func (s Server) applyBottomDockHubState(ctx context.Context, dock []byte) []byte {
+	state, err := s.currentHubSetupState(ctx)
+	if err != nil {
+		s.logf("hub.ui status=warn event=load_bottom_dock_hub_state err=%q", err)
+	}
+
+	configured := state.Configured
+	connectURL := strings.TrimSpace(state.ConnectURL)
+	if connectURL == "" {
+		connectURL = defaultHubSetupState().ConnectURL
+	}
+	dashboardURL := strings.TrimSpace(state.DashboardURL)
+	if dashboardURL == "" {
+		dashboardURL = defaultHubSetupState().DashboardURL
+	}
+
+	hubURL := connectURL
+	hubTitle := "Configure Molten Hub"
+	profileButtonAttr := " hidden"
+	plusClass := "hub-dock-plus"
+	if configured {
+		hubURL = dashboardURL
+		hubTitle = "Open Molten Bot Hub in a new window"
+		profileButtonAttr = ""
+		plusClass = "hub-dock-plus hidden"
+	}
+
+	dock = bytes.Replace(dock,
+		[]byte(`<div id="moltenbot-hub-dock-group" class="hub-dock-group" data-configured="false">`),
+		[]byte(fmt.Sprintf(`<div id="moltenbot-hub-dock-group" class="hub-dock-group" data-configured="%t">`, configured)),
+		1,
+	)
+	dock = bytes.Replace(dock,
+		[]byte(`href="https://app.molten.bot/signin?target=hub"`),
+		[]byte(`href="`+template.HTMLEscapeString(hubURL)+`"`),
+		1,
+	)
+	dock = bytes.Replace(dock,
+		[]byte(`aria-label="Open Molten Bot Hub in a new window"`),
+		[]byte(`aria-label="`+template.HTMLEscapeString(hubTitle)+`"`),
+		1,
+	)
+	dock = bytes.Replace(dock,
+		[]byte(`title="Open Molten Bot Hub in a new window"`),
+		[]byte(`title="`+template.HTMLEscapeString(hubTitle)+`"`),
+		1,
+	)
+	dock = bytes.Replace(dock,
+		[]byte(`<span id="moltenbot-hub-plus" class="hub-dock-plus hidden" aria-hidden="true">+</span>`),
+		[]byte(`<span id="moltenbot-hub-plus" class="`+plusClass+`" aria-hidden="true">+</span>`),
+		1,
+	)
+	dock = bytes.Replace(dock,
+		[]byte("        hidden>\n"),
+		[]byte(profileButtonAttr+">\n"),
+		1,
+	)
+	return dock
 }
 
 func (s Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
