@@ -94,6 +94,18 @@ func TestPRMergeMonitorRemovesMergedTaskFromQueueAndRunsCleanup(t *testing.T) {
 	if got, want := len(snap.Tasks), 0; got != want {
 		t.Fatalf("len(tasks) after merged PR observation = %d, want %d", got, want)
 	}
+	if got, want := len(snap.Releases), 1; got != want {
+		t.Fatalf("len(releases) after merged PR observation = %d, want %d", got, want)
+	}
+	if got, want := snap.Releases[0].Prompt, "ship it"; got != want {
+		t.Fatalf("release.Prompt = %q, want %q", got, want)
+	}
+	if got, want := snap.Releases[0].PRURL, "https://github.com/acme/repo/pull/42"; got != want {
+		t.Fatalf("release.PRURL = %q, want %q", got, want)
+	}
+	if got, want := snap.Releases[0].MergedAt, "2026-04-09T12:00:00Z"; got != want {
+		t.Fatalf("release.MergedAt = %q, want %q", got, want)
+	}
 
 	commands := runner.Commands()
 	if len(commands) == 0 {

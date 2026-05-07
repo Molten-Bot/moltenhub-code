@@ -311,7 +311,7 @@
               <h1 class="panel-section-title releases-title">Releases</h1>
             </div>
           </div>
-          <div class="release-list">
+          <div id="release-list" class="release-list">
             <div class="release-empty" aria-label="No releases">
               <p>No releases yet.</p>
             </div>
@@ -1783,6 +1783,7 @@
     const promptTitleModes = Array.from(document.querySelectorAll("[data-prompt-title-mode]"));
     const appLayout = document.querySelector(".layout");
     const releasesDisplay = document.getElementById("releases-display");
+    const releaseList = document.getElementById("release-list");
     const dashboardDisplay = document.getElementById("dashboard-display");
     const dashboardUpdated = document.getElementById("dashboard-updated");
     const dashboardMaxConcurrent = document.getElementById("dashboard-max-concurrent");
@@ -4564,6 +4565,90 @@
       }
     }
 
+    function releasePromptLabel(release) {
+      const prompt = String(release?.prompt || "").trim();
+      if (prompt) return prompt;
+      const workflow = String(release?.workflow || release?.skill || "").trim();
+      if (workflow) return workflow;
+      return "Merged prompt";
+    }
+
+    function releaseMetaParts(release) {
+      const parts = [];
+      const repos = normalizedTaskRepos(release);
+      if (repos.length) parts.push(repos.join(", "));
+      const branch = formatTaskBranch(release);
+      if (branch && branch !== "-") parts.push(branch);
+      const agent = String(release?.agent_harness || "").trim();
+      if (agent) parts.push(agent);
+      return parts;
+    }
+
+    function renderReleases(snapshot) {
+      if (!releaseList) return;
+      releaseList.textContent = "";
+      const releases = Array.isArray(snapshot?.releases) ? snapshot.releases : [];
+      if (!releases.length) {
+        const empty = document.createElement("div");
+        empty.className = "release-empty";
+        empty.setAttribute("aria-label", "No releases");
+        const text = document.createElement("p");
+        text.textContent = "No releases yet.";
+        empty.appendChild(text);
+        releaseList.appendChild(empty);
+        return;
+      }
+
+      for (const release of releases) {
+        const card = document.createElement("article");
+        card.className = "release-card";
+
+        const icon = document.createElement("span");
+        icon.className = "release-change-status release-change-status-preserved";
+        icon.setAttribute("aria-hidden", "true");
+        const iconNode = document.createElement("i");
+        iconNode.dataset.lucide = "git-merge";
+        iconNode.className = "release-change-icon";
+        icon.appendChild(iconNode);
+
+        const body = document.createElement("div");
+        body.className = "release-card-body";
+        const title = document.createElement("p");
+        title.className = "release-prompt";
+        title.textContent = releasePromptLabel(release);
+        body.appendChild(title);
+
+        const metaParts = releaseMetaParts(release);
+        const mergedAt = relativeTime(release?.merged_at || release?.released_at);
+        const duration = dashboardDuration(Number(release?.duration_seconds || 0));
+        if (mergedAt) metaParts.push(`merged ${mergedAt}`);
+        if (duration && duration !== "0m") metaParts.push(`${duration} runtime`);
+        if (metaParts.length) {
+          const meta = document.createElement("div");
+          meta.className = "release-meta";
+          meta.textContent = metaParts.join(" | ");
+          body.appendChild(meta);
+        }
+
+        const prURL = String(release?.pr_url || "").trim();
+        if (prURL) {
+          const link = document.createElement("a");
+          link.className = "release-link";
+          link.href = prURL;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = "Pull request";
+          body.appendChild(link);
+        }
+
+        card.append(icon, body);
+        releaseList.appendChild(card);
+      }
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    }
+
     function escapeLiteralNewlinesInJSONStrings(raw) {
       let out = "";
       let inString = false;
@@ -6019,6 +6104,7 @@
         }
       }
       syncPromptModeLinks();
+      renderReleases(state.snapshot);
       renderTasks(state.snapshot);
       renderDashboardStats(state.snapshot);
       if (options.updateHash) {
@@ -9182,6 +9268,7 @@
       syncTaskIconStateMemory(snapshot.tasks || []);
       renderHubConnection(snapshot);
       renderResourceMetrics(snapshot);
+      renderReleases(snapshot);
       renderDashboardStats(snapshot);
       renderTasks(snapshot);
       renderFullscreenTasks(snapshot);

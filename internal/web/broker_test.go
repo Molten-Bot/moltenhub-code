@@ -108,6 +108,47 @@ func TestBrokerTracksTaskRuntimeAndSavedTimeStats(t *testing.T) {
 	}
 }
 
+func TestBrokerRecordsMergedPRReleaseFromTask(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	b := NewBroker()
+	b.now = func() time.Time { return now }
+
+	b.RecordTaskRunConfig("req-release", []byte(`{"repo":"git@github.com:acme/repo.git","baseBranch":"main","prompt":"ship release panel","agentHarness":"codex"}`))
+	b.IngestLog("dispatch status=start request_id=req-release repo=git@github.com:acme/repo.git")
+	now = now.Add(3 * time.Minute)
+	b.IngestLog("dispatch status=completed request_id=req-release workspace=/tmp/run branch=moltenhub-release pr_url=https://github.com/acme/repo/pull/42")
+
+	task, ok := b.Task("req-release")
+	if !ok {
+		t.Fatal("Task(req-release) found = false, want true")
+	}
+	now = now.Add(time.Minute)
+	b.RecordReleaseFromTask(task, "2026-05-07T12:04:00Z")
+
+	snap := b.Snapshot()
+	if got, want := len(snap.Releases), 1; got != want {
+		t.Fatalf("len(releases) = %d, want %d", got, want)
+	}
+	release := snap.Releases[0]
+	if got, want := release.RequestID, "req-release"; got != want {
+		t.Fatalf("release.RequestID = %q, want %q", got, want)
+	}
+	if got, want := release.Prompt, "ship release panel"; got != want {
+		t.Fatalf("release.Prompt = %q, want %q", got, want)
+	}
+	if got, want := release.PRURL, "https://github.com/acme/repo/pull/42"; got != want {
+		t.Fatalf("release.PRURL = %q, want %q", got, want)
+	}
+	if got, want := release.DurationSeconds, 180.0; got != want {
+		t.Fatalf("release.DurationSeconds = %v, want %v", got, want)
+	}
+	if got, want := release.MergedAt, "2026-05-07T12:04:00Z"; got != want {
+		t.Fatalf("release.MergedAt = %q, want %q", got, want)
+	}
+}
+
 func TestBrokerNormalizesLegacyOKTerminalStatusToCompleted(t *testing.T) {
 	t.Parallel()
 

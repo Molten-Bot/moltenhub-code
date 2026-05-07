@@ -3459,6 +3459,35 @@ select.prompt-control {
   line-height: 1.55;
 }
 
+.release-card-body {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.release-prompt {
+  overflow-wrap: anywhere;
+}
+
+.release-meta {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.release-link {
+  width: fit-content;
+  color: var(--accent);
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.release-link:hover,
+.release-link:focus {
+  text-decoration: underline;
+}
+
 .release-change-status {
   display: inline-flex;
   align-items: center;

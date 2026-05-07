@@ -12,7 +12,7 @@ import (
 	"github.com/Molten-Bot/moltenhub-code/internal/githubutil"
 )
 
-const defaultPRMergePollInterval = 30 * time.Second
+const defaultPRMergePollInterval = 2 * time.Minute
 
 // PRMergeMonitor watches task pull requests and closes merged tasks so they
 // disappear from queue/UI automatically.
@@ -152,6 +152,7 @@ func (m *PRMergeMonitor) checkTaskPR(ctx context.Context, task Task) {
 	if !state.Merged() {
 		return
 	}
+	m.Broker.RecordReleaseFromTask(task, state.MergedAt)
 	if err := m.Broker.CloseTask(task.RequestID); err != nil {
 		switch {
 		case err == ErrTaskNotFound:
