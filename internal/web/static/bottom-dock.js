@@ -18,6 +18,14 @@
     return window.location.pathname === HOME_PATH;
   }
 
+  function normalizePath(path) {
+    const value = String(path || HOME_PATH).trim() || HOME_PATH;
+    if (value.length > 1) {
+      return value.replace(/\/+$/, "");
+    }
+    return value;
+  }
+
   function replaceLucideIcons(root) {
     const api = window.lucide;
     if (!api || typeof api.createIcons !== "function") {
@@ -166,6 +174,21 @@
     }
   }
 
+  function syncPageNavLinks(root) {
+    const currentPath = normalizePath(window.location.pathname || HOME_PATH);
+    const links = root.querySelectorAll("[data-page-nav-link]");
+    links.forEach((link) => {
+      const linkPath = normalizePath(link.getAttribute("data-page-nav-link") || link.getAttribute("href"));
+      const active = linkPath === currentPath;
+      link.classList.toggle("active", active);
+      if (active) {
+        link.setAttribute("aria-current", "page");
+      } else {
+        link.removeAttribute("aria-current");
+      }
+    });
+  }
+
   function applyGitHubProfileLink(profileURL) {
     const githubProfileLink = document.getElementById("github-profile-link");
     if (!githubProfileLink) {
@@ -274,6 +297,21 @@
     }
   }
 
+  function bindPageNavAnalytics(root) {
+    root.querySelectorAll("[data-page-nav-link]").forEach((link) => {
+      if (link.dataset.bottomDockPageNavBound === "true") {
+        return;
+      }
+      link.dataset.bottomDockPageNavBound = "true";
+      link.addEventListener("click", () => {
+        trackDockEvent("site_page_nav_opened", {
+          source: "dock",
+          target: normalizePath(link.getAttribute("data-page-nav-link") || link.getAttribute("href")),
+        });
+      });
+    });
+  }
+
   function init() {
     const root = document.querySelector(".page-bottom-dock");
     if (!root || root.dataset.bottomDockReady === "true") {
@@ -281,9 +319,11 @@
     }
     root.dataset.bottomDockReady = "true";
     replaceLucideIcons(root);
+    syncPageNavLinks(root);
     routeStudioLinksToHome(root);
     initThemeToggle(root);
     bindStaticDockAnalytics(root);
+    bindPageNavAnalytics(root);
     void resolveGitHubProfileLink();
     void resolveHubDockState();
   }

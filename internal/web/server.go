@@ -46,7 +46,6 @@ var sitePageTemplate = template.Must(template.New("site-page").Parse(`<!doctype 
 <body class="min-h-screen antialiased site-page-body {{.BodyClass}}">
   <div class="site-page {{.PageClass}}">
     <moltenhub-code-header agent-harness="codex" agent-label="Codex"></moltenhub-code-header>
-    <moltenhub-code-nav></moltenhub-code-nav>
     <main class="site-page-main {{.MainClass}}" aria-label="{{.Heading}}">
       {{.Content}}
     </main>

@@ -2186,9 +2186,9 @@ func TestHandlerServesDashboardWhenEnabled(t *testing.T) {
 		`<title>Molten Hub Code Dashboard</title>`,
 		`src="/static/site-header.js"`,
 		`<moltenhub-code-header agent-harness="codex" agent-label="Codex"></moltenhub-code-header>`,
-		`<moltenhub-code-nav></moltenhub-code-nav>`,
 		`class="page-bottom-dock"`,
 		`class="prompt-mode-tabs prompt-mode-tabs-dock"`,
+		`data-page-nav-link="/dashboard"`,
 		`src="/static/bottom-dock.js"`,
 		`href="/static/style.css"`,
 		`class="dashboard-blank" aria-label="Dashboard workspace"`,
@@ -2261,8 +2261,8 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 		t.Fatalf("expected stylesheet to include theme toggle styles")
 	}
 	if !strings.Contains(css, ".prompt-mode-mobile-label {\n  display: none;\n}") ||
-		!strings.Contains(css, ".prompt-mode-mobile-label {\n    position: relative;\n    z-index: 1;\n    display: block;") {
-		t.Fatalf("expected stylesheet to expose mobile labels for docked nav controls")
+		!strings.Contains(css, ".prompt-mode-link-tooltip {\n    display: none;\n  }") {
+		t.Fatalf("expected stylesheet to keep docked nav controls icon-only on mobile")
 	}
 	if !strings.Contains(css, ".prompt-mode-link-icon {\n  position: relative;\n  z-index: 1;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 18px;\n  height: 18px;\n  overflow: hidden;\n  border: 0;\n  background: transparent;\n  box-shadow: none;") {
 		t.Fatalf("expected stylesheet to render dock link icons without circular button chrome")
