@@ -51,3 +51,26 @@ docker run --rm -p 7777:7777 \
 - `MOLTEN_HUB_REGION=na|eu` selects hosted hub region
 - `MOLTEN_HUB_URL=https://na.hub.molten.bot/v1` sets explicit hosted hub API URL
 - `MOLTEN_HUB_SESSION_KEY` customizes generated init config session key
+
+Docker Compose environment values must use mapping syntax (`KEY: value`) or
+list syntax (`KEY=value`). List entries such as `KEY:value` are malformed and
+do not arrive in the container as usable environment variables.
+
+Compose example:
+
+```yaml
+services:
+  codex:
+    image: moltenai/moltenhub-code:latest
+    ports:
+      - "3331:7777"
+    volumes:
+      - ./.moltenhub:/workspace/config
+    environment:
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      MOLTEN_HUB_TOKEN: ${MOLTEN_HUB_TOKEN}
+      MOLTEN_HUB_REGION: na
+      HARNESS_AGENT_HARNESS: codex
+      # Optional for Codex agent auth bootstrap:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+```

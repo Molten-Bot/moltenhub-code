@@ -444,6 +444,37 @@ func TestDefaultCatalogIncludesFixPRCITestsTask(t *testing.T) {
 	}
 }
 
+func TestDefaultCatalogIncludesMovePageCSSToGlobalCSSTask(t *testing.T) {
+	t.Setenv(catalogDirEnv, "")
+	t.Setenv(agentsSeedEnv, "")
+
+	catalog, err := LoadCatalog(DefaultDir)
+	if err != nil {
+		t.Fatalf("LoadCatalog(%q) error = %v", DefaultDir, err)
+	}
+
+	task, ok := catalog.byName["move-page-css-to-global-css"]
+	if !ok {
+		t.Fatalf("default catalog missing %q task", "move-page-css-to-global-css")
+	}
+	prompt := strings.ToLower(task.Prompt)
+	for _, want := range []string{
+		"move all css",
+		"global css file",
+		"page files",
+		"no visual, layout, interaction, accessibility, responsive, route, data-loading, or content regressions",
+		"`failure:`",
+		"`error details:`",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt = %q, want %q guidance", task.Prompt, want)
+		}
+	}
+	if got, want := task.PRTitle, "Molten Hub Code: Move Page CSS To Global CSS"; got != want {
+		t.Fatalf("PRTitle = %q, want %q", got, want)
+	}
+}
+
 func TestDefaultCatalogDoesNotIncludeDeletePromptImagesTask(t *testing.T) {
 	t.Setenv(catalogDirEnv, "")
 	t.Setenv(agentsSeedEnv, "")

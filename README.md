@@ -18,6 +18,27 @@ docker run --rm -p 7777:7777 \
 
 The container starts the hub UI on port `7777`. It persists onboarding, runtime config, and CLI auth home data in `/workspace/config`, so mount that path for repeat runs.
 
+Docker Compose should use mapping syntax (`KEY: value`) or list syntax (`KEY=value`).
+Do not use list entries like `KEY:value`; Compose passes those as malformed
+environment entries and the container cannot use them.
+
+```yaml
+services:
+  codex:
+    image: moltenai/moltenhub-code:latest
+    ports:
+      - "3331:7777"
+    volumes:
+      - ./.moltenhub:/workspace/config
+    environment:
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      MOLTEN_HUB_TOKEN: ${MOLTEN_HUB_TOKEN}
+      MOLTEN_HUB_REGION: na
+      HARNESS_AGENT_HARNESS: codex
+      # Optional: lets Codex authenticate at boot instead of prompting in the UI.
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+```
+
 The runtime image includes:
 
 - Go `1.26.1`
@@ -110,7 +131,7 @@ Useful environment variables:
 - `SHOW_DASHBOARD`: set to `false` to disable the local `/dashboard` page. Defaults to enabled.
 - `OPENAI_API_KEY`, `AUGMENT_SESSION_AUTH`, `PI_PROVIDER_AUTH`, `PI_AUTH_JSON`: optional agent auth values loaded by the entrypoint or persisted config.
 
-Docker Compose list syntax should use `KEY=value`, for example `MOLTEN_HUB_TOKEN=t_XXX`; mapping syntax should use `MOLTEN_HUB_TOKEN: t_XXX`. The entrypoint also tolerates the common list typo `KEY:value` for bootstrap variables.
+Docker Compose list syntax should use `KEY=value`, for example `MOLTEN_HUB_TOKEN=t_XXX`; mapping syntax should use `MOLTEN_HUB_TOKEN: t_XXX`. List entries such as `MOLTEN_HUB_TOKEN:t_XXX` are not valid Compose environment values.
 
 Hub OpenAPI:
 
