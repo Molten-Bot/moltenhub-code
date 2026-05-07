@@ -177,7 +177,11 @@
 
   function syncPageNavLinks(root) {
     const hashDisplay = String(window.location.hash || "").replace(/^#/, "").trim();
-    const currentDisplay = hashDisplay === "releases" || hashDisplay === "dashboard" ? hashDisplay : "studio";
+    const currentDisplay = hashDisplay === "releases" || hashDisplay === "dashboard" || hashDisplay === "chat"
+      ? hashDisplay
+      : normalizePath(window.location.pathname) === "/chat"
+        ? "chat"
+        : "studio";
     const links = root.querySelectorAll("[data-app-display]");
     links.forEach((link) => {
       const linkDisplay = String(link.getAttribute("data-app-display") || "").trim() || "dashboard";
@@ -188,6 +192,26 @@
       } else {
         link.removeAttribute("aria-current");
       }
+    });
+  }
+
+  function routeAppDisplayLinksToHome(root) {
+    if (isHomePage()) {
+      return;
+    }
+    root.querySelectorAll("[data-app-display]").forEach((link) => {
+      if (link.dataset.bottomDockHomeRouteBound === "true") {
+        return;
+      }
+      link.dataset.bottomDockHomeRouteBound = "true";
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        const display = String(link.getAttribute("data-app-display") || "").trim();
+        if (!display) {
+          return;
+        }
+        window.location.assign(`${HOME_PATH}#${display}`);
+      });
     });
   }
 
@@ -324,6 +348,7 @@
     syncPageNavLinks(root);
     window.addEventListener("hashchange", () => syncPageNavLinks(root));
     routeStudioLinksToHome(root);
+    routeAppDisplayLinksToHome(root);
     initThemeToggle(root);
     bindStaticDockAnalytics(root);
     bindPageNavAnalytics(root);

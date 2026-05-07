@@ -216,8 +216,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if strings.Contains(markup, `task-empty-chip`) {
 		t.Fatalf("expected index html to remove empty queue stage chips")
 	}
-	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title">Studio</span>`) {
-		t.Fatalf("expected index html to label the builder mode as Studio")
+	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title">Prompt</span>`) {
+		t.Fatalf("expected index html to label the builder mode as Prompt")
 	}
 	if !strings.Contains(markup, `id="prompt-panel-copy"`) || !strings.Contains(markup, `Compose a repository run, start from a library task, or edit the raw JSON payload.`) {
 		t.Fatalf("expected index html to include prompt panel supporting copy")
@@ -317,8 +317,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="hub-setup-submit" class="prompt-action-button prompt-submit" type="submit">Connect Runtime</button>`) {
 		t.Fatalf("expected index html to use a clearer default hub setup submit label")
 	}
-	if !strings.Contains(markup, `id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true" title="Studio"`) {
-		t.Fatalf("expected index html to relabel the primary dock mode as Studio")
+	if !strings.Contains(markup, `id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true" title="Prompt"`) {
+		t.Fatalf("expected index html to relabel the primary dock mode as Prompt")
 	}
 	if !strings.Contains(markup, `id="hub-setup-emoji-picker"`) || !strings.Contains(markup, `id="hub-setup-emoji-panel"`) {
 		t.Fatalf("expected index html to include the emoji picker control shell")
@@ -1086,8 +1086,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "return normalizeTaskStatusFilter(state.taskStatusFilter) === \"completed\" && runningCount === 0 && completedCount === 0;") {
 		t.Fatalf("expected index html to keep completed-history empty state visible only in completed-history view")
 	}
-	if !strings.Contains(markup, "taskPanel.classList.toggle(\"hidden\", !showTaskPanel);") {
-		t.Fatalf("expected index html to hide the task queue panel when dashboard is inactive or current work and history are both empty")
+	if !strings.Contains(markup, "const showTaskPanel = true;") ||
+		!strings.Contains(markup, "taskPanel.classList.toggle(\"hidden\", !showTaskPanel);") {
+		t.Fatalf("expected index html to keep the task queue panel available across app views")
 	}
 	if !strings.Contains(markup, "taskPanel.setAttribute(\"aria-hidden\", showTaskPanel ? \"false\" : \"true\");") {
 		t.Fatalf("expected index html to keep task panel aria visibility in sync with rendered content")
@@ -1329,8 +1330,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `aria-label="Minimize Studio panel"`) || !strings.Contains(markup, `title="Minimize Studio panel">▾</button>`) {
 		t.Fatalf("expected index html to initialize the studio toggle as an arrow minimize control")
 	}
-	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title">Studio</span>`) {
-		t.Fatalf("expected index html to render the prompt panel under a Studio heading by default")
+	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title">Prompt</span>`) {
+		t.Fatalf("expected index html to render the prompt panel under a Prompt heading by default")
 	}
 	if !strings.Contains(markup, "library-task-option-subtitle") {
 		t.Fatalf("expected index html to include library task subtitles")
@@ -1434,11 +1435,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="prompt-mode-builder"`) {
 		t.Fatalf("expected index html to include builder mode toggle")
 	}
-	if !strings.Contains(markup, `id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true" title="Studio"`) {
-		t.Fatalf("expected index html to render Studio as the primary dock icon action")
+	if !strings.Contains(markup, `id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true" title="Prompt"`) {
+		t.Fatalf("expected index html to render Prompt as the primary dock icon action")
 	}
-	if !strings.Contains(markup, `<span class="prompt-mode-link-tooltip" aria-hidden="true">Studio</span>`) {
-		t.Fatalf("expected index html to expose Studio through dock tooltip text")
+	if !strings.Contains(markup, `<span class="prompt-mode-link-tooltip" aria-hidden="true">Prompt</span>`) {
+		t.Fatalf("expected index html to expose Prompt through dock tooltip text")
 	}
 	if !strings.Contains(markup, `id="prompt-mode-library"`) {
 		t.Fatalf("expected index html to include library mode toggle")
@@ -1449,10 +1450,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function promptModeTitle(mode)") {
 		t.Fatalf("expected index html to include promptModeTitle helper")
 	}
-	if !strings.Contains(markup, `const mode = display === "releases" || display === "dashboard" ? display : "studio";`) ||
+	if !strings.Contains(markup, `const mode = display === "releases" || display === "dashboard" || display === "chat" ? display : "studio";`) ||
+		!strings.Contains(markup, `appLayout.hidden = false;`) ||
 		!strings.Contains(markup, `promptWrap.hidden = !showStudio;`) ||
-		!strings.Contains(markup, `const showTaskPanel = hasTaskPanelTasks && state.appDisplay === "dashboard";`) {
-		t.Fatalf("expected index html to keep studio, releases, and dashboard as mutually exclusive display modes")
+		!strings.Contains(markup, `const showTaskPanel = true;`) {
+		t.Fatalf("expected index html to switch main views while keeping Current Work available")
 	}
 	if !strings.Contains(markup, `promptPanelTitle.textContent = promptModeTitle(state.promptMode);`) {
 		t.Fatalf("expected index html to update the panel heading when the prompt mode changes")
@@ -2208,7 +2210,7 @@ func TestHandlerServesChatView(t *testing.T) {
 		`src="/static/site-header.js"`,
 		`<moltenhub-code-header agent-harness="codex" agent-label="Codex"></moltenhub-code-header>`,
 		`class="page-bottom-dock"`,
-		`data-page-nav-link="/chat"`,
+		`data-app-display="chat"`,
 		`<i data-lucide="message-circle" aria-hidden="true"></i>`,
 		`id="chat-repo-grid" class="chat-repo-grid" aria-label="GitHub repositories"`,
 		`fetch("/api/github/repos", { cache: "no-store" })`,

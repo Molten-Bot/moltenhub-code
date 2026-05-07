@@ -831,6 +831,25 @@ moltenhub-code-nav {
   gap: 6px;
 }
 
+.task-running-count {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--running);
+  color: #fff;
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 0 0 2px rgb(var(--hub-panel-rgb) / 1);
+}
+
 #task-panel {
   display: flex;
   flex-direction: column;
@@ -3547,6 +3566,7 @@ html.pink .task-progress-step.current .task-progress-step-icon.is-agent-logo {
 }
 
 .prompt-visibility-toggle {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;

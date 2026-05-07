@@ -82,7 +82,7 @@
                 type="button"
                 aria-pressed="true"
                 aria-label="Minimize tasks panel"
-                title="Minimize tasks panel">▾</button>
+                title="Minimize tasks panel">▾<span id="task-running-count" class="task-running-count hidden" aria-hidden="true">0</span></button>
             </div>
           </div>
           <div class="scroll task-scroll">
@@ -93,7 +93,7 @@
         <section class="panel prompt-wrap brand-login-card-shell">
           <div class="panel-header prompt-titlebar">
             <div class="panel-header-copy">
-              <span id="prompt-panel-title" class="panel-section-title">Studio</span>
+              <span id="prompt-panel-title" class="panel-section-title">Prompt</span>
               <p id="prompt-panel-copy" class="panel-section-copy">Compose a repository run, start from a library task, or edit the raw JSON payload.</p>
             </div>
             <button id="prompt-visibility-toggle" class="prompt-visibility-toggle" type="button" aria-pressed="true" aria-label="Minimize Studio panel" title="Minimize Studio panel">▾</button>
@@ -297,6 +297,19 @@
       <div class="release-empty" aria-label="No releases">
         <p>No releases yet.</p>
       </div>
+    </section>
+
+    <section id="chat-display" class="chat-main hidden" aria-label="Chat" aria-hidden="true">
+      <section class="chat-shell" aria-labelledby="chat-title">
+        <div class="chat-head">
+          <div>
+            <p class="eyebrow">GitHub</p>
+            <h1 id="chat-title">Chat</h1>
+          </div>
+          <p id="chat-status" class="chat-status" aria-live="polite">Loading repositories...</p>
+        </div>
+        <div id="chat-repo-grid" class="chat-repo-grid" aria-label="GitHub repositories"></div>
+      </section>
     </section>
   </div>
 
@@ -1582,6 +1595,7 @@
         mem: false,
         disk: false,
       },
+      chatReposLoaded: false,
     };
     if (pruneTaskHistory()) {
       persistTaskHistory();
@@ -1646,6 +1660,9 @@
     const promptModeJSON = document.getElementById("prompt-mode-json");
     const appLayout = document.querySelector(".layout");
     const releasesDisplay = document.getElementById("releases-display");
+    const chatDisplay = document.getElementById("chat-display");
+    const chatRepoGrid = document.getElementById("chat-repo-grid");
+    const chatStatus = document.getElementById("chat-status");
     const appDisplayLinks = Array.from(document.querySelectorAll("[data-app-display]"));
     const chatDockLink = document.querySelector('[data-page-nav-link="/chat"]');
     const promptPanelTitle = document.getElementById("prompt-panel-title");
@@ -5216,7 +5233,7 @@
         case "json":
           return "JSON";
         default:
-          return "Studio";
+          return "Prompt";
       }
     }
 
@@ -5231,9 +5248,63 @@
       }
     }
 
+    function renderChatRepoCard(repo) {
+      const card = document.createElement("a");
+      card.className = "chat-repo-card";
+      card.href = String(repo?.html_url || "#");
+      card.target = "_blank";
+      card.rel = "noreferrer noopener";
+      card.setAttribute("aria-label", "Open " + String(repo?.full_name || repo?.name || "repository"));
+
+      const title = document.createElement("span");
+      title.className = "chat-repo-card-title";
+      title.textContent = String(repo?.full_name || repo?.name || "Unnamed repository");
+      card.appendChild(title);
+
+      const description = document.createElement("span");
+      description.className = "chat-repo-card-description";
+      description.textContent = String(repo?.description || "No description.");
+      card.appendChild(description);
+
+      const meta = document.createElement("span");
+      meta.className = "chat-repo-card-meta";
+      const visibility = repo?.private ? "Private" : "Public";
+      const language = String(repo?.language || "").trim();
+      meta.textContent = language ? `${visibility} | ${language}` : visibility;
+      card.appendChild(meta);
+
+      return card;
+    }
+
+    async function loadChatRepos() {
+      if (!chatRepoGrid || !chatStatus || state.chatReposLoaded) {
+        return;
+      }
+      state.chatReposLoaded = true;
+      try {
+        const response = await fetch("/api/github/repos", { cache: "no-store" });
+        const body = await response.json();
+        if (!response.ok || !body || body.ok === false) {
+          throw new Error(body && body.error ? body.error : "github repositories request failed");
+        }
+        const repos = Array.isArray(body.repos) ? body.repos : [];
+        chatRepoGrid.replaceChildren(...repos.map(renderChatRepoCard));
+        chatStatus.textContent = repos.length === 1 ? "1 repository" : `${repos.length} repositories`;
+        if (repos.length === 0) {
+          const empty = document.createElement("p");
+          empty.className = "chat-empty";
+          empty.textContent = "No repositories found.";
+          chatRepoGrid.appendChild(empty);
+        }
+      } catch (err) {
+        state.chatReposLoaded = false;
+        chatStatus.textContent = err && err.message ? err.message : "Unable to load repositories.";
+      }
+    }
+
     function appDisplayFromHash() {
       const hash = String(window.location.hash || "").replace(/^#/, "").trim().toLowerCase();
-      if (hash === "releases" || hash === "dashboard") {
+      if (hash === "releases" || hash === "dashboard" || hash === "chat") {
         return hash;
       }
       return "studio";
@@ -5278,17 +5349,22 @@
     }
 
     function setAppDisplay(display, options = {}) {
-      const mode = display === "releases" || display === "dashboard" ? display : "studio";
+      const mode = display === "releases" || display === "dashboard" || display === "chat" ? display : "studio";
       const showReleases = mode === "releases";
+      const showChat = mode === "chat";
       const showStudio = mode === "studio";
       state.appDisplay = mode;
       if (appLayout) {
-        appLayout.hidden = showReleases;
+        appLayout.hidden = false;
         appLayout.dataset.appDisplay = mode;
       }
       if (releasesDisplay) {
         releasesDisplay.classList.toggle("hidden", !showReleases);
         releasesDisplay.setAttribute("aria-hidden", String(!showReleases));
+      }
+      if (chatDisplay) {
+        chatDisplay.classList.toggle("hidden", !showChat);
+        chatDisplay.setAttribute("aria-hidden", String(!showChat));
       }
       if (promptWrap) {
         promptWrap.hidden = !showStudio;
@@ -5310,12 +5386,17 @@
           ? options.updateHash
           : mode === "releases"
             ? "#releases"
-            : mode === "dashboard"
-              ? "#dashboard"
+          : mode === "dashboard"
+            ? "#dashboard"
+            : mode === "chat"
+              ? "#chat"
               : promptHashFromMode(state.promptMode);
         if (window.location.hash !== nextHash) {
           window.history.pushState(null, "", nextHash);
         }
+      }
+      if (showChat) {
+        void loadChatRepos();
       }
     }
 
@@ -5415,6 +5496,7 @@
     function applyTaskVisibility() {
       const visible = Boolean(state.taskVisible);
       const fullscreenOpen = Boolean(state.taskFullscreenOpen);
+      const runningCount = runningTasks(state.snapshot).length;
       if (taskPanel) {
         taskPanel.classList.toggle("task-panel-collapsed", !visible);
       }
@@ -5422,7 +5504,14 @@
         taskVisibilityToggle.hidden = fullscreenOpen;
         taskVisibilityToggle.disabled = fullscreenOpen;
         taskVisibilityToggle.setAttribute("aria-hidden", fullscreenOpen ? "true" : "false");
-        taskVisibilityToggle.textContent = visible ? "▾" : "▸";
+        const arrow = document.createTextNode(visible ? "▾" : "▸");
+        const count = document.createElement("span");
+        count.id = "task-running-count";
+        count.className = "task-running-count";
+        count.textContent = `${Math.min(99, runningCount)}`;
+        count.setAttribute("aria-hidden", "true");
+        count.classList.toggle("hidden", visible || runningCount <= 0);
+        taskVisibilityToggle.replaceChildren(arrow, count);
         taskVisibilityToggle.setAttribute("aria-label", visible ? "Minimize tasks panel" : "Expand tasks panel");
         taskVisibilityToggle.title = visible ? "Minimize tasks panel" : "Expand tasks panel";
         taskVisibilityToggle.setAttribute("aria-pressed", visible ? "true" : "false");
@@ -8235,7 +8324,7 @@
       const tasks = displayTasks(snapshot);
       const hasTasks = tasks.length > 0;
       const hasTaskPanelTasks = hasTaskPanelContent(snapshot);
-      const showTaskPanel = hasTaskPanelTasks && state.appDisplay === "dashboard";
+      const showTaskPanel = true;
       const promptOnly = normalizeTaskPanelView(state.taskPanelView) === "prompt";
       if (!showTaskPanel && state.taskFullscreenOpen) {
         state.taskFullscreenOpen = false;
@@ -8252,7 +8341,7 @@
       }
       applyTaskVisibility();
       if (taskFullscreenToggle) {
-        taskFullscreenToggle.disabled = !showTaskPanel;
+        taskFullscreenToggle.disabled = !hasTasks;
         taskFullscreenToggle.setAttribute("aria-expanded", state.taskFullscreenOpen ? "true" : "false");
         taskFullscreenToggle.setAttribute("aria-label", state.taskFullscreenOpen && state.taskFullscreenMode === "work" ? "Exit full screen work" : "Open full screen work");
       }
