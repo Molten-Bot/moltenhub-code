@@ -34,7 +34,9 @@ jobs:
         run: go mod download
 
       - name: Build
-        run: go build ./...
+        run: |
+          go build ./...
+          go build -o bin/harness ./cmd/harness
 
       - name: Test
         run: go test ./...
