@@ -40,6 +40,13 @@
             </div>
             <div class="task-panel-actions">
               <button
+                id="task-visibility-toggle"
+                class="task-visibility-toggle prompt-visibility-toggle"
+                type="button"
+                aria-pressed="true"
+                aria-label="Minimize tasks panel"
+                title="Minimize tasks panel">▾</button>
+              <button
                 id="task-sound-toggle"
                 class="task-sound-toggle"
                 type="button"
@@ -537,6 +544,7 @@
     const REVIEWER_HISTORY_KEY = "hubui.reviewerHistory.v1";
     const PROMPT_MODE_KEY = "hubui.localPromptMode";
     const PROMPT_VISIBILITY_KEY = "hubui.localPromptVisible";
+    const TASK_VISIBILITY_KEY = "hubui.taskPanelVisible";
     const TASK_PANEL_VIEW_KEY = "hubui.taskPanelView";
     const TASK_STATUS_FILTER_KEY = "hubui.taskStatusFilter";
     const TASK_HISTORY_KEY = "hubui.taskHistory.v1";
@@ -1374,6 +1382,14 @@
       }
     }
 
+    function loadTaskVisibility() {
+      try {
+        return localStorage.getItem(TASK_VISIBILITY_KEY) !== "hidden";
+      } catch (_err) {
+        return true;
+      }
+    }
+
     function loadTaskPanelView() {
       try {
         const raw = String(localStorage.getItem(TASK_PANEL_VIEW_KEY) || "").trim().toLowerCase();
@@ -1515,6 +1531,7 @@
       promptMode: loadPromptMode(),
       selectedLibraryTask: "",
       promptVisible: loadPromptVisibility(),
+      taskVisible: loadTaskVisibility(),
       taskPanelView: loadTaskPanelView(),
       taskStatusFilter: loadTaskStatusFilter(),
       taskFullscreenMode: "work",
@@ -1595,6 +1612,7 @@
     const taskList = document.getElementById("task-list");
     const taskPanel = document.getElementById("task-panel");
     const taskPanelTitle = document.getElementById("task-panel-title");
+    const taskVisibilityToggle = document.getElementById("task-visibility-toggle");
     const taskSoundToggle = document.getElementById("task-sound-toggle");
     const taskHistoryToggle = document.getElementById("task-history-toggle");
     const taskHistoryToggleBadge = document.getElementById("task-history-toggle-badge");
@@ -4890,6 +4908,14 @@
       }
     }
 
+    function persistTaskVisibility() {
+      try {
+        localStorage.setItem(TASK_VISIBILITY_KEY, state.taskVisible ? "visible" : "hidden");
+      } catch (_err) {
+        // Ignore localStorage failures.
+      }
+    }
+
     function builderPayload() {
       const repo = normalizeRepoValue(builderRepoInput.value) || defaultRepository();
       if (!repo) {
@@ -5288,6 +5314,26 @@
       persistPromptVisibility();
       applyPromptVisibility();
       trackAnalyticsEvent("prompt_visibility_changed", { visible: state.promptVisible });
+    }
+
+    function applyTaskVisibility() {
+      const visible = Boolean(state.taskVisible);
+      if (taskPanel) {
+        taskPanel.classList.toggle("task-panel-collapsed", !visible);
+      }
+      if (taskVisibilityToggle) {
+        taskVisibilityToggle.textContent = visible ? "▾" : "▸";
+        taskVisibilityToggle.setAttribute("aria-label", visible ? "Minimize tasks panel" : "Expand tasks panel");
+        taskVisibilityToggle.title = visible ? "Minimize tasks panel" : "Expand tasks panel";
+        taskVisibilityToggle.setAttribute("aria-pressed", visible ? "true" : "false");
+      }
+    }
+
+    function toggleTaskVisibility() {
+      state.taskVisible = !state.taskVisible;
+      persistTaskVisibility();
+      applyTaskVisibility();
+      trackAnalyticsEvent("task_visibility_changed", { visible: state.taskVisible });
     }
 
     function relativeTime(iso) {
@@ -8060,6 +8106,7 @@
         taskPanel.classList.toggle("is-empty", !hasTasks);
         taskPanel.setAttribute("aria-hidden", hasTaskPanelTasks ? "false" : "true");
       }
+      applyTaskVisibility();
       if (taskFullscreenToggle) {
         taskFullscreenToggle.disabled = !hasTaskPanelTasks;
         taskFullscreenToggle.setAttribute("aria-expanded", state.taskFullscreenOpen ? "true" : "false");
@@ -8843,6 +8890,7 @@
       return false;
     };
     promptVisibilityToggle.addEventListener("click", togglePromptVisibility);
+    taskVisibilityToggle.addEventListener("click", toggleTaskVisibility);
     taskHistoryToggle.addEventListener("click", () => {
       const nextFilter = normalizeTaskStatusFilter(state.taskStatusFilter) === "completed"
         ? "running"
@@ -8983,6 +9031,7 @@
       clearTaskHistoryUnseen();
     }
     applyTaskPanelViewMeta();
+    applyTaskVisibility();
     applyTaskSoundToggleMeta();
     renderConfiguredAgent();
     applyAgentAuthGate(state.agentAuth);

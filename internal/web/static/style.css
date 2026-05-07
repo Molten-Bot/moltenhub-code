@@ -856,6 +856,14 @@ moltenhub-code-nav {
   border-bottom-color: rgb(var(--hub-border-rgb) / 1);
 }
 
+#task-panel.task-panel-collapsed {
+  min-height: var(--hub-studio-collapsed-height);
+}
+
+#task-panel.task-panel-collapsed .task-scroll {
+  display: none;
+}
+
 .task-fullscreen-head-label {
   min-width: 0;
   flex: 1 1 auto;
