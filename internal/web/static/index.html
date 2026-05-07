@@ -13,7 +13,7 @@
     window.gtag("config", "G-BY33RFG2WB");
   </script>
   <script>
-    window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"","configuredAgentLabel":"","defaultRepository":"git@github.com:Molten-Bot/moltenhub-code.git","promptImageHarnesses":["codex","pi"]};
+    window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"","configuredAgentLabel":"","defaultRepository":"git@github.com:Molten-Bot/moltenhub-code.git","promptImageHarnesses":["codex","pi"],"githubReposReady":false};
   </script>
   <script src="/static/lucide.min.js"></script>
   <script src="/static/site-header.js"></script>
@@ -690,6 +690,8 @@
         configuredHarness: String(config.configuredHarness || "").trim(),
         configuredAgentLabel: String(config.configuredAgentLabel || "").trim(),
         defaultRepository: normalizeRepoValue(config.defaultRepository || "") || "git@github.com:Molten-Bot/moltenhub-code.git",
+        githubReposReady: Boolean(config.githubReposReady),
+        githubRepos: Array.isArray(config.githubRepos) ? config.githubRepos : [],
       };
     }
 
@@ -1534,8 +1536,9 @@
       }
     }
 
+    const stateUI = normalizeUIConfig(window.__HUB_UI_CONFIG__);
     const state = {
-      ui: normalizeUIConfig(window.__HUB_UI_CONFIG__),
+      ui: stateUI,
       agentAuth: normalizeAgentAuth({ required: false, ready: true, state: "ready" }),
       hubSetup: normalizeHubSetup({ configured: false }),
       snapshot: null,
@@ -1571,10 +1574,10 @@
       taskOrderLastSyncBucket: Math.floor(Date.now() / TASK_ORDER_SYNC_INTERVAL_MS),
       taskHistoryByID: loadTaskHistory(),
       taskHistoryUnseenIDs: loadTaskHistoryUnseenIDs(),
-      githubReposLoading: true,
-      githubReposReady: false,
+      githubReposLoading: false,
+      githubReposReady: Boolean(stateUI.githubReposReady),
       githubReposLoadError: "",
-      githubRepos: [],
+      githubRepos: stateUI.githubRepos,
       chatSubmittingRepos: new Set(),
       taskSoundMuted: loadTaskSoundMuted(),
       taskSoundInitialized: false,
@@ -7201,9 +7204,6 @@
 
     function currentTasks(snapshot) {
       const taskItems = [];
-      if (state.githubReposLoading) {
-        taskItems.push(githubReposLoadingTask());
-      }
       for (const task of snapshot?.tasks || []) {
         const requestID = String(task?.request_id || "").trim();
         if (!requestID) {
@@ -8715,7 +8715,7 @@
 
     async function loadInitial() {
       try {
-        const githubReposPromise = loadGitHubReposForChat();
+        const githubReposPromise = state.githubReposReady ? Promise.resolve() : loadGitHubReposForChat();
         void loadHubSetupStatus().then(() => {
           if (shouldOpenInitialHubProfileDialog()) {
             openHubProfileDialog("deep_link");

@@ -984,6 +984,7 @@ func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
 	t.Parallel()
 
 	var (
+		mu             sync.Mutex
 		publishedMsgs  []map[string]any
 		offlineReasons []string
 	)
@@ -1005,7 +1006,9 @@ func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
 				t.Fatalf("decode publish body: %v", err)
 			}
 			message, _ := body["message"].(map[string]any)
+			mu.Lock()
 			publishedMsgs = append(publishedMsgs, message)
+			mu.Unlock()
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"ok":true,"result":{"status":"queued"}}`))
 		case "/v1/runtime/messages/offline":
@@ -1014,7 +1017,9 @@ func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Fatalf("decode offline body: %v", err)
 			}
+			mu.Lock()
 			offlineReasons = append(offlineReasons, fmt.Sprint(body["reason"]))
+			mu.Unlock()
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		default:
@@ -1071,7 +1076,10 @@ func TestHandleDispatchInvokesOnDispatchFailed(t *testing.T) {
 		t.Fatal("timed out waiting for OnDispatchFailed callback")
 	}
 
-	publishedResults := nonStatusPayloads(publishedMsgs)
+	mu.Lock()
+	publishedResults := nonStatusPayloads(append([]map[string]any(nil), publishedMsgs...))
+	offlineReasons = append([]string(nil), offlineReasons...)
+	mu.Unlock()
 	if len(publishedResults) != 2 {
 		t.Fatalf("published result requests = %d, want 2", len(publishedResults))
 	}

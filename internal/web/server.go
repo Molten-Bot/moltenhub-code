@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
@@ -99,6 +100,7 @@ type Server struct {
 	RenderHubSetupStatus    func(context.Context) (HubSetupState, error)
 	ResolveGitHubProfileURL func(context.Context) (string, error)
 	ResolveGitHubRepos      func(context.Context) ([]GitHubRepo, error)
+	gitHubRepos             *gitHubRepoCache
 	Ready                   chan<- error
 }
 
@@ -166,6 +168,14 @@ type GitHubRepo struct {
 	UpdatedAt     string `json:"updated_at,omitempty"`
 }
 
+type gitHubRepoCache struct {
+	mu      sync.Mutex
+	loaded  bool
+	loading bool
+	wait    chan struct{}
+	repos   []GitHubRepo
+}
+
 // HubSetupRequest captures the late-stage Hub connect modal payload.
 type HubSetupRequest struct {
 	AgentMode string `json:"agent_mode"`
@@ -183,9 +193,10 @@ type HubSetupRequest struct {
 // NewServer returns a monitor HTTP server.
 func NewServer(addr string, broker *Broker) Server {
 	return Server{
-		Addr:   strings.TrimSpace(addr),
-		Broker: broker,
-		Logf:   func(string, ...any) {},
+		Addr:        strings.TrimSpace(addr),
+		Broker:      broker,
+		Logf:        func(string, ...any) {},
+		gitHubRepos: &gitHubRepoCache{},
 		LoadLibraryTasks: func() ([]library.TaskSummary, error) {
 			catalog, err := library.LoadCatalog(library.DefaultDir)
 			if err != nil {
@@ -657,23 +668,29 @@ func (s Server) renderSitePage(ctx context.Context, w http.ResponseWriter, data 
 
 func (s Server) injectIndexConfig(data []byte) []byte {
 	type indexConfig struct {
-		AutomaticMode        bool     `json:"automaticMode"`
-		ConfiguredHarness    string   `json:"configuredHarness"`
-		ConfiguredAgentLabel string   `json:"configuredAgentLabel"`
-		DefaultRepository    string   `json:"defaultRepository"`
-		PromptImageHarnesses []string `json:"promptImageHarnesses"`
+		AutomaticMode        bool         `json:"automaticMode"`
+		ConfiguredHarness    string       `json:"configuredHarness"`
+		ConfiguredAgentLabel string       `json:"configuredAgentLabel"`
+		DefaultRepository    string       `json:"defaultRepository"`
+		PromptImageHarnesses []string     `json:"promptImageHarnesses"`
+		GitHubReposReady     bool         `json:"githubReposReady"`
+		GitHubRepos          []GitHubRepo `json:"githubRepos,omitempty"`
 	}
 	configuredHarness := strings.TrimSpace(s.ConfiguredHarness)
 	configuredAgentLabel := ""
 	if configuredHarness != "" {
 		configuredAgentLabel = agentruntime.DisplayName(configuredHarness)
 	}
+	s.preloadGitHubRepos()
+	repos, reposReady := s.cachedGitHubRepos()
 	cfg, err := json.Marshal(indexConfig{
 		AutomaticMode:        s.AutomaticMode,
 		ConfiguredHarness:    configuredHarness,
 		ConfiguredAgentLabel: configuredAgentLabel,
 		DefaultRepository:    config.DefaultRepositoryURL,
 		PromptImageHarnesses: agentruntime.SupportedPromptImageHarnesses(),
+		GitHubReposReady:     reposReady,
+		GitHubRepos:          repos,
 	})
 	if err != nil {
 		s.logf("hub.ui status=warn event=marshal_index_config err=%q", err)
@@ -682,7 +699,7 @@ func (s Server) injectIndexConfig(data []byte) []byte {
 
 	return bytes.Replace(
 		data,
-		[]byte(`window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"","configuredAgentLabel":"","defaultRepository":"git@github.com:Molten-Bot/moltenhub-code.git","promptImageHarnesses":["codex","pi"]};`),
+		[]byte(`window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"","configuredAgentLabel":"","defaultRepository":"git@github.com:Molten-Bot/moltenhub-code.git","promptImageHarnesses":["codex","pi"],"githubReposReady":false};`),
 		[]byte("window.__HUB_UI_CONFIG__ = "+string(cfg)+";"),
 		1,
 	)
@@ -1237,10 +1254,88 @@ func newGitHubAPIRequest(ctx context.Context, method, endpoint string) (*http.Re
 }
 
 func (s Server) resolveGitHubRepos(ctx context.Context) ([]GitHubRepo, error) {
+	if s.gitHubRepos != nil {
+		return s.gitHubRepos.resolve(ctx, func(loadCtx context.Context) ([]GitHubRepo, error) {
+			return s.loadGitHubRepos(loadCtx)
+		})
+	}
+	return s.loadGitHubRepos(ctx)
+}
+
+func (s Server) loadGitHubRepos(ctx context.Context) ([]GitHubRepo, error) {
 	if s.ResolveGitHubRepos != nil {
 		return s.ResolveGitHubRepos(ctx)
 	}
 	return resolveAuthenticatedGitHubRepos(ctx, http.DefaultClient)
+}
+
+func (s Server) cachedGitHubRepos() ([]GitHubRepo, bool) {
+	if s.gitHubRepos == nil {
+		return nil, false
+	}
+	return s.gitHubRepos.snapshot()
+}
+
+func (s Server) preloadGitHubRepos() {
+	if s.gitHubRepos == nil || s.gitHubRepos.active() {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if _, err := s.resolveGitHubRepos(ctx); err != nil {
+			s.logf("hub.ui status=warn event=preload_github_repos err=%q", err)
+		}
+	}()
+}
+
+func (c *gitHubRepoCache) snapshot() ([]GitHubRepo, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.loaded {
+		return nil, false
+	}
+	return append([]GitHubRepo(nil), c.repos...), true
+}
+
+func (c *gitHubRepoCache) active() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.loaded || c.loading
+}
+
+func (c *gitHubRepoCache) resolve(ctx context.Context, load func(context.Context) ([]GitHubRepo, error)) ([]GitHubRepo, error) {
+	c.mu.Lock()
+	if c.loaded {
+		defer c.mu.Unlock()
+		return append([]GitHubRepo(nil), c.repos...), nil
+	}
+	if c.loading {
+		wait := c.wait
+		c.mu.Unlock()
+		select {
+		case <-wait:
+			return c.resolve(ctx, load)
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	c.loading = true
+	c.wait = make(chan struct{})
+	wait := c.wait
+	c.mu.Unlock()
+
+	repos, err := load(ctx)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.loading = false
+	close(wait)
+	if err != nil {
+		return nil, err
+	}
+	c.repos = append([]GitHubRepo(nil), repos...)
+	c.loaded = true
+	return append([]GitHubRepo(nil), c.repos...), nil
 }
 
 func resolveAuthenticatedGitHubProfileURL(ctx context.Context, client *http.Client) (string, error) {
