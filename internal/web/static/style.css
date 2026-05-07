@@ -2844,12 +2844,18 @@ select.prompt-control {
   border-bottom: 1px solid rgb(var(--hub-border-rgb) / 1);
 }
 
-.chat-head h1 {
-  margin: 2px 0 0;
-  color: var(--text);
-  font-size: clamp(1.7rem, 3vw, 2.35rem);
-  letter-spacing: 0;
-  line-height: 1.05;
+.chat-title {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.chat-title-current::before {
+  content: "/";
+  margin-inline: 8px;
+  color: var(--text-muted);
+  font-weight: 600;
 }
 
 .chat-status {
