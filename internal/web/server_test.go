@@ -566,10 +566,13 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `pi: "/static/logos/pi.svg"`) {
 		t.Fatalf("expected index html to map the pi harness to the pi logo asset")
 	}
+	if !strings.Contains(markup, `opencode: "/static/logos/opencode.svg"`) {
+		t.Fatalf("expected index html to map the opencode harness to the opencode logo asset")
+	}
 	if !strings.Contains(markup, "task-progress-step-icon") {
 		t.Fatalf("expected index html to render task progress step icons")
 	}
-	if !strings.Contains(markup, `const TASK_PROGRESS_AGENT_STAGES = new Set(["codex", "claude", "auggie", "pi", "augment", "agent", "review"]);`) {
+	if !strings.Contains(markup, `const TASK_PROGRESS_AGENT_STAGES = new Set(["codex", "claude", "auggie", "pi", "opencode", "augment", "agent", "review"]);`) {
 		t.Fatalf("expected index html to define the stage set that maps runtime agent stages into the agent progress step")
 	}
 	if strings.Contains(markup, "current step:") {
@@ -2619,6 +2622,7 @@ func TestHandlerServesStaticSiteHeaderComponent(t *testing.T) {
 		`<header class="header site-header">`,
 		`id="moltenhub-logo"`,
 		`id="configured-agent-logo"`,
+		`opencode: "/static/logos/opencode.svg"`,
 		`id="configured-agent-gorilla-subtitle" class="site-header-subtitle">Codex is now a 600LB Gorilla!</span>`,
 		`id="local-conn-item" class="status-item status-item-compact status-item-compact-expandable"`,
 		`id="hub-conn-item" class="status-item status-item-compact status-item-compact-expandable"`,

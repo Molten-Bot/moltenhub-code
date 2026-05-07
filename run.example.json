@@ -5,6 +5,8 @@
   // "augmentSessionAuth": "{\"accessToken\":\"XXX\",\"tenantURL\":\"https://YYY/\",\"scopes\":[\"email\"]}",
   // Install Pi with: npm install -g @mariozechner/pi-coding-agent
   // Then switch to: "agentHarness": "pi",
+  // Install Opencode with: npm install -g opencode-ai
+  // Then switch to: "agentHarness": "opencode",
   // optional override when executable name differs from harness default
   // "agentCommand": "codex",
   // optional override; omitted or "default" uses "caveman-full", "off" disables compression:

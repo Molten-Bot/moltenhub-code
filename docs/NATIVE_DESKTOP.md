@@ -4,7 +4,7 @@
 
 Use a native-first distribution model, not WASM.
 
-Reason: this app is fundamentally a local process orchestrator. It must run host tools (`git`, `gh`, `codex`/`claude`/`auggie`/`pi`), manage local workspaces, and perform authenticated CLI flows. Those are native OS responsibilities and are already implemented in Go.
+Reason: this app is fundamentally a local process orchestrator. It must run host tools (`git`, `gh`, `codex`/`claude`/`auggie`/`pi`/`opencode`), manage local workspaces, and perform authenticated CLI flows. Those are native OS responsibilities and are already implemented in Go.
 
 ## What We Are Shipping
 
@@ -33,7 +33,7 @@ The Go binary is portable; task execution still depends on host tools.
 Required external tools:
 - `git`
 - `gh` (GitHub CLI)
-- selected agent CLI: `codex`, `claude`, `auggie`, or `pi`
+- selected agent CLI: `codex`, `claude`, `auggie`, `pi`, or `opencode`
 
 Approach:
 1. Do not bundle these initially.

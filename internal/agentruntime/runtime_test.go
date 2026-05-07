@@ -48,6 +48,7 @@ func TestResolveSupportsKnownHarnesses(t *testing.T) {
 		{name: "auggie", harness: HarnessAuggie, command: "auggie", pkg: "@augmentcode/auggie@latest", reqName: "auggie_cli"},
 		{name: "codex", harness: HarnessCodex, command: "codex", pkg: "@openai/codex@latest", reqName: "codex_cli"},
 		{name: "pi", harness: HarnessPi, command: "pi", pkg: "@mariozechner/pi-coding-agent@latest", reqName: "pi_cli"},
+		{name: "opencode", harness: HarnessOpencode, command: "opencode", pkg: "opencode-ai@latest", reqName: "opencode_cli"},
 	}
 
 	for _, tc := range cases {
@@ -94,7 +95,7 @@ func TestResolveRejectsUnknownHarness(t *testing.T) {
 	if err == nil {
 		t.Fatal("Resolve() error = nil, want unsupported harness error")
 	}
-	for _, supported := range []string{HarnessAuggie, HarnessClaude, HarnessCodex, HarnessPi} {
+	for _, supported := range []string{HarnessAuggie, HarnessClaude, HarnessCodex, HarnessPi, HarnessOpencode} {
 		if !strings.Contains(err.Error(), supported) {
 			t.Fatalf("Resolve() error = %v, want supported harness %q listed", err, supported)
 		}
@@ -105,12 +106,13 @@ func TestDisplayName(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]string{
-		"":            "Codex",
-		HarnessCodex:  "Codex",
-		HarnessClaude: "Claude",
-		HarnessAuggie: "Auggie",
-		HarnessPi:     "Pi",
-		"  CLAUDE  ":  "Claude",
+		"":              "Codex",
+		HarnessCodex:    "Codex",
+		HarnessClaude:   "Claude",
+		HarnessAuggie:   "Auggie",
+		HarnessPi:       "Pi",
+		HarnessOpencode: "Opencode",
+		"  CLAUDE  ":    "Claude",
 	}
 	for harness, want := range cases {
 		if got := DisplayName(harness); got != want {
@@ -133,6 +135,9 @@ func TestSupportsPromptImages(t *testing.T) {
 	}
 	if SupportsPromptImages(HarnessAuggie) {
 		t.Fatal("SupportsPromptImages(auggie) = true, want false")
+	}
+	if SupportsPromptImages(HarnessOpencode) {
+		t.Fatal("SupportsPromptImages(opencode) = true, want false")
 	}
 }
 
@@ -242,10 +247,31 @@ func TestBuildCommandPiWithImages(t *testing.T) {
 	}
 }
 
+func TestBuildCommandOpencode(t *testing.T) {
+	t.Parallel()
+
+	rt, err := Resolve(HarnessOpencode, "")
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+
+	cmd, err := rt.BuildCommand("/tmp/repo", "fix bug", RunOptions{})
+	if err != nil {
+		t.Fatalf("BuildCommand() error = %v", err)
+	}
+	wantArgs := []string{"run", "--dangerously-skip-permissions", "fix bug"}
+	if cmd.Name != "opencode" || cmd.Dir != "/tmp/repo" || !reflect.DeepEqual(cmd.Args, wantArgs) {
+		t.Fatalf("unexpected opencode command: %+v", cmd)
+	}
+	if cmd.Stdin != "" {
+		t.Fatalf("Stdin = %q, want empty", cmd.Stdin)
+	}
+}
+
 func TestBuildCommandRejectsImagesForUnsupportedHarnesses(t *testing.T) {
 	t.Parallel()
 
-	for _, harness := range []string{HarnessClaude, HarnessAuggie} {
+	for _, harness := range []string{HarnessClaude, HarnessAuggie, HarnessOpencode} {
 		harness := harness
 		t.Run(harness, func(t *testing.T) {
 			t.Parallel()

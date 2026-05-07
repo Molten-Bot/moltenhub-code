@@ -93,7 +93,7 @@ func TestSelectableAgentAuthGateStatusRequiresHarnessSelectionAfterGitHubReady(t
 	for _, option := range state.ConfigureOptions {
 		gotOrder = append(gotOrder, option.Value)
 	}
-	wantOrder := []string{"claude", "codex", "pi", "auggie"}
+	wantOrder := []string{"claude", "codex", "opencode", "pi", "auggie"}
 	if len(gotOrder) < len(wantOrder) {
 		t.Fatalf("ConfigureOptions count = %d, want at least %d", len(gotOrder), len(wantOrder))
 	}
