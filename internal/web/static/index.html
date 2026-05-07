@@ -309,6 +309,7 @@
               <p id="chat-status" class="chat-status" aria-live="polite">Loading repositories...</p>
             </div>
             <div id="chat-repo-grid" class="chat-repo-grid" aria-label="GitHub repositories"></div>
+            <nav id="chat-repo-pagination" class="chat-repo-pagination hidden" aria-label="GitHub repository pages"></nav>
           </section>
         </section>
 
@@ -671,6 +672,7 @@
     const EMOJI_PANEL_MAX_WIDTH = 360;
     const EMOJI_PANEL_ESTIMATED_HEIGHT = 430;
     const EMOJI_PANEL_ANIMATION_DURATION_MS = 180;
+    const CHAT_REPOS_PER_PAGE = 24;
     const PROFILE_EMOJI_GROUPS = Object.freeze([
       { label: "Smileys", emoji: ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🙂", "🙃", "😉", "😊", "😇", "😍", "🤩", "😘", "😎", "🥳", "🤔", "🫡", "🤯", "😴", "😭", "😤", "😈"] },
       { label: "People", emoji: ["👋", "👏", "🙌", "🙏", "💪", "🦾", "👍", "👎", "✌️", "🤘", "👌", "🤌", "👀", "🧠", "🧑‍💻", "🧑‍🔬", "🧑‍🚀", "🧙", "🥷", "🦸", "🧟", "💃", "🕺", "🏃"] },
@@ -1576,6 +1578,7 @@
       githubReposLoadError: "",
       githubRepos: [],
       chatSubmittingRepos: new Set(),
+      chatRepoPage: 1,
       taskSoundMuted: loadTaskSoundMuted(),
       taskSoundInitialized: false,
       taskSoundSeenStatuses: new Map(),
@@ -1668,6 +1671,7 @@
     const chatDisplay = document.getElementById("chat-display");
     const chatRepoGrid = document.getElementById("chat-repo-grid");
     const chatStatus = document.getElementById("chat-status");
+    const chatRepoPagination = document.getElementById("chat-repo-pagination");
     const appDisplayLinks = Array.from(document.querySelectorAll("[data-app-display]"));
     const chatDockLink = document.querySelector('[data-app-display="chat"]');
     const promptPanelTitle = document.getElementById("prompt-panel-title");
@@ -2045,6 +2049,8 @@
       state.githubReposLoading = true;
       state.githubReposReady = false;
       state.githubReposLoadError = "";
+      state.chatRepoPage = 1;
+      state.chatReposLoaded = false;
       syncChatDockLinkAvailability();
       renderTasks(state.snapshot);
       try {
@@ -5328,6 +5334,65 @@
       return card;
     }
 
+    function renderChatRepoPagination(totalRepos, totalPages) {
+      if (!chatRepoPagination) return;
+      chatRepoPagination.replaceChildren();
+      chatRepoPagination.classList.toggle("hidden", totalPages <= 1);
+      if (totalPages <= 1) return;
+
+      const previous = document.createElement("button");
+      previous.className = "chat-repo-page-button";
+      previous.type = "button";
+      previous.textContent = "Previous";
+      previous.disabled = state.chatRepoPage <= 1;
+      previous.addEventListener("click", () => {
+        if (state.chatRepoPage <= 1) return;
+        state.chatRepoPage -= 1;
+        renderChatRepos();
+      });
+
+      const label = document.createElement("span");
+      label.className = "chat-repo-page-label";
+      label.textContent = `Page ${state.chatRepoPage} of ${totalPages}`;
+
+      const next = document.createElement("button");
+      next.className = "chat-repo-page-button";
+      next.type = "button";
+      next.textContent = "Next";
+      next.disabled = state.chatRepoPage >= totalPages || totalRepos === 0;
+      next.addEventListener("click", () => {
+        if (state.chatRepoPage >= totalPages) return;
+        state.chatRepoPage += 1;
+        renderChatRepos();
+      });
+
+      chatRepoPagination.append(previous, label, next);
+    }
+
+    function renderChatRepos() {
+      if (!chatRepoGrid || !chatStatus) return;
+      const repos = Array.isArray(state.githubRepos) ? state.githubRepos : [];
+      const totalPages = Math.max(1, Math.ceil(repos.length / CHAT_REPOS_PER_PAGE));
+      state.chatRepoPage = Math.min(Math.max(1, state.chatRepoPage), totalPages);
+      const start = (state.chatRepoPage - 1) * CHAT_REPOS_PER_PAGE;
+      const pageRepos = repos.slice(start, start + CHAT_REPOS_PER_PAGE);
+
+      chatRepoGrid.replaceChildren(...pageRepos.map(renderChatRepoCard));
+      if (repos.length === 0) {
+        chatStatus.textContent = "0 repositories";
+        const empty = document.createElement("p");
+        empty.className = "chat-empty";
+        empty.textContent = "No repositories found.";
+        chatRepoGrid.appendChild(empty);
+      } else if (repos.length <= CHAT_REPOS_PER_PAGE) {
+        chatStatus.textContent = repos.length === 1 ? "1 repository" : `${repos.length} repositories`;
+      } else {
+        const end = start + pageRepos.length;
+        chatStatus.textContent = `${start + 1}-${end} of ${repos.length} repositories`;
+      }
+      renderChatRepoPagination(repos.length, totalPages);
+    }
+
     function chatRepoRunValue(repo) {
       const htmlURL = String(repo?.html_url || "").trim();
       if (htmlURL) return htmlURL;
@@ -5412,15 +5477,7 @@
         return;
       }
       state.chatReposLoaded = true;
-      const repos = Array.isArray(state.githubRepos) ? state.githubRepos : [];
-      chatRepoGrid.replaceChildren(...repos.map(renderChatRepoCard));
-      chatStatus.textContent = repos.length === 1 ? "1 repository" : `${repos.length} repositories`;
-      if (repos.length === 0) {
-        const empty = document.createElement("p");
-        empty.className = "chat-empty";
-        empty.textContent = "No repositories found.";
-        chatRepoGrid.appendChild(empty);
-      }
+      renderChatRepos();
     }
 
     function appDisplayFromHash() {

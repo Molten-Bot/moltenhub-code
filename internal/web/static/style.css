@@ -2961,6 +2961,47 @@ select.prompt-control {
   color: var(--surface-danger);
 }
 
+.chat-repo-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding-top: 18px;
+}
+
+.chat-repo-page-button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--surface-control-border);
+  border-radius: 8px;
+  color: var(--theme-button-text);
+  background: var(--theme-button-bg);
+  box-shadow: var(--theme-button-shadow);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 850;
+}
+
+.chat-repo-page-button:not(:disabled):hover,
+.chat-repo-page-button:not(:disabled):focus-visible {
+  border-color: var(--border-strong);
+  outline: none;
+  box-shadow: var(--theme-button-focus);
+}
+
+.chat-repo-page-button:disabled {
+  opacity: 0.52;
+}
+
+.chat-repo-page-label {
+  min-width: 112px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 850;
+  line-height: 1.2;
+  text-align: center;
+}
+
 .chat-empty {
   margin: 0;
   color: var(--muted);

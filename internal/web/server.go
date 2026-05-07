@@ -484,11 +484,15 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
           <p id="chat-status" class="chat-status" aria-live="polite">Loading repositories...</p>
         </div>
         <div id="chat-repo-grid" class="chat-repo-grid" aria-label="GitHub repositories"></div>
+        <nav id="chat-repo-pagination" class="chat-repo-pagination hidden" aria-label="GitHub repository pages"></nav>
       </section>
       <script>
         (function initChatRepos() {
           const grid = document.getElementById("chat-repo-grid");
           const status = document.getElementById("chat-status");
+          const pagination = document.getElementById("chat-repo-pagination");
+          const CHAT_REPOS_PER_PAGE = 24;
+          let repoPage = 1;
           if (!grid || !status) return;
 
           function repoRunValue(repo) {
@@ -613,6 +617,62 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
             return card;
           }
 
+          function renderPagination(totalRepos, totalPages, renderPage) {
+            if (!pagination) return;
+            pagination.replaceChildren();
+            pagination.classList.toggle("hidden", totalPages <= 1);
+            if (totalPages <= 1) return;
+
+            const previous = document.createElement("button");
+            previous.className = "chat-repo-page-button";
+            previous.type = "button";
+            previous.textContent = "Previous";
+            previous.disabled = repoPage <= 1;
+            previous.addEventListener("click", () => {
+              if (repoPage <= 1) return;
+              repoPage -= 1;
+              renderPage();
+            });
+
+            const label = document.createElement("span");
+            label.className = "chat-repo-page-label";
+            label.textContent = "Page " + repoPage + " of " + totalPages;
+
+            const next = document.createElement("button");
+            next.className = "chat-repo-page-button";
+            next.type = "button";
+            next.textContent = "Next";
+            next.disabled = repoPage >= totalPages || totalRepos === 0;
+            next.addEventListener("click", () => {
+              if (repoPage >= totalPages) return;
+              repoPage += 1;
+              renderPage();
+            });
+
+            pagination.append(previous, label, next);
+          }
+
+          function renderRepos(repos) {
+            const totalPages = Math.max(1, Math.ceil(repos.length / CHAT_REPOS_PER_PAGE));
+            repoPage = Math.min(Math.max(1, repoPage), totalPages);
+            const start = (repoPage - 1) * CHAT_REPOS_PER_PAGE;
+            const pageRepos = repos.slice(start, start + CHAT_REPOS_PER_PAGE);
+            grid.replaceChildren(...pageRepos.map(repoCard));
+            if (repos.length === 0) {
+              status.textContent = "0 repositories";
+              const empty = document.createElement("p");
+              empty.className = "chat-empty";
+              empty.textContent = "No repositories found.";
+              grid.appendChild(empty);
+            } else if (repos.length <= CHAT_REPOS_PER_PAGE) {
+              status.textContent = repos.length === 1 ? "1 repository" : repos.length + " repositories";
+            } else {
+              const end = start + pageRepos.length;
+              status.textContent = (start + 1) + "-" + end + " of " + repos.length + " repositories";
+            }
+            renderPagination(repos.length, totalPages, () => renderRepos(repos));
+          }
+
           async function loadRepos() {
             try {
               const response = await fetch("/api/github/repos", { cache: "no-store" });
@@ -621,14 +681,7 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
                 throw new Error(body && body.error ? body.error : "github repositories request failed");
               }
               const repos = Array.isArray(body.repos) ? body.repos : [];
-              grid.replaceChildren(...repos.map(repoCard));
-              status.textContent = repos.length === 1 ? "1 repository" : repos.length + " repositories";
-              if (repos.length === 0) {
-                const empty = document.createElement("p");
-                empty.className = "chat-empty";
-                empty.textContent = "No repositories found.";
-                grid.appendChild(empty);
-              }
+              renderRepos(repos);
             } catch (err) {
               status.textContent = err && err.message ? err.message : "Unable to load repositories.";
             }

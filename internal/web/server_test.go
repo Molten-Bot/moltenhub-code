@@ -1501,6 +1501,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `const response = await fetch("/api/github/repos", { cache: "no-store" });`) ||
 		!strings.Contains(markup, `state.githubRepos = Array.isArray(body.repos) ? body.repos : [];`) ||
 		!strings.Contains(markup, `const repos = Array.isArray(state.githubRepos) ? state.githubRepos : [];`) ||
+		!strings.Contains(markup, `const CHAT_REPOS_PER_PAGE = 24;`) ||
+		!strings.Contains(markup, `const pageRepos = repos.slice(start, start + CHAT_REPOS_PER_PAGE);`) ||
+		!strings.Contains(markup, `function renderChatRepoPagination(totalRepos, totalPages)`) ||
 		!strings.Contains(markup, `repoRead.textContent = "repos: reading GitHub projects";`) ||
 		!strings.Contains(markup, `if (!state.githubReposReady) {`) {
 		t.Fatalf("expected index html to gate chat availability on GitHub repository loading and show that read as current work")
@@ -2236,6 +2239,9 @@ func TestHandlerServesChatView(t *testing.T) {
 		`data-app-display="chat"`,
 		`<i data-lucide="message-circle" aria-hidden="true"></i>`,
 		`id="chat-repo-grid" class="chat-repo-grid" aria-label="GitHub repositories"`,
+		`id="chat-repo-pagination" class="chat-repo-pagination hidden" aria-label="GitHub repository pages"`,
+		`const CHAT_REPOS_PER_PAGE = 24;`,
+		`const pageRepos = repos.slice(start, start + CHAT_REPOS_PER_PAGE);`,
 		`fetch("/api/github/repos", { cache: "no-store" })`,
 		`const card = document.createElement("div");`,
 		`card.setAttribute("role", "button");`,
@@ -2571,6 +2577,11 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".prompt-mode-link.is-disabled,\n.prompt-mode-link[aria-disabled=\"true\"] {") ||
 		!strings.Contains(css, ".task.task-github-repos-loading .task-id {") {
 		t.Fatalf("expected stylesheet to style unavailable chat dock link and repository-loading current work task")
+	}
+	if !strings.Contains(css, ".chat-repo-pagination {") ||
+		!strings.Contains(css, ".chat-repo-page-button {") ||
+		!strings.Contains(css, ".chat-repo-page-label {") {
+		t.Fatalf("expected stylesheet to include chat repository pagination controls")
 	}
 	if !strings.Contains(css, ".task-result-github-link {") ||
 		!strings.Contains(css, ".task-result-link-logo {") {
