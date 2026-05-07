@@ -219,6 +219,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title">Prompt</span>`) {
 		t.Fatalf("expected index html to label the builder mode as Prompt")
 	}
+	if !strings.Contains(markup, `setPromptMode(promptModeFromHash() || "builder");`) {
+		t.Fatalf("expected index html to default Studio to the Prompt view")
+	}
 	if !strings.Contains(markup, `id="prompt-panel-copy"`) || !strings.Contains(markup, `Compose a repository run, start from a library task, or edit the raw JSON payload.`) {
 		t.Fatalf("expected index html to include prompt panel supporting copy")
 	}

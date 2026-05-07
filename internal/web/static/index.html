@@ -9316,7 +9316,7 @@
     initAppearanceControls();
     initSnowfallBackground();
     setAppDisplay(appDisplayFromHash());
-    setPromptMode(promptModeFromHash() || state.promptMode);
+    setPromptMode(promptModeFromHash() || "builder");
     applyPromptVisibility();
     if (normalizeTaskStatusFilter(state.taskStatusFilter) === "completed") {
       clearTaskHistoryUnseen();
