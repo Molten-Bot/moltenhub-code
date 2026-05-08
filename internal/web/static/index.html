@@ -6033,14 +6033,13 @@
       if (!logNode) return;
       const messages = chatRepoPromptMessages(repo);
       logNode.replaceChildren();
-      logNode.classList.toggle("is-empty", messages.length === 0);
-      if (messages.length === 0) {
-        const empty = document.createElement("p");
-        empty.className = "chat-repo-log-empty";
-        empty.textContent = "No prompts yet.";
-        logNode.appendChild(empty);
+      const hasMessages = messages.length > 0;
+      logNode.hidden = !hasMessages;
+      if (!hasMessages) {
+        logNode.setAttribute("aria-hidden", "true");
         return;
       }
+      logNode.removeAttribute("aria-hidden");
 
       for (const message of messages) {
         const bubble = document.createElement("article");

@@ -1620,6 +1620,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `card.setAttribute("aria-expanded", repoKey && state.chatOpenRepoKey === repoKey ? "true" : "false");`) ||
 		!strings.Contains(markup, `ownerIcon.className = "chat-repo-card-owner-icon";`) ||
 		!strings.Contains(markup, `promptLog.className = "chat-repo-log";`) ||
+		!strings.Contains(markup, `logNode.hidden = !hasMessages;`) ||
+		!strings.Contains(markup, `logNode.setAttribute("aria-hidden", "true");`) ||
 		!strings.Contains(markup, `visibilityIcon.className = `) ||
 		!strings.Contains(markup, `chat-repo-card-visibility-public`) ||
 		!strings.Contains(markup, `chat-repo-card-visibility-private`) ||

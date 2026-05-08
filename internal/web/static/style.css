@@ -3102,7 +3102,12 @@ select.prompt-control {
   gap: 7px;
   max-height: min(34vh, 300px);
   min-height: 96px;
-  overflow-y: auto;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-scroll-thumb) var(--surface-scroll-track);
+  overscroll-behavior: contain;
   padding: 10px;
   border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   border-radius: 8px;
@@ -3111,16 +3116,27 @@ select.prompt-control {
     color-mix(in srgb, var(--bg-elevated) 72%, transparent);
 }
 
-.chat-repo-log.is-empty {
-  align-content: center;
+.chat-repo-log[hidden] {
+  display: none;
 }
 
-.chat-repo-log-empty {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.84rem;
-  font-weight: 750;
-  text-align: center;
+.chat-repo-log::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-repo-log::-webkit-scrollbar-track {
+  background: var(--surface-scroll-track);
+  border-radius: 999px;
+}
+
+.chat-repo-log::-webkit-scrollbar-thumb {
+  background: var(--surface-scroll-thumb);
+  border-radius: 999px;
+  border: 1px solid var(--surface-scroll-thumb-border);
+}
+
+.chat-repo-log::-webkit-scrollbar-thumb:hover {
+  background: var(--surface-scroll-thumb-hover);
 }
 
 .chat-repo-message {

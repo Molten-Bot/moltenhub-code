@@ -772,6 +772,27 @@ func TestEmbeddedPromptActionStylesCoverPasteWidthAndStatusFade(t *testing.T) {
 	}
 }
 
+func TestEmbeddedChatPromptLogStylesHideEmptyAndScrollHistory(t *testing.T) {
+	t.Parallel()
+
+	data, err := fs.ReadFile(staticFiles, "static/style.css")
+	if err != nil {
+		t.Fatalf("read embedded style.css: %v", err)
+	}
+	css := string(data)
+
+	for _, want := range []string{
+		".chat-repo-log[hidden] {",
+		"overflow-y: scroll;",
+		"scrollbar-gutter: stable;",
+		".chat-repo-log::-webkit-scrollbar {",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("embedded style.css missing %q", want)
+		}
+	}
+}
+
 func TestAgentAuthEndpointsWithCallbacks(t *testing.T) {
 	t.Parallel()
 
