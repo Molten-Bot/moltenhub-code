@@ -5284,6 +5284,9 @@ func TestWithCompletionGatePromptIncludesAgentRuntimeGuidance(t *testing.T) {
 
 	got := withCompletionGatePrompt("Build API")
 	wantSnippets := []string{
+		"Agent input:\nBuild API",
+		"Treat non-empty product, bug, feature, or review text in it as the implementation target.",
+		"Do not answer that no implementation task was given when the agent input includes a requested repository change.",
 		"When failures occur, send a response back to the calling agent that clearly states failure and includes the error details. Use explicit `Failure:` and `Error details:` fields.",
 		"If local test or validation tooling is unavailable in this runtime (for example `command not found` or missing `node_modules`), do not fail solely for that.",
 		"Before sharing repository or pull-request links in Hub activity, use `gh repo view OWNER/REPO --json isPrivate,nameWithOwner` during clone or PR tooling.",
@@ -5297,6 +5300,34 @@ func TestWithCompletionGatePromptIncludesAgentRuntimeGuidance(t *testing.T) {
 		if !strings.Contains(got, snippet) {
 			t.Fatalf("withCompletionGatePrompt() missing snippet %q", snippet)
 		}
+	}
+}
+
+func TestWithCompletionGatePromptPreservesTerseImplementationTarget(t *testing.T) {
+	t.Parallel()
+
+	prompt := strings.Join([]string{
+		"in git chat",
+		"in the repo listing with long text -> truncate and put an elipsis (...) when the text is over -> 100 chars",
+	}, "\n")
+
+	got := withCompletionGatePrompt(withAgentsPrompt(prompt, "./AGENTS.md"))
+	wantSnippets := []string{
+		"Agent input:",
+		"you are ./AGENTS.md",
+		"in git chat",
+		"in the repo listing with long text -> truncate and put an elipsis (...) when the text is over -> 100 chars",
+		"Task packet handling:",
+		"Do not answer that no implementation task was given when the agent input includes a requested repository change.",
+	}
+	for _, snippet := range wantSnippets {
+		if !strings.Contains(got, snippet) {
+			t.Fatalf("withCompletionGatePrompt() missing snippet %q", snippet)
+		}
+	}
+
+	if strings.Index(got, "in git chat") > strings.Index(got, "Task packet handling:") {
+		t.Fatalf("withCompletionGatePrompt() put task handling before terse task: %q", got)
 	}
 }
 

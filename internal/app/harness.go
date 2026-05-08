@@ -4350,7 +4350,19 @@ func withCompletionGatePrompt(prompt string) string {
 		base = "Improve this repository in a minimal, production-ready way."
 	}
 
-	return failurefollowup.WithExecutionContract(base)
+	return failurefollowup.WithExecutionContract(withImplementationTargetGuard(base))
+}
+
+func withImplementationTargetGuard(prompt string) string {
+	base := strings.TrimSpace(prompt)
+	if base == "" {
+		return ""
+	}
+
+	return fmt.Sprintf(
+		"Agent input:\n%s\n\nTask packet handling:\nThe agent input above includes the requested repository work plus any local instructions. Treat non-empty product, bug, feature, or review text in it as the implementation target. If wording is terse, inspect the repository to identify the target area before asking follow-up. Do not answer that no implementation task was given when the agent input includes a requested repository change.",
+		base,
+	)
 }
 
 func remediationPrompt(basePrompt, prURL, checkSummary string, attempt int) string {
