@@ -3495,12 +3495,19 @@ select.prompt-control {
   line-height: 1.05;
 }
 
+.dashboard-title-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .dashboard-updated {
   color: var(--muted);
+  display: block;
   font-size: 0.74rem;
   font-weight: 800;
   line-height: 1.35;
-  text-align: right;
+  text-align: left;
 }
 
 .dashboard-head-actions {
