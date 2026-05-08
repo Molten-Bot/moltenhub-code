@@ -393,6 +393,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true" title="Prompt"`) {
 		t.Fatalf("expected index html to relabel the primary dock mode as Prompt")
 	}
+	if !strings.Contains(markup, `class="prompt-mode-link site-dock-link is-temporarily-hidden" href="#releases" data-app-display="releases" aria-label="Releases" title="Releases" tabindex="-1" aria-hidden="true"`) {
+		t.Fatalf("expected index html to keep the releases dock link present but temporarily invisible")
+	}
 	if !strings.Contains(markup, `id="hub-setup-emoji-picker"`) || !strings.Contains(markup, `id="hub-setup-emoji-panel"`) {
 		t.Fatalf("expected index html to include the emoji picker control shell")
 	}
