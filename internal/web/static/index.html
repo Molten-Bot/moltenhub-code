@@ -5819,17 +5819,25 @@
       return chatRepoOwnerType(repo) === "organization" ? "Organization repository" : "Personal repository";
     }
 
+    function truncateChatRepoText(value, fallback) {
+      const text = String(value || fallback || "").trim();
+      if (text.length <= 100) return text;
+      return `${text.slice(0, 100).trimEnd()}...`;
+    }
+
     function renderChatRepoCard(repo) {
       const repoKey = chatRepoKey(chatRepoRunValue(repo));
       const expanded = Boolean(repoKey && state.chatOpenRepoKey === repoKey);
       const visibility = repo?.private ? "Private" : "Public";
+      const repoTitle = String(repo?.full_name || repo?.name || "Unnamed repository");
+      const repoDescription = String(repo?.description || "No description.");
       const card = document.createElement("div");
       card.className = "chat-repo-card";
       card.tabIndex = 0;
       card.setAttribute("role", "button");
       card.dataset.repoKey = repoKey;
       card.setAttribute("aria-expanded", String(expanded));
-      card.setAttribute("aria-label", `Open ${String(repo?.full_name || repo?.name || "repository")} panel (${visibility} repository)`);
+      card.setAttribute("aria-label", `Open ${repoTitle} panel (${visibility} repository)`);
 
       const head = document.createElement("span");
       head.className = "chat-repo-card-head";
@@ -5843,7 +5851,10 @@
 
       const title = document.createElement("span");
       title.className = "chat-repo-card-title";
-      title.textContent = String(repo?.full_name || repo?.name || "Unnamed repository");
+      title.textContent = truncateChatRepoText(repoTitle, "Unnamed repository");
+      if (title.textContent !== repoTitle) {
+        title.title = repoTitle;
+      }
       head.appendChild(title);
 
       const chatIcon = document.createElement("span");
@@ -5856,7 +5867,10 @@
 
       const description = document.createElement("span");
       description.className = "chat-repo-card-description";
-      description.textContent = String(repo?.description || "No description.");
+      description.textContent = truncateChatRepoText(repoDescription, "No description.");
+      if (description.textContent !== repoDescription) {
+        description.title = repoDescription;
+      }
       card.appendChild(description);
 
       const meta = document.createElement("span");
