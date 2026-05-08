@@ -144,6 +144,7 @@ type DashboardStats struct {
 	CompletedTasks         int               `json:"completed_tasks"`
 	FailedTasks            int               `json:"failed_tasks"`
 	MaxConcurrentTasks     int               `json:"max_concurrent_tasks"`
+	SessionRuntimeSeconds  float64           `json:"session_runtime_seconds"`
 	TotalSavedSeconds      float64           `json:"total_saved_seconds"`
 	SuccessRate            float64           `json:"success_rate"`
 	AverageDurationSeconds float64           `json:"average_duration_seconds"`
@@ -214,6 +215,7 @@ type Broker struct {
 	hubDetail          string
 	resources          ResourceMetrics
 	maxConcurrentTasks int
+	sessionStartedAt   time.Time
 }
 
 type taskState struct {
@@ -273,16 +275,18 @@ type taskAttemptState struct {
 
 // NewBroker returns a monitor state broker with safe defaults.
 func NewBroker() *Broker {
+	now := time.Now
 	return &Broker{
-		now:          time.Now,
-		maxEvents:    defaultMaxEvents,
-		maxTaskLog:   defaultMaxTaskLogs,
-		tasks:        map[string]*taskState{},
-		closedTasks:  map[string]time.Time{},
-		runConfigs:   map[string][]byte{},
-		attempts:     map[string][]taskAttemptState{},
-		attemptRoots: map[string]string{},
-		subs:         map[chan struct{}]struct{}{},
+		now:              now,
+		maxEvents:        defaultMaxEvents,
+		maxTaskLog:       defaultMaxTaskLogs,
+		tasks:            map[string]*taskState{},
+		closedTasks:      map[string]time.Time{},
+		runConfigs:       map[string][]byte{},
+		attempts:         map[string][]taskAttemptState{},
+		attemptRoots:     map[string]string{},
+		subs:             map[chan struct{}]struct{}{},
+		sessionStartedAt: now().UTC(),
 	}
 }
 
@@ -704,10 +708,11 @@ func (b *Broker) dashboardStatsLocked(now time.Time, tasks []*taskState) Dashboa
 	}
 
 	stats := DashboardStats{
-		TotalTasks:         len(seen),
-		ActiveTasks:        active,
-		MaxConcurrentTasks: b.maxConcurrentTasks,
-		UpdatedAt:          now.UTC().Format(time.RFC3339Nano),
+		TotalTasks:            len(seen),
+		ActiveTasks:           active,
+		MaxConcurrentTasks:    b.maxConcurrentTasks,
+		SessionRuntimeSeconds: taskDuration(b.sessionStartedAt, time.Time{}, now, "").Seconds(),
+		UpdatedAt:             now.UTC().Format(time.RFC3339Nano),
 	}
 	var earliest time.Time
 	var totalDuration time.Duration

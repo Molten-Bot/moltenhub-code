@@ -89,6 +89,7 @@ func TestHandlerStateEndpointReturnsDashboardStats(t *testing.T) {
 
 	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
 	b := NewBroker()
+	b.sessionStartedAt = now.Add(-30 * time.Second)
 	b.now = func() time.Time { return now }
 	b.IngestLog("dispatch status=start request_id=req-1")
 	now = now.Add(10 * time.Second)
@@ -121,6 +122,9 @@ func TestHandlerStateEndpointReturnsDashboardStats(t *testing.T) {
 	}
 	if snap.Stats.MaxConcurrentTasks != 2 {
 		t.Fatalf("stats.max_concurrent_tasks = %d, want 2", snap.Stats.MaxConcurrentTasks)
+	}
+	if snap.Stats.SessionRuntimeSeconds != 60 {
+		t.Fatalf("stats.session_runtime_seconds = %f, want 60", snap.Stats.SessionRuntimeSeconds)
 	}
 	if snap.Stats.ThroughputPerHour <= 0 {
 		t.Fatalf("stats.throughput_per_hour = %f, want positive", snap.Stats.ThroughputPerHour)
@@ -244,6 +248,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="dashboard-display"`) ||
 		!strings.Contains(markup, `<h1 id="dashboard-title">Session Dashboard</h1>`) ||
 		!strings.Contains(markup, `id="dashboard-max-concurrent"`) ||
+		!strings.Contains(markup, `id="dashboard-session-runtime"`) ||
+		!strings.Contains(markup, `Session Runtime`) ||
+		!strings.Contains(markup, `stats.session_runtime_seconds`) ||
 		!strings.Contains(markup, `id="dashboard-time-saved"`) ||
 		!strings.Contains(markup, `id="dashboard-workflow-times"`) ||
 		!strings.Contains(markup, `id="dashboard-agent-times"`) ||

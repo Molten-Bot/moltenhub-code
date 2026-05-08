@@ -64,6 +64,7 @@ func TestBrokerTracksTaskRuntimeAndSavedTimeStats(t *testing.T) {
 
 	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
 	b := NewBroker()
+	b.sessionStartedAt = now.Add(-5 * time.Minute)
 	b.now = func() time.Time { return now }
 
 	b.RecordTaskRunConfig("req-1", []byte(`{"repo":"git@github.com:acme/repo.git","libraryTaskName":"unit-test-coverage","agentHarness":"codex"}`))
@@ -78,6 +79,9 @@ func TestBrokerTracksTaskRuntimeAndSavedTimeStats(t *testing.T) {
 	now = now.Add(time.Minute)
 
 	snap := b.Snapshot()
+	if got, want := snap.Stats.SessionRuntimeSeconds, 540.0; got != want {
+		t.Fatalf("stats.session_runtime_seconds = %v, want %v", got, want)
+	}
 	if got, want := snap.Stats.TotalSavedSeconds, 120.0; got != want {
 		t.Fatalf("stats.total_saved_seconds = %v, want %v", got, want)
 	}
