@@ -255,12 +255,18 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="dashboard-share-x"`) ||
 		!strings.Contains(markup, `id="dashboard-share-facebook"`) ||
 		!strings.Contains(markup, `id="dashboard-share-whatsapp"`) ||
+		!strings.Contains(markup, `const DASHBOARD_SHARE_URL = "https://molten.bot/code";`) ||
 		!strings.Contains(markup, `const DASHBOARD_SHARE_IMAGE_URL = "https://app.molten.bot/logo.svg";`) ||
+		!strings.Contains(markup, `return DASHBOARD_SHARE_URL;`) ||
 		!strings.Contains(markup, `function updateDashboardShareLinks(stats)`) ||
 		!strings.Contains(markup, `https://twitter.com/intent/tweet`) ||
 		!strings.Contains(markup, `https://www.facebook.com/sharer/sharer.php`) ||
 		!strings.Contains(markup, `https://wa.me/`) {
 		t.Fatalf("expected index html to render dashboard social sharing links")
+	}
+	if strings.Contains(markup, `const current = new URL(window.location.href);`) ||
+		strings.Contains(markup, `current.hash = "dashboard";`) {
+		t.Fatalf("expected dashboard sharing links to stop using the local session URL")
 	}
 	if !strings.Contains(markup, "return `Updated ${dashboardRelativeTime(date.getTime())}`;") ||
 		!strings.Contains(markup, "if (seconds < 60) return `${seconds}s ago`;") ||

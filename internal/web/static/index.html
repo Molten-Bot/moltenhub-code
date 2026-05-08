@@ -700,6 +700,7 @@
     const TASK_PROGRESS_VISIBLE = true;
     const HUB_LOGIN_URL = "https://molten.bot/login?target=hub";
     const HUB_DASHBOARD_URL = "https://app.molten.bot/hub";
+    const DASHBOARD_SHARE_URL = "https://molten.bot/code";
     const DASHBOARD_SHARE_IMAGE_URL = "https://app.molten.bot/logo.svg";
     const GOOGLE_ANALYTICS_MEASUREMENT_ID = "G-BY33RFG2WB";
     const COMPLETED_STATUSES = new Set(["completed", "no_changes", "error", "invalid", "duplicate", "stopped"]);
@@ -4532,9 +4533,7 @@
     }
 
     function dashboardShareURL() {
-      const current = new URL(window.location.href);
-      current.hash = "dashboard";
-      return current.toString();
+      return DASHBOARD_SHARE_URL;
     }
 
     function dashboardShareText(stats) {
