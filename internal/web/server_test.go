@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -2582,6 +2583,7 @@ func TestHandlerServesChatView(t *testing.T) {
 		`if (isRepoCardControlTarget(event.target, card)) return;`,
 		`card.setAttribute("aria-expanded", "true");`,
 		`fetch("/api/local-prompt", {`,
+		`headers: { "Content-Type": "application/json", "X-MoltenHub-Task-Source": "chat" },`,
 		`payload.baseBranch = branch;`,
 		`window.MoltenHubHeader.startConnectionStatus();`,
 	}
@@ -3497,6 +3499,95 @@ func TestHandlerLocalPromptSubmitRecordsTaskSourceHeader(t *testing.T) {
 	}
 	if got, want := task.Source, "chat"; got != want {
 		t.Fatalf("task.Source = %q, want %q", got, want)
+	}
+}
+
+func TestHandlerLocalPromptSubmitRecordsTaskSourcePayload(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	srv := NewServer("", b)
+	srv.SubmitLocalPrompt = func(_ context.Context, body []byte) (string, error) {
+		b.RecordTaskRunConfig("local-source-body", body)
+		return "local-source-body", nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	payload := `{"repo":"git@github.com:acme/repo.git","baseBranch":"main","targetSubdir":".","prompt":"update docs","source":"json"}`
+	resp, err := http.Post(ts.URL+"/api/local-prompt", "application/json", bytes.NewBufferString(payload))
+	if err != nil {
+		t.Fatalf("POST /api/local-prompt error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusAccepted)
+	}
+
+	task, ok := b.Task("local-source-body")
+	if !ok {
+		t.Fatal("Task() found = false, want true")
+	}
+	if got, want := task.Source, "json"; got != want {
+		t.Fatalf("task.Source = %q, want %q", got, want)
+	}
+}
+
+func TestHandlerDashboardStatsIncludeTaskSourcesFromSubmitPaths(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	srv := NewServer("", b)
+	var seq int
+	srv.SubmitLocalPrompt = func(_ context.Context, body []byte) (string, error) {
+		seq++
+		requestID := fmt.Sprintf("local-source-%d", seq)
+		b.RecordTaskRunConfig(requestID, body)
+		return requestID, nil
+	}
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	post := func(path, payload, source string) {
+		t.Helper()
+		req, err := http.NewRequest(http.MethodPost, ts.URL+path, bytes.NewBufferString(payload))
+		if err != nil {
+			t.Fatalf("new request: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if source != "" {
+			req.Header.Set(taskSourceHeader, source)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("POST %s error = %v", path, err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusAccepted {
+			t.Fatalf("POST %s status = %d, want %d", path, resp.StatusCode, http.StatusAccepted)
+		}
+	}
+
+	post("/api/local-prompt", `{"repo":"git@github.com:acme/repo.git","prompt":"from prompt"}`, "")
+	post("/api/local-prompt", `{"repo":"git@github.com:acme/repo.git","prompt":"from json","source":"json"}`, "")
+	post("/api/local-prompt", `{"repo":"git@github.com:acme/repo.git","prompt":"from chat"}`, "chat")
+	post("/api/library/run", `{"repo":"git@github.com:acme/repo.git","libraryTaskName":"unit-test-coverage"}`, "")
+	b.RecordTaskRunConfigWithSource("req-hub-source", []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"from hub"}`), "hub")
+
+	snap := b.Snapshot()
+	if got, want := snap.Stats.TotalTasks, 5; got != want {
+		t.Fatalf("stats.total_tasks = %d, want %d", got, want)
+	}
+	got := map[string]int{}
+	for _, group := range snap.Stats.SourceMix {
+		got[group.Name] = group.Tasks
+	}
+	for _, name := range []string{"Chat", "Hub", "JSON", "Library", "Prompt"} {
+		if got[name] != 1 {
+			t.Fatalf("source_mix[%q] = %d, want 1 (all groups: %#v)", name, got[name], snap.Stats.SourceMix)
+		}
 	}
 }
 

@@ -567,7 +567,7 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
             try {
               const response = await fetch("/api/local-prompt", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", "X-MoltenHub-Task-Source": "chat" },
                 body: JSON.stringify(payload)
               });
               let body = null;
@@ -1692,7 +1692,7 @@ func (s Server) handlePromptSubmit(
 		return
 	}
 
-	source := taskSourceFromRequest(r, defaultSource)
+	source := taskSourceFromPromptSubmit(r, body, defaultSource)
 	requestID, err := submit(r.Context(), body)
 	if err != nil {
 		if duplicateRequestID, duplicateState, ok := duplicateSubmissionDetails(err); ok {
@@ -1724,12 +1724,12 @@ func (s Server) handlePromptSubmit(
 	})
 }
 
-func taskSourceFromRequest(r *http.Request, fallback string) string {
+func taskSourceFromPromptSubmit(r *http.Request, body []byte, fallback string) string {
 	source := ""
 	if r != nil {
 		source = r.Header.Get(taskSourceHeader)
 	}
-	return firstNonEmpty(normalizeTaskSource(source), normalizeTaskSource(fallback))
+	return firstNonEmpty(normalizeTaskSource(source), sourceFromRunConfigJSON(body), normalizeTaskSource(fallback))
 }
 
 func (s Server) handleTaskAction(w http.ResponseWriter, r *http.Request) {
