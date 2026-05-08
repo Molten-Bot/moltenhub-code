@@ -1202,6 +1202,11 @@ body .right-col.prompt-collapsed.task-list-hidden {
   pointer-events: auto;
 }
 
+.prompt-mode-link.is-temporarily-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .prompt-mode-link.is-disabled:hover,
 .prompt-mode-link.is-disabled:focus-visible,
 .prompt-mode-link[aria-disabled="true"]:hover,
