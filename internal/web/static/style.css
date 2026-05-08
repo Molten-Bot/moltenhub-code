@@ -3242,6 +3242,11 @@ select.prompt-control {
   box-shadow: 0 8px 18px rgba(10, 44, 102, 0.08);
 }
 
+.chat-repo-message-assistant {
+  justify-self: start;
+  border-radius: 14px 14px 14px 4px;
+}
+
 .chat-repo-message[data-tone="success"] {
   border-color: color-mix(in srgb, var(--surface-success) 42%, var(--border));
   background:
@@ -3281,6 +3286,13 @@ select.prompt-control {
   white-space: pre-wrap;
   font-size: 0.9rem;
   line-height: 1.38;
+}
+
+.chat-repo-message-link {
+  color: inherit;
+  font-weight: 850;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .chat-repo-message-meta {

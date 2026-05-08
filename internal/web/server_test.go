@@ -1655,6 +1655,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `function syncChatPromptMessageTaskStatuses(snapshot = state.snapshot)`) ||
 		!strings.Contains(markup, `function refreshVisibleChatPromptStatuses()`) ||
 		!strings.Contains(markup, `function chatPromptMessageTone(message)`) ||
+		!strings.Contains(markup, `function chatPromptCompletion(message)`) ||
+		!strings.Contains(markup, `link.textContent = text;`) ||
+		!strings.Contains(markup, `bubble.className = "chat-repo-message chat-repo-message-assistant";`) ||
+		!strings.Contains(markup, `syncChatPromptCompletionBubble(bubble, message);`) ||
+		!strings.Contains(markup, `const text = "Your task has completed";`) ||
 		!strings.Contains(markup, `bubble.dataset.tone = chatPromptMessageTone(message);`) ||
 		!strings.Contains(markup, `status === "completed" || status === "no_changes"`) ||
 		!strings.Contains(markup, `status === "error" || status === "invalid" || status === "stopped"`) ||
@@ -1662,7 +1667,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `meta.dataset.statusText = statusText;`) ||
 		!strings.Contains(markup, `refreshVisibleChatPromptStatuses();`) ||
 		!strings.Contains(markup, `syncChatPromptMessageTaskStatuses(snapshot);`) {
-		t.Fatalf("expected index chat prompt history to update queued request labels and message tones from live task status snapshots")
+		t.Fatalf("expected index chat prompt history to update queued request labels, message tones, and completion response bubbles from live task status snapshots")
 	}
 	if !strings.Contains(markup, `class="prompt-mode-link prompt-mode-link-logo"`) ||
 		!strings.Contains(markup, `src="/static/logos/github.svg"`) {
@@ -2648,6 +2653,8 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".chat-repo-message[data-tone=\"success\"] {") ||
 		!strings.Contains(css, ".chat-repo-message[data-tone=\"failure\"] {") ||
 		!strings.Contains(css, ".chat-repo-message[data-tone=\"warning\"] {") ||
+		!strings.Contains(css, ".chat-repo-message-assistant {\n  justify-self: start;") ||
+		!strings.Contains(css, ".chat-repo-message-link {") ||
 		!strings.Contains(css, "color: var(--surface-success);") ||
 		!strings.Contains(css, "color: var(--surface-danger);") {
 		t.Fatalf("expected stylesheet to color-code chat prompt messages by terminal task result")

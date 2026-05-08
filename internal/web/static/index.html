@@ -6020,6 +6020,82 @@
       return "";
     }
 
+    function chatPromptCompletion(message) {
+      const requestID = String(message?.requestID || "").trim();
+      const task = chatTaskByRequestID(requestID);
+      const status = normalizedTaskStatus(task?.status);
+      if (status !== "completed" && status !== "no_changes") {
+        return null;
+      }
+      return {
+        requestID,
+        href: taskPullRequestURL(task),
+      };
+    }
+
+    function updateChatPromptCompletionBody(body, completion) {
+      if (!body || !completion) return;
+      body.replaceChildren();
+
+      const text = "Your task has completed";
+      if (completion.href) {
+        const link = document.createElement("a");
+        link.className = "chat-repo-message-link";
+        link.href = completion.href;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.title = "Open pull request on GitHub.";
+        link.textContent = text;
+        link.addEventListener("click", (event) => {
+          openExternalTaskLink(event, completion.href, () => {
+            trackAnalyticsEvent("chat_prompt_completion_pr_opened", { request_id: completion.requestID });
+          });
+        });
+        body.appendChild(link);
+      } else {
+        body.textContent = text;
+      }
+    }
+
+    function syncChatPromptCompletionBubble(userBubble, message) {
+      if (!(userBubble instanceof HTMLElement)) return;
+      const completion = chatPromptCompletion(message);
+      const next = userBubble.nextElementSibling;
+      const existing = next instanceof HTMLElement &&
+        next.classList.contains("chat-repo-message-assistant") &&
+        next.dataset.requestId === String(message?.requestID || "").trim()
+        ? next
+        : null;
+
+      if (!completion) {
+        existing?.remove();
+        return;
+      }
+
+      const logNode = userBubble.closest(".chat-repo-log");
+      const stickToBottom = logNode &&
+        logNode.scrollTop + logNode.clientHeight >= logNode.scrollHeight - 24;
+      const bubble = existing || document.createElement("article");
+      bubble.className = "chat-repo-message chat-repo-message-assistant";
+      bubble.dataset.tone = "success";
+      bubble.dataset.requestId = completion.requestID;
+
+      let body = bubble.querySelector(".chat-repo-message-body");
+      if (!(body instanceof HTMLElement)) {
+        body = document.createElement("p");
+        body.className = "chat-repo-message-body";
+        bubble.appendChild(body);
+      }
+      updateChatPromptCompletionBody(body, completion);
+
+      if (!existing) {
+        userBubble.after(bubble);
+      }
+      if (stickToBottom) {
+        logNode.scrollTop = logNode.scrollHeight;
+      }
+    }
+
     function renderChatPromptMessageMeta(meta, message) {
       if (!meta) return;
       const requestID = String(message?.requestID || "").trim();
@@ -6076,6 +6152,7 @@
         const bubble = meta.closest(".chat-repo-message");
         if (bubble) {
           bubble.dataset.tone = chatPromptMessageTone(message);
+          syncChatPromptCompletionBubble(bubble, message);
         }
       });
     }
@@ -6096,6 +6173,7 @@
         const bubble = document.createElement("article");
         bubble.className = "chat-repo-message chat-repo-message-user";
         bubble.dataset.tone = chatPromptMessageTone(message);
+        bubble.dataset.requestId = String(message?.requestID || "").trim();
 
         const body = document.createElement("p");
         body.className = "chat-repo-message-body";
@@ -6108,6 +6186,7 @@
         bubble.appendChild(meta);
 
         logNode.appendChild(bubble);
+        syncChatPromptCompletionBubble(bubble, message);
       }
       logNode.scrollTop = logNode.scrollHeight;
     }
