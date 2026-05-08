@@ -1670,10 +1670,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="chat-repo-tabs"`) ||
 		!strings.Contains(markup, `function chatPromptedRepoTabs()`) ||
 		!strings.Contains(markup, `state.snapshot.prompted_repos`) ||
-		!strings.Contains(markup, `reposButton.textContent = "All";`) ||
+		!strings.Contains(markup, `reposIcon.innerHTML = `+"`"+`<i data-lucide="brick-wall" aria-hidden="true"></i>`+"`"+`;`) ||
+		!strings.Contains(markup, `reposLabel.textContent = "All repositories";`) ||
 		!strings.Contains(markup, `chatRepoGrid.classList.toggle("chat-repo-grid-active-repo", Boolean(selectedTab));`) ||
 		!strings.Contains(markup, `repos = repos.filter((repo) => !promptedKeys.has(chatRepoKey(chatRepoRunValue(repo))));`) {
 		t.Fatalf("expected index html chat to render prompted repository tabs and filter the repos tab")
+	}
+	if strings.Contains(markup, `reposButton.textContent = "All";`) {
+		t.Fatalf("expected index html chat repos tab to render as an icon-only control")
 	}
 	if !strings.Contains(markup, "} else if (selectedTab) {\n        chatStatus.textContent = \"\";") ||
 		strings.Contains(markup, `chatStatus.textContent = chatRepoTabLabel(selectedTab.value);`) {

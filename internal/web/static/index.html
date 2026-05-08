@@ -6548,9 +6548,18 @@
       reposButton.className = "chat-repo-tab";
       reposButton.type = "button";
       reposButton.role = "tab";
-      reposButton.textContent = "All";
+      reposButton.title = "All repositories";
+      reposButton.setAttribute("aria-label", "All repositories");
       reposButton.dataset.repoKey = "repos";
       reposButton.setAttribute("aria-selected", String(state.chatActiveRepoTab === "repos"));
+      const reposIcon = document.createElement("span");
+      reposIcon.className = "chat-repo-tab-icon";
+      reposIcon.setAttribute("aria-hidden", "true");
+      reposIcon.innerHTML = `<i data-lucide="brick-wall" aria-hidden="true"></i>`;
+      const reposLabel = document.createElement("span");
+      reposLabel.className = "sr-only";
+      reposLabel.textContent = "All repositories";
+      reposButton.append(reposIcon, reposLabel);
       reposButton.addEventListener("click", () => {
         if (state.chatActiveRepoTab === "repos") return;
         state.chatActiveRepoTab = "repos";
