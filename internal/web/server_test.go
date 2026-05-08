@@ -1719,6 +1719,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `function submitChatRepoPrompt(repo, input, statusNode, images = [], logNode = null, setImages = null)`) ||
 		!strings.Contains(markup, `function chatRepoOwnerIconName(repo)`) ||
 		!strings.Contains(markup, `return chatRepoOwnerType(repo) === "organization" ? "building-2" : "user";`) ||
+		!strings.Contains(markup, `function isChatRepoCardControlTarget(target, card)`) ||
 		!strings.Contains(markup, `const card = document.createElement("div");`) ||
 		!strings.Contains(markup, `card.setAttribute("role", "button");`) ||
 		!strings.Contains(markup, `const expanded = Boolean(repoKey && state.chatOpenRepoKey === repoKey);`) ||
@@ -2114,6 +2115,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `chatIcon.className = "chat-repo-card-chat-icon";`) ||
 		!strings.Contains(markup, "chatIcon.innerHTML = `<i data-lucide=\"message-circle\" aria-hidden=\"true\"></i>`;") ||
 		!strings.Contains(markup, `const openPrompt = () => {`) ||
+		!strings.Contains(markup, `if (isChatRepoCardControlTarget(event.target, card)) return;`) ||
 		!strings.Contains(markup, `card.setAttribute("aria-expanded", "true");`) ||
 		!strings.Contains(markup, "pasteTarget.className = \"prompt-control prompt-action-paste chat-repo-image-paste\"") ||
 		!strings.Contains(markup, "imageActions.className = \"chat-repo-image-actions\"") ||
@@ -2550,6 +2552,7 @@ func TestHandlerServesChatView(t *testing.T) {
 		`fetch("/api/github/repos", { cache: "no-store" })`,
 		`function repoOwnerIconName(repo)`,
 		`return repoOwnerType(repo) === "organization" ? "building-2" : "user";`,
+		`function isRepoCardControlTarget(target, card) {`,
 		`const card = document.createElement("div");`,
 		`card.setAttribute("role", "button");`,
 		`ownerIcon.className = "chat-repo-card-owner-icon";`,
@@ -2558,6 +2561,7 @@ func TestHandlerServesChatView(t *testing.T) {
 		`visibilityIcon.className = "chat-repo-card-visibility " + (repo.private ? "chat-repo-card-visibility-private" : "chat-repo-card-visibility-public");`,
 		`visibilityIcon.innerHTML = '<i data-lucide="' + (repo.private ? "lock" : "globe") + '" aria-hidden="true"></i>';`,
 		`const openPrompt = () => {`,
+		`if (isRepoCardControlTarget(event.target, card)) return;`,
 		`card.setAttribute("aria-expanded", "true");`,
 		`fetch("/api/local-prompt", {`,
 		`payload.baseBranch = branch;`,

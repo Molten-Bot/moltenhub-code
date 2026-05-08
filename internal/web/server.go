@@ -540,6 +540,12 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
             return repoOwnerType(repo) === "organization" ? "Organization repository" : "Personal repository";
           }
 
+          function isRepoCardControlTarget(target, card) {
+            if (!(target instanceof Element)) return false;
+            const control = target.closest("a, button, input, select, textarea, [contenteditable='true'], [role='button']");
+            return Boolean(control && control !== card);
+          }
+
           async function submitRepoPrompt(repo, input, statusNode) {
             const prompt = String(input.value || "").trim();
             if (!prompt) {
@@ -675,7 +681,8 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
               input.focus();
             };
 
-            card.addEventListener("click", () => {
+            card.addEventListener("click", (event) => {
+              if (isRepoCardControlTarget(event.target, card)) return;
               openPrompt();
             });
             card.addEventListener("keydown", (event) => {
