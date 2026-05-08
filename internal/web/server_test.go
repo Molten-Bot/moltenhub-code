@@ -1652,7 +1652,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `let repos = Array.isArray(state.githubRepos) ? state.githubRepos : [];`) ||
 		!strings.Contains(markup, `const CHAT_REPOS_MAX_PER_PAGE = 15;`) ||
 		!strings.Contains(markup, `function chatReposPerPage()`) ||
-		!strings.Contains(markup, `const pageRepos = repos.slice(start, start + reposPerPage);`) ||
+		!strings.Contains(markup, `const pageRepos = listedRepos.slice(start, start + reposPerPage);`) ||
 		!strings.Contains(markup, `function renderChatRepoPagination(totalRepos, totalPages)`) ||
 		!strings.Contains(markup, `if (!state.githubReposReady) {`) ||
 		!strings.Contains(markup, `id="chat-repo-search" class="chat-search-input" type="search"`) ||
@@ -1672,16 +1672,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `state.snapshot.prompted_repos`) ||
 		!strings.Contains(markup, `reposIcon.innerHTML = `+"`"+`<i data-lucide="brick-wall" aria-hidden="true"></i>`+"`"+`;`) ||
 		!strings.Contains(markup, `reposLabel.textContent = "All repositories";`) ||
-		!strings.Contains(markup, `chatRepoGrid.classList.toggle("chat-repo-grid-active-repo", Boolean(selectedTab));`) ||
-		!strings.Contains(markup, `repos = repos.filter((repo) => !promptedKeys.has(chatRepoKey(chatRepoRunValue(repo))));`) {
-		t.Fatalf("expected index html chat to render prompted repository tabs and filter the repos tab")
+		!strings.Contains(markup, `function selectedChatRepo(repos, selectedTab)`) ||
+		!strings.Contains(markup, `chatRepoGrid.classList.toggle("chat-repo-grid-active-repo", Boolean(openRepo));`) ||
+		!strings.Contains(markup, `const displayRepos = openRepo ? [openRepo, ...pageRepos] : pageRepos;`) {
+		t.Fatalf("expected index html chat to render prompted repository tabs, icon-only repos tab, and pin the open repository above the repository list")
 	}
-	if strings.Contains(markup, `reposButton.textContent = "All";`) {
-		t.Fatalf("expected index html chat repos tab to render as an icon-only control")
-	}
-	if !strings.Contains(markup, "} else if (selectedTab) {\n        chatStatus.textContent = \"\";") ||
+	if strings.Contains(markup, `reposButton.textContent = "All";`) ||
+		strings.Contains(markup, `repos = repos.filter((repo) => !promptedKeys.has(chatRepoKey(chatRepoRunValue(repo))));`) ||
 		strings.Contains(markup, `chatStatus.textContent = chatRepoTabLabel(selectedTab.value);`) {
-		t.Fatalf("expected active chat repository tabs to avoid duplicating the repository name in the status label")
+		t.Fatalf("expected chat repository list to keep all repositories below the open repository with an icon-only repos tab")
 	}
 	if strings.Contains(markup, `taskItems.push(githubReposLoadingTask())`) ||
 		strings.Contains(markup, `repoRead.textContent = "repos: reading GitHub projects";`) ||
@@ -1699,7 +1698,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `ownerIcon.className = "chat-repo-card-owner-icon";`) ||
 		!strings.Contains(markup, `promptLog.className = "chat-repo-log";`) ||
 		!strings.Contains(markup, `function syncChatOpenRepoKey(pageRepos, selectedTab, restoreFocusKey)`) ||
-		!strings.Contains(markup, `syncChatOpenRepoKey(pageRepos, selectedTab, restoreFocusKey);`) ||
+		!strings.Contains(markup, `syncChatOpenRepoKey(repos, selectedTab, restoreFocusKey);`) ||
 		!strings.Contains(markup, `logNode.hidden = false;`) ||
 		!strings.Contains(markup, `logNode.dataset.empty = String(!hasMessages);`) ||
 		!strings.Contains(markup, `visibilityIcon.className = `) ||

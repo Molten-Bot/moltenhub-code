@@ -5975,6 +5975,17 @@
       card.appendChild(panel);
 
       const openPrompt = () => {
+        if (repoKey && state.chatOpenRepoKey !== repoKey) {
+          state.chatOpenRepoKey = repoKey;
+          state.chatRepoPage = 1;
+          renderChatRepos();
+          const openedCard = chatRepoGrid?.querySelector(`.chat-repo-card[data-repo-key="${CSS.escape(repoKey)}"]`);
+          const openedPrompt = openedCard?.querySelector(".chat-repo-prompt");
+          if (openedPrompt instanceof HTMLTextAreaElement) {
+            openedPrompt.focus();
+          }
+          return;
+        }
         chatRepoGrid?.querySelectorAll(".chat-repo-card[aria-expanded='true']").forEach((node) => {
           if (node !== card) node.setAttribute("aria-expanded", "false");
         });
@@ -6430,6 +6441,15 @@
       state.chatOpenRepoKey = visibleKeys[0] || "";
     }
 
+    function selectedChatRepo(repos, selectedTab) {
+      const openKey = state.chatOpenRepoKey || selectedTab?.key || "";
+      if (!openKey) return null;
+      const matched = repos.find((repo) => chatRepoKey(chatRepoRunValue(repo)) === openKey);
+      if (matched) return matched;
+      if (selectedTab?.key === openKey) return fallbackChatRepo(selectedTab);
+      return null;
+    }
+
     function chatPromptedRepoTabs() {
       const repos = [];
       if (Array.isArray(state.snapshot?.prompted_repos)) {
@@ -6562,6 +6582,7 @@
           if (state.chatActiveRepoTab === tab.key) return;
           state.chatRepoActivityKeys.delete(tab.key);
           state.chatActiveRepoTab = tab.key;
+          state.chatOpenRepoKey = tab.key;
           state.chatRepoPage = 1;
           renderChatRepos();
         });
@@ -6606,34 +6627,31 @@
       const restoreSelectionEnd = activePrompt?.selectionEnd ?? restoreSelectionStart;
       const tabs = chatPromptedRepoTabs();
       const selectedTab = tabs.find((tab) => tab.key === state.chatActiveRepoTab);
-      const promptedKeys = new Set(tabs.map((tab) => tab.key));
       let repos = Array.isArray(state.githubRepos) ? state.githubRepos : [];
-      if (selectedTab) {
-        const matched = repos.filter((repo) => chatRepoMatchesTab(repo, selectedTab));
-        repos = matched.length > 0 ? matched : [fallbackChatRepo(selectedTab)];
-      } else if (promptedKeys.size > 0) {
-        repos = repos.filter((repo) => !promptedKeys.has(chatRepoKey(chatRepoRunValue(repo))));
-      }
       const unfilteredRepoCount = repos.length;
       repos = filterChatRepos(repos, state.chatRepoSearchQuery);
+      syncChatOpenRepoKey(repos, selectedTab, restoreFocusKey);
+      const openRepo = selectedChatRepo(repos, selectedTab);
+      const openRepoKey = openRepo ? chatRepoKey(chatRepoRunValue(openRepo)) : "";
+      const listedRepos = openRepoKey
+        ? repos.filter((repo) => chatRepoKey(chatRepoRunValue(repo)) !== openRepoKey)
+        : repos;
       const reposPerPage = chatReposPerPage();
-      const totalPages = Math.max(1, Math.ceil(repos.length / reposPerPage));
+      const totalPages = Math.max(1, Math.ceil(listedRepos.length / reposPerPage));
       state.chatRepoPage = Math.min(Math.max(1, state.chatRepoPage), totalPages);
       const start = (state.chatRepoPage - 1) * reposPerPage;
-      const pageRepos = repos.slice(start, start + reposPerPage);
-      syncChatOpenRepoKey(pageRepos, selectedTab, restoreFocusKey);
+      const pageRepos = listedRepos.slice(start, start + reposPerPage);
+      const displayRepos = openRepo ? [openRepo, ...pageRepos] : pageRepos;
 
       renderChatRepoTabs(tabs);
-      chatRepoGrid.classList.toggle("chat-repo-grid-active-repo", Boolean(selectedTab));
-      chatRepoGrid.replaceChildren(...pageRepos.map(renderChatRepoCard));
+      chatRepoGrid.classList.toggle("chat-repo-grid-active-repo", Boolean(openRepo));
+      chatRepoGrid.replaceChildren(...displayRepos.map(renderChatRepoCard));
       if (repos.length === 0) {
         chatStatus.textContent = "0 repositories";
         const empty = document.createElement("p");
         empty.className = "chat-empty";
-        empty.textContent = state.chatRepoSearchQuery ? "No repositories match search." : (selectedTab ? "Repository not found." : "No repositories found.");
+        empty.textContent = state.chatRepoSearchQuery ? "No repositories match search." : "No repositories found.";
         chatRepoGrid.appendChild(empty);
-      } else if (selectedTab) {
-        chatStatus.textContent = "";
       } else if (state.chatRepoSearchQuery) {
         chatStatus.textContent = repos.length === unfilteredRepoCount
           ? `${repos.length} repositories`
@@ -6642,9 +6660,9 @@
         chatStatus.textContent = repos.length === 1 ? "1 repository" : `${repos.length} repositories`;
       } else {
         const end = start + pageRepos.length;
-        chatStatus.textContent = `${start + 1}-${end} of ${repos.length} repositories`;
+        chatStatus.textContent = `${start + 1}-${end} of ${listedRepos.length} repositories`;
       }
-      renderChatRepoPagination(repos.length, totalPages);
+      renderChatRepoPagination(listedRepos.length, totalPages);
       if (restoreFocusKey) {
         const restoredCard = Array.from(chatRepoGrid.querySelectorAll(".chat-repo-card"))
           .find((node) => node instanceof HTMLElement && node.dataset.repoKey === restoreFocusKey);
