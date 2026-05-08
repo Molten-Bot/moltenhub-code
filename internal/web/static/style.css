@@ -3343,9 +3343,9 @@ select.prompt-control {
 
 .chat-repo-message-link-logo {
   display: block;
-  width: 13px;
-  height: 13px;
-  flex: 0 0 13px;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
   object-fit: contain;
   filter: var(--agent-logo-filter);
 }

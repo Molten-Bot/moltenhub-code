@@ -6140,8 +6140,6 @@
       if (!body || !completion) return;
       body.replaceChildren();
 
-      body.appendChild(document.createTextNode("Your task is complete "));
-
       const link = document.createElement("a");
       link.className = "chat-repo-message-link";
       link.href = completion.href;
@@ -6163,6 +6161,7 @@
         });
       });
       body.appendChild(link);
+      body.appendChild(document.createTextNode(" Your task is complete"));
     }
 
     function syncChatPromptCompletionBubble(userBubble, message) {
