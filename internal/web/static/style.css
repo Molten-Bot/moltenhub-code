@@ -3415,8 +3415,9 @@ select.prompt-control {
 .dashboard-stat-card {
   display: grid;
   gap: 8px;
-  min-height: 144px;
-  padding: 16px;
+  min-height: 120px;
+  padding: 14px;
+  position: relative;
 }
 
 .dashboard-stat-card-primary {
@@ -3436,14 +3437,40 @@ select.prompt-control {
 
 .dashboard-stat-card strong {
   color: var(--text);
-  font-size: clamp(1.9rem, 3.5vw, 3rem);
+  font-size: clamp(2.15rem, 3.8vw, 3.3rem);
   line-height: 0.95;
 }
 
 .dashboard-stat-meta {
-  align-self: end;
+  background: var(--surface-control-bg-strong);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--surface-control-shadow);
   color: var(--meta);
+  left: 10px;
+  opacity: 0;
+  padding: 7px 9px;
+  pointer-events: none;
+  position: absolute;
+  right: 10px;
   text-transform: none;
+  top: calc(100% - 10px);
+  transform: translateY(-2px);
+  transition: opacity 140ms ease, transform 140ms ease, visibility 140ms ease;
+  visibility: hidden;
+  z-index: 4;
+}
+
+.dashboard-stat-card:hover .dashboard-stat-meta,
+.dashboard-stat-card:focus-visible .dashboard-stat-meta {
+  opacity: 1;
+  transform: translateY(0);
+  visibility: visible;
+}
+
+.dashboard-stat-card:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: 2px;
 }
 
 .dashboard-chart-shell {
