@@ -2906,14 +2906,19 @@ select.prompt-control {
 .chat-controls {
   display: flex;
   align-items: center;
+  gap: 12px;
   padding-top: 14px;
 }
 
 .chat-search-field {
   display: flex;
+  flex: 1 1 220px;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
   width: min(100%, 420px);
+  min-width: 180px;
+  max-width: 420px;
   min-height: 38px;
   padding: 0 11px;
   border: 1px solid var(--surface-control-border);
@@ -2955,9 +2960,10 @@ select.prompt-control {
 
 .chat-repo-tabs {
   display: flex;
+  flex: 0 1 auto;
   flex-wrap: wrap;
   gap: 8px;
-  padding-top: 16px;
+  min-width: 0;
 }
 
 .chat-repo-tab {
