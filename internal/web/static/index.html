@@ -420,14 +420,14 @@
 
   <div id="task-fullscreen" class="task-fullscreen hidden" aria-hidden="true">
     <div class="task-fullscreen-shell">
-      <button id="task-fullscreen-close" class="task-fullscreen-close hidden" type="button" aria-label="Close full screen tasks" title="Close full screen tasks">
-        <i data-lucide="x" class="task-fullscreen-close-icon" aria-hidden="true"></i>
-        <span class="sr-only">Close full screen tasks</span>
-      </button>
       <div id="task-fullscreen-body" class="task-fullscreen-body">
         <section class="panel task-fullscreen-panel task-fullscreen-task-panel">
           <div class="panel-header">
             <span id="task-fullscreen-panel-title">Current Work</span>
+            <button id="task-fullscreen-close" class="task-fullscreen-close hidden" type="button" aria-label="Close full screen tasks" title="Close full screen tasks">
+              <i data-lucide="x" class="task-fullscreen-close-icon" aria-hidden="true"></i>
+              <span class="sr-only">Close full screen tasks</span>
+            </button>
           </div>
           <div class="scroll task-scroll">
             <div id="task-fullscreen-list" class="task-list"></div>
@@ -7728,7 +7728,7 @@
       if (!taskFullscreenClose) return;
       const normalizedMode = taskFullscreenMode(mode);
       const label = normalizedMode === "console" ? "Close console view" : "Exit full screen work";
-      const icon = normalizedMode === "console" ? "x" : "ellipsis";
+      const icon = "x";
       taskFullscreenClose.setAttribute("aria-label", label);
       taskFullscreenClose.setAttribute("title", label);
       const glyph = document.createElement("i");

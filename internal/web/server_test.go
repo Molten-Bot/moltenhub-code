@@ -1063,6 +1063,13 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="task-fullscreen-close"`) {
 		t.Fatalf("expected index html to include a dedicated full screen close control")
 	}
+	fullscreenTitleIndex := strings.Index(markup, `id="task-fullscreen-panel-title">Current Work</span>`)
+	fullscreenCloseIndex := strings.Index(markup, `id="task-fullscreen-close"`)
+	fullscreenListIndex := strings.Index(markup, `id="task-fullscreen-list"`)
+	if fullscreenTitleIndex == -1 || fullscreenCloseIndex == -1 || fullscreenListIndex == -1 ||
+		fullscreenCloseIndex < fullscreenTitleIndex || fullscreenCloseIndex > fullscreenListIndex {
+		t.Fatalf("expected full screen close control to render inside the Current Work panel header")
+	}
 	if !strings.Contains(markup, `class="task-fullscreen-close-icon"`) || !strings.Contains(markup, `data-lucide="x"`) {
 		t.Fatalf("expected index html to render the full screen close control as a lucide X icon button")
 	}
@@ -2929,14 +2936,14 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if strings.Contains(css, "body.task-fullscreen-open #task-fullscreen-toggle") {
 		t.Fatalf("expected stylesheet to stop reusing the panel toggle as the fullscreen close control")
 	}
-	if !strings.Contains(css, "top: max(16px, env(safe-area-inset-top));") || !strings.Contains(css, "right: max(16px, env(safe-area-inset-right));") {
-		t.Fatalf("expected stylesheet to keep the full screen close control clear of viewport edges")
+	if strings.Contains(css, "top: max(16px, env(safe-area-inset-top));") || strings.Contains(css, "right: max(16px, env(safe-area-inset-right));") {
+		t.Fatalf("expected stylesheet to keep the full screen close control integrated with the panel header instead of the viewport edge")
 	}
 	if !strings.Contains(css, "background: var(--surface-fullscreen-close-bg);") || !strings.Contains(css, "color: #fff;") {
 		t.Fatalf("expected stylesheet to give the full screen close control high-contrast styling")
 	}
-	if !strings.Contains(css, "inline-size: 48px;") {
-		t.Fatalf("expected stylesheet to size the full screen close control as a compact icon button")
+	if !strings.Contains(css, "inline-size: 32px;") || !strings.Contains(css, "block-size: 32px;") {
+		t.Fatalf("expected stylesheet to size the full screen close control as a compact title-bar icon button")
 	}
 	if !strings.Contains(css, ".task-fullscreen") {
 		t.Fatalf("expected stylesheet to include full screen task layout styles")
