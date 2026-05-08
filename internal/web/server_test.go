@@ -252,6 +252,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `id="dashboard-source-total"`) {
 		t.Fatalf("expected index html to render the dashboard stats panel")
 	}
+	if !strings.Contains(markup, `<span class="dashboard-stat-label">Totals</span>`) ||
+		!strings.Contains(markup, `<strong id="dashboard-total-tasks" class="dashboard-total-stat">Tasks 0 PRs 0</strong>`) ||
+		!strings.Contains(markup, "function dashboardPullRequestCount(snapshot)") ||
+		!strings.Contains(markup, "dashboardTotalTasks.textContent = `Tasks ${Number(stats.total_tasks || 0)} PRs ${dashboardPullRequestCount(snapshot)}`;") {
+		t.Fatalf("expected dashboard total card to show task and pull-request totals")
+	}
 	if !strings.Contains(markup, `id="dashboard-share-x"`) ||
 		!strings.Contains(markup, `id="dashboard-share-facebook"`) ||
 		!strings.Contains(markup, `id="dashboard-share-whatsapp"`) ||

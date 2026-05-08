@@ -3607,6 +3607,11 @@ select.prompt-control {
   line-height: 0.95;
 }
 
+.dashboard-stat-card strong.dashboard-total-stat {
+  font-size: clamp(1.35rem, 2.1vw, 2rem);
+  line-height: 1.05;
+}
+
 .dashboard-stat-meta {
   background: var(--surface-control-bg-strong);
   border: 1px solid var(--border);

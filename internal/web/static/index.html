@@ -340,9 +340,9 @@
               <span id="dashboard-max-concurrent-meta" class="dashboard-stat-meta">Peak active this server run</span>
             </div>
             <div class="dashboard-stat-card" tabindex="0" aria-describedby="dashboard-total-tasks-meta">
-              <span class="dashboard-stat-label">Total Tasks</span>
-              <strong id="dashboard-total-tasks">0</strong>
-              <span id="dashboard-total-tasks-meta" class="dashboard-stat-meta">Queued, running, completed, failed</span>
+              <span class="dashboard-stat-label">Totals</span>
+              <strong id="dashboard-total-tasks" class="dashboard-total-stat">Tasks 0 PRs 0</strong>
+              <span id="dashboard-total-tasks-meta" class="dashboard-stat-meta">Queued, running, completed, failed, pull requests</span>
             </div>
             <div class="dashboard-stat-card" tabindex="0" aria-describedby="dashboard-throughput-meta">
               <span class="dashboard-stat-label">Throughput</span>
@@ -4747,6 +4747,17 @@
       chart.update("none");
     }
 
+    function dashboardPullRequestCount(snapshot) {
+      const urls = new Set();
+      for (const item of [...(snapshot?.tasks || []), ...(snapshot?.releases || [])]) {
+        const prURL = String(item?.pr_url || "").trim();
+        if (prURL) {
+          urls.add(prURL);
+        }
+      }
+      return urls.size;
+    }
+
     function renderDashboardStats(snapshot) {
       const stats = snapshot && typeof snapshot.stats === "object" && snapshot.stats !== null ? snapshot.stats : {};
       const active = Number(stats.active_tasks || 0);
@@ -4761,7 +4772,7 @@
         dashboardMaxConcurrent.textContent = String(Number(stats.max_concurrent_tasks || 0));
       }
       if (dashboardTotalTasks) {
-        dashboardTotalTasks.textContent = String(Number(stats.total_tasks || 0));
+        dashboardTotalTasks.textContent = `Tasks ${Number(stats.total_tasks || 0)} PRs ${dashboardPullRequestCount(snapshot)}`;
       }
       if (dashboardThroughput) {
         dashboardThroughput.textContent = dashboardRate(Number(stats.throughput_per_hour || 0));
