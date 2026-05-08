@@ -2970,11 +2970,12 @@ select.prompt-control {
   border-radius: 8px;
   color: var(--text);
   background: var(--surface-control-bg);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font: inherit;
   font-size: 0.84rem;
   font-weight: 850;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .chat-repo-tab[aria-selected="true"] {
@@ -2989,6 +2990,37 @@ select.prompt-control {
   border-color: var(--border-strong);
   outline: none;
   box-shadow: var(--theme-button-focus);
+}
+
+.chat-repo-tab-icon {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  color: var(--muted);
+}
+
+.chat-repo-tab-icon svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke-width: 2.25;
+}
+
+.chat-repo-tab-has-activity .chat-repo-tab-icon {
+  color: var(--accent);
+}
+
+.chat-repo-tab-has-activity .chat-repo-tab-icon svg {
+  fill: currentColor;
+}
+
+.chat-repo-tab-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-repo-grid {

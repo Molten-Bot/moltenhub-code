@@ -1708,6 +1708,7 @@
       chatPromptDrafts: new Map(),
       chatOpenRepoKey: "",
       chatPromptedRepos: [],
+      chatRepoActivityKeys: new Set(),
       chatActiveRepoTab: "repos",
       chatRepoPage: 1,
       chatRepoSearchQuery: "",
@@ -6201,6 +6202,56 @@
       return chatRepoKey(chatRepoRunValue(repo)) === tab.key;
     }
 
+    function chatRepoActivitySignature(task) {
+      const logs = Array.isArray(task?.logs) ? task.logs : [];
+      const lastLog = logs.length > 0 ? logs[logs.length - 1] : null;
+      return [
+        normalizedTaskStatus(task?.status) || "pending",
+        String(task?.stage || "").trim(),
+        String(task?.stage_status || "").trim(),
+        String(task?.updated_at || "").trim(),
+        String(logs.length),
+        String(lastLog?.time || ""),
+        String(lastLog?.stream || ""),
+        String(lastLog?.text || "").slice(0, 160),
+      ].join("|");
+    }
+
+    function chatRepoKeysForTask(task) {
+      const keys = [];
+      const seen = new Set();
+      for (const repo of taskRepoValues(task)) {
+        const key = chatRepoKey(repo);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        keys.push(key);
+      }
+      return keys;
+    }
+
+    function syncChatRepoActivity(previousSnapshot, nextSnapshot) {
+      if (!previousSnapshot) return;
+      const previousSignatures = new Map();
+      for (const task of previousSnapshot?.tasks || []) {
+        const requestID = taskRequestID(task);
+        if (!requestID) continue;
+        previousSignatures.set(requestID, chatRepoActivitySignature(task));
+      }
+
+      for (const task of nextSnapshot?.tasks || []) {
+        const requestID = taskRequestID(task);
+        if (!requestID) continue;
+        const previousSignature = previousSignatures.get(requestID);
+        const nextSignature = chatRepoActivitySignature(task);
+        if (previousSignature === nextSignature) continue;
+        for (const key of chatRepoKeysForTask(task)) {
+          if (key && key !== state.chatActiveRepoTab) {
+            state.chatRepoActivityKeys.add(key);
+          }
+        }
+      }
+    }
+
     function fallbackChatRepo(tab) {
       const path = githubRepoPathFromValue(tab.value) || cleanRepoName(tab.value);
       return {
@@ -6229,11 +6280,25 @@
         button.className = "chat-repo-tab";
         button.type = "button";
         button.role = "tab";
-        button.textContent = tab.label;
         button.dataset.repoKey = tab.key;
+        if (state.chatActiveRepoTab === tab.key) {
+          state.chatRepoActivityKeys.delete(tab.key);
+        }
+        const hasActivity = state.chatRepoActivityKeys.has(tab.key);
+        button.classList.toggle("chat-repo-tab-has-activity", hasActivity);
+        button.title = hasActivity ? "New run activity" : "Prompted repository";
         button.setAttribute("aria-selected", String(state.chatActiveRepoTab === tab.key));
+        const icon = document.createElement("span");
+        icon.className = "chat-repo-tab-icon";
+        icon.setAttribute("aria-hidden", "true");
+        icon.innerHTML = `<i data-lucide="message-circle" aria-hidden="true"></i>`;
+        const label = document.createElement("span");
+        label.className = "chat-repo-tab-label";
+        label.textContent = tab.label;
+        button.append(icon, label);
         button.addEventListener("click", () => {
           if (state.chatActiveRepoTab === tab.key) return;
+          state.chatRepoActivityKeys.delete(tab.key);
           state.chatActiveRepoTab = tab.key;
           state.chatRepoPage = 1;
           renderChatRepos();
@@ -6255,6 +6320,7 @@
         renderChatRepos();
       });
       chatRepoTabs.appendChild(reposButton);
+      replaceLucideIcons(chatRepoTabs);
     }
 
     function renderChatRepos() {
@@ -9795,6 +9861,7 @@
       syncTaskCompletionSounds(snapshot);
       syncNewHubTaskFocus(previousSnapshot, snapshot);
       syncTaskCompletionSparkles(previousSnapshot, snapshot);
+      syncChatRepoActivity(previousSnapshot, snapshot);
       rememberCompletedTaskHistory(snapshot);
       syncChatPromptMessageTaskStatuses(snapshot);
       const observedRepos = [];
