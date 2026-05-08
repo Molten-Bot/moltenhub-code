@@ -3680,10 +3680,15 @@ select.prompt-control {
   text-transform: uppercase;
 }
 
+.dashboard-stat-label {
+  font-size: 0.74rem;
+}
+
 .dashboard-stat-card strong {
   color: var(--text);
-  font-size: clamp(2.15rem, 3.8vw, 3.3rem);
+  font-size: clamp(1.9rem, 3vw, 2.8rem);
   line-height: 0.95;
+  white-space: nowrap;
 }
 
 .dashboard-stat-meta {
