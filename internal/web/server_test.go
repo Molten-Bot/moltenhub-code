@@ -247,7 +247,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `id="dashboard-time-saved"`) ||
 		!strings.Contains(markup, `id="dashboard-workflow-times"`) ||
 		!strings.Contains(markup, `id="dashboard-agent-times"`) ||
-		!strings.Contains(markup, `id="dashboard-task-chart"`) {
+		!strings.Contains(markup, `id="dashboard-task-chart"`) ||
+		!strings.Contains(markup, `id="dashboard-source-chart"`) ||
+		!strings.Contains(markup, `id="dashboard-source-total"`) {
 		t.Fatalf("expected index html to render the dashboard stats panel")
 	}
 	if !strings.Contains(markup, `id="dashboard-share-x"`) ||

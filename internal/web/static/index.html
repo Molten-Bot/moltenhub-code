@@ -379,12 +379,21 @@
               <div id="dashboard-agent-times" class="dashboard-time-list"></div>
             </section>
           </div>
-          <div class="dashboard-chart-shell">
-            <div class="dashboard-chart-head">
-              <span>Task Mix</span>
-              <span id="dashboard-success-rate">0% success</span>
+          <div class="dashboard-chart-grid" aria-label="Task mix charts">
+            <div class="dashboard-chart-shell">
+              <div class="dashboard-chart-head">
+                <span>Task Mix</span>
+                <span id="dashboard-success-rate">0% success</span>
+              </div>
+              <canvas id="dashboard-task-chart" aria-label="Task status chart"></canvas>
             </div>
-            <canvas id="dashboard-task-chart" aria-label="Task status chart"></canvas>
+            <div class="dashboard-chart-shell">
+              <div class="dashboard-chart-head">
+                <span>Source Mix</span>
+                <span id="dashboard-source-total">0 prompts</span>
+              </div>
+              <canvas id="dashboard-source-chart" aria-label="Prompt source chart"></canvas>
+            </div>
           </div>
         </section>
 
@@ -1762,6 +1771,7 @@
     let deferredSelectionRenderTimer = null;
     let taskAudioContext = null;
     let dashboardChart = null;
+    let dashboardSourceChart = null;
     let githubReposLoadPromise = null;
     let chatRepoResizeRenderQueued = false;
     const localConnItem = document.getElementById("local-conn-item");
@@ -1825,6 +1835,8 @@
     const dashboardAgentTimes = document.getElementById("dashboard-agent-times");
     const dashboardSuccessRate = document.getElementById("dashboard-success-rate");
     const dashboardTaskChart = document.getElementById("dashboard-task-chart");
+    const dashboardSourceTotal = document.getElementById("dashboard-source-total");
+    const dashboardSourceChartCanvas = document.getElementById("dashboard-source-chart");
     const dashboardShareX = document.getElementById("dashboard-share-x");
     const dashboardShareFacebook = document.getElementById("dashboard-share-facebook");
     const dashboardShareWhatsApp = document.getElementById("dashboard-share-whatsapp");
@@ -4613,6 +4625,88 @@
       return dashboardChart;
     }
 
+    function ensureDashboardSourceChart() {
+      if (dashboardSourceChart || !dashboardSourceChartCanvas || !window.Chart) {
+        return dashboardSourceChart;
+      }
+      if (dashboardDisplay && dashboardDisplay.classList.contains("hidden")) {
+        return null;
+      }
+      dashboardSourceChart = new window.Chart(dashboardSourceChartCanvas, {
+        type: "doughnut",
+        data: {
+          labels: ["Chat", "Hub", "JSON", "Library", "Prompt", "Other"],
+          datasets: [{
+            data: [0, 0, 0, 0, 0, 0],
+            backgroundColor: ["#14b8a6", "#7b61ff", "#f59e0b", "#0a84ff", "#2bb673", "#7188b1"],
+            borderColor: "rgba(255, 255, 255, 0.8)",
+            borderWidth: 2,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: "64%",
+          plugins: {
+            legend: {
+              position: "bottom",
+              labels: {
+                boxWidth: 10,
+                usePointStyle: true,
+              },
+            },
+          },
+        },
+      });
+      return dashboardSourceChart;
+    }
+
+    function dashboardSourceColor(label) {
+      switch (String(label || "").trim().toLowerCase()) {
+        case "chat":
+          return "#14b8a6";
+        case "hub":
+          return "#7b61ff";
+        case "json":
+          return "#f59e0b";
+        case "library":
+          return "#0a84ff";
+        case "prompt":
+          return "#2bb673";
+        default:
+          return "#7188b1";
+      }
+    }
+
+    function renderDashboardSourceMix(stats) {
+      const sourceMix = Array.isArray(stats?.source_mix) ? stats.source_mix : [];
+      const labels = [];
+      const data = [];
+      let total = 0;
+      for (const group of sourceMix) {
+        const count = Number(group?.tasks || 0);
+        if (!Number.isFinite(count) || count <= 0) {
+          continue;
+        }
+        labels.push(String(group?.name || "Other"));
+        data.push(count);
+        total += count;
+      }
+      if (dashboardSourceTotal) {
+        dashboardSourceTotal.textContent = `${total} ${total === 1 ? "prompt" : "prompts"}`;
+      }
+      const chart = ensureDashboardSourceChart();
+      if (!chart) {
+        return;
+      }
+      chart.data.labels = labels.length > 0 ? labels : ["No prompts"];
+      chart.data.datasets[0].data = data.length > 0 ? data : [0];
+      chart.data.datasets[0].backgroundColor = labels.length > 0
+        ? labels.map(dashboardSourceColor)
+        : [dashboardSourceColor("other")];
+      chart.update("none");
+    }
+
     function renderDashboardStats(snapshot) {
       const stats = snapshot && typeof snapshot.stats === "object" && snapshot.stats !== null ? snapshot.stats : {};
       const active = Number(stats.active_tasks || 0);
@@ -4647,6 +4741,7 @@
       updateDashboardShareLinks(stats);
       renderDashboardTimeList(dashboardWorkflowTimes, stats.workflow_times);
       renderDashboardTimeList(dashboardAgentTimes, stats.agent_times);
+      renderDashboardSourceMix(stats);
       const chart = ensureDashboardChart();
       if (chart) {
         chart.data.datasets[0].data = [active, completed, failed];

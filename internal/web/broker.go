@@ -139,19 +139,20 @@ type ResourceMetrics struct {
 
 // DashboardStats captures in-memory run stats for the monitor dashboard.
 type DashboardStats struct {
-	TotalTasks             int              `json:"total_tasks"`
-	ActiveTasks            int              `json:"active_tasks"`
-	CompletedTasks         int              `json:"completed_tasks"`
-	FailedTasks            int              `json:"failed_tasks"`
-	MaxConcurrentTasks     int              `json:"max_concurrent_tasks"`
-	TotalSavedSeconds      float64          `json:"total_saved_seconds"`
-	SuccessRate            float64          `json:"success_rate"`
-	AverageDurationSeconds float64          `json:"average_duration_seconds"`
-	VelocityPerHour        float64          `json:"velocity_per_hour"`
-	ThroughputPerHour      float64          `json:"throughput_per_hour"`
-	UpdatedAt              string           `json:"updated_at,omitempty"`
-	WorkflowTimes          []TimeStatsGroup `json:"workflow_times,omitempty"`
-	AgentTimes             []TimeStatsGroup `json:"agent_times,omitempty"`
+	TotalTasks             int               `json:"total_tasks"`
+	ActiveTasks            int               `json:"active_tasks"`
+	CompletedTasks         int               `json:"completed_tasks"`
+	FailedTasks            int               `json:"failed_tasks"`
+	MaxConcurrentTasks     int               `json:"max_concurrent_tasks"`
+	TotalSavedSeconds      float64           `json:"total_saved_seconds"`
+	SuccessRate            float64           `json:"success_rate"`
+	AverageDurationSeconds float64           `json:"average_duration_seconds"`
+	VelocityPerHour        float64           `json:"velocity_per_hour"`
+	ThroughputPerHour      float64           `json:"throughput_per_hour"`
+	UpdatedAt              string            `json:"updated_at,omitempty"`
+	WorkflowTimes          []TimeStatsGroup  `json:"workflow_times,omitempty"`
+	AgentTimes             []TimeStatsGroup  `json:"agent_times,omitempty"`
+	SourceMix              []CountStatsGroup `json:"source_mix,omitempty"`
 }
 
 // TimeStatsGroup captures observed runtime and saved time for one workflow or agent.
@@ -163,6 +164,15 @@ type TimeStatsGroup struct {
 	TotalDurationSeconds   float64 `json:"total_duration_seconds"`
 	TotalSavedSeconds      float64 `json:"total_saved_seconds"`
 	AverageDurationSeconds float64 `json:"average_duration_seconds"`
+}
+
+// CountStatsGroup captures task counts for dashboard mix charts.
+type CountStatsGroup struct {
+	Name           string `json:"name"`
+	Tasks          int    `json:"tasks"`
+	ActiveTasks    int    `json:"active_tasks"`
+	CompletedTasks int    `json:"completed_tasks"`
+	FailedTasks    int    `json:"failed_tasks"`
 }
 
 // Snapshot is the complete monitor payload for the web UI.
@@ -254,6 +264,7 @@ type taskAttemptState struct {
 	RerunOf   string
 	Workflow  string
 	Agent     string
+	Source    string
 	Status    string
 	Error     string
 	StartedAt time.Time
@@ -505,11 +516,12 @@ func (b *Broker) RecordTaskRunConfigWithSource(requestID string, runConfigJSON [
 			UpdatedAt:         now,
 		}
 		b.tasks[requestID] = t
-		b.recordTaskAttemptLocked(b.taskAttemptRootLocked(requestID), requestID, "", t.Status, t.Error, t.Workflow, t.AgentHarness, now)
+		b.recordTaskAttemptLocked(b.taskAttemptRootLocked(requestID), requestID, "", t.Status, t.Error, t.Workflow, t.AgentHarness, t.Source, now)
 		changed = true
 	}
 	if source != "" && t != nil && t.Source != source {
 		t.Source = source
+		b.recordTaskAttemptLocked(b.taskAttemptRootLocked(requestID), requestID, "", t.Status, t.Error, t.Workflow, t.AgentHarness, t.Source, now)
 		changed = true
 	}
 	if prompt != "" {
@@ -585,6 +597,7 @@ func (b *Broker) RecordTaskSource(requestID string, source string) {
 	}
 	t.Source = source
 	t.UpdatedAt = now
+	b.recordTaskAttemptLocked(b.taskAttemptRootLocked(requestID), requestID, "", t.Status, t.Error, t.Workflow, t.AgentHarness, t.Source, now)
 	b.notifySubscribersLocked()
 }
 
@@ -648,7 +661,7 @@ func (b *Broker) RecordRejectedPromptSubmissionWithSource(runConfigJSON []byte, 
 		},
 	}
 	b.tasks[requestID] = t
-	b.recordTaskAttemptLocked(b.taskAttemptRootLocked(requestID), requestID, "", t.Status, t.Error, t.Workflow, t.AgentHarness, now)
+	b.recordTaskAttemptLocked(b.taskAttemptRootLocked(requestID), requestID, "", t.Status, t.Error, t.Workflow, t.AgentHarness, t.Source, now)
 	b.notifySubscribersLocked()
 	return requestID
 }
@@ -670,6 +683,7 @@ func (b *Broker) dashboardStatsLocked(now time.Time, tasks []*taskState) Dashboa
 			RequestID: t.RequestID,
 			Workflow:  taskWorkflow(t),
 			Agent:     taskAgentHarness(t),
+			Source:    normalizeTaskSource(t.Source),
 			Status:    normalizeTaskTerminalStatus(t.Status),
 			Error:     strings.TrimSpace(t.Error),
 			StartedAt: t.StartedAt,
@@ -701,6 +715,7 @@ func (b *Broker) dashboardStatsLocked(now time.Time, tasks []*taskState) Dashboa
 	successfulTerminals := 0
 	workflowGroups := map[string]*TimeStatsGroup{}
 	agentGroups := map[string]*TimeStatsGroup{}
+	sourceGroups := map[string]*CountStatsGroup{}
 	for _, attempt := range seen {
 		startedAt := attempt.StartedAt
 		updatedAt := attempt.UpdatedAt
@@ -731,6 +746,7 @@ func (b *Broker) dashboardStatsLocked(now time.Time, tasks []*taskState) Dashboa
 		duration := taskDuration(startedAt, updatedAt, now, status)
 		addTimeStatsGroup(workflowGroups, normalizedGroupName(attempt.Workflow, "Ad Hoc Prompt"), status, duration)
 		addTimeStatsGroup(agentGroups, normalizedGroupName(attempt.Agent, "Unknown Agent"), status, duration)
+		addCountStatsGroup(sourceGroups, sourceGroupName(attempt.Source), status)
 	}
 	terminalTasks := stats.CompletedTasks + stats.FailedTasks
 	if terminalTasks > 0 {
@@ -749,6 +765,7 @@ func (b *Broker) dashboardStatsLocked(now time.Time, tasks []*taskState) Dashboa
 	}
 	stats.WorkflowTimes = sortedTimeStatsGroups(workflowGroups)
 	stats.AgentTimes = sortedTimeStatsGroups(agentGroups)
+	stats.SourceMix = sortedCountStatsGroups(sourceGroups)
 	return stats
 }
 
@@ -904,6 +921,65 @@ func sortedTimeStatsGroups(groups map[string]*TimeStatsGroup) []TimeStatsGroup {
 		return out[i].TotalSavedSeconds > out[j].TotalSavedSeconds
 	})
 	return out
+}
+
+func addCountStatsGroup(groups map[string]*CountStatsGroup, name, status string) {
+	if groups == nil {
+		return
+	}
+	name = normalizedGroupName(name, "Other")
+	group := groups[name]
+	if group == nil {
+		group = &CountStatsGroup{Name: name}
+		groups[name] = group
+	}
+	group.Tasks++
+	if isActiveTaskStatus(status) {
+		group.ActiveTasks++
+	}
+	if isSuccessfulTaskStatus(status) {
+		group.CompletedTasks++
+	}
+	if isFailedTaskStatus(status) {
+		group.FailedTasks++
+	}
+}
+
+func sortedCountStatsGroups(groups map[string]*CountStatsGroup) []CountStatsGroup {
+	if len(groups) == 0 {
+		return nil
+	}
+	out := make([]CountStatsGroup, 0, len(groups))
+	for _, group := range groups {
+		if group == nil {
+			continue
+		}
+		out = append(out, *group)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Tasks == out[j].Tasks {
+			return out[i].Name < out[j].Name
+		}
+		return out[i].Tasks > out[j].Tasks
+	})
+	return out
+}
+
+func sourceGroupName(source string) string {
+	switch normalizeTaskSource(source) {
+	case "chat":
+		return "Chat"
+	case "hub":
+		return "Hub"
+	case "json":
+		return "JSON"
+	case "library":
+		return "Library"
+	case "prompt":
+		return "Prompt"
+	default:
+		return "Other"
+	}
 }
 
 func normalizedGroupName(name, fallback string) string {
@@ -1085,7 +1161,11 @@ func (b *Broker) RecordTaskRerunAttempt(rerunOf, requestID string) {
 	if root == "" {
 		root = rerunOf
 	}
-	b.recordTaskAttemptLocked(root, requestID, rerunOf, "queued", "", "", "", now)
+	source := ""
+	if t, ok := b.tasks[rerunOf]; ok && t != nil {
+		source = t.Source
+	}
+	b.recordTaskAttemptLocked(root, requestID, rerunOf, "queued", "", "", "", source, now)
 	b.notifySubscribersLocked()
 }
 
@@ -1186,7 +1266,7 @@ func (b *Broker) ensureTaskLocked(requestID string, now time.Time) *taskState {
 			existing.Branch = b.taskInitialBranchLocked(requestID)
 		}
 		existing.UpdatedAt = now
-		b.recordTaskAttemptLocked(b.taskAttemptRootLocked(requestID), requestID, "", existing.Status, existing.Error, existing.Workflow, existing.AgentHarness, now)
+		b.recordTaskAttemptLocked(b.taskAttemptRootLocked(requestID), requestID, "", existing.Status, existing.Error, existing.Workflow, existing.AgentHarness, existing.Source, now)
 		return existing
 	}
 
@@ -1205,14 +1285,14 @@ func (b *Broker) ensureTaskLocked(requestID string, now time.Time) *taskState {
 		UpdatedAt:         now,
 	}
 	b.tasks[requestID] = t
-	b.recordTaskAttemptLocked(b.taskAttemptRootLocked(requestID), requestID, "", t.Status, t.Error, t.Workflow, t.AgentHarness, now)
+	b.recordTaskAttemptLocked(b.taskAttemptRootLocked(requestID), requestID, "", t.Status, t.Error, t.Workflow, t.AgentHarness, t.Source, now)
 	return t
 }
 
 func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[string]string, now time.Time) {
 	defer func() {
 		if t != nil {
-			b.recordTaskAttemptLocked(b.taskAttemptRootLocked(t.RequestID), t.RequestID, "", t.Status, t.Error, t.Workflow, t.AgentHarness, now)
+			b.recordTaskAttemptLocked(b.taskAttemptRootLocked(t.RequestID), t.RequestID, "", t.Status, t.Error, t.Workflow, t.AgentHarness, t.Source, now)
 		}
 	}()
 
@@ -1397,7 +1477,7 @@ func (b *Broker) taskAttemptRootLocked(requestID string) string {
 	return requestID
 }
 
-func (b *Broker) recordTaskAttemptLocked(root, requestID, rerunOf, status, errText, workflow, agent string, now time.Time) {
+func (b *Broker) recordTaskAttemptLocked(root, requestID, rerunOf, status, errText, workflow, agent, source string, now time.Time) {
 	root = strings.TrimSpace(root)
 	requestID = strings.TrimSpace(requestID)
 	if root == "" {
@@ -1421,6 +1501,7 @@ func (b *Broker) recordTaskAttemptLocked(root, requestID, rerunOf, status, errTe
 	rerunOf = strings.TrimSpace(rerunOf)
 	workflow = strings.TrimSpace(workflow)
 	agent = strings.TrimSpace(agent)
+	source = normalizeTaskSource(source)
 
 	attempts := b.attempts[root]
 	for i := range attempts {
@@ -1436,6 +1517,9 @@ func (b *Broker) recordTaskAttemptLocked(root, requestID, rerunOf, status, errTe
 		if agent != "" {
 			attempts[i].Agent = agent
 		}
+		if source != "" {
+			attempts[i].Source = source
+		}
 		attempts[i].Status = status
 		attempts[i].Error = errText
 		attempts[i].UpdatedAt = now
@@ -1447,6 +1531,7 @@ func (b *Broker) recordTaskAttemptLocked(root, requestID, rerunOf, status, errTe
 		RerunOf:   rerunOf,
 		Workflow:  workflow,
 		Agent:     agent,
+		Source:    source,
 		Status:    status,
 		Error:     errText,
 		StartedAt: now,

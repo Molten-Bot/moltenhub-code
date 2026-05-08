@@ -108,6 +108,28 @@ func TestBrokerTracksTaskRuntimeAndSavedTimeStats(t *testing.T) {
 	}
 }
 
+func TestBrokerTracksDashboardSourceMix(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.RecordTaskRunConfigWithSource("local-chat", []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"from chat"}`), "chat")
+	b.RecordTaskRunConfigWithSource("local-json", []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"from json"}`), "json")
+	b.RecordTaskRunConfigWithSource("local-library", []byte(`{"repo":"git@github.com:acme/repo.git","libraryTaskName":"unit-test-coverage"}`), "library")
+	b.RecordTaskRunConfigWithSource("local-prompt", []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"from prompt"}`), "prompt")
+	b.RecordTaskRunConfigWithSource("req-hub", []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"from hub"}`), "hub")
+
+	snap := b.Snapshot()
+	got := map[string]int{}
+	for _, group := range snap.Stats.SourceMix {
+		got[group.Name] = group.Tasks
+	}
+	for _, name := range []string{"Chat", "Hub", "JSON", "Library", "Prompt"} {
+		if got[name] != 1 {
+			t.Fatalf("source_mix[%q] = %d, want 1 (all groups: %#v)", name, got[name], snap.Stats.SourceMix)
+		}
+	}
+}
+
 func TestBrokerRecordsMergedPRReleaseFromTask(t *testing.T) {
 	t.Parallel()
 

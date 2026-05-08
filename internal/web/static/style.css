@@ -3595,6 +3595,12 @@ select.prompt-control {
   outline-offset: 2px;
 }
 
+.dashboard-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .dashboard-chart-shell {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -3660,7 +3666,8 @@ select.prompt-control {
   margin: 0;
 }
 
-#dashboard-task-chart {
+#dashboard-task-chart,
+#dashboard-source-chart {
   width: 100% !important;
   height: 100% !important;
   min-height: 0;
@@ -3737,6 +3744,10 @@ select.prompt-control {
   }
 
   .dashboard-time-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-chart-grid {
     grid-template-columns: 1fr;
   }
 
