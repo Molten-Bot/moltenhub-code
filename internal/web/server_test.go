@@ -246,6 +246,13 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `id="dashboard-task-chart"`) {
 		t.Fatalf("expected index html to render the dashboard stats panel")
 	}
+	if !strings.Contains(markup, "return `Updated ${dashboardRelativeTime(date.getTime())}`;") ||
+		!strings.Contains(markup, "if (seconds < 60) return `${seconds}s ago`;") ||
+		!strings.Contains(markup, "if (minutes < 60) return `${minutes}m ago`;") ||
+		!strings.Contains(markup, "return `${hours}h ago`;") ||
+		!strings.Contains(markup, "refreshDashboardUpdatedLabel();") {
+		t.Fatalf("expected dashboard updated label to render relative seconds, minutes, and hours")
+	}
 	if !strings.Contains(markup, `<moltenhub-code-header agent-harness="codex" agent-label="Codex"></moltenhub-code-header>`) {
 		t.Fatalf("expected index html to render app heading through the shared site header")
 	}

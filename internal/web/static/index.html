@@ -4495,10 +4495,25 @@
       }
     }
 
+    function dashboardRelativeTime(timestamp) {
+      const delta = Math.max(0, Date.now() - timestamp);
+      const seconds = Math.floor(delta / 1000);
+      if (seconds < 60) return `${seconds}s ago`;
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return `${minutes}m ago`;
+      const hours = Math.floor(minutes / 60);
+      return `${hours}h ago`;
+    }
+
     function dashboardUpdatedLabel(value) {
       const date = new Date(String(value || ""));
       if (Number.isNaN(date.getTime())) return "Waiting for data";
-      return `Updated ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
+      return `Updated ${dashboardRelativeTime(date.getTime())}`;
+    }
+
+    function refreshDashboardUpdatedLabel() {
+      if (!dashboardUpdated) return;
+      dashboardUpdated.textContent = dashboardUpdatedLabel(dashboardUpdated.dataset.updatedAt);
     }
 
     function ensureDashboardChart() {
@@ -4543,7 +4558,9 @@
       const completed = Number(stats.completed_tasks || 0);
       const failed = Number(stats.failed_tasks || 0);
       if (dashboardUpdated) {
-        dashboardUpdated.textContent = dashboardUpdatedLabel(stats.updated_at || snapshot?.generated_at);
+        const dashboardUpdatedAt = stats.updated_at || snapshot?.generated_at;
+        dashboardUpdated.dataset.updatedAt = String(dashboardUpdatedAt || "").trim();
+        refreshDashboardUpdatedLabel();
       }
       if (dashboardMaxConcurrent) {
         dashboardMaxConcurrent.textContent = String(Number(stats.max_concurrent_tasks || 0));
@@ -6747,6 +6764,7 @@
           started_at: node.dataset.startedAt,
         });
       }
+      refreshDashboardUpdatedLabel();
     }
 
     function refreshTaskTimingSummariesTick() {
