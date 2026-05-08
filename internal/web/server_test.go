@@ -1650,6 +1650,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `function chatPromptedRepoTabs()`) ||
 		!strings.Contains(markup, `state.snapshot.prompted_repos`) ||
 		!strings.Contains(markup, `reposButton.textContent = "All";`) ||
+		!strings.Contains(markup, `chatRepoGrid.classList.toggle("chat-repo-grid-active-repo", Boolean(selectedTab));`) ||
 		!strings.Contains(markup, `repos = repos.filter((repo) => !promptedKeys.has(chatRepoKey(chatRepoRunValue(repo))));`) {
 		t.Fatalf("expected index html chat to render prompted repository tabs and filter the repos tab")
 	}
@@ -2720,6 +2721,12 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".chat-repo-card[aria-expanded=\"true\"] {\n  grid-column: 1 / -1;") {
 		t.Fatalf("expected expanded chat repository cards to span the full repository grid width")
+	}
+	if !strings.Contains(css, ".chat-shell {\n  display: flex;\n  flex-direction: column;") ||
+		!strings.Contains(css, ".chat-repo-grid-active-repo {\n  flex: 1 1 auto;") ||
+		!strings.Contains(css, ".chat-repo-grid-active-repo .chat-repo-card[aria-expanded=\"true\"] {") ||
+		!strings.Contains(css, ".chat-repo-grid-active-repo .chat-repo-log:not([hidden]) {") {
+		t.Fatalf("expected selected chat repository panels to fill the Git / Chat shell")
 	}
 	if !strings.Contains(css, ".chat-repo-message[data-tone=\"success\"] {") ||
 		!strings.Contains(css, ".chat-repo-message[data-tone=\"failure\"] {") ||

@@ -6409,6 +6409,7 @@
       const pageRepos = repos.slice(start, start + reposPerPage);
 
       renderChatRepoTabs(tabs);
+      chatRepoGrid.classList.toggle("chat-repo-grid-active-repo", Boolean(selectedTab));
       chatRepoGrid.replaceChildren(...pageRepos.map(renderChatRepoCard));
       if (repos.length === 0) {
         chatStatus.textContent = "0 repositories";

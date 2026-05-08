@@ -2861,6 +2861,8 @@ select.prompt-control {
 }
 
 .chat-shell {
+  display: flex;
+  flex-direction: column;
   min-height: clamp(360px, 58vh, 680px);
   padding: clamp(14px, 2.2vw, 22px);
   border: 1px solid var(--border);
@@ -3037,6 +3039,11 @@ select.prompt-control {
   padding-top: 12px;
 }
 
+.chat-repo-grid-active-repo {
+  flex: 1 1 auto;
+  grid-template-rows: minmax(0, 1fr);
+}
+
 .chat-repo-card {
   position: relative;
   display: grid;
@@ -3182,6 +3189,11 @@ select.prompt-control {
   border-color: var(--border-strong);
 }
 
+.chat-repo-grid-active-repo .chat-repo-card[aria-expanded="true"] {
+  min-height: 0;
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
 .chat-repo-panel {
   display: none;
   gap: 8px;
@@ -3190,6 +3202,16 @@ select.prompt-control {
 
 .chat-repo-card[aria-expanded="true"] .chat-repo-panel {
   display: grid;
+}
+
+.chat-repo-grid-active-repo .chat-repo-card[aria-expanded="true"] .chat-repo-panel {
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+}
+
+.chat-repo-grid-active-repo .chat-repo-card[aria-expanded="true"] .chat-repo-panel:has(.chat-repo-log[hidden]) {
+  align-content: end;
+  grid-template-rows: auto auto;
 }
 
 .chat-repo-log {
@@ -3210,6 +3232,11 @@ select.prompt-control {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--bg-panel-muted) 40%, transparent), transparent),
     color-mix(in srgb, var(--bg-elevated) 72%, transparent);
+}
+
+.chat-repo-grid-active-repo .chat-repo-log:not([hidden]) {
+  max-height: none;
+  min-height: 0;
 }
 
 .chat-repo-log[hidden] {
