@@ -4464,8 +4464,7 @@
 
     function dashboardRate(value) {
       if (!Number.isFinite(value) || value <= 0) return "0/h";
-      if (value < 10 && value % 1 !== 0) return `${value.toFixed(1)}/h`;
-      return `${Math.round(value)}/h`;
+      return `${Math.ceil(value)}/h`;
     }
 
     function dashboardPercent(value) {
