@@ -4444,6 +4444,36 @@ func TestRunCodexReturnsErrorWhenAgentReportsNoImplementationTarget(t *testing.T
 	}
 }
 
+func TestRunCodexDoesNotDowngradeMissingImplementationTargetToValidationGap(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "fix failing dispatch follow-up handling"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "`AGENTS.md` read. Repo ready.\nNo implementation target given. Send bug/feature request.",
+				Stderr: "Failure: local validation command failed in runtime.\nError details: `npm run test` -> `sh: 1: vitest: not found`",
+			},
+		},
+	}}
+
+	h := New(fake)
+	err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", "")
+	if err == nil {
+		t.Fatal("runCodex() error = nil, want no-implementation-target failure")
+	}
+	if !strings.Contains(err.Error(), "Failure: agent did not identify an implementation target.") {
+		t.Fatalf("runCodex() error = %v, want no-implementation-target failure", err)
+	}
+	if strings.Contains(err.Error(), "validation_tooling_unavailable") {
+		t.Fatalf("runCodex() error = %v, should not downgrade to validation tooling gap", err)
+	}
+}
+
 func TestRunCodexAllowsValidationToolingMissingFailure(t *testing.T) {
 	t.Parallel()
 

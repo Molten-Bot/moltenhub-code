@@ -2813,6 +2813,9 @@ func (h Harness) runCodexWithHeartbeat(
 		case run := <-done:
 			if failed, detail := codexReportedFailure(run.res); failed {
 				detail = codexFailureDetailWithErrorDetails(run.res, detail)
+				if isImplementationTargetFailure(detail) {
+					return run.res, fmt.Errorf("%s reported failure: %s", agentStage, detail)
+				}
 				if isNonFatalValidationToolingFailure(detail, run.res) {
 					h.logf(
 						"stage=%s status=warn action=validation_tooling_unavailable detail=%q",
@@ -3127,6 +3130,10 @@ func isNonFatalValidationToolingFailure(detail string, res execx.Result) bool {
 		return true
 	}
 	return false
+}
+
+func isImplementationTargetFailure(detail string) bool {
+	return strings.Contains(strings.ToLower(strings.TrimSpace(detail)), "agent did not identify an implementation target")
 }
 
 func containsAny(text string, markers []string) bool {
