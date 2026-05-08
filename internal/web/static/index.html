@@ -334,8 +334,23 @@
             </div>
           </div>
           <div class="dashboard-stats-grid" aria-label="Run stats">
+            <div class="dashboard-stat-card dashboard-stat-card-primary" tabindex="0" aria-describedby="dashboard-time-saved-meta">
+              <span class="dashboard-stat-label">Time Saved</span>
+              <strong id="dashboard-time-saved">0m</strong>
+              <span id="dashboard-time-saved-meta" class="dashboard-stat-meta">Successful agent runtime</span>
+            </div>
+            <div class="dashboard-stat-card" tabindex="0" aria-describedby="dashboard-throughput-meta">
+              <span class="dashboard-stat-label">Throughput</span>
+              <strong id="dashboard-throughput">0/h</strong>
+              <span id="dashboard-throughput-meta" class="dashboard-stat-meta">Successful completions per hour</span>
+            </div>
+            <div class="dashboard-stat-card" tabindex="0" aria-describedby="dashboard-velocity-meta">
+              <span class="dashboard-stat-label">Velocity</span>
+              <strong id="dashboard-velocity">0/h</strong>
+              <span id="dashboard-velocity-meta" class="dashboard-stat-meta">Tasks observed per hour</span>
+            </div>
             <div class="dashboard-stat-card dashboard-stat-card-primary" tabindex="0" aria-describedby="dashboard-max-concurrent-meta">
-              <span class="dashboard-stat-label">Max Concurrent Tasks</span>
+              <span class="dashboard-stat-label">Max Concurrency</span>
               <strong id="dashboard-max-concurrent">0</strong>
               <span id="dashboard-max-concurrent-meta" class="dashboard-stat-meta">Peak active this server run</span>
             </div>
@@ -349,30 +364,15 @@
               <strong id="dashboard-total-prs">0</strong>
               <span id="dashboard-total-prs-meta" class="dashboard-stat-meta">Unique pull requests opened</span>
             </div>
-            <div class="dashboard-stat-card dashboard-stat-card-primary" tabindex="0" aria-describedby="dashboard-session-runtime-meta">
-              <span class="dashboard-stat-label">Session Runtime</span>
-              <strong id="dashboard-session-runtime">0m</strong>
-              <span id="dashboard-session-runtime-meta" class="dashboard-stat-meta">Elapsed monitor session time</span>
-            </div>
-            <div class="dashboard-stat-card" tabindex="0" aria-describedby="dashboard-throughput-meta">
-              <span class="dashboard-stat-label">Throughput</span>
-              <strong id="dashboard-throughput">0/h</strong>
-              <span id="dashboard-throughput-meta" class="dashboard-stat-meta">Successful completions per hour</span>
-            </div>
-            <div class="dashboard-stat-card" tabindex="0" aria-describedby="dashboard-velocity-meta">
-              <span class="dashboard-stat-label">Velocity</span>
-              <strong id="dashboard-velocity">0/h</strong>
-              <span id="dashboard-velocity-meta" class="dashboard-stat-meta">Tasks observed per hour</span>
-            </div>
-            <div class="dashboard-stat-card dashboard-stat-card-primary" tabindex="0" aria-describedby="dashboard-time-saved-meta">
-              <span class="dashboard-stat-label">Time Saved</span>
-              <strong id="dashboard-time-saved">0m</strong>
-              <span id="dashboard-time-saved-meta" class="dashboard-stat-meta">Successful agent runtime</span>
-            </div>
             <div class="dashboard-stat-card" tabindex="0" aria-describedby="dashboard-average-runtime-meta">
               <span class="dashboard-stat-label">Average Runtime</span>
               <strong id="dashboard-average-runtime">0m</strong>
               <span id="dashboard-average-runtime-meta" class="dashboard-stat-meta">Completed task runtime</span>
+            </div>
+            <div class="dashboard-stat-card dashboard-stat-card-primary" tabindex="0" aria-describedby="dashboard-session-runtime-meta">
+              <span class="dashboard-stat-label">Session Runtime</span>
+              <strong id="dashboard-session-runtime">0m</strong>
+              <span id="dashboard-session-runtime-meta" class="dashboard-stat-meta">Elapsed monitor session time</span>
             </div>
           </div>
           <div class="dashboard-time-grid" aria-label="Time breakdowns">

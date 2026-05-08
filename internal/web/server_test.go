@@ -269,6 +269,30 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "dashboardTotalPRs.textContent = String(dashboardPullRequestCount(snapshot));") {
 		t.Fatalf("expected dashboard to show task and pull-request totals in separate stat cards")
 	}
+	if strings.Contains(markup, `<span class="dashboard-stat-label">Max Concurrent Tasks</span>`) {
+		t.Fatalf("expected dashboard max concurrency label to use concise copy")
+	}
+	lastDashboardStatLabel := -1
+	for _, label := range []string{
+		"Time Saved",
+		"Throughput",
+		"Velocity",
+		"Max Concurrency",
+		"Total Tasks",
+		"Pull Requests",
+		"Average Runtime",
+		"Session Runtime",
+	} {
+		statLabel := `<span class="dashboard-stat-label">` + label + `</span>`
+		index := strings.Index(markup, statLabel)
+		if index < 0 {
+			t.Fatalf("expected dashboard stat label %q", label)
+		}
+		if index <= lastDashboardStatLabel {
+			t.Fatalf("expected dashboard stat label %q to appear after previous stat label", label)
+		}
+		lastDashboardStatLabel = index
+	}
 	if !strings.Contains(markup, `id="dashboard-share-x"`) ||
 		!strings.Contains(markup, `id="dashboard-share-facebook"`) ||
 		!strings.Contains(markup, `id="dashboard-share-whatsapp"`) ||
