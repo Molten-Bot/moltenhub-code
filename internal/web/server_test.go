@@ -1551,6 +1551,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected bottom dock Library and JSON controls to activate their Studio views through the shared mode path")
 	}
 	if !strings.Contains(markup, `let mode = display === "releases" || display === "dashboard" || display === "chat" ? display : "studio";`) ||
+		!strings.Contains(markup, `function releasesAvailable(snapshot = state.snapshot)`) ||
+		!strings.Contains(markup, `if (mode === "releases" && !releasesAvailable()) {`) ||
+		!strings.Contains(markup, `mode = "studio";`) ||
 		!strings.Contains(markup, `if (mode === "chat" && !state.githubReposReady) {`) ||
 		!strings.Contains(markup, `appLayout.hidden = false;`) ||
 		!strings.Contains(markup, `promptWrap.hidden = !showStudio;`) ||
@@ -1601,6 +1604,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `function syncReleaseDockLinkAvailability(snapshot = state.snapshot)`) ||
 		!strings.Contains(markup, `releaseDockLink.setAttribute("aria-disabled", String(!available));`) ||
 		!strings.Contains(markup, `releaseDockLink.removeAttribute("href");`) ||
+		!strings.Contains(markup, `if (display === "releases" && !releasesAvailable()) {`) ||
 		!strings.Contains(markup, `trackAnalyticsEvent("releases_open_blocked", { reason: "no_releases" });`) ||
 		!strings.Contains(markup, `let githubReposLoadPromise = null;`) ||
 		!strings.Contains(markup, `const response = await fetch("/api/github/repos", { cache: "no-store" });`) ||

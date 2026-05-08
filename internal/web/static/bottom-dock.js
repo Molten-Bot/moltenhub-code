@@ -188,7 +188,7 @@
     const links = root.querySelectorAll("[data-app-display]");
     links.forEach((link) => {
       const linkDisplay = String(link.getAttribute("data-app-display") || "").trim() || "dashboard";
-      const active = linkDisplay === currentDisplay;
+      const active = linkDisplay === currentDisplay && !dockLinkDisabled(link);
       link.classList.toggle("active", active);
       if (active) {
         link.setAttribute("aria-current", "true");
@@ -221,6 +221,8 @@
       releaseLink.removeAttribute("href");
       releaseLink.tabIndex = -1;
       releaseLink.title = RELEASES_EMPTY_TITLE;
+      releaseLink.classList.remove("active");
+      releaseLink.removeAttribute("aria-current");
     }
   }
 

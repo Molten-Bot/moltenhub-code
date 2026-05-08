@@ -148,8 +148,10 @@ func TestBottomDockProfileButtonRoutesToLocalProfileDialog(t *testing.T) {
 		t.Fatalf("expected shared dock Hub logo to stay visible and link to the dashboard when configured")
 	}
 	if !strings.Contains(script, `function syncReleaseDockLinkAvailability(snapshot, root = document)`) ||
+		!strings.Contains(script, `const active = linkDisplay === currentDisplay && !dockLinkDisabled(link);`) ||
 		!strings.Contains(script, `releaseLink.setAttribute("aria-disabled", String(!available));`) ||
 		!strings.Contains(script, `releaseLink.removeAttribute("href");`) ||
+		!strings.Contains(script, `releaseLink.classList.remove("active");`) ||
 		!strings.Contains(script, `const response = await fetch("/api/status", { cache: "no-store" });`) ||
 		!strings.Contains(script, `event.stopImmediatePropagation();`) {
 		t.Fatalf("expected shared dock script to disable releases navigation until releases exist")

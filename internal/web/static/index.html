@@ -2207,6 +2207,13 @@
       return Array.isArray(snapshot?.releases) && snapshot.releases.length > 0;
     }
 
+    function releasesAvailable(snapshot = state.snapshot) {
+      if (snapshot && typeof snapshot === "object") {
+        return snapshotHasReleases(snapshot);
+      }
+      return releaseDockLink && releaseDockLink.getAttribute("aria-disabled") !== "true";
+    }
+
     function syncReleaseDockLinkAvailability(snapshot = state.snapshot) {
       if (window.HubBottomDock && typeof window.HubBottomDock.syncReleaseDockLinkAvailability === "function") {
         window.HubBottomDock.syncReleaseDockLinkAvailability(snapshot);
@@ -2229,6 +2236,8 @@
         releaseDockLink.removeAttribute("href");
         releaseDockLink.tabIndex = -1;
         releaseDockLink.title = "No releases yet";
+        releaseDockLink.classList.remove("active");
+        releaseDockLink.removeAttribute("aria-current");
       }
     }
 
@@ -6666,7 +6675,10 @@
 
     function appDisplayFromHash() {
       const hash = String(window.location.hash || "").replace(/^#/, "").trim().toLowerCase();
-      if (hash === "releases" || hash === "dashboard" || hash === "chat") {
+      if (hash === "releases") {
+        return releasesAvailable() ? "releases" : "studio";
+      }
+      if (hash === "dashboard" || hash === "chat") {
         return hash;
       }
       return "studio";
@@ -6727,6 +6739,10 @@
 
     function setAppDisplay(display, options = {}) {
       let mode = display === "releases" || display === "dashboard" || display === "chat" ? display : "studio";
+      if (mode === "releases" && !releasesAvailable()) {
+        syncReleaseDockLinkAvailability();
+        mode = "studio";
+      }
       if (mode === "chat" && !state.githubReposReady) {
         void loadGitHubReposForChat().then(() => {
           if (state.githubReposReady && appDisplayFromHash() === "chat") {
@@ -10008,6 +10024,11 @@
       renderFullscreenTasks(snapshot);
       renderChatReposFromSnapshot();
       renderFullscreenTerminal(snapshot);
+      if (state.appDisplay === "releases" && !snapshotHasReleases(snapshot)) {
+        setAppDisplay("studio");
+      } else if (state.appDisplay !== "releases" && appDisplayFromHash() === "releases") {
+        setAppDisplay("releases");
+      }
     }
 
     async function loadLibraryTasks() {
@@ -10675,7 +10696,7 @@
           return;
         }
         const display = String(link.dataset.appDisplay || "").trim();
-        if (display === "releases" && !snapshotHasReleases() && link.getAttribute("aria-disabled") === "true") {
+        if (display === "releases" && !releasesAvailable()) {
           event.preventDefault();
           event.stopImmediatePropagation();
           syncReleaseDockLinkAvailability();
