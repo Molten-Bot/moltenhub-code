@@ -1826,6 +1826,7 @@
     const chatRepoPagination = document.getElementById("chat-repo-pagination");
     const appDisplayLinks = Array.from(document.querySelectorAll("[data-app-display]"));
     const chatDockLink = document.querySelector('[data-app-display="chat"]');
+    const releaseDockLink = document.querySelector('[data-app-display="releases"]');
     const promptPanelTitle = document.getElementById("prompt-panel-title");
     const promptPanelCopy = document.getElementById("prompt-panel-copy");
     const githubProfileLink = document.getElementById("github-profile-link");
@@ -2200,6 +2201,35 @@
         chatDockLink.removeAttribute("href");
       }
       chatDockLink.title = available ? "Chat" : (state.githubReposLoadError || "Chat unavailable until repositories load");
+    }
+
+    function snapshotHasReleases(snapshot = state.snapshot) {
+      return Array.isArray(snapshot?.releases) && snapshot.releases.length > 0;
+    }
+
+    function syncReleaseDockLinkAvailability(snapshot = state.snapshot) {
+      if (window.HubBottomDock && typeof window.HubBottomDock.syncReleaseDockLinkAvailability === "function") {
+        window.HubBottomDock.syncReleaseDockLinkAvailability(snapshot);
+        return;
+      }
+      if (!releaseDockLink) {
+        return;
+      }
+      if (!snapshot || typeof snapshot !== "object") {
+        return;
+      }
+      const available = snapshotHasReleases(snapshot);
+      releaseDockLink.classList.toggle("is-disabled", !available);
+      releaseDockLink.setAttribute("aria-disabled", String(!available));
+      if (available) {
+        releaseDockLink.href = "#releases";
+        releaseDockLink.removeAttribute("tabindex");
+        releaseDockLink.title = "Releases";
+      } else {
+        releaseDockLink.removeAttribute("href");
+        releaseDockLink.tabIndex = -1;
+        releaseDockLink.title = "No releases yet";
+      }
     }
 
     function loadGitHubReposForChat() {
@@ -4627,6 +4657,7 @@
 
     function renderReleases(snapshot) {
       if (!releaseList) return;
+      syncReleaseDockLinkAvailability(snapshot);
       releaseList.textContent = "";
       const releases = Array.isArray(snapshot?.releases) ? snapshot.releases : [];
       if (!releases.length) {
@@ -10631,8 +10662,16 @@
         if (event.defaultPrevented) {
           return;
         }
+        const display = String(link.dataset.appDisplay || "").trim();
+        if (display === "releases" && !snapshotHasReleases() && link.getAttribute("aria-disabled") === "true") {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          syncReleaseDockLinkAvailability();
+          trackAnalyticsEvent("releases_open_blocked", { reason: "no_releases" });
+          return;
+        }
         event.preventDefault();
-        setAppDisplay(link.dataset.appDisplay, { updateHash: true });
+        setAppDisplay(display, { updateHash: true });
       });
     }
     window.addEventListener("hashchange", () => {

@@ -400,10 +400,10 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true" title="Prompt"`) {
 		t.Fatalf("expected index html to relabel the primary dock mode as Prompt")
 	}
-	if !strings.Contains(markup, `class="prompt-mode-link site-dock-link" href="#releases" data-app-display="releases" aria-label="Releases" title="Releases"`) ||
-		strings.Contains(markup, `data-app-display="releases" aria-label="Releases" title="Releases" tabindex="-1"`) ||
-		strings.Contains(markup, `data-app-display="releases" aria-label="Releases" title="Releases" aria-hidden="true"`) {
-		t.Fatalf("expected index html to show the releases dock link as visible and focusable")
+	if !strings.Contains(markup, `class="prompt-mode-link site-dock-link is-disabled" data-app-display="releases" aria-label="Releases" aria-disabled="true" tabindex="-1" title="No releases yet"`) ||
+		strings.Contains(markup, `href="#releases" data-app-display="releases"`) ||
+		strings.Contains(markup, `data-app-display="releases" aria-label="Releases" aria-hidden="true"`) {
+		t.Fatalf("expected index html to render the releases dock link as disabled until releases exist")
 	}
 	if !strings.Contains(markup, `id="hub-setup-emoji-picker"`) || !strings.Contains(markup, `id="hub-setup-emoji-panel"`) {
 		t.Fatalf("expected index html to include the emoji picker control shell")
@@ -1597,6 +1597,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `const chatDockLink = document.querySelector('[data-app-display="chat"]');`) ||
 		!strings.Contains(markup, `chatDockLink.setAttribute("aria-disabled", String(!available));`) ||
 		!strings.Contains(markup, `chatDockLink.removeAttribute("href");`) ||
+		!strings.Contains(markup, `const releaseDockLink = document.querySelector('[data-app-display="releases"]');`) ||
+		!strings.Contains(markup, `function syncReleaseDockLinkAvailability(snapshot = state.snapshot)`) ||
+		!strings.Contains(markup, `releaseDockLink.setAttribute("aria-disabled", String(!available));`) ||
+		!strings.Contains(markup, `releaseDockLink.removeAttribute("href");`) ||
+		!strings.Contains(markup, `trackAnalyticsEvent("releases_open_blocked", { reason: "no_releases" });`) ||
 		!strings.Contains(markup, `let githubReposLoadPromise = null;`) ||
 		!strings.Contains(markup, `const response = await fetch("/api/github/repos", { cache: "no-store" });`) ||
 		!strings.Contains(markup, `state.githubRepos = Array.isArray(body.repos) ? body.repos : [];`) ||
@@ -2364,6 +2369,37 @@ func TestHandlerServesReleasesAsIndexDisplay(t *testing.T) {
 		if strings.Contains(markup, entry) {
 			t.Fatalf("expected releases html to omit fake default entry %q", entry)
 		}
+	}
+}
+
+func TestHandlerEnablesReleasesDockWhenSnapshotHasReleases(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	now := time.Date(2026, 5, 7, 12, 5, 0, 0, time.UTC)
+	b.now = func() time.Time { return now }
+	b.RecordReleaseFromTask(Task{
+		RequestID:       "req-release",
+		Prompt:          "ship release panel",
+		PRURL:           "https://github.com/acme/repo/pull/42",
+		StartedAt:       now.Add(-3 * time.Minute).Format(time.RFC3339),
+		UpdatedAt:       now.Add(-1 * time.Minute).Format(time.RFC3339),
+		DurationSeconds: 120,
+	}, now.Add(-30*time.Second).Format(time.RFC3339))
+
+	srv := NewServer("", b)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+	markup := resp.Body.String()
+	if !strings.Contains(markup, `class="prompt-mode-link site-dock-link" href="#releases" data-app-display="releases" aria-label="Releases" title="Releases"`) ||
+		strings.Contains(markup, `data-app-display="releases" aria-label="Releases" aria-disabled="true"`) ||
+		strings.Contains(markup, `data-app-display="releases" aria-label="Releases" tabindex="-1"`) {
+		t.Fatalf("expected index html to enable the releases dock link when releases exist")
 	}
 }
 

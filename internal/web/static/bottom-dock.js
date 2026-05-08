@@ -5,6 +5,9 @@
   const THEME_MODES = ["light", "dark", "night", "pink"];
   const DEFAULT_THEME_MODE = "light";
   const HOME_PATH = "/";
+  const RELEASES_HASH = "#releases";
+  const RELEASES_READY_TITLE = "Releases";
+  const RELEASES_EMPTY_TITLE = "No releases yet";
   const HUB_PROFILE_DEEP_LINK_HASH = "#agent-profile";
   const HUB_LOGIN_URL = "https://molten.bot/login?target=hub";
   const HUB_DASHBOARD_URL = "https://app.molten.bot/hub";
@@ -195,6 +198,54 @@
     });
   }
 
+  function snapshotHasReleases(snapshot) {
+    return Array.isArray(snapshot?.releases) && snapshot.releases.length > 0;
+  }
+
+  function syncReleaseDockLinkAvailability(snapshot, root = document) {
+    const releaseLink = root.querySelector('[data-app-display="releases"]');
+    if (!releaseLink) {
+      return;
+    }
+    if (!snapshot || typeof snapshot !== "object") {
+      return;
+    }
+    const available = snapshotHasReleases(snapshot);
+    releaseLink.classList.toggle("is-disabled", !available);
+    releaseLink.setAttribute("aria-disabled", String(!available));
+    if (available) {
+      releaseLink.href = RELEASES_HASH;
+      releaseLink.removeAttribute("tabindex");
+      releaseLink.title = RELEASES_READY_TITLE;
+    } else {
+      releaseLink.removeAttribute("href");
+      releaseLink.tabIndex = -1;
+      releaseLink.title = RELEASES_EMPTY_TITLE;
+    }
+  }
+
+  async function resolveReleaseDockState(root) {
+    if (isHomePage()) {
+      return;
+    }
+    try {
+      const response = await fetch("/api/status", { cache: "no-store" });
+      let body = null;
+      try {
+        body = await response.json();
+      } catch (_err) {
+        body = null;
+      }
+      syncReleaseDockLinkAvailability(response.ok ? body : { releases: [] }, root);
+    } catch (_err) {
+      syncReleaseDockLinkAvailability({ releases: [] }, root);
+    }
+  }
+
+  function dockLinkDisabled(link) {
+    return link && link.getAttribute("aria-disabled") === "true";
+  }
+
   function routeAppDisplayLinksToHome(root) {
     if (isHomePage()) {
       return;
@@ -205,6 +256,11 @@
       }
       link.dataset.bottomDockHomeRouteBound = "true";
       link.addEventListener("click", (event) => {
+        if (dockLinkDisabled(link)) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          return;
+        }
         event.preventDefault();
         const display = String(link.getAttribute("data-app-display") || "").trim();
         if (!display) {
@@ -330,6 +386,9 @@
       }
       link.dataset.bottomDockPageNavBound = "true";
       link.addEventListener("click", () => {
+        if (dockLinkDisabled(link)) {
+          return;
+        }
         trackDockEvent("site_page_nav_opened", {
           source: "dock",
           target: String(link.getAttribute("data-app-display") || "").trim(),
@@ -353,6 +412,7 @@
     bindStaticDockAnalytics(root);
     bindPageNavAnalytics(root);
     void resolveGitHubProfileLink();
+    void resolveReleaseDockState(root);
     void resolveHubDockState();
   }
 
@@ -360,6 +420,7 @@
     init,
     applyThemeMode,
     syncThemeToggle,
+    syncReleaseDockLinkAvailability,
   });
 
   if (document.readyState === "loading") {

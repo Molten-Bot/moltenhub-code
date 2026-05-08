@@ -410,7 +410,19 @@ func (s Server) injectBottomDockComponent(ctx context.Context, data []byte) []by
 		return data
 	}
 	dock = s.applyBottomDockHubState(ctx, dock)
+	dock = s.applyBottomDockReleaseState(dock)
 	return bytes.Replace(data, []byte(bottomDockPlaceholder), bytes.TrimSpace(dock), 1)
+}
+
+func (s Server) applyBottomDockReleaseState(dock []byte) []byte {
+	if s.Broker == nil || len(s.Broker.Snapshot().Releases) == 0 {
+		return dock
+	}
+	return bytes.Replace(dock,
+		[]byte(`<a class="prompt-mode-link site-dock-link is-disabled" data-app-display="releases" aria-label="Releases" aria-disabled="true" tabindex="-1" title="No releases yet">`),
+		[]byte(`<a class="prompt-mode-link site-dock-link" href="#releases" data-app-display="releases" aria-label="Releases" title="Releases">`),
+		1,
+	)
 }
 
 func (s Server) applyBottomDockHubState(ctx context.Context, dock []byte) []byte {
