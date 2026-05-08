@@ -403,6 +403,7 @@
                 <span id="dashboard-source-total">0 prompts</span>
               </div>
               <canvas id="dashboard-source-chart" aria-label="Prompt source chart"></canvas>
+              <div id="dashboard-source-legend" class="dashboard-source-legend" aria-label="Prompt source legend"></div>
             </div>
           </div>
         </section>
@@ -1850,6 +1851,7 @@
     const dashboardTaskChart = document.getElementById("dashboard-task-chart");
     const dashboardSourceTotal = document.getElementById("dashboard-source-total");
     const dashboardSourceChartCanvas = document.getElementById("dashboard-source-chart");
+    const dashboardSourceLegend = document.getElementById("dashboard-source-legend");
     const dashboardShareX = document.getElementById("dashboard-share-x");
     const dashboardShareFacebook = document.getElementById("dashboard-share-facebook");
     const dashboardShareWhatsApp = document.getElementById("dashboard-share-whatsapp");
@@ -4646,6 +4648,46 @@
       return dashboardCSSValue(DASHBOARD_SOURCE_COLOR_VARS[key], DASHBOARD_SOURCE_COLOR_FALLBACKS[key]);
     }
 
+    function dashboardSourceIconName(label) {
+      switch (String(label || "").trim().toLowerCase()) {
+        case "chat":
+          return "message-circle";
+        case "hub":
+          return "satellite-dish";
+        case "json":
+          return "braces";
+        case "library":
+          return "book-open";
+        case "prompt":
+          return "pencil";
+        default:
+          return "circle-help";
+      }
+    }
+
+    function renderDashboardSourceLegend(labels = []) {
+      if (!dashboardSourceLegend) return;
+      const entries = labels.length > 0 ? labels : ["No prompts"];
+      dashboardSourceLegend.replaceChildren(...entries.map((label) => {
+        const item = document.createElement("span");
+        item.className = "dashboard-source-legend-item";
+        item.style.setProperty("--dashboard-source-legend-color", dashboardSourceColor(label));
+
+        const iconWrap = document.createElement("span");
+        iconWrap.className = "dashboard-source-legend-icon";
+        iconWrap.setAttribute("aria-hidden", "true");
+        const icon = document.createElement("i");
+        icon.setAttribute("data-lucide", dashboardSourceIconName(label));
+        iconWrap.appendChild(icon);
+
+        const text = document.createElement("span");
+        text.textContent = String(label || "Other");
+        item.append(iconWrap, text);
+        return item;
+      }));
+      replaceLucideIcons(dashboardSourceLegend);
+    }
+
     function applyDashboardChartTheme(chart) {
       if (!chart) return;
       const dataset = chart.data.datasets[0];
@@ -4655,8 +4697,14 @@
         dataset.backgroundColor = chart.data.labels.map(dashboardSourceColor);
       }
       dataset.borderColor = dashboardCSSValue("--dashboard-chart-border", "rgba(255, 255, 255, 0.76)");
-      chart.options.plugins.legend.labels.color = dashboardCSSValue("--muted", "#5a6f95");
+      const legendLabels = chart.options?.plugins?.legend?.labels;
+      if (legendLabels) {
+        legendLabels.color = dashboardCSSValue("--muted", "#5a6f95");
+      }
       chart.update("none");
+      if (chart === dashboardSourceChart) {
+        renderDashboardSourceLegend(chart.data.labels);
+      }
     }
 
     function refreshDashboardChartTheme() {
@@ -4725,16 +4773,12 @@
           cutout: "64%",
           plugins: {
             legend: {
-              position: "bottom",
-              labels: {
-                boxWidth: 10,
-                color: dashboardCSSValue("--muted", "#5a6f95"),
-                usePointStyle: true,
-              },
+              display: false,
             },
           },
         },
       });
+      renderDashboardSourceLegend(dashboardSourceChart.data.labels);
       return dashboardSourceChart;
     }
 
@@ -4765,6 +4809,7 @@
         ? labels.map(dashboardSourceColor)
         : [dashboardSourceColor("other")];
       chart.update("none");
+      renderDashboardSourceLegend(chart.data.labels);
     }
 
     function dashboardPullRequestCount(snapshot) {
