@@ -499,9 +499,9 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
           <p id="chat-status" class="chat-status" aria-live="polite"></p>
         </div>
         <div class="chat-controls">
-          <label class="chat-search-field">
+          <label class="chat-search-field hidden">
             <i data-lucide="search" aria-hidden="true"></i>
-            <input id="chat-repo-search" class="chat-search-input" type="search" spellcheck="false" placeholder="Search repositories" aria-label="Search repositories">
+            <input id="chat-repo-search" class="chat-search-input" type="search" spellcheck="false" placeholder="Search repositories" aria-label="Search repositories" disabled>
           </label>
         </div>
         <div id="chat-repo-grid" class="chat-repo-grid" aria-label="GitHub repositories"></div>
@@ -749,8 +749,19 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
             });
           }
 
+          function syncSearchVisibility(active) {
+            if (!search) return;
+            const searchField = search.closest(".chat-search-field");
+            const enabled = Boolean(active);
+            if (searchField) {
+              searchField.classList.toggle("hidden", !enabled);
+            }
+            search.disabled = !enabled;
+          }
+
           function renderRepos(sourceRepos) {
             const unfilteredRepoCount = sourceRepos.length;
+            syncSearchVisibility(unfilteredRepoCount > 1);
             const repos = filterRepos(sourceRepos, repoSearchQuery);
             const totalPages = Math.max(1, Math.ceil(repos.length / CHAT_REPOS_PER_PAGE));
             repoPage = Math.min(Math.max(1, repoPage), totalPages);
@@ -796,6 +807,7 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
               renderRepos(allRepos);
             } catch (err) {
               status.textContent = err && err.message ? err.message : "Unable to load repositories.";
+              syncSearchVisibility(false);
             }
           }
 

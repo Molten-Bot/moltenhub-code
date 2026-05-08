@@ -1686,6 +1686,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `id="chat-repo-search" class="chat-search-input" type="search"`) ||
 		!strings.Contains(markup, `const chatRepoSearch = document.getElementById("chat-repo-search");`) ||
 		!strings.Contains(markup, `function filterChatRepos(repos, query)`) ||
+		!strings.Contains(markup, `function syncChatRepoSearchVisibility(active)`) ||
+		!strings.Contains(markup, `syncChatRepoSearchVisibility(!viewingRepoChat && unfilteredRepoCount > 1);`) ||
+		!strings.Contains(markup, `chatRepoSearch.disabled = !enabled;`) ||
 		!strings.Contains(markup, `state.chatRepoSearchQuery = chatRepoSearch.value;`) ||
 		!strings.Contains(markup, `empty.textContent = state.chatRepoSearchQuery ? "No repositories match search."`) {
 		t.Fatalf("expected index html to gate chat availability on GitHub repository loading")
@@ -2551,6 +2554,9 @@ func TestHandlerServesChatView(t *testing.T) {
 		`const CHAT_REPOS_PER_PAGE = 15;`,
 		`const pageRepos = repos.slice(start, start + CHAT_REPOS_PER_PAGE);`,
 		`function filterRepos(repos, query)`,
+		`function syncSearchVisibility(active)`,
+		`syncSearchVisibility(unfilteredRepoCount > 1);`,
+		`search.disabled = !enabled;`,
 		`empty.textContent = repoSearchQuery ? "No repositories match search." : "No repositories found.";`,
 		`repoSearchQuery = search.value;`,
 		`fetch("/api/github/repos", { cache: "no-store" })`,

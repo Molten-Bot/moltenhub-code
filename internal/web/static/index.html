@@ -421,9 +421,9 @@
             </div>
             <div class="chat-controls">
               <div id="chat-repo-tabs" class="chat-repo-tabs" role="tablist" aria-label="Prompted repositories"></div>
-              <label class="chat-search-field">
+              <label class="chat-search-field hidden">
                 <i data-lucide="search" aria-hidden="true"></i>
-                <input id="chat-repo-search" class="chat-search-input" type="search" spellcheck="false" placeholder="Search repositories" aria-label="Search repositories">
+                <input id="chat-repo-search" class="chat-search-input" type="search" spellcheck="false" placeholder="Search repositories" aria-label="Search repositories" disabled>
               </label>
             </div>
             <div id="chat-repo-grid" class="chat-repo-grid" aria-label="GitHub repositories"></div>
@@ -6731,6 +6731,7 @@
       const openRepo = selectedChatRepo(reposForSelection, selectedTab);
       const openRepoKey = openRepo ? chatRepoKey(chatRepoRunValue(openRepo)) : "";
       const viewingRepoChat = Boolean(selectedTab && openRepo);
+      syncChatRepoSearchVisibility(!viewingRepoChat && unfilteredRepoCount > 1);
       let listedRepos = repos;
       if (viewingRepoChat) {
         listedRepos = [];
@@ -6799,6 +6800,16 @@
         ].map((value) => String(value || "").toLowerCase()).join(" ");
         return terms.every((term) => haystack.includes(term));
       });
+    }
+
+    function syncChatRepoSearchVisibility(active) {
+      if (!chatRepoSearch) return;
+      const searchField = chatRepoSearch.closest(".chat-search-field");
+      const enabled = Boolean(active);
+      if (searchField) {
+        searchField.classList.toggle("hidden", !enabled);
+      }
+      chatRepoSearch.disabled = !enabled;
     }
 
     function chatRepoPanelContainsFocus() {
@@ -6929,6 +6940,7 @@
       if (!state.githubReposReady) {
         chatStatus.textContent = state.githubReposLoadError || "";
         chatRepoGrid.replaceChildren();
+        syncChatRepoSearchVisibility(false);
         if (chatRepoPagination) {
           chatRepoPagination.replaceChildren();
           chatRepoPagination.classList.add("hidden");
