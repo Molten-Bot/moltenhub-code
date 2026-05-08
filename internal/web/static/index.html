@@ -1863,6 +1863,7 @@
     const chatRepoPagination = document.getElementById("chat-repo-pagination");
     const appDisplayLinks = Array.from(document.querySelectorAll("[data-app-display]"));
     const chatDockLink = document.querySelector('[data-app-display="chat"]');
+    const dashboardDockLink = document.querySelector('[data-app-display="dashboard"]');
     const promptPanelTitle = document.getElementById("prompt-panel-title");
     const promptPanelCopy = document.getElementById("prompt-panel-copy");
     const githubProfileLink = document.getElementById("github-profile-link");
@@ -2237,6 +2238,44 @@
         chatDockLink.removeAttribute("href");
       }
       chatDockLink.title = available ? "Chat" : (state.githubReposLoadError || "Chat unavailable until repositories load");
+    }
+
+    function dashboardHasStartedTask(snapshot) {
+      if (!snapshot || typeof snapshot !== "object") {
+        return false;
+      }
+      const stats = snapshot.stats && typeof snapshot.stats === "object" ? snapshot.stats : {};
+      if (Number(stats.total_tasks || 0) > 0) {
+        return true;
+      }
+      return Array.isArray(snapshot.tasks) && snapshot.tasks.length > 0;
+    }
+
+    function dashboardAvailable(snapshot = state.snapshot) {
+      return dashboardHasStartedTask(snapshot);
+    }
+
+    function appDisplayLinkDisabled(link) {
+      return link && link.getAttribute("aria-disabled") === "true";
+    }
+
+    function syncDashboardDockLinkAvailability(snapshot = state.snapshot) {
+      if (!dashboardDockLink) {
+        return;
+      }
+      const available = dashboardAvailable(snapshot);
+      dashboardDockLink.classList.toggle("is-disabled", !available);
+      dashboardDockLink.setAttribute("aria-disabled", String(!available));
+      dashboardDockLink.tabIndex = available ? 0 : -1;
+      if (available) {
+        dashboardDockLink.href = "#dashboard";
+      } else {
+        dashboardDockLink.removeAttribute("href");
+      }
+      dashboardDockLink.title = available ? "Dashboard" : "Dashboard unavailable until first task starts";
+      if (!available && state.appDisplay === "dashboard") {
+        setAppDisplay("studio", { updateHash: promptHashFromMode(state.promptMode) });
+      }
     }
 
     function loadGitHubReposForChat() {
@@ -7012,6 +7051,9 @@
 
     function setAppDisplay(display, options = {}) {
       let mode = display === "dashboard" || display === "chat" ? display : "studio";
+      if (mode === "dashboard" && !dashboardAvailable(state.snapshot)) {
+        mode = "studio";
+      }
       if (mode === "chat" && !state.githubReposReady) {
         void loadGitHubReposForChat().then(() => {
           if (state.githubReposReady && appDisplayFromHash() === "chat") {
@@ -7041,8 +7083,9 @@
         promptWrap.hidden = !showStudio;
         promptWrap.setAttribute("aria-hidden", String(!showStudio));
       }
+      syncDashboardDockLinkAvailability(state.snapshot);
       for (const link of appDisplayLinks) {
-        const active = String(link.dataset.appDisplay || "").trim() === mode;
+        const active = String(link.dataset.appDisplay || "").trim() === mode && !appDisplayLinkDisabled(link);
         link.classList.toggle("active", active);
         if (active) {
           link.setAttribute("aria-current", "true");
@@ -10282,6 +10325,7 @@
       syncTaskIconStateMemory(snapshot.tasks || []);
       renderHubConnection(snapshot);
       renderResourceMetrics(snapshot);
+      syncDashboardDockLinkAvailability(snapshot);
       renderDashboardStats(snapshot);
       renderTasks(snapshot);
       renderFullscreenTasks(snapshot);
@@ -10330,6 +10374,9 @@
         }
         const snapshot = await response.json();
         render(snapshot);
+        if (appDisplayFromHash() === "dashboard") {
+          setAppDisplay("dashboard");
+        }
         void githubReposPromise.then(() => {
           if (appDisplayFromHash() === "chat") {
             setAppDisplay("chat");
@@ -10954,6 +11001,10 @@
           return;
         }
         const display = String(link.dataset.appDisplay || "").trim();
+        if (appDisplayLinkDisabled(link) && display === "dashboard") {
+          event.preventDefault();
+          return;
+        }
         event.preventDefault();
         setAppDisplay(display, { updateHash: true });
       });
@@ -10999,6 +11050,7 @@
     renderPromptImages();
     replaceLucideIcons(document.body);
     syncChatDockLinkAvailability();
+    syncDashboardDockLinkAvailability();
     syncBaseBranchClearState();
     syncBuilderDraftClearState();
     try {

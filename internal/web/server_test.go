@@ -316,6 +316,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "refreshDashboardUpdatedLabel();") {
 		t.Fatalf("expected dashboard updated label to render relative seconds, minutes, and hours")
 	}
+	if !strings.Contains(markup, `const dashboardDockLink = document.querySelector('[data-app-display="dashboard"]');`) ||
+		!strings.Contains(markup, `function dashboardHasStartedTask(snapshot)`) ||
+		!strings.Contains(markup, `dashboardDockLink.setAttribute("aria-disabled", String(!available));`) ||
+		!strings.Contains(markup, `dashboardDockLink.removeAttribute("href");`) ||
+		!strings.Contains(markup, `if (mode === "dashboard" && !dashboardAvailable(state.snapshot)) {`) ||
+		!strings.Contains(markup, `if (appDisplayLinkDisabled(link) && display === "dashboard") {`) {
+		t.Fatalf("expected dashboard dock link to stay disabled until the first task starts")
+	}
 	if !strings.Contains(markup, `<moltenhub-code-header agent-harness="codex" agent-label="Codex"></moltenhub-code-header>`) {
 		t.Fatalf("expected index html to render app heading through the shared site header")
 	}
