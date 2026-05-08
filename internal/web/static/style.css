@@ -3351,11 +3351,26 @@ select.prompt-control {
 }
 
 .chat-repo-message-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
   color: color-mix(in srgb, var(--meta) 82%, transparent);
   font-size: 0.62rem;
   font-weight: 700;
   line-height: 1.25;
   text-align: right;
+}
+
+.chat-repo-message-meta-stat {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, currentColor 32%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  white-space: nowrap;
 }
 
 .chat-repo-prompt {

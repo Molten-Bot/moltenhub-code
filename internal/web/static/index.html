@@ -6031,7 +6031,14 @@
     function chatPromptMessageTime(value) {
       const date = new Date(value);
       if (Number.isNaN(date.getTime())) return "";
-      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const elapsedMs = Math.max(0, Date.now() - date.getTime());
+      const elapsedSeconds = Math.floor(elapsedMs / 1000);
+      if (elapsedSeconds < 60) return `${elapsedSeconds}s ago`;
+      const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+      if (elapsedMinutes < 60) return `${elapsedMinutes}m ago`;
+      const elapsedHours = Math.floor(elapsedMinutes / 60);
+      if (elapsedHours < 24) return `${elapsedHours}h ago`;
+      return date.toLocaleDateString([], { month: "short", day: "numeric" });
     }
 
     function chatStatusDisplayLabel(value) {
@@ -6239,15 +6246,32 @@
       const imageCount = Number.isFinite(message?.imageCount) ? message.imageCount : 0;
       const statusText = chatPromptMessageStatusText(message);
       const statusTitle = chatPromptMessageStatusTitle(message);
-      const parts = [];
+      const stats = [];
       const time = chatPromptMessageTime(message?.createdAt);
-      if (time) parts.push(time);
-      if (statusText) parts.push(statusText);
+      if (time) {
+        const startedAt = new Date(message?.createdAt);
+        stats.push({
+          text: time,
+          title: Number.isNaN(startedAt.getTime()) ? "" : `Started ${startedAt.toLocaleString()}`,
+        });
+      }
       if (imageCount > 0) {
-        parts.push(`${imageCount} screenshot${imageCount === 1 ? "" : "s"}`);
+        stats.push({
+          text: `${imageCount} screenshot${imageCount === 1 ? "" : "s"}`,
+          title: `${imageCount} screenshot${imageCount === 1 ? "" : "s"} attached`,
+        });
       }
 
-      meta.textContent = parts.join(" | ");
+      meta.replaceChildren();
+      for (const stat of stats) {
+        const item = document.createElement("span");
+        item.className = "chat-repo-message-meta-stat";
+        item.textContent = stat.text;
+        if (stat.title) {
+          item.title = stat.title;
+        }
+        meta.appendChild(item);
+      }
       meta.dataset.requestId = requestID;
       meta.dataset.createdAt = String(message?.createdAt || "");
       meta.dataset.imageCount = String(imageCount);
@@ -7136,6 +7160,7 @@
           started_at: node.dataset.startedAt,
         });
       }
+      refreshVisibleChatPromptStatuses();
       refreshDashboardUpdatedLabel();
       refreshDashboardSessionRuntime();
     }
