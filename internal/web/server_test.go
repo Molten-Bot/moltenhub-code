@@ -2880,6 +2880,11 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, `--primary: #ec4899;`) || !strings.Contains(css, `--accent: #db2777;`) || !strings.Contains(css, `--theme-button-text: #ffe4f1;`) {
 		t.Fatalf("expected stylesheet to define pink theme palette tokens")
 	}
+	if !strings.Contains(css, `html.pink .chat-repo-message[data-tone="success"] .chat-repo-message-body,`) ||
+		!strings.Contains(css, `html.pink .chat-repo-submit-status[data-tone="ok"] {`) ||
+		!strings.Contains(css, `html.pink .chat-status,`) {
+		t.Fatalf("expected stylesheet to apply pink theme text colors to Git chat text")
+	}
 	if !strings.Contains(css, ".agent-auth-shell {\n  display: flex;\n  flex-direction: column;\n  width: 100%;\n  max-width: 36rem;\n  min-height: 220px;\n  padding: clamp(24px, 3vw, 32px);\n  border: 1px solid var(--surface-auth-panel-border);\n  border-radius: var(--radius-card);\n  background: var(--surface-auth-panel-bg);\n  box-shadow: var(--surface-auth-panel-shadow);\n}") {
 		t.Fatalf("expected stylesheet to render onboarding content inside a readable auth panel")
 	}

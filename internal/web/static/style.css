@@ -6498,6 +6498,21 @@ html.pink {
   --shadow-lg: 0 28px 72px rgba(10, 2, 7, 0.64);
 }
 
+html.pink .chat-repo-message[data-tone="success"] .chat-repo-message-body,
+html.pink .chat-repo-message[data-tone="success"] .chat-repo-message-meta,
+html.pink .chat-repo-submit-status[data-tone="ok"] {
+  color: var(--text);
+}
+
+html.pink .chat-status,
+html.pink .chat-repo-card-description,
+html.pink .chat-repo-card-meta,
+html.pink .chat-repo-message-meta,
+html.pink .chat-repo-page-label,
+html.pink .chat-empty {
+  color: var(--text-soft);
+}
+
 html[data-hover-mode="on"] .prompt-action-button:not(:disabled),
 html[data-hover-mode="on"] .task-rerun:not(:disabled),
 html[data-hover-mode="on"] .task-output-toggle:not(:disabled),
