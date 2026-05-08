@@ -118,34 +118,14 @@ func (g *opencodeAuthGate) Configure(ctx context.Context, rawInput string) (web.
 		return snap, nil
 	}
 	configureCommand := strings.TrimSpace(g.authState.configureCommand)
-	initCfg := g.initCfg
-	runtimeConfigPath := g.runtimeConfigPath
-	runner := g.runner
 	g.mu.Unlock()
 
 	if configureCommand == claudeGitHubConfigureCommand {
-		return configureGitHubTokenAndApply(
+		return g.configureGitHubTokenAndRefresh(
 			ctx,
 			agentruntime.HarnessOpencode,
-			runtimeConfigPath,
-			initCfg,
-			runner,
 			rawInput,
-			func(state web.AgentAuthState, err error) (web.AgentAuthState, error) {
-				g.mu.Lock()
-				g.authState.applySnapshot(state)
-				snap := g.snapshotLocked()
-				g.mu.Unlock()
-				return snap, err
-			},
-			func(token string) (web.AgentAuthState, error) {
-				g.mu.Lock()
-				g.initCfg.GitHubToken = token
-				g.refreshLocked(ctx)
-				snap := g.snapshotLocked()
-				g.mu.Unlock()
-				return snap, nil
-			},
+			func() { g.refreshLocked(ctx) },
 		)
 	}
 

@@ -56,6 +56,49 @@ func (g *configurableAgentAuthGateBase) snapshotLocked(harness string) web.Agent
 	return g.authState.snapshot(harness)
 }
 
+func (g *configurableAgentAuthGateBase) configureGitHubTokenAndRefresh(
+	ctx context.Context,
+	harness string,
+	rawInput string,
+	refreshLocked func(),
+) (web.AgentAuthState, error) {
+	if g == nil {
+		return readyAgentAuthState(), nil
+	}
+
+	g.mu.Lock()
+	runtimeConfigPath := g.runtimeConfigPath
+	initCfg := g.initCfg
+	runner := g.runner
+	g.mu.Unlock()
+
+	return configureGitHubTokenAndApply(
+		ctx,
+		harness,
+		runtimeConfigPath,
+		initCfg,
+		runner,
+		rawInput,
+		func(state web.AgentAuthState, err error) (web.AgentAuthState, error) {
+			g.mu.Lock()
+			g.authState.applySnapshot(state)
+			snap := g.snapshotLocked(harness)
+			g.mu.Unlock()
+			return snap, err
+		},
+		func(token string) (web.AgentAuthState, error) {
+			g.mu.Lock()
+			g.initCfg.GitHubToken = token
+			if refreshLocked != nil {
+				refreshLocked()
+			}
+			snap := g.snapshotLocked(harness)
+			g.mu.Unlock()
+			return snap, nil
+		},
+	)
+}
+
 func (s *configurableAgentAuthState) touch() {
 	s.updatedAt = time.Now().UTC()
 }
@@ -338,42 +381,9 @@ func gitHubTokenValidationCommand() execx.Command {
 	return execx.Command{Name: "gh", Args: []string{"auth", "status", "--hostname", "github.com"}}
 }
 
-func gitHubTokenValidationFallbackCommand() execx.Command {
-	return execx.Command{Name: "gh", Args: []string{"auth", "status", "--hostname", "github.com"}}
-}
-
 func runGitHubTokenValidationCommand(ctx context.Context, runner execx.Runner) error {
-	res, err := runner.Run(ctx, gitHubTokenValidationCommand())
-	if err == nil {
-		return nil
-	}
-	if !shouldRetryGitHubTokenValidationWithoutActiveFlag(res, err) {
-		return err
-	}
-	_, fallbackErr := runner.Run(ctx, gitHubTokenValidationFallbackCommand())
-	return fallbackErr
-}
-
-func shouldRetryGitHubTokenValidationWithoutActiveFlag(res execx.Result, err error) bool {
-	if err == nil {
-		return false
-	}
-	outputText := strings.ToLower(strings.TrimSpace(res.Stdout + "\n" + res.Stderr))
-	errText := strings.ToLower(strings.TrimSpace(err.Error()))
-	combined := strings.TrimSpace(outputText + "\n" + errText)
-	if !strings.Contains(combined, "active") {
-		return false
-	}
-	if strings.Contains(combined, "unknown flag") || strings.Contains(combined, "flag provided but not defined") {
-		return true
-	}
-	if strings.Contains(combined, "flags:") &&
-		strings.Contains(combined, "--hostname") &&
-		strings.Contains(combined, "--show-token") &&
-		!strings.Contains(outputText, "--active") {
-		return true
-	}
-	return false
+	_, err := runner.Run(ctx, gitHubTokenValidationCommand())
+	return err
 }
 
 func withTemporaryGitHubTokenEnvironment(token string, run func() error) error {

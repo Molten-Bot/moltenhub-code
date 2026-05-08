@@ -153,33 +153,14 @@ func (g *piAuthGate) Configure(ctx context.Context, rawInput string) (web.AgentA
 
 	g.mu.Lock()
 	configureCommand := strings.TrimSpace(g.authState.configureCommand)
-	runtimeConfigPath := g.runtimeConfigPath
-	initCfg := g.initCfg
 	g.mu.Unlock()
 
 	if configureCommand == claudeGitHubConfigureCommand {
-		return configureGitHubTokenAndApply(
+		return g.configureGitHubTokenAndRefresh(
 			ctx,
 			agentruntime.HarnessPi,
-			runtimeConfigPath,
-			initCfg,
-			g.runner,
 			rawInput,
-			func(state web.AgentAuthState, err error) (web.AgentAuthState, error) {
-				g.mu.Lock()
-				g.authState.applySnapshot(state)
-				snap := g.snapshotLocked()
-				g.mu.Unlock()
-				return snap, err
-			},
-			func(token string) (web.AgentAuthState, error) {
-				g.mu.Lock()
-				g.initCfg.GitHubToken = token
-				g.refreshLocked()
-				snap := g.snapshotLocked()
-				g.mu.Unlock()
-				return snap, nil
-			},
+			g.refreshLocked,
 		)
 	}
 

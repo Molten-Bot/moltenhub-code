@@ -32,10 +32,6 @@ func gitHubTokenValidationArgsStringForTest() string {
 	return strings.Join(gitHubTokenValidationCommand().Args, " ")
 }
 
-func gitHubTokenValidationFallbackArgsStringForTest() string {
-	return strings.Join(gitHubTokenValidationFallbackCommand().Args, " ")
-}
-
 func isGitHubTokenValidationCommandForTest(cmd execx.Command) bool {
 	return cmd.Name == "gh" && strings.Join(cmd.Args, " ") == gitHubTokenValidationArgsStringForTest()
 }
@@ -262,13 +258,6 @@ func TestValidateGitHubTokenUsesLegacyCompatibleStatusCommand(t *testing.T) {
 	}
 	if got := os.Getenv("GITHUB_TOKEN"); got != "" {
 		t.Fatalf("GITHUB_TOKEN after validation = %q, want restored empty", got)
-	}
-}
-
-func TestShouldRetryGitHubTokenValidationWithoutActiveFlagFromHelpTail(t *testing.T) {
-	err := errors.New("run gh [auth status --active --hostname github.com]: exit status 1 (Flags: | -h, --hostname string Check a specific hostname's auth status | -t, --show-token Display the auth token)")
-	if !shouldRetryGitHubTokenValidationWithoutActiveFlag(execx.Result{}, err) {
-		t.Fatal("shouldRetryGitHubTokenValidationWithoutActiveFlag() = false, want true")
 	}
 }
 
