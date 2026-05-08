@@ -276,14 +276,18 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if strings.Contains(markup, `task-empty-chip`) {
 		t.Fatalf("expected index html to remove empty queue stage chips")
 	}
-	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title prompt-title-list"`) ||
+	if !strings.Contains(markup, `id="prompt-panel-title" class="panel-section-title prompt-title-list" aria-label="Prompt Studio"`) ||
 		!strings.Contains(markup, `data-lucide="pencil" class="prompt-title-icon"`) ||
-		!strings.Contains(markup, `Studio <span class="prompt-title-separator" aria-hidden="true">/</span> Prompt`) ||
+		!strings.Contains(markup, `data-prompt-title-label="Prompt Studio" aria-label="Prompt Studio"`) ||
 		!strings.Contains(markup, `data-lucide="book-open" class="prompt-title-icon"`) ||
-		!strings.Contains(markup, `Studio <span class="prompt-title-separator" aria-hidden="true">/</span> Library`) ||
+		!strings.Contains(markup, `data-prompt-title-label="Library Studio" aria-label="Library Studio" hidden aria-hidden="true"`) ||
 		!strings.Contains(markup, `data-lucide="braces" class="prompt-title-icon"`) ||
-		!strings.Contains(markup, `Studio <span class="prompt-title-separator" aria-hidden="true">/</span> JSON`) {
-		t.Fatalf("expected index html to label Studio modes as separate icon titles")
+		!strings.Contains(markup, `data-prompt-title-label="JSON Studio" aria-label="JSON Studio" hidden aria-hidden="true"`) ||
+		!strings.Contains(markup, `<span>Studio</span>`) {
+		t.Fatalf("expected index html to label Studio as a single active mode icon title")
+	}
+	if strings.Contains(markup, `Studio <span class="prompt-title-separator" aria-hidden="true">/</span>`) {
+		t.Fatalf("expected index html to remove duplicated Studio mode breadcrumb text")
 	}
 	if !strings.Contains(markup, `setPromptMode(promptModeFromHash() || "builder");`) {
 		t.Fatalf("expected index html to default Studio to the Prompt view")
@@ -1542,8 +1546,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to switch main views while hiding Current Work on dashboard and releases")
 	}
 	if !strings.Contains(markup, `function syncPromptTitleModes()`) ||
-		!strings.Contains(markup, `item.classList.toggle("active", String(item.dataset.promptTitleMode || "") === state.promptMode);`) {
-		t.Fatalf("expected index html to update the compact Studio mode heading when the prompt mode changes")
+		!strings.Contains(markup, `item.hidden = !active;`) ||
+		!strings.Contains(markup, `promptPanelTitle.setAttribute("aria-label", label);`) {
+		t.Fatalf("expected index html to update and hide inactive compact Studio mode headings when the prompt mode changes")
 	}
 	if !strings.Contains(markup, `id="prompt-mode-builder" class="prompt-mode-link active" href="#studio-builder" aria-selected="true"`) {
 		t.Fatalf("expected builder mode to render as an anchor-style control inside the shared segmented dock")

@@ -94,18 +94,18 @@
         <section class="panel prompt-wrap brand-login-card-shell">
           <div class="panel-header prompt-titlebar">
             <div class="panel-header-copy">
-              <span id="prompt-panel-title" class="panel-section-title prompt-title-list" aria-label="Studio views">
-                <span class="prompt-title-mode active" data-prompt-title-mode="builder">
+              <span id="prompt-panel-title" class="panel-section-title prompt-title-list" aria-label="Prompt Studio">
+                <span class="prompt-title-mode active" data-prompt-title-mode="builder" data-prompt-title-label="Prompt Studio" aria-label="Prompt Studio">
                   <i data-lucide="pencil" class="prompt-title-icon" aria-hidden="true"></i>
-                  <span>Studio <span class="prompt-title-separator" aria-hidden="true">/</span> Prompt</span>
+                  <span>Studio</span>
                 </span>
-                <span class="prompt-title-mode" data-prompt-title-mode="library">
+                <span class="prompt-title-mode" data-prompt-title-mode="library" data-prompt-title-label="Library Studio" aria-label="Library Studio" hidden aria-hidden="true">
                   <i data-lucide="book-open" class="prompt-title-icon" aria-hidden="true"></i>
-                  <span>Studio <span class="prompt-title-separator" aria-hidden="true">/</span> Library</span>
+                  <span>Studio</span>
                 </span>
-                <span class="prompt-title-mode" data-prompt-title-mode="json">
+                <span class="prompt-title-mode" data-prompt-title-mode="json" data-prompt-title-label="JSON Studio" aria-label="JSON Studio" hidden aria-hidden="true">
                   <i data-lucide="braces" class="prompt-title-icon" aria-hidden="true"></i>
-                  <span>Studio <span class="prompt-title-separator" aria-hidden="true">/</span> JSON</span>
+                  <span>Studio</span>
                 </span>
               </span>
               <p id="prompt-panel-copy" class="panel-section-copy">Compose a repository run, start from a library task, or edit the raw JSON payload.</p>
@@ -1806,6 +1806,7 @@
     const chatRepoPagination = document.getElementById("chat-repo-pagination");
     const appDisplayLinks = Array.from(document.querySelectorAll("[data-app-display]"));
     const chatDockLink = document.querySelector('[data-app-display="chat"]');
+    const promptPanelTitle = document.getElementById("prompt-panel-title");
     const promptPanelCopy = document.getElementById("prompt-panel-copy");
     const githubProfileLink = document.getElementById("github-profile-link");
     const moltenBotHubDockGroup = document.getElementById("moltenbot-hub-dock-group");
@@ -6175,7 +6176,16 @@
 
     function syncPromptTitleModes() {
       for (const item of promptTitleModes) {
-        item.classList.toggle("active", String(item.dataset.promptTitleMode || "") === state.promptMode);
+        const active = String(item.dataset.promptTitleMode || "") === state.promptMode;
+        item.classList.toggle("active", active);
+        item.hidden = !active;
+        item.setAttribute("aria-hidden", String(!active));
+        if (active && promptPanelTitle) {
+          const label = String(item.dataset.promptTitleLabel || "").trim();
+          if (label) {
+            promptPanelTitle.setAttribute("aria-label", label);
+          }
+        }
       }
     }
 

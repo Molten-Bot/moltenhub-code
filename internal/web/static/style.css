@@ -1039,30 +1039,22 @@ body .right-col.prompt-collapsed.task-list-hidden {
 .prompt-title-list {
   display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
+  flex-wrap: nowrap;
+  gap: 0;
   justify-self: start;
   min-width: 0;
-  white-space: normal;
-  font-size: 0.78rem;
-  letter-spacing: 0.02em;
-}
-
-.prompt-title-separator {
-  margin-inline: 2px;
-  color: var(--muted);
-  font-weight: 700;
+  white-space: nowrap;
 }
 
 .prompt-title-mode {
-  display: inline-flex;
+  display: none;
   align-items: center;
   gap: 5px;
-  color: var(--muted);
+  color: var(--text);
 }
 
 .prompt-title-mode.active {
-  color: var(--text);
+  display: inline-flex;
 }
 
 .prompt-title-icon {
