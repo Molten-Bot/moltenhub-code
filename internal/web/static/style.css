@@ -3336,6 +3336,7 @@ select.prompt-control {
 .chat-repo-message-link {
   display: inline-flex;
   align-items: center;
+  margin-right: 3px;
   color: inherit;
   font-weight: 850;
   text-decoration: none;
