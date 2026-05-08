@@ -1602,7 +1602,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `id="chat-repo-tabs"`) ||
 		!strings.Contains(markup, `function chatPromptedRepoTabs()`) ||
 		!strings.Contains(markup, `state.snapshot.prompted_repos`) ||
-		!strings.Contains(markup, `reposButton.textContent = "Repos";`) ||
+		!strings.Contains(markup, `reposButton.textContent = "All";`) ||
 		!strings.Contains(markup, `repos = repos.filter((repo) => !promptedKeys.has(chatRepoKey(chatRepoRunValue(repo))));`) {
 		t.Fatalf("expected index html chat to render prompted repository tabs and filter the repos tab")
 	}
