@@ -2284,6 +2284,27 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 }
 
+func TestHandlerGameServesZooCatch(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodGet, "/game", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+	if ct := resp.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		t.Fatalf("content-type = %q", ct)
+	}
+
+	markup := resp.Body.String()
+	if !strings.Contains(markup, `id="game-board"`) || !strings.Contains(markup, `src="/static/game.js"`) {
+		t.Fatalf("expected game markup to include board and script")
+	}
+}
+
 func TestIndexPromptReviewerClearBehavior(t *testing.T) {
 	t.Parallel()
 
