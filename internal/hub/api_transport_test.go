@@ -186,6 +186,26 @@ func TestExtractInboundRuntimeMessageForWebsocketEnvelope(t *testing.T) {
 	}
 }
 
+func TestExtractInboundRuntimeMessageForTaskCancel(t *testing.T) {
+	t.Parallel()
+
+	root := map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tasks/cancel",
+		"params": map[string]any{
+			"id": "hub-task-cancel",
+		},
+	}
+
+	got := extractInboundRuntimeMessage(root)
+	if got.Message == nil {
+		t.Fatal("Message = nil, want cancel packet")
+	}
+	if taskID := inboundTaskCancelID(got.Message); taskID != "hub-task-cancel" {
+		t.Fatalf("inboundTaskCancelID(message) = %q, want hub-task-cancel", taskID)
+	}
+}
+
 func TestExtractInboundRuntimeMessageForRuntimeEventDataEnvelope(t *testing.T) {
 	t.Parallel()
 

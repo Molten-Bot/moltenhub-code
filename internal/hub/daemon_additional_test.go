@@ -732,6 +732,8 @@ func TestProcessInboundMessagePublishesStoppedFailureWhenTaskControlStopsDispatc
 	var (
 		mu                sync.Mutex
 		registeredID      string
+		aliasRequestID    string
+		aliases           []string
 		completedID       string
 		registerCancelSet bool
 	)
@@ -745,6 +747,12 @@ func TestProcessInboundMessagePublishesStoppedFailureWhenTaskControlStopsDispatc
 			stopped: true,
 		}
 	}
+	d.RegisterTaskAliases = func(requestID string, got ...string) {
+		mu.Lock()
+		aliasRequestID = requestID
+		aliases = append([]string(nil), got...)
+		mu.Unlock()
+	}
 	d.CompleteTaskControl = func(requestID string) {
 		mu.Lock()
 		completedID = requestID
@@ -752,9 +760,11 @@ func TestProcessInboundMessagePublishesStoppedFailureWhenTaskControlStopsDispatc
 	}
 
 	msg := map[string]any{
-		"type":       "skill_request",
-		"skill":      "code_for_me",
-		"request_id": "req-stop-control",
+		"type":        "skill_request",
+		"skill":       "code_for_me",
+		"request_id":  "req-stop-control",
+		"hub_task_id": "hub-stop-control",
+		"context_id":  "ctx-stop-control",
 		"config": map[string]any{
 			"repo":   "git@github.com:acme/repo.git",
 			"prompt": "stop this task",
@@ -767,6 +777,8 @@ func TestProcessInboundMessagePublishesStoppedFailureWhenTaskControlStopsDispatc
 
 	mu.Lock()
 	gotRegisteredID := registeredID
+	gotAliasRequestID := aliasRequestID
+	gotAliases := append([]string(nil), aliases...)
 	gotCompletedID := completedID
 	gotCancelSet := registerCancelSet
 	mu.Unlock()
@@ -776,6 +788,12 @@ func TestProcessInboundMessagePublishesStoppedFailureWhenTaskControlStopsDispatc
 	}
 	if !gotCancelSet {
 		t.Fatal("RegisterTaskControl cancel = nil, want non-nil")
+	}
+	if gotAliasRequestID != "req-stop-control" {
+		t.Fatalf("RegisterTaskAliases requestID = %q, want %q", gotAliasRequestID, "req-stop-control")
+	}
+	if len(gotAliases) != 2 || gotAliases[0] != "hub-stop-control" || gotAliases[1] != "ctx-stop-control" {
+		t.Fatalf("RegisterTaskAliases aliases = %#v, want hub/context aliases", gotAliases)
 	}
 	if gotCompletedID != "req-stop-control" {
 		t.Fatalf("CompleteTaskControl requestID = %q, want %q", gotCompletedID, "req-stop-control")
@@ -798,6 +816,112 @@ func TestProcessInboundMessagePublishesStoppedFailureWhenTaskControlStopsDispatc
 	}
 	if got := len(api.offlineCalls); got != 0 {
 		t.Fatalf("offline calls = %d, want 0 for operator stop", got)
+	}
+}
+
+func TestProcessInboundMessageStopsTaskControlOnTaskCancel(t *testing.T) {
+	t.Parallel()
+
+	d := NewDaemon(nil)
+	api := &stubMoltenHubAPI{token: "t"}
+	cfg := InitConfig{
+		Skill: SkillConfig{
+			Name:         "code_for_me",
+			DispatchType: "skill_request",
+			ResultType:   "skill_result",
+		},
+	}
+
+	var (
+		mu         sync.Mutex
+		canceledID string
+		logs       []string
+	)
+	d.Logf = func(format string, args ...any) {
+		mu.Lock()
+		logs = append(logs, fmt.Sprintf(format, args...))
+		mu.Unlock()
+	}
+	d.CancelTaskControl = func(taskID string) (string, bool) {
+		mu.Lock()
+		canceledID = taskID
+		mu.Unlock()
+		return "req-cancel", true
+	}
+
+	msg := map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "CancelTask",
+		"params": map[string]any{
+			"id":        "hub-task-cancel",
+			"contextId": "ctx-cancel",
+		},
+	}
+
+	var workers sync.WaitGroup
+	d.processInboundMessage(context.Background(), api, cfg, msg, "delivery-cancel", "message-cancel", nil, &workers, nil)
+	workers.Wait()
+
+	mu.Lock()
+	gotCanceledID := canceledID
+	gotLogs := append([]string(nil), logs...)
+	mu.Unlock()
+	if gotCanceledID != "hub-task-cancel" {
+		t.Fatalf("CancelTaskControl taskID = %q, want %q", gotCanceledID, "hub-task-cancel")
+	}
+
+	var (
+		statuses []map[string]any
+		acked    []string
+	)
+	deadline := time.After(2 * time.Second)
+	for {
+		api.mu.Lock()
+		statuses = append([]map[string]any(nil), statusPayloads(api.published)...)
+		acked = append([]string(nil), api.acked...)
+		api.mu.Unlock()
+		if len(statuses) == 1 && len(acked) == 1 {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("status payloads = %d, acked = %d; want 1 each", len(statuses), len(acked))
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+
+	if got := acked[0]; got != "delivery-cancel" {
+		t.Fatalf("acked delivery = %q, want %q", got, "delivery-cancel")
+	}
+	payload := statuses[0]
+	if got := fmt.Sprint(payload["request_id"]); got != "req-cancel" {
+		t.Fatalf("status request_id = %q, want %q", got, "req-cancel")
+	}
+	if got := fmt.Sprint(payload["status"]); got != "stopped" {
+		t.Fatalf("status = %q, want stopped", got)
+	}
+	if got := fmt.Sprint(payload["task_id"]); got != "hub-task-cancel" {
+		t.Fatalf("task_id = %q, want hub-task-cancel", got)
+	}
+	if got := fmt.Sprint(payload["context_id"]); got != "ctx-cancel" {
+		t.Fatalf("context_id = %q, want ctx-cancel", got)
+	}
+	if got := fmt.Sprint(payload["task_state"]); got != a2a.TaskStateCanceled.String() {
+		t.Fatalf("task_state = %q, want %q", got, a2a.TaskStateCanceled.String())
+	}
+	if got := fmt.Sprint(payload["action"]); got != "cancel_task" {
+		t.Fatalf("action = %q, want cancel_task", got)
+	}
+
+	foundStoppedLog := false
+	for _, line := range gotLogs {
+		if strings.Contains(line, "dispatch status=stopped request_id=req-cancel") {
+			foundStoppedLog = true
+			break
+		}
+	}
+	if !foundStoppedLog {
+		t.Fatalf("stopped log not found in %#v", gotLogs)
 	}
 }
 

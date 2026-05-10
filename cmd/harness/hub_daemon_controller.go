@@ -25,6 +25,8 @@ type hubDaemonController struct {
 	onDispatchQueued    func(string, config.Config)
 	onDispatchFailed    func(string, config.Config, app.Result)
 	registerTaskControl func(string, context.CancelCauseFunc) hub.DispatchTaskControl
+	registerTaskAliases func(string, ...string)
+	cancelTaskControl   func(string) (string, bool)
 	completeTaskControl func(string)
 	startGracePeriod    time.Duration
 
@@ -162,6 +164,8 @@ func (c *hubDaemonController) run(runCtx context.Context, cfg hub.InitConfig, do
 		daemon.OnDispatchQueued = c.onDispatchQueued
 		daemon.OnDispatchFailed = c.onDispatchFailed
 		daemon.RegisterTaskControl = c.registerTaskControl
+		daemon.RegisterTaskAliases = c.registerTaskAliases
+		daemon.CancelTaskControl = c.cancelTaskControl
 		daemon.CompleteTaskControl = c.completeTaskControl
 		runDaemon = daemon.Run
 	}

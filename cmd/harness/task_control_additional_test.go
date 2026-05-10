@@ -22,6 +22,35 @@ func TestLocalTaskControllerCompleteRemovesTask(t *testing.T) {
 	}
 }
 
+func TestLocalTaskControllerAliasesResolveAndCompleteWithCanonicalID(t *testing.T) {
+	t.Parallel()
+
+	controller := newLocalTaskController()
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+	controller.Register("req-root", cancel)
+	controller.RegisterAliases("req-root", "hub-task", "ctx-task")
+
+	canonical, err := controller.StopWithCanonical("hub-task")
+	if err != nil {
+		t.Fatalf("StopWithCanonical(alias) error = %v", err)
+	}
+	if canonical != "req-root" {
+		t.Fatalf("StopWithCanonical(alias) canonical = %q, want %q", canonical, "req-root")
+	}
+	if cause := context.Cause(ctx); !errors.Is(cause, errTaskStoppedByOperator) {
+		t.Fatalf("context.Cause() = %v, want %v", cause, errTaskStoppedByOperator)
+	}
+
+	controller.Complete("ctx-task")
+	if err := controller.Pause("req-root"); err == nil {
+		t.Fatal("Pause(completed canonical) error = nil, want not found")
+	}
+	if err := controller.Pause("hub-task"); err == nil {
+		t.Fatal("Pause(completed alias) error = nil, want not found")
+	}
+}
+
 func TestLocalTaskHandlePauseRunAndStopErrorPaths(t *testing.T) {
 	t.Parallel()
 

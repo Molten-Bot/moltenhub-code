@@ -41,6 +41,8 @@ type Daemon struct {
 	OnDispatchQueued    func(requestID string, runCfg config.Config)
 	OnDispatchFailed    func(requestID string, runCfg config.Config, result app.Result)
 	RegisterTaskControl func(requestID string, cancel context.CancelCauseFunc) DispatchTaskControl
+	RegisterTaskAliases func(requestID string, aliases ...string)
+	CancelTaskControl   func(taskID string) (requestID string, stopped bool)
 	CompleteTaskControl func(requestID string)
 	DispatchController  *AdaptiveDispatchController
 	ReconnectDelay      time.Duration
@@ -58,6 +60,7 @@ const failureFollowUpNoPathGuidance = "No workspace or log path was captured bef
 const failureFollowUpTargetSubdir = "."
 const transportOfflineReasonExecutionFailure = "task_execution_failure"
 const dispatchTaskStatusType = "task_status_update"
+const taskStoppedByOperatorReason = "task was stopped by operator"
 
 // NewDaemon returns a hub daemon with defaults.
 func NewDaemon(runner execx.Runner) Daemon {
@@ -394,6 +397,11 @@ func (d Daemon) processInboundMessage(
 	workers *sync.WaitGroup,
 	deduper *dispatchDeduper,
 ) {
+	if taskID := inboundTaskCancelID(msg); taskID != "" {
+		d.processInboundTaskCancel(ctx, api, cfg, msg, deliveryID, taskID)
+		return
+	}
+
 	if isNonDispatchHubEvent(msg, cfg) {
 		if strings.TrimSpace(deliveryID) != "" {
 			if err := api.AckRuntimeDelivery(ctx, deliveryID); err != nil {
@@ -503,6 +511,9 @@ func (d Daemon) processInboundMessage(
 	var taskControl DispatchTaskControl
 	if d.RegisterTaskControl != nil {
 		taskControl = d.RegisterTaskControl(dispatch.RequestID, cancelRun)
+	}
+	if d.RegisterTaskAliases != nil {
+		d.RegisterTaskAliases(dispatch.RequestID, dispatch.HubTaskID, dispatch.ContextID)
 	}
 	if d.OnDispatchQueued != nil {
 		d.OnDispatchQueued(dispatch.RequestID, dispatch.Config)
@@ -673,6 +684,132 @@ func (d Daemon) processInboundMessage(
 			return
 		}
 	}(dispatch, deliveryID, dupKey, ackedEarly, runCtx, cancelRun, taskControl)
+}
+
+func (d Daemon) processInboundTaskCancel(
+	ctx context.Context,
+	api MoltenHubAPI,
+	cfg InitConfig,
+	msg map[string]any,
+	deliveryID string,
+	taskID string,
+) {
+	taskID = strings.TrimSpace(taskID)
+	requestID := firstNonEmpty(inboundTaskCancelRequestID(msg), taskID)
+	stopped := false
+	if d.CancelTaskControl != nil {
+		if canonical, ok := d.CancelTaskControl(taskID); ok {
+			requestID = firstNonEmpty(canonical, requestID)
+			stopped = true
+		}
+	}
+
+	if stopped {
+		d.logf("dispatch status=stopped request_id=%s err=%q", requestID, taskStoppedByOperatorReason)
+		d.publishDispatchStatus(
+			ctx,
+			api,
+			cfg,
+			SkillDispatch{
+				RequestID: requestID,
+				HubTaskID: taskID,
+				ContextID: inboundTaskCancelContextID(msg),
+				Skill:     cfg.Skill.Name,
+			},
+			"stopped",
+			a2a.TaskStateCanceled,
+			"Task stopped by operator.",
+			map[string]any{
+				"error":         taskStoppedByOperatorReason,
+				"status_action": "cancel_task",
+			},
+		)
+	} else {
+		d.logf("dispatch status=warn action=cancel_task request_id=%s err=%q", requestID, "task control not found")
+	}
+
+	if strings.TrimSpace(deliveryID) != "" {
+		if err := api.AckRuntimeDelivery(ctx, deliveryID); err != nil {
+			d.logf("dispatch status=ack_error delivery_id=%s err=%q", deliveryID, err)
+		}
+	}
+}
+
+func inboundTaskCancelID(msg map[string]any) string {
+	if len(msg) == 0 {
+		return ""
+	}
+	method := strings.ToLower(strings.TrimSpace(firstNonEmpty(
+		stringAt(msg, "method"),
+		stringAtPath(msg, "payload", "method"),
+		stringAtPath(msg, "data", "method"),
+	)))
+	switch method {
+	case "canceltask", "tasks/cancel":
+	default:
+		return ""
+	}
+	return firstNonEmpty(
+		stringAtPath(msg, "params", "id"),
+		stringAtPath(msg, "params", "taskId"),
+		stringAtPath(msg, "params", "task_id"),
+		stringAtPath(msg, "params", "task", "id"),
+		stringAtPath(msg, "params", "metadata", "request_id"),
+		stringAtPath(msg, "params", "metadata", "requestId"),
+		stringAt(msg, "id"),
+		stringAt(msg, "taskId"),
+		stringAt(msg, "task_id"),
+		stringAt(msg, "a2aTaskId"),
+		stringAt(msg, "a2a_task_id"),
+		stringAt(msg, "hubTaskId"),
+		stringAt(msg, "hub_task_id"),
+		stringAtPath(msg, "payload", "params", "id"),
+		stringAtPath(msg, "payload", "params", "taskId"),
+		stringAtPath(msg, "payload", "params", "task_id"),
+		stringAtPath(msg, "data", "params", "id"),
+		stringAtPath(msg, "data", "params", "taskId"),
+		stringAtPath(msg, "data", "params", "task_id"),
+	)
+}
+
+func inboundTaskCancelRequestID(msg map[string]any) string {
+	return firstNonEmpty(
+		stringAtPath(msg, "params", "request_id"),
+		stringAtPath(msg, "params", "requestId"),
+		stringAtPath(msg, "params", "metadata", "request_id"),
+		stringAtPath(msg, "params", "metadata", "requestId"),
+		stringAt(msg, "request_id"),
+		stringAt(msg, "requestId"),
+		stringAtPath(msg, "payload", "request_id"),
+		stringAtPath(msg, "payload", "requestId"),
+		stringAtPath(msg, "payload", "params", "request_id"),
+		stringAtPath(msg, "payload", "params", "requestId"),
+		stringAtPath(msg, "data", "request_id"),
+		stringAtPath(msg, "data", "requestId"),
+		stringAtPath(msg, "data", "params", "request_id"),
+		stringAtPath(msg, "data", "params", "requestId"),
+	)
+}
+
+func inboundTaskCancelContextID(msg map[string]any) string {
+	return firstNonEmpty(
+		stringAtPath(msg, "params", "context_id"),
+		stringAtPath(msg, "params", "contextId"),
+		stringAtPath(msg, "params", "metadata", "context_id"),
+		stringAtPath(msg, "params", "metadata", "contextId"),
+		stringAt(msg, "context_id"),
+		stringAt(msg, "contextId"),
+		stringAt(msg, "a2a_context_id"),
+		stringAt(msg, "a2aContextId"),
+		stringAtPath(msg, "payload", "context_id"),
+		stringAtPath(msg, "payload", "contextId"),
+		stringAtPath(msg, "payload", "params", "context_id"),
+		stringAtPath(msg, "payload", "params", "contextId"),
+		stringAtPath(msg, "data", "context_id"),
+		stringAtPath(msg, "data", "contextId"),
+		stringAtPath(msg, "data", "params", "context_id"),
+		stringAtPath(msg, "data", "params", "contextId"),
+	)
 }
 
 func isNonDispatchHubEvent(msg map[string]any, cfg InitConfig) bool {

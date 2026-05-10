@@ -1094,6 +1094,9 @@ func looksLikeInboundDispatchMessage(msg map[string]any) bool {
 	if len(msg) == 0 {
 		return false
 	}
+	if inboundTaskCancelID(msg) != "" {
+		return true
+	}
 	if looksLikeDispatchEnvelope(msg) || looksLikeA2AMessage(msg) {
 		return true
 	}

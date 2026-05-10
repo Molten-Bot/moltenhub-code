@@ -672,6 +672,14 @@ func runHub(args []string) int {
 	hubController.registerTaskControl = func(requestID string, cancel context.CancelCauseFunc) hub.DispatchTaskControl {
 		return localTaskController.Register(requestID, cancel)
 	}
+	hubController.registerTaskAliases = localTaskController.RegisterAliases
+	hubController.cancelTaskControl = func(requestID string) (string, bool) {
+		canonical, err := localTaskController.StopWithCanonical(requestID)
+		if err != nil {
+			return firstNonEmptyString(canonical, requestID), false
+		}
+		return canonical, true
+	}
 	hubController.completeTaskControl = localTaskController.Complete
 	hubController.onDispatchQueued = func(requestID string, runCfg config.Config) {
 		if runConfigJSON, ok := marshalRunConfigJSON(runCfg); ok {
@@ -838,10 +846,11 @@ func runHub(args []string) int {
 			return nil
 		}
 		uiServer.StopTask = func(_ context.Context, requestID string) error {
-			if err := localTaskController.Stop(requestID); err != nil {
+			canonical, err := localTaskController.StopWithCanonical(requestID)
+			if err != nil {
 				return err
 			}
-			daemonLogger("dispatch status=stopped request_id=%s err=%q", requestID, errTaskStoppedByOperator)
+			daemonLogger("dispatch status=stopped request_id=%s err=%q", firstNonEmptyString(canonical, requestID), errTaskStoppedByOperator)
 			return nil
 		}
 		go func() {
