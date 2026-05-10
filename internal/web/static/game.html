@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zoo Catch</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="game-body">
+  <main class="game-shell" aria-label="Zoo Catch">
+    <section class="game-stage-panel">
+      <div class="game-topbar">
+        <div>
+          <p class="game-kicker">Zoo Catch</p>
+          <h1>Bring animals home</h1>
+        </div>
+        <div class="game-score" aria-live="polite">
+          <span id="caught-count">0</span>/<span id="total-count">0</span>
+        </div>
+      </div>
+      <div id="game-board" class="game-board" tabindex="0" aria-label="Zoo Catch game board">
+        <div id="zoo" class="zoo-yard" aria-label="Zoo">
+          <span class="zoo-label">Zoo</span>
+          <div id="zoo-slots" class="zoo-slots" aria-label="Caught animals"></div>
+        </div>
+        <div id="worker" class="worker" aria-label="Worker" title="Worker"></div>
+        <div id="bad-guy" class="bad-guy" aria-label="Bad guy" title="Bad guy"></div>
+      </div>
+      <div class="game-actions">
+        <button id="new-game" type="button">New Game</button>
+        <span id="game-message" aria-live="polite">Use arrow keys or WASD.</span>
+      </div>
+    </section>
+  </main>
+  <script src="/static/game.js"></script>
+</body>
+</html>

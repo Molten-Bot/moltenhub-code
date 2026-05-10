@@ -278,6 +278,7 @@ func (s Server) Handler() http.Handler {
 	}
 	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/chat", s.handleChat)
+	mux.HandleFunc("/game", s.handleGame)
 	mux.HandleFunc("/api/state", s.handleState)
 	mux.HandleFunc("/api/status", s.handleState)
 	mux.HandleFunc("/api/library", s.handleLibrary)
@@ -820,6 +821,23 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
         })();
       </script>`),
 	})
+}
+
+func (s Server) handleGame(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/game" {
+		http.NotFound(w, r)
+		return
+	}
+
+	data, err := fs.ReadFile(staticFiles, "static/game.html")
+	if err != nil {
+		http.Error(w, "game ui is unavailable", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(data)
 }
 
 func (s Server) renderSitePage(ctx context.Context, w http.ResponseWriter, data sitePageData) {
