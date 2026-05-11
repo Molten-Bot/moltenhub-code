@@ -6443,6 +6443,17 @@
       const task = chatTaskByRequestID(requestID);
       if (!task || !TASK_PROGRESS_VISIBLE) return null;
 
+      const status = normalizedTaskStatus(task?.status) || "pending";
+      if (COMPLETED_STATUSES.has(status)) {
+        const statusLabel = taskStatusLabel(status);
+        const icon = document.createElement("span");
+        icon.className = `chat-repo-message-meta-stage-icon ${statusClass(status)}`;
+        icon.title = title || `Status: ${statusLabel}.`;
+        icon.setAttribute("aria-label", `Status: ${statusLabel}.`);
+        icon.appendChild(createTaskStatusIcon(status));
+        return icon;
+      }
+
       const model = taskProgressModel(task);
       const steps = Array.isArray(model?.steps) ? model.steps : [];
       const index = Number.isFinite(model?.index) ? model.index : 0;

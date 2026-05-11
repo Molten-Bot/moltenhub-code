@@ -3360,7 +3360,8 @@ select.prompt-control {
 }
 
 .chat-repo-message-meta-stage-img,
-.chat-repo-message-meta-stage-glyph {
+.chat-repo-message-meta-stage-glyph,
+.chat-repo-message-meta-stage-icon .task-status-glyph {
   display: block;
   width: 12px;
   height: 12px;
@@ -3376,7 +3377,8 @@ select.prompt-control {
   filter: var(--agent-logo-filter);
 }
 
-.chat-repo-message-meta-stage-glyph {
+.chat-repo-message-meta-stage-glyph,
+.chat-repo-message-meta-stage-icon .task-status-glyph {
   stroke-width: 2.4;
 }
 
