@@ -1769,6 +1769,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index chat repositories to defer snapshot rerenders while a repo prompt panel has focus")
 	}
 	if !strings.Contains(markup, `function chatPromptTaskStatusLabel(task)`) ||
+		!strings.Contains(markup, `function syncChatPromptMessagesFromSnapshot(snapshot = state.snapshot)`) ||
+		!strings.Contains(markup, `const tasks = historyTasks(snapshot).sort((a, b) => {`) ||
+		!strings.Contains(markup, `upsertChatRepoPromptMessage(repo, message);`) ||
+		!strings.Contains(markup, `function chatPromptSourceLabel(source)`) ||
+		!strings.Contains(markup, `return "Studio";`) ||
 		!strings.Contains(markup, `function syncChatPromptMessageTaskStatuses(snapshot = state.snapshot)`) ||
 		!strings.Contains(markup, `function refreshVisibleChatPromptStatuses()`) ||
 		!strings.Contains(markup, `function chatPromptMessageTone(message)`) ||
@@ -1785,9 +1790,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `status === "error" || status === "invalid" || status === "stopped"`) ||
 		!strings.Contains(markup, `storedStatus.startsWith("completed") || storedStatus.startsWith("no changes")`) ||
 		!strings.Contains(markup, `meta.dataset.statusText = statusText;`) ||
+		!strings.Contains(markup, `meta.dataset.sourceLabel = sourceLabel;`) ||
 		!strings.Contains(markup, `refreshVisibleChatPromptStatuses();`) ||
+		!strings.Contains(markup, `syncChatPromptMessagesFromSnapshot(snapshot);`) ||
 		!strings.Contains(markup, `syncChatPromptMessageTaskStatuses(snapshot);`) {
-		t.Fatalf("expected index chat prompt history to update queued request labels, message tones, and completion response bubbles from live task status snapshots")
+		t.Fatalf("expected index chat prompt history to seed repository prompts from task snapshots and update queued request labels, message tones, and completion response bubbles")
 	}
 	if !strings.Contains(markup, `class="prompt-mode-link prompt-mode-link-logo"`) ||
 		!strings.Contains(markup, `src="/static/logos/github.svg"`) {

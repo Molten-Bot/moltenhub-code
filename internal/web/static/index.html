@@ -6189,7 +6189,8 @@
     }
 
     function chatRepoLogKey(repo) {
-      return chatRepoRunValue(repo);
+      const value = typeof repo === "string" ? normalizeRepoValue(repo) : chatRepoRunValue(repo);
+      return chatRepoKey(value) || value;
     }
 
     function chatRepoPromptMessages(repo) {
@@ -6199,23 +6200,129 @@
       return Array.isArray(messages) ? messages : [];
     }
 
-    function appendChatRepoPromptMessage(repo, message) {
+    function chatPromptSourceLabel(source) {
+      switch (normalizeTaskStartSource(source)) {
+        case "chat":
+          return "Chat";
+        case "hub":
+          return "Hub";
+        case "library":
+          return "Library";
+        case "json":
+          return "JSON";
+        case "prompt":
+          return "Studio";
+        default:
+          return "";
+      }
+    }
+
+    function normalizeChatPromptMessage(message, existing = null) {
+      const prompt = String(message?.prompt || existing?.prompt || "").trim();
+      if (!prompt) return null;
+      const requestID = String(message?.requestID || existing?.requestID || "").trim();
+      const source = normalizeTaskStartSource(message?.source || existing?.source || "");
+      const sourceLabel = String(message?.sourceLabel || existing?.sourceLabel || chatPromptSourceLabel(source)).trim();
+      return {
+        prompt,
+        requestID,
+        imageCount: Number.isFinite(message?.imageCount)
+          ? message.imageCount
+          : Number.isFinite(existing?.imageCount)
+            ? existing.imageCount
+            : 0,
+        createdAt: message?.createdAt || existing?.createdAt || new Date().toISOString(),
+        statusText: String(message?.statusText || existing?.statusText || "").trim(),
+        statusTitle: String(message?.statusTitle || existing?.statusTitle || "").trim(),
+        source,
+        sourceLabel,
+      };
+    }
+
+    function sortChatPromptMessages(messages) {
+      return (messages || [])
+        .map((message, index) => ({ message, index }))
+        .sort((a, b) => {
+          const startedDiff = parseTaskTimestamp(a.message?.createdAt) - parseTaskTimestamp(b.message?.createdAt);
+          if (startedDiff !== 0) return startedDiff;
+          const requestDiff = String(a.message?.requestID || "").localeCompare(String(b.message?.requestID || ""));
+          if (requestDiff !== 0) return requestDiff;
+          return a.index - b.index;
+        })
+        .map((item) => item.message);
+    }
+
+    function upsertChatRepoPromptMessage(repo, message) {
       const key = chatRepoLogKey(repo);
       if (!key) return [];
-      const current = chatRepoPromptMessages(repo);
-      const next = [
-        ...current,
-        {
-          prompt: String(message?.prompt || "").trim(),
-          requestID: String(message?.requestID || "").trim(),
-          imageCount: Number.isFinite(message?.imageCount) ? message.imageCount : 0,
-          createdAt: message?.createdAt || new Date().toISOString(),
-          statusText: String(message?.statusText || "").trim(),
-          statusTitle: String(message?.statusTitle || "").trim(),
-        },
-      ].slice(-20);
-      state.chatPromptLog.set(key, next);
-      return next;
+      const current = chatRepoPromptMessages(key);
+      const requestID = String(message?.requestID || "").trim();
+      let updated = false;
+      const next = current.map((existing) => {
+        if (requestID && String(existing?.requestID || "").trim() === requestID) {
+          updated = true;
+          return normalizeChatPromptMessage(message, existing) || existing;
+        }
+        return existing;
+      });
+      if (!updated) {
+        const normalized = normalizeChatPromptMessage(message);
+        if (normalized) {
+          next.push(normalized);
+        }
+      }
+      const sorted = sortChatPromptMessages(next).slice(-20);
+      state.chatPromptLog.set(key, sorted);
+      return sorted;
+    }
+
+    function appendChatRepoPromptMessage(repo, message) {
+      return upsertChatRepoPromptMessage(repo, {
+        ...message,
+        createdAt: message?.createdAt || new Date().toISOString(),
+      });
+    }
+
+    function chatPromptMessageFromTask(task) {
+      const requestID = taskRequestID(task);
+      const prompt = String(task?.prompt || "").trim();
+      if (!requestID || !prompt) return null;
+      const status = chatPromptTaskStatusForTask(requestID, task);
+      const source = taskStartSource(task);
+      return {
+        prompt,
+        requestID,
+        imageCount: 0,
+        createdAt: task?.started_at || task?.startedAt || task?.updated_at || task?.updatedAt || new Date().toISOString(),
+        statusText: status?.text || "",
+        statusTitle: status?.title || "",
+        source,
+        sourceLabel: chatPromptSourceLabel(source),
+      };
+    }
+
+    function syncChatPromptMessagesFromSnapshot(snapshot = state.snapshot) {
+      if (!(state.chatPromptLog instanceof Map)) {
+        state.chatPromptLog = new Map();
+      }
+      const tasks = historyTasks(snapshot).sort((a, b) => {
+        const startedDiff = parseTaskTimestamp(a?.started_at || a?.startedAt) - parseTaskTimestamp(b?.started_at || b?.startedAt);
+        if (startedDiff !== 0) return startedDiff;
+        return String(a?.request_id || "").localeCompare(String(b?.request_id || ""));
+      });
+      const promptedRepos = [];
+      for (const task of tasks) {
+        const message = chatPromptMessageFromTask(task);
+        if (!message) continue;
+        const repos = taskRepoValues(task);
+        promptedRepos.push(...repos);
+        for (const repo of repos) {
+          upsertChatRepoPromptMessage(repo, message);
+        }
+      }
+      if (promptedRepos.length > 0) {
+        state.chatPromptedRepos = dedupeRepoValues([...promptedRepos, ...state.chatPromptedRepos]);
+      }
     }
 
     function chatPromptMessageTime(value) {
@@ -6473,6 +6580,13 @@
           title: `${imageCount} screenshot${imageCount === 1 ? "" : "s"} attached`,
         });
       }
+      const sourceLabel = String(message?.sourceLabel || chatPromptSourceLabel(message?.source)).trim();
+      if (sourceLabel) {
+        stats.push({
+          text: sourceLabel,
+          title: `${sourceLabel} prompt`,
+        });
+      }
 
       meta.replaceChildren();
       for (const stat of stats) {
@@ -6493,6 +6607,8 @@
       meta.dataset.imageCount = String(imageCount);
       meta.dataset.statusText = statusText;
       meta.dataset.statusTitle = statusTitle;
+      meta.dataset.source = normalizeTaskStartSource(message?.source || "");
+      meta.dataset.sourceLabel = sourceLabel;
       if (requestID && statusTitle) {
         meta.title = statusTitle;
       } else {
@@ -6525,6 +6641,8 @@
           imageCount: Number.parseInt(meta.dataset.imageCount || "0", 10) || 0,
           statusText: meta.dataset.statusText,
           statusTitle: meta.dataset.statusTitle,
+          source: meta.dataset.source,
+          sourceLabel: meta.dataset.sourceLabel,
         };
         renderChatPromptMessageMeta(meta, message);
         const bubble = meta.closest(".chat-repo-message");
@@ -7018,6 +7136,8 @@
           prompt,
           requestID,
           imageCount: promptImages.length,
+          source: "chat",
+          sourceLabel: "Chat",
         });
         state.chatPromptedRepos = dedupeRepoValues([repoValue, ...state.chatPromptedRepos]);
         state.chatActiveRepoTab = chatRepoKey(repoValue) || state.chatActiveRepoTab;
@@ -10394,6 +10514,7 @@
       syncTaskCompletionSparkles(previousSnapshot, snapshot);
       syncChatRepoActivity(previousSnapshot, snapshot);
       rememberCompletedTaskHistory(snapshot);
+      syncChatPromptMessagesFromSnapshot(snapshot);
       syncChatPromptMessageTaskStatuses(snapshot);
       const observedRepos = [];
       const failedRepoAccessRepos = [];
