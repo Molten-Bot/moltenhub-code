@@ -12,12 +12,12 @@
   const actorSize = 38;
   const speed = 22;
   const animals = [
-    { id: "lion", glyph: "L", color: "#e8a14b" },
-    { id: "zebra", glyph: "Z", color: "#f2f5f1" },
-    { id: "rhino", glyph: "R", color: "#9aa7b3" },
-    { id: "giraffe", glyph: "G", color: "#d8a853" },
-    { id: "panda", glyph: "P", color: "#f0f3f5" },
-    { id: "hippo", glyph: "H", color: "#9d82b8" }
+    { id: "lion", glyph: "L" },
+    { id: "zebra", glyph: "Z" },
+    { id: "rhino", glyph: "R" },
+    { id: "giraffe", glyph: "G" },
+    { id: "panda", glyph: "P" },
+    { id: "hippo", glyph: "H" }
   ];
 
   let worker = { x: 0, y: 0 };
@@ -114,22 +114,21 @@
   }
 
   function drawActor(el, point) {
-    el.style.transform = "translate(" + point.x + "px, " + point.y + "px)";
+    el.style.setProperty("--zoo-actor-x", point.x + "px");
+    el.style.setProperty("--zoo-actor-y", point.y + "px");
   }
 
   function drawAnimals() {
-    animalState.forEach((animal, index) => {
+    animalState.forEach((animal) => {
       if (animal.caught) {
         if (!zooSlots.contains(animal.el)) zooSlots.appendChild(animal.el);
         animal.el.classList.add("caught");
-        animal.el.style.transform = "";
-        animal.el.style.background = animal.color;
-        animal.el.style.order = String(index);
+        animal.el.style.removeProperty("--zoo-actor-x");
+        animal.el.style.removeProperty("--zoo-actor-y");
         return;
       }
       if (!board.contains(animal.el)) board.appendChild(animal.el);
       animal.el.classList.remove("caught");
-      animal.el.style.background = animal.color;
       drawActor(animal.el, animal);
     });
   }
@@ -197,7 +196,7 @@
     animalState = animals.map((animal) => {
       const point = randomOutsideZoo();
       const el = document.createElement("div");
-      el.className = "animal";
+      el.className = `animal animal-${animal.id}`;
       el.textContent = animal.glyph;
       el.setAttribute("aria-label", animal.id);
       el.title = "";

@@ -227,6 +227,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `class="app dashboard-app"`) {
 		t.Fatalf("expected dashboard page layout styles to be attached through global stylesheet classes")
 	}
+	if !strings.Contains(markup, `probe.className = "clipboard-copy-probe";`) ||
+		strings.Contains(markup, `probe.style.position = "absolute";`) ||
+		strings.Contains(markup, `probe.style.left = "-9999px";`) {
+		t.Fatalf("expected clipboard fallback positioning to be owned by the global stylesheet")
+	}
 	if strings.Contains(markup, `src="/static/emoji-picker.js"`) {
 		t.Fatalf("expected index html to use the inline dispatch-style emoji picker instead of the external picker script")
 	}
@@ -1172,12 +1177,17 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "state.taskOrderPendingSince = nowMs;") {
 		t.Fatalf("expected index html to reset task reorder delay timing whenever the desired order changes")
 	}
-	if !strings.Contains(markup, "const TASK_REFLOW_TRANSITION_MS = 560;") ||
-		!strings.Contains(markup, "const TASK_REFLOW_TRANSITION_EASING = \"cubic-bezier(0.16, 1, 0.3, 1)\";") {
-		t.Fatalf("expected index html to define smoother task reflow transition parameters")
+	if strings.Contains(markup, "TASK_REFLOW_TRANSITION_MS") ||
+		strings.Contains(markup, "TASK_REFLOW_TRANSITION_EASING") {
+		t.Fatalf("expected index html to keep task reflow transition styling in the global stylesheet")
 	}
-	if !strings.Contains(markup, "translate ${TASK_REFLOW_TRANSITION_MS}ms ${TASK_REFLOW_TRANSITION_EASING}") {
-		t.Fatalf("expected index html to animate task reflow with translate-based transitions for smoother movement")
+	stylesheet, err := staticFiles.ReadFile("static/style.css")
+	if err != nil {
+		t.Fatalf("read style.css: %v", err)
+	}
+	if !strings.Contains(string(stylesheet), ".task.task-reflow-offset.task-reflow-animate") ||
+		!strings.Contains(string(stylesheet), "transition: translate 560ms cubic-bezier(0.16, 1, 0.3, 1);") {
+		t.Fatalf("expected global stylesheet to animate task reflow with translate-based transitions")
 	}
 	if !strings.Contains(markup, "function applyTaskOrderCadence(tasks)") {
 		t.Fatalf("expected index html to include cadence-based task order stabilization")
@@ -1375,8 +1385,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "const showTaskSideActions = showTaskCloneAction && !inlineCompletedActions;") {
 		t.Fatalf("expected index html to inline completed-task clone actions and gate side actions to remaining clone actions")
 	}
-	if !strings.Contains(markup, "const TASK_SIDE_ACTION_SIZE_PX = \"34px\";") {
-		t.Fatalf("expected index html to define a stable runtime width for task side actions")
+	if strings.Contains(markup, "TASK_SIDE_ACTION_SIZE_PX") ||
+		strings.Contains(markup, "cloneButton.style.width") ||
+		strings.Contains(markup, "cloneButton.style.flex") ||
+		strings.Contains(markup, "cloneButton.style.alignSelf") {
+		t.Fatalf("expected index html to leave task clone action sizing in the global stylesheet")
 	}
 	if !strings.Contains(markup, "node.classList.toggle(\"task-has-side-actions\", showTaskSideActions);") {
 		t.Fatalf("expected index html to mark task cards with right-side side-action rails")
@@ -2315,6 +2328,35 @@ func TestHandlerGameServesZooCatch(t *testing.T) {
 	if !strings.Contains(markup, `src="https://www.googletagmanager.com/gtag/js?id=G-BY33RFG2WB"`) ||
 		!strings.Contains(markup, `window.gtag("config", "G-BY33RFG2WB");`) {
 		t.Fatalf("expected game page to load and configure google analytics")
+	}
+
+	script, err := staticFiles.ReadFile("static/game.js")
+	if err != nil {
+		t.Fatalf("read game script: %v", err)
+	}
+	gameScript := string(script)
+	if !strings.Contains(gameScript, "el.className = `animal animal-${animal.id}`;") ||
+		strings.Contains(gameScript, "style.background") ||
+		strings.Contains(gameScript, "style.order") ||
+		strings.Contains(gameScript, "style.transform") {
+		t.Fatalf("expected game script to use global stylesheet classes for static animal styles")
+	}
+
+	stylesheet, err := staticFiles.ReadFile("static/style.css")
+	if err != nil {
+		t.Fatalf("read style.css: %v", err)
+	}
+	css := string(stylesheet)
+	for _, want := range []string{
+		".animal-lion {",
+		"--zoo-animal-bg: #e8a14b;",
+		".animal-hippo {",
+		"--zoo-animal-order: 5;",
+		"transform: translate(var(--zoo-actor-x, 0), var(--zoo-actor-y, 0));",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("expected game animal stylesheet to contain %q", want)
+		}
 	}
 }
 

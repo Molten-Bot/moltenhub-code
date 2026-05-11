@@ -214,16 +214,14 @@
       const spaceAbove = rect.top - VIEWPORT_GUTTER;
       const placeBelow = spaceBelow >= PANEL_ESTIMATED_HEIGHT || spaceBelow >= spaceAbove;
 
-      panel.style.left = `${Math.round(left)}px`;
-      panel.style.width = `min(${PANEL_MAX_WIDTH}px, calc(100vw - ${VIEWPORT_GUTTER * 2}px))`;
-      panel.style.maxHeight = `calc(100vh - ${VIEWPORT_GUTTER * 2}px)`;
+      panel.style.setProperty("--hub-emoji-panel-left", `${Math.round(left)}px`);
       if (placeBelow) {
-        panel.style.top = `${Math.round(rect.bottom + PANEL_OFFSET)}px`;
-        panel.style.bottom = "auto";
+        panel.style.setProperty("--hub-emoji-panel-top", `${Math.round(rect.bottom + PANEL_OFFSET)}px`);
+        panel.style.removeProperty("--hub-emoji-panel-bottom");
         panel.setAttribute("data-placement", "bottom");
       } else {
-        panel.style.top = "auto";
-        panel.style.bottom = `${Math.round(viewportHeight - rect.top + PANEL_OFFSET)}px`;
+        panel.style.removeProperty("--hub-emoji-panel-top");
+        panel.style.setProperty("--hub-emoji-panel-bottom", `${Math.round(viewportHeight - rect.top + PANEL_OFFSET)}px`);
         panel.setAttribute("data-placement", "top");
       }
     }
@@ -303,11 +301,9 @@
       } else {
         detachOutsideWatchers();
         detachPositionWatchers();
-        panel.style.top = "";
-        panel.style.bottom = "";
-        panel.style.left = "";
-        panel.style.width = "";
-        panel.style.maxHeight = "";
+        panel.style.removeProperty("--hub-emoji-panel-left");
+        panel.style.removeProperty("--hub-emoji-panel-top");
+        panel.style.removeProperty("--hub-emoji-panel-bottom");
         panel.removeAttribute("data-placement");
       }
     }

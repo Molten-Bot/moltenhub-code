@@ -696,9 +696,7 @@
     const STREAM_RENDER_INTERVAL_MS = 120;
     const TASK_ORDER_TRANSITION_DELAY_MS = 2_000;
     const TASK_ORDER_SYNC_INTERVAL_MS = 4_000;
-    const TASK_REFLOW_TRANSITION_MS = 560;
     const NEW_HUB_TASK_HIGHLIGHT_MS = 4_000;
-    const TASK_REFLOW_TRANSITION_EASING = "cubic-bezier(0.16, 1, 0.3, 1)";
     const TASK_TIMING_REFRESH_INTERVAL_MS = 30_000;
     const TASK_ICON_IDLE_SPIN_MS = 16_000;
     const TASK_ICON_IDLE_REFRESH_MS = 1_000;
@@ -753,7 +751,6 @@
     );
     const MOLTENHUB_LOGO_URL = "/static/logo.svg";
     const GITHUB_LOGO_URL = "/static/logos/github.svg";
-    const TASK_SIDE_ACTION_SIZE_PX = "34px";
     const CLAUDE_AUTH_LOGO_URL = "/static/logos/claude-code.svg";
     const TASK_ACTION_ICON_NAMES = Object.freeze({
       output: "terminal-square",
@@ -2032,15 +2029,13 @@
         const placeBelow = spaceBelow >= EMOJI_PANEL_ESTIMATED_HEIGHT || spaceBelow >= spaceAbove;
 
         panel.dataset.placement = placeBelow ? "bottom" : "top";
-        panel.style.left = `${left}px`;
-        panel.style.width = `min(${EMOJI_PANEL_MAX_WIDTH}px, calc(100vw - ${EMOJI_PANEL_VIEWPORT_GUTTER * 2}px))`;
-        panel.style.maxHeight = `calc(100vh - ${EMOJI_PANEL_VIEWPORT_GUTTER * 2}px)`;
-        panel.style.top = "auto";
-        panel.style.bottom = "auto";
+        panel.style.setProperty("--hub-emoji-panel-left", `${left}px`);
         if (placeBelow) {
-          panel.style.top = `${rect.bottom + EMOJI_PANEL_OFFSET}px`;
+          panel.style.setProperty("--hub-emoji-panel-top", `${rect.bottom + EMOJI_PANEL_OFFSET}px`);
+          panel.style.removeProperty("--hub-emoji-panel-bottom");
         } else {
-          panel.style.bottom = `${window.innerHeight - rect.top + EMOJI_PANEL_OFFSET}px`;
+          panel.style.removeProperty("--hub-emoji-panel-top");
+          panel.style.setProperty("--hub-emoji-panel-bottom", `${window.innerHeight - rect.top + EMOJI_PANEL_OFFSET}px`);
         }
       };
 
@@ -2078,6 +2073,9 @@
         panelCloseTimer = window.setTimeout(() => {
           panel.hidden = true;
           panel.classList.remove("is-closing");
+          panel.style.removeProperty("--hub-emoji-panel-left");
+          panel.style.removeProperty("--hub-emoji-panel-top");
+          panel.style.removeProperty("--hub-emoji-panel-bottom");
           unmountPicker();
           panelCloseTimer = 0;
         }, EMOJI_PANEL_ANIMATION_DURATION_MS);
@@ -3867,8 +3865,7 @@
       const probe = document.createElement("textarea");
       probe.value = value;
       probe.setAttribute("readonly", "readonly");
-      probe.style.position = "absolute";
-      probe.style.left = "-9999px";
+      probe.className = "clipboard-copy-probe";
       document.body.appendChild(probe);
       probe.select();
       try {
@@ -9523,9 +9520,9 @@
       const fill = document.createElement("div");
       fill.className = "task-progress-fill";
       if (stepsModel.length > 1) {
-        fill.style.width = `${(index / (stepsModel.length - 1)) * 100}%`;
+        fill.style.setProperty("--task-progress-fill-width", `${(index / (stepsModel.length - 1)) * 100}%`);
       } else {
-        fill.style.width = "100%";
+        fill.style.setProperty("--task-progress-fill-width", "100%");
       }
       line.appendChild(fill);
 
@@ -9789,32 +9786,19 @@
           continue;
         }
 
-        const supportsTranslateProperty = typeof node.style.translate === "string";
-        node.style.transition = "none";
-        if (supportsTranslateProperty) {
-          node.style.translate = `${deltaX}px ${deltaY}px`;
-        } else {
-          node.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-        }
+        node.classList.remove("task-reflow-animate");
+        node.style.setProperty("--task-reflow-x", `${deltaX}px`);
+        node.style.setProperty("--task-reflow-y", `${deltaY}px`);
+        node.classList.add("task-reflow-offset");
         window.requestAnimationFrame(() => {
-          if (supportsTranslateProperty) {
-            node.style.transition = `translate ${TASK_REFLOW_TRANSITION_MS}ms ${TASK_REFLOW_TRANSITION_EASING}`;
-            node.style.translate = "0 0";
-          } else {
-            node.style.transition = `transform ${TASK_REFLOW_TRANSITION_MS}ms ${TASK_REFLOW_TRANSITION_EASING}`;
-            node.style.transform = "";
-          }
+          node.classList.add("task-reflow-animate");
           const clearTransition = (event) => {
-            if (supportsTranslateProperty && event?.propertyName && event.propertyName !== "translate") {
+            if (event?.propertyName && event.propertyName !== "translate" && event.propertyName !== "transform") {
               return;
             }
-            if (!supportsTranslateProperty && event?.propertyName && event.propertyName !== "transform") {
-              return;
-            }
-            node.style.transition = "";
-            if (supportsTranslateProperty) {
-              node.style.translate = "";
-            }
+            node.classList.remove("task-reflow-offset", "task-reflow-animate");
+            node.style.removeProperty("--task-reflow-x");
+            node.style.removeProperty("--task-reflow-y");
           };
           node.addEventListener("transitionend", clearTransition, { once: true });
         });
@@ -10100,11 +10084,6 @@
           const cloneButton = document.createElement("button");
           cloneButton.type = "button";
           cloneButton.className = "task-copy-link";
-          cloneButton.style.width = TASK_SIDE_ACTION_SIZE_PX;
-          cloneButton.style.minWidth = TASK_SIDE_ACTION_SIZE_PX;
-          cloneButton.style.height = TASK_SIDE_ACTION_SIZE_PX;
-          cloneButton.style.flex = `0 0 ${TASK_SIDE_ACTION_SIZE_PX}`;
-          cloneButton.style.alignSelf = "center";
           cloneButton.title = "Clone locally to test and review changes.";
           cloneButton.setAttribute("aria-label", "Clone locally to test and review changes.");
 
@@ -10270,11 +10249,6 @@
             const cloneButton = document.createElement("button");
             cloneButton.type = "button";
             cloneButton.className = "task-copy-link";
-            cloneButton.style.width = TASK_SIDE_ACTION_SIZE_PX;
-            cloneButton.style.minWidth = TASK_SIDE_ACTION_SIZE_PX;
-            cloneButton.style.height = TASK_SIDE_ACTION_SIZE_PX;
-            cloneButton.style.flex = `0 0 ${TASK_SIDE_ACTION_SIZE_PX}`;
-            cloneButton.style.alignSelf = "center";
             cloneButton.title = "Clone locally to test and review changes.";
             cloneButton.setAttribute("aria-label", "Clone locally to test and review changes.");
 
