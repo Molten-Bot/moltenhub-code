@@ -754,6 +754,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function formatTaskBranch(") {
 		t.Fatalf("expected index html to include branch formatter for task metadata")
 	}
+	if !strings.Contains(markup, "function renderTaskRepoMeta(task)") ||
+		!strings.Contains(markup, `wrapper.className = "task-repo-meta";`) ||
+		!strings.Contains(markup, `chip.className = "task-repo-chip";`) ||
+		!strings.Contains(markup, `className: "task-repo-avatar",`) {
+		t.Fatalf("expected index html to render task repositories as stable avatar chips")
+	}
 	if !strings.Contains(markup, "const baseBranch = String(task?.base_branch || \"\").trim();") {
 		t.Fatalf("expected index html to consider task base_branch when formatting branch metadata")
 	}
@@ -1740,14 +1746,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected GitHub repository loading to stay out of Current Work and visible chat text")
 	}
 	if !strings.Contains(markup, `function submitChatRepoPrompt(repo, input, statusNode, images = [], logNode = null, setImages = null)`) ||
-		!strings.Contains(markup, `function chatRepoOwnerIconName(repo)`) ||
-		!strings.Contains(markup, `return chatRepoOwnerType(repo) === "organization" ? "building-2" : "user";`) ||
+		!strings.Contains(markup, `function createRepoAvatar(repo, options = {})`) ||
+		!strings.Contains(markup, `return applyRepoAvatar(document.createElement("span"), repo, options);`) ||
 		!strings.Contains(markup, `function isChatRepoCardControlTarget(target, card)`) ||
 		!strings.Contains(markup, `const card = document.createElement("div");`) ||
 		!strings.Contains(markup, `card.setAttribute("role", "button");`) ||
 		!strings.Contains(markup, `const expanded = Boolean(repoKey && state.chatOpenRepoKey === repoKey);`) ||
 		!strings.Contains(markup, `card.setAttribute("aria-expanded", String(expanded));`) ||
-		!strings.Contains(markup, `ownerIcon.className = "chat-repo-card-owner-icon";`) ||
+		!strings.Contains(markup, `className: "chat-repo-card-repo-avatar",`) ||
+		!strings.Contains(markup, `className: "chat-repo-tab-icon",`) ||
 		!strings.Contains(markup, `promptLog.className = "chat-repo-log";`) ||
 		!strings.Contains(markup, `function syncChatOpenRepoKey(pageRepos, selectedTab, restoreFocusKey)`) ||
 		!strings.Contains(markup, `syncChatOpenRepoKey(reposForSelection, selectedTab, restoreFocusKey);`) ||
@@ -1985,6 +1992,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `historyField.classList.toggle("hidden", !hasSavedHistory);`) {
 		t.Fatalf("expected index html to hide repo history when there are no saved repos")
 	}
+	if !strings.Contains(markup, `id="builder-repo-avatar" class="repo-avatar repo-avatar-sm repo-history-avatar" hidden aria-hidden="true"`) ||
+		!strings.Contains(markup, `id="library-repo-avatar" class="repo-avatar repo-avatar-sm repo-history-avatar" hidden aria-hidden="true"`) ||
+		!strings.Contains(markup, `function renderSelectedRepoHistoryAvatar(avatarNode, value)`) ||
+		!strings.Contains(markup, `renderRepoHistorySelect(builderRepoHistoryField, builderRepoSelect, builderRepoInput, builderRepoAvatar);`) {
+		t.Fatalf("expected index html to show selected repository history avatars beside native selects")
+	}
 	if !strings.Contains(markup, "function rememberRepos(") {
 		t.Fatalf("expected index html to include repo history persistence")
 	}
@@ -1994,6 +2007,19 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "libraryRepoInput.addEventListener(\"change\", () => {") ||
 		!strings.Contains(markup, "libraryRepoInput.addEventListener(\"blur\", () => {") {
 		t.Fatalf("expected index html to persist manually entered repositories into history before submission")
+	}
+	if !strings.Contains(markup, `const REPO_AVATAR_PALETTE = Object.freeze([`) ||
+		!strings.Contains(markup, `function canonicalRepoAvatarKey(repo)`) ||
+		!strings.Contains(markup, `const githubSSHMatch = repo.match(/^git@github\.com:([^?#]+)$/i);`) ||
+		!strings.Contains(markup, `const githubSSHURLMatch = repo.match(/^ssh:\/\/git@github\.com\/([^?#]+)$/i);`) ||
+		!strings.Contains(markup, `if (/^(www\.)?github\.com$/i.test(parsed.hostname))`) ||
+		!strings.Contains(markup, `/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/.test(repo)`) ||
+		!strings.Contains(markup, `path = path.replace(/^\/+|\/+$/g, "").replace(/\.git$/i, "");`) ||
+		!strings.Contains(markup, `if (githubPath) return githubPath.toLowerCase();`) ||
+		!strings.Contains(markup, `hash = Math.imul(hash, 0x01000193) >>> 0;`) ||
+		!strings.Contains(markup, `const swatch = REPO_AVATAR_PALETTE[hash % REPO_AVATAR_PALETTE.length];`) ||
+		!strings.Contains(markup, `node.dataset.repoAvatarKey = model.key;`) {
+		t.Fatalf("expected index html to derive stable repo avatars from normalized GitHub repo identities")
 	}
 	if !strings.Contains(markup, "function rememberReviewers(") ||
 		!strings.Contains(markup, "function renderReviewerHistorySelect(") ||
@@ -2866,7 +2892,11 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	}
 	if !strings.Contains(css, ".chat-repo-card-head {") ||
 		!strings.Contains(css, ".chat-repo-card {\n  position: relative;") ||
-		!strings.Contains(css, ".chat-repo-card-owner-icon {") ||
+		!strings.Contains(css, ".repo-avatar {") ||
+		!strings.Contains(css, ".repo-history-avatar {") ||
+		!strings.Contains(css, ".chat-repo-card-repo-avatar {") ||
+		!strings.Contains(css, ".chat-repo-tab-icon.repo-avatar {") ||
+		!strings.Contains(css, ".task-repo-chip {") ||
 		!strings.Contains(css, ".chat-repo-card-chat-icon {") ||
 		!strings.Contains(css, ".chat-repo-card-visibility {") ||
 		!strings.Contains(css, ".chat-repo-card-visibility-private {") ||

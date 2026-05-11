@@ -109,6 +109,34 @@ func TestNormalizeRunConfigMapAppliesCodeReviewSkillDefaults(t *testing.T) {
 	}
 }
 
+func TestNormalizeRunConfigMapEnablesAutoReviewForPromptSkill(t *testing.T) {
+	t.Parallel()
+
+	normalized, err := normalizeRunConfigMap(`{"repo":"git@github.com:acme/repo.git","prompt":"build it"}`, "code_for_me")
+	if err != nil {
+		t.Fatalf("normalizeRunConfigMap(code_for_me) error = %v", err)
+	}
+	if got, ok := normalized["autoReview"].(bool); !ok || !got {
+		t.Fatalf("autoReview = %#v, want true", normalized["autoReview"])
+	}
+
+	normalized, err = normalizeRunConfigMap(`{"repo":"git@github.com:acme/repo.git","prompt":"build it","autoReview":false}`, "code_for_me")
+	if err != nil {
+		t.Fatalf("normalizeRunConfigMap(code_for_me explicit false) error = %v", err)
+	}
+	if got, ok := normalized["autoReview"].(bool); !ok || got {
+		t.Fatalf("autoReview = %#v, want explicit false", normalized["autoReview"])
+	}
+
+	normalized, err = normalizeRunConfigMap(`{"repo":"git@github.com:acme/repo.git","libraryTaskName":"unit-test-coverage"}`, "code_for_me")
+	if err != nil {
+		t.Fatalf("normalizeRunConfigMap(code_for_me library) error = %v", err)
+	}
+	if got, exists := normalized["autoReview"]; exists {
+		t.Fatalf("autoReview = %#v, want unset for library task", got)
+	}
+}
+
 func TestExtractConfigValueAndLooksLikeRunConfigMap(t *testing.T) {
 	t.Parallel()
 

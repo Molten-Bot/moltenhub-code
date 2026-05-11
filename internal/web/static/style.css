@@ -1540,6 +1540,57 @@ html.pink .hub-dock-group[data-configured="true"] #moltenbot-hub-link:focus-visi
   min-width: 0;
 }
 
+.repo-avatar {
+  --repo-avatar-bg: var(--surface-control-bg-strong);
+  --repo-avatar-fg: var(--text);
+  --repo-avatar-border: var(--border);
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--repo-avatar-border);
+  border-radius: 7px;
+  background: var(--repo-avatar-bg);
+  color: var(--repo-avatar-fg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.repo-avatar-md {
+  flex-basis: 22px;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 0.58rem;
+}
+
+.repo-avatar-sm {
+  flex-basis: 20px;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  font-size: 0.52rem;
+}
+
+.repo-avatar-xs {
+  flex-basis: 18px;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  font-size: 0.48rem;
+}
+
+.repo-history-avatar {
+  flex: 0 0 auto;
+}
+
 .prompt-control,
 .prompt-text,
 .prompt-action-paste {
@@ -3002,12 +3053,38 @@ select.prompt-control {
   stroke-width: 2.25;
 }
 
+.chat-repo-tab-icon.repo-avatar {
+  flex-basis: 20px;
+  width: 20px;
+  height: 20px;
+  color: var(--repo-avatar-fg);
+}
+
 .chat-repo-tab-has-activity .chat-repo-tab-icon {
   color: var(--accent);
 }
 
 .chat-repo-tab-has-activity .chat-repo-tab-icon svg {
   fill: currentColor;
+}
+
+.chat-repo-tab-has-activity .chat-repo-tab-icon.repo-avatar {
+  color: var(--repo-avatar-fg);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent) 72%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.chat-repo-tab-has-activity .chat-repo-tab-icon.repo-avatar::after {
+  content: "";
+  position: absolute;
+  right: -2px;
+  top: -2px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--surface-control-bg);
+  border-radius: 999px;
+  background: var(--accent);
 }
 
 .chat-repo-tab-label {
@@ -3063,22 +3140,8 @@ select.prompt-control {
   padding-right: 34px;
 }
 
-.chat-repo-card-owner-icon {
+.chat-repo-card-repo-avatar {
   flex: 0 0 auto;
-  display: inline-grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-  border-radius: 6px;
-  color: var(--muted);
-  background: color-mix(in srgb, var(--bg-elevated) 78%, transparent);
-}
-
-.chat-repo-card-owner-icon svg {
-  width: 14px;
-  height: 14px;
-  stroke-width: 2.2;
 }
 
 .chat-repo-card-title {
@@ -3948,6 +4011,51 @@ select.prompt-control {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.task-meta > .task-repo-meta {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.task-repo-label {
+  flex: 0 0 auto;
+}
+
+.task-repo-list {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.task-repo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: min(260px, 100%);
+  padding: 2px 7px 2px 3px;
+  border: 1px solid var(--surface-control-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface-control-bg) 82%, transparent);
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.task-repo-chip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-repo-empty {
+  color: var(--muted);
 }
 
 .task-meta > div + div {

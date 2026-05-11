@@ -634,6 +634,33 @@ func TestMarshalRunConfigJSONReturnsJSONPayload(t *testing.T) {
 	}
 }
 
+func TestEnablePromptAutoReviewOnlyForPromptRuns(t *testing.T) {
+	t.Parallel()
+
+	promptCfg := enablePromptAutoReview(config.Config{
+		Prompt: "Build API",
+	})
+	if !promptCfg.AutoReview {
+		t.Fatal("prompt autoReview = false, want true")
+	}
+
+	libraryCfg := enablePromptAutoReview(config.Config{
+		Prompt:          "Library prompt from catalog",
+		LibraryTaskName: "unit-test-coverage",
+	})
+	if libraryCfg.AutoReview {
+		t.Fatal("library autoReview = true, want false")
+	}
+
+	reviewCfg := enablePromptAutoReview(config.Config{
+		Prompt: "Review the pull request",
+		Review: &config.ReviewConfig{PRNumber: 42},
+	})
+	if reviewCfg.AutoReview {
+		t.Fatal("review task autoReview = true, want false")
+	}
+}
+
 func TestFailureFollowUpPromptDefaultWhenNoPaths(t *testing.T) {
 	t.Parallel()
 

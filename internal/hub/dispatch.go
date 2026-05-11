@@ -344,6 +344,14 @@ func normalizeRunConfigMap(v any, skillName string) (map[string]any, error) {
 
 func applySkillSpecificRunConfigDefaults(parsed map[string]any, skillName string) error {
 	switch normalizeNamedSkill(skillName) {
+	case defaultRuntimeSkillName:
+		if firstNonEmpty(stringAt(parsed, "prompt")) != "" &&
+			firstNonEmpty(stringAt(parsed, "libraryTaskName")) == "" &&
+			parsed["review"] == nil {
+			if _, exists := parsed["autoReview"]; !exists {
+				parsed["autoReview"] = true
+			}
+		}
 	case codeReviewSkillName:
 		if firstNonEmpty(stringAt(parsed, "prompt")) != "" {
 			return fmt.Errorf("%s skill does not accept prompt; send repo + branch or prnumber", codeReviewSkillName)
@@ -947,6 +955,7 @@ func normalizeRunConfigAliases(m map[string]any) error {
 	copyRunConfigAlias(m, "commitMessage", "commitmessage")
 	copyRunConfigAlias(m, "prTitle", "prtitle")
 	copyRunConfigAlias(m, "prBody", "prbody")
+	copyRunConfigAlias(m, "autoReview", "autoreview")
 	normalizeReviewRunConfigAliases(m)
 
 	if firstNonEmpty(stringAt(m, "baseBranch")) == "" {

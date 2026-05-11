@@ -12,3 +12,4 @@ moltenhub/
 bin/*
 prompt-images/*
 *.out
+.codex

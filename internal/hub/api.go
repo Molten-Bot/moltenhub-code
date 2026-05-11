@@ -1658,6 +1658,7 @@ func buildSupportedSkillsMetadata() []map[string]any {
 					skillParameter("targetsubdir", "Repository subdirectory where the agent should work."),
 					skillParameter("responsemode", "Agent prose mode such as off, caveman-full, or default."),
 					skillParameter("reviewers", "GitHub handles to request on created pull requests."),
+					skillParameter("autoreview", "Run an independent post-PR review session and re-engage the coding agent on requested changes."),
 					skillParameter("images", "Base64 prompt images for supported agents."),
 				},
 			),

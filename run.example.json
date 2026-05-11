@@ -11,6 +11,8 @@
   // "agentCommand": "codex",
   // optional override; omitted or "default" uses "caveman-full", "off" disables compression:
   // "responseMode": "off",
+  // optional direct-run post-PR review loop; local prompt and Hub prompt submissions enable this automatically:
+  // "autoReview": true,
   "githubHandle": "octocat",
   "prompt": "Add your prompt here."
   // library task example:

@@ -123,6 +123,7 @@
                   <label id="builder-repo-history-field" class="prompt-field prompt-field-repo-history">
                     <span class="prompt-label">Repository</span>
                     <span class="prompt-select-action-wrap">
+                      <span id="builder-repo-avatar" class="repo-avatar repo-avatar-sm repo-history-avatar" hidden aria-hidden="true"></span>
                       <select id="builder-repo-select" class="prompt-control">
                         <option value="">Enter repo manually</option>
                       </select>
@@ -199,6 +200,7 @@
                   <label id="library-repo-history-field" class="prompt-field prompt-field-repo-history">
                     <span class="prompt-label">Repository</span>
                     <span class="prompt-select-action-wrap">
+                      <span id="library-repo-avatar" class="repo-avatar repo-avatar-sm repo-history-avatar" hidden aria-hidden="true"></span>
                       <select id="library-repo-select" class="prompt-control">
                         <option value="">Enter repo manually</option>
                       </select>
@@ -715,6 +717,26 @@
     const DASHBOARD_SHARE_URL = "https://molten.bot/code";
     const DASHBOARD_SHARE_IMAGE_URL = "https://app.molten.bot/logo.svg";
     const GOOGLE_ANALYTICS_MEASUREMENT_ID = "G-BY33RFG2WB";
+    const REPO_AVATAR_PALETTE = Object.freeze([
+      { bg: "#1d4ed8", fg: "#ffffff", border: "#93c5fd" },
+      { bg: "#0f766e", fg: "#ffffff", border: "#5eead4" },
+      { bg: "#a16207", fg: "#ffffff", border: "#fde68a" },
+      { bg: "#be123c", fg: "#ffffff", border: "#fda4af" },
+      { bg: "#6d28d9", fg: "#ffffff", border: "#c4b5fd" },
+      { bg: "#0369a1", fg: "#ffffff", border: "#7dd3fc" },
+      { bg: "#15803d", fg: "#ffffff", border: "#86efac" },
+      { bg: "#c2410c", fg: "#ffffff", border: "#fdba74" },
+      { bg: "#7e22ce", fg: "#ffffff", border: "#d8b4fe" },
+      { bg: "#0e7490", fg: "#ffffff", border: "#67e8f9" },
+      { bg: "#b91c1c", fg: "#ffffff", border: "#fca5a5" },
+      { bg: "#4338ca", fg: "#ffffff", border: "#a5b4fc" },
+      { bg: "#047857", fg: "#ffffff", border: "#6ee7b7" },
+      { bg: "#9d174d", fg: "#ffffff", border: "#f9a8d4" },
+      { bg: "#334155", fg: "#ffffff", border: "#cbd5e1" },
+      { bg: "#854d0e", fg: "#ffffff", border: "#fcd34d" },
+      { bg: "#0f4c81", fg: "#ffffff", border: "#93c5fd" },
+      { bg: "#365314", fg: "#ffffff", border: "#bef264" },
+    ]);
     const COMPLETED_STATUSES = new Set(["completed", "no_changes", "error", "invalid", "duplicate", "stopped"]);
     const TASK_PROGRESS_PREP_STAGES = new Set(["preflight", "auth", "workspace", "config", "submit", "dispatch"]);
     const TASK_PROGRESS_AGENT_STAGES = new Set(["codex", "claude", "auggie", "pi", "opencode", "augment", "agent", "review"]);
@@ -1881,6 +1903,7 @@
     const promptLibraryPanel = document.getElementById("prompt-library-panel");
     const promptRawPanel = document.getElementById("prompt-raw-panel");
     const builderRepoSelect = document.getElementById("builder-repo-select");
+    const builderRepoAvatar = document.getElementById("builder-repo-avatar");
     const builderRepoDelete = document.getElementById("builder-repo-delete");
     const builderRepoHistoryField = document.getElementById("builder-repo-history-field");
     const builderRepositoryField = document.getElementById("builder-repo-field");
@@ -1898,6 +1921,7 @@
     const builderImagePasteTargetWrap = builderImagePasteTarget ? builderImagePasteTarget.parentElement : null;
     const builderImagesClear = document.getElementById("builder-images-clear");
     const libraryRepoSelect = document.getElementById("library-repo-select");
+    const libraryRepoAvatar = document.getElementById("library-repo-avatar");
     const libraryRepoDelete = document.getElementById("library-repo-delete");
     const libraryRepoHistoryField = document.getElementById("library-repo-history-field");
     const libraryRepositoryField = document.getElementById("library-repo-field");
@@ -5847,7 +5871,28 @@
       return defaultRepository();
     }
 
-    function renderRepoHistorySelect(historyField, select, input) {
+    function renderSelectedRepoHistoryAvatar(avatarNode, value) {
+      if (!avatarNode) return;
+      const repo = normalizeRepoValue(value);
+      if (!repo) {
+        avatarNode.hidden = true;
+        avatarNode.textContent = "";
+        avatarNode.removeAttribute("title");
+        avatarNode.removeAttribute("data-repo-avatar-key");
+        avatarNode.style.removeProperty("--repo-avatar-bg");
+        avatarNode.style.removeProperty("--repo-avatar-fg");
+        avatarNode.style.removeProperty("--repo-avatar-border");
+        return;
+      }
+      applyRepoAvatar(avatarNode, repo, {
+        className: "repo-history-avatar",
+        size: "sm",
+        decorative: true,
+      });
+      avatarNode.hidden = false;
+    }
+
+    function renderRepoHistorySelect(historyField, select, input, avatarNode) {
       if (!historyField || !select || !input) {
         return;
       }
@@ -5882,14 +5927,15 @@
       if (nextValue) {
         input.value = nextValue;
       }
+      renderSelectedRepoHistoryAvatar(avatarNode, nextValue);
 
       syncRepositoryFieldVisibility();
       syncRepoDeleteButtons();
     }
 
     function renderRepoHistoryOptions() {
-      renderRepoHistorySelect(builderRepoHistoryField, builderRepoSelect, builderRepoInput);
-      renderRepoHistorySelect(libraryRepoHistoryField, libraryRepoSelect, libraryRepoInput);
+      renderRepoHistorySelect(builderRepoHistoryField, builderRepoSelect, builderRepoInput, builderRepoAvatar);
+      renderRepoHistorySelect(libraryRepoHistoryField, libraryRepoSelect, libraryRepoInput, libraryRepoAvatar);
     }
 
     function renderReviewerHistorySelect(historyField, select, input) {
@@ -5962,18 +6008,6 @@
       }
     }
 
-    function chatRepoOwnerType(repo) {
-      return String(repo?.owner_type || repo?.owner?.type || "").trim().toLowerCase();
-    }
-
-    function chatRepoOwnerIconName(repo) {
-      return chatRepoOwnerType(repo) === "organization" ? "building-2" : "user";
-    }
-
-    function chatRepoOwnerIconLabel(repo) {
-      return chatRepoOwnerType(repo) === "organization" ? "Organization repository" : "Personal repository";
-    }
-
     function truncateChatRepoText(value, fallback) {
       const text = String(value || fallback || "").trim();
       if (text.length <= 100) return text;
@@ -6003,12 +6037,11 @@
       const head = document.createElement("span");
       head.className = "chat-repo-card-head";
 
-      const ownerIcon = document.createElement("span");
-      ownerIcon.className = "chat-repo-card-owner-icon";
-      ownerIcon.title = chatRepoOwnerIconLabel(repo);
-      ownerIcon.setAttribute("aria-hidden", "true");
-      ownerIcon.innerHTML = `<i data-lucide="${chatRepoOwnerIconName(repo)}" aria-hidden="true"></i>`;
-      head.appendChild(ownerIcon);
+      head.appendChild(createRepoAvatar(repo, {
+        className: "chat-repo-card-repo-avatar",
+        size: "md",
+        decorative: true,
+      }));
 
       const title = document.createElement("span");
       title.className = "chat-repo-card-title";
@@ -6738,7 +6771,7 @@
     }
 
     function chatRepoKey(value) {
-      return githubRepoPathFromValue(value).toLowerCase();
+      return canonicalRepoAvatarKey(value);
     }
 
     function chatRepoTabLabel(value) {
@@ -6894,10 +6927,11 @@
         button.classList.toggle("chat-repo-tab-has-activity", hasActivity);
         button.title = hasActivity ? "New run activity" : "Prompted repository";
         button.setAttribute("aria-selected", String(state.chatActiveRepoTab === tab.key));
-        const icon = document.createElement("span");
-        icon.className = "chat-repo-tab-icon";
-        icon.setAttribute("aria-hidden", "true");
-        icon.innerHTML = `<i data-lucide="message-circle" aria-hidden="true"></i>`;
+        const icon = createRepoAvatar(tab.value, {
+          className: "chat-repo-tab-icon",
+          size: "sm",
+          decorative: true,
+        });
         const label = document.createElement("span");
         label.className = "chat-repo-tab-label";
         label.textContent = tab.label;
@@ -7611,6 +7645,98 @@
       return `${parts[0]}/${parts[1]}`;
     }
 
+    function repoAvatarSourceValue(repo) {
+      if (repo && typeof repo === "object") {
+        return String(repo.full_name || repo.html_url || repo.clone_url || repo.ssh_url || repo.git_url || repo.name || "").trim();
+      }
+      return String(repo || "").trim();
+    }
+
+    function canonicalRepoAvatarKey(repo) {
+      const value = repoAvatarSourceValue(repo);
+      if (!value) return "";
+      const githubPath = githubRepoPathFromValue(value);
+      if (githubPath) return githubPath.toLowerCase();
+      return cleanRepoName(value)
+        .replace(/^\/+|\/+$/g, "")
+        .replace(/\.git$/i, "")
+        .toLowerCase();
+    }
+
+    function repoAvatarHash(key) {
+      let hash = 0x811c9dc5;
+      for (let index = 0; index < key.length; index += 1) {
+        hash ^= key.charCodeAt(index);
+        hash = Math.imul(hash, 0x01000193) >>> 0;
+      }
+      return hash >>> 0;
+    }
+
+    function repoAvatarInitials(repo, key) {
+      const label = displayRepoLabel(repoAvatarSourceValue(repo)) || key || "repo";
+      const githubPath = githubRepoPathFromValue(label) || key;
+      const pathParts = githubPath.split("/").filter(Boolean);
+      const repoName = pathParts[pathParts.length - 1] || label;
+      const nameParts = repoName.split(/[^A-Za-z0-9]+/).filter(Boolean);
+      if (nameParts.length >= 2) {
+        return `${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase();
+      }
+      if (pathParts.length >= 2) {
+        return `${pathParts[0][0]}${pathParts[1][0]}`.toUpperCase();
+      }
+      return repoName.replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase() || "R";
+    }
+
+    function repoAvatarLabel(repo, key) {
+      const value = repoAvatarSourceValue(repo);
+      const githubPath = githubRepoPathFromValue(value);
+      return githubPath || displayRepoLabel(value) || key || "Repository";
+    }
+
+    function repoAvatarModel(repo) {
+      const key = canonicalRepoAvatarKey(repo) || "repo";
+      const hash = repoAvatarHash(key);
+      const swatch = REPO_AVATAR_PALETTE[hash % REPO_AVATAR_PALETTE.length];
+      return {
+        key,
+        label: repoAvatarLabel(repo, key),
+        initials: repoAvatarInitials(repo, key),
+        swatch,
+      };
+    }
+
+    function applyRepoAvatar(node, repo, options = {}) {
+      const model = repoAvatarModel(repo);
+      const classes = ["repo-avatar"];
+      if (options.size) {
+        classes.push(`repo-avatar-${options.size}`);
+      }
+      if (options.className) {
+        classes.push(options.className);
+      }
+      node.className = classes.join(" ");
+      node.textContent = model.initials;
+      node.title = model.label;
+      node.dataset.repoAvatarKey = model.key;
+      node.style.setProperty("--repo-avatar-bg", model.swatch.bg);
+      node.style.setProperty("--repo-avatar-fg", model.swatch.fg);
+      node.style.setProperty("--repo-avatar-border", model.swatch.border);
+      if (options.decorative) {
+        node.setAttribute("aria-hidden", "true");
+        node.removeAttribute("role");
+        node.removeAttribute("aria-label");
+      } else {
+        node.removeAttribute("aria-hidden");
+        node.setAttribute("role", "img");
+        node.setAttribute("aria-label", `${model.label} repository avatar`);
+      }
+      return node;
+    }
+
+    function createRepoAvatar(repo, options = {}) {
+      return applyRepoAvatar(document.createElement("span"), repo, options);
+    }
+
     function taskRepoRootURL(task) {
       for (const repo of taskRepoValues(task)) {
         const repoPath = githubRepoPathFromValue(repo);
@@ -7706,6 +7832,44 @@
       const repos = normalizedTaskRepos(task);
       if (!repos.length) return "-";
       return `[${repos.join(", ")}]`;
+    }
+
+    function renderTaskRepoMeta(task) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "task-repo-meta";
+
+      const label = document.createElement("span");
+      label.className = "task-repo-label";
+      label.textContent = "repos:";
+      wrapper.appendChild(label);
+
+      const list = document.createElement("span");
+      list.className = "task-repo-list";
+      const repos = taskRepoValues(task);
+      if (!repos.length) {
+        const empty = document.createElement("span");
+        empty.className = "task-repo-empty";
+        empty.textContent = "-";
+        list.appendChild(empty);
+      } else {
+        for (const repo of repos) {
+          const chip = document.createElement("span");
+          chip.className = "task-repo-chip";
+          chip.appendChild(createRepoAvatar(repo, {
+            className: "task-repo-avatar",
+            size: "xs",
+            decorative: true,
+          }));
+          const text = document.createElement("span");
+          text.className = "task-repo-chip-label";
+          text.textContent = displayRepoLabel(repo);
+          chip.title = displayRepoLabel(repo);
+          chip.appendChild(text);
+          list.appendChild(chip);
+        }
+      }
+      wrapper.appendChild(list);
+      return wrapper;
     }
 
     function formatTaskBranch(task) {
@@ -10221,8 +10385,7 @@
           const meta = document.createElement("div");
           meta.className = "task-meta";
 
-          const repos = document.createElement("div");
-          repos.textContent = `repos: ${formatTaskRepos(task)}`;
+          const repos = renderTaskRepoMeta(task);
           const branch = document.createElement("div");
           branch.textContent = `branch: ${formatTaskBranch(task)}`;
           const skill = document.createElement("div");

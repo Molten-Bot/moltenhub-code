@@ -108,7 +108,7 @@ Each task run:
 8. Commits changed repos, pushes branches, opens or reuses PRs, and watches required checks.
 9. If checks fail, runs up to three focused remediation attempts and pushes follow-up commits.
 
-Harness-created commits include the hard-coded GitHub co-author trailer `Co-authored-by: Molten Bot 000 <260473928+moltenbot000@users.noreply.github.com>`. Commits created by an agent before the harness commit step are pushed as-is and are not amended or rewritten.
+Harness-created commits use the Molten Bot git identity and include one hard-coded GitHub co-author trailer: `Co-authored-by: Molten Bot 000 <260473928+moltenbot000@users.noreply.github.com>`. Commits created by an agent before the harness commit step are pushed as-is and are not amended or rewritten.
 
 If no repository changes remain after the agent runs, the task exits successfully with `status=no_changes`.
 

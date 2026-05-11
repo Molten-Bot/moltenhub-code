@@ -52,6 +52,7 @@ type Config struct {
 	GitHubHandle           string        `json:"githubHandle"`
 	Reviewers              []string      `json:"reviewers"`
 	Review                 *ReviewConfig `json:"review,omitempty"`
+	AutoReview             bool          `json:"autoReview,omitempty"`
 }
 
 // PromptImage captures one prompt image attachment.
@@ -113,6 +114,7 @@ func rejectSnakeCaseRunConfigFields(raw map[string]json.RawMessage) error {
 		"library_task_name":         "libraryTaskName",
 		"library_task_display_name": "libraryTaskDisplayName",
 		"response_mode":             "responseMode",
+		"auto_review":               "autoReview",
 	}
 	for legacy, canonical := range forbidden {
 		if _, ok := raw[legacy]; ok {

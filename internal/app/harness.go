@@ -40,6 +40,7 @@ const (
 	ExitPR        = 70
 
 	maxPRCheckRemediationAttempts = 3
+	maxPostPRReviewAttempts       = 3
 	maxPRCreateAttempts           = 3
 	prCreateRetryDelay            = 2 * time.Second
 	prChecksWatchIntervalSeconds  = 10
@@ -57,14 +58,20 @@ const (
 	maxGitErrorDetailChars           = 500
 	maxReviewMetadataChars           = 12000
 	maxReviewCommentsChars           = 16000
+	maxReviewReviewsChars            = 16000
+	maxReviewInlineCommentsChars     = 16000
+	maxReviewChecksChars             = 12000
 	maxReviewDiffStatChars           = 12000
 	maxReviewDiffPatchChars          = 30000
 	bootstrapGitUserName             = "MoltenHub Code"
 	bootstrapGitUserEmail            = "bot@molten.bot"
 	bootstrapMainCommitMessage       = "chore: initialize main branch"
-	moltenbotCoAuthorTrailer         = "Co-authored-by: Molten Bot 000 <260473928+moltenbot000@users.noreply.github.com>"
+	moltenbotCoAuthorName            = "Molten Bot 000"
+	moltenbotCoAuthorEmail           = "260473928+moltenbot000@users.noreply.github.com"
+	moltenbotCoAuthorTrailer         = "Co-authored-by: " + moltenbotCoAuthorName + " <" + moltenbotCoAuthorEmail + ">"
 	agentsCredentialGuardInstruction = "YOU ARE NOT ALLOWED TO SHARE: GITHUB PAT and YOUR (AGENTS) AUTH CREDENTIALS"
 	prCommentScreenshotsRelDir       = ".moltenhub/pr-comment-screenshots"
+	postPRReviewResultRelPath        = ".moltenhub/post-pr-review.json"
 	publishRemoteOrigin              = "origin"
 	publishRemoteFork                = "fork"
 	publishStrategyDirect            = "direct"
@@ -74,6 +81,7 @@ const (
 type logFn func(string, ...any)
 
 var authSetupGitMu sync.Mutex
+var coAuthorTrailerLineRE = regexp.MustCompile(`(?i)^\s*Co-authored-by:\s*.+<[^>]+>\s*$`)
 
 var errPRCreatePermissionDenied = errors.New("pull request create permission denied")
 
@@ -482,7 +490,63 @@ func (h Harness) processChangedRepo(
 		)
 	}
 
-	for attempt := 0; ; attempt++ {
+	reviewAttempt := 0
+	handlePassingChecks := func() (bool, int, string, error) {
+		if !shouldRunPostPRReview(cfg, *repo) {
+			return true, ExitSuccess, "", nil
+		}
+		if reviewAttempt >= maxPostPRReviewAttempts {
+			return false, ExitPR, "review", fmt.Errorf(
+				"post-PR review did not approve repo %s after %d remediation attempt(s)",
+				repo.URL,
+				maxPostPRReviewAttempts,
+			)
+		}
+		reviewAttempt++
+		decision, err := h.runPostPRReview(
+			ctx,
+			cfg,
+			*repo,
+			runtime,
+			agentsPath,
+			reviewAttempt,
+		)
+		if err != nil {
+			return false, ExitPR, "review", err
+		}
+		if decision.Approved {
+			return true, ExitSuccess, "", nil
+		}
+		if reviewAttempt >= maxPostPRReviewAttempts {
+			return false, ExitPR, "review", fmt.Errorf(
+				"post-PR review requested changes for repo %s after %d remediation attempt(s): %s",
+				repo.URL,
+				maxPostPRReviewAttempts,
+				decision.Feedback,
+			)
+		}
+		if err := h.applyPostPRReviewFeedback(
+			ctx,
+			cfg,
+			repo,
+			runtime,
+			codexDir,
+			codexOpts,
+			codexBasePrompt,
+			agentsPath,
+			codexTargetLabel,
+			agentStage,
+			reviewAttempt,
+			decision,
+			multiRepo,
+		); err != nil {
+			return false, ExitPR, "review", err
+		}
+		return false, ExitSuccess, "", nil
+	}
+
+checkLoop:
+	for attempt := 0; ; {
 		var (
 			checkRes     execx.Result
 			checkErr     error
@@ -505,7 +569,11 @@ func (h Harness) processChangedRepo(
 			}
 			if checkErr == nil {
 				h.logf("stage=checks status=ok repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt+1)
-				return ExitSuccess, "", nil
+				done, exitCode, stage, err := handlePassingChecks()
+				if err != nil || done {
+					return exitCode, stage, err
+				}
+				continue checkLoop
 			}
 
 			checkSummary = summarizeCheckOutput(checkRes)
@@ -522,7 +590,11 @@ func (h Harness) processChangedRepo(
 							repo.PRURL,
 							attempt+1,
 						)
-						return ExitSuccess, "", nil
+						done, exitCode, stage, err := handlePassingChecks()
+						if err != nil || done {
+							return exitCode, stage, err
+						}
+						continue checkLoop
 					}
 				} else {
 					h.logf(
@@ -579,7 +651,11 @@ func (h Harness) processChangedRepo(
 							repo.PRURL,
 							attempt+1,
 						)
-						return ExitSuccess, "", nil
+						done, exitCode, stage, err := handlePassingChecks()
+						if err != nil || done {
+							return exitCode, stage, err
+						}
+						continue checkLoop
 					}
 				} else {
 					h.logf(
@@ -603,7 +679,11 @@ func (h Harness) processChangedRepo(
 							repo.PRURL,
 							attempt+1,
 						)
-						return ExitSuccess, "", nil
+						done, exitCode, stage, err := handlePassingChecks()
+						if err != nil || done {
+							return exitCode, stage, err
+						}
+						continue checkLoop
 					}
 				} else {
 					h.logf(
@@ -699,6 +779,7 @@ func (h Harness) processChangedRepo(
 					repo.URL,
 					repo.RelDir,
 				)
+				attempt++
 				continue
 			}
 			if !isNothingToCommitResult(commitRes, commitErr) {
@@ -715,6 +796,7 @@ func (h Harness) processChangedRepo(
 			return ExitGit, "git", err
 		}
 		h.logf("stage=git status=ok action=repair_commit attempt=%d repo=%s repo_dir=%s", attempt+1, repo.URL, repo.RelDir)
+		attempt++
 	}
 }
 
@@ -1931,15 +2013,18 @@ func withAgentsPrompt(prompt, agentsPath string) string {
 }
 
 type reviewPRMetadata struct {
-	Number      int    `json:"number"`
-	Title       string `json:"title"`
-	Body        string `json:"body"`
-	URL         string `json:"url"`
-	State       string `json:"state"`
-	IsDraft     bool   `json:"isDraft"`
-	BaseRefName string `json:"baseRefName"`
-	HeadRefName string `json:"headRefName"`
-	Author      struct {
+	Number            int             `json:"number"`
+	Title             string          `json:"title"`
+	Body              string          `json:"body"`
+	URL               string          `json:"url"`
+	State             string          `json:"state"`
+	IsDraft           bool            `json:"isDraft"`
+	BaseRefName       string          `json:"baseRefName"`
+	HeadRefName       string          `json:"headRefName"`
+	ReviewDecision    string          `json:"reviewDecision"`
+	MergeStateStatus  string          `json:"mergeStateStatus"`
+	StatusCheckRollup json.RawMessage `json:"statusCheckRollup,omitempty"`
+	Author            struct {
 		Login string `json:"login"`
 	} `json:"author"`
 }
@@ -1981,6 +2066,21 @@ func (h Harness) buildReviewPromptContext(
 	if err != nil {
 		return "", fmt.Errorf("load pull request comments: %w", err)
 	}
+	reviewsText := h.optionalReviewCommandOutput(
+		ctx,
+		prReviewReviewsCommand(repo.Dir, metadata.Number),
+		"No submitted pull-request reviews were returned by gh api.",
+	)
+	inlineCommentsText := h.optionalReviewCommandOutput(
+		ctx,
+		prReviewInlineCommentsCommand(repo.Dir, metadata.Number),
+		"No inline pull-request review comments were returned by gh api.",
+	)
+	checksText := h.optionalReviewCommandOutput(
+		ctx,
+		prReviewChecksCommand(repo.Dir, selector),
+		"No pull-request check status was returned by gh pr checks.",
+	)
 
 	baseRef := remoteTrackingRef(metadata.BaseRefName)
 	headRef := pullRequestTrackingRef(metadata.Number)
@@ -2006,14 +2106,23 @@ func (h Harness) buildReviewPromptContext(
 	b.WriteString(fmt.Sprintf("- Pull request URL: %s\n", pickFirstNonEmpty(metadata.URL, reviewCfg.PRURL)))
 	b.WriteString(fmt.Sprintf("- Base branch: %s\n", metadata.BaseRefName))
 	b.WriteString(fmt.Sprintf("- Head branch: %s\n", pickFirstNonEmpty(metadata.HeadRefName, reviewCfg.HeadBranch)))
-	b.WriteString("- Existing PR discussion has already been fetched for you below.\n")
+	b.WriteString("- Existing PR discussion, submitted reviews, inline comments, and check status have already been fetched for you below.\n")
 	b.WriteString("- The git diff below was generated locally after fetching the PR head and base refs.\n")
 	b.WriteString("- Treat this prepared context as a starting point and verify important claims yourself before concluding.\n\n")
 	b.WriteString("Pull request metadata:\n```json\n")
 	b.WriteString(truncateForPrompt(string(metadataJSON), maxReviewMetadataChars))
 	b.WriteString("\n```\n\n")
-	b.WriteString("Existing pull request discussion:\n```text\n")
+	b.WriteString("Existing pull request conversation comments:\n```text\n")
 	b.WriteString(truncateForPrompt(nonEmptyOrDefault(commentsRes.Stdout, "No pull-request comments were returned by gh pr view --comments."), maxReviewCommentsChars))
+	b.WriteString("\n```\n\n")
+	b.WriteString("Submitted pull request reviews:\n```json\n")
+	b.WriteString(truncateForPrompt(reviewsText, maxReviewReviewsChars))
+	b.WriteString("\n```\n\n")
+	b.WriteString("Inline pull request review comments:\n```json\n")
+	b.WriteString(truncateForPrompt(inlineCommentsText, maxReviewInlineCommentsChars))
+	b.WriteString("\n```\n\n")
+	b.WriteString("Pull request check status:\n```text\n")
+	b.WriteString(truncateForPrompt(checksText, maxReviewChecksChars))
 	b.WriteString("\n```\n\n")
 	b.WriteString("Local git diff summary:\n```text\n")
 	b.WriteString(truncateForPrompt(nonEmptyOrDefault(joinCommandOutput(diffStatRes), "No diff summary output was returned by git diff --stat --summary."), maxReviewDiffStatChars))
@@ -2022,6 +2131,372 @@ func (h Harness) buildReviewPromptContext(
 	b.WriteString(truncateForPrompt(nonEmptyOrDefault(diffPatchRes.Stdout, "No diff patch output was returned by git diff."), maxReviewDiffPatchChars))
 	b.WriteString("\n```")
 	return strings.TrimSpace(b.String()), nil
+}
+
+func (h Harness) optionalReviewCommandOutput(ctx context.Context, cmd execx.Command, fallback string) string {
+	res, err := h.runCommand(ctx, "review", cmd)
+	text := nonEmptyOrDefault(joinCommandOutput(res), fallback)
+	if err == nil {
+		return text
+	}
+	detail := strings.TrimSpace(err.Error())
+	if detail == "" {
+		return text
+	}
+	return strings.TrimSpace(text + "\nCommand error: " + detail)
+}
+
+type postPRReviewDecision struct {
+	Approved bool
+	Status   string
+	Summary  string
+	Findings []postPRReviewFinding
+	Feedback string
+}
+
+type postPRReviewFinding struct {
+	Severity       string `json:"severity,omitempty"`
+	File           string `json:"file,omitempty"`
+	Line           int    `json:"line,omitempty"`
+	Title          string `json:"title,omitempty"`
+	Detail         string `json:"detail,omitempty"`
+	Recommendation string `json:"recommendation,omitempty"`
+}
+
+type postPRReviewResultFile struct {
+	Status   string                `json:"status"`
+	Summary  string                `json:"summary"`
+	Findings []postPRReviewFinding `json:"findings"`
+}
+
+func shouldRunPostPRReview(cfg config.Config, repo repoWorkspace) bool {
+	return cfg.AutoReview &&
+		cfg.Review == nil &&
+		strings.TrimSpace(repo.PRURL) != "" &&
+		strings.TrimSpace(repo.URL) != ""
+}
+
+func (h Harness) runPostPRReview(
+	ctx context.Context,
+	cfg config.Config,
+	repo repoWorkspace,
+	runtime agentruntime.Runtime,
+	agentsPath string,
+	attempt int,
+) (postPRReviewDecision, error) {
+	if !shouldRunPostPRReview(cfg, repo) {
+		return postPRReviewDecision{Approved: true, Status: "skipped"}, nil
+	}
+	if strings.TrimSpace(repo.Dir) == "" {
+		return postPRReviewDecision{}, fmt.Errorf("post-PR review workspace requires a repository directory")
+	}
+
+	reviewRelDir := fmt.Sprintf("%s-review-%02d", pickFirstNonEmpty(repo.RelDir, "repo"), attempt)
+	reviewDir := filepath.Join(filepath.Dir(repo.Dir), reviewRelDir)
+	h.logf("stage=review status=start action=post_pr_clone repo=%s repo_dir=%s review_dir=%s attempt=%d", repo.URL, repo.RelDir, reviewRelDir, attempt)
+	if _, err := h.runCloneWithRetry(ctx, repo.URL, "", reviewDir, reviewRelDir, cloneRepoDefaultBranchCommand(repo.URL, reviewDir)); err != nil {
+		return postPRReviewDecision{}, fmt.Errorf("clone independent post-PR review workspace: %w", err)
+	}
+	h.logf("stage=review status=ok action=post_pr_clone repo=%s repo_dir=%s review_dir=%s attempt=%d", repo.URL, repo.RelDir, reviewRelDir, attempt)
+
+	reviewRepo := repo
+	reviewRepo.Dir = reviewDir
+	reviewRepo.RelDir = reviewRelDir
+	reviewContext, err := h.buildReviewPromptContext(ctx, reviewRepo, config.ReviewConfig{PRURL: repo.PRURL})
+	if err != nil {
+		return postPRReviewDecision{}, err
+	}
+	if prNumber, ok := prNumberFromURL(repo.PRURL); ok {
+		if _, err := h.runCommand(ctx, "review", switchDetachCommand(reviewDir, pullRequestTrackingRef(prNumber))); err != nil {
+			h.logf("stage=review status=warn action=checkout_pr_head repo=%s repo_dir=%s pr_url=%s err=%q", repo.URL, reviewRelDir, repo.PRURL, err)
+		}
+	}
+
+	resultPath := filepath.Join(reviewDir, filepath.FromSlash(postPRReviewResultRelPath))
+	if err := os.MkdirAll(filepath.Dir(resultPath), 0o755); err != nil {
+		return postPRReviewDecision{}, fmt.Errorf("prepare post-PR review result directory: %w", err)
+	}
+	if err := os.Remove(resultPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return postPRReviewDecision{}, fmt.Errorf("clear stale post-PR review result: %w", err)
+	}
+
+	reviewPrompt := postPRReviewPrompt(cfg, repo, reviewContext, postPRReviewResultRelPath, attempt)
+	h.logf("stage=review status=start action=post_pr_agent repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt)
+	start := time.Now()
+	if err := h.runCodex(ctx, runtime, reviewDir, reviewPrompt, codexRunOptions{}, agentsPath, cfg.ResponseMode); err != nil {
+		return postPRReviewDecision{}, err
+	}
+	h.logf("stage=review status=ok action=post_pr_agent repo=%s repo_dir=%s pr_url=%s attempt=%d elapsed_s=%d", repo.URL, repo.RelDir, repo.PRURL, attempt, int(time.Since(start).Seconds()))
+
+	decision, err := readPostPRReviewDecision(resultPath)
+	if err != nil {
+		return postPRReviewDecision{}, err
+	}
+	if decision.Approved {
+		h.logf("stage=review status=ok action=post_pr_result repo=%s repo_dir=%s pr_url=%s attempt=%d decision=approved", repo.URL, repo.RelDir, repo.PRURL, attempt)
+		return decision, nil
+	}
+
+	h.logf("stage=review status=changes_requested action=post_pr_result repo=%s repo_dir=%s pr_url=%s attempt=%d findings=%d", repo.URL, repo.RelDir, repo.PRURL, attempt, len(decision.Findings))
+	commentBody := postPRReviewCommentBody(decision, attempt)
+	if strings.TrimSpace(commentBody) != "" {
+		if _, err := h.runCommand(ctx, "pr", prCommentCommand(repo.Dir, repo.PRURL, commentBody)); err != nil {
+			h.logf("stage=review status=warn action=post_pr_comment repo=%s repo_dir=%s pr_url=%s attempt=%d err=%q", repo.URL, repo.RelDir, repo.PRURL, attempt, err)
+		}
+	}
+	return decision, nil
+}
+
+func postPRReviewPrompt(cfg config.Config, repo repoWorkspace, reviewContext, resultRelPath string, attempt int) string {
+	var b strings.Builder
+	b.WriteString("You are performing an independent post-PR review in a fresh agent session.\n\n")
+	b.WriteString("Objective:\n")
+	b.WriteString("- Decide whether the pull request satisfies the original task prompt and repository standards.\n")
+	b.WriteString("- Review objectively; do not assume the implementation agent was correct.\n")
+	b.WriteString("- Do not implement fixes in this session.\n")
+	b.WriteString("- Treat existing PR comments as context, but verify whether each concern is still present in the latest diff before repeating it.\n\n")
+	b.WriteString("Original task prompt:\n```text\n")
+	b.WriteString(strings.TrimSpace(cfg.Prompt))
+	b.WriteString("\n```\n\n")
+	b.WriteString(fmt.Sprintf("Repository remote: %s\n", repo.URL))
+	b.WriteString(fmt.Sprintf("Pull request URL: %s\n", repo.PRURL))
+	b.WriteString(fmt.Sprintf("Target subdirectory from the implementation run: %s\n", nonEmptyOrDefault(cfg.TargetSubdir, ".")))
+	b.WriteString(fmt.Sprintf("Review round: %d/%d\n\n", attempt, maxPostPRReviewAttempts))
+	b.WriteString(reviewContext)
+	b.WriteString("\n\nResult contract:\n")
+	b.WriteString(fmt.Sprintf("- Write exactly one JSON object to `%s`.\n", resultRelPath))
+	b.WriteString("- The only repository file you may create or modify is that result JSON file.\n")
+	b.WriteString("- Use `status: \"approved\"` when the PR is ready.\n")
+	b.WriteString("- Use `status: \"changes_requested\"` when the coding agent must fix something.\n")
+	b.WriteString("- Findings must be concrete and actionable with file and line when available.\n\n")
+	b.WriteString("JSON shape:\n```json\n")
+	b.WriteString("{\n  \"status\": \"approved\",\n  \"summary\": \"short review summary\",\n  \"findings\": []\n}\n")
+	b.WriteString("```\n")
+	return strings.TrimSpace(b.String())
+}
+
+func readPostPRReviewDecision(path string) (postPRReviewDecision, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return postPRReviewDecision{}, fmt.Errorf("read post-PR review result %s: %w", path, err)
+	}
+	var parsed postPRReviewResultFile
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return postPRReviewDecision{}, fmt.Errorf("decode post-PR review result %s: %w", path, err)
+	}
+	status := normalizePostPRReviewStatus(parsed.Status)
+	if status == "" {
+		if len(parsed.Findings) > 0 {
+			status = "changes_requested"
+		} else {
+			return postPRReviewDecision{}, fmt.Errorf("post-PR review result status %q is unsupported", parsed.Status)
+		}
+	}
+	decision := postPRReviewDecision{
+		Approved: status == "approved",
+		Status:   status,
+		Summary:  strings.TrimSpace(parsed.Summary),
+		Findings: parsed.Findings,
+	}
+	decision.Feedback = postPRReviewFeedback(decision)
+	return decision, nil
+}
+
+func normalizePostPRReviewStatus(status string) string {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "approved", "approve", "pass", "passed", "ok", "ready", "no_changes_requested":
+		return "approved"
+	case "changes_requested", "request_changes", "changes", "needs_changes", "fail", "failed", "blocked":
+		return "changes_requested"
+	default:
+		return ""
+	}
+}
+
+func postPRReviewFeedback(decision postPRReviewDecision) string {
+	var b strings.Builder
+	if summary := strings.TrimSpace(decision.Summary); summary != "" {
+		b.WriteString(summary)
+	}
+	for i, finding := range decision.Findings {
+		line := postPRReviewFindingLine(i+1, finding)
+		if line == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString(line)
+	}
+	if strings.TrimSpace(b.String()) == "" {
+		return "Post-PR review requested changes but did not provide details."
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func postPRReviewFindingLine(index int, finding postPRReviewFinding) string {
+	var location string
+	file := strings.TrimSpace(finding.File)
+	if file != "" {
+		location = file
+		if finding.Line > 0 {
+			location = fmt.Sprintf("%s:%d", location, finding.Line)
+		}
+	}
+	title := strings.TrimSpace(finding.Title)
+	detail := strings.TrimSpace(finding.Detail)
+	recommendation := strings.TrimSpace(finding.Recommendation)
+	severity := strings.TrimSpace(finding.Severity)
+
+	parts := make([]string, 0, 4)
+	if severity != "" {
+		parts = append(parts, severity)
+	}
+	if location != "" {
+		parts = append(parts, location)
+	}
+	if title != "" {
+		parts = append(parts, title)
+	}
+	if detail != "" {
+		parts = append(parts, detail)
+	}
+	if recommendation != "" {
+		parts = append(parts, "Recommendation: "+recommendation)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d. %s", index, strings.Join(parts, " - "))
+}
+
+func postPRReviewCommentBody(decision postPRReviewDecision, attempt int) string {
+	feedback := strings.TrimSpace(decision.Feedback)
+	if feedback == "" {
+		return ""
+	}
+	return fmt.Sprintf("MoltenHub post-PR review round %d requested changes.\n\n%s", attempt, feedback)
+}
+
+func prNumberFromURL(prURL string) (int, bool) {
+	selector := githubutil.PullRequestSelector(prURL)
+	number, err := strconv.Atoi(selector)
+	return number, err == nil && number > 0
+}
+
+func (h Harness) applyPostPRReviewFeedback(
+	ctx context.Context,
+	cfg config.Config,
+	repo *repoWorkspace,
+	runtime agentruntime.Runtime,
+	codexDir string,
+	codexOpts codexRunOptions,
+	codexBasePrompt string,
+	agentsPath string,
+	codexTargetLabel string,
+	agentStage string,
+	attempt int,
+	decision postPRReviewDecision,
+	multiRepo bool,
+) error {
+	if repo == nil {
+		return fmt.Errorf("repo workspace is required")
+	}
+	repairPrompt := postPRReviewRemediationPrompt(
+		codexBasePrompt,
+		repo.RelDir,
+		repo.URL,
+		repo.PRURL,
+		decision.Feedback,
+		attempt,
+		multiRepo,
+	)
+	h.logf(
+		"stage=%s status=start target=%s mode=review_remediation attempt=%d repo=%s repo_dir=%s",
+		agentStage,
+		codexTargetLabel,
+		attempt,
+		repo.URL,
+		repo.RelDir,
+	)
+	start := time.Now()
+	if err := h.runCodex(ctx, runtime, codexDir, repairPrompt, codexOpts, agentsPath, cfg.ResponseMode); err != nil {
+		return fmt.Errorf("run review remediation agent: %w", err)
+	}
+	h.logf(
+		"stage=%s status=ok elapsed_s=%d mode=review_remediation attempt=%d repo=%s repo_dir=%s",
+		agentStage,
+		int(time.Since(start).Seconds()),
+		attempt,
+		repo.URL,
+		repo.RelDir,
+	)
+
+	statusRes, err := h.runCommand(ctx, "git", statusCommand(repo.Dir))
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(statusRes.Stdout) == "" {
+		return fmt.Errorf("post-PR review requested changes and agent produced no remediation changes for repo %s", repo.URL)
+	}
+
+	h.logf("stage=git status=start action=review_repair_commit attempt=%d repo=%s repo_dir=%s", attempt, repo.URL, repo.RelDir)
+	if _, err := h.runCommand(ctx, "git", addCommand(repo.Dir)); err != nil {
+		return err
+	}
+	commitRes, commitErr := h.runCommand(ctx, "git", commitCommand(repo.Dir, reviewRemediationCommitMessage(cfg.CommitMessage, attempt)))
+	if commitErr != nil {
+		noChanges, statusErr := h.refreshRepoChangeStateAfterNoOpCommit(ctx, repo, commitRes, commitErr)
+		if statusErr != nil {
+			return statusErr
+		}
+		if noChanges {
+			h.logf(
+				"stage=git status=ok action=review_repair_commit attempt=%d repo=%s repo_dir=%s reason=no_changes_after_add",
+				attempt,
+				repo.URL,
+				repo.RelDir,
+			)
+			return nil
+		}
+		if !isNothingToCommitResult(commitRes, commitErr) {
+			return commitErr
+		}
+		h.logf(
+			"stage=git status=ok action=review_repair_commit attempt=%d repo=%s repo_dir=%s reason=already_committed",
+			attempt,
+			repo.URL,
+			repo.RelDir,
+		)
+	}
+	if err := h.pushWithSync(ctx, *repo, 0); err != nil {
+		return err
+	}
+	h.logf("stage=git status=ok action=review_repair_commit attempt=%d repo=%s repo_dir=%s", attempt, repo.URL, repo.RelDir)
+	return nil
+}
+
+func postPRReviewRemediationPrompt(basePrompt, repoPath, repoURL, prURL, feedback string, attempt int, multiRepo bool) string {
+	if !multiRepo {
+		return fmt.Sprintf(
+			"%s\n\nPost-PR review remediation round %d/%d.\nAn open PR already exists: %s\n\nThe independent review session requested changes:\n%s\n\nFix the underlying issues, update tests as needed, and keep the PR high quality. Do not dismiss review feedback unless you verify it is already resolved in the current PR state.",
+			strings.TrimSpace(basePrompt),
+			attempt,
+			maxPostPRReviewAttempts,
+			prURL,
+			strings.TrimSpace(feedback),
+		)
+	}
+	return fmt.Sprintf(
+		"%s\n\nPost-PR review remediation round %d/%d.\nTarget repository workspace path: %s\nTarget repository remote: %s\nAn open PR already exists for this repository: %s\n\nThe independent review session requested changes for this repository:\n%s\n\nFocus remediation changes on this repository, update tests as needed, and keep the PR high quality. If you also change other repositories, ensure each changed repository has its own branch and PR.",
+		strings.TrimSpace(basePrompt),
+		attempt,
+		maxPostPRReviewAttempts,
+		repoPath,
+		repoURL,
+		prURL,
+		strings.TrimSpace(feedback),
+	)
 }
 
 func repoWorkspaceDirName(repoURL string, index, total int) string {
@@ -2047,7 +2522,7 @@ func prReviewMetadataCommand(repoDir, selector string) execx.Command {
 		Name: "gh",
 		Args: []string{
 			"pr", "view", selector,
-			"--json", "number,title,body,url,state,isDraft,baseRefName,headRefName,author",
+			"--json", "number,title,body,url,state,isDraft,baseRefName,headRefName,author,reviewDecision,mergeStateStatus,statusCheckRollup",
 		},
 	}
 }
@@ -2057,6 +2532,30 @@ func prReviewCommentsCommand(repoDir, selector string) execx.Command {
 		Dir:  repoDir,
 		Name: "gh",
 		Args: []string{"pr", "view", selector, "--comments"},
+	}
+}
+
+func prReviewReviewsCommand(repoDir string, prNumber int) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: []string{"api", fmt.Sprintf("repos/{owner}/{repo}/pulls/%d/reviews", prNumber), "--paginate"},
+	}
+}
+
+func prReviewInlineCommentsCommand(repoDir string, prNumber int) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: []string{"api", fmt.Sprintf("repos/{owner}/{repo}/pulls/%d/comments", prNumber), "--paginate"},
+	}
+}
+
+func prReviewChecksCommand(repoDir, selector string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: []string{"pr", "checks", githubutil.PullRequestSelector(selector)},
 	}
 }
 
@@ -3604,6 +4103,14 @@ func switchMainBranchCommand(repoDir string) execx.Command {
 	}
 }
 
+func switchDetachCommand(repoDir, ref string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "git",
+		Args: []string{"switch", "--detach", ref},
+	}
+}
+
 func initializeMainBranchCommitCommand(repoDir string) execx.Command {
 	args := []string{
 		"-c",
@@ -3904,16 +4411,37 @@ func addPRCommentScreenshotsCommand(repoDir string, files []string) execx.Comman
 }
 
 func commitCommand(repoDir, msg string) execx.Command {
-	args := append([]string{"commit"}, commitMessageArgs(msg)...)
+	args := []string{
+		"-c",
+		"user.name=" + moltenbotCoAuthorName,
+		"-c",
+		"user.email=" + moltenbotCoAuthorEmail,
+		"commit",
+	}
+	args = append(args, commitMessageArgs(msg)...)
 	return execx.Command{Dir: repoDir, Name: "git", Args: args}
 }
 
 func commitMessageArgs(msg string) []string {
-	args := []string{"-m", msg}
-	if !strings.Contains(msg, moltenbotCoAuthorTrailer) {
-		args = append(args, "-m", moltenbotCoAuthorTrailer)
+	msg = stripCoAuthorTrailers(msg)
+	if msg == "" {
+		msg = "chore: automated update"
 	}
-	return args
+	return []string{"-m", msg, "-m", moltenbotCoAuthorTrailer}
+}
+
+func stripCoAuthorTrailers(msg string) string {
+	msg = strings.ReplaceAll(msg, "\r\n", "\n")
+	msg = strings.ReplaceAll(msg, "\r", "\n")
+	lines := strings.Split(msg, "\n")
+	kept := lines[:0]
+	for _, line := range lines {
+		if coAuthorTrailerLineRE.MatchString(line) {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return strings.TrimSpace(strings.Join(kept, "\n"))
 }
 
 func pushCommand(repoDir, branch string) execx.Command {
@@ -4692,4 +5220,12 @@ func remediationCommitMessage(base string, attempt int) string {
 		base = "chore: automated update"
 	}
 	return fmt.Sprintf("%s (ci remediation %d)", base, attempt)
+}
+
+func reviewRemediationCommitMessage(base string, attempt int) string {
+	base = strings.TrimSpace(base)
+	if base == "" {
+		base = "chore: automated update"
+	}
+	return fmt.Sprintf("%s (review remediation %d)", base, attempt)
 }

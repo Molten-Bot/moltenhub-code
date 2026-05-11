@@ -75,6 +75,26 @@ func isCloneGitCommand(cmd execx.Command) bool {
 	return cmd.Name == "git" && len(cmd.Args) > 0 && cmd.Args[0] == "clone"
 }
 
+type writingFakeRunner struct {
+	*fakeRunner
+	writeDir  string
+	writePath string
+	writeBody string
+}
+
+func (f *writingFakeRunner) Run(ctx context.Context, cmd execx.Command) (execx.Result, error) {
+	res, err := f.fakeRunner.Run(ctx, cmd)
+	if cmd.Name == "codex" && cmd.Dir == f.writeDir && strings.TrimSpace(f.writePath) != "" {
+		if mkdirErr := os.MkdirAll(filepath.Dir(f.writePath), 0o755); mkdirErr != nil {
+			f.t.Fatalf("MkdirAll(%s) error = %v", filepath.Dir(f.writePath), mkdirErr)
+		}
+		if writeErr := os.WriteFile(f.writePath, []byte(f.writeBody), 0o644); writeErr != nil {
+			f.t.Fatalf("WriteFile(%s) error = %v", f.writePath, writeErr)
+		}
+	}
+	return res, err
+}
+
 type captureRunner struct {
 	cmd execx.Command
 }
@@ -146,7 +166,7 @@ func repoURLFromConfig(cfg config.Config) string {
 	return cfg.RepoURL
 }
 
-func expectedPreparedReviewContext(repoURL, metadataJSON, commentsText, diffStat, diffPatch string) string {
+func expectedPreparedReviewContext(repoURL, metadataJSON, commentsText, reviewsText, inlineCommentsText, checksText, diffStat, diffPatch string) string {
 	var metadata reviewPRMetadata
 	if err := json.Unmarshal([]byte(metadataJSON), &metadata); err != nil {
 		panic(err)
@@ -163,14 +183,23 @@ func expectedPreparedReviewContext(repoURL, metadataJSON, commentsText, diffStat
 	b.WriteString(fmt.Sprintf("- Pull request URL: %s\n", metadata.URL))
 	b.WriteString(fmt.Sprintf("- Base branch: %s\n", metadata.BaseRefName))
 	b.WriteString(fmt.Sprintf("- Head branch: %s\n", metadata.HeadRefName))
-	b.WriteString("- Existing PR discussion has already been fetched for you below.\n")
+	b.WriteString("- Existing PR discussion, submitted reviews, inline comments, and check status have already been fetched for you below.\n")
 	b.WriteString("- The git diff below was generated locally after fetching the PR head and base refs.\n")
 	b.WriteString("- Treat this prepared context as a starting point and verify important claims yourself before concluding.\n\n")
 	b.WriteString("Pull request metadata:\n```json\n")
 	b.WriteString(string(prettyMetadata))
 	b.WriteString("\n```\n\n")
-	b.WriteString("Existing pull request discussion:\n```text\n")
+	b.WriteString("Existing pull request conversation comments:\n```text\n")
 	b.WriteString(commentsText)
+	b.WriteString("\n```\n\n")
+	b.WriteString("Submitted pull request reviews:\n```json\n")
+	b.WriteString(reviewsText)
+	b.WriteString("\n```\n\n")
+	b.WriteString("Inline pull request review comments:\n```json\n")
+	b.WriteString(inlineCommentsText)
+	b.WriteString("\n```\n\n")
+	b.WriteString("Pull request check status:\n```text\n")
+	b.WriteString(checksText)
 	b.WriteString("\n```\n\n")
 	b.WriteString("Local git diff summary:\n```text\n")
 	b.WriteString(diffStat)
@@ -246,6 +275,85 @@ func TestRunHappyPathCreatesPR(t *testing.T) {
 	}
 	if res.NoChanges {
 		t.Fatal("NoChanges = true, want false")
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunAutoReviewRunsIndependentReviewAfterChecks(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.AutoReview = true
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "autoreview123456"
+	runDir := testRunDir(guid)
+	t.Cleanup(func() { _ = os.RemoveAll(runDir) })
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	reviewDir := filepath.Join(runDir, "repo-review-01")
+	reviewResultPath := filepath.Join(reviewDir, filepath.FromSlash(postPRReviewResultRelPath))
+	branch := "moltenhub-build-api"
+	prURL := "https://github.com/acme/repo/pull/42"
+	metadataJSON := `{"number":42,"title":"Build API","body":"Original task prompt: Build API","url":"https://github.com/acme/repo/pull/42","state":"OPEN","isDraft":false,"baseRefName":"main","headRefName":"moltenhub-build-api","author":{"login":"octocat"}}`
+	commentsText := "No comments."
+	reviewsText := `[]`
+	inlineCommentsText := `[]`
+	checksText := "build\tpass\t1m"
+	diffStat := " file.go | 1 +"
+	diffPatch := "diff --git a/file.go b/file.go\n+ok\n"
+
+	fake := &fakeRunner{t: t, allowUnorderedClones: true, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## moltenhub-build-api\n M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL)},
+		{cmd: cloneRepoDefaultBranchCommand(cfg.RepoURL, reviewDir)},
+		{cmd: prReviewMetadataCommand(reviewDir, "42"), res: execx.Result{Stdout: metadataJSON}},
+		{cmd: fetchRemoteBranchCommand(reviewDir, "main")},
+		{cmd: fetchPullRequestHeadCommand(reviewDir, 42)},
+		{cmd: prReviewCommentsCommand(reviewDir, "42"), res: execx.Result{Stdout: commentsText}},
+		{cmd: prReviewReviewsCommand(reviewDir, 42), res: execx.Result{Stdout: reviewsText}},
+		{cmd: prReviewInlineCommentsCommand(reviewDir, 42), res: execx.Result{Stdout: inlineCommentsText}},
+		{cmd: prReviewChecksCommand(reviewDir, "42"), res: execx.Result{Stdout: checksText}},
+		{cmd: reviewDiffStatCommand(reviewDir, remoteTrackingRef("main"), pullRequestTrackingRef(42)), res: execx.Result{Stdout: diffStat}},
+		{cmd: reviewDiffPatchCommand(reviewDir, remoteTrackingRef("main"), pullRequestTrackingRef(42)), res: execx.Result{Stdout: diffPatch}},
+		{cmd: switchDetachCommand(reviewDir, pullRequestTrackingRef(42))},
+		{cmd: codexCommand(reviewDir, "")},
+	}}
+	runner := &writingFakeRunner{
+		fakeRunner: fake,
+		writeDir:   reviewDir,
+		writePath:  reviewResultPath,
+		writeBody:  `{"status":"approved","summary":"Ready","findings":[]}`,
+	}
+
+	h := New(runner)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if res.PRURL != prURL {
+		t.Fatalf("PRURL = %q", res.PRURL)
 	}
 	if len(fake.exps) != 0 {
 		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
@@ -617,6 +725,9 @@ func TestRunBuildsReviewContextBeforeInvokingCodex(t *testing.T) {
 	branch := "moltenhub-review-the-pull-request"
 	metadataJSON := `{"number":42,"title":"Improve tests","body":"Adds stronger coverage.","url":"https://github.com/acme/repo/pull/42","state":"OPEN","isDraft":false,"baseRefName":"main","headRefName":"feature/improve-tests","author":{"login":"octocat"}}`
 	commentsText := "reviewer: Please add one more regression test."
+	reviewsText := `[{"state":"COMMENTED","body":"Looks close."}]`
+	inlineCommentsText := `[{"path":"internal/service_test.go","line":12,"body":"Cover the edge case."}]`
+	checksText := "build\tpass\t1m"
 	diffStat := " internal/service_test.go | 12 ++++++++++++\n 1 file changed, 12 insertions(+)"
 	diffPatch := "diff --git a/internal/service_test.go b/internal/service_test.go\n+func TestServiceRegression(t *testing.T) {}\n"
 
@@ -632,9 +743,12 @@ func TestRunBuildsReviewContextBeforeInvokingCodex(t *testing.T) {
 		{cmd: fetchRemoteBranchCommand(repoDir, "main")},
 		{cmd: fetchPullRequestHeadCommand(repoDir, 42)},
 		{cmd: prReviewCommentsCommand(repoDir, "42"), res: execx.Result{Stdout: commentsText}},
+		{cmd: prReviewReviewsCommand(repoDir, 42), res: execx.Result{Stdout: reviewsText}},
+		{cmd: prReviewInlineCommentsCommand(repoDir, 42), res: execx.Result{Stdout: inlineCommentsText}},
+		{cmd: prReviewChecksCommand(repoDir, "42"), res: execx.Result{Stdout: checksText}},
 		{cmd: reviewDiffStatCommand(repoDir, remoteTrackingRef("main"), pullRequestTrackingRef(42)), res: execx.Result{Stdout: diffStat}},
 		{cmd: reviewDiffPatchCommand(repoDir, remoteTrackingRef("main"), pullRequestTrackingRef(42)), res: execx.Result{Stdout: diffPatch}},
-		{cmd: codexCommand(targetDir, withAgentsPrompt(strings.TrimSpace(cfg.Prompt+"\n\n"+expectedPreparedReviewContext(repoURLFromConfig(cfg), metadataJSON, commentsText, diffStat, diffPatch)), agentsPath))},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(strings.TrimSpace(cfg.Prompt+"\n\n"+expectedPreparedReviewContext(repoURLFromConfig(cfg), metadataJSON, commentsText, reviewsText, inlineCommentsText, checksText, diffStat, diffPatch)), agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M docs/reviews/pr-42.md\n"}},
 		{cmd: addCommand(repoDir)},
 		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
@@ -677,6 +791,9 @@ func TestRunBuildsReviewContextFromHeadBranchSelector(t *testing.T) {
 	branch := "moltenhub-review-the-pull-request"
 	metadataJSON := `{"number":42,"title":"Improve tests","body":"Adds stronger coverage.","url":"https://github.com/acme/repo/pull/42","state":"OPEN","isDraft":false,"baseRefName":"main","headRefName":"feature/improve-tests","author":{"login":"octocat"}}`
 	commentsText := "reviewer: Please add one more regression test."
+	reviewsText := `[{"state":"COMMENTED","body":"Looks close."}]`
+	inlineCommentsText := `[{"path":"internal/service_test.go","line":12,"body":"Cover the edge case."}]`
+	checksText := "build\tpass\t1m"
 	diffStat := " internal/service_test.go | 12 ++++++++++++\n 1 file changed, 12 insertions(+)"
 	diffPatch := "diff --git a/internal/service_test.go b/internal/service_test.go\n+func TestServiceRegression(t *testing.T) {}\n"
 
@@ -692,9 +809,12 @@ func TestRunBuildsReviewContextFromHeadBranchSelector(t *testing.T) {
 		{cmd: fetchRemoteBranchCommand(repoDir, "main")},
 		{cmd: fetchPullRequestHeadCommand(repoDir, 42)},
 		{cmd: prReviewCommentsCommand(repoDir, "feature/improve-tests"), res: execx.Result{Stdout: commentsText}},
+		{cmd: prReviewReviewsCommand(repoDir, 42), res: execx.Result{Stdout: reviewsText}},
+		{cmd: prReviewInlineCommentsCommand(repoDir, 42), res: execx.Result{Stdout: inlineCommentsText}},
+		{cmd: prReviewChecksCommand(repoDir, "feature/improve-tests"), res: execx.Result{Stdout: checksText}},
 		{cmd: reviewDiffStatCommand(repoDir, remoteTrackingRef("main"), pullRequestTrackingRef(42)), res: execx.Result{Stdout: diffStat}},
 		{cmd: reviewDiffPatchCommand(repoDir, remoteTrackingRef("main"), pullRequestTrackingRef(42)), res: execx.Result{Stdout: diffPatch}},
-		{cmd: codexCommand(targetDir, withAgentsPrompt(strings.TrimSpace(cfg.Prompt+"\n\n"+expectedPreparedReviewContext(repoURLFromConfig(cfg), metadataJSON, commentsText, diffStat, diffPatch)), agentsPath))},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(strings.TrimSpace(cfg.Prompt+"\n\n"+expectedPreparedReviewContext(repoURLFromConfig(cfg), metadataJSON, commentsText, reviewsText, inlineCommentsText, checksText, diffStat, diffPatch)), agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M docs/reviews/pr-42.md\n"}},
 		{cmd: addCommand(repoDir)},
 		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
@@ -717,6 +837,54 @@ func TestRunBuildsReviewContextFromHeadBranchSelector(t *testing.T) {
 	}
 	if len(fake.exps) != 0 {
 		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestReadPostPRReviewDecisionNormalizesResult(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "review.json")
+	if err := os.WriteFile(path, []byte(`{
+		"status": "changes_requested",
+		"summary": "Needs another pass.",
+		"findings": [{
+			"severity": "high",
+			"file": "internal/service.go",
+			"line": 27,
+			"title": "Missing authorization check",
+			"detail": "The new endpoint accepts unauthenticated calls.",
+			"recommendation": "Require the existing auth helper before serving the request."
+		}]
+	}`), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	decision, err := readPostPRReviewDecision(path)
+	if err != nil {
+		t.Fatalf("readPostPRReviewDecision() error = %v", err)
+	}
+	if decision.Approved {
+		t.Fatal("Approved = true, want false")
+	}
+	for _, want := range []string{
+		"Needs another pass.",
+		"high - internal/service.go:27 - Missing authorization check",
+		"Recommendation: Require the existing auth helper before serving the request.",
+	} {
+		if !strings.Contains(decision.Feedback, want) {
+			t.Fatalf("Feedback missing %q:\n%s", want, decision.Feedback)
+		}
+	}
+
+	if err := os.WriteFile(path, []byte(`{"status":"approved","summary":"Ready","findings":[]}`), 0o644); err != nil {
+		t.Fatalf("WriteFile() approved error = %v", err)
+	}
+	approved, err := readPostPRReviewDecision(path)
+	if err != nil {
+		t.Fatalf("readPostPRReviewDecision(approved) error = %v", err)
+	}
+	if !approved.Approved {
+		t.Fatal("Approved = false, want true")
 	}
 }
 
@@ -3537,21 +3705,41 @@ func TestCommitCommandAddsMoltenbotCoAuthorTrailer(t *testing.T) {
 
 	repoDir := "/tmp/run/repo"
 	commit := commitCommand(repoDir, "feat: automate api")
-	want := []string{"commit", "-m", "feat: automate api", "-m", wantTrailer}
+	want := []string{
+		"-c",
+		"user.name=Molten Bot 000",
+		"-c",
+		"user.email=260473928+moltenbot000@users.noreply.github.com",
+		"commit",
+		"-m",
+		"feat: automate api",
+		"-m",
+		wantTrailer,
+	}
 	if commit.Name != "git" || commit.Dir != repoDir || !reflect.DeepEqual(commit.Args, want) {
 		t.Fatalf("commit command unexpected: %+v", commit)
 	}
 
 	remediationMessage := remediationCommitMessage("fix: tests", 2)
 	remediation := commitCommand(repoDir, remediationMessage)
-	wantRemediation := []string{"commit", "-m", "fix: tests (ci remediation 2)", "-m", wantTrailer}
+	wantRemediation := []string{
+		"-c",
+		"user.name=Molten Bot 000",
+		"-c",
+		"user.email=260473928+moltenbot000@users.noreply.github.com",
+		"commit",
+		"-m",
+		"fix: tests (ci remediation 2)",
+		"-m",
+		wantTrailer,
+	}
 	if remediation.Name != "git" || remediation.Dir != repoDir || !reflect.DeepEqual(remediation.Args, wantRemediation) {
 		t.Fatalf("remediation commit command unexpected: %+v", remediation)
 	}
 
-	messageWithTrailer := "feat: automate api\n\n" + wantTrailer
+	messageWithTrailer := "feat: automate api\n\nCo-authored-by: moltenhub-bot <moltenhub-bot@users.noreply.github.com>\n" + wantTrailer
 	deduped := commitCommand(repoDir, messageWithTrailer)
-	wantDeduped := []string{"commit", "-m", messageWithTrailer}
+	wantDeduped := want
 	if deduped.Name != "git" || deduped.Dir != repoDir || !reflect.DeepEqual(deduped.Args, wantDeduped) {
 		t.Fatalf("deduped commit command unexpected: %+v", deduped)
 	}

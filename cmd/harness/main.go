@@ -811,6 +811,7 @@ func runHub(args []string) int {
 			if err != nil {
 				return "", fmt.Errorf("invalid run config: %w", err)
 			}
+			runCfg = enablePromptAutoReview(runCfg)
 			recordLibraryUsage(runCfg)
 			return enqueueLocalRun(reqCtx, runCfg, true, localSubmitSource, false)
 		}
@@ -2138,6 +2139,13 @@ func marshalRunConfigJSON(cfg config.Config) ([]byte, bool) {
 		return nil, false
 	}
 	return payload, true
+}
+
+func enablePromptAutoReview(cfg config.Config) config.Config {
+	if cfg.Review == nil && strings.TrimSpace(cfg.LibraryTaskName) == "" && strings.TrimSpace(cfg.Prompt) != "" {
+		cfg.AutoReview = true
+	}
+	return cfg
 }
 
 func taskStartSourceForSubmission(source string, runCfg config.Config) string {
