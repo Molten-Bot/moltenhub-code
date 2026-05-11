@@ -1778,6 +1778,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `function refreshVisibleChatPromptStatuses()`) ||
 		!strings.Contains(markup, `function chatPromptMessageTone(message)`) ||
 		!strings.Contains(markup, `function chatPromptCompletion(message)`) ||
+		!strings.Contains(markup, `if (COMPLETED_STATUSES.has(status)) {`) ||
+		!strings.Contains(markup, `icon.appendChild(createTaskStatusIcon(status));`) ||
 		!strings.Contains(markup, `if (!href) {`) ||
 		!strings.Contains(markup, `body.appendChild(link);`) ||
 		!strings.Contains(markup, `body.appendChild(document.createTextNode(" Your task is complete"));`) ||
