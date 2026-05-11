@@ -84,6 +84,27 @@ func TestRunInitializesDefaultSessionRunnerWithoutCallingItOnConfigError(t *test
 	}
 }
 
+func TestRunInitializesDefaultSessionRunnerForValidConfig(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := writeMuxConfig(t, dir, "task.json", "prompt")
+	var logs []string
+	m := Multiplexer{
+		Logf: func(format string, args ...any) {
+			logs = append(logs, format)
+		},
+	}
+
+	res := m.Run(context.Background(), []string{path})
+	if len(res.Sessions) != 1 || res.Sessions[0].State != SessionError {
+		t.Fatalf("Run(default runner) = %+v, want harness error session", res.Sessions)
+	}
+	if len(logs) == 0 {
+		t.Fatal("logs = empty, want default runner log forwarding exercised")
+	}
+}
+
 func TestRunOneIgnoresLogLinesWithoutStageStatus(t *testing.T) {
 	t.Parallel()
 
