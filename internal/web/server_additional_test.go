@@ -781,6 +781,29 @@ func TestEmbeddedPromptActionStylesCoverPasteWidthAndStatusFade(t *testing.T) {
 	}
 }
 
+func TestEmbeddedTaskNoChangesUsesSuccessTone(t *testing.T) {
+	t.Parallel()
+
+	data, err := fs.ReadFile(staticFiles, "static/style.css")
+	if err != nil {
+		t.Fatalf("read embedded style.css: %v", err)
+	}
+	css := string(data)
+
+	for _, want := range []string{
+		".badge.no_changes {\n  background: var(--good);",
+		".task-result.no_changes {\n  color: var(--surface-success);",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("embedded style.css missing %q", want)
+		}
+	}
+	if strings.Contains(css, ".badge.no_changes,\n.badge.duplicate") ||
+		strings.Contains(css, ".task-result.no_changes,\n.task-result.duplicate") {
+		t.Fatalf("embedded style.css should not group no-change tasks with warning/duplicate styles")
+	}
+}
+
 func TestEmbeddedChatPromptLogStylesHideEmptyAndScrollHistory(t *testing.T) {
 	t.Parallel()
 
