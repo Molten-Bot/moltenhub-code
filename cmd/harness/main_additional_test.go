@@ -1033,7 +1033,7 @@ func TestShouldEscalateNoChangesFollowUpRequiresFollowUpSourceAndMissingPR(t *te
 	}
 }
 
-func TestUnexpectedNoChangesFollowUpRunConfigPreservesTaskTargetingAndAddsContext(t *testing.T) {
+func TestUnexpectedNoChangesFollowUpRunConfigTargetsMoltenHubAndAddsContext(t *testing.T) {
 	t.Parallel()
 
 	logRoot := filepath.Join(t.TempDir(), ".log")
@@ -1059,13 +1059,13 @@ func TestUnexpectedNoChangesFollowUpRunConfigPreservesTaskTargetingAndAddsContex
 	}
 
 	cfg := unexpectedNoChangesFollowUpRunConfig("local-1712345678-000001", result, runCfg, logRoot)
-	if got, want := cfg.BaseBranch, "release/2026.04-hotfix"; got != want {
+	if got, want := cfg.BaseBranch, ""; got != want {
 		t.Fatalf("BaseBranch = %q, want %q", got, want)
 	}
-	if got, want := cfg.TargetSubdir, "cmd/harness"; got != want {
+	if got, want := cfg.TargetSubdir, "."; got != want {
 		t.Fatalf("TargetSubdir = %q, want %q", got, want)
 	}
-	if got, want := cfg.Repos, []string{"git@github.com:acme/repo.git"}; !reflect.DeepEqual(got, want) {
+	if got, want := cfg.Repos, []string{config.DefaultRepositoryURL}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Repos = %v, want %v", got, want)
 	}
 
@@ -1073,6 +1073,8 @@ func TestUnexpectedNoChangesFollowUpRunConfigPreservesTaskTargetingAndAddsContex
 
 	for _, want := range []string{
 		"Review the previous local task logs first.",
+		"fix the underlying MoltenHub Code application issue in this repository",
+		"Treat the original task prompt as failure context only",
 		"Only return a no-op if you can cite concrete repository evidence",
 		expectedLogDir,
 		filepath.Join(expectedLogDir, logFileName),
@@ -1080,6 +1082,7 @@ func TestUnexpectedNoChangesFollowUpRunConfigPreservesTaskTargetingAndAddsContex
 		"- request_id=local-1712345678-000001",
 		"- workspace_dir=/tmp/run-123",
 		"- branch=release/2026.04-hotfix",
+		"- repos=git@github.com:acme/repo.git",
 		"- target_subdir=cmd/harness",
 		"Original task prompt:",
 		"fix the broken local no changes task handling",
@@ -1094,7 +1097,7 @@ func TestUnexpectedNoChangesFollowUpRunConfigPreservesTaskTargetingAndAddsContex
 	}
 }
 
-func TestUnexpectedNoChangesFollowUpRunConfigKeepsConfiguredMainBranch(t *testing.T) {
+func TestUnexpectedNoChangesFollowUpRunConfigForcesRemoteDefaultBranch(t *testing.T) {
 	t.Parallel()
 
 	cfg := unexpectedNoChangesFollowUpRunConfig(
@@ -1110,12 +1113,12 @@ func TestUnexpectedNoChangesFollowUpRunConfigKeepsConfiguredMainBranch(t *testin
 		t.TempDir(),
 	)
 
-	if got, want := cfg.BaseBranch, "main"; got != want {
+	if got, want := cfg.BaseBranch, ""; got != want {
 		t.Fatalf("BaseBranch = %q, want %q", got, want)
 	}
 }
 
-func TestUnexpectedNoChangesFollowUpRunConfigRetainsOriginalRepoList(t *testing.T) {
+func TestUnexpectedNoChangesFollowUpRunConfigUsesMoltenHubRepoAndKeepsOriginalReposInPrompt(t *testing.T) {
 	t.Parallel()
 
 	runCfg := config.Config{
@@ -1132,8 +1135,17 @@ func TestUnexpectedNoChangesFollowUpRunConfigRetainsOriginalRepoList(t *testing.
 		t.TempDir(),
 	)
 
-	if got, want := cfg.Repos, runCfg.RepoList(); !reflect.DeepEqual(got, want) {
+	if got, want := cfg.Repos, []string{config.DefaultRepositoryURL}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Repos = %v, want %v", got, want)
+	}
+	for _, want := range []string{
+		"- repos=",
+		"git@github.com:acme/repo-a.git",
+		"git@github.com:acme/repo-b.git",
+	} {
+		if !strings.Contains(cfg.Prompt, want) {
+			t.Fatalf("Prompt missing original repo context %q: %q", want, cfg.Prompt)
+		}
 	}
 }
 
@@ -1198,10 +1210,22 @@ func TestEscalatedNoChangesFollowUpRunConfigAddsStricterPrompt(t *testing.T) {
 	}
 
 	cfg := escalatedNoChangesFollowUpRunConfig("local-1712345678-000001", app.Result{NoChanges: true}, runCfg, logRoot)
+	if got, want := cfg.BaseBranch, ""; got != want {
+		t.Fatalf("BaseBranch = %q, want %q", got, want)
+	}
+	if got, want := cfg.TargetSubdir, "."; got != want {
+		t.Fatalf("TargetSubdir = %q, want %q", got, want)
+	}
+	if got, want := cfg.Repos, []string{config.DefaultRepositoryURL}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Repos = %v, want %v", got, want)
+	}
 	for _, want := range []string{
 		"The original task and the no-changes follow-up both completed without file changes or a pull request.",
-		"do not return another no-op unless you can cite exact file paths",
+		"fix the underlying MoltenHub Code application issue in this repository",
+		"do not implement that requested product change here unless it is required to fix MoltenHub Code failure handling",
+		"Do not return another no-op unless you can cite exact file paths",
 		"Observed repeated no-change context:",
+		"- target_subdir=internal/web",
 		"Original task prompt:",
 		"change the website to pink",
 	} {

@@ -174,7 +174,7 @@ func TestDedupeKeyForRunConfigDiffersByTargetSubdir(t *testing.T) {
 	}
 }
 
-func TestDedupeKeyForSubmissionCanonicalizesAutomaticFollowUpPrompts(t *testing.T) {
+func TestDedupeKeyForSubmissionCanonicalizesFailureFollowUpPrompts(t *testing.T) {
 	t.Parallel()
 
 	cfgA := config.Config{
@@ -191,7 +191,28 @@ func TestDedupeKeyForSubmissionCanonicalizesAutomaticFollowUpPrompts(t *testing.
 	keyA := dedupeKeyForSubmission(cfgA, failureFollowUpSource)
 	keyB := dedupeKeyForSubmission(cfgB, failureFollowUpSource)
 	if keyA != keyB {
-		t.Fatalf("automatic follow-up keys should match despite prompt context drift\nA: %q\nB: %q", keyA, keyB)
+		t.Fatalf("failure follow-up keys should match despite prompt context drift\nA: %q\nB: %q", keyA, keyB)
+	}
+}
+
+func TestDedupeKeyForSubmissionKeepsNoChangesFollowUpPromptContext(t *testing.T) {
+	t.Parallel()
+
+	cfgA := config.Config{
+		Repos:      []string{config.DefaultRepositoryURL},
+		BaseBranch: "",
+		Prompt:     "Review the previous local task logs first.\n- request_id=local-1\n- repos=git@github.com:acme/repo-a.git",
+	}
+	cfgB := config.Config{
+		Repos:      []string{config.DefaultRepositoryURL},
+		BaseBranch: "",
+		Prompt:     "Review the previous local task logs first.\n- request_id=local-2\n- repos=git@github.com:acme/repo-b.git",
+	}
+
+	keyA := dedupeKeyForSubmission(cfgA, noChangesFollowUpSource)
+	keyB := dedupeKeyForSubmission(cfgB, noChangesFollowUpSource)
+	if keyA == keyB {
+		t.Fatalf("no-changes follow-up keys should differ by prompt context\nA: %q\nB: %q", keyA, keyB)
 	}
 }
 

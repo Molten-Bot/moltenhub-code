@@ -183,12 +183,15 @@ func dedupeKeyForRunConfig(cfg config.Config) string {
 }
 
 func dedupeKeyForSubmission(cfg config.Config, source string) string {
+	source = strings.TrimSpace(strings.ToLower(source))
 	if !isAutomaticFollowUpSource(source) {
 		return dedupeKeyForRunConfig(cfg)
 	}
 
 	normalized := cfg
-	normalized.Prompt = strings.TrimSpace(strings.ToLower(source))
+	if source == failureFollowUpSource {
+		normalized.Prompt = source
+	}
 	return dedupeKeyForRunConfig(normalized)
 }
 
