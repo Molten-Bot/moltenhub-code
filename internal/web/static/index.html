@@ -6843,15 +6843,15 @@
       const visibleKeys = pageRepos
         .map((repo) => chatRepoKey(chatRepoRunValue(repo)))
         .filter(Boolean);
+      if (selectedTab?.key) {
+        state.chatOpenRepoKey = selectedTab.key;
+        return;
+      }
       if (restoreFocusKey && visibleKeys.includes(restoreFocusKey)) {
         state.chatOpenRepoKey = restoreFocusKey;
         return;
       }
       if (state.chatOpenRepoKey && visibleKeys.includes(state.chatOpenRepoKey)) {
-        return;
-      }
-      if (selectedTab?.key && visibleKeys.includes(selectedTab.key)) {
-        state.chatOpenRepoKey = selectedTab.key;
         return;
       }
       state.chatOpenRepoKey = visibleKeys[0] || "";

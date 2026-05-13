@@ -1751,6 +1751,17 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `displayRepos = [openRepo];`) {
 		t.Fatalf("expected index html chat to render closable prompted repository tabs, icon-only repos tab, and isolate active repository chat")
 	}
+	syncChatOpenRepoKeyIndex := strings.Index(markup, `function syncChatOpenRepoKey(pageRepos, selectedTab, restoreFocusKey)`)
+	selectedChatTabIndex := -1
+	focusedChatRepoIndex := -1
+	if syncChatOpenRepoKeyIndex >= 0 {
+		syncChatOpenRepoKeyMarkup := markup[syncChatOpenRepoKeyIndex:]
+		selectedChatTabIndex = strings.Index(syncChatOpenRepoKeyMarkup, `if (selectedTab?.key) {`)
+		focusedChatRepoIndex = strings.Index(syncChatOpenRepoKeyMarkup, `if (restoreFocusKey && visibleKeys.includes(restoreFocusKey)) {`)
+	}
+	if syncChatOpenRepoKeyIndex < 0 || selectedChatTabIndex < 0 || focusedChatRepoIndex < 0 || selectedChatTabIndex > focusedChatRepoIndex {
+		t.Fatalf("expected selected chat repository tab to control the open repo before restoring textarea focus")
+	}
 	if !strings.Contains(markup, `if (viewingRepoChat) {
         chatStatus.textContent = "";`) {
 		t.Fatalf("expected active repository chat to clear repository count status")
