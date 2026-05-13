@@ -2190,11 +2190,36 @@ body[data-app-display="studio"][data-prompt-mode="library"] .library-task-list {
   border: 0;
   background: transparent;
   color: inherit;
-  display: block;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
   width: 100%;
   text-align: left;
   min-width: 0;
   padding: 0;
+}
+
+.library-task-option-icon {
+  align-items: center;
+  color: var(--accent);
+  display: inline-flex;
+  height: 22px;
+  justify-content: center;
+  width: 22px;
+}
+
+.library-task-option-icon svg,
+.library-task-option-icon .lucide,
+.library-task-option-icon [data-lucide] {
+  display: block;
+  height: 17px;
+  width: 17px;
+}
+
+.library-task-option-text {
+  display: block;
+  min-width: 0;
 }
 
 .library-task-option-title {

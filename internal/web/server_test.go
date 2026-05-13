@@ -141,8 +141,8 @@ func TestHandlerLibraryEndpointReturnsTasks(t *testing.T) {
 	srv := NewServer("", NewBroker())
 	srv.LoadLibraryTasks = func() ([]library.TaskSummary, error) {
 		return []library.TaskSummary{
-			{Name: "security-review", DisplayName: "Security Review", Prompt: "Review the repository."},
-			{Name: "unit-test-coverage", DisplayName: "100% Unit Test Coverage", Prompt: "Raise coverage."},
+			{Name: "security-review", DisplayName: "Security Review", Icon: "shield-check", Prompt: "Review the repository."},
+			{Name: "unit-test-coverage", DisplayName: "100% Unit Test Coverage", Icon: "badge-check", Prompt: "Raise coverage."},
 		}, nil
 	}
 
@@ -169,6 +169,9 @@ func TestHandlerLibraryEndpointReturnsTasks(t *testing.T) {
 	}
 	if got, want := body.Tasks[0].Prompt, "Review the repository."; got != want {
 		t.Fatalf("tasks[0].prompt = %q, want %q", got, want)
+	}
+	if got, want := body.Tasks[0].Icon, "shield-check"; got != want {
+		t.Fatalf("tasks[0].icon = %q, want %q", got, want)
 	}
 }
 

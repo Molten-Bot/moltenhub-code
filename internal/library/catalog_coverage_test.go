@@ -102,6 +102,7 @@ func TestLoadTaskDefinitionsAndDecodeTaskDefinitionValidationPaths(t *testing.T)
 
 	task, err := decodeTaskDefinition("tasks.json", "task-name", []byte(`{
 		"displayName":" Display ",
+		"icon":" shield-check ",
 		"description":" Desc ",
 		"targetSubdir":"  ",
 		"prompt":" Prompt ",
@@ -120,6 +121,9 @@ func TestLoadTaskDefinitionsAndDecodeTaskDefinitionValidationPaths(t *testing.T)
 	}
 	if got, want := task.TargetSubdir, "."; got != want {
 		t.Fatalf("TargetSubdir = %q, want %q", got, want)
+	}
+	if got, want := task.Icon, "shield-check"; got != want {
+		t.Fatalf("Icon = %q, want %q", got, want)
 	}
 	if got, want := task.GitHubHandle, "@octocat"; got != want {
 		t.Fatalf("GitHubHandle = %q, want %q", got, want)

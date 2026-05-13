@@ -23,7 +23,7 @@ func TestDefaultLibraryJSONFilesHaveCanonicalShape(t *testing.T) {
 		t.Fatalf("no library json files found in %q", dir)
 	}
 
-	wantFields := []string{"commitMessage", "description", "displayName", "prTitle", "prompt", "targetSubdir"}
+	wantFields := []string{"commitMessage", "description", "displayName", "icon", "prTitle", "prompt", "targetSubdir"}
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -96,6 +96,7 @@ func TestLoadCatalogReadsJSONTasks(t *testing.T) {
 	data := `{
   "security-review": {
     "displayName": "Security Review",
+    "icon": "shield-check",
     "description": "Audit security boundaries.",
     "targetSubdir": ".",
     "prompt": "Review the repository."
@@ -118,6 +119,9 @@ func TestLoadCatalogReadsJSONTasks(t *testing.T) {
 	if got, want := catalog.Tasks[0].DisplayName, "Security Review"; got != want {
 		t.Fatalf("DisplayName = %q, want %q", got, want)
 	}
+	if got, want := catalog.Tasks[0].Icon, "shield-check"; got != want {
+		t.Fatalf("Icon = %q, want %q", got, want)
+	}
 	if got, want := catalog.Tasks[0].TargetSubdir, "."; got != want {
 		t.Fatalf("TargetSubdir = %q, want %q", got, want)
 	}
@@ -133,6 +137,9 @@ func TestLoadCatalogReadsJSONTasks(t *testing.T) {
 	}
 	if got, want := summaries[0].Prompt, "Review the repository."; got != want {
 		t.Fatalf("Summaries()[0].Prompt = %q, want %q", got, want)
+	}
+	if got, want := summaries[0].Icon, "shield-check"; got != want {
+		t.Fatalf("Summaries()[0].Icon = %q, want %q", got, want)
 	}
 }
 

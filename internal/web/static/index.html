@@ -5430,6 +5430,11 @@
       return String(task.description || "").trim();
     }
 
+    function libraryTaskIcon(task) {
+      if (!task || typeof task !== "object") return "book-open";
+      return String(task.icon || "").trim() || "book-open";
+    }
+
     function closeLibraryPromptModal() {
       if (state.libraryPromptModalOpen) {
         trackAnalyticsEvent("library_prompt_modal_closed", { prompt_mode: state.promptMode });
@@ -5470,6 +5475,7 @@
         entries.push({
           name,
           displayName: libraryTaskDisplayName(task),
+          icon: libraryTaskIcon(task),
           description: libraryTaskDescription(task),
           prompt: String(task.prompt || "").trim(),
         });
@@ -5505,15 +5511,28 @@
         button.className = "library-task-option-toggle";
         button.setAttribute("aria-pressed", String(entry.name === selected));
 
+        const iconWrap = document.createElement("span");
+        iconWrap.className = "library-task-option-icon";
+        iconWrap.setAttribute("aria-hidden", "true");
+        const icon = document.createElement("i");
+        icon.setAttribute("data-lucide", entry.icon);
+        icon.setAttribute("aria-hidden", "true");
+        iconWrap.appendChild(icon);
+        button.appendChild(iconWrap);
+
+        const text = document.createElement("span");
+        text.className = "library-task-option-text";
+
         const title = document.createElement("div");
         title.className = "library-task-option-title";
         title.textContent = entry.displayName;
-        button.appendChild(title);
+        text.appendChild(title);
 
         const subtitle = document.createElement("div");
         subtitle.className = "library-task-option-subtitle";
         subtitle.textContent = entry.description || "No subtitle available.";
-        button.appendChild(subtitle);
+        text.appendChild(subtitle);
+        button.appendChild(text);
 
         button.addEventListener("click", () => {
           const changed = state.selectedLibraryTask !== entry.name;

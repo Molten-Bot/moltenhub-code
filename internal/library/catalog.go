@@ -25,6 +25,7 @@ const (
 type TaskDefinition struct {
 	Name          string   `json:"name"`
 	DisplayName   string   `json:"displayName"`
+	Icon          string   `json:"icon"`
 	Description   string   `json:"description"`
 	TargetSubdir  string   `json:"targetSubdir"`
 	Prompt        string   `json:"prompt"`
@@ -62,6 +63,7 @@ func (t *TaskDefinition) UnmarshalJSON(data []byte) error {
 type TaskSummary struct {
 	Name        string `json:"name"`
 	DisplayName string `json:"displayName,omitempty"`
+	Icon        string `json:"icon,omitempty"`
 	Description string `json:"description,omitempty"`
 	Prompt      string `json:"prompt,omitempty"`
 }
@@ -75,6 +77,7 @@ type Catalog struct {
 var taskDefinitionFieldNames = map[string]struct{}{
 	"name":          {},
 	"displayName":   {},
+	"icon":          {},
 	"description":   {},
 	"targetSubdir":  {},
 	"prompt":        {},
@@ -139,6 +142,7 @@ func (c Catalog) Summaries() []TaskSummary {
 		out = append(out, TaskSummary{
 			Name:        task.Name,
 			DisplayName: task.DisplayName,
+			Icon:        task.Icon,
 			Description: task.Description,
 			Prompt:      task.Prompt,
 		})
@@ -274,6 +278,7 @@ func decodeTaskDefinition(path, key string, data []byte) (TaskDefinition, error)
 
 	task.Name = strings.TrimSpace(task.Name)
 	task.DisplayName = strings.TrimSpace(task.DisplayName)
+	task.Icon = strings.TrimSpace(task.Icon)
 	task.Description = strings.TrimSpace(task.Description)
 	task.TargetSubdir = strings.TrimSpace(task.TargetSubdir)
 	task.Prompt = strings.TrimSpace(task.Prompt)
