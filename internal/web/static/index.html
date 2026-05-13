@@ -1003,13 +1003,13 @@
     }
 
     function taskStatusIconKey(status) {
-      if (status === "completed") {
+      if (status === "completed" || status === "no_changes") {
         return "completed";
       }
       if (status === "stopped") {
         return "stopped";
       }
-      if (status === "no_changes" || status === "duplicate" || status === "paused") {
+      if (status === "duplicate" || status === "paused") {
         return "warning";
       }
       if (status === "error" || status === "invalid") {

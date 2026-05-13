@@ -2757,7 +2757,10 @@ body[data-app-display="studio"][data-prompt-mode="library"] .library-task-list {
   background: var(--good);
 }
 
-.badge.no_changes,
+.badge.no_changes {
+  background: var(--good);
+}
+
 .badge.duplicate,
 .badge.paused {
   background: var(--warn);
@@ -4281,10 +4284,14 @@ html.pink .task-progress-step.current .task-progress-step-icon.is-agent-logo {
   background: rgba(43, 182, 115, 0.1);
 }
 
-.task-result.no_changes,
 .task-result.duplicate {
   color: var(--surface-warning);
   background: rgba(245, 158, 11, 0.1);
+}
+
+.task-result.no_changes {
+  color: var(--surface-success);
+  background: rgba(43, 182, 115, 0.1);
 }
 
 .task-result.stopped {

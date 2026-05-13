@@ -732,6 +732,10 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `if (status === "stopped") {`) || !strings.Contains(markup, `if (status === "error" || status === "invalid") {`) {
 		t.Fatalf("expected index html to separate stopped status icon handling from error/invalid handling")
 	}
+	if !strings.Contains(markup, `if (status === "completed" || status === "no_changes") {`) ||
+		strings.Contains(markup, `status === "no_changes" || status === "duplicate" || status === "paused"`) {
+		t.Fatalf("expected index html to render no-change completions with the completed status icon instead of warning")
+	}
 	if strings.Contains(markup, `status === "error" || status === "invalid" || status === "duplicate" || status === "stopped"`) || !strings.Contains(markup, `status === "error" || status === "invalid" || status === "duplicate"`) {
 		t.Fatalf("expected index html to avoid playing the error sound for user-stopped tasks")
 	}
