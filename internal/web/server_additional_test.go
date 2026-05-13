@@ -781,6 +781,40 @@ func TestEmbeddedPromptActionStylesCoverPasteWidthAndStatusFade(t *testing.T) {
 	}
 }
 
+func TestDashboardSourceLegendStylesLiveInGlobalStylesheet(t *testing.T) {
+	t.Parallel()
+
+	markup, err := staticFiles.ReadFile("static/index.html")
+	if err != nil {
+		t.Fatalf("read index.html: %v", err)
+	}
+	html := string(markup)
+	if strings.Contains(html, "item.style.setProperty(\"--dashboard-source-legend-color\"") {
+		t.Fatalf("expected dashboard source legend color styling to live in static/style.css")
+	}
+	if !strings.Contains(html, "dashboard-source-legend-item-${dashboardSourceKey(label)}") {
+		t.Fatalf("expected dashboard source legend to choose source-specific global classes")
+	}
+
+	data, err := fs.ReadFile(staticFiles, "static/style.css")
+	if err != nil {
+		t.Fatalf("read embedded style.css: %v", err)
+	}
+	css := string(data)
+	for _, want := range []string{
+		".dashboard-source-legend-icon {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 14px;\n  height: 14px;\n  color: var(--dashboard-chart-other);\n}",
+		".dashboard-source-legend-item-chat .dashboard-source-legend-icon {\n  color: var(--dashboard-chart-chat);\n}",
+		".dashboard-source-legend-item-hub .dashboard-source-legend-icon {\n  color: var(--dashboard-chart-hub);\n}",
+		".dashboard-source-legend-item-json .dashboard-source-legend-icon {\n  color: var(--dashboard-chart-json);\n}",
+		".dashboard-source-legend-item-library .dashboard-source-legend-icon {\n  color: var(--dashboard-chart-library);\n}",
+		".dashboard-source-legend-item-prompt .dashboard-source-legend-icon {\n  color: var(--dashboard-chart-prompt);\n}",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("embedded style.css missing %q", want)
+		}
+	}
+}
+
 func TestEmbeddedTaskNoChangesUsesSuccessTone(t *testing.T) {
 	t.Parallel()
 

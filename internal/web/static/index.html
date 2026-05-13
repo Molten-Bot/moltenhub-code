@@ -4768,8 +4768,13 @@
     }
 
     function dashboardSourceColor(label) {
-      const key = DASHBOARD_SOURCE_COLOR_VARS[String(label || "").trim().toLowerCase()] ? String(label || "").trim().toLowerCase() : "other";
+      const key = dashboardSourceKey(label);
       return dashboardCSSValue(DASHBOARD_SOURCE_COLOR_VARS[key], DASHBOARD_SOURCE_COLOR_FALLBACKS[key]);
+    }
+
+    function dashboardSourceKey(label) {
+      const key = String(label || "").trim().toLowerCase();
+      return DASHBOARD_SOURCE_COLOR_VARS[key] ? key : "other";
     }
 
     function dashboardSourceIconName(label) {
@@ -4794,8 +4799,7 @@
       const entries = labels.length > 0 ? labels : ["No prompts"];
       dashboardSourceLegend.replaceChildren(...entries.map((label) => {
         const item = document.createElement("span");
-        item.className = "dashboard-source-legend-item";
-        item.style.setProperty("--dashboard-source-legend-color", dashboardSourceColor(label));
+        item.className = `dashboard-source-legend-item dashboard-source-legend-item-${dashboardSourceKey(label)}`;
 
         const iconWrap = document.createElement("span");
         iconWrap.className = "dashboard-source-legend-icon";

@@ -3911,7 +3911,27 @@ body[data-app-display="studio"][data-prompt-mode="library"] .library-task-list {
   justify-content: center;
   width: 14px;
   height: 14px;
-  color: var(--dashboard-source-legend-color);
+  color: var(--dashboard-chart-other);
+}
+
+.dashboard-source-legend-item-chat .dashboard-source-legend-icon {
+  color: var(--dashboard-chart-chat);
+}
+
+.dashboard-source-legend-item-hub .dashboard-source-legend-icon {
+  color: var(--dashboard-chart-hub);
+}
+
+.dashboard-source-legend-item-json .dashboard-source-legend-icon {
+  color: var(--dashboard-chart-json);
+}
+
+.dashboard-source-legend-item-library .dashboard-source-legend-icon {
+  color: var(--dashboard-chart-library);
+}
+
+.dashboard-source-legend-item-prompt .dashboard-source-legend-icon {
+  color: var(--dashboard-chart-prompt);
 }
 
 .dashboard-source-legend-icon svg {
