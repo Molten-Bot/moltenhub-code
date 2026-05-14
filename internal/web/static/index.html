@@ -6616,6 +6616,51 @@
       };
     }
 
+    function chatPromptCompletionTime(message) {
+      const requestID = String(message?.requestID || "").trim();
+      const task = chatTaskByRequestID(requestID);
+      const completedAt = parseTaskTimestamp(task?.history_completed_at || task?.updated_at || task?.updatedAt);
+      if (completedAt > 0) return completedAt;
+      return parseTaskTimestamp(message?.createdAt);
+    }
+
+    function chatPromptLogEvents(messages) {
+      return (messages || [])
+        .flatMap((message, index) => {
+          const requestID = String(message?.requestID || "").trim();
+          const events = [{
+            type: "user",
+            message,
+            requestID,
+            index,
+            order: 0,
+            time: parseTaskTimestamp(message?.createdAt),
+          }];
+          const completion = chatPromptCompletion(message);
+          if (completion) {
+            events.push({
+              type: "assistant",
+              message,
+              completion,
+              requestID,
+              index,
+              order: 1,
+              time: chatPromptCompletionTime(message),
+            });
+          }
+          return events;
+        })
+        .sort((a, b) => {
+          const timeDiff = a.time - b.time;
+          if (timeDiff !== 0) return timeDiff;
+          const requestDiff = a.requestID.localeCompare(b.requestID);
+          if (requestDiff !== 0) return requestDiff;
+          const orderDiff = a.order - b.order;
+          if (orderDiff !== 0) return orderDiff;
+          return a.index - b.index;
+        });
+    }
+
     function updateChatPromptCompletionBody(body, completion) {
       if (!body || !completion) return;
       body.replaceChildren();
@@ -6644,43 +6689,18 @@
       body.appendChild(document.createTextNode(" Your task is complete"));
     }
 
-    function syncChatPromptCompletionBubble(userBubble, message) {
-      if (!(userBubble instanceof HTMLElement)) return;
-      const completion = chatPromptCompletion(message);
-      const next = userBubble.nextElementSibling;
-      const existing = next instanceof HTMLElement &&
-        next.classList.contains("chat-repo-message-assistant") &&
-        next.dataset.requestId === String(message?.requestID || "").trim()
-        ? next
-        : null;
-
-      if (!completion) {
-        existing?.remove();
-        return;
-      }
-
-      const logNode = userBubble.closest(".chat-repo-log");
-      const stickToBottom = logNode &&
-        logNode.scrollTop + logNode.clientHeight >= logNode.scrollHeight - 24;
-      const bubble = existing || document.createElement("article");
+    function renderChatPromptCompletionBubble(completion) {
+      const bubble = document.createElement("article");
       bubble.className = "chat-repo-message chat-repo-message-assistant";
       bubble.dataset.tone = "success";
       bubble.dataset.requestId = completion.requestID;
 
-      let body = bubble.querySelector(".chat-repo-message-body");
-      if (!(body instanceof HTMLElement)) {
-        body = document.createElement("p");
-        body.className = "chat-repo-message-body";
-        bubble.appendChild(body);
-      }
+      const body = document.createElement("p");
+      body.className = "chat-repo-message-body";
+      bubble.appendChild(body);
       updateChatPromptCompletionBody(body, completion);
 
-      if (!existing) {
-        userBubble.after(bubble);
-      }
-      if (stickToBottom) {
-        logNode.scrollTop = logNode.scrollHeight;
-      }
+      return bubble;
     }
 
     function renderChatPromptMessageCopyButton(value, requestID) {
@@ -6788,21 +6808,11 @@
     }
 
     function refreshVisibleChatPromptStatuses() {
-      document.querySelectorAll(".chat-repo-message-meta[data-request-id]").forEach((meta) => {
-        const message = {
-          requestID: meta.dataset.requestId,
-          createdAt: meta.dataset.createdAt,
-          imageCount: Number.parseInt(meta.dataset.imageCount || "0", 10) || 0,
-          statusText: meta.dataset.statusText,
-          statusTitle: meta.dataset.statusTitle,
-          source: meta.dataset.source,
-          sourceLabel: meta.dataset.sourceLabel,
-        };
-        renderChatPromptMessageMeta(meta, message);
-        const bubble = meta.closest(".chat-repo-message");
-        if (bubble) {
-          bubble.dataset.tone = chatPromptMessageTone(message);
-          syncChatPromptCompletionBubble(bubble, message);
+      document.querySelectorAll(".chat-repo-log").forEach((logNode) => {
+        const card = logNode.closest(".chat-repo-card");
+        const repoKey = card instanceof HTMLElement ? card.dataset.repoKey : "";
+        if (repoKey) {
+          renderChatRepoPromptLog(repoKey, logNode);
         }
       });
     }
@@ -6820,7 +6830,13 @@
       }
       logNode.removeAttribute("aria-hidden");
 
-      for (const message of messages) {
+      for (const event of chatPromptLogEvents(messages)) {
+        if (event.type === "assistant") {
+          logNode.appendChild(renderChatPromptCompletionBubble(event.completion));
+          continue;
+        }
+
+        const message = event.message;
         const bubble = document.createElement("article");
         bubble.className = "chat-repo-message chat-repo-message-user";
         bubble.dataset.tone = chatPromptMessageTone(message);
@@ -6840,7 +6856,6 @@
         bubble.appendChild(meta);
 
         logNode.appendChild(bubble);
-        syncChatPromptCompletionBubble(bubble, message);
       }
       logNode.scrollTop = logNode.scrollHeight;
     }
