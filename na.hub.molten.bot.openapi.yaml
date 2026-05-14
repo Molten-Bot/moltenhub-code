@@ -1,0 +1,70 @@
+openapi: 3.0.3
+info:
+  title: Molten Hub API
+  version: "1.0"
+paths:
+  /agents/me/metadata:
+    get:
+      responses:
+        "200":
+          description: ok
+  /agents/me:
+    get:
+      responses:
+        "200":
+          description: ok
+  /messages/publish:
+    post:
+      responses:
+        "200":
+          description: ok
+  /messages/pull:
+    get:
+      responses:
+        "200":
+          description: ok
+  /messages/ack:
+    post:
+      responses:
+        "200":
+          description: ok
+  /messages/nack:
+    post:
+      responses:
+        "200":
+          description: ok
+  /runtime/messages/publish:
+    post:
+      responses:
+        "200":
+          description: ok
+  /runtime/messages/pull:
+    get:
+      responses:
+        "200":
+          description: ok
+  /runtime/messages/ack:
+    post:
+      responses:
+        "200":
+          description: ok
+  /runtime/messages/nack:
+    post:
+      responses:
+        "200":
+          description: ok
+  /runtime/messages/{message_id}:
+    delete:
+      responses:
+        "200":
+          description: ok
+  /runtime/messages/ws:
+    get:
+      responses:
+        "200":
+          description: ok
+  /runtime/messages/offline:
+    post:
+      responses:
+        "200":
+          description: ok
