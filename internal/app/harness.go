@@ -500,6 +500,30 @@ func (h Harness) processChangedRepo(
 					repo.PRURL,
 					attempt+1,
 				)
+				if noRequired, noRequiredSummary, requiredErr := h.reconcileNoChecksWithRequiredStatusChecks(ctx, *repo); requiredErr == nil {
+					if noRequired {
+						if noRequiredSummary != "" {
+							checkSummary = noRequiredSummary
+						}
+						h.logf(
+							"stage=checks status=ok reason=no_required_status_checks repo=%s repo_dir=%s pr_url=%s attempt=%d",
+							repo.URL,
+							repo.RelDir,
+							repo.PRURL,
+							attempt+1,
+						)
+						return ExitSuccess, "", nil
+					}
+				} else {
+					h.logf(
+						"stage=checks status=warn action=required_status_checks reason=query_failed repo=%s repo_dir=%s pr_url=%s attempt=%d err=%q",
+						repo.URL,
+						repo.RelDir,
+						repo.PRURL,
+						attempt+1,
+						requiredErr,
+					)
+				}
 				requiredChecksOnly = false
 				checkRes, checkErr = h.runCommand(ctx, "checks", prChecksAnyCommand(repo.Dir, repo.PRURL))
 			}

@@ -2226,6 +2226,7 @@ func TestRunNoRequiredChecksFallsBackToAllChecks(t *testing.T) {
 		{cmd: pushCommand(repoDir, branch)},
 		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
 		{cmd: prChecksCommand(repoDir, prURL), res: execx.Result{Stderr: noRequired + "\n"}, err: errors.New("checks unavailable")},
+		{cmd: requiredStatusChecksCommand(repoDir, "acme/repo", "main"), res: execx.Result{Stdout: `{"contexts":["test"],"checks":[]}`}},
 		{cmd: prChecksAnyCommand(repoDir, prURL)},
 	}}
 
@@ -2248,6 +2249,59 @@ func TestRunNoRequiredChecksFallsBackToAllChecks(t *testing.T) {
 	}
 	if sleepCalls != 0 {
 		t.Fatalf("sleepCalls = %d, want 0", sleepCalls)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunNoRequiredChecksWithNoConfiguredRequiredChecksPasses(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+	prURL := "https://github.com/acme/repo/pull/42"
+	noRequired := "no required checks reported on the 'moltenhub-build-api' branch"
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL), res: execx.Result{Stderr: noRequired + "\n"}, err: errors.New("checks unavailable")},
+		{
+			cmd: requiredStatusChecksCommand(repoDir, "acme/repo", "main"),
+			res: execx.Result{Stderr: "HTTP 404: Branch not protected"},
+			err: errors.New("branch protection unavailable"),
+		},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
 	}
 	if len(fake.exps) != 0 {
 		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
