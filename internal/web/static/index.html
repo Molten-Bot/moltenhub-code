@@ -884,6 +884,38 @@
       }
     }
 
+    function analyticsPageLocation() {
+      return `${window.location.origin}${window.location.pathname}${window.location.hash || ""}`;
+    }
+
+    function trackAnalyticsPageView(appDisplay) {
+      if (typeof window.gtag !== "function") {
+        return;
+      }
+
+      const mode = appDisplay === "dashboard" || appDisplay === "chat" ? appDisplay : "studio";
+      const currentLocation = analyticsPageLocation();
+      const payload = {
+        send_to: GOOGLE_ANALYTICS_MEASUREMENT_ID,
+        page_title: document.title,
+        page_location: currentLocation,
+        app_display: mode,
+      };
+      if (mode === "studio") {
+        payload.prompt_mode = promptModeFromHash() || state.promptMode;
+      }
+      if (lastAnalyticsPageLocation && lastAnalyticsPageLocation !== currentLocation) {
+        payload.page_referrer = lastAnalyticsPageLocation;
+      }
+
+      try {
+        window.gtag("event", "page_view", payload);
+        lastAnalyticsPageLocation = currentLocation;
+      } catch (_err) {
+        // Keep navigation working even if analytics dispatch fails.
+      }
+    }
+
     function agentAuthAnalyticsParams(extra = {}) {
       return {
         agent_harness: authHarness(state.agentAuth),
@@ -1803,6 +1835,7 @@
       persistTaskHistory();
       persistTaskHistoryUnseenIDs();
     }
+    let lastAnalyticsPageLocation = analyticsPageLocation();
     let agentAuthRefreshTimer = null;
     let agentAuthAutoSubmitTimer = null;
     let claudePostSubmitVerifyTimer = null;
@@ -2342,10 +2375,12 @@
           }
           state.githubRepos = Array.isArray(body.repos) ? body.repos : [];
           state.githubReposReady = true;
+          trackAnalyticsEvent("chat_repos_loaded", { repo_count: state.githubRepos.length });
         } catch (err) {
           state.githubReposLoadError = err && err.message ? err.message : "Unable to read GitHub projects.";
           state.githubRepos = [];
           state.githubReposReady = false;
+          trackAnalyticsEvent("chat_repos_load_failed");
         } finally {
           state.githubReposLoading = false;
           githubReposLoadPromise = null;
@@ -4724,6 +4759,13 @@
       }
     }
 
+    function trackDashboardShare(destination) {
+      trackAnalyticsEvent("dashboard_share_opened", {
+        destination,
+        source: "dashboard",
+      });
+    }
+
     function dashboardRelativeTime(timestamp) {
       const delta = Math.max(0, Date.now() - timestamp);
       const seconds = Math.floor(delta / 1000);
@@ -7017,6 +7059,7 @@
       previous.addEventListener("click", () => {
         if (state.chatRepoPage <= 1) return;
         state.chatRepoPage -= 1;
+        trackAnalyticsEvent("chat_repo_page_changed", { direction: "previous", page: state.chatRepoPage, source: "chat" });
         renderChatRepos();
       });
 
@@ -7032,6 +7075,7 @@
       next.addEventListener("click", () => {
         if (state.chatRepoPage >= totalPages) return;
         state.chatRepoPage += 1;
+        trackAnalyticsEvent("chat_repo_page_changed", { direction: "next", page: state.chatRepoPage, source: "chat" });
         renderChatRepos();
       });
 
@@ -7248,6 +7292,7 @@
           state.chatActiveRepoTab = tab.key;
           state.chatOpenRepoKey = tab.key;
           state.chatRepoPage = 1;
+          trackAnalyticsEvent("chat_repo_tab_selected", { source: "chat", tab_type: "project" });
           renderChatRepos();
         });
         chatRepoTabs.appendChild(button);
@@ -7273,6 +7318,7 @@
         if (state.chatActiveRepoTab === "repos") return;
         state.chatActiveRepoTab = "repos";
         state.chatRepoPage = 1;
+        trackAnalyticsEvent("chat_repo_tab_selected", { source: "chat", tab_type: "all_repositories" });
         renderChatRepos();
       });
       chatRepoTabs.appendChild(reposButton);
@@ -7615,6 +7661,7 @@
         });
         mode = "studio";
       }
+      const previousMode = state.appDisplay;
       const showDashboard = mode === "dashboard";
       const showChat = mode === "chat";
       const showStudio = mode === "studio";
@@ -7662,6 +7709,9 @@
           window.history.pushState(null, "", nextHash);
         }
       }
+      if (previousMode !== mode) {
+        trackAnalyticsPageView(mode);
+      }
       if (showChat) {
         void loadChatRepos();
       }
@@ -7702,6 +7752,8 @@
     function activatePromptMode(mode) {
       const nextMode = mode === "library" || mode === "json" ? mode : "builder";
       if (state.appDisplay === "studio" && state.promptMode === nextMode && state.promptVisible) return;
+      const wasStudio = state.appDisplay === "studio";
+      const promptModeChanged = state.promptMode !== nextMode;
       if (nextMode === "json") {
         try {
           syncRawFromMode(state.promptMode === "library" ? "library" : "builder");
@@ -7717,6 +7769,9 @@
       }
       setPromptMode(nextMode);
       setAppDisplay("studio", { updateHash: promptHashFromMode(nextMode) });
+      if (wasStudio && promptModeChanged) {
+        trackAnalyticsPageView("studio");
+      }
     }
 
     function clearLocalPromptStatusTimer() {
@@ -11304,6 +11359,15 @@
         trackAnalyticsEvent("github_profile_opened", { source: "dock" });
       });
     }
+    if (dashboardShareX) {
+      dashboardShareX.addEventListener("click", () => trackDashboardShare("x"));
+    }
+    if (dashboardShareFacebook) {
+      dashboardShareFacebook.addEventListener("click", () => trackDashboardShare("facebook"));
+    }
+    if (dashboardShareWhatsApp) {
+      dashboardShareWhatsApp.addEventListener("click", () => trackDashboardShare("whatsapp"));
+    }
     if (chatDockLink) {
       chatDockLink.addEventListener("click", (event) => {
         if (!state.githubReposReady) {
@@ -11557,10 +11621,16 @@
       });
     }
     window.addEventListener("hashchange", () => {
-      setAppDisplay(appDisplayFromHash());
+      const previousDisplay = state.appDisplay;
+      const previousPromptMode = state.promptMode;
+      const nextDisplay = appDisplayFromHash();
+      setAppDisplay(nextDisplay);
       const hashPromptMode = promptModeFromHash();
       if (hashPromptMode) {
         setPromptMode(hashPromptMode);
+        if (nextDisplay === "studio" && previousDisplay === "studio" && previousPromptMode !== hashPromptMode) {
+          trackAnalyticsPageView("studio");
+        }
       }
     });
     if (chatRepoGrid) {
@@ -11580,6 +11650,12 @@
         if (state.appDisplay === "chat" && state.githubReposReady) {
           renderChatRepos();
         }
+        const resultCount = filterChatRepos(Array.isArray(state.githubRepos) ? state.githubRepos : [], state.chatRepoSearchQuery).length;
+        trackAnalyticsEvent("chat_repo_search_changed", {
+          has_query: Boolean(String(state.chatRepoSearchQuery || "").trim()),
+          result_count: resultCount,
+          source: "chat",
+        });
       });
     }
     window.addEventListener("resize", queueChatRepoResizeRender, { passive: true });

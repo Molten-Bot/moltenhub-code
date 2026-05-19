@@ -315,6 +315,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `const DASHBOARD_SHARE_IMAGE_URL = "https://app.molten.bot/logo.svg";`) ||
 		!strings.Contains(markup, `return DASHBOARD_SHARE_URL;`) ||
 		!strings.Contains(markup, `function updateDashboardShareLinks(stats)`) ||
+		!strings.Contains(markup, `function trackDashboardShare(destination)`) ||
+		!strings.Contains(markup, `trackAnalyticsEvent("dashboard_share_opened", {`) ||
 		!strings.Contains(markup, `https://twitter.com/intent/tweet`) ||
 		!strings.Contains(markup, `https://www.facebook.com/sharer/sharer.php`) ||
 		!strings.Contains(markup, `https://wa.me/`) {
@@ -2263,6 +2265,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `function trackAnalyticsEvent(name, params = {})`) {
 		t.Fatalf("expected index html to include the analytics event helper")
 	}
+	if !strings.Contains(markup, `function trackAnalyticsPageView(appDisplay)`) ||
+		!strings.Contains(markup, `function analyticsPageLocation()`) ||
+		!strings.Contains(markup, `window.gtag("event", "page_view", payload);`) ||
+		!strings.Contains(markup, `lastAnalyticsPageLocation = currentLocation;`) {
+		t.Fatalf("expected index html to track virtual page views for hash-routed app screens")
+	}
 	if !strings.Contains(markup, `const payload = { send_to: GOOGLE_ANALYTICS_MEASUREMENT_ID };`) {
 		t.Fatalf("expected analytics events to route to the configured google analytics destination")
 	}
@@ -2276,6 +2284,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		`trackAnalyticsEvent("hub_setup_started", hubSetupAnalyticsParams({ auto_submit: autoSubmit }));`,
 		`trackAnalyticsEvent("agent_auth_configure_started", agentAuthAnalyticsParams({ auth_method: "github_token" }));`,
 		`trackAnalyticsEvent("prompt_screenshots_attached", {`,
+		`trackAnalyticsEvent("chat_repo_search_changed", {`,
+		`trackAnalyticsEvent("chat_repo_page_changed", { direction: "next", page: state.chatRepoPage, source: "chat" });`,
+		`trackAnalyticsEvent("chat_repo_tab_selected", { source: "chat", tab_type: "project" });`,
+		`trackAnalyticsEvent("chat_repos_loaded", { repo_count: state.githubRepos.length });`,
+		`trackAnalyticsEvent("chat_repos_load_failed");`,
 	} {
 		if !strings.Contains(markup, want) {
 			t.Fatalf("expected index html to include analytics event tag %q", want)
