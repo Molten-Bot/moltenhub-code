@@ -7,6 +7,7 @@ moltenhub/
 !.github/workflows/
 !.github/workflows/*.yml
 !.github/workflows/*.yaml
+!.goreleaser.yml
 !.dockerignore
 !.env.example
 bin/*
