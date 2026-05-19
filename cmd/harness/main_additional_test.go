@@ -844,7 +844,9 @@ func TestConfigureHubSetupMarksFailingOnboardingStep(t *testing.T) {
 func TestShouldQueueUnexpectedNoChangesFollowUpRequiresMissingPR(t *testing.T) {
 	t.Parallel()
 
-	ok, reason := shouldQueueUnexpectedNoChangesFollowUp(app.Result{NoChanges: true})
+	runCfg := config.Config{Prompt: "fix broken task handling"}
+
+	ok, reason := shouldQueueUnexpectedNoChangesFollowUp(app.Result{NoChanges: true}, runCfg)
 	if !ok || reason != "" {
 		t.Fatalf("shouldQueueUnexpectedNoChangesFollowUp(no PR) = (%v, %q), want (true, \"\")", ok, reason)
 	}
@@ -852,12 +854,28 @@ func TestShouldQueueUnexpectedNoChangesFollowUpRequiresMissingPR(t *testing.T) {
 	ok, reason = shouldQueueUnexpectedNoChangesFollowUp(app.Result{
 		NoChanges: true,
 		PRURL:     "https://github.com/acme/repo/pull/1",
-	})
+	}, runCfg)
 	if ok {
 		t.Fatal("shouldQueueUnexpectedNoChangesFollowUp(existing PR) = true, want false")
 	}
 	if reason != "task already has a pull request" {
 		t.Fatalf("reason = %q, want %q", reason, "task already has a pull request")
+	}
+}
+
+func TestShouldQueueUnexpectedNoChangesFollowUpSkipsVerificationPrompt(t *testing.T) {
+	t.Parallel()
+
+	runCfg := config.Config{
+		Prompt: "Make sure that the openapi.yml is up to date with any new changes in the api.\n\nIssue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.\n\nFor implementation or repository-change requests, do not stop at analysis. Produce the smallest correct repository diff unless concrete file evidence proves no file changes are required.",
+	}
+
+	ok, reason := shouldQueueUnexpectedNoChangesFollowUp(app.Result{NoChanges: true}, runCfg)
+	if ok {
+		t.Fatal("shouldQueueUnexpectedNoChangesFollowUp(up-to-date verification) = true, want false")
+	}
+	if reason != "original prompt does not clearly require repository changes" {
+		t.Fatalf("reason = %q, want %q", reason, "original prompt does not clearly require repository changes")
 	}
 }
 
@@ -1245,7 +1263,13 @@ func TestPromptRequestsRepositoryChange(t *testing.T) {
 		{prompt: "change the website to pink", want: true},
 		{prompt: "fix the broken auth flow", want: true},
 		{prompt: "review the latest logs and explain what happened", want: false},
+		{prompt: "review the latest logs and fix the broken auth flow", want: true},
 		{prompt: "what changed in the container?", want: false},
+		{prompt: "Make sure that the openapi.yml is up to date with any new changes in the api.", want: false},
+		{prompt: "Confirm generated OpenAPI is up-to-date.", want: false},
+		{prompt: "Ensure generated OpenAPI matches the API routes.", want: false},
+		{prompt: "Fix: ensure generated OpenAPI matches the API routes.", want: true},
+		{prompt: "Update generated OpenAPI to match the API routes.", want: true},
 		{prompt: "", want: true},
 	}
 
