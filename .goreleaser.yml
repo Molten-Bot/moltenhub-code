@@ -1,0 +1,57 @@
+version: 2
+
+project_name: moltenhub-code
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: harness
+    main: ./cmd/harness
+    binary: harness
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: harness
+    ids:
+      - harness
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+release:
+  github:
+    owner: Molten-Bot
+    name: moltenhub-code
+  prerelease: auto
