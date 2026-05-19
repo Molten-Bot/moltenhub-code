@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -1244,6 +1245,7 @@ func (d Daemon) handleDispatch(
 		if err := api.RecordRunCompletedActivity(ctx, dispatch.Config); err != nil {
 			d.logf("dispatch status=warn action=record_run_completed_activity request_id=%s err=%q", dispatch.RequestID, err)
 		}
+		d.recordPublicPullRequestActivities(ctx, api, dispatch.RequestID, res)
 	}
 	if res.NoChanges && !resultHasPR(res) {
 		d.logf(
@@ -1274,6 +1276,18 @@ func (d Daemon) recordActivity(ctx context.Context, api MoltenHubAPI, requestID,
 	}
 	if err := api.RecordActivity(ctx, activity); err != nil {
 		d.logf("dispatch status=warn action=%s request_id=%s err=%q", action, requestID, err)
+	}
+}
+
+func (d Daemon) recordPublicPullRequestActivities(ctx context.Context, api MoltenHubAPI, requestID string, res app.Result) {
+	if api == nil || d.Runner == nil {
+		return
+	}
+	for _, prURL := range publicPullRequestActivityURLs(ctx, d.Runner, res, d.logf) {
+		activity := "GitHub pull request ready: " + prURL
+		if err := api.RecordActivity(ctx, activity); err != nil {
+			d.logf("dispatch status=warn action=record_public_pull_request_activity request_id=%s pr_url=%s err=%q", requestID, prURL, err)
+		}
 	}
 }
 
@@ -2208,6 +2222,84 @@ func resultHasPR(result app.Result) bool {
 		return true
 	}
 	return strings.TrimSpace(joinAllRepoPRURLs(result.RepoResults)) != ""
+}
+
+func publicPullRequestActivityURLs(ctx context.Context, runner execx.Runner, result app.Result, logf func(string, ...any)) []string {
+	if runner == nil {
+		return nil
+	}
+	prURLs := splitNonEmptyCSV(completedPRURLs(result))
+	if len(prURLs) == 0 {
+		prURLs = splitNonEmptyCSV(joinAllRepoPRURLs(result.RepoResults))
+	}
+	if fallback := strings.TrimSpace(result.PRURL); fallback != "" {
+		prURLs = append(prURLs, fallback)
+	}
+
+	out := make([]string, 0, len(prURLs))
+	seenURLs := map[string]struct{}{}
+	visibilityCache := map[string]bool{}
+	for _, prURL := range prURLs {
+		repo, ok := githubRepoFromPullRequestURL(prURL)
+		if !ok {
+			continue
+		}
+		public, cached := visibilityCache[repo]
+		if !cached {
+			public = isPublicGitHubRepo(ctx, runner, repo, logf)
+			visibilityCache[repo] = public
+		}
+		if !public {
+			continue
+		}
+		if _, seen := seenURLs[prURL]; seen {
+			continue
+		}
+		seenURLs[prURL] = struct{}{}
+		out = append(out, prURL)
+	}
+	return out
+}
+
+func githubRepoFromPullRequestURL(rawURL string) (string, bool) {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || parsed == nil || !strings.EqualFold(parsed.Hostname(), "github.com") {
+		return "", false
+	}
+	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	if len(parts) < 4 || parts[2] != "pull" {
+		return "", false
+	}
+	owner := strings.TrimSpace(parts[0])
+	repo := strings.TrimSpace(parts[1])
+	if owner == "" || repo == "" {
+		return "", false
+	}
+	return owner + "/" + repo, true
+}
+
+func isPublicGitHubRepo(ctx context.Context, runner execx.Runner, repo string, logf func(string, ...any)) bool {
+	res, err := runner.Run(ctx, execx.Command{
+		Name: "gh",
+		Args: []string{"repo", "view", strings.TrimSpace(repo), "--json", "isPrivate,nameWithOwner"},
+	})
+	if err != nil {
+		if logf != nil {
+			logf("dispatch status=warn action=verify_public_github_repo repo=%s err=%q", repo, err)
+		}
+		return false
+	}
+	var payload struct {
+		IsPrivate bool   `json:"isPrivate"`
+		Name      string `json:"nameWithOwner"`
+	}
+	if err := json.Unmarshal([]byte(res.Stdout), &payload); err != nil {
+		if logf != nil {
+			logf("dispatch status=warn action=verify_public_github_repo repo=%s err=%q", repo, err)
+		}
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(payload.Name), strings.TrimSpace(repo)) && !payload.IsPrivate
 }
 
 func completedPRURLs(result app.Result) string {

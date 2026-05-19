@@ -88,6 +88,49 @@ func (r *blockedRunner) Run(ctx context.Context, _ execx.Command) (execx.Result,
 	return execx.Result{}, r.err
 }
 
+type publicRepoRunner struct {
+	t       *testing.T
+	private map[string]bool
+	calls   []execx.Command
+}
+
+func (r *publicRepoRunner) Run(_ context.Context, cmd execx.Command) (execx.Result, error) {
+	r.calls = append(r.calls, cmd)
+	if cmd.Name != "gh" || len(cmd.Args) != 5 || cmd.Args[0] != "repo" || cmd.Args[1] != "view" || cmd.Args[3] != "--json" {
+		r.t.Fatalf("unexpected command: %+v", cmd)
+	}
+	repo := cmd.Args[2]
+	isPrivate := r.private[repo]
+	return execx.Result{Stdout: fmt.Sprintf(`{"isPrivate":%t,"nameWithOwner":%q}`, isPrivate, repo)}, nil
+}
+
+func TestPublicPullRequestActivityURLsVerifiesRepoVisibility(t *testing.T) {
+	t.Parallel()
+
+	runner := &publicRepoRunner{
+		t:       t,
+		private: map[string]bool{"acme/private": true},
+	}
+	result := app.Result{
+		PRURL: "https://github.com/acme/solo/pull/11",
+		RepoResults: []app.RepoResult{
+			{PRURL: "https://github.com/acme/public/pull/12", Changed: true},
+			{PRURL: "https://github.com/acme/private/pull/13", Changed: true},
+			{PRURL: "https://github.com/acme/public/pull/12", Changed: true},
+			{PRURL: "https://not-github.example/acme/repo/pull/14", Changed: true},
+		},
+	}
+
+	got := publicPullRequestActivityURLs(context.Background(), runner, result, func(string, ...any) {})
+	want := []string{"https://github.com/acme/public/pull/12", "https://github.com/acme/solo/pull/11"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("publicPullRequestActivityURLs() = %#v", got)
+	}
+	if len(runner.calls) != 3 {
+		t.Fatalf("visibility checks = %d, want 3", len(runner.calls))
+	}
+}
+
 type stubDispatchTaskControl struct {
 	waitErr error
 	stopped bool
