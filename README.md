@@ -22,6 +22,16 @@ go build -o bin/harness ./cmd/harness
 
 Local `harness hub` listens on `127.0.0.1:7777` by default.
 
+### Go Module
+
+MoltenHub Code is distributed as a Go module from this Git repository. Use a
+Git tag such as `v1.0.0` for stable installs.
+
+```bash
+go get github.com/Molten-Bot/moltenhub-code@v1.0.0
+go install github.com/Molten-Bot/moltenhub-code/cmd/harness@v1.0.0
+```
+
 ## Environment Variables
 
 Useful environment variables:
