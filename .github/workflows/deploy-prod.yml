@@ -8,9 +8,19 @@ on:
         required: true
         default: vnext
         type: string
-      release_tag:
-        description: Git tag to publish to GitHub Releases
+      bump:
+        description: Version bump to apply when creating the release tag
         required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      first_release:
+        description: First release tag to create when no vX.Y.Z tag exists
+        required: true
+        default: v1.0.0
         type: string
 
 permissions:
@@ -25,30 +35,89 @@ jobs:
     name: Publish GitHub Release artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      release_tag: ${{ steps.release.outputs.tag }}
     steps:
-      - name: Checkout release tag
+      - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.inputs.release_tag }}
           fetch-depth: 0
+          fetch-tags: true
 
-      - name: Validate release tag
-        env:
-          RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+      - name: Configure Git author
         run: |
-          case "${RELEASE_TAG}" in
-            v[0-9]*.[0-9]*.[0-9]*)
-              ;;
-            *)
-              echo "Invalid release_tag: ${RELEASE_TAG}" >&2
-              exit 1
-              ;;
-          esac
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if ! git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}" >/dev/null; then
-            echo "Missing release tag: ${RELEASE_TAG}" >&2
+      - name: Compute release tag
+        id: release
+        env:
+          BUMP: ${{ github.event.inputs.bump }}
+          FIRST_RELEASE: ${{ github.event.inputs.first_release }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "${BUMP}" =~ ^(patch|minor|major)$ ]]; then
+            echo "Invalid bump: ${BUMP}" >&2
             exit 1
           fi
+
+          if [[ ! "${FIRST_RELEASE}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid first_release: ${FIRST_RELEASE}" >&2
+            exit 1
+          fi
+
+          latest_tag=""
+          while IFS= read -r tag; do
+            if [[ "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              latest_tag="${tag}"
+              break
+            fi
+          done < <(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname)
+
+          if [[ -z "${latest_tag}" ]]; then
+            release_tag="${FIRST_RELEASE}"
+          else
+            version="${latest_tag#v}"
+            IFS=. read -r major minor patch <<< "${version}"
+
+            case "${BUMP}" in
+              major)
+                major=$((major + 1))
+                minor=0
+                patch=0
+                ;;
+              minor)
+                minor=$((minor + 1))
+                patch=0
+                ;;
+              patch)
+                patch=$((patch + 1))
+                ;;
+            esac
+
+            release_tag="v${major}.${minor}.${patch}"
+          fi
+
+          if git rev-parse --verify "refs/tags/${release_tag}^{commit}" >/dev/null 2>&1; then
+            echo "Release tag already exists: ${release_tag}" >&2
+            exit 1
+          fi
+
+          echo "tag=${release_tag}" >> "${GITHUB_OUTPUT}"
+          echo "Release tag: ${release_tag}"
+          echo "### Release" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Tag: ${release_tag}" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Bump: ${BUMP}" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Create release tag
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git tag -a "${RELEASE_TAG}" -m "Release ${RELEASE_TAG}"
+          git push origin "refs/tags/${RELEASE_TAG}"
+          git checkout --detach "${RELEASE_TAG}"
 
       - name: Setup Go
         uses: actions/setup-go@v6
@@ -83,7 +152,10 @@ jobs:
       - name: Promote source tag to latest
         env:
           SOURCE_TAG: ${{ github.event.inputs.source_tag }}
+          RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
         run: |
+          set -euo pipefail
+
           case "${SOURCE_TAG}" in
             ''|*[!A-Za-z0-9_.-]*)
               echo "Invalid source_tag: ${SOURCE_TAG}" >&2
@@ -94,3 +166,8 @@ jobs:
           docker buildx imagetools create \
             --tag moltenai/moltenhub-code:latest \
             "moltenai/moltenhub-code:${SOURCE_TAG}"
+
+          echo "### Docker promotion" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Release: ${RELEASE_TAG}" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Promoted: moltenai/moltenhub-code:${SOURCE_TAG}" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Latest: moltenai/moltenhub-code:latest" >> "${GITHUB_STEP_SUMMARY}"
