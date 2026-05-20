@@ -1077,9 +1077,6 @@ func TestAgentAuthGateFactorySelectsSupportedHarnesses(t *testing.T) {
 	if gate := newConcreteAgentAuthGate(context.Background(), nil, agentruntime.Runtime{Harness: agentruntime.HarnessClaude, Command: "claude"}, hub.InitConfig{}, nil); gate == nil {
 		t.Fatal("newConcreteAgentAuthGate(claude) = nil")
 	}
-	if gate := newConcreteAgentAuthGate(context.Background(), nil, agentruntime.Runtime{Harness: agentruntime.HarnessAuggie, Command: "auggie"}, hub.InitConfig{}, nil); gate == nil {
-		t.Fatal("newConcreteAgentAuthGate(auggie) = nil")
-	}
 	if gate := newConcreteAgentAuthGate(context.Background(), nil, agentruntime.Runtime{Harness: "unknown"}, hub.InitConfig{}, nil); gate != nil {
 		t.Fatalf("newConcreteAgentAuthGate(unknown) = %#v, want nil", gate)
 	}

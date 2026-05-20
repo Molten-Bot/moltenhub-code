@@ -276,8 +276,8 @@ func TestValidateRejectsUnknownAgentHarness(t *testing.T) {
 }
 
 func TestLoadInitReadsAgentRuntimeFromEnv(t *testing.T) {
-	t.Setenv("HARNESS_AGENT_HARNESS", "AUGGIE")
-	t.Setenv("HARNESS_AGENT_COMMAND", "auggie-custom")
+	t.Setenv("HARNESS_AGENT_HARNESS", "CLAUDE")
+	t.Setenv("HARNESS_AGENT_COMMAND", "claude-custom")
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "init.json")
@@ -293,10 +293,10 @@ func TestLoadInitReadsAgentRuntimeFromEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadInit() error = %v", err)
 	}
-	if got, want := cfg.AgentHarness, "auggie"; got != want {
+	if got, want := cfg.AgentHarness, "claude"; got != want {
 		t.Fatalf("AgentHarness = %q, want %q", got, want)
 	}
-	if got, want := cfg.AgentCommand, "auggie-custom"; got != want {
+	if got, want := cfg.AgentCommand, "claude-custom"; got != want {
 		t.Fatalf("AgentCommand = %q, want %q", got, want)
 	}
 }

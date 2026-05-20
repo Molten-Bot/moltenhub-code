@@ -43,8 +43,6 @@ func newConcreteAgentAuthGate(
 			initCfg,
 			logf,
 		)
-	case agentruntime.HarnessAuggie:
-		return newAuggieAuthGateWithRunner(runner, initCfg.RuntimeConfigPath, initCfg)
 	default:
 		return nil
 	}

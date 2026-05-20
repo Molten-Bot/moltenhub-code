@@ -45,7 +45,6 @@ func TestResolveSupportsKnownHarnesses(t *testing.T) {
 		reqName string
 	}{
 		{name: "claude", harness: HarnessClaude, command: "claude", pkg: "@anthropic-ai/claude-code@latest", reqName: "claude_cli"},
-		{name: "auggie", harness: HarnessAuggie, command: "auggie", pkg: "@augmentcode/auggie@latest", reqName: "auggie_cli"},
 		{name: "codex", harness: HarnessCodex, command: "codex", pkg: "@openai/codex@latest", reqName: "codex_cli"},
 	}
 
@@ -93,7 +92,7 @@ func TestResolveRejectsUnknownHarness(t *testing.T) {
 	if err == nil {
 		t.Fatal("Resolve() error = nil, want unsupported harness error")
 	}
-	for _, supported := range []string{HarnessAuggie, HarnessClaude, HarnessCodex} {
+	for _, supported := range []string{HarnessClaude, HarnessCodex} {
 		if !strings.Contains(err.Error(), supported) {
 			t.Fatalf("Resolve() error = %v, want supported harness %q listed", err, supported)
 		}
@@ -107,7 +106,6 @@ func TestDisplayName(t *testing.T) {
 		"":            "Codex",
 		HarnessCodex:  "Codex",
 		HarnessClaude: "Claude",
-		HarnessAuggie: "Auggie",
 		"  CLAUDE  ":  "Claude",
 	}
 	for harness, want := range cases {
@@ -125,9 +123,6 @@ func TestSupportsPromptImages(t *testing.T) {
 	}
 	if SupportsPromptImages(HarnessClaude) {
 		t.Fatal("SupportsPromptImages(claude) = true, want false")
-	}
-	if SupportsPromptImages(HarnessAuggie) {
-		t.Fatal("SupportsPromptImages(auggie) = true, want false")
 	}
 }
 
@@ -183,28 +178,10 @@ func TestBuildCommandClaude(t *testing.T) {
 	}
 }
 
-func TestBuildCommandAuggie(t *testing.T) {
-	t.Parallel()
-
-	rt, err := Resolve(HarnessAuggie, "")
-	if err != nil {
-		t.Fatalf("Resolve() error = %v", err)
-	}
-
-	cmd, err := rt.BuildCommand("/tmp/repo", "fix bug", RunOptions{})
-	if err != nil {
-		t.Fatalf("BuildCommand() error = %v", err)
-	}
-	wantArgs := []string{"--print", "--quiet", "fix bug"}
-	if cmd.Name != "auggie" || cmd.Dir != "/tmp/repo" || !reflect.DeepEqual(cmd.Args, wantArgs) {
-		t.Fatalf("unexpected auggie command: %+v", cmd)
-	}
-}
-
 func TestBuildCommandRejectsImagesForUnsupportedHarnesses(t *testing.T) {
 	t.Parallel()
 
-	for _, harness := range []string{HarnessClaude, HarnessAuggie} {
+	for _, harness := range []string{HarnessClaude} {
 		harness := harness
 		t.Run(harness, func(t *testing.T) {
 			t.Parallel()

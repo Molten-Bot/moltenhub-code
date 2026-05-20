@@ -575,7 +575,6 @@ func TestShouldEnableAgentAuthConfigure(t *testing.T) {
 	}{
 		{name: "codex", harness: agentruntime.HarnessCodex, want: true},
 		{name: "claude", harness: agentruntime.HarnessClaude, want: true},
-		{name: "auggie", harness: agentruntime.HarnessAuggie, want: true},
 		{name: "mixed-case-codex", harness: "  CoDeX  ", want: true},
 		{name: "unknown", harness: "custom", want: false},
 		{name: "empty", harness: "", want: false},
@@ -1578,9 +1577,9 @@ func TestApplyDefaultAgentRuntimeConfig(t *testing.T) {
 		t.Fatalf("applyDefaultAgentRuntimeConfig() = %+v", got)
 	}
 
-	explicit := config.Config{AgentHarness: "auggie", AgentCommand: "auggie-custom"}
+	explicit := config.Config{AgentHarness: "codex", AgentCommand: "codex-custom"}
 	got = applyDefaultAgentRuntimeConfig(explicit, initCfg)
-	if got.AgentHarness != "auggie" || got.AgentCommand != "auggie-custom" {
+	if got.AgentHarness != "codex" || got.AgentCommand != "codex-custom" {
 		t.Fatalf("explicit run config should win; got %+v", got)
 	}
 }

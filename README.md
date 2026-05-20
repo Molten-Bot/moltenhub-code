@@ -57,7 +57,6 @@ Useful environment variables:
 - `HARNESS_AGENT_HARNESS`: default agent harness.
 - `HARNESS_AGENT_COMMAND`: default agent executable.
 - `OPENAI_API_KEY`: Codex login bootstrap.
-- `AUGMENT_SESSION_AUTH`: Auggie session JSON from `auggie token print`.
 
 ## Response Modes
 

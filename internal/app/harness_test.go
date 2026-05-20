@@ -136,7 +136,7 @@ func sampleConfig() config.Config {
 		Prompt:        "Build API",
 		CommitMessage: "feat: automate api",
 		PRTitle:       "feat: automate api",
-		PRBody:        "Proposed changes from Molten.Bot\n\nThis PR implements the requested changes described below.\nBuilt using an AI augmented engineering and reviewed before submission.\nOnly relevant files were modified.\n\nAutomated by MoltenHub Code\n\nOriginal task prompt:\n```text\nBuild API\n```\n\nCurious how this was built? See how AI agents can help with your own projects: [MoltenBot Code](https://molten.bot/code?source=pr)",
+		PRBody:        "Proposed changes from Molten.Bot\n\nThis PR implements the requested changes described below.\nBuilt using AI-assisted engineering and reviewed before submission.\nOnly relevant files were modified.\n\nAutomated by MoltenHub Code\n\nOriginal task prompt:\n```text\nBuild API\n```\n\nCurious how this was built? See how AI agents can help with your own projects: [MoltenBot Code](https://molten.bot/code?source=pr)",
 		Labels:        []string{"automation", ""},
 		Reviewers:     []string{"octocat", ""},
 	}
@@ -605,7 +605,7 @@ func TestRunBuildsReviewContextBeforeInvokingCodex(t *testing.T) {
 
 	cfg := sampleConfig()
 	cfg.Prompt = "Review the pull request"
-	cfg.PRBody = "Proposed changes from Molten.Bot\n\nThis PR implements the requested changes described below.\nBuilt using an AI augmented engineering and reviewed before submission.\nOnly relevant files were modified.\n\nAutomated by MoltenHub Code\n\nOriginal task prompt:\n```text\nReview the pull request\n```\n\nCurious how this was built? See how AI agents can help with your own projects: [MoltenBot Code](https://molten.bot/code?source=pr)"
+	cfg.PRBody = "Proposed changes from Molten.Bot\n\nThis PR implements the requested changes described below.\nBuilt using AI-assisted engineering and reviewed before submission.\nOnly relevant files were modified.\n\nAutomated by MoltenHub Code\n\nOriginal task prompt:\n```text\nReview the pull request\n```\n\nCurious how this was built? See how AI agents can help with your own projects: [MoltenBot Code](https://molten.bot/code?source=pr)"
 	cfg.Review = &config.ReviewConfig{PRNumber: 42}
 
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
@@ -665,7 +665,7 @@ func TestRunBuildsReviewContextFromHeadBranchSelector(t *testing.T) {
 
 	cfg := sampleConfig()
 	cfg.Prompt = "Review the pull request"
-	cfg.PRBody = "Proposed changes from Molten.Bot\n\nThis PR implements the requested changes described below.\nBuilt using an AI augmented engineering and reviewed before submission.\nOnly relevant files were modified.\n\nAutomated by MoltenHub Code\n\nOriginal task prompt:\n```text\nReview the pull request\n```\n\nCurious how this was built? See how AI agents can help with your own projects: [MoltenBot Code](https://molten.bot/code?source=pr)"
+	cfg.PRBody = "Proposed changes from Molten.Bot\n\nThis PR implements the requested changes described below.\nBuilt using AI-assisted engineering and reviewed before submission.\nOnly relevant files were modified.\n\nAutomated by MoltenHub Code\n\nOriginal task prompt:\n```text\nReview the pull request\n```\n\nCurious how this was built? See how AI agents can help with your own projects: [MoltenBot Code](https://molten.bot/code?source=pr)"
 	cfg.Review = &config.ReviewConfig{HeadBranch: "feature/improve-tests"}
 
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
@@ -3827,7 +3827,7 @@ func TestPRCreateCommandsEnforceStandardBodyFormat(t *testing.T) {
 
 	required := []string{
 		"Proposed changes from Molten.Bot",
-		"This PR implements the requested changes described below.\nBuilt using an AI augmented engineering and reviewed before submission.\nOnly relevant files were modified.",
+		"This PR implements the requested changes described below.\nBuilt using AI-assisted engineering and reviewed before submission.\nOnly relevant files were modified.",
 		"Hardened auth retry flow and fixed flaky assertions.",
 		"Original task prompt:\n```text\nInvestigate failing checks\n```",
 		"Curious how this was built? See how AI agents can help with your own projects: [MoltenBot Code](https://molten.bot/code?source=pr)",
@@ -3878,20 +3878,6 @@ func TestAgentCommandWithOptionsUsesConfiguredRuntime(t *testing.T) {
 		t.Fatalf("claude stdin = %q, want empty", claudeCmd.Stdin)
 	}
 
-	auggieRuntime, err := agentruntime.Resolve(agentruntime.HarnessAuggie, "")
-	if err != nil {
-		t.Fatalf("Resolve(auggie) error = %v", err)
-	}
-	auggieCmd, err := agentCommandWithOptions(auggieRuntime, targetDir, prompt, codexRunOptions{})
-	if err != nil {
-		t.Fatalf("agentCommandWithOptions(auggie) error = %v", err)
-	}
-	if auggieCmd.Name != "auggie" || auggieCmd.Dir != targetDir {
-		t.Fatalf("unexpected auggie command: %+v", auggieCmd)
-	}
-	if got, want := auggieCmd.Args[len(auggieCmd.Args)-1], withCompletionGatePrompt(prompt); got != want {
-		t.Fatalf("auggie prompt arg = %q, want completion-gated prompt", got)
-	}
 	if _, err := agentCommandWithOptions(claudeRuntime, targetDir, prompt, codexRunOptions{ImagePaths: []string{"x.png"}}); err == nil {
 		t.Fatal("agentCommandWithOptions(claude with images) error = nil, want non-nil")
 	}
@@ -3982,7 +3968,6 @@ func TestRunAppliesResponseModeAcrossNonCodexRuntimes(t *testing.T) {
 		harness string
 	}{
 		{name: "claude", harness: agentruntime.HarnessClaude},
-		{name: "auggie", harness: agentruntime.HarnessAuggie},
 	}
 
 	for _, tt := range tests {

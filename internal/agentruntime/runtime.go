@@ -12,7 +12,6 @@ import (
 const (
 	HarnessCodex  = "codex"
 	HarnessClaude = "claude"
-	HarnessAuggie = "auggie"
 )
 
 const defaultHarness = HarnessCodex
@@ -20,7 +19,6 @@ const defaultHarness = HarnessCodex
 var ErrPromptImagesUnsupported = errors.New("prompt images are unsupported for this agent harness")
 
 var harnessDisplayNames = map[string]string{
-	HarnessAuggie: "Auggie",
 	HarnessClaude: "Claude",
 	HarnessCodex:  "Codex",
 }
@@ -59,11 +57,6 @@ var definitions = map[string]definition{
 		defaultCommand: HarnessClaude,
 		defaultPackage: "@anthropic-ai/claude-code@latest",
 		build:          buildClaudeCommand,
-	},
-	HarnessAuggie: {
-		defaultCommand: HarnessAuggie,
-		defaultPackage: "@augmentcode/auggie@latest",
-		build:          buildAuggieCommand,
 	},
 }
 
@@ -228,15 +221,6 @@ func buildClaudeCommand(targetDir, prompt string, opts RunOptions) (execx.Comman
 		"--dangerously-skip-permissions",
 		prompt,
 	}
-	return execx.Command{Dir: targetDir, Args: args}, nil
-}
-
-func buildAuggieCommand(targetDir, prompt string, opts RunOptions) (execx.Command, error) {
-	if err := validatePromptImageSupport(HarnessAuggie, opts.ImagePaths); err != nil {
-		return execx.Command{}, err
-	}
-
-	args := []string{"--print", "--quiet", prompt}
 	return execx.Command{Dir: targetDir, Args: args}, nil
 }
 

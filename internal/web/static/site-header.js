@@ -8,8 +8,6 @@
   const AGENT_LOGO_URLS = Object.freeze({
     codex: "/static/logos/codex-cli.svg",
     claude: "/static/logos/claude-code.svg",
-    auggie: "/static/logos/augment.svg",
-    augment: "/static/logos/augment.svg",
   });
 
   function applyPersistedTheme() {
@@ -33,8 +31,6 @@
     const normalized = String(harness || "").trim().toLowerCase();
     if (normalized === "codex") return "Codex";
     if (normalized === "claude") return "Claude Code";
-    if (normalized === "auggie") return "Auggie";
-    if (normalized === "augment") return "Auggie";
     return "Agent";
   }
 
@@ -44,7 +40,6 @@
       return AGENT_LOGO_URLS[label];
     }
     if (label.includes("claude")) return AGENT_LOGO_URLS.claude;
-    if (label.includes("auggie") || label.includes("augment")) return AGENT_LOGO_URLS.auggie;
     if (label.includes("codex")) return AGENT_LOGO_URLS.codex;
     return "";
   }

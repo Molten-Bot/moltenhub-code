@@ -3,7 +3,7 @@
 `docker-compose.yml` mounts `./.moltenhub` to `/workspace/config` in the container.
 
 This directory remains available if you prefer a manual bind mount (for example with `docker run`).
-The image sets `HOME=/workspace/config/home` by default so CLI auth files from Codex, Claude, and Auggie persist with the same config mount.
+The image sets `HOME=/workspace/config/home` by default so CLI auth files from Codex and Claude persist with the same config mount.
 
 `GITHUB_TOKEN` also works as direct bootstrap input. When container starts, entrypoint copies `GITHUB_TOKEN` to `GH_TOKEN`, runs `gh` auth setup, and hub onboarding skips GitHub token prompt if token already exists.
 
@@ -19,7 +19,6 @@ When running hub mode, `init.json` may also include runtime secrets:
 
 - `github_token` for GitHub auth bootstrap
 - `openai_api_key` for Codex CLI login when using the Codex harness
-- `augment_session_auth` for Auggie CLI auth when using the Auggie harness; set it to the full session JSON from `auggie token print`
 
 After first successful onboarding, persisted `config.json` may also contain `github_token`. Future boots load that automatically if `GITHUB_TOKEN`/`GH_TOKEN` are unset.
 

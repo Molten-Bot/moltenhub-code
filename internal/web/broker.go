@@ -2222,7 +2222,7 @@ func agentHarnessFromFields(fields map[string]string) string {
 
 func agentHarnessFromStage(stage string) string {
 	switch strings.ToLower(strings.TrimSpace(stage)) {
-	case "codex", "claude", "auggie":
+	case "codex", "claude":
 		return strings.ToLower(strings.TrimSpace(stage))
 	default:
 		return ""

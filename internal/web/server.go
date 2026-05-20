@@ -1361,15 +1361,13 @@ func (s Server) handleAgentAuthVerify(w http.ResponseWriter, r *http.Request) {
 }
 
 type agentAuthConfigureRequest struct {
-	AugmentSessionAuth      string `json:"augment_session_auth"`
-	AugmentSessionAuthAlias string `json:"augmentSessionAuth"`
-	SessionAuth             string `json:"session_auth"`
-	SessionAuthAlias        string `json:"sessionAuth"`
-	GitHubToken             string `json:"github_token"`
-	GitHubTokenAlias        string `json:"githubToken"`
-	ClaudeAuthCode          string `json:"claude_auth_code"`
-	ClaudeAuthCodeAlias     string `json:"claudeAuthCode"`
-	Value                   string `json:"value"`
+	SessionAuth         string `json:"session_auth"`
+	SessionAuthAlias    string `json:"sessionAuth"`
+	GitHubToken         string `json:"github_token"`
+	GitHubTokenAlias    string `json:"githubToken"`
+	ClaudeAuthCode      string `json:"claude_auth_code"`
+	ClaudeAuthCodeAlias string `json:"claudeAuthCode"`
+	Value               string `json:"value"`
 }
 
 func (s Server) handleAgentAuthConfigure(w http.ResponseWriter, r *http.Request) {
@@ -1409,8 +1407,6 @@ func (s Server) handleAgentAuthConfigure(w http.ResponseWriter, r *http.Request)
 	}
 
 	sessionAuth := firstNonEmptyString(
-		req.AugmentSessionAuth,
-		req.AugmentSessionAuthAlias,
 		req.SessionAuth,
 		req.SessionAuthAlias,
 		req.GitHubToken,
