@@ -759,7 +759,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "task-progress-step-icon") {
 		t.Fatalf("expected index html to render task progress step icons")
 	}
-	if !strings.Contains(markup, `const TASK_PROGRESS_AGENT_STAGES = new Set(["codex", "claude", "auggie", "augment", "agent", "review"]);`) {
+	if !strings.Contains(markup, `const TASK_PROGRESS_AGENT_STAGES = new Set(["codex", "claude", "agent", "review"]);`) {
 		t.Fatalf("expected index html to define the stage set that maps runtime agent stages into the agent progress step")
 	}
 	if strings.Contains(markup, "current step:") {

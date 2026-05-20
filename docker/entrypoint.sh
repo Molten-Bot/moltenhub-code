@@ -165,18 +165,6 @@ if [ "${OPENAI_API_KEY:-}" = "" ]; then
     fi
 fi
 
-if [ "${AUGMENT_SESSION_AUTH:-}" = "" ]; then
-    augment_session_auth_from_init="$(read_json_key "${init_path}" "augment_session_auth,augmentSessionAuth,AUGMENT_SESSION_AUTH")"
-    if [ "${augment_session_auth_from_init}" != "" ]; then
-        export AUGMENT_SESSION_AUTH="${augment_session_auth_from_init}"
-    else
-        augment_session_auth_from_config="$(read_json_key "${config_path}" "augment_session_auth,augmentSessionAuth,AUGMENT_SESSION_AUTH")"
-        if [ "${augment_session_auth_from_config}" != "" ]; then
-            export AUGMENT_SESSION_AUTH="${augment_session_auth_from_config}"
-        fi
-    fi
-fi
-
 git config --global user.name "${GIT_USER_NAME:-moltenhub-bot}"
 git config --global user.email "${GIT_USER_EMAIL:-moltenhub-bot@users.noreply.github.com}"
 

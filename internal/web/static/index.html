@@ -555,7 +555,7 @@
 
       <div id="agent-auth-configure" class="hidden">
         <div id="agent-auth-configure-command-row" class="agent-auth-command-box agent-auth-command-box-inline">
-          <code id="agent-auth-configure-command" class="agent-auth-command-text agent-auth-command-text-inline">auggie token print</code>
+          <code id="agent-auth-configure-command" class="agent-auth-command-text agent-auth-command-text-inline">gh auth token</code>
           <button
             id="agent-auth-configure-copy"
             class="agent-auth-copy agent-auth-command-copy"
@@ -719,7 +719,7 @@
     const GOOGLE_ANALYTICS_MEASUREMENT_ID = "G-BY33RFG2WB";
     const COMPLETED_STATUSES = new Set(["completed", "no_changes", "error", "invalid", "duplicate", "stopped"]);
     const TASK_PROGRESS_PREP_STAGES = new Set(["preflight", "auth", "workspace", "config", "submit", "dispatch"]);
-    const TASK_PROGRESS_AGENT_STAGES = new Set(["codex", "claude", "auggie", "augment", "agent", "review"]);
+    const TASK_PROGRESS_AGENT_STAGES = new Set(["codex", "claude", "agent", "review"]);
     const LIBRARY_TASK_TYPE_ORDER = Object.freeze(["quality", "maintenance", "security", "review"]);
     const LIBRARY_TASK_TYPE_DEFS = Object.freeze({
       quality: { label: "Quality", icon: "badge-check" },
@@ -747,11 +747,9 @@
     const AGENT_LOGO_URLS = Object.freeze({
       codex: "/static/logos/codex-cli.svg",
       claude: "/static/logos/claude-code.svg",
-      auggie: "/static/logos/augment.svg",
-      augment: "/static/logos/augment.svg",
     });
-    const AGENT_COLOR_LOGO_HARNESSES = new Set(["codex", "claude", "auggie", "augment"]);
-    const AGENT_HARNESS_SELECTION_ORDER = Object.freeze(["claude", "codex", "auggie"]);
+    const AGENT_COLOR_LOGO_HARNESSES = new Set(["codex", "claude"]);
+    const AGENT_HARNESS_SELECTION_ORDER = Object.freeze(["claude", "codex"]);
     const AGENT_HARNESS_SELECTION_PRIORITY = Object.freeze(
       AGENT_HARNESS_SELECTION_ORDER.reduce((priority, harness, index) => {
         priority[harness] = index;
@@ -961,7 +959,6 @@
 
       const label = configuredAgentLabel().toLowerCase();
       if (label.includes("claude")) return AGENT_LOGO_URLS.claude;
-      if (label.includes("auggie") || label.includes("augment")) return AGENT_LOGO_URLS.auggie;
       if (label.includes("codex")) return AGENT_LOGO_URLS.codex;
       return "";
     }
@@ -972,7 +969,6 @@
         return AGENT_LOGO_URLS[label];
       }
       if (label.includes("claude")) return AGENT_LOGO_URLS.claude;
-      if (label.includes("auggie") || label.includes("augment")) return AGENT_LOGO_URLS.auggie;
       if (label.includes("codex")) return AGENT_LOGO_URLS.codex;
       return "";
     }
@@ -986,7 +982,6 @@
         return true;
       }
       if (label.includes("claude")) return true;
-      if (label.includes("auggie") || label.includes("augment")) return true;
       if (label.includes("codex")) return true;
       return false;
     }
@@ -1524,7 +1519,6 @@
       const normalized = String(harness || "").trim().toLowerCase();
       if (normalized === "codex") return "Codex";
       if (normalized === "claude") return "Claude Code";
-      if (normalized === "auggie") return "Auggie";
       return "Agent";
     }
 
@@ -3305,12 +3299,6 @@
       }
     }
 
-    function isAuggieConfigureState(auth) {
-      const current = auth && typeof auth === "object" ? auth : state.agentAuth;
-      const harness = authHarness(current);
-      return harness === "auggie" && isManualConfigureState(current) && !isGitHubTokenConfigureState(current);
-    }
-
     function isClaudeGitHubConfigureState(auth) {
       const current = auth && typeof auth === "object" ? auth : state.agentAuth;
       return isManualConfigureState(current) && isGitHubTokenConfigureState(current);
@@ -3350,13 +3338,12 @@
 
     function isSupportedHarnessSelectionValue(value) {
       const normalized = String(value || "").trim().toLowerCase();
-      return normalized === "codex" || normalized === "claude" || normalized === "auggie";
+      return normalized === "codex" || normalized === "claude";
     }
 
     function harnessSelectionPriority(value) {
       const normalized = String(value || "").trim().toLowerCase();
-      const canonical = normalized === "augment" ? "auggie" : normalized;
-      const priority = AGENT_HARNESS_SELECTION_PRIORITY[canonical];
+      const priority = AGENT_HARNESS_SELECTION_PRIORITY[normalized];
       return Number.isFinite(priority) ? priority : Number.MAX_SAFE_INTEGER;
     }
 
@@ -3506,7 +3493,7 @@
       return (trimmed.startsWith("sk-ant-") || trimmed.startsWith("sk-")) && !/\s|#/.test(trimmed);
     }
 
-    function setAuggieConfigureError(message) {
+    function setAgentAuthConfigureError(message) {
       if (!agentAuthConfigureError) return;
       const text = String(message || "").trim();
       agentAuthConfigureError.textContent = text;
@@ -3581,7 +3568,6 @@
       const challengeKey = `${state.agentAuth.state}|${state.agentAuth.configureCommand}|${state.agentAuth.configurePlaceholder}|${state.agentAuth.deviceCode}|${state.agentAuth.authURL}|${selectionOptionsKey}`;
       const requiresManualConfigure = isManualConfigureState(state.agentAuth);
       const needsHarnessSelection = isHarnessSelectionState(state.agentAuth);
-      const needsAuggieConfigure = isAuggieConfigureState(state.agentAuth);
       const needsClaudeGitHubConfigure = isClaudeGitHubConfigureState(state.agentAuth);
       const needsClaudeCredentialsConfigure = isClaudeCredentialsConfigureState(state.agentAuth);
 
@@ -3640,8 +3626,6 @@
       if (agentAuthTitle) {
         if (needsHarnessSelection) {
           agentAuthTitle.textContent = "Select Agent";
-        } else if (needsAuggieConfigure) {
-          agentAuthTitle.textContent = "Setup Auggie";
         } else if (needsClaudeGitHubConfigure) {
           agentAuthTitle.textContent = "Setup GitHub";
         } else if (needsClaudeCredentialsConfigure) {
@@ -3715,9 +3699,7 @@
         agentAuthConfigureCommandRow.classList.toggle("hidden", false);
       }
       if (agentAuthConfigureCommand) {
-        const fallbackCommand = needsAuggieConfigure
-          ? "auggie token print"
-          : "gh auth token";
+        const fallbackCommand = "gh auth token";
         agentAuthConfigureCommand.textContent = state.agentAuth.configureCommand || fallbackCommand;
       }
       if (agentAuthConfigureCommandLabel) {
@@ -3740,11 +3722,9 @@
         agentAuthConfigureLabel.classList.toggle("hidden", needsClaudeGitHubConfigure);
       }
       if (agentAuthConfigureInput) {
-        const fallbackPlaceholder = needsAuggieConfigure
-          ? '{"accessToken":"XXX","tenantURL":"https://YYY/","scopes":["email"]}'
-          : needsClaudeCredentialsConfigure
-            ? "Paste ~/.claude/.credentials.json contents or CLAUDE_CODE_OAUTH_TOKEN..."
-            : "ghp_xxx";
+        const fallbackPlaceholder = needsClaudeCredentialsConfigure
+          ? "Paste ~/.claude/.credentials.json contents or CLAUDE_CODE_OAUTH_TOKEN..."
+          : "ghp_xxx";
         const placeholder = state.agentAuth.configurePlaceholder || fallbackPlaceholder;
         agentAuthConfigureInput.placeholder = placeholder;
         agentAuthConfigureInput.classList.toggle("agent-auth-configure-input-github", needsClaudeGitHubConfigure);
@@ -3778,7 +3758,7 @@
         }
       }
       if (!requiresManualConfigure) {
-        setAuggieConfigureError("");
+        setAgentAuthConfigureError("");
       }
       if (!isClaudePendingBrowserLoginState(state.agentAuth)) {
         setAgentAuthBrowserCodeError("");
@@ -3810,8 +3790,8 @@
       trackAnalyticsEvent("agent_auth_code_copied", agentAuthAnalyticsParams());
     }
 
-    async function copyAuggieConfigureCommand() {
-      const command = String(state.agentAuth.configureCommand || "").trim() || "auggie token print";
+    async function copyAgentAuthConfigureCommand() {
+      const command = String(state.agentAuth.configureCommand || "").trim() || "gh auth token";
       await copyTextToClipboard(command, agentAuthConfigureCopy, {
         preserveContents: true,
         copiedLabel: "Copied configure command",
@@ -3900,58 +3880,6 @@
       }
     }
 
-    function normalizeAuggieSessionAuthPayload(raw) {
-      const trimmed = String(raw || "").trim();
-      if (!trimmed) {
-        throw new Error("Paste configuration value first.");
-      }
-
-      let parsed = null;
-      try {
-        parsed = JSON.parse(trimmed);
-      } catch (_err) {
-        throw new Error("Auggie session auth must be valid JSON.");
-      }
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        throw new Error("Auggie session auth must be one JSON object.");
-      }
-
-      const accessToken = String(parsed.accessToken || "").trim();
-      if (!accessToken) {
-        throw new Error("accessToken is required.");
-      }
-      const tenantURL = String(parsed.tenantURL || "").trim();
-      if (!tenantURL) {
-        throw new Error("tenantURL is required.");
-      }
-
-      let parsedURL = null;
-      try {
-        parsedURL = new URL(tenantURL);
-      } catch (_err) {
-        throw new Error("tenantURL must be an absolute URL.");
-      }
-      if (parsedURL.protocol !== "https:") {
-        throw new Error("tenantURL must use https.");
-      }
-
-      const scopes = Array.isArray(parsed.scopes)
-        ? parsed.scopes.map((scope) => String(scope || "").trim()).filter((scope) => scope !== "")
-        : [];
-      if (!scopes.length) {
-        throw new Error("scopes must include at least one value.");
-      }
-      if (!scopes.some((scope) => scope.toLowerCase() === "email")) {
-        throw new Error("scopes must include \"email\".");
-      }
-
-      return JSON.stringify({
-        accessToken,
-        tenantURL,
-        scopes,
-      });
-    }
-
     function normalizeGitHubTokenPayload(raw) {
       const token = String(raw || "").trim();
       if (!token) {
@@ -4038,7 +3966,7 @@
         return;
       }
 
-      setAuggieConfigureError("");
+      setAgentAuthConfigureError("");
       state.agentHarnessSelectionPending = harness;
       renderAgentHarnessSelection(state.agentAuth);
       setAgentAuthBusy(true);
@@ -4104,56 +4032,14 @@
       }
     }
 
-    async function configureAuggieAuth() {
-      setAuggieConfigureError("");
-      let normalizedSessionAuth = "";
-      try {
-        normalizedSessionAuth = normalizeAuggieSessionAuthPayload(agentAuthConfigureInput ? agentAuthConfigureInput.value : "");
-      } catch (err) {
-        const message = err && err.message ? err.message : "Invalid Auggie session auth payload.";
-        clearAgentAuthConfigureInputIfSensitive();
-        setAuggieConfigureError(message);
-        return;
-      }
-
-      setAgentAuthVerifyPending(true);
-      setAgentAuthBusy(true);
-      trackAnalyticsEvent("agent_auth_configure_started", agentAuthAnalyticsParams({ auth_method: "auggie_session" }));
-      try {
-        const auth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
-          augment_session_auth: normalizedSessionAuth,
-        });
-        applyAgentAuthGate(auth);
-        if (auth.ready) {
-          setAuggieConfigureError("");
-          if (agentAuthConfigureInput) {
-            agentAuthConfigureInput.value = "";
-          }
-          setLocalPromptStatus("ok", `${currentAgentLabel()} auth is ready.`);
-        } else {
-          setAgentAuthVerifyPending(false);
-        }
-        trackAnalyticsEvent("agent_auth_configure_succeeded", agentAuthAnalyticsParams({ auth_method: "auggie_session", ready: Boolean(auth.ready) }));
-      } catch (err) {
-        trackAnalyticsEvent("agent_auth_configure_failed", agentAuthAnalyticsParams({ auth_method: "auggie_session" }));
-        const message = err && err.message ? err.message : "Auggie auth configure failed.";
-        setAgentAuthVerifyPending(false);
-        clearAgentAuthConfigureInputIfSensitive();
-        setAuggieConfigureError(message);
-        setLocalPromptStatus("error", `${currentAgentLabel()} configure failed: ${message}`);
-      } finally {
-        setAgentAuthBusy(false);
-      }
-    }
-
     async function configureClaudeGitHubToken() {
-      setAuggieConfigureError("");
+      setAgentAuthConfigureError("");
       let token = "";
       try {
         token = normalizeGitHubTokenPayload(agentAuthConfigureSecretInput ? agentAuthConfigureSecretInput.value : "");
       } catch (err) {
         const message = err && err.message ? err.message : "Invalid GitHub token.";
-        setAuggieConfigureError(message);
+        setAgentAuthConfigureError(message);
         return;
       }
 
@@ -4168,7 +4054,7 @@
         await loadGitHubProfileLink();
         if (auth.ready) {
           await loadGitHubReposForChat();
-          setAuggieConfigureError("");
+          setAgentAuthConfigureError("");
           clearAgentAuthConfigureInputIfSensitive();
           setLocalPromptStatus("ok", `${currentAgentLabel()} auth is ready.`);
         } else {
@@ -4181,7 +4067,7 @@
         const message = err && err.message ? err.message : "GitHub token configure failed.";
         setAgentAuthVerifyPending(false);
         clearAgentAuthConfigureInputIfSensitive();
-        setAuggieConfigureError(message);
+        setAgentAuthConfigureError(message);
         setLocalPromptStatus("error", `${currentAgentLabel()} configure failed: ${message}`);
       } finally {
         setAgentAuthBusy(false);
@@ -4189,10 +4075,10 @@
     }
 
     async function configureClaudeCredentials() {
-      setAuggieConfigureError("");
+      setAgentAuthConfigureError("");
       const credentials = agentAuthConfigureInput ? String(agentAuthConfigureInput.value || "").trim() : "";
       if (!credentials) {
-        setAuggieConfigureError("Paste Claude credentials first.");
+        setAgentAuthConfigureError("Paste Claude credentials first.");
         return;
       }
 
@@ -4205,7 +4091,7 @@
         });
         applyAgentAuthGate(auth);
         if (auth.ready) {
-          setAuggieConfigureError("");
+          setAgentAuthConfigureError("");
           if (agentAuthConfigureInput) {
             agentAuthConfigureInput.value = "";
           }
@@ -4218,7 +4104,7 @@
         trackAnalyticsEvent("agent_auth_configure_failed", agentAuthAnalyticsParams({ auth_method: "claude_credentials" }));
         const message = err && err.message ? err.message : "Claude credentials configure failed.";
         setAgentAuthVerifyPending(false);
-        setAuggieConfigureError(message);
+        setAgentAuthConfigureError(message);
         setLocalPromptStatus("error", `${currentAgentLabel()} configure failed: ${message}`);
       } finally {
         setAgentAuthBusy(false);
@@ -4232,10 +4118,6 @@
       trackAnalyticsEvent("agent_auth_verify_started", agentAuthAnalyticsParams());
       try {
         markAgentAuthInteraction();
-        if (isAuggieConfigureState()) {
-          await configureAuggieAuth();
-          return;
-        }
         if (isClaudeGitHubConfigureState()) {
           await configureClaudeGitHubToken();
           return;
@@ -11195,7 +11077,7 @@
       agentAuthCopy.addEventListener("click", copyAgentAuthCode);
     }
     if (agentAuthConfigureCopy) {
-      agentAuthConfigureCopy.addEventListener("click", copyAuggieConfigureCommand);
+      agentAuthConfigureCopy.addEventListener("click", copyAgentAuthConfigureCommand);
     }
     if (agentAuthBrowserCommandPrimaryCopy) {
       agentAuthBrowserCommandPrimaryCopy.addEventListener("click", copyClaudeBrowserPrimaryCommand);
@@ -11205,17 +11087,17 @@
     }
     if (agentAuthConfigureInput) {
       agentAuthConfigureInput.addEventListener("input", () => {
-        setAuggieConfigureError("");
+        setAgentAuthConfigureError("");
       });
     }
     if (agentAuthConfigureSecretInput) {
       agentAuthConfigureSecretInput.addEventListener("input", () => {
-        setAuggieConfigureError("");
+        setAgentAuthConfigureError("");
       });
     }
     if (agentAuthConfigureOption) {
       agentAuthConfigureOption.addEventListener("change", () => {
-        setAuggieConfigureError("");
+        setAgentAuthConfigureError("");
       });
     }
     if (agentAuthHarnessGrid) {

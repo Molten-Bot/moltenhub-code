@@ -275,18 +275,6 @@ func ClearRuntimeConfigHubSettings(path string, initCfg InitConfig) error {
 	return writeRuntimeConfigDoc(path, doc)
 }
 
-// SaveRuntimeConfigAuggieAuth persists augment_session_auth to the runtime
-// config JSON while preserving other configuration fields.
-func SaveRuntimeConfigAuggieAuth(path string, initCfg InitConfig, augmentSessionAuth string) error {
-	return saveRuntimeConfigStringField(
-		path,
-		initCfg,
-		augmentSessionAuth,
-		"augment session auth is required",
-		"augment_session_auth",
-	)
-}
-
 // SaveRuntimeConfigGitHubToken persists github_token to the runtime config JSON
 // while preserving other configuration fields.
 func SaveRuntimeConfigGitHubToken(path string, initCfg InitConfig, gitHubToken string) error {

@@ -738,7 +738,7 @@ func TestAgentAuthEndpointsDefaultAndMethodHandling(t *testing.T) {
 		t.Fatalf("POST /api/agent-auth/verify status = %d, want 501", verifyResp.StatusCode)
 	}
 
-	configureResp, err := http.Post(ts.URL+"/api/agent-auth/configure", "application/json", bytes.NewBufferString(`{"augment_session_auth":"{}"}`))
+	configureResp, err := http.Post(ts.URL+"/api/agent-auth/configure", "application/json", bytes.NewBufferString(`{"value":"token"}`))
 	if err != nil {
 		t.Fatalf("POST /api/agent-auth/configure error = %v", err)
 	}
@@ -936,11 +936,11 @@ func TestAgentAuthEndpointsWithCallbacks(t *testing.T) {
 		}, nil
 	}
 	srv.ConfigureAgentAuth = func(_ context.Context, sessionAuth string) (AgentAuthState, error) {
-		if got, want := strings.TrimSpace(sessionAuth), `{"accessToken":"token_saved","tenantURL":"https://tenant.example/","scopes":["email"]}`; got != want {
+		if got, want := strings.TrimSpace(sessionAuth), "github_token_saved_token"; got != want {
 			t.Fatalf("sessionAuth = %q, want %q", got, want)
 		}
 		return AgentAuthState{
-			Harness:  "auggie",
+			Harness:  "claude",
 			Required: true,
 			Ready:    true,
 			State:    "ready",
@@ -978,7 +978,7 @@ func TestAgentAuthEndpointsWithCallbacks(t *testing.T) {
 		t.Fatalf("POST /api/agent-auth/verify status = %d, want 200", verifyResp.StatusCode)
 	}
 
-	configureResp, err := http.Post(ts.URL+"/api/agent-auth/configure", "application/json", bytes.NewBufferString(`{"augment_session_auth":"{\"accessToken\":\"token_saved\",\"tenantURL\":\"https://tenant.example/\",\"scopes\":[\"email\"]}"}`))
+	configureResp, err := http.Post(ts.URL+"/api/agent-auth/configure", "application/json", bytes.NewBufferString(`{"github_token":"github_token_saved_token"}`))
 	if err != nil {
 		t.Fatalf("POST /api/agent-auth/configure error = %v", err)
 	}
@@ -1436,20 +1436,8 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	if !strings.Contains(html, "function agentAuthLabel(harness)") {
 		t.Fatalf("expected auth gate labels to be harness-aware")
 	}
-	if !strings.Contains(html, "Setup Auggie") {
-		t.Fatalf("expected auggie setup heading support")
-	}
-	if strings.Contains(html, "Auggie Configure") {
-		t.Fatalf("expected legacy auggie configure heading to be removed")
-	}
-	if strings.Contains(html, "Run in your terminal locally") {
-		t.Fatalf("expected legacy auggie configure instruction copy to be removed")
-	}
-	if strings.Contains(html, "Paste Auggie session JSON") {
-		t.Fatalf("expected legacy auggie configure label copy to be removed")
-	}
 	if !strings.Contains(html, "id=\"agent-auth-configure\"") {
-		t.Fatalf("expected auggie configure panel markup")
+		t.Fatalf("expected configure panel markup")
 	}
 	if !strings.Contains(html, `id="agent-auth-device-code-row" class="agent-auth-command-box agent-auth-command-box-inline hidden"`) ||
 		!strings.Contains(html, `agentAuthDeviceCodeRow.classList.toggle("hidden", !state.agentAuth.deviceCode);`) {
@@ -1461,9 +1449,6 @@ func TestAuthGateVerifyButtonHidesWhileVerificationIsPending(t *testing.T) {
 	if !strings.Contains(html, `id="agent-auth-shell"`) ||
 		!strings.Contains(html, `agentAuthShell.classList.toggle("agent-auth-github-shell", needsClaudeGitHubConfigure);`) {
 		t.Fatalf("expected GitHub token setup to use a narrower auth shell")
-	}
-	if !strings.Contains(html, "normalizeAuggieSessionAuthPayload") {
-		t.Fatalf("expected auggie configure JSON schema validator")
 	}
 	if !strings.Contains(html, "function isGitHubTokenConfigureState(auth)") {
 		t.Fatalf("expected auth gate to detect GitHub token configure flows across harnesses")

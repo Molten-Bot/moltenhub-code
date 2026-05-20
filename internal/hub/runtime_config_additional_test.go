@@ -119,89 +119,6 @@ func TestSaveAndLoadRuntimeConfigUseDefaultResolvedPath(t *testing.T) {
 	}
 }
 
-func TestSaveRuntimeConfigAuggieAuthCreatesConfigFromInitWhenMissing(t *testing.T) {
-	t.Parallel()
-
-	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
-	sessionAuth := `{"accessToken":"token_saved","tenantURL":"https://tenant.example/","scopes":["email"]}`
-
-	if err := SaveRuntimeConfigAuggieAuth(path, InitConfig{
-		BaseURL:      "https://na.hub.molten.bot/v1",
-		AgentHarness: "auggie",
-	}, sessionAuth); err != nil {
-		t.Fatalf("SaveRuntimeConfigAuggieAuth() error = %v", err)
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("ReadFile() error = %v", err)
-	}
-
-	var got map[string]any
-	if err := json.Unmarshal(data, &got); err != nil {
-		t.Fatalf("Unmarshal() error = %v", err)
-	}
-	if got["augment_session_auth"] != sessionAuth {
-		t.Fatalf("augment_session_auth = %#v, want %q", got["augment_session_auth"], sessionAuth)
-	}
-	if got["agent_harness"] != "auggie" {
-		t.Fatalf("agent_harness = %#v, want %q", got["agent_harness"], "auggie")
-	}
-}
-
-func TestSaveRuntimeConfigAuggieAuthMergesIntoExistingConfig(t *testing.T) {
-	t.Parallel()
-
-	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatalf("MkdirAll() error = %v", err)
-	}
-	if err := os.WriteFile(path, []byte(`{"base_url":"https://na.hub.molten.bot/v1","agent_token":"agent_saved","custom":"preserved"}`), 0o600); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-
-	sessionAuth := `{"accessToken":"token_saved","tenantURL":"https://tenant.example/","scopes":["email"]}`
-	if err := SaveRuntimeConfigAuggieAuth(path, InitConfig{}, sessionAuth); err != nil {
-		t.Fatalf("SaveRuntimeConfigAuggieAuth() error = %v", err)
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("ReadFile() error = %v", err)
-	}
-
-	var got map[string]any
-	if err := json.Unmarshal(data, &got); err != nil {
-		t.Fatalf("Unmarshal() error = %v", err)
-	}
-	if got["augment_session_auth"] != sessionAuth {
-		t.Fatalf("augment_session_auth = %#v, want %q", got["augment_session_auth"], sessionAuth)
-	}
-	if got["custom"] != "preserved" {
-		t.Fatalf("custom = %#v, want %q", got["custom"], "preserved")
-	}
-}
-
-func TestSaveRuntimeConfigAuggieAuthRejectsMalformedConfigJSON(t *testing.T) {
-	t.Parallel()
-
-	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatalf("MkdirAll() error = %v", err)
-	}
-	if err := os.WriteFile(path, []byte("{"), 0o600); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-
-	err := SaveRuntimeConfigAuggieAuth(path, InitConfig{}, `{"accessToken":"token_saved","tenantURL":"https://tenant.example/","scopes":["email"]}`)
-	if err == nil {
-		t.Fatal("SaveRuntimeConfigAuggieAuth() error = nil, want non-nil")
-	}
-	if got := err.Error(); got == "" || got == "parse runtime config" {
-		t.Fatalf("error = %q, want parse detail", got)
-	}
-}
-
 func TestSaveRuntimeConfigGitHubTokenCreatesConfigFromInitWhenMissing(t *testing.T) {
 	t.Parallel()
 
@@ -428,15 +345,15 @@ func TestReadRuntimeConfigString(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
-	if err := os.WriteFile(path, []byte(`{"github_token":"github_token_saved","augment_session_auth":"{\"accessToken\":\"a\"}"}`), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"github_token":"github_token_saved","openai_api_key":"sk_saved"}`), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
 	if got, want := ReadRuntimeConfigString(path, "github_token", "githubToken"), "github_token_saved"; got != want {
 		t.Fatalf("ReadRuntimeConfigString(github_token) = %q, want %q", got, want)
 	}
-	if got, want := ReadRuntimeConfigString(path, "missing", "augment_session_auth"), `{"accessToken":"a"}`; got != want {
-		t.Fatalf("ReadRuntimeConfigString(augment_session_auth) = %q, want %q", got, want)
+	if got, want := ReadRuntimeConfigString(path, "missing", "openai_api_key"), "sk_saved"; got != want {
+		t.Fatalf("ReadRuntimeConfigString(openai_api_key) = %q, want %q", got, want)
 	}
 }
 

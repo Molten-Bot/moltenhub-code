@@ -50,7 +50,6 @@ RUN apt-get update \
     && npm install --global \
       @openai/codex@latest \
       @anthropic-ai/claude-code@latest \
-      @augmentcode/auggie@latest \
       @moltenbot/railsmith@latest \
       playwright@latest \
       @playwright/test@latest \

@@ -59,16 +59,14 @@ func TestSupportedPromptImageHarnessLabelsSkipsBlankAndDuplicateLabels(t *testin
 	}
 }
 
-func TestSupportedPromptImageHarnessLabelsFormatsThreeOrMore(t *testing.T) {
+func TestSupportedPromptImageHarnessLabelsFormatsMultiple(t *testing.T) {
 	originalNames := harnessDisplayNames
 	originalHarnesses := promptImageHarnesses
 	harnessDisplayNames = map[string]string{
-		HarnessAuggie: "Auggie",
 		HarnessCodex:  "Codex",
 		HarnessClaude: "Claude",
 	}
 	promptImageHarnesses = map[string]struct{}{
-		HarnessAuggie: {},
 		HarnessCodex:  {},
 		HarnessClaude: {},
 	}
@@ -77,8 +75,8 @@ func TestSupportedPromptImageHarnessLabelsFormatsThreeOrMore(t *testing.T) {
 		promptImageHarnesses = originalHarnesses
 	})
 
-	if got := supportedPromptImageHarnessLabels(); got != "Auggie, Claude, or Codex" {
-		t.Fatalf("supportedPromptImageHarnessLabels() = %q, want Oxford comma list", got)
+	if got := supportedPromptImageHarnessLabels(); got != "Claude or Codex" {
+		t.Fatalf("supportedPromptImageHarnessLabels() = %q, want two-item list", got)
 	}
 }
 

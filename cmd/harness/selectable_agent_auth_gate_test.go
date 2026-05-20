@@ -93,7 +93,7 @@ func TestSelectableAgentAuthGateStatusRequiresHarnessSelectionAfterGitHubReady(t
 	for _, option := range state.ConfigureOptions {
 		gotOrder = append(gotOrder, option.Value)
 	}
-	wantOrder := []string{"claude", "codex", "auggie"}
+	wantOrder := []string{"claude", "codex"}
 	if len(gotOrder) < len(wantOrder) {
 		t.Fatalf("ConfigureOptions count = %d, want at least %d", len(gotOrder), len(wantOrder))
 	}
@@ -172,11 +172,11 @@ func TestSelectableAgentAuthGateConfigurePersistsSelectionAndRejectsSwitch(t *te
 	path := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
 	gate := newSelectableAgentAuthGate(context.Background(), selectableGitHubReadyRunner(), hub.InitConfig{RuntimeConfigPath: path}, nil)
 
-	state, err := gate.Configure(context.Background(), "auggie")
+	state, err := gate.Configure(context.Background(), "claude")
 	if err != nil {
-		t.Fatalf("Configure(auggie) error = %v", err)
+		t.Fatalf("Configure(claude) error = %v", err)
 	}
-	if got, want := state.Harness, "auggie"; got != want {
+	if got, want := state.Harness, "claude"; got != want {
 		t.Fatalf("Harness = %q, want %q", got, want)
 	}
 
@@ -188,10 +188,10 @@ func TestSelectableAgentAuthGateConfigurePersistsSelectionAndRejectsSwitch(t *te
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("Unmarshal(config.json) error = %v", err)
 	}
-	if got, want := doc["agent_harness"], "auggie"; got != want {
+	if got, want := doc["agent_harness"], "claude"; got != want {
 		t.Fatalf("agent_harness = %#v, want %q", got, want)
 	}
-	if got, want := doc["agent_command"], "auggie"; got != want {
+	if got, want := doc["agent_command"], "claude"; got != want {
 		t.Fatalf("agent_command = %#v, want %q", got, want)
 	}
 

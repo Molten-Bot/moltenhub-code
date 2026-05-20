@@ -398,7 +398,6 @@ func TestLoadRuntimeConfigSupportsInitStyleWholeConfig(t *testing.T) {
   "session_key": "main",
   "github_token": "github_token_saved",
   "openai_api_key": "sk_saved",
-  "augment_session_auth": "{\"accessToken\":\"token_saved\",\"tenantURL\":\"https://tenant.example\"}",
   "profile": {
     "display_name": "moltenbot000 hub coder",
     "emoji": "🤙🏻",
@@ -434,9 +433,6 @@ func TestLoadRuntimeConfigSupportsInitStyleWholeConfig(t *testing.T) {
 	if got.OpenAIAPIKey != "sk_saved" {
 		t.Fatalf("OpenAIAPIKey = %q", got.OpenAIAPIKey)
 	}
-	if got.AugmentSessionAuth != "{\"accessToken\":\"token_saved\",\"tenantURL\":\"https://tenant.example\"}" {
-		t.Fatalf("AugmentSessionAuth = %q", got.AugmentSessionAuth)
-	}
 	if got.Dispatcher.MaxParallel != 4 {
 		t.Fatalf("Dispatcher.MaxParallel = %d", got.Dispatcher.MaxParallel)
 	}
@@ -460,7 +456,6 @@ func TestClearRuntimeConfigHubSettingsRemovesHubIdentityAndPreservesAuth(t *test
   "agent_harness": "codex",
   "agent_command": "codex",
   "github_token": "github_token_saved",
-  "augment_session_auth": "{\"accessToken\":\"token_saved\"}",
   "library_task_usage": {
     "unit-test-coverage": 2
   },
@@ -492,9 +487,6 @@ func TestClearRuntimeConfigHubSettingsRemovesHubIdentityAndPreservesAuth(t *test
 	}
 	if got, want := doc["github_token"], "github_token_saved"; got != want {
 		t.Fatalf("github_token = %#v, want %q", got, want)
-	}
-	if got, want := doc["augment_session_auth"], "{\"accessToken\":\"token_saved\"}"; got != want {
-		t.Fatalf("augment_session_auth = %#v, want %q", got, want)
 	}
 	if got, want := doc["agent_harness"], "codex"; got != want {
 		t.Fatalf("agent_harness = %#v, want %q", got, want)

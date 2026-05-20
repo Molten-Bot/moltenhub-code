@@ -25,22 +25,21 @@ const (
 
 // InitConfig is the init.json contract for hub runtime mode.
 type InitConfig struct {
-	Version            string           `json:"version"`
-	BaseURL            string           `json:"base_url"`
-	BindToken          string           `json:"bind_token"`
-	AgentToken         string           `json:"agent_token"`
-	LogLevel           string           `json:"log_level,omitempty"`
-	AgentHarness       string           `json:"agent_harness,omitempty"`
-	AgentCommand       string           `json:"agent_command,omitempty"`
-	SessionKey         string           `json:"session_key"`
-	Handle             string           `json:"handle"`
-	Profile            ProfileConfig    `json:"profile"`
-	GitHubToken        string           `json:"github_token,omitempty"`
-	OpenAIAPIKey       string           `json:"openai_api_key,omitempty"`
-	AugmentSessionAuth string           `json:"augment_session_auth,omitempty"`
-	Skill              SkillConfig      `json:"-"`
-	RuntimeConfigPath  string           `json:"-"`
-	Dispatcher         DispatcherConfig `json:"dispatcher"`
+	Version           string           `json:"version"`
+	BaseURL           string           `json:"base_url"`
+	BindToken         string           `json:"bind_token"`
+	AgentToken        string           `json:"agent_token"`
+	LogLevel          string           `json:"log_level,omitempty"`
+	AgentHarness      string           `json:"agent_harness,omitempty"`
+	AgentCommand      string           `json:"agent_command,omitempty"`
+	SessionKey        string           `json:"session_key"`
+	Handle            string           `json:"handle"`
+	Profile           ProfileConfig    `json:"profile"`
+	GitHubToken       string           `json:"github_token,omitempty"`
+	OpenAIAPIKey      string           `json:"openai_api_key,omitempty"`
+	Skill             SkillConfig      `json:"-"`
+	RuntimeConfigPath string           `json:"-"`
+	Dispatcher        DispatcherConfig `json:"dispatcher"`
 }
 
 // ProfileConfig controls optional agent profile sync on startup.
@@ -147,7 +146,6 @@ func (c *InitConfig) ApplyDefaults() {
 	}
 	c.GitHubToken = strings.TrimSpace(c.GitHubToken)
 	c.OpenAIAPIKey = strings.TrimSpace(c.OpenAIAPIKey)
-	c.AugmentSessionAuth = strings.TrimSpace(c.AugmentSessionAuth)
 	c.AgentHarness = strings.ToLower(strings.TrimSpace(c.AgentHarness))
 	if c.AgentHarness == "" {
 		c.AgentHarness = strings.ToLower(strings.TrimSpace(os.Getenv("HARNESS_AGENT_HARNESS")))
