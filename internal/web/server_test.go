@@ -756,13 +756,10 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function taskProgressStepsForTask(") || !strings.Contains(markup, "function taskProgressCurrentStepID(") || !strings.Contains(markup, "function taskProgressModel(") {
 		t.Fatalf("expected index html to build dynamic progress steps per task")
 	}
-	if !strings.Contains(markup, `pi: "/static/logos/pi.svg"`) {
-		t.Fatalf("expected index html to map the pi harness to the pi logo asset")
-	}
 	if !strings.Contains(markup, "task-progress-step-icon") {
 		t.Fatalf("expected index html to render task progress step icons")
 	}
-	if !strings.Contains(markup, `const TASK_PROGRESS_AGENT_STAGES = new Set(["codex", "claude", "auggie", "pi", "augment", "agent", "review"]);`) {
+	if !strings.Contains(markup, `const TASK_PROGRESS_AGENT_STAGES = new Set(["codex", "claude", "auggie", "augment", "agent", "review"]);`) {
 		t.Fatalf("expected index html to define the stage set that maps runtime agent stages into the agent progress step")
 	}
 	if strings.Contains(markup, "current step:") {
@@ -2252,7 +2249,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "clearSubmittedPromptState();") {
 		t.Fatalf("expected index html to clear the submitted prompt state after a successful queue")
 	}
-	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"","configuredAgentLabel":"","defaultRepository":"`+config.DefaultRepositoryURL+`","promptImageHarnesses":["codex","pi"],"githubReposReady":false};`) {
+	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"","configuredAgentLabel":"","defaultRepository":"`+config.DefaultRepositoryURL+`","promptImageHarnesses":["codex"],"githubReposReady":false};`) {
 		t.Fatalf("expected index html to include default UI config")
 	}
 	if !strings.Contains(markup, `id="theme-toggle"`) || !strings.Contains(markup, `function nextThemeMode(theme)`) {
@@ -2472,7 +2469,7 @@ func TestHandlerIndexInjectsAutomaticModeConfig(t *testing.T) {
 	}
 
 	markup := resp.Body.String()
-	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":true,"configuredHarness":"","configuredAgentLabel":"","defaultRepository":"`+config.DefaultRepositoryURL+`","promptImageHarnesses":["codex","pi"],"githubReposReady":false};`) {
+	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":true,"configuredHarness":"","configuredAgentLabel":"","defaultRepository":"`+config.DefaultRepositoryURL+`","promptImageHarnesses":["codex"],"githubReposReady":false};`) {
 		t.Fatalf("expected automatic mode UI config, got %q", markup)
 	}
 }
@@ -2491,30 +2488,8 @@ func TestHandlerIndexInjectsConfiguredHarness(t *testing.T) {
 	}
 
 	markup := resp.Body.String()
-	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"claude","configuredAgentLabel":"Claude","defaultRepository":"`+config.DefaultRepositoryURL+`","promptImageHarnesses":["codex","pi"],"githubReposReady":false};`) {
+	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"claude","configuredAgentLabel":"Claude","defaultRepository":"`+config.DefaultRepositoryURL+`","promptImageHarnesses":["codex"],"githubReposReady":false};`) {
 		t.Fatalf("expected configured harness UI config, got %q", markup)
-	}
-}
-
-func TestHandlerIndexInjectsPiHarnessConfig(t *testing.T) {
-	t.Parallel()
-
-	srv := NewServer("", NewBroker())
-	srv.ConfiguredHarness = "pi"
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	resp := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(resp, req)
-
-	if resp.Code != http.StatusOK {
-		t.Fatalf("status = %d", resp.Code)
-	}
-
-	markup := resp.Body.String()
-	if !strings.Contains(markup, `window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"pi","configuredAgentLabel":"Pi","defaultRepository":"`+config.DefaultRepositoryURL+`","promptImageHarnesses":["codex","pi"],"githubReposReady":false};`) {
-		t.Fatalf("expected configured pi harness UI config, got %q", markup)
-	}
-	if !strings.Contains(markup, `pi: "/static/logos/pi.svg"`) {
-		t.Fatalf("expected configured pi harness markup to include the pi logo asset mapping")
 	}
 }
 
@@ -2558,13 +2533,10 @@ func TestHandlerIndexIncludesClaudeBrowserCodeFlow(t *testing.T) {
 		`aria-label="Copy configure command"`,
 		`id="agent-auth-configure-secret-input" class="prompt-text agent-auth-configure-input-github agent-auth-configure-input-single-line hidden" type="password"`,
 		`agentAuthConfigureSecretInput.value = "";`,
-		`cat ~/.pi/agent/auth.json`,
-		`Paste ~/.pi/agent/auth.json contents...`,
 		`agent-auth-configure-input-single-line`,
 		`function clearAgentAuthConfigureInputIfSensitive()`,
 		"state.agentAuth.configureCommand}|${state.agentAuth.configurePlaceholder}",
 		`agentAuthConfigureInput.value = "";`,
-		`GitHub token does not belong in PI auth JSON`,
 		`const useClaudeLogoLink = authHarness(state.agentAuth) === "claude" && authURL !== "" && !useClaudeCommandFlow;`,
 		`const code = claudeBrowserCodeValue();`,
 		`trackAnalyticsEvent("agent_auth_link_opened", agentAuthAnalyticsParams());`,
@@ -3483,25 +3455,6 @@ func TestHandlerServesStaticLogoAsset(t *testing.T) {
 
 	srv := NewServer("", NewBroker())
 	req := httptest.NewRequest(http.MethodGet, "/static/logos/codex-cli.svg", nil)
-	resp := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(resp, req)
-
-	if resp.Code != http.StatusOK {
-		t.Fatalf("status = %d", resp.Code)
-	}
-	if ct := resp.Header().Get("Content-Type"); !strings.Contains(ct, "image/svg+xml") {
-		t.Fatalf("content-type = %q", ct)
-	}
-	if body := resp.Body.String(); !strings.Contains(body, "<svg") {
-		t.Fatalf("expected svg payload, got %q", body)
-	}
-}
-
-func TestHandlerServesStaticPiLogoAsset(t *testing.T) {
-	t.Parallel()
-
-	srv := NewServer("", NewBroker())
-	req := httptest.NewRequest(http.MethodGet, "/static/logos/pi.svg", nil)
 	resp := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(resp, req)
 

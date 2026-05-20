@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -70,8 +69,6 @@ type entrypointTestEnv struct {
 	configDir   string
 	homeDir     string
 	augmentPath string
-	piPath      string
-	piAuthPath  string
 }
 
 func newEntrypointTestEnv(t *testing.T) entrypointTestEnv {
@@ -89,7 +86,7 @@ func newEntrypointTestEnv(t *testing.T) entrypointTestEnv {
 
 	writeEntrypointStub(t, filepath.Join(binDir, "git"), "#!/bin/sh\nexit 0\n")
 	writeEntrypointStub(t, filepath.Join(binDir, "gh"), "#!/bin/sh\nexit 0\n")
-	writeEntrypointStub(t, filepath.Join(binDir, "envdump"), "#!/bin/sh\nset -eu\nprintf '%s' \"${AUGMENT_SESSION_AUTH:-}\" > \"${HARNESS_STUB_AUGMENT_FILE}\"\nprintf '%s' \"${OPENAI_API_KEY:-}\" > \"${HARNESS_STUB_PI_FILE}\"\n")
+	writeEntrypointStub(t, filepath.Join(binDir, "envdump"), "#!/bin/sh\nset -eu\nprintf '%s' \"${AUGMENT_SESSION_AUTH:-}\" > \"${HARNESS_STUB_AUGMENT_FILE}\"\n")
 	homeDir := filepath.Join(root, "home")
 	if err := os.MkdirAll(homeDir, 0o755); err != nil {
 		t.Fatalf("mkdir home dir: %v", err)
@@ -100,8 +97,6 @@ func newEntrypointTestEnv(t *testing.T) entrypointTestEnv {
 		configDir:   configDir,
 		homeDir:     homeDir,
 		augmentPath: filepath.Join(root, "augment-session-auth.txt"),
-		piPath:      filepath.Join(root, "pi-provider-auth.txt"),
-		piAuthPath:  filepath.Join(homeDir, ".pi", "agent", "auth.json"),
 	}
 }
 
@@ -121,7 +116,6 @@ func runEntrypointScript(t *testing.T, env entrypointTestEnv, extra map[string]s
 		"PATH=" + pathValue,
 		"HARNESS_CONFIG_DIR=" + env.configDir,
 		"HARNESS_STUB_AUGMENT_FILE=" + env.augmentPath,
-		"HARNESS_STUB_PI_FILE=" + env.piPath,
 		"GITHUB_TOKEN=github_token_test",
 	}
 	if _, ok := extra["HOME"]; !ok {
@@ -146,61 +140,6 @@ func entrypointScriptPath(t *testing.T) string {
 	return filepath.Join(root, "docker", "entrypoint.sh")
 }
 
-func TestEntrypointScriptExportsPiProviderAuthFromRunConfig(t *testing.T) {
-	t.Parallel()
-
-	piAPIKey := "sk-" + "pi-from-run"
-	env := newEntrypointTestEnv(t)
-	configPath := filepath.Join(env.configDir, "config.json")
-	if err := os.WriteFile(configPath, []byte(fmt.Sprintf(`{
-  "repo": "git@github.com:acme/repo.git",
-  "prompt": "test prompt",
-  "pi_provider_auth": "{\"env_var\":\"OPENAI_API_KEY\",\"value\":\"%s\"}"
-}`, piAPIKey)), 0o644); err != nil {
-		t.Fatalf("write run config: %v", err)
-	}
-
-	output, err := runEntrypointScript(t, env, nil)
-	if err != nil {
-		t.Fatalf("entrypoint error: %v\noutput: %s", err, output)
-	}
-
-	got, err := os.ReadFile(env.piPath)
-	if err != nil {
-		t.Fatalf("read pi env file: %v", err)
-	}
-	if want := piAPIKey; string(got) != want {
-		t.Fatalf("OPENAI_API_KEY = %q, want %q", string(got), want)
-	}
-}
-
-func TestEntrypointScriptWritesPiAuthJSONFromRunConfig(t *testing.T) {
-	t.Parallel()
-
-	env := newEntrypointTestEnv(t)
-	configPath := filepath.Join(env.configDir, "config.json")
-	if err := os.WriteFile(configPath, []byte(`{
-  "repo": "git@github.com:acme/repo.git",
-  "prompt": "test prompt",
-  "pi_auth_json": "{\"provider\":\"pi\",\"token\":\"saved\"}"
-}`), 0o644); err != nil {
-		t.Fatalf("write run config: %v", err)
-	}
-
-	output, err := runEntrypointScript(t, env, nil)
-	if err != nil {
-		t.Fatalf("entrypoint error: %v\noutput: %s", err, output)
-	}
-
-	got, err := os.ReadFile(env.piAuthPath)
-	if err != nil {
-		t.Fatalf("read pi auth file: %v", err)
-	}
-	if want := `{"provider":"pi","token":"saved"}`; string(got) != want {
-		t.Fatalf("pi auth json = %q, want %q", string(got), want)
-	}
-}
-
 func TestEntrypointScriptDefaultsHomeUnderConfigDir(t *testing.T) {
 	t.Parallel()
 
@@ -208,8 +147,7 @@ func TestEntrypointScriptDefaultsHomeUnderConfigDir(t *testing.T) {
 	configPath := filepath.Join(env.configDir, "config.json")
 	if err := os.WriteFile(configPath, []byte(`{
   "repo": "git@github.com:acme/repo.git",
-  "prompt": "test prompt",
-  "pi_auth_json": "{\"provider\":\"pi\",\"token\":\"saved\"}"
+  "prompt": "test prompt"
 }`), 0o644); err != nil {
 		t.Fatalf("write run config: %v", err)
 	}
@@ -219,11 +157,7 @@ func TestEntrypointScriptDefaultsHomeUnderConfigDir(t *testing.T) {
 		t.Fatalf("entrypoint error: %v\noutput: %s", err, output)
 	}
 
-	got, err := os.ReadFile(filepath.Join(env.configDir, "home", ".pi", "agent", "auth.json"))
-	if err != nil {
-		t.Fatalf("read persisted pi auth file: %v", err)
-	}
-	if want := `{"provider":"pi","token":"saved"}`; string(got) != want {
-		t.Fatalf("persisted pi auth json = %q, want %q", string(got), want)
+	if _, err := os.Stat(filepath.Join(env.configDir, "home")); err != nil {
+		t.Fatalf("stat default home: %v", err)
 	}
 }

@@ -13,7 +13,6 @@ const (
 	HarnessCodex  = "codex"
 	HarnessClaude = "claude"
 	HarnessAuggie = "auggie"
-	HarnessPi     = "pi"
 )
 
 const defaultHarness = HarnessCodex
@@ -24,12 +23,10 @@ var harnessDisplayNames = map[string]string{
 	HarnessAuggie: "Auggie",
 	HarnessClaude: "Claude",
 	HarnessCodex:  "Codex",
-	HarnessPi:     "Pi",
 }
 
 var promptImageHarnesses = map[string]struct{}{
 	HarnessCodex: {},
-	HarnessPi:    {},
 }
 
 // RunOptions controls provider-specific execution behavior.
@@ -67,11 +64,6 @@ var definitions = map[string]definition{
 		defaultCommand: HarnessAuggie,
 		defaultPackage: "@augmentcode/auggie@latest",
 		build:          buildAuggieCommand,
-	},
-	HarnessPi: {
-		defaultCommand: HarnessPi,
-		defaultPackage: "@mariozechner/pi-coding-agent@latest",
-		build:          buildPiCommand,
 	},
 }
 
@@ -169,9 +161,6 @@ func (r Runtime) RequirementName() string {
 
 // PreflightCommand returns the command used to verify CLI availability.
 func (r Runtime) PreflightCommand() execx.Command {
-	if normalizeHarness(r.Harness) == HarnessPi {
-		return execx.Command{Name: strings.TrimSpace(r.Command), Args: []string{"--version"}}
-	}
 	return execx.Command{Name: strings.TrimSpace(r.Command), Args: []string{"--help"}}
 }
 
@@ -248,19 +237,6 @@ func buildAuggieCommand(targetDir, prompt string, opts RunOptions) (execx.Comman
 	}
 
 	args := []string{"--print", "--quiet", prompt}
-	return execx.Command{Dir: targetDir, Args: args}, nil
-}
-
-func buildPiCommand(targetDir, prompt string, opts RunOptions) (execx.Command, error) {
-	args := []string{"--print", "--mode", "text", "--no-session"}
-	for _, imagePath := range opts.ImagePaths {
-		imagePath = strings.TrimSpace(imagePath)
-		if imagePath == "" {
-			continue
-		}
-		args = append(args, "@"+imagePath)
-	}
-	args = append(args, prompt)
 	return execx.Command{Dir: targetDir, Args: args}, nil
 }
 

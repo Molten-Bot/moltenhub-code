@@ -45,8 +45,6 @@ func newConcreteAgentAuthGate(
 		)
 	case agentruntime.HarnessAuggie:
 		return newAuggieAuthGateWithRunner(runner, initCfg.RuntimeConfigPath, initCfg)
-	case agentruntime.HarnessPi:
-		return newPiAuthGateWithRuntime(runner, runtime.Command, initCfg.RuntimeConfigPath, initCfg, logf)
 	default:
 		return nil
 	}

@@ -80,11 +80,11 @@ func TestSaveRuntimeConfigAgentRuntimeAllowsIdempotentResave(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
-	if err := os.WriteFile(path, []byte(`{"agent_harness":"pi","agent_command":"pi"}`), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"agent_harness":"codex","agent_command":"codex"}`), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	if err := SaveRuntimeConfigAgentRuntime(path, InitConfig{}, "pi", ""); err != nil {
+	if err := SaveRuntimeConfigAgentRuntime(path, InitConfig{}, "codex", ""); err != nil {
 		t.Fatalf("SaveRuntimeConfigAgentRuntime() error = %v", err)
 	}
 }

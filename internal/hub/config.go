@@ -38,8 +38,6 @@ type InitConfig struct {
 	GitHubToken        string           `json:"github_token,omitempty"`
 	OpenAIAPIKey       string           `json:"openai_api_key,omitempty"`
 	AugmentSessionAuth string           `json:"augment_session_auth,omitempty"`
-	PiAuthJSON         string           `json:"pi_auth_json,omitempty"`
-	PiProviderAuth     string           `json:"pi_provider_auth,omitempty"`
 	Skill              SkillConfig      `json:"-"`
 	RuntimeConfigPath  string           `json:"-"`
 	Dispatcher         DispatcherConfig `json:"dispatcher"`
@@ -150,8 +148,6 @@ func (c *InitConfig) ApplyDefaults() {
 	c.GitHubToken = strings.TrimSpace(c.GitHubToken)
 	c.OpenAIAPIKey = strings.TrimSpace(c.OpenAIAPIKey)
 	c.AugmentSessionAuth = strings.TrimSpace(c.AugmentSessionAuth)
-	c.PiAuthJSON = strings.TrimSpace(c.PiAuthJSON)
-	c.PiProviderAuth = strings.TrimSpace(c.PiProviderAuth)
 	c.AgentHarness = strings.ToLower(strings.TrimSpace(c.AgentHarness))
 	if c.AgentHarness == "" {
 		c.AgentHarness = strings.ToLower(strings.TrimSpace(os.Getenv("HARNESS_AGENT_HARNESS")))

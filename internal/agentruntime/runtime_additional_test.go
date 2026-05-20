@@ -19,7 +19,7 @@ func TestUnsupportedPromptImagesErrorFallsBackWhenDisplayLabelEmpty(t *testing.T
 	if err == nil {
 		t.Fatal("UnsupportedPromptImagesError() = nil, want error")
 	}
-	if got, want := err.Error(), " does not support prompt images."; len(got) < len(want) || got[:len(want)] != want {
+	if got, want := err.Error(), " does not support prompt images:"; len(got) < len(want) || got[:len(want)] != want {
 		t.Fatalf("UnsupportedPromptImagesError() = %q, want empty label fallback prefix %q", got, want)
 	}
 }
@@ -43,12 +43,10 @@ func TestSupportedPromptImageHarnessLabelsSkipsBlankAndDuplicateLabels(t *testin
 	originalHarnesses := promptImageHarnesses
 	harnessDisplayNames = map[string]string{
 		HarnessCodex: "Agent",
-		HarnessPi:    "Agent",
 		"blank":      " ",
 	}
 	promptImageHarnesses = map[string]struct{}{
 		HarnessCodex: {},
-		HarnessPi:    {},
 		"blank":      {},
 	}
 	t.Cleanup(func() {
@@ -67,19 +65,19 @@ func TestSupportedPromptImageHarnessLabelsFormatsThreeOrMore(t *testing.T) {
 	harnessDisplayNames = map[string]string{
 		HarnessAuggie: "Auggie",
 		HarnessCodex:  "Codex",
-		HarnessPi:     "Pi",
+		HarnessClaude: "Claude",
 	}
 	promptImageHarnesses = map[string]struct{}{
 		HarnessAuggie: {},
 		HarnessCodex:  {},
-		HarnessPi:     {},
+		HarnessClaude: {},
 	}
 	t.Cleanup(func() {
 		harnessDisplayNames = originalNames
 		promptImageHarnesses = originalHarnesses
 	})
 
-	if got := supportedPromptImageHarnessLabels(); got != "Auggie, Codex, or Pi" {
+	if got := supportedPromptImageHarnessLabels(); got != "Auggie, Claude, or Codex" {
 		t.Fatalf("supportedPromptImageHarnessLabels() = %q, want Oxford comma list", got)
 	}
 }

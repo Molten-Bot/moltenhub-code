@@ -576,7 +576,6 @@ func TestShouldEnableAgentAuthConfigure(t *testing.T) {
 		{name: "codex", harness: agentruntime.HarnessCodex, want: true},
 		{name: "claude", harness: agentruntime.HarnessClaude, want: true},
 		{name: "auggie", harness: agentruntime.HarnessAuggie, want: true},
-		{name: "pi", harness: agentruntime.HarnessPi, want: true},
 		{name: "mixed-case-codex", harness: "  CoDeX  ", want: true},
 		{name: "unknown", harness: "custom", want: false},
 		{name: "empty", harness: "", want: false},
@@ -1530,45 +1529,6 @@ func TestRunHubBootDiagnosticsUsesConfiguredAgentRuntime(t *testing.T) {
 		t.Fatal("runHubBootDiagnostics() = false, want true")
 	}
 	assertLogContains(t, logs, "boot.diagnosis status=ok requirement=claude_cli")
-}
-
-func TestRunHubBootDiagnosticsSupportsPiRuntime(t *testing.T) {
-	t.Parallel()
-
-	pingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/ping" {
-			http.NotFound(w, r)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	}))
-	defer pingServer.Close()
-
-	runner := &stubExecRunner{
-		results: map[string]stubExecResult{
-			stubCommandKey(execx.Command{Name: "git", Args: []string{"--version"}}):       {result: execx.Result{Stdout: "git version"}},
-			stubCommandKey(execx.Command{Name: "gh", Args: []string{"--version"}}):        {result: execx.Result{Stdout: "gh version"}},
-			stubCommandKey(execx.Command{Name: "pi-custom", Args: []string{"--version"}}): {result: execx.Result{Stdout: "0.67.2"}},
-			stubCommandKey(execx.Command{Name: "gh", Args: []string{"auth", "status"}}):   {result: execx.Result{Stdout: "Logged in to github.com as test\n"}},
-		},
-	}
-
-	var logs []string
-	ok := runHubBootDiagnostics(
-		context.Background(),
-		runner,
-		func(format string, args ...any) { logs = append(logs, fmt.Sprintf(format, args...)) },
-		hub.InitConfig{
-			BaseURL:      pingServer.URL + "/v1",
-			AgentHarness: "pi",
-			AgentCommand: "pi-custom",
-		},
-	)
-	if !ok {
-		t.Fatal("runHubBootDiagnostics() = false, want true")
-	}
-	assertLogContains(t, logs, "boot.diagnosis status=ok requirement=pi_cli")
 }
 
 func TestRunHubBootDiagnosticsMentionsGitHubCLIPackageWhenPreflightFails(t *testing.T) {

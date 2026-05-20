@@ -948,7 +948,7 @@ func (s Server) injectIndexConfig(data []byte) []byte {
 
 	return bytes.Replace(
 		data,
-		[]byte(`window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"","configuredAgentLabel":"","defaultRepository":"git@github.com:Molten-Bot/moltenhub-code.git","promptImageHarnesses":["codex","pi"],"githubReposReady":false};`),
+		[]byte(`window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"","configuredAgentLabel":"","defaultRepository":"git@github.com:Molten-Bot/moltenhub-code.git","promptImageHarnesses":["codex"],"githubReposReady":false};`),
 		[]byte("window.__HUB_UI_CONFIG__ = "+string(cfg)+";"),
 		1,
 	)
@@ -1363,10 +1363,6 @@ func (s Server) handleAgentAuthVerify(w http.ResponseWriter, r *http.Request) {
 type agentAuthConfigureRequest struct {
 	AugmentSessionAuth      string `json:"augment_session_auth"`
 	AugmentSessionAuthAlias string `json:"augmentSessionAuth"`
-	PiAuthJSON              string `json:"pi_auth_json"`
-	PiAuthJSONAlias         string `json:"piAuthJSON"`
-	PiProviderAuth          string `json:"pi_provider_auth"`
-	PiProviderAuthAlias     string `json:"piProviderAuth"`
 	SessionAuth             string `json:"session_auth"`
 	SessionAuthAlias        string `json:"sessionAuth"`
 	GitHubToken             string `json:"github_token"`
@@ -1415,10 +1411,6 @@ func (s Server) handleAgentAuthConfigure(w http.ResponseWriter, r *http.Request)
 	sessionAuth := firstNonEmptyString(
 		req.AugmentSessionAuth,
 		req.AugmentSessionAuthAlias,
-		req.PiAuthJSON,
-		req.PiAuthJSONAlias,
-		req.PiProviderAuth,
-		req.PiProviderAuthAlias,
 		req.SessionAuth,
 		req.SessionAuthAlias,
 		req.GitHubToken,

@@ -287,30 +287,6 @@ func SaveRuntimeConfigAuggieAuth(path string, initCfg InitConfig, augmentSession
 	)
 }
 
-// SaveRuntimeConfigPiAuthJSON persists pi_auth_json to the runtime
-// config JSON while preserving other configuration fields.
-func SaveRuntimeConfigPiAuthJSON(path string, initCfg InitConfig, piAuthJSON string) error {
-	return saveRuntimeConfigStringField(
-		path,
-		initCfg,
-		piAuthJSON,
-		"pi auth json is required",
-		"pi_auth_json",
-	)
-}
-
-// SaveRuntimeConfigPiProviderAuth persists pi_provider_auth to the runtime
-// config JSON while preserving other configuration fields.
-func SaveRuntimeConfigPiProviderAuth(path string, initCfg InitConfig, piProviderAuth string) error {
-	return saveRuntimeConfigStringField(
-		path,
-		initCfg,
-		piProviderAuth,
-		"pi provider auth is required",
-		"pi_provider_auth",
-	)
-}
-
 // SaveRuntimeConfigGitHubToken persists github_token to the runtime config JSON
 // while preserving other configuration fields.
 func SaveRuntimeConfigGitHubToken(path string, initCfg InitConfig, gitHubToken string) error {

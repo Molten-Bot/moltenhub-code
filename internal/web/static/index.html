@@ -15,7 +15,7 @@
     window.gtag("config", "G-BY33RFG2WB");
   </script>
   <script>
-    window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"","configuredAgentLabel":"","defaultRepository":"git@github.com:Molten-Bot/moltenhub-code.git","promptImageHarnesses":["codex","pi"],"githubReposReady":false};
+    window.__HUB_UI_CONFIG__ = {"automaticMode":false,"configuredHarness":"","configuredAgentLabel":"","defaultRepository":"git@github.com:Molten-Bot/moltenhub-code.git","promptImageHarnesses":["codex"],"githubReposReady":false};
   </script>
   <script src="/static/lucide.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
@@ -719,7 +719,7 @@
     const GOOGLE_ANALYTICS_MEASUREMENT_ID = "G-BY33RFG2WB";
     const COMPLETED_STATUSES = new Set(["completed", "no_changes", "error", "invalid", "duplicate", "stopped"]);
     const TASK_PROGRESS_PREP_STAGES = new Set(["preflight", "auth", "workspace", "config", "submit", "dispatch"]);
-    const TASK_PROGRESS_AGENT_STAGES = new Set(["codex", "claude", "auggie", "pi", "augment", "agent", "review"]);
+    const TASK_PROGRESS_AGENT_STAGES = new Set(["codex", "claude", "auggie", "augment", "agent", "review"]);
     const LIBRARY_TASK_TYPE_ORDER = Object.freeze(["quality", "maintenance", "security", "review"]);
     const LIBRARY_TASK_TYPE_DEFS = Object.freeze({
       quality: { label: "Quality", icon: "badge-check" },
@@ -749,10 +749,9 @@
       claude: "/static/logos/claude-code.svg",
       auggie: "/static/logos/augment.svg",
       augment: "/static/logos/augment.svg",
-      pi: "/static/logos/pi.svg",
     });
     const AGENT_COLOR_LOGO_HARNESSES = new Set(["codex", "claude", "auggie", "augment"]);
-    const AGENT_HARNESS_SELECTION_ORDER = Object.freeze(["claude", "codex", "pi", "auggie"]);
+    const AGENT_HARNESS_SELECTION_ORDER = Object.freeze(["claude", "codex", "auggie"]);
     const AGENT_HARNESS_SELECTION_PRIORITY = Object.freeze(
       AGENT_HARNESS_SELECTION_ORDER.reduce((priority, harness, index) => {
         priority[harness] = index;
@@ -963,7 +962,6 @@
       const label = configuredAgentLabel().toLowerCase();
       if (label.includes("claude")) return AGENT_LOGO_URLS.claude;
       if (label.includes("auggie") || label.includes("augment")) return AGENT_LOGO_URLS.auggie;
-      if (/\bpi\b/.test(label)) return AGENT_LOGO_URLS.pi;
       if (label.includes("codex")) return AGENT_LOGO_URLS.codex;
       return "";
     }
@@ -975,7 +973,6 @@
       }
       if (label.includes("claude")) return AGENT_LOGO_URLS.claude;
       if (label.includes("auggie") || label.includes("augment")) return AGENT_LOGO_URLS.auggie;
-      if (/\bpi\b/.test(label)) return AGENT_LOGO_URLS.pi;
       if (label.includes("codex")) return AGENT_LOGO_URLS.codex;
       return "";
     }
@@ -1528,7 +1525,6 @@
       if (normalized === "codex") return "Codex";
       if (normalized === "claude") return "Claude Code";
       if (normalized === "auggie") return "Auggie";
-      if (normalized === "pi") return "Pi";
       return "Agent";
     }
 
@@ -3315,11 +3311,6 @@
       return harness === "auggie" && isManualConfigureState(current) && !isGitHubTokenConfigureState(current);
     }
 
-    function isPiConfigureState(auth) {
-      const current = auth && typeof auth === "object" ? auth : state.agentAuth;
-      return authHarness(current) === "pi" && isManualConfigureState(current) && !isGitHubTokenConfigureState(current);
-    }
-
     function isClaudeGitHubConfigureState(auth) {
       const current = auth && typeof auth === "object" ? auth : state.agentAuth;
       return isManualConfigureState(current) && isGitHubTokenConfigureState(current);
@@ -3359,7 +3350,7 @@
 
     function isSupportedHarnessSelectionValue(value) {
       const normalized = String(value || "").trim().toLowerCase();
-      return normalized === "codex" || normalized === "claude" || normalized === "auggie" || normalized === "pi";
+      return normalized === "codex" || normalized === "claude" || normalized === "auggie";
     }
 
     function harnessSelectionPriority(value) {
@@ -3651,8 +3642,6 @@
           agentAuthTitle.textContent = "Select Agent";
         } else if (needsAuggieConfigure) {
           agentAuthTitle.textContent = "Setup Auggie";
-        } else if (isPiConfigureState(state.agentAuth)) {
-          agentAuthTitle.textContent = "Setup Pi";
         } else if (needsClaudeGitHubConfigure) {
           agentAuthTitle.textContent = "Setup GitHub";
         } else if (needsClaudeCredentialsConfigure) {
@@ -3722,37 +3711,29 @@
       if (agentAuthConfigure) {
         agentAuthConfigure.classList.toggle("hidden", !requiresManualConfigure || needsHarnessSelection);
       }
-      const needsPiConfigure = isPiConfigureState(state.agentAuth);
-      const hasPiConfigureOptions = needsPiConfigure &&
-        Array.isArray(state.agentAuth.configureOptions) &&
-        state.agentAuth.configureOptions.length > 0;
       if (agentAuthConfigureCommandRow) {
-        agentAuthConfigureCommandRow.classList.toggle("hidden", needsPiConfigure && hasPiConfigureOptions);
+        agentAuthConfigureCommandRow.classList.toggle("hidden", false);
       }
       if (agentAuthConfigureCommand) {
         const fallbackCommand = needsAuggieConfigure
           ? "auggie token print"
-          : needsPiConfigure
-            ? "cat ~/.pi/agent/auth.json"
-            : "gh auth token";
+          : "gh auth token";
         agentAuthConfigureCommand.textContent = state.agentAuth.configureCommand || fallbackCommand;
       }
       if (agentAuthConfigureCommandLabel) {
-        agentAuthConfigureCommandLabel.classList.toggle("hidden", needsClaudeGitHubConfigure || (needsPiConfigure && hasPiConfigureOptions));
+        agentAuthConfigureCommandLabel.classList.toggle("hidden", needsClaudeGitHubConfigure);
       }
       if (agentAuthConfigureOptionRow) {
-        agentAuthConfigureOptionRow.classList.toggle("hidden", !hasPiConfigureOptions);
+        agentAuthConfigureOptionRow.classList.toggle("hidden", true);
       }
       if (agentAuthConfigureOptionLabel) {
-        agentAuthConfigureOptionLabel.classList.toggle("hidden", !hasPiConfigureOptions);
+        agentAuthConfigureOptionLabel.classList.toggle("hidden", true);
       }
       if (agentAuthConfigureLabel) {
         if (needsClaudeGitHubConfigure) {
           agentAuthConfigureLabel.textContent = "Paste GitHub token";
         } else if (needsClaudeCredentialsConfigure) {
           agentAuthConfigureLabel.textContent = "Paste Claude credentials";
-        } else if (needsPiConfigure) {
-          agentAuthConfigureLabel.textContent = "Paste ~/.pi/agent/auth.json";
         } else {
           agentAuthConfigureLabel.textContent = "Paste configuration value";
         }
@@ -3763,14 +3744,12 @@
           ? '{"accessToken":"XXX","tenantURL":"https://YYY/","scopes":["email"]}'
           : needsClaudeCredentialsConfigure
             ? "Paste ~/.claude/.credentials.json contents or CLAUDE_CODE_OAUTH_TOKEN..."
-            : needsPiConfigure
-              ? "Paste ~/.pi/agent/auth.json contents..."
-              : "ghp_xxx";
+            : "ghp_xxx";
         const placeholder = state.agentAuth.configurePlaceholder || fallbackPlaceholder;
         agentAuthConfigureInput.placeholder = placeholder;
         agentAuthConfigureInput.classList.toggle("agent-auth-configure-input-github", needsClaudeGitHubConfigure);
-        agentAuthConfigureInput.classList.toggle("agent-auth-configure-input-single-line", needsClaudeGitHubConfigure || (needsPiConfigure && hasPiConfigureOptions));
-        agentAuthConfigureInput.rows = needsClaudeGitHubConfigure || (needsPiConfigure && hasPiConfigureOptions) ? 1 : 5;
+        agentAuthConfigureInput.classList.toggle("agent-auth-configure-input-single-line", needsClaudeGitHubConfigure);
+        agentAuthConfigureInput.rows = needsClaudeGitHubConfigure ? 1 : 5;
         agentAuthConfigureInput.classList.toggle("hidden", needsClaudeGitHubConfigure);
       }
       if (agentAuthConfigureSecretInput) {
@@ -3995,17 +3974,6 @@
       if (agentAuthConfigureInput && isLikelyGitHubTokenValue(agentAuthConfigureInput.value)) {
         agentAuthConfigureInput.value = "";
       }
-    }
-
-    function normalizePiAuthJSONPayload(raw) {
-      const value = String(raw || "").trim();
-      if (!value) {
-        throw new Error("Paste ~/.pi/agent/auth.json first.");
-      }
-      if (isLikelyGitHubTokenValue(value)) {
-        throw new Error("GitHub token does not belong in PI auth JSON. Paste ~/.pi/agent/auth.json instead.");
-      }
-      return value;
     }
 
     async function requestAgentAuth(path, method, requestBody) {
@@ -4257,48 +4225,6 @@
       }
     }
 
-    async function configurePiAuth() {
-      setAuggieConfigureError("");
-      let authJSON = "";
-      try {
-        authJSON = normalizePiAuthJSONPayload(agentAuthConfigureInput ? agentAuthConfigureInput.value : "");
-      } catch (err) {
-        const message = err && err.message ? err.message : "Invalid Pi auth JSON.";
-        clearAgentAuthConfigureInputIfSensitive();
-        setAuggieConfigureError(message);
-        return;
-      }
-
-      setAgentAuthVerifyPending(true);
-      setAgentAuthBusy(true);
-      trackAnalyticsEvent("agent_auth_configure_started", agentAuthAnalyticsParams({ auth_method: "pi_auth_json" }));
-      try {
-        const auth = await requestAgentAuth("/api/agent-auth/configure", "POST", {
-          pi_auth_json: authJSON,
-        });
-        applyAgentAuthGate(auth);
-        if (auth.ready) {
-          setAuggieConfigureError("");
-          if (agentAuthConfigureInput) {
-            agentAuthConfigureInput.value = "";
-          }
-          setLocalPromptStatus("ok", `${currentAgentLabel()} auth is ready.`);
-        } else {
-          setAgentAuthVerifyPending(false);
-        }
-        trackAnalyticsEvent("agent_auth_configure_succeeded", agentAuthAnalyticsParams({ auth_method: "pi_auth_json", ready: Boolean(auth.ready) }));
-      } catch (err) {
-        trackAnalyticsEvent("agent_auth_configure_failed", agentAuthAnalyticsParams({ auth_method: "pi_auth_json" }));
-        const message = err && err.message ? err.message : "PI auth configure failed.";
-        setAgentAuthVerifyPending(false);
-        clearAgentAuthConfigureInputIfSensitive();
-        setAuggieConfigureError(message);
-        setLocalPromptStatus("error", `${currentAgentLabel()} configure failed: ${message}`);
-      } finally {
-        setAgentAuthBusy(false);
-      }
-    }
-
     async function verifyAgentDeviceAuth() {
       if (state.agentAuthBusy || (state.agentAuthVerifyPending && !isClaudePendingBrowserLoginState())) {
         return;
@@ -4308,10 +4234,6 @@
         markAgentAuthInteraction();
         if (isAuggieConfigureState()) {
           await configureAuggieAuth();
-          return;
-        }
-        if (isPiConfigureState()) {
-          await configurePiAuth();
           return;
         }
         if (isClaudeGitHubConfigureState()) {

@@ -19,7 +19,6 @@ const agentHarnessSelectionState = "needs_harness_selection"
 var preferredHarnessSelectionOrder = []string{
 	agentruntime.HarnessClaude,
 	agentruntime.HarnessCodex,
-	agentruntime.HarnessPi,
 	agentruntime.HarnessAuggie,
 }
 

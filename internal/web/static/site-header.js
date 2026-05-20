@@ -10,7 +10,6 @@
     claude: "/static/logos/claude-code.svg",
     auggie: "/static/logos/augment.svg",
     augment: "/static/logos/augment.svg",
-    pi: "/static/logos/pi.svg",
   });
 
   function applyPersistedTheme() {
@@ -36,7 +35,6 @@
     if (normalized === "claude") return "Claude Code";
     if (normalized === "auggie") return "Auggie";
     if (normalized === "augment") return "Auggie";
-    if (normalized === "pi") return "Pi";
     return "Agent";
   }
 
@@ -47,7 +45,6 @@
     }
     if (label.includes("claude")) return AGENT_LOGO_URLS.claude;
     if (label.includes("auggie") || label.includes("augment")) return AGENT_LOGO_URLS.auggie;
-    if (/\bpi\b/.test(label)) return AGENT_LOGO_URLS.pi;
     if (label.includes("codex")) return AGENT_LOGO_URLS.codex;
     return "";
   }

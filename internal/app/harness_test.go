@@ -3854,23 +3854,6 @@ func TestPRCreateCommandsEnforceStandardBodyFormat(t *testing.T) {
 	}
 }
 
-func TestPreflightCommandsWithRuntimeUseVersionForPi(t *testing.T) {
-	t.Parallel()
-
-	runtime, err := agentruntime.Resolve(agentruntime.HarnessPi, "pi-custom")
-	if err != nil {
-		t.Fatalf("Resolve() error = %v", err)
-	}
-
-	cmds := preflightCommandsWithRuntime(runtime)
-	if got, want := len(cmds), 3; got != want {
-		t.Fatalf("len(preflight commands) = %d, want %d", got, want)
-	}
-	if got := cmds[2]; got.Name != "pi-custom" || !reflect.DeepEqual(got.Args, []string{"--version"}) {
-		t.Fatalf("runtime preflight command = %+v", got)
-	}
-}
-
 func TestAgentCommandWithOptionsUsesConfiguredRuntime(t *testing.T) {
 	t.Parallel()
 
@@ -3909,33 +3892,8 @@ func TestAgentCommandWithOptionsUsesConfiguredRuntime(t *testing.T) {
 	if got, want := auggieCmd.Args[len(auggieCmd.Args)-1], withCompletionGatePrompt(prompt); got != want {
 		t.Fatalf("auggie prompt arg = %q, want completion-gated prompt", got)
 	}
-	piRuntime, err := agentruntime.Resolve(agentruntime.HarnessPi, "")
-	if err != nil {
-		t.Fatalf("Resolve(pi) error = %v", err)
-	}
-	piCmd, err := agentCommandWithOptions(piRuntime, targetDir, prompt, codexRunOptions{})
-	if err != nil {
-		t.Fatalf("agentCommandWithOptions(pi) error = %v", err)
-	}
-	if piCmd.Name != "pi" || piCmd.Dir != targetDir {
-		t.Fatalf("unexpected pi command: %+v", piCmd)
-	}
-	if got, want := piCmd.Args[:len(piCmd.Args)-1], []string{"--print", "--mode", "text", "--no-session"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("unexpected pi args prefix = %#v, want %#v", got, want)
-	}
-	if got, want := piCmd.Args[len(piCmd.Args)-1], withCompletionGatePrompt(prompt); got != want {
-		t.Fatalf("pi prompt arg = %q, want completion-gated prompt", got)
-	}
 	if _, err := agentCommandWithOptions(claudeRuntime, targetDir, prompt, codexRunOptions{ImagePaths: []string{"x.png"}}); err == nil {
 		t.Fatal("agentCommandWithOptions(claude with images) error = nil, want non-nil")
-	}
-	piImageCmd, err := agentCommandWithOptions(piRuntime, targetDir, prompt, codexRunOptions{ImagePaths: []string{"x.png"}})
-	if err != nil {
-		t.Fatalf("agentCommandWithOptions(pi with images) error = %v", err)
-	}
-	wantPiImageArgs := []string{"--print", "--mode", "text", "--no-session", "@x.png", withCompletionGatePrompt(prompt)}
-	if !reflect.DeepEqual(piImageCmd.Args, wantPiImageArgs) {
-		t.Fatalf("pi image args = %#v, want %#v", piImageCmd.Args, wantPiImageArgs)
 	}
 }
 
@@ -4025,7 +3983,6 @@ func TestRunAppliesResponseModeAcrossNonCodexRuntimes(t *testing.T) {
 	}{
 		{name: "claude", harness: agentruntime.HarnessClaude},
 		{name: "auggie", harness: agentruntime.HarnessAuggie},
-		{name: "pi", harness: agentruntime.HarnessPi},
 	}
 
 	for _, tt := range tests {

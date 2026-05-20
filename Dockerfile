@@ -51,7 +51,6 @@ RUN apt-get update \
       @openai/codex@latest \
       @anthropic-ai/claude-code@latest \
       @augmentcode/auggie@latest \
-      @mariozechner/pi-coding-agent@latest \
       @moltenbot/railsmith@latest \
       playwright@latest \
       @playwright/test@latest \
