@@ -99,6 +99,25 @@ func TestResolveRejectsUnknownHarness(t *testing.T) {
 	}
 }
 
+func TestResolveRejectsRemovedAgentHarnesses(t *testing.T) {
+	t.Parallel()
+
+	for _, harness := range []string{"augment", "auggie", "opencode", "pi"} {
+		harness := harness
+		t.Run(harness, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := Resolve(harness, "")
+			if err == nil {
+				t.Fatalf("Resolve(%q) error = nil, want unsupported harness error", harness)
+			}
+			if !strings.Contains(err.Error(), "unsupported agentHarness") {
+				t.Fatalf("Resolve(%q) error = %v, want unsupported agentHarness", harness, err)
+			}
+		})
+	}
+}
+
 func TestDisplayName(t *testing.T) {
 	t.Parallel()
 
