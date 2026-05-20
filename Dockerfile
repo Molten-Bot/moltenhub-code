@@ -53,7 +53,6 @@ RUN apt-get update \
       @augmentcode/auggie@latest \
       @mariozechner/pi-coding-agent@latest \
       @moltenbot/railsmith@latest \
-      opencode-ai@latest \
       playwright@latest \
       @playwright/test@latest \
     && playwright install --with-deps chromium \

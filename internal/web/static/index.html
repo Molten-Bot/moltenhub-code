@@ -719,7 +719,7 @@
     const GOOGLE_ANALYTICS_MEASUREMENT_ID = "G-BY33RFG2WB";
     const COMPLETED_STATUSES = new Set(["completed", "no_changes", "error", "invalid", "duplicate", "stopped"]);
     const TASK_PROGRESS_PREP_STAGES = new Set(["preflight", "auth", "workspace", "config", "submit", "dispatch"]);
-    const TASK_PROGRESS_AGENT_STAGES = new Set(["codex", "claude", "auggie", "pi", "opencode", "augment", "agent", "review"]);
+    const TASK_PROGRESS_AGENT_STAGES = new Set(["codex", "claude", "auggie", "pi", "augment", "agent", "review"]);
     const LIBRARY_TASK_TYPE_ORDER = Object.freeze(["quality", "maintenance", "security", "review"]);
     const LIBRARY_TASK_TYPE_DEFS = Object.freeze({
       quality: { label: "Quality", icon: "badge-check" },
@@ -750,10 +750,9 @@
       auggie: "/static/logos/augment.svg",
       augment: "/static/logos/augment.svg",
       pi: "/static/logos/pi.svg",
-      opencode: "/static/logos/opencode.svg",
     });
-    const AGENT_COLOR_LOGO_HARNESSES = new Set(["codex", "claude", "auggie", "augment", "opencode"]);
-    const AGENT_HARNESS_SELECTION_ORDER = Object.freeze(["claude", "codex", "opencode", "pi", "auggie"]);
+    const AGENT_COLOR_LOGO_HARNESSES = new Set(["codex", "claude", "auggie", "augment"]);
+    const AGENT_HARNESS_SELECTION_ORDER = Object.freeze(["claude", "codex", "pi", "auggie"]);
     const AGENT_HARNESS_SELECTION_PRIORITY = Object.freeze(
       AGENT_HARNESS_SELECTION_ORDER.reduce((priority, harness, index) => {
         priority[harness] = index;
@@ -964,7 +963,6 @@
       const label = configuredAgentLabel().toLowerCase();
       if (label.includes("claude")) return AGENT_LOGO_URLS.claude;
       if (label.includes("auggie") || label.includes("augment")) return AGENT_LOGO_URLS.auggie;
-      if (label.includes("opencode")) return AGENT_LOGO_URLS.opencode;
       if (/\bpi\b/.test(label)) return AGENT_LOGO_URLS.pi;
       if (label.includes("codex")) return AGENT_LOGO_URLS.codex;
       return "";
@@ -977,7 +975,6 @@
       }
       if (label.includes("claude")) return AGENT_LOGO_URLS.claude;
       if (label.includes("auggie") || label.includes("augment")) return AGENT_LOGO_URLS.auggie;
-      if (label.includes("opencode")) return AGENT_LOGO_URLS.opencode;
       if (/\bpi\b/.test(label)) return AGENT_LOGO_URLS.pi;
       if (label.includes("codex")) return AGENT_LOGO_URLS.codex;
       return "";
@@ -993,7 +990,6 @@
       }
       if (label.includes("claude")) return true;
       if (label.includes("auggie") || label.includes("augment")) return true;
-      if (label.includes("opencode")) return true;
       if (label.includes("codex")) return true;
       return false;
     }
@@ -1532,7 +1528,6 @@
       if (normalized === "codex") return "Codex";
       if (normalized === "claude") return "Claude Code";
       if (normalized === "auggie") return "Auggie";
-      if (normalized === "opencode") return "OpenCode";
       if (normalized === "pi") return "Pi";
       return "Agent";
     }
@@ -3325,11 +3320,6 @@
       return authHarness(current) === "pi" && isManualConfigureState(current) && !isGitHubTokenConfigureState(current);
     }
 
-    function isOpencodeConfigureState(auth) {
-      const current = auth && typeof auth === "object" ? auth : state.agentAuth;
-      return authHarness(current) === "opencode" && isManualConfigureState(current) && !isGitHubTokenConfigureState(current);
-    }
-
     function isClaudeGitHubConfigureState(auth) {
       const current = auth && typeof auth === "object" ? auth : state.agentAuth;
       return isManualConfigureState(current) && isGitHubTokenConfigureState(current);
@@ -3369,7 +3359,7 @@
 
     function isSupportedHarnessSelectionValue(value) {
       const normalized = String(value || "").trim().toLowerCase();
-      return normalized === "codex" || normalized === "claude" || normalized === "auggie" || normalized === "pi" || normalized === "opencode";
+      return normalized === "codex" || normalized === "claude" || normalized === "auggie" || normalized === "pi";
     }
 
     function harnessSelectionPriority(value) {
@@ -3601,7 +3591,6 @@
       const requiresManualConfigure = isManualConfigureState(state.agentAuth);
       const needsHarnessSelection = isHarnessSelectionState(state.agentAuth);
       const needsAuggieConfigure = isAuggieConfigureState(state.agentAuth);
-      const needsOpencodeConfigure = isOpencodeConfigureState(state.agentAuth);
       const needsClaudeGitHubConfigure = isClaudeGitHubConfigureState(state.agentAuth);
       const needsClaudeCredentialsConfigure = isClaudeCredentialsConfigureState(state.agentAuth);
 
@@ -3662,8 +3651,6 @@
           agentAuthTitle.textContent = "Select Agent";
         } else if (needsAuggieConfigure) {
           agentAuthTitle.textContent = "Setup Auggie";
-        } else if (needsOpencodeConfigure) {
-          agentAuthTitle.textContent = "Setup OpenCode";
         } else if (isPiConfigureState(state.agentAuth)) {
           agentAuthTitle.textContent = "Setup Pi";
         } else if (needsClaudeGitHubConfigure) {
@@ -3745,11 +3732,9 @@
       if (agentAuthConfigureCommand) {
         const fallbackCommand = needsAuggieConfigure
           ? "auggie token print"
-          : needsOpencodeConfigure
-            ? "opencode auth login"
-            : needsPiConfigure
-              ? "cat ~/.pi/agent/auth.json"
-              : "gh auth token";
+          : needsPiConfigure
+            ? "cat ~/.pi/agent/auth.json"
+            : "gh auth token";
         agentAuthConfigureCommand.textContent = state.agentAuth.configureCommand || fallbackCommand;
       }
       if (agentAuthConfigureCommandLabel) {
@@ -3768,8 +3753,6 @@
           agentAuthConfigureLabel.textContent = "Paste Claude credentials";
         } else if (needsPiConfigure) {
           agentAuthConfigureLabel.textContent = "Paste ~/.pi/agent/auth.json";
-        } else if (needsOpencodeConfigure) {
-          agentAuthConfigureLabel.textContent = "Configure OpenCode locally";
         } else {
           agentAuthConfigureLabel.textContent = "Paste configuration value";
         }
@@ -3782,9 +3765,7 @@
             ? "Paste ~/.claude/.credentials.json contents or CLAUDE_CODE_OAUTH_TOKEN..."
             : needsPiConfigure
               ? "Paste ~/.pi/agent/auth.json contents..."
-              : needsOpencodeConfigure
-                ? "Run opencode auth login or set provider credentials, then click Done."
-                : "ghp_xxx";
+              : "ghp_xxx";
         const placeholder = state.agentAuth.configurePlaceholder || fallbackPlaceholder;
         agentAuthConfigureInput.placeholder = placeholder;
         agentAuthConfigureInput.classList.toggle("agent-auth-configure-input-github", needsClaudeGitHubConfigure);

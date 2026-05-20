@@ -788,7 +788,7 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 					"minimum": 1,
 				},
 				"targetsubdir": propertyNonEmptyString(),
-				"agentharness": propertyStringEnum("codex", "claude", "auggie", "pi", "opencode"),
+				"agentharness": propertyStringEnum("codex", "claude", "auggie", "pi"),
 				"agentcommand": propertyNonEmptyString(),
 				"prompt":       propertyNonEmptyString(),
 				"responsemode": propertyStringEnum(config.SupportedResponseModesWithDefault()...),

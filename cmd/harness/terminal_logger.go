@@ -207,7 +207,7 @@ func compactAgentProgressLine(line string) (string, bool) {
 
 func isCompactableAgentStage(stage string) bool {
 	switch stage {
-	case "agent", "codex", "claude", "auggie", "pi", "opencode":
+	case "agent", "codex", "claude", "auggie", "pi":
 		return true
 	default:
 		return false

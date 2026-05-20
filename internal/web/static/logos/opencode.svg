@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="OpenCode logo">
-  <rect x="4" y="4" width="40" height="40" rx="9" fill="#101828"/>
-  <path d="M19.5 17L12.5 24L19.5 31" fill="none" stroke="#12D18E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M28.5 17L35.5 24L28.5 31" fill="none" stroke="#12D18E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M26.5 14L21.5 34" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>
-</svg>

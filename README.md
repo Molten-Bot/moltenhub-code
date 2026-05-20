@@ -56,7 +56,7 @@ Useful environment variables:
 - `MOLTEN_HUB_SESSION_KEY`: runtime config session key; defaults to `main`.
 - `HARNESS_AGENT_HARNESS`: default agent harness.
 - `HARNESS_AGENT_COMMAND`: default agent executable.
-- `OPENAI_API_KEY`: Codex login bootstrap; also usable by OpenCode providers.
+- `OPENAI_API_KEY`: Codex login bootstrap.
 - `AUGMENT_SESSION_AUTH`: Auggie session JSON from `auggie token print`.
 - `PI_PROVIDER_AUTH` or `PI_AUTH_JSON`: Pi provider auth bootstrap.
 

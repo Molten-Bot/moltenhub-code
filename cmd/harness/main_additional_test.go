@@ -577,7 +577,6 @@ func TestShouldEnableAgentAuthConfigure(t *testing.T) {
 		{name: "claude", harness: agentruntime.HarnessClaude, want: true},
 		{name: "auggie", harness: agentruntime.HarnessAuggie, want: true},
 		{name: "pi", harness: agentruntime.HarnessPi, want: true},
-		{name: "opencode", harness: agentruntime.HarnessOpencode, want: true},
 		{name: "mixed-case-codex", harness: "  CoDeX  ", want: true},
 		{name: "unknown", harness: "custom", want: false},
 		{name: "empty", harness: "", want: false},

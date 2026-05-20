@@ -3926,20 +3926,6 @@ func TestAgentCommandWithOptionsUsesConfiguredRuntime(t *testing.T) {
 	if got, want := piCmd.Args[len(piCmd.Args)-1], withCompletionGatePrompt(prompt); got != want {
 		t.Fatalf("pi prompt arg = %q, want completion-gated prompt", got)
 	}
-	opencodeRuntime, err := agentruntime.Resolve(agentruntime.HarnessOpencode, "")
-	if err != nil {
-		t.Fatalf("Resolve(opencode) error = %v", err)
-	}
-	opencodeCmd, err := agentCommandWithOptions(opencodeRuntime, targetDir, prompt, codexRunOptions{})
-	if err != nil {
-		t.Fatalf("agentCommandWithOptions(opencode) error = %v", err)
-	}
-	if opencodeCmd.Name != "opencode" || opencodeCmd.Dir != targetDir {
-		t.Fatalf("unexpected opencode command: %+v", opencodeCmd)
-	}
-	if got, want := opencodeCmd.Args, []string{"run", "--dangerously-skip-permissions", withCompletionGatePrompt(prompt)}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("unexpected opencode args = %#v, want %#v", got, want)
-	}
 	if _, err := agentCommandWithOptions(claudeRuntime, targetDir, prompt, codexRunOptions{ImagePaths: []string{"x.png"}}); err == nil {
 		t.Fatal("agentCommandWithOptions(claude with images) error = nil, want non-nil")
 	}
@@ -4040,7 +4026,6 @@ func TestRunAppliesResponseModeAcrossNonCodexRuntimes(t *testing.T) {
 		{name: "claude", harness: agentruntime.HarnessClaude},
 		{name: "auggie", harness: agentruntime.HarnessAuggie},
 		{name: "pi", harness: agentruntime.HarnessPi},
-		{name: "opencode", harness: agentruntime.HarnessOpencode},
 	}
 
 	for _, tt := range tests {

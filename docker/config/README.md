@@ -3,7 +3,7 @@
 `docker-compose.yml` mounts `./.moltenhub` to `/workspace/config` in the container.
 
 This directory remains available if you prefer a manual bind mount (for example with `docker run`).
-The image sets `HOME=/workspace/config/home` by default so CLI auth files from Codex, Claude, Auggie, PI, and OpenCode persist with the same config mount.
+The image sets `HOME=/workspace/config/home` by default so CLI auth files from Codex, Claude, Auggie, and PI persist with the same config mount.
 
 `GITHUB_TOKEN` also works as direct bootstrap input. When container starts, entrypoint copies `GITHUB_TOKEN` to `GH_TOKEN`, runs `gh` auth setup, and hub onboarding skips GitHub token prompt if token already exists.
 
@@ -20,7 +20,6 @@ When running hub mode, `init.json` may also include runtime secrets:
 - `github_token` for GitHub auth bootstrap
 - `openai_api_key` for Codex CLI login when using the Codex harness
 - `augment_session_auth` for Auggie CLI auth when using the Auggie harness; set it to the full session JSON from `auggie token print`
-- OpenCode can use `opencode auth login`, persisted auth under `HOME`, or provider environment variables such as `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`
 
 After first successful onboarding, persisted `config.json` may also contain `github_token`. Future boots load that automatically if `GITHUB_TOKEN`/`GH_TOKEN` are unset.
 
@@ -72,6 +71,6 @@ services:
       MOLTEN_HUB_TOKEN: ${MOLTEN_HUB_TOKEN}
       MOLTEN_HUB_REGION: na
       HARNESS_AGENT_HARNESS: codex
-      # Optional for Codex or OpenCode agent auth bootstrap:
+      # Optional for Codex agent auth bootstrap:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
 ```

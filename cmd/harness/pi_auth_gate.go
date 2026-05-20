@@ -57,7 +57,6 @@ var piProviderOptions = []piProviderOption{
 	{EnvVar: "ZAI_API_KEY", Label: "ZAI API key", Description: "Use ZAI with an API key."},
 	{EnvVar: "MISTRAL_API_KEY", Label: "Mistral API key", Description: "Use Mistral with an API key."},
 	{EnvVar: "MINIMAX_API_KEY", Label: "MiniMax API key", Description: "Use MiniMax with an API key."},
-	{EnvVar: "OPENCODE_API_KEY", Label: "OpenCode Zen/OpenCode Go API key", Description: "Use OpenCode Zen/OpenCode Go with an API key."},
 	{EnvVar: "KIMI_API_KEY", Label: "Kimi For Coding API key", Description: "Use Kimi For Coding with an API key."},
 	{EnvVar: "AWS_PROFILE", Label: "AWS profile", Description: "AWS profile name for Amazon Bedrock."},
 	{EnvVar: "AWS_ACCESS_KEY_ID", Label: "AWS access key ID", Description: "AWS access key for Amazon Bedrock."},
