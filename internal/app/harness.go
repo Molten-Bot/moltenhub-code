@@ -2857,6 +2857,14 @@ func (h Harness) runCodexWithHeartbeat(
 					)
 					return run.res, nil
 				}
+				if isNonFatalHubSnapshotRefreshFailure(detail, run.res) {
+					h.logf(
+						"stage=%s status=warn action=hub_snapshot_refresh_unavailable detail=%q",
+						agentStage,
+						detail,
+					)
+					return run.res, nil
+				}
 				return run.res, fmt.Errorf("%s reported failure: %s", agentStage, detail)
 			}
 			if run.err != nil {
@@ -3222,6 +3230,28 @@ func isRecoveredTransientRegistryLookupFailure(detail string, res execx.Result) 
 		}
 	}
 	return false
+}
+
+func isNonFatalHubSnapshotRefreshFailure(detail string, res execx.Result) bool {
+	text := strings.ToLower(strings.TrimSpace(strings.Join([]string{
+		detail,
+		res.Stdout,
+		res.Stderr,
+	}, "\n")))
+	if text == "" {
+		return false
+	}
+	requiredMarkers := []string{
+		"prebuild hub snapshot refresh could not fetch live snapshot",
+		"moltenhub_admin_snapshot_key is not configured",
+		"build kept existing `hub-snapshot.json` and completed",
+	}
+	for _, marker := range requiredMarkers {
+		if !strings.Contains(text, marker) {
+			return false
+		}
+	}
+	return true
 }
 
 func codexExtractErrorDetail(output string) string {

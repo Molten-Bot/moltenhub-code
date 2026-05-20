@@ -5335,6 +5335,51 @@ func TestCodexReportedFailureDetectsTerminalFailureInNoisyStdout(t *testing.T) {
 	}
 }
 
+func TestCodexReportedFailureTreatsCompletedHubSnapshotRefreshWarningAsNonFatal(t *testing.T) {
+	t.Parallel()
+
+	res := execx.Result{
+		Stdout: strings.Join([]string{
+			"Done. Blog post added at [src/data/blogposts.json](/tmp/repo/src/data/blogposts.json:2).",
+			"Validation:",
+			"`npm run generate:content` passed.",
+			"`npm run build` passed after `npm ci`.",
+			"Failure: prebuild hub snapshot refresh could not fetch live snapshot.",
+			"Error details: `MOLTENHUB_ADMIN_SNAPSHOT_KEY is not configured for this build.` Build kept existing `hub-snapshot.json` and completed.",
+			"Sources used: npm package facts from `npm view @moltenbot/railsmith`.",
+		}, "\n"),
+	}
+
+	failed, detail := codexReportedFailure(res)
+	if !failed {
+		t.Fatal("codexReportedFailure(hub snapshot warning) = false, want initial terminal failure detection")
+	}
+	detail = codexFailureDetailWithErrorDetails(res, detail)
+	if !isNonFatalHubSnapshotRefreshFailure(detail, res) {
+		t.Fatalf("isNonFatalHubSnapshotRefreshFailure(...) = false, detail=%q", detail)
+	}
+}
+
+func TestCodexReportedFailureDoesNotIgnoreIncompleteHubSnapshotRefreshFailure(t *testing.T) {
+	t.Parallel()
+
+	res := execx.Result{
+		Stdout: strings.Join([]string{
+			"Failure: prebuild hub snapshot refresh could not fetch live snapshot.",
+			"Error details: `MOLTENHUB_ADMIN_SNAPSHOT_KEY is not configured for this build.`",
+		}, "\n"),
+	}
+
+	failed, detail := codexReportedFailure(res)
+	if !failed {
+		t.Fatal("codexReportedFailure(incomplete hub snapshot failure) = false, want failure")
+	}
+	detail = codexFailureDetailWithErrorDetails(res, detail)
+	if isNonFatalHubSnapshotRefreshFailure(detail, res) {
+		t.Fatalf("isNonFatalHubSnapshotRefreshFailure(...) = true for incomplete build detail %q", detail)
+	}
+}
+
 func TestCodexReportedFailureDetectsStructuredTaskFailurePayload(t *testing.T) {
 	t.Parallel()
 
