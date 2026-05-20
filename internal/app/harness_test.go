@@ -5245,6 +5245,44 @@ func TestCodexReportedFailureIgnoresInterimFailureMarkerInNoisyStdout(t *testing
 	}
 }
 
+func TestCodexReportedFailureIgnoresBareFailureHeadingInCompletedSummary(t *testing.T) {
+	t.Parallel()
+
+	res := execx.Result{
+		Stdout: strings.Join([]string{
+			"Done.",
+			"Changed:",
+			"- Added [GlobalStyles.astro](/tmp/repo/src/components/GlobalStyles.astro)",
+			"Verification:",
+			"- `npm run typecheck` passed.",
+			"- `npm run build` passed.",
+			"Failure:",
+			"- `npm test` failed pre-existing `tests/unit/login-targets.test.ts` expectation.",
+			"- `npm run lint` failed pre-existing `src/pages/code.astro` type errors.",
+			"Remaining risk: visual comparison only smoke-level.",
+		}, "\n"),
+	}
+
+	if failed, detail := codexReportedFailure(res); failed || detail != "" {
+		t.Fatalf("codexReportedFailure(completed summary failure heading) = (%v, %q), want (false, \"\")", failed, detail)
+	}
+}
+
+func TestCodexReportedFailureKeepsBareFailureHeadingFatalWithoutCompletion(t *testing.T) {
+	t.Parallel()
+
+	res := execx.Result{
+		Stdout: strings.Join([]string{
+			"Failure:",
+			"Error details: could not write repository files.",
+		}, "\n"),
+	}
+
+	if failed, detail := codexReportedFailure(res); !failed || !strings.HasPrefix(detail, "Failure:") {
+		t.Fatalf("codexReportedFailure(bare fatal heading) = (%v, %q), want (true, \"Failure:...\")", failed, detail)
+	}
+}
+
 func TestCodexReportedFailureIgnoresNarrativeTaskFailedPhrasing(t *testing.T) {
 	t.Parallel()
 

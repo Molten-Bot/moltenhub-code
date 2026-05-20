@@ -3357,9 +3357,12 @@ func codexReportedFailureInOutput(output string, allowStructured bool) (bool, st
 
 	var structuredTaskFailureLine string
 	var structuredErrorLine string
-	for _, trimmed := range nonEmpty[start:] {
+	for i, trimmed := range nonEmpty[start:] {
 		lower := strings.ToLower(trimmed)
 		if strings.HasPrefix(lower, "failure:") {
+			if isBareFailureHeadingAfterCompletion(trimmed, nonEmpty[:start+i]) {
+				continue
+			}
 			return true, trimmed
 		}
 		if isNoImplementationTargetLine(lower) {
@@ -3380,6 +3383,20 @@ func codexReportedFailureInOutput(output string, allowStructured bool) (bool, st
 		return true, structuredTaskFailureLine + " " + structuredErrorLine
 	}
 	return false, ""
+}
+
+func isBareFailureHeadingAfterCompletion(line string, previous []string) bool {
+	trimmed := strings.TrimSpace(line)
+	if !strings.EqualFold(trimmed, "failure:") {
+		return false
+	}
+	for _, prev := range previous {
+		switch strings.ToLower(strings.TrimSpace(prev)) {
+		case "done.", "success:", "changed:", "verification:", "verified:":
+			return true
+		}
+	}
+	return false
 }
 
 func codexReportedCompactStructuredFailure(output string) (bool, string) {
