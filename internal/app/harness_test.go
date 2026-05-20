@@ -1782,6 +1782,25 @@ func TestRunFailedChecksTriggersCodexRemediation(t *testing.T) {
 	}
 }
 
+func TestRemediationPromptUsesCIFixLibraryTask(t *testing.T) {
+	t.Parallel()
+
+	prompt := remediationPrompt("Original task prompt", "https://github.com/acme/repo/pull/42", "unit tests failed", 1)
+
+	for _, want := range []string{
+		"You are a senior software engineer fixing pull-request CI failures.",
+		"Check PR CI status with gh.",
+		"Remediation round 1/3.",
+		"PR CI/CD checks are failing right now.",
+		"unit tests failed",
+		"Original task context:\nOriginal task prompt",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("remediationPrompt() missing %q in:\n%s", want, prompt)
+		}
+	}
+}
+
 func TestRunFailedChecksWithStaleFailureSnapshotPasses(t *testing.T) {
 	t.Parallel()
 
@@ -1819,7 +1838,7 @@ func TestRunFailedChecksWithStaleFailureSnapshotPasses(t *testing.T) {
 		{cmd: pushCommand(repoDir, branch)},
 		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
 		{cmd: prChecksCommand(repoDir, prURL), res: execx.Result{Stdout: checkOutput + "\n"}, err: errors.New("checks failed")},
-		{cmd: prChecksJSONCommand(repoDir, prURL, true), res: execx.Result{Stdout: snapshotJSON + "\n"}},
+		{cmd: prChecksJSONCommand(repoDir, prURL, false), res: execx.Result{Stdout: snapshotJSON + "\n"}},
 	}}
 
 	h := New(fake)
@@ -3473,7 +3492,7 @@ func TestCommandBuilders(t *testing.T) {
 	}
 
 	checks := prChecksCommand(repoDir, "https://github.com/acme/repo/pull/42")
-	wantChecks := []string{"pr", "checks", "42", "--watch", "--required", "--interval", "10"}
+	wantChecks := []string{"pr", "checks", "42", "--watch", "--interval", "10"}
 	if checks.Name != "gh" || checks.Dir != repoDir || !reflect.DeepEqual(checks.Args, wantChecks) {
 		t.Fatalf("pr checks command unexpected: %+v", checks)
 	}

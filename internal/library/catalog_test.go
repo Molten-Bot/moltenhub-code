@@ -247,6 +247,16 @@ func TestLoadCatalogSupportsSingleTaskShape(t *testing.T) {
 	if got, want := catalog.Names(), []string{"security-review"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Names() = %v, want %v", got, want)
 	}
+	task, ok := catalog.Task(" security-review ")
+	if !ok {
+		t.Fatal("Task(security-review) found = false, want true")
+	}
+	if got, want := task.Prompt, "Review the repository."; got != want {
+		t.Fatalf("Task(security-review).Prompt = %q, want %q", got, want)
+	}
+	if _, ok := catalog.Task("missing"); ok {
+		t.Fatal("Task(missing) found = true, want false")
+	}
 }
 
 func TestLoadCatalogRejectsSnakeCaseTaskFields(t *testing.T) {

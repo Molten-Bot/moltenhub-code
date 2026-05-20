@@ -23,6 +23,7 @@ import (
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/failurefollowup"
 	"github.com/Molten-Bot/moltenhub-code/internal/githubutil"
+	"github.com/Molten-Bot/moltenhub-code/internal/library"
 	"github.com/Molten-Bot/moltenhub-code/internal/slug"
 	"github.com/Molten-Bot/moltenhub-code/internal/workspace"
 )
@@ -48,6 +49,7 @@ const (
 	prChecksNoReportRetryDelay       = 10 * time.Second
 	maxCheckSummaryChars             = 4000
 	defaultCIWorkflowPath            = ".github/workflows/ci.yml"
+	ciFixLibraryTaskName             = "fix-pr-ci-tests"
 	maxPushSyncAttempts              = 3
 	maxCloneAttempts                 = 3
 	cloneRetryDelay                  = 2 * time.Second
@@ -489,7 +491,7 @@ func (h Harness) processChangedRepo(
 			checkSummary string
 		)
 		for noReportRetry := 0; ; noReportRetry++ {
-			requiredChecksOnly := true
+			requiredChecksOnly := false
 			h.logf("stage=checks status=start repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt+1)
 			checkRes, checkErr = h.runCommand(ctx, "checks", prChecksCommand(repo.Dir, repo.PRURL))
 			if checkErr != nil && isNoRequiredChecksReported(checkRes, checkErr) {
@@ -4351,7 +4353,6 @@ func prChecksCommand(repoDir, prURL string) execx.Command {
 		Args: []string{
 			"pr", "checks", githubutil.PullRequestSelector(prURL),
 			"--watch",
-			"--required",
 			"--interval", fmt.Sprintf("%d", prChecksWatchIntervalSeconds),
 		},
 	}
@@ -4451,13 +4452,15 @@ func withImplementationTargetGuard(prompt string) string {
 }
 
 func remediationPrompt(basePrompt, prURL, checkSummary string, attempt int) string {
+	ciFixPrompt := ciFixLibraryPrompt()
 	return fmt.Sprintf(
-		"%s\n\nRemediation round %d/%d.\nAn open PR already exists: %s\n\nRequired CI/CD checks are failing right now.\nLatest check output:\n%s\n\nFix the underlying issues, update tests/workflows as needed, and keep the PR high quality.",
-		strings.TrimSpace(basePrompt),
+		"%s\n\nRemediation round %d/%d.\nAn open PR already exists: %s\n\nPR CI/CD checks are failing right now.\nLatest check output:\n%s\n\nOriginal task context:\n%s",
+		ciFixPrompt,
 		attempt,
 		maxPRCheckRemediationAttempts,
 		prURL,
 		checkSummary,
+		strings.TrimSpace(basePrompt),
 	)
 }
 
@@ -4465,16 +4468,28 @@ func remediationPromptForRepo(basePrompt, repoPath, repoURL, prURL, checkSummary
 	if !multiRepo {
 		return remediationPrompt(basePrompt, prURL, checkSummary, attempt)
 	}
+	ciFixPrompt := ciFixLibraryPrompt()
 	return fmt.Sprintf(
-		"%s\n\nRemediation round %d/%d.\nTarget repository workspace path: %s\nTarget repository remote: %s\nAn open PR already exists for this repository: %s\n\nRequired CI/CD checks are failing right now for this repository.\nLatest check output:\n%s\n\nFocus remediation changes on this repository, update tests/workflows as needed, and keep the PR high quality. If you also change other repositories, ensure each changed repository has its own branch and PR.",
-		strings.TrimSpace(basePrompt),
+		"%s\n\nRemediation round %d/%d.\nTarget repository workspace path: %s\nTarget repository remote: %s\nAn open PR already exists for this repository: %s\n\nPR CI/CD checks are failing right now for this repository.\nLatest check output:\n%s\n\nFocus remediation changes on this repository. If you also change other repositories, ensure each changed repository has its own branch and PR.\n\nOriginal task context:\n%s",
+		ciFixPrompt,
 		attempt,
 		maxPRCheckRemediationAttempts,
 		repoPath,
 		repoURL,
 		prURL,
 		checkSummary,
+		strings.TrimSpace(basePrompt),
 	)
+}
+
+func ciFixLibraryPrompt() string {
+	catalog, err := library.LoadCatalog(library.DefaultDir)
+	if err == nil {
+		if task, ok := catalog.Task(ciFixLibraryTaskName); ok && strings.TrimSpace(task.Prompt) != "" {
+			return strings.TrimSpace(task.Prompt)
+		}
+	}
+	return "You are a senior software engineer fixing pull-request CI failures.\n\nFix the root cause of broken CI with the smallest coherent repository diff. Validate locally where possible. If CI, tests, or validation fail, report `Failure:` and `Error details:`."
 }
 
 func summarizeCheckOutput(res execx.Result) string {

@@ -167,6 +167,12 @@ func (c Catalog) Names() []string {
 	return out
 }
 
+// Task returns one task definition by name.
+func (c Catalog) Task(name string) (TaskDefinition, bool) {
+	task, ok := c.byName[strings.TrimSpace(name)]
+	return task, ok
+}
+
 // ExpandRunConfig resolves one library task name into a standard harness run config.
 func (c Catalog) ExpandRunConfig(taskName, repo, branch string) (config.Config, error) {
 	taskName = strings.TrimSpace(taskName)
