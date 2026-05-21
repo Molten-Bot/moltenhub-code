@@ -127,7 +127,7 @@ func TestBrokerTracksDashboardSourceMix(t *testing.T) {
 	for _, group := range snap.Stats.SourceMix {
 		got[group.Name] = group.Tasks
 	}
-	for _, name := range []string{"Dialogue", "Hub", "JSON", "Library", "Prompt"} {
+	for _, name := range []string{"Chat", "Hub", "JSON", "Library", "Prompt"} {
 		if got[name] != 1 {
 			t.Fatalf("source_mix[%q] = %d, want 1 (all groups: %#v)", name, got[name], snap.Stats.SourceMix)
 		}

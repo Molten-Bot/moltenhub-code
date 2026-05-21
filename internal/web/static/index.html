@@ -409,15 +409,15 @@
           </div>
         </section>
 
-        <section id="chat-display" class="chat-main hidden" aria-label="Dialogue" aria-hidden="true">
+        <section id="chat-display" class="chat-main hidden" aria-label="Chat" aria-hidden="true">
           <section class="chat-shell" aria-labelledby="chat-title">
             <div class="chat-head">
               <div>
-                <h1 id="chat-title" class="chat-title" aria-label="Git / Dialogue">
+                <h1 id="chat-title" class="chat-title" aria-label="Git / Chat">
                   <span class="panel-section-title chat-title-github-logo" aria-hidden="true">
                     <img src="/static/logos/github.svg" alt="">
                   </span>
-                  <span class="panel-section-title chat-title-current">Dialogue</span>
+                  <span class="panel-section-title chat-title-current">Chat</span>
                 </h1>
               </div>
               <p id="chat-status" class="chat-status" aria-live="polite"></p>
@@ -729,7 +729,7 @@
       review: { label: "Review", icon: "clipboard-check" },
     });
     const TASK_PROGRESS_STEP_DEFS = Object.freeze({
-      entry_chat: { id: "entry_chat", label: "Dialogue", detail: "Queued from Dialogue.", icon: "entry_chat" },
+      entry_chat: { id: "entry_chat", label: "Chat", detail: "Queued from Chat.", icon: "entry_chat" },
       entry_hub: { id: "entry_hub", label: "Hub", detail: "Queued by Molten Hub.", icon: "entry_hub" },
       entry_prompt: { id: "entry_prompt", label: "Prompt", detail: "Queued from Prompt Studio.", icon: "entry_prompt" },
       entry_library: { id: "entry_library", label: "Library", detail: "Queued from Library Studio.", icon: "entry_library" },
@@ -2289,7 +2289,7 @@
       } else {
         chatDockLink.removeAttribute("href");
       }
-      chatDockLink.title = available ? "Dialogue" : (state.githubReposLoadError || "Dialogue unavailable until repositories load");
+      chatDockLink.title = available ? "Chat" : (state.githubReposLoadError || "Chat unavailable until repositories load");
     }
 
     function dashboardHasStartedTask(snapshot) {
@@ -4727,10 +4727,10 @@
       dashboardSourceChart = new window.Chart(dashboardSourceChartCanvas, {
         type: "doughnut",
         data: {
-          labels: ["Dialogue", "Hub", "JSON", "Library", "Prompt", "Other"],
+          labels: ["Chat", "Hub", "JSON", "Library", "Prompt", "Other"],
           datasets: [{
             data: [0, 0, 0, 0, 0, 0],
-            backgroundColor: ["Dialogue", "Hub", "JSON", "Library", "Prompt", "Other"].map(dashboardSourceColor),
+            backgroundColor: ["Chat", "Hub", "JSON", "Library", "Prompt", "Other"].map(dashboardSourceColor),
             borderColor: dashboardCSSValue("--dashboard-chart-border", "rgba(255, 255, 255, 0.76)"),
             borderWidth: 2,
           }],
@@ -6301,7 +6301,7 @@
     function chatPromptSourceLabel(source) {
       switch (normalizeTaskStartSource(source)) {
         case "chat":
-          return "Dialogue";
+          return "Chat";
         case "hub":
           return "Hub";
         case "library":
@@ -6317,7 +6317,8 @@
 
     function chatPromptDisplaySourceLabel(value) {
       const label = String(value || "").trim();
-      return label.toLowerCase() === "chat" ? "Dialogue" : label;
+      const normalized = label.toLowerCase();
+      return normalized === "chat" || normalized === "dialogue" ? "Chat" : label;
     }
 
     function normalizeChatPromptMessage(message, existing = null) {
@@ -6700,7 +6701,7 @@
       button.type = "button";
       button.className = "chat-repo-message-copy";
       button.title = "Copy message";
-      button.setAttribute("aria-label", "Copy dialogue message");
+      button.setAttribute("aria-label", "Copy chat message");
       button.innerHTML = '<i data-lucide="copy" aria-hidden="true"></i>';
       button.addEventListener("click", (event) => {
         event.preventDefault();
@@ -7345,7 +7346,7 @@
           requestID,
           imageCount: promptImages.length,
           source: "chat",
-          sourceLabel: "Dialogue",
+          sourceLabel: "Chat",
         });
         state.chatClosedRepoKeys.delete(chatRepoKey(repoValue));
         persistChatClosedRepoKeys();

@@ -1640,7 +1640,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	chatDockIndex := strings.Index(markup, `data-app-display="chat"`)
 	promptDockIndex := strings.Index(markup, `id="prompt-mode-builder"`)
 	if chatDockIndex < 0 || promptDockIndex < 0 || chatDockIndex > promptDockIndex {
-		t.Fatalf("expected Dialogue to render before Prompt in the bottom dock")
+		t.Fatalf("expected Chat to render before Prompt in the bottom dock")
 	}
 	if !strings.Contains(markup, `<span class="prompt-mode-link-tooltip" aria-hidden="true">Prompt</span>`) {
 		t.Fatalf("expected index html to expose Prompt through dock tooltip text")
@@ -1776,7 +1776,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		strings.Contains(markup, `repoRead.textContent = "repos: reading GitHub projects";`) ||
 		strings.Contains(markup, `const GITHUB_REPOS_LOADING_TASK_ID = "github-repos-loading";`) ||
 		strings.Contains(markup, `Loading repositories...`) {
-		t.Fatalf("expected GitHub repository loading to stay out of Current Work and visible dialogue text")
+		t.Fatalf("expected GitHub repository loading to stay out of Current Work and visible chat text")
 	}
 	if !strings.Contains(markup, `function submitChatRepoPrompt(repo, input, statusNode, images = [], logNode = null, setImages = null)`) ||
 		!strings.Contains(markup, `function chatRepoOwnerIconName(repo)`) ||
@@ -2659,7 +2659,7 @@ func TestHandlerServesChatView(t *testing.T) {
 
 	markup := resp.Body.String()
 	required := []string{
-		`<title>Molten Hub Code Dialogue</title>`,
+		`<title>Molten Hub Code Chat</title>`,
 		`src="https://www.googletagmanager.com/gtag/js?id=G-BY33RFG2WB"`,
 		`window.gtag("config", "G-BY33RFG2WB");`,
 		`src="/static/site-header.js"`,
@@ -2668,7 +2668,7 @@ func TestHandlerServesChatView(t *testing.T) {
 		`data-app-display="chat"`,
 		`class="panel-section-title chat-title-github-logo" aria-hidden="true"`,
 		`<img src="/static/logos/github.svg" alt="">`,
-		`<span class="panel-section-title chat-title-current">Dialogue</span>`,
+		`<span class="panel-section-title chat-title-current">Chat</span>`,
 		`<i data-lucide="message-circle" aria-hidden="true"></i>`,
 		`id="chat-repo-search" class="chat-search-input" type="search"`,
 		`id="chat-repo-grid" class="chat-repo-grid" aria-label="GitHub repositories"`,
@@ -2940,7 +2940,7 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 		!strings.Contains(css, ".chat-repo-grid-active-repo {\n  flex: 1 1 auto;") ||
 		!strings.Contains(css, ".chat-repo-grid-active-repo .chat-repo-card[aria-expanded=\"true\"] {") ||
 		!strings.Contains(css, ".chat-repo-grid-active-repo .chat-repo-log:not([hidden]) {") {
-		t.Fatalf("expected selected chat repository panels to fill the Git / Dialogue shell")
+		t.Fatalf("expected selected chat repository panels to fill the Git / Chat shell")
 	}
 	if !strings.Contains(css, ".chat-repo-message[data-tone=\"success\"] {") ||
 		!strings.Contains(css, ".chat-repo-message[data-tone=\"failure\"] {") ||
@@ -3023,7 +3023,7 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, `html.pink .chat-repo-message[data-tone="success"] .chat-repo-message-body,`) ||
 		!strings.Contains(css, `html.pink .chat-repo-submit-status[data-tone="ok"] {`) ||
 		!strings.Contains(css, `html.pink .chat-status,`) {
-		t.Fatalf("expected stylesheet to apply pink theme text colors to Git dialogue text")
+		t.Fatalf("expected stylesheet to apply pink theme text colors to Git chat text")
 	}
 	if !strings.Contains(css, ".agent-auth-shell {\n  display: flex;\n  flex-direction: column;\n  width: 100%;\n  max-width: 36rem;\n  min-height: 220px;\n  padding: clamp(24px, 3vw, 32px);\n  border: 1px solid var(--surface-auth-panel-border);\n  border-radius: var(--radius-card);\n  background: var(--surface-auth-panel-bg);\n  box-shadow: var(--surface-auth-panel-shadow);\n}") {
 		t.Fatalf("expected stylesheet to render onboarding content inside a readable auth panel")
@@ -3330,7 +3330,7 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 		t.Fatalf("expected stylesheet to mark disabled emoji picker buttons as unavailable")
 	}
 	if !strings.Contains(css, ".chat-repo-message-copy {\n  display: inline-flex;") || !strings.Contains(css, "  cursor: pointer;\n}") {
-		t.Fatalf("expected stylesheet to use a pointer cursor for dialogue message copy buttons")
+		t.Fatalf("expected stylesheet to use a pointer cursor for chat message copy buttons")
 	}
 	if strings.Count(css, "cursor:") != 4 {
 		t.Fatalf("expected stylesheet to avoid unrelated custom cursor styles")
@@ -3698,7 +3698,7 @@ func TestHandlerDashboardStatsIncludeTaskSourcesFromSubmitPaths(t *testing.T) {
 	for _, group := range snap.Stats.SourceMix {
 		got[group.Name] = group.Tasks
 	}
-	for _, name := range []string{"Dialogue", "Hub", "JSON", "Library", "Prompt"} {
+	for _, name := range []string{"Chat", "Hub", "JSON", "Library", "Prompt"} {
 		if got[name] != 1 {
 			t.Fatalf("source_mix[%q] = %d, want 1 (all groups: %#v)", name, got[name], snap.Stats.SourceMix)
 		}
