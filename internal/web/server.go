@@ -168,21 +168,22 @@ type HubSetupStep struct {
 
 // GitHubRepo captures the repository fields shown in the dialogue view.
 type GitHubRepo struct {
-	Name          string `json:"name"`
-	FullName      string `json:"full_name"`
-	Description   string `json:"description,omitempty"`
-	HTMLURL       string `json:"html_url"`
-	OwnerType     string `json:"owner_type,omitempty"`
-	OwnerKind     string `json:"owner_kind,omitempty"`
-	DefaultBranch string `json:"default_branch,omitempty"`
-	Private       bool   `json:"private"`
-	Public        bool   `json:"public"`
-	Personal      bool   `json:"personal,omitempty"`
-	Organization  bool   `json:"organization,omitempty"`
-	Visibility    string `json:"visibility,omitempty"`
-	Language      string `json:"language,omitempty"`
-	UpdatedAt     string `json:"updated_at,omitempty"`
-	PushedAt      string `json:"pushed_at,omitempty"`
+	Name           string `json:"name"`
+	FullName       string `json:"full_name"`
+	Description    string `json:"description,omitempty"`
+	HTMLURL        string `json:"html_url"`
+	OwnerType      string `json:"owner_type,omitempty"`
+	OwnerKind      string `json:"owner_kind,omitempty"`
+	OwnerAvatarURL string `json:"owner_avatar_url,omitempty"`
+	DefaultBranch  string `json:"default_branch,omitempty"`
+	Private        bool   `json:"private"`
+	Public         bool   `json:"public"`
+	Personal       bool   `json:"personal,omitempty"`
+	Organization   bool   `json:"organization,omitempty"`
+	Visibility     string `json:"visibility,omitempty"`
+	Language       string `json:"language,omitempty"`
+	UpdatedAt      string `json:"updated_at,omitempty"`
+	PushedAt       string `json:"pushed_at,omitempty"`
 }
 
 type gitHubRepoCache struct {
@@ -571,7 +572,7 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
           function repoOwnerType(repo) {
             const owner = repo && repo.owner ? repo.owner : {};
-            return String(repo.owner_type || owner.type || "").trim().toLowerCase();
+            return String(repo && (repo.owner_type || repo.owner_kind || owner.type || owner.kind) || "").trim().toLowerCase();
           }
 
           function repoOwnerIconName(repo) {
@@ -580,6 +581,47 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
           function repoOwnerIconLabel(repo) {
             return repoOwnerType(repo) === "organization" ? "Organization repository" : "Personal repository";
+          }
+
+          function repoOwnerAvatarURL(repo) {
+            const owner = repo && repo.owner ? repo.owner : {};
+            const raw = String(repo && (repo.owner_avatar_url || owner.avatar_url) || "").trim();
+            if (!raw) return "";
+            try {
+              const url = new URL(raw);
+              if (url.protocol === "https:" || url.protocol === "http:") {
+                return url.href;
+              }
+            } catch (_err) {
+              return "";
+            }
+            return "";
+          }
+
+          function renderRepoOwnerIcon(ownerIcon, repo) {
+            const fallbackIcon = '<i data-lucide="' + repoOwnerIconName(repo) + '" aria-hidden="true"></i>';
+            const fallback = () => {
+              ownerIcon.classList.remove("chat-repo-card-owner-icon-has-avatar");
+              ownerIcon.innerHTML = fallbackIcon;
+              if (window.lucide && typeof window.lucide.createIcons === "function") {
+                window.lucide.createIcons({ root: ownerIcon });
+              }
+            };
+            const avatarURL = repoOwnerAvatarURL(repo);
+            if (!avatarURL) {
+              fallback();
+              return;
+            }
+            const avatar = document.createElement("img");
+            avatar.className = "chat-repo-card-owner-avatar";
+            avatar.alt = "";
+            avatar.loading = "lazy";
+            avatar.decoding = "async";
+            avatar.referrerPolicy = "no-referrer";
+            avatar.src = avatarURL;
+            avatar.addEventListener("error", fallback, { once: true });
+            ownerIcon.classList.add("chat-repo-card-owner-icon-has-avatar");
+            ownerIcon.replaceChildren(avatar);
           }
 
           function repoAnalyticsParams(repo, extra) {
@@ -662,7 +704,7 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
             ownerIcon.className = "chat-repo-card-owner-icon";
             ownerIcon.title = repoOwnerIconLabel(repo);
             ownerIcon.setAttribute("aria-hidden", "true");
-            ownerIcon.innerHTML = '<i data-lucide="' + repoOwnerIconName(repo) + '" aria-hidden="true"></i>';
+            renderRepoOwnerIcon(ownerIcon, repo);
             head.appendChild(ownerIcon);
 
             const title = document.createElement("span");
@@ -1671,7 +1713,8 @@ func resolveAuthenticatedGitHubRepos(ctx context.Context, client *http.Client) (
 			Description string `json:"description"`
 			HTMLURL     string `json:"html_url"`
 			Owner       struct {
-				Type string `json:"type"`
+				Type      string `json:"type"`
+				AvatarURL string `json:"avatar_url"`
 			} `json:"owner"`
 			DefaultBranch string `json:"default_branch"`
 			Private       bool   `json:"private"`
@@ -1686,21 +1729,22 @@ func resolveAuthenticatedGitHubRepos(ctx context.Context, client *http.Client) (
 		for _, repo := range body {
 			ownerKind := repositoryOwnerKind(repo.Owner.Type)
 			repos = append(repos, GitHubRepo{
-				Name:          strings.TrimSpace(repo.Name),
-				FullName:      strings.TrimSpace(repo.FullName),
-				Description:   strings.TrimSpace(repo.Description),
-				HTMLURL:       strings.TrimSpace(repo.HTMLURL),
-				OwnerType:     strings.TrimSpace(repo.Owner.Type),
-				OwnerKind:     string(ownerKind),
-				DefaultBranch: strings.TrimSpace(repo.DefaultBranch),
-				Private:       repo.Private,
-				Public:        !repo.Private,
-				Personal:      ownerKind == RepositoryOwnerPersonal,
-				Organization:  ownerKind == RepositoryOwnerOrganization,
-				Visibility:    repositoryVisibilityString(repo.Private),
-				Language:      strings.TrimSpace(repo.Language),
-				UpdatedAt:     strings.TrimSpace(repo.UpdatedAt),
-				PushedAt:      strings.TrimSpace(repo.PushedAt),
+				Name:           strings.TrimSpace(repo.Name),
+				FullName:       strings.TrimSpace(repo.FullName),
+				Description:    strings.TrimSpace(repo.Description),
+				HTMLURL:        strings.TrimSpace(repo.HTMLURL),
+				OwnerType:      strings.TrimSpace(repo.Owner.Type),
+				OwnerKind:      string(ownerKind),
+				OwnerAvatarURL: strings.TrimSpace(repo.Owner.AvatarURL),
+				DefaultBranch:  strings.TrimSpace(repo.DefaultBranch),
+				Private:        repo.Private,
+				Public:         !repo.Private,
+				Personal:       ownerKind == RepositoryOwnerPersonal,
+				Organization:   ownerKind == RepositoryOwnerOrganization,
+				Visibility:     repositoryVisibilityString(repo.Private),
+				Language:       strings.TrimSpace(repo.Language),
+				UpdatedAt:      strings.TrimSpace(repo.UpdatedAt),
+				PushedAt:       strings.TrimSpace(repo.PushedAt),
 			})
 		}
 		nextURL = nextGitHubPageURL(resp.Header.Get("Link"))
@@ -1720,6 +1764,7 @@ func enrichGitHubRepos(repos []GitHubRepo) []GitHubRepo {
 			out[i].Personal = ownerKind == RepositoryOwnerPersonal
 			out[i].Organization = ownerKind == RepositoryOwnerOrganization
 		}
+		out[i].OwnerAvatarURL = strings.TrimSpace(out[i].OwnerAvatarURL)
 		out[i].Public = !out[i].Private
 		if out[i].Visibility == "" {
 			out[i].Visibility = repositoryVisibilityString(out[i].Private)

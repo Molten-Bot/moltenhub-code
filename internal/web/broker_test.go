@@ -141,12 +141,13 @@ func TestBrokerTracksRepositoryStatsAndPullRequests(t *testing.T) {
 	b := NewBroker()
 	b.now = func() time.Time { return now }
 	b.SetGitHubRepositories([]GitHubRepo{{
-		Name:          "repo",
-		FullName:      "acme/repo",
-		HTMLURL:       "https://github.com/acme/repo",
-		OwnerType:     "Organization",
-		DefaultBranch: "main",
-		Private:       true,
+		Name:           "repo",
+		FullName:       "acme/repo",
+		HTMLURL:        "https://github.com/acme/repo",
+		OwnerType:      "Organization",
+		OwnerAvatarURL: "https://avatars.githubusercontent.com/u/42?v=4",
+		DefaultBranch:  "main",
+		Private:        true,
 	}})
 
 	b.RecordTaskRunConfig("req-1", []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"ship it"}`))
@@ -171,6 +172,9 @@ func TestBrokerTracksRepositoryStatsAndPullRequests(t *testing.T) {
 	}
 	if !loaded.Private || loaded.Public || !loaded.Organization || loaded.Personal || loaded.Visibility != RepositoryVisibilityPrivate || loaded.OwnerKind != RepositoryOwnerOrganization {
 		t.Fatalf("loaded repository flags = %#v", loaded)
+	}
+	if got, want := loaded.OwnerAvatarURL, "https://avatars.githubusercontent.com/u/42?v=4"; got != want {
+		t.Fatalf("loaded.OwnerAvatarURL = %q, want %q", got, want)
 	}
 	if got, want := loaded.Stats.CompletedTasks, 1; got != want {
 		t.Fatalf("loaded.Stats.CompletedTasks = %d, want %d", got, want)
@@ -215,14 +219,15 @@ func TestBrokerMergesRuntimeAndLoadedRepositoryMetadata(t *testing.T) {
 	b := NewBroker()
 	b.RecordTaskRunConfig("req-runtime", []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"before preload"}`))
 	b.SetGitHubRepositories([]GitHubRepo{{
-		Name:          "repo",
-		FullName:      "acme/repo",
-		Description:   "Docs",
-		HTMLURL:       "https://github.com/acme/repo",
-		OwnerType:     "User",
-		DefaultBranch: "trunk",
-		Private:       false,
-		Language:      "Go",
+		Name:           "repo",
+		FullName:       "acme/repo",
+		Description:    "Docs",
+		HTMLURL:        "https://github.com/acme/repo",
+		OwnerType:      "User",
+		OwnerAvatarURL: "https://avatars.githubusercontent.com/u/100?v=4",
+		DefaultBranch:  "trunk",
+		Private:        false,
+		Language:       "Go",
 	}})
 
 	snap := b.Snapshot()
@@ -230,7 +235,7 @@ func TestBrokerMergesRuntimeAndLoadedRepositoryMetadata(t *testing.T) {
 		t.Fatalf("repositories = %#v, want merged single repo", snap.Repositories)
 	}
 	repo := snap.Repositories[0]
-	if repo.FullName != "acme/repo" || repo.Description != "Docs" || repo.DefaultBranch != "trunk" || repo.Language != "Go" {
+	if repo.FullName != "acme/repo" || repo.Description != "Docs" || repo.OwnerAvatarURL != "https://avatars.githubusercontent.com/u/100?v=4" || repo.DefaultBranch != "trunk" || repo.Language != "Go" {
 		t.Fatalf("repository metadata = %#v, want loaded metadata merged onto runtime repo", repo)
 	}
 	if !repo.Public || repo.Private || !repo.Personal || repo.Organization || repo.Visibility != RepositoryVisibilityPublic || repo.OwnerKind != RepositoryOwnerPersonal {

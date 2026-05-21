@@ -3254,10 +3254,24 @@ select.prompt-control {
   background: color-mix(in srgb, var(--bg-elevated) 78%, transparent);
 }
 
+.chat-repo-card-owner-icon-has-avatar {
+  overflow: hidden;
+  border-radius: 50%;
+  color: inherit;
+}
+
 .chat-repo-card-owner-icon svg {
   width: 14px;
   height: 14px;
   stroke-width: 2.2;
+}
+
+.chat-repo-card-owner-avatar {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
 }
 
 .chat-repo-card-title {

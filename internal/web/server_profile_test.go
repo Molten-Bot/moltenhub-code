@@ -159,7 +159,7 @@ func TestResolveAuthenticatedGitHubRepos(t *testing.T) {
 				}
 				header := make(http.Header)
 				header.Set("Link", `<https://api.github.com/user/repos?page=2>; rel="next"`)
-				return githubResponse(http.StatusOK, `[{"name":"repo","full_name":"acme/repo","description":"Docs","html_url":"https://github.com/acme/repo","owner":{"type":"Organization"},"default_branch":"trunk","private":true,"language":"Go","updated_at":"2026-05-01T00:00:00Z","pushed_at":"2026-05-02T00:00:00Z"}]`, header), nil
+				return githubResponse(http.StatusOK, `[{"name":"repo","full_name":"acme/repo","description":"Docs","html_url":"https://github.com/acme/repo","owner":{"type":"Organization","avatar_url":"https://avatars.githubusercontent.com/u/42?v=4"},"default_branch":"trunk","private":true,"language":"Go","updated_at":"2026-05-01T00:00:00Z","pushed_at":"2026-05-02T00:00:00Z"}]`, header), nil
 			case 2:
 				if got, want := req.URL.String(), "https://api.github.com/user/repos?page=2"; got != want {
 					t.Fatalf("request URL = %q, want %q", got, want)
@@ -176,7 +176,7 @@ func TestResolveAuthenticatedGitHubRepos(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveAuthenticatedGitHubRepos() error = %v", err)
 	}
-	if len(repos) != 2 || repos[0].FullName != "acme/web" || repos[0].OwnerType != "User" || repos[0].OwnerKind != "personal" || !repos[0].Public || !repos[0].Personal || repos[0].Visibility != "public" || repos[0].PushedAt != "2026-05-03T00:00:00Z" || repos[1].FullName != "acme/repo" || repos[1].OwnerType != "Organization" || repos[1].OwnerKind != "organization" || repos[1].DefaultBranch != "trunk" || !repos[1].Private || repos[1].Public || !repos[1].Organization || repos[1].Visibility != "private" || repos[1].Language != "Go" {
+	if len(repos) != 2 || repos[0].FullName != "acme/web" || repos[0].OwnerType != "User" || repos[0].OwnerKind != "personal" || !repos[0].Public || !repos[0].Personal || repos[0].Visibility != "public" || repos[0].PushedAt != "2026-05-03T00:00:00Z" || repos[1].FullName != "acme/repo" || repos[1].OwnerType != "Organization" || repos[1].OwnerKind != "organization" || repos[1].OwnerAvatarURL != "https://avatars.githubusercontent.com/u/42?v=4" || repos[1].DefaultBranch != "trunk" || !repos[1].Private || repos[1].Public || !repos[1].Organization || repos[1].Visibility != "private" || repos[1].Language != "Go" {
 		t.Fatalf("repos = %#v, want paged repository summaries", repos)
 	}
 

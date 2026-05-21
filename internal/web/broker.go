@@ -174,23 +174,24 @@ const (
 
 // Repository is the in-memory view of one repository and the work observed for it.
 type Repository struct {
-	Key           string               `json:"key"`
-	Name          string               `json:"name,omitempty"`
-	FullName      string               `json:"full_name,omitempty"`
-	Description   string               `json:"description,omitempty"`
-	HTMLURL       string               `json:"html_url,omitempty"`
-	DefaultBranch string               `json:"default_branch,omitempty"`
-	Language      string               `json:"language,omitempty"`
-	UpdatedAt     string               `json:"updated_at,omitempty"`
-	PushedAt      string               `json:"pushed_at,omitempty"`
-	Visibility    RepositoryVisibility `json:"visibility"`
-	OwnerKind     RepositoryOwnerKind  `json:"owner_kind"`
-	Private       bool                 `json:"private"`
-	Public        bool                 `json:"public"`
-	Personal      bool                 `json:"personal"`
-	Organization  bool                 `json:"organization"`
-	Stats         RepositoryStats      `json:"stats"`
-	PullRequests  []string             `json:"pull_requests,omitempty"`
+	Key            string               `json:"key"`
+	Name           string               `json:"name,omitempty"`
+	FullName       string               `json:"full_name,omitempty"`
+	Description    string               `json:"description,omitempty"`
+	HTMLURL        string               `json:"html_url,omitempty"`
+	OwnerAvatarURL string               `json:"owner_avatar_url,omitempty"`
+	DefaultBranch  string               `json:"default_branch,omitempty"`
+	Language       string               `json:"language,omitempty"`
+	UpdatedAt      string               `json:"updated_at,omitempty"`
+	PushedAt       string               `json:"pushed_at,omitempty"`
+	Visibility     RepositoryVisibility `json:"visibility"`
+	OwnerKind      RepositoryOwnerKind  `json:"owner_kind"`
+	Private        bool                 `json:"private"`
+	Public         bool                 `json:"public"`
+	Personal       bool                 `json:"personal"`
+	Organization   bool                 `json:"organization"`
+	Stats          RepositoryStats      `json:"stats"`
+	PullRequests   []string             `json:"pull_requests,omitempty"`
 }
 
 type RepositoryStats struct {
@@ -2097,21 +2098,22 @@ func repositoryFromGitHubRepo(key string, repo GitHubRepo) Repository {
 	}
 	fullName := strings.TrimSpace(repo.FullName)
 	return Repository{
-		Key:           key,
-		Name:          strings.TrimSpace(repo.Name),
-		FullName:      fullName,
-		Description:   strings.TrimSpace(repo.Description),
-		HTMLURL:       strings.TrimSpace(repo.HTMLURL),
-		DefaultBranch: strings.TrimSpace(repo.DefaultBranch),
-		Language:      strings.TrimSpace(repo.Language),
-		UpdatedAt:     strings.TrimSpace(repo.UpdatedAt),
-		PushedAt:      strings.TrimSpace(repo.PushedAt),
-		Visibility:    visibility,
-		OwnerKind:     ownerKind,
-		Private:       repo.Private,
-		Public:        !repo.Private,
-		Personal:      ownerKind == RepositoryOwnerPersonal,
-		Organization:  ownerKind == RepositoryOwnerOrganization,
+		Key:            key,
+		Name:           strings.TrimSpace(repo.Name),
+		FullName:       fullName,
+		Description:    strings.TrimSpace(repo.Description),
+		HTMLURL:        strings.TrimSpace(repo.HTMLURL),
+		OwnerAvatarURL: strings.TrimSpace(repo.OwnerAvatarURL),
+		DefaultBranch:  strings.TrimSpace(repo.DefaultBranch),
+		Language:       strings.TrimSpace(repo.Language),
+		UpdatedAt:      strings.TrimSpace(repo.UpdatedAt),
+		PushedAt:       strings.TrimSpace(repo.PushedAt),
+		Visibility:     visibility,
+		OwnerKind:      ownerKind,
+		Private:        repo.Private,
+		Public:         !repo.Private,
+		Personal:       ownerKind == RepositoryOwnerPersonal,
+		Organization:   ownerKind == RepositoryOwnerOrganization,
 	}
 }
 
@@ -2121,6 +2123,7 @@ func mergeRepository(current, next Repository) Repository {
 	next.FullName = firstNonEmpty(next.FullName, current.FullName)
 	next.Description = firstNonEmpty(next.Description, current.Description)
 	next.HTMLURL = firstNonEmpty(next.HTMLURL, current.HTMLURL)
+	next.OwnerAvatarURL = firstNonEmpty(next.OwnerAvatarURL, current.OwnerAvatarURL)
 	next.DefaultBranch = firstNonEmpty(next.DefaultBranch, current.DefaultBranch)
 	next.Language = firstNonEmpty(next.Language, current.Language)
 	next.UpdatedAt = firstNonEmpty(next.UpdatedAt, current.UpdatedAt)

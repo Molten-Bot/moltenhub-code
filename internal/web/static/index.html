@@ -5994,7 +5994,8 @@
     }
 
     function chatRepoOwnerType(repo) {
-      return String(repo?.owner_type || repo?.owner?.type || "").trim().toLowerCase();
+      const owner = repo && repo.owner ? repo.owner : {};
+      return String(repo?.owner_type || repo?.owner_kind || owner.type || owner.kind || "").trim().toLowerCase();
     }
 
     function chatRepoOwnerIconName(repo) {
@@ -6003,6 +6004,45 @@
 
     function chatRepoOwnerIconLabel(repo) {
       return chatRepoOwnerType(repo) === "organization" ? "Organization repository" : "Personal repository";
+    }
+
+    function chatRepoOwnerAvatarURL(repo) {
+      const owner = repo && repo.owner ? repo.owner : {};
+      const raw = String(repo?.owner_avatar_url || owner.avatar_url || "").trim();
+      if (!raw) return "";
+      try {
+        const url = new URL(raw);
+        if (url.protocol === "https:" || url.protocol === "http:") {
+          return url.href;
+        }
+      } catch (_err) {
+        return "";
+      }
+      return "";
+    }
+
+    function renderChatRepoOwnerIcon(ownerIcon, repo) {
+      const fallbackIcon = `<i data-lucide="${chatRepoOwnerIconName(repo)}" aria-hidden="true"></i>`;
+      const fallback = () => {
+        ownerIcon.classList.remove("chat-repo-card-owner-icon-has-avatar");
+        ownerIcon.innerHTML = fallbackIcon;
+        replaceLucideIcons(ownerIcon);
+      };
+      const avatarURL = chatRepoOwnerAvatarURL(repo);
+      if (!avatarURL) {
+        fallback();
+        return;
+      }
+      const avatar = document.createElement("img");
+      avatar.className = "chat-repo-card-owner-avatar";
+      avatar.alt = "";
+      avatar.loading = "lazy";
+      avatar.decoding = "async";
+      avatar.referrerPolicy = "no-referrer";
+      avatar.src = avatarURL;
+      avatar.addEventListener("error", fallback, { once: true });
+      ownerIcon.classList.add("chat-repo-card-owner-icon-has-avatar");
+      ownerIcon.replaceChildren(avatar);
     }
 
     function truncateChatRepoText(value, fallback) {
@@ -6081,7 +6121,7 @@
       ownerIcon.className = "chat-repo-card-owner-icon";
       ownerIcon.title = chatRepoOwnerIconLabel(repo);
       ownerIcon.setAttribute("aria-hidden", "true");
-      ownerIcon.innerHTML = `<i data-lucide="${chatRepoOwnerIconName(repo)}" aria-hidden="true"></i>`;
+      renderChatRepoOwnerIcon(ownerIcon, repo);
       head.appendChild(ownerIcon);
 
       const title = document.createElement("span");

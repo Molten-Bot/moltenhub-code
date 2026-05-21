@@ -1780,13 +1780,19 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `function submitChatRepoPrompt(repo, input, statusNode, images = [], logNode = null, setImages = null)`) ||
 		!strings.Contains(markup, `function chatRepoOwnerIconName(repo)`) ||
+		!strings.Contains(markup, `repo?.owner_type || repo?.owner_kind`) ||
 		!strings.Contains(markup, `return chatRepoOwnerType(repo) === "organization" ? "building-2" : "user";`) ||
+		!strings.Contains(markup, `function chatRepoOwnerAvatarURL(repo)`) ||
+		!strings.Contains(markup, `function renderChatRepoOwnerIcon(ownerIcon, repo)`) ||
+		!strings.Contains(markup, `avatar.className = "chat-repo-card-owner-avatar";`) ||
+		!strings.Contains(markup, `avatar.addEventListener("error", fallback, { once: true });`) ||
 		!strings.Contains(markup, `function isChatRepoCardControlTarget(target, card)`) ||
 		!strings.Contains(markup, `const card = document.createElement("div");`) ||
 		!strings.Contains(markup, `card.setAttribute("role", "button");`) ||
 		!strings.Contains(markup, `const expanded = Boolean(repoKey && state.chatOpenRepoKey === repoKey);`) ||
 		!strings.Contains(markup, `card.setAttribute("aria-expanded", String(expanded));`) ||
 		!strings.Contains(markup, `ownerIcon.className = "chat-repo-card-owner-icon";`) ||
+		!strings.Contains(markup, `renderChatRepoOwnerIcon(ownerIcon, repo);`) ||
 		!strings.Contains(markup, `promptLog.className = "chat-repo-log";`) ||
 		!strings.Contains(markup, `function syncChatOpenRepoKey(pageRepos, selectedTab, restoreFocusKey)`) ||
 		!strings.Contains(markup, `syncChatOpenRepoKey(reposForSelection, selectedTab, restoreFocusKey);`) ||
@@ -2684,11 +2690,17 @@ func TestHandlerServesChatView(t *testing.T) {
 		`repoSearchQuery = search.value;`,
 		`fetch("/api/github/repos", { cache: "no-store" })`,
 		`function repoOwnerIconName(repo)`,
+		`repo && (repo.owner_type || repo.owner_kind`,
 		`return repoOwnerType(repo) === "organization" ? "building-2" : "user";`,
+		`function repoOwnerAvatarURL(repo)`,
+		`function renderRepoOwnerIcon(ownerIcon, repo)`,
+		`avatar.className = "chat-repo-card-owner-avatar";`,
+		`avatar.addEventListener("error", fallback, { once: true });`,
 		`function isRepoCardControlTarget(target, card) {`,
 		`const card = document.createElement("div");`,
 		`card.setAttribute("role", "button");`,
 		`ownerIcon.className = "chat-repo-card-owner-icon";`,
+		`renderRepoOwnerIcon(ownerIcon, repo);`,
 		`chatIcon.className = "chat-repo-card-chat-icon";`,
 		`chatIcon.innerHTML = '<i data-lucide="message-circle" aria-hidden="true"></i>';`,
 		`visibilityIcon.className = "chat-repo-card-visibility " + (repo.private ? "chat-repo-card-visibility-private" : "chat-repo-card-visibility-public");`,
@@ -2724,14 +2736,15 @@ func TestHandlerGitHubReposUsesOverride(t *testing.T) {
 	srv := NewServer("", NewBroker())
 	srv.ResolveGitHubRepos = func(context.Context) ([]GitHubRepo, error) {
 		return []GitHubRepo{{
-			Name:          "repo",
-			FullName:      "acme/repo",
-			Description:   "Docs",
-			HTMLURL:       "https://github.com/acme/repo",
-			OwnerType:     "Organization",
-			DefaultBranch: "main",
-			Language:      "Go",
-			Private:       true,
+			Name:           "repo",
+			FullName:       "acme/repo",
+			Description:    "Docs",
+			HTMLURL:        "https://github.com/acme/repo",
+			OwnerType:      "Organization",
+			OwnerAvatarURL: "https://avatars.githubusercontent.com/u/42?v=4",
+			DefaultBranch:  "main",
+			Language:       "Go",
+			Private:        true,
 		}}, nil
 	}
 	req := httptest.NewRequest(http.MethodGet, "/api/github/repos", nil)
@@ -2747,6 +2760,7 @@ func TestHandlerGitHubReposUsesOverride(t *testing.T) {
 		!strings.Contains(body, `"html_url":"https://github.com/acme/repo"`) ||
 		!strings.Contains(body, `"owner_type":"Organization"`) ||
 		!strings.Contains(body, `"owner_kind":"organization"`) ||
+		!strings.Contains(body, `"owner_avatar_url":"https://avatars.githubusercontent.com/u/42?v=4"`) ||
 		!strings.Contains(body, `"default_branch":"main"`) ||
 		!strings.Contains(body, `"private":true`) ||
 		!strings.Contains(body, `"visibility":"private"`) ||
@@ -2955,6 +2969,8 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".chat-repo-card-head {") ||
 		!strings.Contains(css, ".chat-repo-card {\n  position: relative;") ||
 		!strings.Contains(css, ".chat-repo-card-owner-icon {") ||
+		!strings.Contains(css, ".chat-repo-card-owner-icon-has-avatar {") ||
+		!strings.Contains(css, ".chat-repo-card-owner-avatar {") ||
 		!strings.Contains(css, ".chat-repo-card-chat-icon {") ||
 		!strings.Contains(css, ".chat-repo-card-visibility {") ||
 		!strings.Contains(css, ".chat-repo-card-visibility-private {") ||
