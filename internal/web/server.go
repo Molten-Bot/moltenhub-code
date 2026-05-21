@@ -690,10 +690,12 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
           function repoCard(repo) {
             const visibility = repo.private ? "Private" : "Public";
+            const repoValue = repoRunValue(repo);
             const card = document.createElement("div");
             card.className = "chat-repo-card";
             card.tabIndex = 0;
             card.setAttribute("role", "button");
+            card.dataset.repoKey = repoValue;
             card.setAttribute("aria-expanded", "false");
             card.setAttribute("aria-label", "Open " + String(repo.full_name || repo.name || "repository") + " panel (" + visibility + " repository)");
 
@@ -796,6 +798,44 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
             return card;
           }
 
+          function repoCardSignature(repo) {
+            return {
+              value: repoRunValue(repo),
+              title: String(repo.full_name || repo.name || "Unnamed repository"),
+              description: String(repo.description || "No description."),
+              language: String(repo.language || "").trim(),
+              visibility: repo.private ? "private" : "public",
+              ownerType: repoOwnerType(repo),
+              ownerAvatar: repoOwnerAvatarURL(repo)
+            };
+          }
+
+          function repoCardSignatureString(repo) {
+            return JSON.stringify(repoCardSignature(repo));
+          }
+
+          function repoCardNode(repo, reusableCards) {
+            const repoValue = repoRunValue(repo);
+            const renderSig = repoCardSignatureString(repo);
+            const existing = repoValue ? reusableCards.get(repoValue) : null;
+            if (existing instanceof HTMLElement && existing.dataset.renderSig === renderSig) {
+              return existing;
+            }
+            const card = repoCard(repo);
+            card.dataset.renderSig = renderSig;
+            return card;
+          }
+
+          function repoGridRenderSignature(pageRepos, context) {
+            return JSON.stringify({
+              searchQuery: repoSearchQuery,
+              page: repoPage,
+              repoCount: Number(context && context.repoCount) || 0,
+              unfilteredRepoCount: Number(context && context.unfilteredRepoCount) || 0,
+              cards: pageRepos.map(repoCardSignature)
+            });
+          }
+
           function renderPagination(totalRepos, totalPages, renderPage) {
             if (!pagination) return;
             pagination.replaceChildren();
@@ -868,13 +908,29 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
             repoPage = Math.min(Math.max(1, repoPage), totalPages);
             const start = (repoPage - 1) * CHAT_REPOS_PER_PAGE;
             const pageRepos = repos.slice(start, start + CHAT_REPOS_PER_PAGE);
-            grid.replaceChildren(...pageRepos.map(repoCard));
+            const renderSig = repoGridRenderSignature(pageRepos, {
+              repoCount: repos.length,
+              unfilteredRepoCount
+            });
+            const shouldRenderGrid = grid.dataset.renderSig !== renderSig;
+            if (shouldRenderGrid) {
+              grid.dataset.renderSig = renderSig;
+              const reusableCards = new Map();
+              grid.querySelectorAll(".chat-repo-card[data-repo-key]").forEach((card) => {
+                if (card instanceof HTMLElement && card.dataset.repoKey) {
+                  reusableCards.set(card.dataset.repoKey, card);
+                }
+              });
+              grid.replaceChildren(...pageRepos.map((repo) => repoCardNode(repo, reusableCards)));
+            }
             if (repos.length === 0) {
               status.textContent = "0 repositories";
-              const empty = document.createElement("p");
-              empty.className = "chat-empty";
-              empty.textContent = repoSearchQuery ? "No repositories match search." : "No repositories found.";
-              grid.appendChild(empty);
+              if (shouldRenderGrid) {
+                const empty = document.createElement("p");
+                empty.className = "chat-empty";
+                empty.textContent = repoSearchQuery ? "No repositories match search." : "No repositories found.";
+                grid.appendChild(empty);
+              }
             } else if (repoSearchQuery) {
               status.textContent = repos.length === unfilteredRepoCount
                 ? (repos.length === 1 ? "1 repository" : repos.length + " repositories")
@@ -914,6 +970,8 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
               trackChatEvent("chat_repos_loaded", { repo_count: repos.length });
             } catch (err) {
               status.textContent = err && err.message ? err.message : "Unable to load repositories.";
+              grid.dataset.renderSig = "";
+              grid.replaceChildren();
               syncSearchVisibility(false);
               trackChatEvent("chat_repos_load_failed");
             }

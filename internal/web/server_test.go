@@ -2222,8 +2222,13 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `card.dataset.repoKey = repoKey;`) ||
 		!strings.Contains(markup, `state.chatPromptDrafts.set(repoKey, prompt.value);`) ||
 		!strings.Contains(markup, `const activePrompt = document.activeElement instanceof HTMLTextAreaElement &&`) ||
-		!strings.Contains(markup, `restoredPrompt.setSelectionRange(Math.min(restoreSelectionStart, end), end);`) {
-		t.Fatalf("expected chat repository prompts to preserve open panel, draft text, and cursor focus across re-renders")
+		!strings.Contains(markup, `restoredPrompt.setSelectionRange(Math.min(restoreSelectionStart, end), end);`) ||
+		!strings.Contains(markup, `function chatRepoGridRenderSignature(displayRepos, context = {})`) ||
+		!strings.Contains(markup, `const shouldRenderGrid = chatRepoGrid.dataset.renderSig !== gridRenderSig;`) ||
+		!strings.Contains(markup, `function chatRepoCardNode(repo, reusableCards)`) ||
+		!strings.Contains(markup, `card.dataset.renderSig = renderSig;`) ||
+		!strings.Contains(markup, `function chatRepoTabsRenderSignature(tabs)`) {
+		t.Fatalf("expected chat repository prompts to preserve open panel, draft text, cursor focus, and stable card/tab DOM across re-renders")
 	}
 	if !strings.Contains(markup, "function clearPromptImages(syncRaw = true)") {
 		t.Fatalf("expected index html to allow screenshot clearing without forcing raw prompt resync")
@@ -2684,6 +2689,10 @@ func TestHandlerServesChatView(t *testing.T) {
 		`const pageRepos = repos.slice(start, start + CHAT_REPOS_PER_PAGE);`,
 		`function filterRepos(repos, query)`,
 		`function syncSearchVisibility(active)`,
+		`function repoGridRenderSignature(pageRepos, context)`,
+		`function repoCardNode(repo, reusableCards)`,
+		`card.dataset.renderSig = renderSig;`,
+		`const shouldRenderGrid = grid.dataset.renderSig !== renderSig;`,
 		`syncSearchVisibility(unfilteredRepoCount > 1);`,
 		`search.disabled = !enabled;`,
 		`empty.textContent = repoSearchQuery ? "No repositories match search." : "No repositories found.";`,

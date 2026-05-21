@@ -6326,6 +6326,12 @@
       return card;
     }
 
+    function syncChatRepoCardState(card, repo) {
+      if (!(card instanceof HTMLElement)) return;
+      const repoKey = chatRepoKey(chatRepoRunValue(repo));
+      card.setAttribute("aria-expanded", String(Boolean(repoKey && state.chatOpenRepoKey === repoKey)));
+    }
+
     function chatRepoLogKey(repo) {
       const value = typeof repo === "string" ? normalizeRepoValue(repo) : chatRepoRunValue(repo);
       return chatRepoKey(value) || value;
@@ -7109,15 +7115,30 @@
 
     function renderChatRepoTabs(tabs) {
       if (!chatRepoTabs) return;
-      chatRepoTabs.replaceChildren();
       chatRepoTabs.classList.toggle("hidden", tabs.length === 0);
       if (tabs.length === 0) {
         state.chatActiveRepoTab = "repos";
+        if (chatRepoTabs.dataset.renderSig !== "[]") {
+          chatRepoTabs.dataset.renderSig = "[]";
+          chatRepoTabs.replaceChildren();
+        }
         return;
       }
       if (state.chatActiveRepoTab !== "repos" && !tabs.some((tab) => tab.key === state.chatActiveRepoTab)) {
         state.chatActiveRepoTab = "repos";
       }
+      for (const tab of tabs) {
+        if (state.chatActiveRepoTab === tab.key) {
+          clearChatRepoActivity(tab.key);
+        }
+      }
+
+      const renderSig = chatRepoTabsRenderSignature(tabs);
+      if (chatRepoTabs.dataset.renderSig === renderSig) {
+        return;
+      }
+      chatRepoTabs.dataset.renderSig = renderSig;
+      chatRepoTabs.replaceChildren();
 
       for (const tab of tabs) {
         const button = document.createElement("button");
@@ -7125,9 +7146,6 @@
         button.type = "button";
         button.role = "tab";
         button.dataset.repoKey = tab.key;
-        if (state.chatActiveRepoTab === tab.key) {
-          clearChatRepoActivity(tab.key);
-        }
         const hasActivity = state.chatRepoActivityKeys.has(tab.key);
         button.classList.toggle("chat-repo-tab-has-activity", hasActivity);
         button.classList.toggle("chat-repo-tab-has-success-activity", hasActivity && state.chatRepoActivityTones.get(tab.key) === "success");
@@ -7180,6 +7198,69 @@
       replaceLucideIcons(chatRepoTabs);
     }
 
+    function chatRepoTabsRenderSignature(tabs) {
+      return JSON.stringify({
+        activeTab: state.chatActiveRepoTab,
+        tabs: tabs.map((tab) => {
+          const hasActivity = state.chatRepoActivityKeys.has(tab.key);
+          return {
+            key: tab.key,
+            label: tab.label,
+            hasActivity,
+            tone: hasActivity ? (state.chatRepoActivityTones.get(tab.key) || "update") : "",
+          };
+        }),
+      });
+    }
+
+    function chatRepoCardRenderSignature(repo) {
+      const repoValue = chatRepoRunValue(repo);
+      const repoKey = chatRepoKey(repoValue);
+      return {
+        key: repoKey,
+        value: repoValue,
+        title: String(repo?.full_name || repo?.name || "Unnamed repository"),
+        description: String(repo?.description || "No description."),
+        language: String(repo?.language || "").trim(),
+        visibility: repo?.private ? "private" : "public",
+        ownerType: chatRepoOwnerType(repo),
+        ownerAvatar: chatRepoOwnerAvatarURL(repo),
+        closable: canCloseChatProject(repoKey),
+      };
+    }
+
+    function chatRepoCardRenderSignatureString(repo) {
+      return JSON.stringify(chatRepoCardRenderSignature(repo));
+    }
+
+    function chatRepoCardNode(repo, reusableCards) {
+      const repoKey = chatRepoKey(chatRepoRunValue(repo));
+      const renderSig = chatRepoCardRenderSignatureString(repo);
+      const existing = repoKey ? reusableCards.get(repoKey) : null;
+      if (existing instanceof HTMLElement && existing.dataset.renderSig === renderSig) {
+        syncChatRepoCardState(existing, repo);
+        return existing;
+      }
+      const card = renderChatRepoCard(repo);
+      card.dataset.renderSig = renderSig;
+      return card;
+    }
+
+    function chatRepoGridRenderSignature(displayRepos, context = {}) {
+      return JSON.stringify({
+        activeTab: state.chatActiveRepoTab,
+        openRepoKey: state.chatOpenRepoKey,
+        searchQuery: state.chatRepoSearchQuery,
+        page: state.chatRepoPage,
+        viewingRepoChat: Boolean(context.viewingRepoChat),
+        repoCount: Number(context.repoCount) || 0,
+        listedRepoCount: Number(context.listedRepoCount) || 0,
+        unfilteredRepoCount: Number(context.unfilteredRepoCount) || 0,
+        reposPerPage: Number(context.reposPerPage) || 0,
+        cards: displayRepos.map(chatRepoCardRenderSignature),
+      });
+    }
+
     function renderChatRepos() {
       if (!chatRepoGrid || !chatStatus) return;
       if (nodeContainsActiveSelection(chatRepoGrid)) {
@@ -7226,15 +7307,34 @@
 
       renderChatRepoTabs(tabs);
       chatRepoGrid.classList.toggle("chat-repo-grid-active-repo", Boolean(openRepo));
-      chatRepoGrid.replaceChildren(...displayRepos.map(renderChatRepoCard));
+      const gridRenderSig = chatRepoGridRenderSignature(displayRepos, {
+        viewingRepoChat,
+        repoCount: repos.length,
+        listedRepoCount: listedRepos.length,
+        unfilteredRepoCount,
+        reposPerPage,
+      });
+      const shouldRenderGrid = chatRepoGrid.dataset.renderSig !== gridRenderSig;
+      if (shouldRenderGrid) {
+        chatRepoGrid.dataset.renderSig = gridRenderSig;
+        const reusableCards = new Map();
+        chatRepoGrid.querySelectorAll(".chat-repo-card[data-repo-key]").forEach((card) => {
+          if (card instanceof HTMLElement && card.dataset.repoKey) {
+            reusableCards.set(card.dataset.repoKey, card);
+          }
+        });
+        chatRepoGrid.replaceChildren(...displayRepos.map((repo) => chatRepoCardNode(repo, reusableCards)));
+      }
       if (viewingRepoChat) {
         chatStatus.textContent = "";
       } else if (repos.length === 0) {
         chatStatus.textContent = "0 repositories";
-        const empty = document.createElement("p");
-        empty.className = "chat-empty";
-        empty.textContent = state.chatRepoSearchQuery ? "No repositories match search." : "No repositories found.";
-        chatRepoGrid.appendChild(empty);
+        if (shouldRenderGrid) {
+          const empty = document.createElement("p");
+          empty.className = "chat-empty";
+          empty.textContent = state.chatRepoSearchQuery ? "No repositories match search." : "No repositories found.";
+          chatRepoGrid.appendChild(empty);
+        }
       } else if (state.chatRepoSearchQuery) {
         chatStatus.textContent = repos.length === unfilteredRepoCount
           ? `${repos.length} repositories`
@@ -7420,6 +7520,7 @@
       }
       if (!state.githubReposReady) {
         chatStatus.textContent = state.githubReposLoadError || "";
+        chatRepoGrid.dataset.renderSig = "";
         chatRepoGrid.replaceChildren();
         syncChatRepoSearchVisibility(false);
         if (chatRepoPagination) {
