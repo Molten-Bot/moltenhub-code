@@ -1,5 +1,0 @@
-services:
-  moltenhub-code:
-    build:
-      context: .
-    image: ${MOLTENHUB_CODE_IMAGE:-moltenhub-code:local}
