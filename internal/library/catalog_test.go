@@ -535,6 +535,38 @@ func TestDefaultCatalogIncludesMovePageCSSToGlobalCSSTask(t *testing.T) {
 	}
 }
 
+func TestDefaultCatalogIncludesAgentsMDGuardrailsTask(t *testing.T) {
+	t.Setenv(catalogDirEnv, "")
+	t.Setenv(agentsSeedEnv, "")
+
+	catalog, err := LoadCatalog(DefaultDir)
+	if err != nil {
+		t.Fatalf("LoadCatalog(%q) error = %v", DefaultDir, err)
+	}
+
+	task, ok := catalog.byName["agents-md-guardrails"]
+	if !ok {
+		t.Fatalf("default catalog missing %q task", "agents-md-guardrails")
+	}
+	prompt := strings.ToLower(task.Prompt)
+	for _, want := range []string{
+		"@moltenbot/railsmith",
+		"railsmith guide",
+		"railsmith doctor --root .",
+		"read every existing agents.md",
+		"railsmith check --root .",
+		"failure:",
+		"error details:",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt = %q, want %q guidance", task.Prompt, want)
+		}
+	}
+	if got, want := task.PRTitle, "Molten Hub Code: AGENTS.md Guardrails"; got != want {
+		t.Fatalf("PRTitle = %q, want %q", got, want)
+	}
+}
+
 func TestDefaultCatalogDoesNotIncludeDeletePromptImagesTask(t *testing.T) {
 	t.Setenv(catalogDirEnv, "")
 	t.Setenv(agentsSeedEnv, "")
