@@ -548,12 +548,16 @@ func TestDefaultCatalogIncludesAgentsMDGuardrailsTask(t *testing.T) {
 	if !ok {
 		t.Fatalf("default catalog missing %q task", "agents-md-guardrails")
 	}
+	if got, want := task.DisplayName, "Guardrails -> Railsmith"; got != want {
+		t.Fatalf("DisplayName = %q, want %q", got, want)
+	}
 	prompt := strings.ToLower(task.Prompt)
 	for _, want := range []string{
 		"@moltenbot/railsmith",
 		"railsmith guide",
 		"railsmith doctor --root .",
 		"read every existing agents.md",
+		"return a no-op",
 		"railsmith check --root .",
 		"failure:",
 		"error details:",
@@ -562,7 +566,7 @@ func TestDefaultCatalogIncludesAgentsMDGuardrailsTask(t *testing.T) {
 			t.Fatalf("prompt = %q, want %q guidance", task.Prompt, want)
 		}
 	}
-	if got, want := task.PRTitle, "Molten Hub Code: AGENTS.md Guardrails"; got != want {
+	if got, want := task.PRTitle, "Molten Hub Code: Guardrails -> Railsmith"; got != want {
 		t.Fatalf("PRTitle = %q, want %q", got, want)
 	}
 }
