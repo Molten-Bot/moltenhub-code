@@ -554,9 +554,18 @@ func TestDefaultCatalogIncludesAgentsMDGuardrailsTask(t *testing.T) {
 	prompt := strings.ToLower(task.Prompt)
 	for _, want := range []string{
 		"@moltenbot/railsmith",
+		"target repository",
+		"plain markdown",
+		"closest agents.md wins",
 		"railsmith guide",
 		"railsmith doctor --root .",
+		"railsmith diff --root . --mode detailed",
+		"railsmith patterns list",
+		"railsmith learn <pattern-id>",
+		"too generic",
+		"real engineering patterns",
 		"read every existing agents.md",
+		"library/agents.md",
 		"return a no-op",
 		"railsmith check --root .",
 		"failure:",
