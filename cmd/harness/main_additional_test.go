@@ -638,6 +638,42 @@ func TestMarshalRunConfigJSONReturnsJSONPayload(t *testing.T) {
 	}
 }
 
+func TestMarshalRunConfigJSONStoresLibraryTaskForReplay(t *testing.T) {
+	t.Parallel()
+
+	payload, ok := marshalRunConfigJSON(config.Config{
+		RepoURL:         "git@github.com:acme/repo.git",
+		BaseBranch:      "release",
+		LibraryTaskName: "unit-test-coverage",
+		Prompt:          "expanded library prompt",
+	})
+	if !ok {
+		t.Fatal("marshalRunConfigJSON() ok = false, want true")
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if got, want := decoded["libraryTaskName"], "unit-test-coverage"; got != want {
+		t.Fatalf("libraryTaskName = %v, want %q", got, want)
+	}
+	if got := strings.TrimSpace(fmt.Sprint(decoded["prompt"])); got != "" {
+		t.Fatalf("prompt = %q, want empty for library replay payload", got)
+	}
+
+	cfg, err := hub.ParseRunConfigJSON(payload)
+	if err != nil {
+		t.Fatalf("ParseRunConfigJSON() error = %v", err)
+	}
+	if got, want := cfg.LibraryTaskName, "unit-test-coverage"; got != want {
+		t.Fatalf("LibraryTaskName = %q, want %q", got, want)
+	}
+	if got := cfg.Prompt; !strings.Contains(got, "100% unit-test coverage") {
+		t.Fatalf("Prompt = %q, want expanded library prompt", got)
+	}
+}
+
 func TestFailureFollowUpPromptDefaultWhenNoPaths(t *testing.T) {
 	t.Parallel()
 

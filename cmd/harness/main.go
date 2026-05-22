@@ -2354,6 +2354,9 @@ func countChangedRepos(results []app.RepoResult) int {
 }
 
 func marshalRunConfigJSON(cfg config.Config) ([]byte, bool) {
+	if strings.TrimSpace(cfg.LibraryTaskName) != "" {
+		cfg.Prompt = ""
+	}
 	payload, err := json.Marshal(cfg)
 	if err != nil {
 		return nil, false
