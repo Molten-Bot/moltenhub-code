@@ -28,7 +28,7 @@ services:
       PUID: "${PUID:-1000}"
       PGID: "${PGID:-1000}"
       TZ: "${TZ:-America/Vancouver}"
-      WHISPER_MODEL: "${WHISPER_MODEL:-tiny-int8}"
+      WHISPER_MODEL: "${WHISPER_MODEL:-auto}"
       WHISPER_LANG: "${WHISPER_LANG:-auto}"
       WHISPER_BEAM: "${WHISPER_BEAM:-1}"
     volumes:

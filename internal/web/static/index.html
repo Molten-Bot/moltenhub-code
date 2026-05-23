@@ -5236,7 +5236,8 @@
       syncPromptSpeechButton();
       setLocalPromptStatus("warn", "Transcribing...");
       try {
-        const response = await fetch("/api/speech/transcribe?language=auto", {
+        const language = speechTranscriptionLanguage();
+        const response = await fetch(`/api/speech/transcribe?language=${encodeURIComponent(language)}`, {
           method: "POST",
           headers: { "Content-Type": "application/octet-stream" },
           body: concatSpeechBuffers(chunks),
@@ -5321,6 +5322,13 @@
         inputOffset = nextInputOffset;
       }
       return output;
+    }
+
+    function speechTranscriptionLanguage() {
+      const locales = Array.isArray(navigator.languages) ? navigator.languages : [];
+      const locale = String(locales[0] || navigator.language || "").toLowerCase();
+      const language = locale.split(/[-_]/)[0];
+      return /^[a-z]{2,3}$/.test(language) ? language : "auto";
     }
 
     function floatToSpeechPCM(input) {
