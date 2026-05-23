@@ -535,6 +535,10 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
         </div>
         <div id="chat-repo-grid" class="chat-repo-grid" aria-label="GitHub repositories"></div>
         <nav id="chat-repo-pagination" class="chat-repo-pagination hidden" aria-label="GitHub repository pages"></nav>
+        <button id="chat-speech-toggle" class="chat-speech-toggle hidden" type="button" aria-label="Dictate chat prompt" aria-pressed="false" title="Dictate chat prompt" disabled>
+          <i data-lucide="mic" aria-hidden="true"></i>
+          <span class="sr-only">Dictate</span>
+        </button>
       </section>
       <script>
         (function initChatRepos() {
@@ -542,10 +546,31 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
           const status = document.getElementById("chat-status");
           const search = document.getElementById("chat-repo-search");
           const pagination = document.getElementById("chat-repo-pagination");
+          const speechToggle = document.getElementById("chat-speech-toggle");
           const CHAT_REPOS_PER_PAGE = 15;
+          const SPEECH_SAMPLE_RATE = 16000;
+          const SPEECH_STATUS_REFRESH_MS = 30000;
+          const SPEECH_MIN_PEAK = 0.012;
+          const SPEECH_MIN_RMS = 0.004;
           let repoPage = 1;
           let allRepos = [];
           let repoSearchQuery = "";
+          const speech = {
+            enabled: false,
+            reachable: false,
+            recording: false,
+            submitting: false,
+            chunks: [],
+            mediaStream: null,
+            audioContext: null,
+            source: null,
+            processor: null,
+            zeroGain: null,
+            sampleCount: 0,
+            squareSum: 0,
+            peak: 0,
+            statusTimer: null
+          };
           if (!grid || !status) return;
 
           function trackChatEvent(name, params) {
@@ -647,6 +672,296 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
             if (!(target instanceof Element)) return false;
             const control = target.closest("a, button, input, select, textarea, [contenteditable='true'], [role='button']");
             return Boolean(control && control !== card);
+          }
+
+          function browserSpeechCaptureSupported() {
+            return Boolean(
+              navigator.mediaDevices &&
+              typeof navigator.mediaDevices.getUserMedia === "function" &&
+              (window.AudioContext || window.webkitAudioContext)
+            );
+          }
+
+          function activeChatPromptInput() {
+            if (document.activeElement instanceof HTMLTextAreaElement && document.activeElement.classList.contains("chat-repo-prompt")) {
+              return document.activeElement;
+            }
+            return grid.querySelector(".chat-repo-card[aria-expanded='true'] .chat-repo-prompt");
+          }
+
+          function setChatSpeechStatus(tone, message) {
+            status.textContent = message;
+            status.dataset.tone = tone || "";
+          }
+
+          function syncChatSpeechButton() {
+            if (!speechToggle) return;
+            const visible = browserSpeechCaptureSupported() && Boolean(speech.enabled) && Boolean(speech.reachable);
+            const busy = Boolean(speech.recording || speech.submitting);
+            speechToggle.classList.toggle("hidden", !visible);
+            speechToggle.disabled = !visible || Boolean(speech.submitting);
+            speechToggle.classList.toggle("recording", Boolean(speech.recording));
+            speechToggle.setAttribute("aria-hidden", visible ? "false" : "true");
+            speechToggle.setAttribute("aria-pressed", speech.recording ? "true" : "false");
+            speechToggle.setAttribute("aria-label", speech.recording ? "Stop dictation" : "Dictate chat prompt");
+            speechToggle.title = speech.recording ? "Stop dictation" : (busy ? "Transcribing" : "Dictate chat prompt");
+            speechToggle.innerHTML = speech.recording
+              ? '<i data-lucide="square" aria-hidden="true"></i><span class="sr-only">Stop dictation</span>'
+              : '<i data-lucide="mic" aria-hidden="true"></i><span class="sr-only">Dictate</span>';
+            if (window.lucide && typeof window.lucide.createIcons === "function") {
+              window.lucide.createIcons({ root: speechToggle });
+            }
+          }
+
+          async function refreshChatSpeechStatus() {
+            try {
+              const response = await fetch("/api/speech/status", { cache: "no-store" });
+              const body = await response.json().catch(() => null);
+              const speechStatus = body && body.speech ? body.speech : {};
+              speech.enabled = Boolean(speechStatus.enabled);
+              speech.reachable = Boolean(speechStatus.reachable);
+              if (window.MoltenHubHeader && typeof window.MoltenHubHeader.updateSpeechConnection === "function") {
+                window.MoltenHubHeader.updateSpeechConnection(
+                  speech.enabled && speech.reachable,
+                  speech.reachable ? "Connected" : "Unavailable"
+                );
+              }
+            } catch (_err) {
+              speech.enabled = false;
+              speech.reachable = false;
+              if (window.MoltenHubHeader && typeof window.MoltenHubHeader.updateSpeechConnection === "function") {
+                window.MoltenHubHeader.updateSpeechConnection(false, "Unavailable");
+              }
+            } finally {
+              syncChatSpeechButton();
+              if (!speech.statusTimer) {
+                speech.statusTimer = window.setInterval(refreshChatSpeechStatus, SPEECH_STATUS_REFRESH_MS);
+              }
+            }
+          }
+
+          async function toggleChatSpeechDictation() {
+            if (speech.recording) {
+              await stopChatSpeechDictation();
+              return;
+            }
+            await startChatSpeechDictation();
+          }
+
+          async function startChatSpeechDictation() {
+            const input = activeChatPromptInput();
+            if (!input) {
+              setChatSpeechStatus("error", "Open a repository prompt before dictating.");
+              return;
+            }
+            if (!browserSpeechCaptureSupported()) {
+              setChatSpeechStatus("error", "This browser does not support microphone capture.");
+              return;
+            }
+            if (!speech.reachable) {
+              await refreshChatSpeechStatus();
+            }
+            if (!speech.reachable) {
+              setChatSpeechStatus("error", "Speech dictation is unavailable.");
+              return;
+            }
+
+            try {
+              const AudioCtor = window.AudioContext || window.webkitAudioContext;
+              speech.chunks = [];
+              resetSpeechCaptureStats();
+              speech.mediaStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                  channelCount: 1,
+                  echoCancellation: true,
+                  noiseSuppression: true
+                }
+              });
+              speech.audioContext = new AudioCtor();
+              if (speech.audioContext.state === "suspended") {
+                await speech.audioContext.resume();
+              }
+              speech.source = speech.audioContext.createMediaStreamSource(speech.mediaStream);
+              speech.processor = speech.audioContext.createScriptProcessor(4096, 1, 1);
+              speech.zeroGain = speech.audioContext.createGain();
+              speech.zeroGain.gain.value = 0;
+              speech.processor.onaudioprocess = (event) => {
+                if (!speech.recording || !speech.audioContext) return;
+                const inputBuffer = event.inputBuffer.getChannelData(0);
+                const downsampled = downsampleSpeech(inputBuffer, speech.audioContext.sampleRate, SPEECH_SAMPLE_RATE);
+                updateSpeechCaptureStats(downsampled);
+                speech.chunks.push(floatToSpeechPCM(downsampled));
+              };
+              speech.source.connect(speech.processor);
+              speech.processor.connect(speech.zeroGain);
+              speech.zeroGain.connect(speech.audioContext.destination);
+              speech.recording = true;
+              syncChatSpeechButton();
+              input.focus();
+              setChatSpeechStatus("warn", "Listening. Press the mic again to stop.");
+              trackChatEvent("chat_speech_started");
+            } catch (err) {
+              cleanupChatSpeechCapture();
+              setChatSpeechStatus("error", "Dictation failed: " + (err && err.message ? err.message : "capture failed"));
+              trackChatEvent("chat_speech_failed", { stage: "capture" });
+            }
+          }
+
+          async function stopChatSpeechDictation() {
+            const target = activeChatPromptInput();
+            const chunks = speech.chunks.slice();
+            const captureStats = currentSpeechCaptureStats(chunks);
+            cleanupChatSpeechCapture();
+            if (!chunks.length || captureStats.bytes <= 0) {
+              setChatSpeechStatus("warn", "No speech audio was captured.");
+              return;
+            }
+            speech.submitting = true;
+            syncChatSpeechButton();
+            setChatSpeechStatus("warn", "Transcribing...");
+            try {
+              const response = await fetch("/api/speech/transcribe", {
+                method: "POST",
+                headers: { "Content-Type": "application/octet-stream" },
+                body: concatSpeechBuffers(chunks)
+              });
+              const body = await response.json().catch(() => null);
+              if (!response.ok || !body || !body.ok) {
+                throw new Error(body && body.error ? body.error : "speech http " + response.status);
+              }
+              const text = String(body.text || "").trim();
+              if (!text) {
+                const nearSilent = Boolean(body && body.audio && body.audio.near_silent || captureStats.nearSilent);
+                setChatSpeechStatus("warn", nearSilent ? "No speech was recognized. Check microphone input." : "No speech was recognized.");
+                trackChatEvent("chat_speech_failed", { stage: nearSilent ? "quiet_empty_transcript" : "empty_transcript" });
+                return;
+              }
+              appendDictatedChatText(target || activeChatPromptInput(), text);
+              setChatSpeechStatus("ok", "Dictation added to prompt.");
+              trackChatEvent("chat_speech_succeeded");
+            } catch (err) {
+              setChatSpeechStatus("error", "Dictation failed: " + (err && err.message ? err.message : "transcribe failed"));
+              trackChatEvent("chat_speech_failed", { stage: "transcribe" });
+            } finally {
+              speech.submitting = false;
+              syncChatSpeechButton();
+            }
+          }
+
+          function cleanupChatSpeechCapture() {
+            speech.recording = false;
+            if (speech.processor) {
+              speech.processor.disconnect();
+              speech.processor.onaudioprocess = null;
+            }
+            if (speech.source) speech.source.disconnect();
+            if (speech.zeroGain) speech.zeroGain.disconnect();
+            if (speech.mediaStream) {
+              for (const track of speech.mediaStream.getTracks()) {
+                track.stop();
+              }
+            }
+            if (speech.audioContext) {
+              speech.audioContext.close().catch(() => {});
+            }
+            speech.mediaStream = null;
+            speech.audioContext = null;
+            speech.source = null;
+            speech.processor = null;
+            speech.zeroGain = null;
+            speech.chunks = [];
+            resetSpeechCaptureStats();
+            syncChatSpeechButton();
+          }
+
+          function resetSpeechCaptureStats() {
+            speech.sampleCount = 0;
+            speech.squareSum = 0;
+            speech.peak = 0;
+          }
+
+          function updateSpeechCaptureStats(input) {
+            if (!input || !input.length) return;
+            for (let i = 0; i < input.length; i += 1) {
+              const sample = Math.max(-1, Math.min(1, Number(input[i]) || 0));
+              const absSample = Math.abs(sample);
+              if (absSample > speech.peak) {
+                speech.peak = absSample;
+              }
+              speech.squareSum += sample * sample;
+            }
+            speech.sampleCount += input.length;
+          }
+
+          function currentSpeechCaptureStats(chunks) {
+            const bytes = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+            const sampleCount = speech.sampleCount || Math.floor(bytes / 2);
+            const rms = sampleCount > 0 ? Math.sqrt(speech.squareSum / sampleCount) : 0;
+            const nearSilent = bytes > 0 && speech.peak < SPEECH_MIN_PEAK && rms < SPEECH_MIN_RMS;
+            return {
+              bytes,
+              sampleCount,
+              peak: speech.peak,
+              rms,
+              nearSilent
+            };
+          }
+
+          function appendDictatedChatText(input, text) {
+            if (!(input instanceof HTMLTextAreaElement)) {
+              setChatSpeechStatus("error", "Open a repository prompt before dictating.");
+              return;
+            }
+            const dictated = String(text || "").trim();
+            if (!dictated) return;
+            const current = String(input.value || "");
+            const separator = current.trim() ? (current.endsWith("\n") ? "" : "\n") : "";
+            input.value = current + separator + dictated;
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            input.focus();
+            input.selectionStart = input.value.length;
+            input.selectionEnd = input.value.length;
+          }
+
+          function downsampleSpeech(input, inputRate, outputRate) {
+            if (inputRate === outputRate) return input;
+            const ratio = inputRate / outputRate;
+            const outputLength = Math.round(input.length / ratio);
+            const output = new Float32Array(outputLength);
+            let inputOffset = 0;
+            for (let outputOffset = 0; outputOffset < outputLength; outputOffset += 1) {
+              const nextInputOffset = Math.round((outputOffset + 1) * ratio);
+              let sum = 0;
+              let count = 0;
+              for (let i = inputOffset; i < nextInputOffset && i < input.length; i += 1) {
+                sum += input[i];
+                count += 1;
+              }
+              output[outputOffset] = count > 0 ? sum / count : 0;
+              inputOffset = nextInputOffset;
+            }
+            return output;
+          }
+
+          function floatToSpeechPCM(input) {
+            const buffer = new ArrayBuffer(input.length * 2);
+            const view = new DataView(buffer);
+            for (let i = 0; i < input.length; i += 1) {
+              const sample = Math.max(-1, Math.min(1, input[i]));
+              view.setInt16(i * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+            }
+            return buffer;
+          }
+
+          function concatSpeechBuffers(chunks) {
+            const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+            const output = new Uint8Array(total);
+            let offset = 0;
+            for (const chunk of chunks) {
+              output.set(new Uint8Array(chunk), offset);
+              offset += chunk.byteLength;
+            }
+            return output;
           }
 
           async function submitRepoPrompt(repo, input, statusNode) {
@@ -966,6 +1281,12 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
               });
             });
           }
+          if (speechToggle) {
+            speechToggle.addEventListener("click", (event) => {
+              event.preventDefault();
+              void toggleChatSpeechDictation();
+            });
+          }
 
           async function loadRepos() {
             try {
@@ -988,6 +1309,7 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
           }
 
           void loadRepos();
+          void refreshChatSpeechStatus();
         })();
       </script>`),
 	})

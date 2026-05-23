@@ -2724,7 +2724,18 @@ func TestHandlerServesChatView(t *testing.T) {
 		`id="chat-repo-search" class="chat-search-input" type="search"`,
 		`id="chat-repo-grid" class="chat-repo-grid" aria-label="GitHub repositories"`,
 		`id="chat-repo-pagination" class="chat-repo-pagination hidden" aria-label="GitHub repository pages"`,
+		`id="chat-speech-toggle" class="chat-speech-toggle hidden"`,
 		`const search = document.getElementById("chat-repo-search");`,
+		`const speechToggle = document.getElementById("chat-speech-toggle");`,
+		`function activeChatPromptInput()`,
+		`function refreshChatSpeechStatus()`,
+		`fetch("/api/speech/status", { cache: "no-store" })`,
+		`function toggleChatSpeechDictation()`,
+		`function startChatSpeechDictation()`,
+		`function stopChatSpeechDictation()`,
+		`fetch("/api/speech/transcribe",`,
+		`function appendDictatedChatText(input, text)`,
+		`speechToggle.addEventListener("click",`,
 		`const CHAT_REPOS_PER_PAGE = 15;`,
 		`const pageRepos = repos.slice(start, start + CHAT_REPOS_PER_PAGE);`,
 		`function filterRepos(repos, query)`,
@@ -3146,11 +3157,17 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 		!strings.Contains(css, ".chat-repo-card-closable .chat-repo-card-head") {
 		t.Fatalf("expected stylesheet to place active chat project close button beside the chat icon")
 	}
-	if !strings.Contains(css, ".chat-shell {\n  display: flex;\n  flex-direction: column;") ||
+	if !strings.Contains(css, ".chat-shell {\n  position: relative;\n  display: flex;\n  flex-direction: column;") ||
 		!strings.Contains(css, ".chat-repo-grid-active-repo {\n  flex: 1 1 auto;") ||
 		!strings.Contains(css, ".chat-repo-grid-active-repo .chat-repo-card[aria-expanded=\"true\"] {") ||
 		!strings.Contains(css, ".chat-repo-grid-active-repo .chat-repo-log:not([hidden]) {") {
 		t.Fatalf("expected selected chat repository panels to fill the Git / Chat shell")
+	}
+	if !strings.Contains(css, ".chat-speech-toggle {\n  position: absolute;") ||
+		!strings.Contains(css, "right: clamp(14px, 2.2vw, 22px);") ||
+		!strings.Contains(css, "bottom: clamp(14px, 2.2vw, 22px);") ||
+		!strings.Contains(css, ".chat-speech-toggle.recording {") {
+		t.Fatalf("expected stylesheet to pin the chat transcribe button to the bottom right of the chat section")
 	}
 	if !strings.Contains(css, ".chat-repo-message[data-tone=\"success\"] {") ||
 		!strings.Contains(css, ".chat-repo-message[data-tone=\"failure\"] {") ||
