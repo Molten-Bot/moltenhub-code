@@ -1,0 +1,389 @@
+openapi: 3.0.3
+info:
+  title: Molten Hub API
+  version: "1.0"
+  description: Offline contract snapshot for Molten Hub Code runtime integration.
+servers:
+  - url: https://na.hub.molten.bot/v1
+paths:
+  /ping:
+    get:
+      summary: Hub liveness probe
+      responses:
+        "200":
+          description: Hub is reachable
+  /health:
+    get:
+      summary: Hub health probe
+      responses:
+        "200":
+          description: Hub is healthy
+  /agents/bind-tokens:
+    post:
+      summary: Exchange a bind token for an agent token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BindTokenRequest"
+      responses:
+        "200":
+          description: Agent token response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BindTokenResponse"
+  /agents/bind:
+    post:
+      summary: Compatibility bind-token exchange endpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BindTokenRequest"
+      responses:
+        "200":
+          description: Agent token response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BindTokenResponse"
+  /agents/me/metadata:
+    get:
+      summary: Read current agent metadata
+      responses:
+        "200":
+          description: Current agent metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+    patch:
+      summary: Update current agent metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentMetadataPatch"
+      responses:
+        "200":
+          description: Metadata updated
+  /agents/me:
+    get:
+      summary: Read current agent profile
+      responses:
+        "200":
+          description: Current agent profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+    patch:
+      summary: Update current agent profile or metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentMetadataPatch"
+      responses:
+        "200":
+          description: Agent updated
+  /agents/me/status:
+    patch:
+      summary: Update current agent lifecycle status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentStatusPatch"
+      responses:
+        "200":
+          description: Status updated
+    post:
+      summary: Compatibility current agent lifecycle status update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentStatusPatch"
+      responses:
+        "200":
+          description: Status updated
+  /agents/me/activities:
+    post:
+      summary: Publish current agent activity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentActivity"
+      responses:
+        "200":
+          description: Activity recorded
+  /messages/publish:
+    post:
+      summary: Legacy runtime result publish endpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuntimePublishRequest"
+      responses:
+        "200":
+          description: Message published
+  /messages/pull:
+    get:
+      summary: Legacy runtime pull endpoint
+      parameters:
+        - $ref: "#/components/parameters/TimeoutMs"
+      responses:
+        "200":
+          description: Runtime message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuntimePulledMessage"
+        "204":
+          description: No message available
+  /messages/ack:
+    post:
+      summary: Legacy runtime delivery acknowledgement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuntimeDeliveryUpdate"
+      responses:
+        "200":
+          description: Delivery acknowledged
+  /messages/nack:
+    post:
+      summary: Legacy runtime delivery release
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuntimeDeliveryUpdate"
+      responses:
+        "200":
+          description: Delivery released
+  /runtime/messages/publish:
+    post:
+      summary: Publish a runtime result message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuntimePublishRequest"
+      responses:
+        "200":
+          description: Message published
+  /runtime/messages/pull:
+    get:
+      summary: Pull the next runtime message
+      parameters:
+        - $ref: "#/components/parameters/TimeoutMs"
+      responses:
+        "200":
+          description: Runtime message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuntimePulledMessage"
+        "204":
+          description: No message available
+  /runtime/messages/ack:
+    post:
+      summary: Acknowledge a pulled runtime delivery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuntimeDeliveryUpdate"
+      responses:
+        "200":
+          description: Delivery acknowledged
+  /runtime/messages/nack:
+    post:
+      summary: Release a pulled runtime delivery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuntimeDeliveryUpdate"
+      responses:
+        "200":
+          description: Delivery released
+  /runtime/messages/{message_id}:
+    parameters:
+      - name: message_id
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      summary: Delete a runtime message by id
+      responses:
+        "200":
+          description: Message deleted
+  /runtime/messages/ws:
+    get:
+      summary: Runtime websocket stream
+      parameters:
+        - name: session_key
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Websocket upgrade accepted
+  /runtime/messages/offline:
+    post:
+      summary: Mark a runtime websocket session offline
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuntimeOfflineRequest"
+      responses:
+        "200":
+          description: Runtime marked offline
+  /a2a:
+    post:
+      summary: A2A JSON-RPC endpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: A2A response
+components:
+  parameters:
+    TimeoutMs:
+      name: timeout_ms
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 30000
+  schemas:
+    Agent:
+      type: object
+      additionalProperties: true
+      properties:
+        handle:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+    AgentMetadataPatch:
+      type: object
+      additionalProperties: true
+      properties:
+        handle:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum: [online, offline]
+    AgentStatusPatch:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [online, offline]
+    AgentActivity:
+      type: object
+      required: [activity]
+      properties:
+        activity:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+    BindTokenRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        bind_token:
+          type: string
+        bindToken:
+          type: string
+        token:
+          type: string
+    BindTokenResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        agent_token:
+          type: string
+        agentToken:
+          type: string
+        token:
+          type: string
+        api_base_url:
+          type: string
+        apiBaseUrl:
+          type: string
+    RuntimePublishRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        message:
+          type: object
+          additionalProperties: true
+        target:
+          type: string
+        target_agent:
+          type: string
+        session_key:
+          type: string
+    RuntimePulledMessage:
+      type: object
+      additionalProperties: true
+      properties:
+        delivery_id:
+          type: string
+        message_id:
+          type: string
+        message:
+          type: object
+          additionalProperties: true
+    RuntimeDeliveryUpdate:
+      type: object
+      required: [delivery_id]
+      properties:
+        delivery_id:
+          type: string
+    RuntimeOfflineRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        session_key:
+          type: string
+        reason:
+          type: string
