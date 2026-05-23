@@ -7580,10 +7580,11 @@
       reposLabel.textContent = "All repositories";
       reposButton.append(reposIcon, reposLabel);
       reposButton.addEventListener("click", () => {
-        if (state.chatActiveRepoTab === "repos") return;
+        const clearedSearch = clearChatRepoSearchQuery();
+        if (state.chatActiveRepoTab === "repos" && !clearedSearch) return;
         state.chatActiveRepoTab = "repos";
         state.chatRepoPage = 1;
-        trackAnalyticsEvent("chat_repo_tab_selected", { source: "chat", tab_type: "all_repositories" });
+        trackAnalyticsEvent("chat_repo_tab_selected", { source: "chat", tab_type: "all_repositories", cleared_search: clearedSearch });
         renderChatRepos();
       });
       chatRepoTabs.appendChild(reposButton);
@@ -7776,6 +7777,15 @@
         searchField.classList.toggle("hidden", !enabled);
       }
       chatRepoSearch.disabled = !enabled;
+    }
+
+    function clearChatRepoSearchQuery() {
+      const hadQuery = Boolean(String(state.chatRepoSearchQuery || "").trim() || String(chatRepoSearch?.value || "").trim());
+      state.chatRepoSearchQuery = "";
+      if (chatRepoSearch && chatRepoSearch.value !== "") {
+        chatRepoSearch.value = "";
+      }
+      return hadQuery;
     }
 
     function chatRepoPanelContainsFocus() {
