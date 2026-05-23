@@ -1861,6 +1861,7 @@
     let dashboardChart = null;
     let dashboardSourceChart = null;
     let githubReposLoadPromise = null;
+    let githubReposLoadSequence = 0;
     let chatRepoResizeRenderQueued = false;
     const localConnItem = document.getElementById("local-conn-item");
     const localConnDot = document.getElementById("local-conn-dot");
@@ -2307,7 +2308,7 @@
       if (!chatDockLink) {
         return;
       }
-      const available = Boolean(state.githubReposReady) && !state.githubReposLoading;
+      const available = Boolean(state.githubReposReady);
       chatDockLink.classList.toggle("is-disabled", !available);
       chatDockLink.setAttribute("aria-disabled", String(!available));
       chatDockLink.tabIndex = available ? 0 : -1;
@@ -2357,26 +2358,34 @@
       }
     }
 
-    function loadGitHubReposForChat() {
-      if (state.githubReposReady) {
+    function loadGitHubReposForChat(options = {}) {
+      const force = Boolean(options.force);
+      const refresh = Boolean(options.refresh || force);
+      const keepExisting = Boolean(options.keepExisting) && state.githubReposReady;
+      if (state.githubReposReady && !force) {
         syncChatDockLinkAvailability();
         return Promise.resolve();
       }
-      if (githubReposLoadPromise) {
+      const forceNewRequest = force && refresh;
+      if (githubReposLoadPromise && !forceNewRequest) {
         return githubReposLoadPromise;
       }
+      const loadSequence = githubReposLoadSequence + 1;
+      githubReposLoadSequence = loadSequence;
       state.githubReposLoading = true;
-      state.githubReposReady = false;
       state.githubReposLoadError = "";
-      state.chatRepoPage = 1;
-      state.chatReposLoaded = false;
+      if (!keepExisting) {
+        state.githubReposReady = false;
+        state.chatRepoPage = 1;
+        state.chatReposLoaded = false;
+      }
       syncChatDockLinkAvailability();
-      if (chatStatus) {
+      if (chatStatus && !keepExisting) {
         chatStatus.textContent = "";
       }
       githubReposLoadPromise = (async () => {
         try {
-          const response = await fetch("/api/github/repos", { cache: "no-store" });
+          const response = await fetch(refresh ? "/api/github/repos?refresh=1" : "/api/github/repos", { cache: "no-store" });
           let body = null;
           try {
             body = await response.json();
@@ -2386,20 +2395,31 @@
           if (!response.ok || !body || body.ok === false) {
             throw new Error(body?.error || `github repos http ${response.status}`);
           }
+          if (loadSequence !== githubReposLoadSequence) {
+            return;
+          }
           state.githubRepos = Array.isArray(body.repos) ? body.repos : [];
           state.githubReposReady = true;
+          state.chatReposLoaded = false;
           trackAnalyticsEvent("chat_repos_loaded", { repo_count: state.githubRepos.length });
         } catch (err) {
+          if (loadSequence !== githubReposLoadSequence) {
+            return;
+          }
           state.githubReposLoadError = err && err.message ? err.message : "Unable to read GitHub projects.";
-          state.githubRepos = [];
-          state.githubReposReady = false;
+          if (!keepExisting) {
+            state.githubRepos = [];
+            state.githubReposReady = false;
+          }
           trackAnalyticsEvent("chat_repos_load_failed");
         } finally {
-          state.githubReposLoading = false;
-          githubReposLoadPromise = null;
-          syncChatDockLinkAvailability();
-          if (state.appDisplay === "chat") {
-            loadChatRepos();
+          if (loadSequence === githubReposLoadSequence) {
+            state.githubReposLoading = false;
+            githubReposLoadPromise = null;
+            syncChatDockLinkAvailability();
+            if (state.appDisplay === "chat") {
+              loadChatRepos();
+            }
           }
         }
       })();
@@ -4081,7 +4101,7 @@
         applyAgentAuthGate(auth);
         await loadGitHubProfileLink();
         if (auth.ready) {
-          await loadGitHubReposForChat();
+          await loadGitHubReposForChat({ force: true, refresh: true });
           setAgentAuthConfigureError("");
           clearAgentAuthConfigureInputIfSensitive();
           setLocalPromptStatus("ok", `${currentAgentLabel()} auth is ready.`);
@@ -11171,7 +11191,9 @@
 
     async function loadInitial() {
       try {
-        const githubReposPromise = state.githubReposReady ? Promise.resolve() : loadGitHubReposForChat();
+        const githubReposPromise = state.githubReposReady
+          ? loadGitHubReposForChat({ force: true, refresh: true, keepExisting: true })
+          : loadGitHubReposForChat();
         void loadHubSetupStatus().then(() => {
           if (shouldOpenInitialHubProfileDialog()) {
             openHubProfileDialog("deep_link");

@@ -154,7 +154,7 @@ func TestResolveAuthenticatedGitHubRepos(t *testing.T) {
 			}
 			switch requests {
 			case 1:
-				if got, want := req.URL.String(), "https://api.github.com/user/repos?per_page=100&affiliation=owner,collaborator,organization_member&sort=pushed"; got != want {
+				if got, want := req.URL.String(), "https://api.github.com/user/repos?per_page=100&visibility=all&affiliation=owner,collaborator,organization_member&sort=pushed"; got != want {
 					t.Fatalf("request URL = %q, want %q", got, want)
 				}
 				header := make(http.Header)
