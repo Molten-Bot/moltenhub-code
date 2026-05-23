@@ -16,7 +16,7 @@ services:
       MOLTEN_HUB_DEFAULT_REPOSITORY: ${MOLTEN_HUB_DEFAULT_REPOSITORY:-}
       MOLTEN_HUB_SPEECH_HOST: faster-whisper
       MOLTEN_HUB_SPEECH_PORT: "10300"
-      MOLTEN_HUB_SPEECH_LANGUAGE: "${MOLTEN_HUB_SPEECH_LANGUAGE:-${WHISPER_LANG:-en}}"
+      MOLTEN_HUB_SPEECH_LANGUAGE: "${MOLTEN_HUB_SPEECH_LANGUAGE:-en}"
     volumes:
       - ./.moltenhub:/workspace/config
     depends_on:

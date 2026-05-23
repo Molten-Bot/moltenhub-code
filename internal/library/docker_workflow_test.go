@@ -36,6 +36,39 @@ func TestDeployVnextPublishesSupplyChainAttestations(t *testing.T) {
 	}
 }
 
+func TestComposeKeepsSpeechLanguageDefaultDeterministic(t *testing.T) {
+	t.Parallel()
+
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller(0) failed")
+	}
+
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	composePath := filepath.Join(repoRoot, "docker-compose.yml")
+	envExamplePath := filepath.Join(repoRoot, ".env.example")
+
+	composeData, err := os.ReadFile(composePath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", composePath, err)
+	}
+	envExampleData, err := os.ReadFile(envExamplePath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", envExamplePath, err)
+	}
+
+	compose := string(composeData)
+	if !strings.Contains(compose, `MOLTEN_HUB_SPEECH_LANGUAGE: "${MOLTEN_HUB_SPEECH_LANGUAGE:-en}"`) {
+		t.Fatalf("%s must default hub speech requests to English unless MOLTEN_HUB_SPEECH_LANGUAGE is explicit", composePath)
+	}
+	if strings.Contains(compose, `MOLTEN_HUB_SPEECH_LANGUAGE: "${MOLTEN_HUB_SPEECH_LANGUAGE:-${WHISPER_LANG:-en}}"`) {
+		t.Fatalf("%s still lets WHISPER_LANG=auto disable the hub speech language hint", composePath)
+	}
+	if !strings.Contains(string(envExampleData), "WHISPER_LANG=en") {
+		t.Fatalf("%s must keep the sample speech sidecar language aligned with the hub default", envExamplePath)
+	}
+}
+
 func TestDeployProdPromotesExistingImageTag(t *testing.T) {
 	t.Parallel()
 
