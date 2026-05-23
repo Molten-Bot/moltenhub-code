@@ -111,6 +111,8 @@ type repoWorkspace struct {
 	BaseBranch                  string
 	CreateWorkBranch            bool
 	Changed                     bool
+	BranchCollisionSuffix       string
+	BranchCollisionAttempts     int
 	WriteAccessChecked          bool
 	WriteAccessAllowed          bool
 	WriteAccessErr              error
@@ -242,11 +244,14 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		return h.fail(ExitConfig, "config", fmt.Errorf("targetSubdir does not exist or is not a directory: %s", cfg.TargetSubdir), runDir)
 	}
 
-	generatedBranch := slug.BranchName(cfg.Prompt, h.Now(), guid)
+	runNow := h.Now()
+	generatedBranch := slug.BranchName(cfg.Prompt, runNow, guid)
+	branchCollisionSuffix := runBranchCollisionSuffix(runNow, guid)
 	for i := range repos {
 		branch := strings.TrimSpace(repos[i].BaseBranch)
 		if repos[i].CreateWorkBranch {
 			branch = generatedBranch
+			repos[i].BranchCollisionSuffix = branchCollisionSuffix
 		}
 		repos[i].Branch = branch
 		if !repos[i].CreateWorkBranch {
@@ -437,7 +442,7 @@ func (h Harness) processChangedRepo(
 		}
 		h.logf("stage=git status=ok action=commit repo=%s repo_dir=%s reason=already_committed", repo.URL, repo.RelDir)
 	}
-	if err := h.pushWithSync(ctx, *repo, 0); err != nil {
+	if err := h.pushWithSync(ctx, repo, 0); err != nil {
 		return ExitGit, "git", err
 	}
 	h.logf("stage=git status=ok action=commit repo=%s repo_dir=%s", repo.URL, repo.RelDir)
@@ -737,15 +742,18 @@ func (h Harness) processChangedRepo(
 				repo.RelDir,
 			)
 		}
-		if err := h.pushWithSync(ctx, *repo, attempt+1); err != nil {
+		if err := h.pushWithSync(ctx, repo, attempt+1); err != nil {
 			return ExitGit, "git", err
 		}
 		h.logf("stage=git status=ok action=repair_commit attempt=%d repo=%s repo_dir=%s", attempt+1, repo.URL, repo.RelDir)
 	}
 }
 
-func (h Harness) pushWithSync(ctx context.Context, repo repoWorkspace, remediationAttempt int) error {
-	pushRemote := repoPushRemote(repo)
+func (h Harness) pushWithSync(ctx context.Context, repo *repoWorkspace, remediationAttempt int) error {
+	if repo == nil {
+		return fmt.Errorf("repo workspace is required")
+	}
+	pushRemote := repoPushRemote(*repo)
 	for pushAttempt := 1; pushAttempt <= maxPushSyncAttempts; pushAttempt++ {
 		res, err := h.runCommand(ctx, "git", pushToRemoteCommand(repo.Dir, pushRemote, repo.Branch))
 		if err == nil {
@@ -753,6 +761,13 @@ func (h Harness) pushWithSync(ctx context.Context, repo repoWorkspace, remediati
 		}
 		if !isNonFastForwardPush(res, err) || pushAttempt >= maxPushSyncAttempts {
 			return err
+		}
+		if repo.CreateWorkBranch {
+			if err := h.renameWorkBranchForRemoteCollision(ctx, repo, pushRemote); err != nil {
+				return fmt.Errorf("avoid remote branch collision before push retry: %w", err)
+			}
+			pushRemote = repoPushRemote(*repo)
+			continue
 		}
 		if remediationAttempt > 0 {
 			h.logf(
@@ -784,11 +799,134 @@ func (h Harness) pushWithSync(ctx context.Context, repo repoWorkspace, remediati
 	return fmt.Errorf("push retries exhausted for branch %q on remote %q", repo.Branch, pushRemote)
 }
 
+func (h Harness) renameWorkBranchForRemoteCollision(ctx context.Context, repo *repoWorkspace, remote string) error {
+	if repo == nil {
+		return fmt.Errorf("repo workspace is required")
+	}
+	oldBranch := normalizeBranchRef(repo.Branch)
+	if oldBranch == "" {
+		return fmt.Errorf("work branch is required")
+	}
+	repo.BranchCollisionAttempts++
+	newBranch := collisionAvoidanceBranchName(
+		oldBranch,
+		branchCollisionSuffixVariant(repo.BranchCollisionSuffix, repo.BranchCollisionAttempts),
+	)
+	if newBranch == "" || newBranch == oldBranch {
+		return fmt.Errorf("cannot derive alternate branch for colliding work branch %q", oldBranch)
+	}
+	remote = normalizeGitRemoteName(remote)
+	h.logf(
+		"stage=git status=start action=branch_rename reason=remote_non_fast_forward repo=%s repo_dir=%s branch=%s new_branch=%s remote=%s",
+		repo.URL,
+		repo.RelDir,
+		oldBranch,
+		newBranch,
+		remote,
+	)
+	if _, err := h.runCommand(ctx, "git", branchMoveCommand(repo.Dir, newBranch)); err != nil {
+		return fmt.Errorf("rename work branch %q to %q after remote non-fast-forward on %q: %w", oldBranch, newBranch, remote, err)
+	}
+	repo.Branch = newBranch
+	syncRepoPublishHeadRef(repo)
+	h.logf(
+		"stage=git status=ok action=branch_rename reason=remote_non_fast_forward repo=%s repo_dir=%s branch=%s previous_branch=%s remote=%s",
+		repo.URL,
+		repo.RelDir,
+		newBranch,
+		oldBranch,
+		remote,
+	)
+	return nil
+}
+
+func runBranchCollisionSuffix(now time.Time, guid string) string {
+	if suffix := sanitizeBranchSuffix(guid); suffix != "" {
+		if len(suffix) > 8 {
+			return suffix[:8]
+		}
+		return suffix
+	}
+	if !now.IsZero() {
+		return now.UTC().Format("20060102-150405")
+	}
+	return "retry"
+}
+
+func branchCollisionSuffixVariant(suffix string, attempt int) string {
+	suffix = sanitizeBranchSuffix(suffix)
+	if suffix == "" {
+		suffix = "retry"
+	}
+	if attempt <= 1 {
+		return suffix
+	}
+	return fmt.Sprintf("%s-%d", suffix, attempt)
+}
+
+func sanitizeBranchSuffix(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var b strings.Builder
+	lastSep := false
+	for _, r := range value {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			b.WriteRune(r)
+			lastSep = false
+		case r == '-' || r == '_' || r == '.':
+			if b.Len() == 0 || lastSep {
+				continue
+			}
+			b.WriteByte('-')
+			lastSep = true
+		default:
+			if b.Len() == 0 || lastSep {
+				continue
+			}
+			b.WriteByte('-')
+			lastSep = true
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+func collisionAvoidanceBranchName(branch, suffix string) string {
+	branch = strings.Trim(normalizeBranchRef(branch), "-/")
+	if branch == "" {
+		branch = "moltenhub-task"
+	}
+	suffix = branchCollisionSuffixVariant(suffix, 1)
+	if strings.HasSuffix(branch, "-"+suffix) {
+		return branch
+	}
+	const maxCollisionBranchNameLen = 120
+	maxBaseLen := maxCollisionBranchNameLen - len(suffix) - 1
+	if maxBaseLen < len("moltenhub-task") {
+		maxBaseLen = len("moltenhub-task")
+	}
+	if len(branch) > maxBaseLen {
+		branch = strings.Trim(branch[:maxBaseLen], "-/")
+		if branch == "" {
+			branch = "moltenhub-task"
+		}
+	}
+	return branch + "-" + suffix
+}
+
+type remoteWriteAccessProbe struct {
+	NonFastForward bool
+}
+
 func (h Harness) verifyRemoteWriteAccess(ctx context.Context, repo repoWorkspace) error {
 	return h.verifyRemoteWriteAccessOnRemote(ctx, repo, publishRemoteOrigin, "git")
 }
 
 func (h Harness) verifyRemoteWriteAccessOnRemote(ctx context.Context, repo repoWorkspace, remote, stage string) error {
+	_, err := h.probeRemoteWriteAccessOnRemote(ctx, repo, remote, stage)
+	return err
+}
+
+func (h Harness) probeRemoteWriteAccessOnRemote(ctx context.Context, repo repoWorkspace, remote, stage string) (remoteWriteAccessProbe, error) {
 	remote = strings.TrimSpace(remote)
 	if remote == "" {
 		remote = publishRemoteOrigin
@@ -816,9 +954,9 @@ func (h Harness) verifyRemoteWriteAccessOnRemote(ctx context.Context, repo repoW
 				repo.Branch,
 				remote,
 			)
-			return nil
+			return remoteWriteAccessProbe{NonFastForward: true}, nil
 		}
-		return commandErrorWithDetails(
+		return remoteWriteAccessProbe{}, commandErrorWithDetails(
 			fmt.Sprintf("verify remote write access for repo %s branch %q on remote %q", repo.URL, repo.Branch, remote),
 			err,
 			res,
@@ -833,7 +971,7 @@ func (h Harness) verifyRemoteWriteAccessOnRemote(ctx context.Context, repo repoW
 		repo.Branch,
 		remote,
 	)
-	return nil
+	return remoteWriteAccessProbe{}, nil
 }
 
 func (h Harness) preparePublishWorkflow(ctx context.Context, repo *repoWorkspace) error {
@@ -859,7 +997,18 @@ func (h Harness) preparePublishWorkflow(ctx context.Context, repo *repoWorkspace
 		repo.Branch,
 	)
 
-	if err := h.verifyRemoteWriteAccessOnRemote(ctx, *repo, publishRemoteOrigin, "workflow"); err == nil {
+	probe, err := h.probeRemoteWriteAccessOnRemote(ctx, *repo, publishRemoteOrigin, "workflow")
+	if err == nil && probe.NonFastForward && repo.CreateWorkBranch {
+		if renameErr := h.renameWorkBranchForRemoteCollision(ctx, repo, publishRemoteOrigin); renameErr != nil {
+			return renameErr
+		}
+		probe, err = h.probeRemoteWriteAccessOnRemote(ctx, *repo, publishRemoteOrigin, "workflow")
+		if err == nil && probe.NonFastForward {
+			err = fmt.Errorf("generated work branch %q still conflicts with remote %q", repo.Branch, publishRemoteOrigin)
+		}
+	}
+
+	if err == nil {
 		repo.WriteAccessChecked = true
 		repo.WriteAccessAllowed = true
 		repo.WriteAccessErr = nil
@@ -3753,6 +3902,14 @@ func branchCommand(repoDir, branch string) execx.Command {
 		Dir:  repoDir,
 		Name: "git",
 		Args: []string{"switch", "-c", branch},
+	}
+}
+
+func branchMoveCommand(repoDir, branch string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "git",
+		Args: []string{"branch", "-m", branch},
 	}
 }
 

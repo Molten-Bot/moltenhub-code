@@ -282,6 +282,85 @@ func TestMarkLocalRunRuntimeOfflinePublishesWhenHubConnected(t *testing.T) {
 	}
 }
 
+func TestPublishLocalRunFailureResultPublishesExplicitFailurePayload(t *testing.T) {
+	t.Parallel()
+
+	var publishBody map[string]any
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/runtime/messages/publish":
+			if err := json.NewDecoder(r.Body).Decode(&publishBody); err != nil {
+				t.Fatalf("decode publish body: %v", err)
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer ts.Close()
+
+	var logs []string
+	publishLocalRunFailureResult(context.Background(), hub.InitConfig{
+		BaseURL:    ts.URL + "/v1",
+		AgentToken: "token",
+	}, "req-local-fail", app.Result{
+		ExitCode:     app.ExitGit,
+		Err:          errors.New("git: merge conflict"),
+		WorkspaceDir: "/tmp/work",
+		Branch:       "moltenhub-build-api",
+	}, func() bool { return true }, func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	})
+
+	msg, ok := publishBody["message"].(map[string]any)
+	if !ok {
+		t.Fatalf("published message missing: %#v", publishBody)
+	}
+	if got := msg["status"]; got != "error" {
+		t.Fatalf("message.status = %#v, want error", got)
+	}
+	if got := msg["failed"]; got != true {
+		t.Fatalf("message.failed = %#v, want true", got)
+	}
+	if got := msg["Failure:"]; got != "task failed" {
+		t.Fatalf("message.Failure: = %#v", got)
+	}
+	if got := msg["Error details:"]; got != "git: merge conflict" {
+		t.Fatalf("message.Error details: = %#v", got)
+	}
+	if got := msg["message"]; got != "Failure: task failed. Error details: git: merge conflict" {
+		t.Fatalf("message.message = %#v", got)
+	}
+	result, _ := msg["result"].(map[string]any)
+	if result == nil {
+		t.Fatal("message.result missing")
+	}
+	if got := result["Error details:"]; got != "git: merge conflict" {
+		t.Fatalf("result.Error details: = %#v", got)
+	}
+	if len(logs) != 1 || !strings.Contains(logs[0], "action=publish_failure_result") || !strings.Contains(logs[0], "status=ok") {
+		t.Fatalf("publish logs = %#v, want successful publish_failure_result log", logs)
+	}
+}
+
+func TestPublishLocalRunFailureResultSkipsWhenHubDisconnected(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request while hub disconnected: %s %s", r.Method, r.URL.Path)
+	}))
+	defer ts.Close()
+
+	publishLocalRunFailureResult(context.Background(), hub.InitConfig{
+		BaseURL:    ts.URL + "/v1",
+		AgentToken: "token",
+	}, "req-local-fail", app.Result{
+		ExitCode: app.ExitGit,
+		Err:      errors.New("git: merge conflict"),
+	}, func() bool { return false }, nil)
+}
+
 func TestMarkLocalRunRuntimeOfflineSkipsWhenHubDisconnected(t *testing.T) {
 	t.Parallel()
 

@@ -508,6 +508,7 @@ func runHub(args []string) int {
 				finalState = outcome.State
 				switch outcome.State {
 				case "error":
+					publishLocalRunFailureResult(runCtx, activeCfg, requestID, outcome.Result, hubRuntimeConnected, daemonLogger)
 					markLocalRunRuntimeOffline(runCtx, activeCfg, requestID, hubRuntimeConnected, daemonLogger)
 					if allowFailureFollowUp {
 						if queueFailureRerun != nil {
@@ -2239,6 +2240,122 @@ func resultHasPR(result app.Result) bool {
 		return true
 	}
 	return strings.TrimSpace(joinAllPRURLs(result.RepoResults)) != ""
+}
+
+func publishLocalRunFailureResult(ctx context.Context, cfg hub.InitConfig, requestID string, result app.Result, hubConnected func() bool, logf func(string, ...any)) {
+	if result.Err == nil {
+		return
+	}
+	if hubConnected == nil || !hubConnected() {
+		return
+	}
+	token := strings.TrimSpace(cfg.AgentToken)
+	if token == "" {
+		return
+	}
+	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
+	if baseURL == "" {
+		return
+	}
+	if logf == nil {
+		logf = func(string, ...any) {}
+	}
+
+	publishCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	cfg.ApplyDefaults()
+	client := hub.NewAPIClient(baseURL)
+	if err := client.PublishResult(publishCtx, token, localRunFailurePayload(cfg, requestID, result)); err != nil {
+		logf("dispatch status=warn action=publish_failure_result request_id=%s err=%q", requestID, err)
+		return
+	}
+	logf("dispatch status=ok action=publish_failure_result request_id=%s", requestID)
+}
+
+func localRunFailurePayload(cfg hub.InitConfig, requestID string, result app.Result) map[string]any {
+	cfg.ApplyDefaults()
+	errText := "unknown error"
+	if result.Err != nil && strings.TrimSpace(result.Err.Error()) != "" {
+		errText = strings.TrimSpace(result.Err.Error())
+	}
+	message := failureMessage(errText)
+	prURLs := completedPRURLs(result)
+	resultPayload := map[string]any{
+		"exitCode":     result.ExitCode,
+		"workspaceDir": result.WorkspaceDir,
+		"branch":       result.Branch,
+		"prUrl":        result.PRURL,
+		"prUrls":       splitCSV(prURLs),
+		"changedRepos": countChangedRepos(result.RepoResults),
+		"noChanges":    result.NoChanges,
+		"status":       "failed",
+		"message":      message,
+		"response":     message,
+		"error":        errText,
+	}
+	addFailureFields(resultPayload, errText)
+
+	payload := map[string]any{
+		"type":       cfg.Skill.ResultType,
+		"skill":      cfg.Skill.Name,
+		"request_id": strings.TrimSpace(requestID),
+		"status":     "error",
+		"failed":     true,
+		"ok":         false,
+		"message":    message,
+		"response":   message,
+		"error":      errText,
+		"result":     resultPayload,
+	}
+	addFailureFields(payload, errText)
+	failure := map[string]any{
+		"status":  "failed",
+		"message": message,
+		"error":   errText,
+		"details": resultPayload,
+	}
+	addFailureFields(failure, errText)
+	payload["failure"] = failure
+	return payload
+}
+
+func failureMessage(errText string) string {
+	errText = strings.TrimSpace(errText)
+	if errText == "" {
+		errText = "unknown error"
+	}
+	return "Failure: task failed. Error details: " + errText
+}
+
+func addFailureFields(payload map[string]any, errText string) {
+	if payload == nil {
+		return
+	}
+	errText = strings.TrimSpace(errText)
+	if errText == "" {
+		errText = "unknown error"
+	}
+	payload["Failure"] = "task failed"
+	payload["Failure:"] = "task failed"
+	payload["Error details"] = errText
+	payload["Error details:"] = errText
+}
+
+func splitCSV(value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func recordLocalRunStartedActivity(ctx context.Context, cfg hub.InitConfig, runCfg config.Config, requestID string, hubConnected func() bool, logf func(string, ...any)) {
