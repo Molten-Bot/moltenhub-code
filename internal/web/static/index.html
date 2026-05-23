@@ -2406,6 +2406,7 @@
           state.githubRepos = Array.isArray(body.repos) ? body.repos : [];
           state.githubReposReady = true;
           state.chatReposLoaded = false;
+          renderRepoHistoryOptions();
           trackAnalyticsEvent("chat_repos_loaded", { repo_count: state.githubRepos.length });
         } catch (err) {
           if (loadSequence !== githubReposLoadSequence) {
@@ -5919,9 +5920,9 @@
       if (!select || !repositoryField) {
         return;
       }
-      const hasSavedHistory = state.repoHistory.length > 0;
+      const hasRepoChoices = repoSelectValues().length > 0;
       const usingRepoHistory = normalizeRepoValue(select.value) !== "";
-      repositoryField.classList.toggle("hidden", hasSavedHistory && usingRepoHistory);
+      repositoryField.classList.toggle("hidden", hasRepoChoices && usingRepoHistory);
     }
 
     function syncRepositoryFieldVisibility() {
@@ -6204,6 +6205,26 @@
       return defaultRepository();
     }
 
+    function githubRepoSelectValue(repo) {
+      if (!repo || typeof repo !== "object") {
+        return "";
+      }
+      const htmlURL = String(repo.html_url || "").trim();
+      if (htmlURL) return htmlURL;
+      const fullName = String(repo.full_name || "").trim();
+      if (fullName) return `https://github.com/${fullName.replace(/^\/+/, "")}`;
+      return String(repo.name || "").trim();
+    }
+
+    function githubRepoSelectValues() {
+      const repos = Array.isArray(state.githubRepos) ? state.githubRepos : [];
+      return repos.map(githubRepoSelectValue).filter(Boolean);
+    }
+
+    function repoSelectValues(currentValue = "") {
+      return dedupeRepoValues([currentValue, ...state.repoHistory, ...githubRepoSelectValues()]);
+    }
+
     function renderRepoHistorySelect(historyField, select, input) {
       if (!historyField || !select || !input) {
         return;
@@ -6212,15 +6233,15 @@
       const currentValue = normalizeRepoValue(input.value);
       const selectedValue = normalizeRepoValue(select.value);
       const manualSelected = selectedValue === "";
-      const unique = dedupeRepoValues([currentValue, ...state.repoHistory]);
-      const hasSavedHistory = state.repoHistory.length > 0;
+      const unique = repoSelectValues(currentValue);
+      const hasRepoChoices = unique.length > 0;
 
-      historyField.classList.toggle("hidden", !hasSavedHistory);
+      historyField.classList.toggle("hidden", !hasRepoChoices);
 
       select.replaceChildren();
       const manualOption = document.createElement("option");
       manualOption.value = "";
-      manualOption.textContent = unique.length ? "Enter repo manually" : "No saved repos yet";
+      manualOption.textContent = unique.length ? "Enter repo manually" : "No repositories loaded";
       select.appendChild(manualOption);
 
       for (const repo of unique) {

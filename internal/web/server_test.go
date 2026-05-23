@@ -1727,6 +1727,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `if (loadSequence !== githubReposLoadSequence)`) ||
 		!strings.Contains(markup, `const response = await fetch(refresh ? "/api/github/repos?refresh=1" : "/api/github/repos", { cache: "no-store" });`) ||
 		!strings.Contains(markup, `state.githubRepos = Array.isArray(body.repos) ? body.repos : [];`) ||
+		!strings.Contains(markup, `renderRepoHistoryOptions();`) ||
 		!strings.Contains(markup, `loadGitHubReposForChat({ force: true, refresh: true, keepExisting: true })`) ||
 		!strings.Contains(markup, `loadGitHubReposForChat({ force: true, refresh: true });`) ||
 		!strings.Contains(markup, `const allRepos = Array.isArray(state.githubRepos) ? state.githubRepos : [];`) ||
@@ -2049,8 +2050,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "builderImagesClear.classList.toggle(\"hidden\", isLibrary);") {
 		t.Fatalf("expected index html to hide screenshot clearing in library mode only")
 	}
-	if !strings.Contains(markup, `historyField.classList.toggle("hidden", !hasSavedHistory);`) {
-		t.Fatalf("expected index html to hide repo history when there are no saved repos")
+	if !strings.Contains(markup, `historyField.classList.toggle("hidden", !hasRepoChoices);`) ||
+		!strings.Contains(markup, `const hasRepoChoices = repoSelectValues().length > 0;`) {
+		t.Fatalf("expected index html to show repository dropdown when saved or GitHub repositories are available")
 	}
 	if !strings.Contains(markup, "function rememberRepos(") {
 		t.Fatalf("expected index html to include repo history persistence")
@@ -2085,6 +2087,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, "function defaultRepoSelection(") {
 		t.Fatalf("expected index html to include repo history default selection helper")
+	}
+	if !strings.Contains(markup, "function githubRepoSelectValue(repo)") ||
+		!strings.Contains(markup, "function githubRepoSelectValues()") ||
+		!strings.Contains(markup, "function repoSelectValues(currentValue = \"\")") ||
+		!strings.Contains(markup, "return dedupeRepoValues([currentValue, ...state.repoHistory, ...githubRepoSelectValues()]);") {
+		t.Fatalf("expected repository dropdown to include GitHub repositories loaded for chat")
 	}
 	if !strings.Contains(markup, `"defaultRepository":""`) {
 		t.Fatalf("expected index html to leave the default repository empty")
