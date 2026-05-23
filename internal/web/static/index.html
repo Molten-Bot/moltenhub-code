@@ -185,12 +185,15 @@
                 </div>
                 <label id="builder-prompt-field" class="prompt-field">
                   <span class="prompt-label">Prompt</span>
-                  <textarea
-                    id="builder-prompt-input"
-                    class="prompt-text prompt-control"
-                    rows="6"
-                    spellcheck="false"
-                    placeholder="Describe the change you want"></textarea>
+                  <span class="speech-stream-wrap">
+                    <textarea
+                      id="builder-prompt-input"
+                      class="prompt-text prompt-control"
+                      rows="6"
+                      spellcheck="false"
+                      placeholder="Describe the change you want"></textarea>
+                    <span id="builder-speech-stream" class="speech-stream" aria-hidden="true"></span>
+                  </span>
                 </label>
               </div>
 
@@ -1913,6 +1916,7 @@
     const localPromptStatusDefaultText = String(localPromptStatus?.dataset.defaultText || "").trim();
     let localPromptStatusTimer = 0;
     const promptSpeechToggle = document.getElementById("prompt-speech-toggle");
+    const builderSpeechStream = document.getElementById("builder-speech-stream");
     const promptModeBuilder = document.getElementById("prompt-mode-builder");
     const promptModeLibrary = document.getElementById("prompt-mode-library");
     const promptModeJSON = document.getElementById("prompt-mode-json");
@@ -5167,6 +5171,38 @@
       replaceLucideIcons(promptSpeechToggle);
     }
 
+    function clampSpeechStreamLevel(level) {
+      if (!Number.isFinite(level)) return 0;
+      return Math.max(0, Math.min(1, level));
+    }
+
+    function setSpeechStreamActive(stream, active) {
+      if (!(stream instanceof HTMLElement)) return;
+      stream.classList.toggle("is-active", Boolean(active));
+      if (!active) {
+        stream.style.setProperty("--speech-level", "0");
+      }
+    }
+
+    function setSpeechStreamLevel(stream, level) {
+      if (!(stream instanceof HTMLElement)) return;
+      stream.style.setProperty("--speech-level", clampSpeechStreamLevel(level).toFixed(3));
+    }
+
+    function speechStreamLevelFromSamples(input) {
+      if (!input || !input.length) return 0;
+      let sum = 0;
+      let peak = 0;
+      for (let i = 0; i < input.length; i += 1) {
+        const sample = Math.max(-1, Math.min(1, Number(input[i]) || 0));
+        const absSample = Math.abs(sample);
+        if (absSample > peak) peak = absSample;
+        sum += sample * sample;
+      }
+      const rms = Math.sqrt(sum / input.length);
+      return Math.max(peak * 1.8, rms * 16);
+    }
+
     async function refreshSpeechStatus() {
       try {
         const response = await fetch("/api/speech/status", { cache: "no-store" });
@@ -5239,6 +5275,7 @@
           const input = event.inputBuffer.getChannelData(0);
           const downsampled = downsampleSpeech(input, state.speech.audioContext.sampleRate, SPEECH_SAMPLE_RATE);
           updateSpeechCaptureStats(downsampled);
+          setSpeechStreamLevel(builderSpeechStream, speechStreamLevelFromSamples(downsampled));
           state.speech.chunks.push(floatToSpeechPCM(downsampled));
         };
         state.speech.source.connect(state.speech.processor);
@@ -5246,6 +5283,7 @@
         state.speech.zeroGain.connect(state.speech.audioContext.destination);
         state.speech.recording = true;
         syncPromptSpeechButton();
+        setSpeechStreamActive(builderSpeechStream, true);
         setLocalPromptStatus("warn", "Listening. Press the mic again to stop.");
         trackAnalyticsEvent("prompt_speech_started", { prompt_mode: state.promptMode });
       } catch (err) {
@@ -5324,6 +5362,7 @@
       state.speech.zeroGain = null;
       state.speech.chunks = [];
       resetSpeechCaptureStats();
+      setSpeechStreamActive(builderSpeechStream, false);
       syncPromptSpeechButton();
     }
 
@@ -6556,6 +6595,12 @@
       if (repoKey && state.chatPromptDrafts.has(repoKey)) {
         prompt.value = state.chatPromptDrafts.get(repoKey);
       }
+      const promptWrap = document.createElement("span");
+      promptWrap.className = "speech-stream-wrap chat-repo-prompt-wrap";
+      const speechStream = document.createElement("span");
+      speechStream.className = "speech-stream chat-speech-stream";
+      speechStream.setAttribute("aria-hidden", "true");
+      promptWrap.append(prompt, speechStream);
 
       const pasteTarget = document.createElement("div");
       pasteTarget.className = "prompt-control prompt-action-paste chat-repo-image-paste";
@@ -6634,7 +6679,7 @@
         event.stopPropagation();
       });
       imageActions.append(pasteTarget, submitStatus);
-      panel.append(promptLog, prompt, imageActions);
+      panel.append(promptLog, promptWrap, imageActions);
       card.appendChild(panel);
 
       const openPrompt = () => {

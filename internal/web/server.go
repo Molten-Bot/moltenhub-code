@@ -689,6 +689,43 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
             return grid.querySelector(".chat-repo-card[aria-expanded='true'] .chat-repo-prompt");
           }
 
+          function activeChatSpeechStream() {
+            const input = activeChatPromptInput();
+            return input ? input.closest(".speech-stream-wrap")?.querySelector(".speech-stream") : null;
+          }
+
+          function clampSpeechStreamLevel(level) {
+            if (!Number.isFinite(level)) return 0;
+            return Math.max(0, Math.min(1, level));
+          }
+
+          function setSpeechStreamActive(stream, active) {
+            if (!(stream instanceof HTMLElement)) return;
+            stream.classList.toggle("is-active", Boolean(active));
+            if (!active) {
+              stream.style.setProperty("--speech-level", "0");
+            }
+          }
+
+          function setSpeechStreamLevel(stream, level) {
+            if (!(stream instanceof HTMLElement)) return;
+            stream.style.setProperty("--speech-level", clampSpeechStreamLevel(level).toFixed(3));
+          }
+
+          function speechStreamLevelFromSamples(input) {
+            if (!input || !input.length) return 0;
+            let sum = 0;
+            let peak = 0;
+            for (let i = 0; i < input.length; i += 1) {
+              const sample = Math.max(-1, Math.min(1, Number(input[i]) || 0));
+              const absSample = Math.abs(sample);
+              if (absSample > peak) peak = absSample;
+              sum += sample * sample;
+            }
+            const rms = Math.sqrt(sum / input.length);
+            return Math.max(peak * 1.8, rms * 16);
+          }
+
           function setChatSpeechStatus(tone, message) {
             status.textContent = message;
             status.dataset.tone = tone || "";
@@ -754,6 +791,7 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
               setChatSpeechStatus("error", "Open a repository prompt before dictating.");
               return;
             }
+            const stream = activeChatSpeechStream();
             if (!browserSpeechCaptureSupported()) {
               setChatSpeechStatus("error", "This browser does not support microphone capture.");
               return;
@@ -790,6 +828,7 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
                 const inputBuffer = event.inputBuffer.getChannelData(0);
                 const downsampled = downsampleSpeech(inputBuffer, speech.audioContext.sampleRate, SPEECH_SAMPLE_RATE);
                 updateSpeechCaptureStats(downsampled);
+                setSpeechStreamLevel(stream, speechStreamLevelFromSamples(downsampled));
                 speech.chunks.push(floatToSpeechPCM(downsampled));
               };
               speech.source.connect(speech.processor);
@@ -797,6 +836,7 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
               speech.zeroGain.connect(speech.audioContext.destination);
               speech.recording = true;
               syncChatSpeechButton();
+              setSpeechStreamActive(stream, true);
               input.focus();
               setChatSpeechStatus("warn", "Listening. Press the mic again to stop.");
               trackChatEvent("chat_speech_started");
@@ -871,6 +911,7 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
             speech.zeroGain = null;
             speech.chunks = [];
             resetSpeechCaptureStats();
+            setSpeechStreamActive(activeChatSpeechStream(), false);
             syncChatSpeechButton();
           }
 
@@ -1078,6 +1119,12 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
             input.rows = 3;
             input.placeholder = "Prompt for default branch";
             input.setAttribute("aria-label", "Prompt for " + String(repo.full_name || repo.name || "repository"));
+            const inputWrap = document.createElement("span");
+            inputWrap.className = "speech-stream-wrap chat-repo-prompt-wrap";
+            const speechStream = document.createElement("span");
+            speechStream.className = "speech-stream chat-speech-stream";
+            speechStream.setAttribute("aria-hidden", "true");
+            inputWrap.append(input, speechStream);
 
             const panelStatus = document.createElement("span");
             panelStatus.className = "chat-repo-submit-status";
@@ -1096,7 +1143,7 @@ func (s Server) handleChat(w http.ResponseWriter, r *http.Request) {
             input.addEventListener("pointerdown", (event) => {
               event.stopPropagation();
             });
-            panel.append(input, panelStatus);
+            panel.append(inputWrap, panelStatus);
             card.appendChild(panel);
 
             const openPrompt = () => {
