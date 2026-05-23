@@ -16,7 +16,7 @@ services:
       MOLTEN_HUB_DEFAULT_REPOSITORY: ${MOLTEN_HUB_DEFAULT_REPOSITORY:-}
       MOLTEN_HUB_SPEECH_HOST: faster-whisper
       MOLTEN_HUB_SPEECH_PORT: "10300"
-      MOLTEN_HUB_SPEECH_LANGUAGE: "${MOLTEN_HUB_SPEECH_LANGUAGE:-${WHISPER_LANG:-auto}}"
+      MOLTEN_HUB_SPEECH_LANGUAGE: "${MOLTEN_HUB_SPEECH_LANGUAGE:-${WHISPER_LANG:-en}}"
     volumes:
       - ./.moltenhub:/workspace/config
     depends_on:
@@ -32,9 +32,9 @@ services:
       PUID: "${PUID:-1000}"
       PGID: "${PGID:-1000}"
       TZ: "${TZ:-America/Vancouver}"
-      WHISPER_MODEL: "${WHISPER_MODEL:-auto}"
-      WHISPER_LANG: "${WHISPER_LANG:-${MOLTEN_HUB_SPEECH_LANGUAGE:-auto}}"
-      WHISPER_BEAM: "${WHISPER_BEAM:-0}"
+      WHISPER_MODEL: "${WHISPER_MODEL:-base-int8}"
+      WHISPER_LANG: "${WHISPER_LANG:-${MOLTEN_HUB_SPEECH_LANGUAGE:-en}}"
+      WHISPER_BEAM: "${WHISPER_BEAM:-1}"
     volumes:
       - ./.faster-whisper:/config
     ports:
