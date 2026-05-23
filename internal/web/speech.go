@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -16,14 +17,26 @@ import (
 )
 
 const (
-	defaultSpeechHost       = "faster-whisper"
-	defaultSpeechPort       = "10300"
-	defaultSpeechLanguage   = "en"
-	defaultSpeechRate       = 16000
-	defaultSpeechSampleSize = 2
-	defaultSpeechChannels   = 1
-	defaultSpeechTimeout    = 120 * time.Second
-	maxSpeechSeconds        = 120
+	defaultSpeechHost           = "faster-whisper"
+	defaultSpeechPort           = "10300"
+	defaultSpeechLanguage       = "en"
+	defaultSpeechRate           = 16000
+	defaultSpeechSampleSize     = 2
+	defaultSpeechChannels       = 1
+	defaultSpeechTimeout        = 120 * time.Second
+	maxSpeechSeconds            = 120
+	speechNearSilentPeak        = 0.01
+	speechNearSilentRMS         = 0.0025
+	speechCodeDisabled          = "speech_disabled"
+	speechCodeSampleTooLarge    = "sample_too_large"
+	speechCodeSampleRead        = "sample_read_failed"
+	speechCodeSampleEmpty       = "sample_empty"
+	speechCodeUnavailable       = "speech_unavailable"
+	speechCodeWyomingRead       = "wyoming_read_failed"
+	speechCodeWyomingWrite      = "wyoming_write_failed"
+	speechCodeWyomingError      = "wyoming_error"
+	speechCodeTimeout           = "speech_timeout"
+	speechReasonEmptyTranscript = "empty_transcript"
 )
 
 var errSpeechDisabled = errors.New("speech dictation is disabled")
@@ -47,6 +60,34 @@ type speechStatus struct {
 	Port      string `json:"port,omitempty"`
 	Language  string `json:"language,omitempty"`
 	Rate      int    `json:"rate"`
+}
+
+type speechAudioStats struct {
+	Bytes           int64   `json:"bytes"`
+	Samples         int64   `json:"samples"`
+	DurationSeconds float64 `json:"duration_seconds"`
+	Peak            float64 `json:"peak"`
+	RMS             float64 `json:"rms"`
+	NearSilent      bool    `json:"near_silent"`
+}
+
+type speechTranscribeError struct {
+	Code string
+	Err  error
+}
+
+func (e *speechTranscribeError) Error() string {
+	if e == nil || e.Err == nil {
+		return ""
+	}
+	return e.Err.Error()
+}
+
+func (e *speechTranscribeError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
 }
 
 type wyomingEventHeader struct {
@@ -85,6 +126,7 @@ func (s Server) handleSpeechTranscribe(w http.ResponseWriter, r *http.Request) {
 	if !cfg.Enabled {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
 			"ok":    false,
+			"code":  speechCodeDisabled,
 			"error": errSpeechDisabled.Error(),
 		})
 		return
@@ -96,45 +138,100 @@ func (s Server) handleSpeechTranscribe(w http.ResponseWriter, r *http.Request) {
 		if errors.As(err, &maxBytesErr) {
 			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{
 				"ok":    false,
+				"code":  speechCodeSampleTooLarge,
 				"error": "speech sample is too large",
 			})
 			return
 		}
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":    false,
+			"code":  speechCodeSampleRead,
 			"error": "could not read speech sample",
 		})
 		return
 	}
+	stats := analyzeSpeechPCM(cfg, pcm)
 	if int64(len(pcm)) > cfg.MaxBytes {
 		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{
 			"ok":    false,
+			"code":  speechCodeSampleTooLarge,
 			"error": "speech sample is too large",
+			"audio": stats,
 		})
 		return
 	}
 	if len(pcm) == 0 {
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":    false,
+			"code":  speechCodeSampleEmpty,
 			"error": "speech sample is empty",
+			"audio": stats,
 		})
 		return
 	}
 
-	text, err := transcribeSpeechPCM(r.Context(), cfg, pcm, r.URL.Query().Get("language"))
+	requestedLanguage := r.URL.Query().Get("language")
+	resolvedLanguage := resolveSpeechLanguage(requestedLanguage, cfg.Language)
+	languageMode := resolvedLanguage
+	if languageMode == "" {
+		languageMode = "auto"
+	}
+	s.logf(
+		"hub.ui status=start endpoint=speech_transcribe bytes=%d duration_seconds=%.3f peak=%.5f rms=%.5f near_silent=%t language=%q requested_language=%q",
+		stats.Bytes,
+		stats.DurationSeconds,
+		stats.Peak,
+		stats.RMS,
+		stats.NearSilent,
+		languageMode,
+		strings.TrimSpace(requestedLanguage),
+	)
+
+	text, err := transcribeSpeechPCM(r.Context(), cfg, pcm, requestedLanguage)
 	if err != nil {
-		s.logf("hub.ui status=warn endpoint=speech_transcribe err=%q", err)
+		code := speechErrorCode(err)
+		s.logf(
+			"hub.ui status=warn endpoint=speech_transcribe code=%q bytes=%d duration_seconds=%.3f near_silent=%t err=%q",
+			code,
+			stats.Bytes,
+			stats.DurationSeconds,
+			stats.NearSilent,
+			err,
+		)
 		writeJSON(w, http.StatusBadGateway, map[string]any{
 			"ok":    false,
+			"code":  code,
 			"error": err.Error(),
+			"audio": stats,
 		})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":   true,
-		"text": text,
-	})
+	body := map[string]any{
+		"ok":    true,
+		"text":  text,
+		"audio": stats,
+	}
+	if strings.TrimSpace(text) == "" {
+		body["reason"] = speechReasonEmptyTranscript
+		s.logf(
+			"hub.ui status=warn endpoint=speech_transcribe reason=%q bytes=%d duration_seconds=%.3f peak=%.5f rms=%.5f near_silent=%t",
+			speechReasonEmptyTranscript,
+			stats.Bytes,
+			stats.DurationSeconds,
+			stats.Peak,
+			stats.RMS,
+			stats.NearSilent,
+		)
+	} else {
+		s.logf(
+			"hub.ui status=ok endpoint=speech_transcribe text_chars=%d bytes=%d duration_seconds=%.3f",
+			len([]rune(text)),
+			stats.Bytes,
+			stats.DurationSeconds,
+		)
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 func loadSpeechConfig() speechConfig {
@@ -201,7 +298,7 @@ func transcribeSpeechPCM(ctx context.Context, cfg speechConfig, pcm []byte, lang
 	var dialer net.Dialer
 	conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(cfg.Host, cfg.Port))
 	if err != nil {
-		return "", fmt.Errorf("speech server unavailable at %s:%s", cfg.Host, cfg.Port)
+		return "", newSpeechTranscribeError(speechCodeUnavailable, fmt.Errorf("speech server unavailable at %s:%s", cfg.Host, cfg.Port))
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(cfg.Timeout))
@@ -212,10 +309,10 @@ func transcribeSpeechPCM(ctx context.Context, cfg speechConfig, pcm []byte, lang
 		transcribeData["language"] = lang
 	}
 	if err := writeWyomingEvent(writer, "transcribe", transcribeData, nil); err != nil {
-		return "", fmt.Errorf("start speech transcription: %w", err)
+		return "", newSpeechTranscribeError(speechCodeWyomingWrite, fmt.Errorf("start speech transcription: %w", err))
 	}
 	if err := writeWyomingEvent(writer, "audio-start", speechAudioFormat(cfg), nil); err != nil {
-		return "", fmt.Errorf("start speech audio: %w", err)
+		return "", newSpeechTranscribeError(speechCodeWyomingWrite, fmt.Errorf("start speech audio: %w", err))
 	}
 	chunkSize := cfg.Rate * cfg.Width * cfg.Channel
 	for offset := 0; offset < len(pcm); offset += chunkSize {
@@ -224,11 +321,11 @@ func transcribeSpeechPCM(ctx context.Context, cfg speechConfig, pcm []byte, lang
 			end = len(pcm)
 		}
 		if err := writeWyomingEvent(writer, "audio-chunk", speechAudioFormat(cfg), pcm[offset:end]); err != nil {
-			return "", fmt.Errorf("send speech audio: %w", err)
+			return "", newSpeechTranscribeError(speechCodeWyomingWrite, fmt.Errorf("send speech audio: %w", err))
 		}
 	}
 	if err := writeWyomingEvent(writer, "audio-stop", nil, nil); err != nil {
-		return "", fmt.Errorf("stop speech audio: %w", err)
+		return "", newSpeechTranscribeError(speechCodeWyomingWrite, fmt.Errorf("stop speech audio: %w", err))
 	}
 
 	reader := bufio.NewReader(conn)
@@ -241,7 +338,11 @@ func transcribeSpeechPCM(ctx context.Context, cfg speechConfig, pcm []byte, lang
 					return text, nil
 				}
 			}
-			return "", fmt.Errorf("read speech transcript: %w", err)
+			code := speechCodeWyomingRead
+			if isTimeoutError(err) || errors.Is(err, context.DeadlineExceeded) {
+				code = speechCodeTimeout
+			}
+			return "", newSpeechTranscribeError(code, fmt.Errorf("read speech transcript: %w", err))
 		}
 		switch event.Type {
 		case "transcript":
@@ -260,9 +361,32 @@ func transcribeSpeechPCM(ctx context.Context, cfg speechConfig, pcm []byte, lang
 			if message == "" {
 				message = "speech server returned an error"
 			}
-			return "", errors.New(message)
+			return "", newSpeechTranscribeError(speechCodeWyomingError, errors.New(message))
 		}
 	}
+}
+
+func newSpeechTranscribeError(code string, err error) error {
+	if err == nil {
+		err = errors.New(code)
+	}
+	return &speechTranscribeError{Code: code, Err: err}
+}
+
+func speechErrorCode(err error) string {
+	var speechErr *speechTranscribeError
+	if errors.As(err, &speechErr) && strings.TrimSpace(speechErr.Code) != "" {
+		return speechErr.Code
+	}
+	if isTimeoutError(err) || errors.Is(err, context.DeadlineExceeded) {
+		return speechCodeTimeout
+	}
+	return speechCodeWyomingRead
+}
+
+func isTimeoutError(err error) bool {
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
 func writeWyomingEvent(writer *bufio.Writer, eventType string, data map[string]any, payload []byte) error {
@@ -335,6 +459,39 @@ func speechAudioFormat(cfg speechConfig) map[string]any {
 		"width":    cfg.Width,
 		"channels": cfg.Channel,
 	}
+}
+
+func analyzeSpeechPCM(cfg speechConfig, pcm []byte) speechAudioStats {
+	stats := speechAudioStats{
+		Bytes: int64(len(pcm)),
+	}
+	bytesPerSecond := cfg.Rate * cfg.Width * cfg.Channel
+	if bytesPerSecond > 0 {
+		stats.DurationSeconds = float64(len(pcm)) / float64(bytesPerSecond)
+	}
+	if cfg.Width != 2 || cfg.Channel != 1 {
+		return stats
+	}
+
+	samples := len(pcm) / cfg.Width
+	if samples == 0 {
+		stats.NearSilent = true
+		return stats
+	}
+	var squareSum float64
+	for offset := 0; offset+1 < len(pcm); offset += 2 {
+		raw := int16(uint16(pcm[offset]) | uint16(pcm[offset+1])<<8)
+		sample := float64(raw) / 32768
+		absSample := math.Abs(sample)
+		if absSample > stats.Peak {
+			stats.Peak = absSample
+		}
+		squareSum += sample * sample
+	}
+	stats.Samples = int64(samples)
+	stats.RMS = math.Sqrt(squareSum / float64(samples))
+	stats.NearSilent = stats.Peak < speechNearSilentPeak && stats.RMS < speechNearSilentRMS
+	return stats
 }
 
 func firstNonEmptyEnv(keys ...string) string {
@@ -411,7 +568,11 @@ func configuredSpeechLanguage(language string) string {
 }
 
 func resolveSpeechLanguage(requested, fallback string) string {
-	if lang := normalizeSpeechLanguage(requested); lang != "" {
+	requestedValue := strings.ToLower(strings.TrimSpace(requested))
+	if requestedValue == "auto" {
+		return ""
+	}
+	if lang := normalizeSpeechLanguage(requestedValue); lang != "" {
 		return lang
 	}
 	return normalizeSpeechLanguage(fallback)

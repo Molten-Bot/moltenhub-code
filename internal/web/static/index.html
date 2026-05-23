@@ -809,6 +809,8 @@
     const CLAUDE_POST_SUBMIT_VERIFY_MAX_ATTEMPTS = 25;
     const SPEECH_SAMPLE_RATE = 16000;
     const SPEECH_STATUS_REFRESH_MS = 10000;
+    const SPEECH_MIN_PEAK = 0.01;
+    const SPEECH_MIN_RMS = 0.0025;
     const HUB_SETUP_DIALOG_MODES = ["connect", "profile"];
     const HUB_PROFILE_DEEP_LINK_HASH = "#agent-profile";
     const HUB_PROFILE_DEFAULT_EMOJI = "🙂";
@@ -1816,6 +1818,9 @@
         processor: null,
         zeroGain: null,
         statusTimer: 0,
+        sampleCount: 0,
+        squareSum: 0,
+        peak: 0,
       },
       taskSoundMuted: loadTaskSoundMuted(),
       taskSoundInitialized: false,
@@ -5212,6 +5217,7 @@
       try {
         const AudioCtor = window.AudioContext || window.webkitAudioContext;
         state.speech.chunks = [];
+        resetSpeechCaptureStats();
         state.speech.mediaStream = await navigator.mediaDevices.getUserMedia({
           audio: {
             channelCount: 1,
@@ -5220,6 +5226,9 @@
           },
         });
         state.speech.audioContext = new AudioCtor();
+        if (state.speech.audioContext.state === "suspended") {
+          await state.speech.audioContext.resume();
+        }
         state.speech.source = state.speech.audioContext.createMediaStreamSource(state.speech.mediaStream);
         state.speech.processor = state.speech.audioContext.createScriptProcessor(4096, 1, 1);
         state.speech.zeroGain = state.speech.audioContext.createGain();
@@ -5228,6 +5237,7 @@
           if (!state.speech.recording || !state.speech.audioContext) return;
           const input = event.inputBuffer.getChannelData(0);
           const downsampled = downsampleSpeech(input, state.speech.audioContext.sampleRate, SPEECH_SAMPLE_RATE);
+          updateSpeechCaptureStats(downsampled);
           state.speech.chunks.push(floatToSpeechPCM(downsampled));
         };
         state.speech.source.connect(state.speech.processor);
@@ -5246,9 +5256,15 @@
 
     async function stopPromptSpeechDictation() {
       const chunks = state.speech.chunks.slice();
+      const captureStats = currentSpeechCaptureStats(chunks);
       cleanupPromptSpeechCapture();
-      if (!chunks.length) {
+      if (!chunks.length || captureStats.bytes <= 0) {
         setLocalPromptStatus("warn", "No speech audio was captured.");
+        return;
+      }
+      if (captureStats.nearSilent) {
+        trackAnalyticsEvent("prompt_speech_failed", { stage: "silent_input" });
+        setLocalPromptStatus("warn", "No microphone signal was captured.");
         return;
       }
 
@@ -5256,7 +5272,7 @@
       syncPromptSpeechButton();
       setLocalPromptStatus("warn", "Transcribing...");
       try {
-        const response = await fetch("/api/speech/transcribe?language=auto", {
+        const response = await fetch("/api/speech/transcribe", {
           method: "POST",
           headers: { "Content-Type": "application/octet-stream" },
           body: concatSpeechBuffers(chunks),
@@ -5267,6 +5283,7 @@
         }
         const text = String(body.text || "").trim();
         if (!text) {
+          trackAnalyticsEvent("prompt_speech_failed", { stage: body?.reason === "empty_transcript" ? "empty_transcript" : "empty_text" });
           setLocalPromptStatus("warn", "No speech was recognized.");
           return;
         }
@@ -5308,7 +5325,43 @@
       state.speech.processor = null;
       state.speech.zeroGain = null;
       state.speech.chunks = [];
+      resetSpeechCaptureStats();
       syncPromptSpeechButton();
+    }
+
+    function resetSpeechCaptureStats() {
+      state.speech.sampleCount = 0;
+      state.speech.squareSum = 0;
+      state.speech.peak = 0;
+    }
+
+    function updateSpeechCaptureStats(input) {
+      if (!input || !input.length) return;
+      for (let i = 0; i < input.length; i += 1) {
+        const sample = Math.max(-1, Math.min(1, Number(input[i]) || 0));
+        const absSample = Math.abs(sample);
+        if (absSample > state.speech.peak) {
+          state.speech.peak = absSample;
+        }
+        state.speech.squareSum += sample * sample;
+      }
+      state.speech.sampleCount += input.length;
+    }
+
+    function currentSpeechCaptureStats(chunks) {
+      const bytes = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+      const sampleCount = state.speech.sampleCount || Math.floor(bytes / 2);
+      const rms = sampleCount > 0 ? Math.sqrt(state.speech.squareSum / sampleCount) : 0;
+      const durationSeconds = sampleCount > 0 ? sampleCount / SPEECH_SAMPLE_RATE : bytes / (SPEECH_SAMPLE_RATE * 2);
+      const nearSilent = bytes > 0 && state.speech.peak < SPEECH_MIN_PEAK && rms < SPEECH_MIN_RMS;
+      return {
+        bytes,
+        sampleCount,
+        durationSeconds,
+        peak: state.speech.peak,
+        rms,
+        nearSilent,
+      };
     }
 
     function appendDictatedPromptText(text) {

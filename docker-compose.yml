@@ -32,7 +32,7 @@ services:
       PUID: "${PUID:-1000}"
       PGID: "${PGID:-1000}"
       TZ: "${TZ:-America/Vancouver}"
-      WHISPER_MODEL: "${WHISPER_MODEL:-tiny-int8}"
+      WHISPER_MODEL: "${WHISPER_MODEL:-base-int8}"
       WHISPER_LANG: "${WHISPER_LANG:-${MOLTEN_HUB_SPEECH_LANGUAGE:-en}}"
       WHISPER_BEAM: "${WHISPER_BEAM:-1}"
     volumes:

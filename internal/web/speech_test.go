@@ -98,7 +98,7 @@ func TestHandleSpeechTranscribeUsesWyomingServer(t *testing.T) {
 	t.Setenv("WHISPER_LANG", "")
 
 	srv := NewServer("", NewBroker())
-	req := httptest.NewRequest(http.MethodPost, "/api/speech/transcribe?language=auto", bytes.NewReader([]byte{1, 0, 2, 0}))
+	req := httptest.NewRequest(http.MethodPost, "/api/speech/transcribe", bytes.NewReader([]byte{1, 0, 2, 0}))
 	req.Header.Set("Content-Type", "application/octet-stream")
 	resp := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(resp, req)
@@ -123,6 +123,161 @@ func TestHandleSpeechTranscribeUsesWyomingServer(t *testing.T) {
 		t.Fatalf("Wyoming event types = %#v, want %#v", got.types, wantTypes)
 	} else if got.language != defaultSpeechLanguage {
 		t.Fatalf("Wyoming transcribe language = %q, want %q", got.language, defaultSpeechLanguage)
+	}
+}
+
+func TestHandleSpeechTranscribeAutoLanguageOmitsWyomingLanguage(t *testing.T) {
+	received := make(chan string, 1)
+	listener := listenFakeSpeechServer(t, func(conn net.Conn) {
+		defer conn.Close()
+
+		reader := bufio.NewReader(conn)
+		var language string
+		for {
+			event, err := readWyomingEvent(reader)
+			if err != nil {
+				t.Errorf("read Wyoming event: %v", err)
+				return
+			}
+			if event.Type == "transcribe" {
+				if value, ok := event.Data["language"]; ok {
+					language = strings.TrimSpace(fmt.Sprint(value))
+				}
+			}
+			if event.Type == "audio-stop" {
+				break
+			}
+		}
+		received <- language
+		if err := writeWyomingEvent(bufio.NewWriter(conn), "transcript", map[string]any{"text": "Dictated prompt"}, nil); err != nil {
+			t.Errorf("write transcript: %v", err)
+		}
+	})
+
+	host, port, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		t.Fatalf("split listener address: %v", err)
+	}
+	t.Setenv("MOLTEN_HUB_SPEECH_HOST", host)
+	t.Setenv("MOLTEN_HUB_SPEECH_PORT", port)
+	t.Setenv("MOLTEN_HUB_SPEECH_LANGUAGE", "en")
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodPost, "/api/speech/transcribe?language=auto", bytes.NewReader([]byte{1, 0, 2, 0}))
+	req.Header.Set("Content-Type", "application/octet-stream")
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("POST /api/speech/transcribe status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	if got := <-received; got != "" {
+		t.Fatalf("Wyoming transcribe language = %q, want automatic detection", got)
+	}
+}
+
+func TestHandleSpeechTranscribeEmptyTranscriptReportsReason(t *testing.T) {
+	listener := listenFakeSpeechServer(t, func(conn net.Conn) {
+		defer conn.Close()
+
+		reader := bufio.NewReader(conn)
+		for {
+			event, err := readWyomingEvent(reader)
+			if err != nil {
+				t.Errorf("read Wyoming event: %v", err)
+				return
+			}
+			if event.Type == "audio-stop" {
+				break
+			}
+		}
+		if err := writeWyomingEvent(bufio.NewWriter(conn), "transcript", map[string]any{"text": ""}, nil); err != nil {
+			t.Errorf("write transcript: %v", err)
+		}
+	})
+
+	host, port, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		t.Fatalf("split listener address: %v", err)
+	}
+	t.Setenv("MOLTEN_HUB_SPEECH_HOST", host)
+	t.Setenv("MOLTEN_HUB_SPEECH_PORT", port)
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodPost, "/api/speech/transcribe", bytes.NewReader([]byte{0, 0, 0, 0}))
+	req.Header.Set("Content-Type", "application/octet-stream")
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("POST /api/speech/transcribe status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+
+	var body struct {
+		OK     bool             `json:"ok"`
+		Text   string           `json:"text"`
+		Reason string           `json:"reason"`
+		Audio  speechAudioStats `json:"audio"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode transcription: %v", err)
+	}
+	if !body.OK || body.Text != "" || body.Reason != speechReasonEmptyTranscript {
+		t.Fatalf("empty transcription body = %#v", body)
+	}
+	if !body.Audio.NearSilent {
+		t.Fatalf("audio near_silent = false, want true")
+	}
+}
+
+func TestHandleSpeechTranscribeWyomingEOFReportsStructuredError(t *testing.T) {
+	listener := listenFakeSpeechServer(t, func(conn net.Conn) {
+		reader := bufio.NewReader(conn)
+		for {
+			event, err := readWyomingEvent(reader)
+			if err != nil {
+				t.Errorf("read Wyoming event: %v", err)
+				_ = conn.Close()
+				return
+			}
+			if event.Type == "audio-stop" {
+				_ = conn.Close()
+				return
+			}
+		}
+	})
+
+	host, port, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		t.Fatalf("split listener address: %v", err)
+	}
+	t.Setenv("MOLTEN_HUB_SPEECH_HOST", host)
+	t.Setenv("MOLTEN_HUB_SPEECH_PORT", port)
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodPost, "/api/speech/transcribe", bytes.NewReader([]byte{1, 0, 2, 0}))
+	req.Header.Set("Content-Type", "application/octet-stream")
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusBadGateway {
+		t.Fatalf("POST /api/speech/transcribe status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+
+	var body struct {
+		OK    bool             `json:"ok"`
+		Code  string           `json:"code"`
+		Error string           `json:"error"`
+		Audio speechAudioStats `json:"audio"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode transcription error: %v", err)
+	}
+	if body.OK || body.Code != speechCodeWyomingRead || !strings.Contains(body.Error, "read speech transcript") {
+		t.Fatalf("transcription error body = %#v", body)
+	}
+	if body.Audio.Bytes != 4 {
+		t.Fatalf("audio bytes = %d, want 4", body.Audio.Bytes)
 	}
 }
 
@@ -211,6 +366,33 @@ func TestWriteWyomingEventUsesCanonicalDataLength(t *testing.T) {
 	}
 	if got := int(header["payload_length"].(float64)); got != 2 {
 		t.Fatalf("Wyoming payload_length = %d, want 2", got)
+	}
+}
+
+func TestAnalyzeSpeechPCMDetectsSilenceAndSignal(t *testing.T) {
+	cfg := speechConfig{
+		Rate:    defaultSpeechRate,
+		Width:   defaultSpeechSampleSize,
+		Channel: defaultSpeechChannels,
+	}
+
+	silent := analyzeSpeechPCM(cfg, make([]byte, defaultSpeechRate*defaultSpeechSampleSize))
+	if silent.Bytes != int64(defaultSpeechRate*defaultSpeechSampleSize) {
+		t.Fatalf("silent bytes = %d, want %d", silent.Bytes, defaultSpeechRate*defaultSpeechSampleSize)
+	}
+	if silent.DurationSeconds != 1 {
+		t.Fatalf("silent duration = %f, want 1", silent.DurationSeconds)
+	}
+	if !silent.NearSilent || silent.Peak != 0 || silent.RMS != 0 {
+		t.Fatalf("silent stats = %#v, want near silent zero signal", silent)
+	}
+
+	signal := analyzeSpeechPCM(cfg, []byte{0xff, 0x7f, 0x00, 0x00, 0x01, 0x80, 0x00, 0x00})
+	if signal.NearSilent {
+		t.Fatalf("signal stats = %#v, want audible signal", signal)
+	}
+	if signal.Peak < 0.9 || signal.RMS < 0.5 {
+		t.Fatalf("signal stats = %#v, want high peak and rms", signal)
 	}
 }
 

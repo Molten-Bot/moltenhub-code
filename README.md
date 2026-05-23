@@ -29,6 +29,9 @@ sidecar. The web UI probes `faster-whisper:10300`; when it is reachable, the
 Prompt Studio shows a microphone button that appends dictated text to the
 prompt field. The Compose sidecar disables Docker log capture because
 `wyoming-faster-whisper` logs transcript text at INFO level.
+The bundled sidecar defaults to the `base-int8` model and English language
+hints for more reliable short-form dictation; set both `WHISPER_LANG=auto` and
+`MOLTEN_HUB_SPEECH_LANGUAGE=auto` to use Whisper language detection.
 
 ### Local Build
 
