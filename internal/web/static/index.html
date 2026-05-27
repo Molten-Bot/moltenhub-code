@@ -6837,7 +6837,7 @@
       speechToggle.setAttribute("aria-pressed", "false");
       speechToggle.title = "Dictate chat prompt";
       speechToggle.innerHTML = '<i data-lucide="mic" aria-hidden="true"></i><span class="sr-only">Dictate</span>';
-      promptWrap.append(prompt, speechStream, speechToggle);
+      promptWrap.append(prompt, speechStream);
 
       const pasteTarget = document.createElement("div");
       pasteTarget.className = "prompt-control prompt-action-paste chat-repo-image-paste";
@@ -6938,7 +6938,7 @@
       pasteTarget.addEventListener("pointerdown", (event) => {
         event.stopPropagation();
       });
-      imageActions.append(pasteTarget, submitStatus);
+      imageActions.append(pasteTarget, submitStatus, speechToggle);
       panel.append(promptLog, promptWrap, imageActions);
       card.appendChild(panel);
       syncSpeechToggleButton(

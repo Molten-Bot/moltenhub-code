@@ -3250,10 +3250,7 @@ select.prompt-control {
 }
 
 .chat-speech-toggle {
-  position: absolute;
-  right: clamp(14px, 2.2vw, 22px);
-  bottom: clamp(14px, 2.2vw, 22px);
-  z-index: 3;
+  flex: 0 0 42px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3915,7 +3912,7 @@ select.prompt-control {
   width: 100%;
   min-height: 88px;
   resize: vertical;
-  padding: 10px 72px 10px 12px;
+  padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);

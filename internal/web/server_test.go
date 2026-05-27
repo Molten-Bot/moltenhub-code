@@ -2267,7 +2267,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `card.setAttribute("aria-expanded", "true");`) ||
 		!strings.Contains(markup, "pasteTarget.className = \"prompt-control prompt-action-paste chat-repo-image-paste\"") ||
 		!strings.Contains(markup, "imageActions.className = \"chat-repo-image-actions\"") ||
-		!strings.Contains(markup, "imageActions.append(pasteTarget, submitStatus);") {
+		!strings.Contains(markup, "imageActions.append(pasteTarget, submitStatus, speechToggle);") {
 		t.Fatalf("expected chat repository prompts to open from card/icon and accept pasted screenshots")
 	}
 	if !strings.Contains(markup, "images: promptImages,") ||
@@ -3234,11 +3234,11 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 		!strings.Contains(css, ".chat-repo-grid-active-repo .chat-repo-log:not([hidden]) {") {
 		t.Fatalf("expected selected chat repository panels to fill the Git / Chat shell")
 	}
-	if !strings.Contains(css, ".chat-speech-toggle {\n  position: absolute;") ||
-		!strings.Contains(css, "right: clamp(14px, 2.2vw, 22px);") ||
-		!strings.Contains(css, "bottom: clamp(14px, 2.2vw, 22px);") ||
+	if !strings.Contains(css, ".chat-speech-toggle {\n  flex: 0 0 42px;") ||
+		!strings.Contains(css, ".chat-repo-image-actions {\n  display: flex;") ||
+		!strings.Contains(css, ".chat-repo-prompt {\n  width: 100%;\n  min-height: 88px;\n  resize: vertical;\n  padding: 10px 12px;") ||
 		!strings.Contains(css, ".chat-speech-toggle.recording {") {
-		t.Fatalf("expected stylesheet to pin the chat transcribe button to the bottom right of the chat section")
+		t.Fatalf("expected stylesheet to place the chat transcribe button in the bottom action row outside the text box")
 	}
 	if !strings.Contains(css, ".chat-repo-message[data-tone=\"success\"] {") ||
 		!strings.Contains(css, ".chat-repo-message[data-tone=\"failure\"] {") ||
