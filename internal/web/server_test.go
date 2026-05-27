@@ -344,7 +344,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `dashboardDockLink.setAttribute("aria-disabled", String(!available));`) ||
 		!strings.Contains(markup, `dashboardDockLink.removeAttribute("href");`) ||
 		!strings.Contains(markup, `if (mode === "dashboard" && !dashboardAvailable(state.snapshot)) {`) ||
-		!strings.Contains(markup, `if (appDisplayLinkDisabled(link) && display === "dashboard") {`) {
+		!strings.Contains(markup, `if (appDisplayLinkDisabled(link)) {`) {
 		t.Fatalf("expected dashboard dock link to stay disabled until the first task starts")
 	}
 	if !strings.Contains(markup, `<moltenhub-code-header agent-harness="codex" agent-label="Codex"></moltenhub-code-header>`) {
@@ -1902,8 +1902,12 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `function syncTaskViewDockState`) ||
 		!strings.Contains(markup, `function syncTaskViewDockCompletion`) ||
+		!strings.Contains(markup, `function taskViewAvailable(snapshot = state.snapshot)`) ||
+		!strings.Contains(markup, `taskViewDockLink.setAttribute("aria-disabled", String(!available));`) ||
+		!strings.Contains(markup, `taskViewDockLink.removeAttribute("href");`) ||
+		!strings.Contains(markup, `if (mode === "work" && !taskViewAvailable(state.snapshot)) {`) ||
 		!strings.Contains(markup, `clearTaskViewDockCompletion();`) {
-		t.Fatalf("expected index script to update Current Work dock count, completion color, and click acknowledgment")
+		t.Fatalf("expected index script to update Current Work dock count, availability, completion color, and click acknowledgment")
 	}
 	if !strings.Contains(markup, `id="builder-repo-select"`) {
 		t.Fatalf("expected index html to include repo history select")

@@ -2421,14 +2421,27 @@
       return count;
     }
 
+    function taskViewAvailable(snapshot = state.snapshot) {
+      return runningTasks(snapshot).length > 0 || completedTasks(snapshot).length > 0;
+    }
+
     function syncTaskViewDockState(snapshot = state.snapshot) {
       if (!taskViewDockLink) {
         return;
       }
       const runningCount = taskViewDockRunningTaskCount(snapshot);
+      const available = taskViewAvailable(snapshot);
       taskViewDockLink.classList.toggle("task-view-dock-complete", Boolean(state.taskViewDockCompletionPending));
+      taskViewDockLink.classList.toggle("is-disabled", !available);
+      taskViewDockLink.setAttribute("aria-disabled", String(!available));
+      taskViewDockLink.tabIndex = available ? 0 : -1;
       taskViewDockLink.dataset.runningTasks = String(runningCount);
       taskViewDockLink.dataset.completionPending = state.taskViewDockCompletionPending ? "true" : "false";
+      if (available) {
+        taskViewDockLink.href = "#current-work";
+      } else {
+        taskViewDockLink.removeAttribute("href");
+      }
       if (taskViewDockRunningCount) {
         taskViewDockRunningCount.textContent = String(Math.min(99, runningCount));
         taskViewDockRunningCount.classList.toggle("hidden", runningCount <= 0);
@@ -2443,7 +2456,10 @@
       }
       const label = labelParts.join(", ");
       taskViewDockLink.setAttribute("aria-label", label);
-      taskViewDockLink.title = label;
+      taskViewDockLink.title = available ? label : "Current Work unavailable until a task runs";
+      if (!available && state.appDisplay === "work") {
+        setAppDisplay("studio", { updateHash: promptHashFromMode(state.promptMode) });
+      }
     }
 
     function clearTaskViewDockCompletion() {
@@ -8183,6 +8199,9 @@
       if (mode === "dashboard" && !dashboardAvailable(state.snapshot)) {
         mode = "studio";
       }
+      if (mode === "work" && !taskViewAvailable(state.snapshot)) {
+        mode = "studio";
+      }
       if (mode === "chat" && !state.githubReposReady) {
         void loadGitHubReposForChat().then(() => {
           if (state.githubReposReady && appDisplayFromHash() === "chat") {
@@ -12391,7 +12410,7 @@
           return;
         }
         const display = String(link.dataset.appDisplay || "").trim();
-        if (appDisplayLinkDisabled(link) && display === "dashboard") {
+        if (appDisplayLinkDisabled(link)) {
           event.preventDefault();
           return;
         }
