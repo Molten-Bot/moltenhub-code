@@ -914,7 +914,7 @@
         return;
       }
 
-      const mode = appDisplay === "dashboard" || appDisplay === "chat" ? appDisplay : "studio";
+      const mode = appDisplay === "dashboard" || appDisplay === "chat" || appDisplay === "work" ? appDisplay : "studio";
       const currentLocation = analyticsPageLocation();
       const payload = {
         send_to: GOOGLE_ANALYTICS_MEASUREMENT_ID,
@@ -7988,8 +7988,11 @@
 
     function appDisplayFromHash() {
       const hash = String(window.location.hash || "").replace(/^#/, "").trim().toLowerCase();
-      if (hash === "dashboard" || hash === "chat") {
+      if (hash === "dashboard" || hash === "chat" || hash === "work") {
         return hash;
+      }
+      if (hash === "current-work") {
+        return "work";
       }
       return "studio";
     }
@@ -8048,17 +8051,17 @@
     }
 
     function syncTaskVisibilityForAppDisplay() {
-      if (state.appDisplay === "chat") {
-        state.taskVisible = false;
+      if (state.appDisplay === "work") {
+        state.taskVisible = true;
         return;
       }
-      if (state.appDisplay === "studio") {
-        state.taskVisible = true;
+      if (state.appDisplay === "studio" || state.appDisplay === "chat") {
+        state.taskVisible = false;
       }
     }
 
     function setAppDisplay(display, options = {}) {
-      let mode = display === "dashboard" || display === "chat" ? display : "studio";
+      let mode = display === "dashboard" || display === "chat" || display === "work" ? display : "studio";
       if (mode === "dashboard" && !dashboardAvailable(state.snapshot)) {
         mode = "studio";
       }
@@ -8073,6 +8076,7 @@
       const previousMode = state.appDisplay;
       const showDashboard = mode === "dashboard";
       const showChat = mode === "chat";
+      const showWork = mode === "work";
       const showStudio = mode === "studio";
       state.appDisplay = mode;
       document.body.dataset.appDisplay = mode;
@@ -8113,7 +8117,9 @@
             ? "#dashboard"
             : mode === "chat"
               ? "#chat"
-              : promptHashFromMode(state.promptMode);
+              : showWork
+                ? "#current-work"
+                : promptHashFromMode(state.promptMode);
         if (window.location.hash !== nextHash) {
           window.history.pushState(null, "", nextHash);
         }
@@ -11084,7 +11090,7 @@
       const tasks = displayTasks(snapshot);
       const hasTasks = tasks.length > 0;
       const hasTaskPanelTasks = hasTaskPanelContent(snapshot);
-      const showTaskPanel = state.appDisplay === "studio" || state.appDisplay === "chat";
+      const showTaskPanel = state.appDisplay === "work";
       const promptOnly = normalizeTaskPanelView(state.taskPanelView) === "prompt";
       if (!showTaskPanel && state.taskFullscreenOpen) {
         state.taskFullscreenOpen = false;

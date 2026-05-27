@@ -177,11 +177,15 @@
 
   function syncPageNavLinks(root) {
     const hashDisplay = String(window.location.hash || "").replace(/^#/, "").trim();
-    const currentDisplay = hashDisplay === "dashboard" || hashDisplay === "chat"
+    const hashAppDisplay = hashDisplay === "dashboard" || hashDisplay === "chat" || hashDisplay === "work"
       ? hashDisplay
-      : normalizePath(window.location.pathname) === "/chat"
+      : hashDisplay === "current-work"
+        ? "work"
+        : "";
+    const currentDisplay = hashAppDisplay
+      || (normalizePath(window.location.pathname) === "/chat"
         ? "chat"
-        : "studio";
+        : "studio");
     const links = root.querySelectorAll("[data-app-display]");
     links.forEach((link) => {
       const linkDisplay = String(link.getAttribute("data-app-display") || "").trim() || "dashboard";
@@ -219,7 +223,8 @@
         if (!display) {
           return;
         }
-        window.location.assign(`${HOME_PATH}#${display}`);
+        const hash = String(link.hash || "").trim();
+        window.location.assign(`${HOME_PATH}${hash || `#${display}`}`);
       });
     });
   }

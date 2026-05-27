@@ -1292,9 +1292,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "return normalizeTaskStatusFilter(state.taskStatusFilter) === \"completed\" && runningCount === 0 && completedCount === 0;") {
 		t.Fatalf("expected index html to keep completed-history empty state visible only in completed-history view")
 	}
-	if !strings.Contains(markup, `const showTaskPanel = state.appDisplay === "studio" || state.appDisplay === "chat";`) ||
+	if !strings.Contains(markup, `const showTaskPanel = state.appDisplay === "work";`) ||
 		!strings.Contains(markup, "taskPanel.classList.toggle(\"hidden\", !showTaskPanel);") {
-		t.Fatalf("expected index html to show the task queue panel only on work-oriented app views")
+		t.Fatalf("expected index html to show the task queue panel only on the Current Work view")
 	}
 	if !strings.Contains(markup, "taskPanel.setAttribute(\"aria-hidden\", showTaskPanel ? \"false\" : \"true\");") {
 		t.Fatalf("expected index html to keep task panel aria visibility in sync with rendered content")
@@ -1683,19 +1683,19 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `activatePromptMode("json");`) {
 		t.Fatalf("expected bottom dock Library and JSON controls to activate their Studio views through the shared mode path")
 	}
-	if !strings.Contains(markup, `let mode = display === "dashboard" || display === "chat" ? display : "studio";`) ||
+	if !strings.Contains(markup, `let mode = display === "dashboard" || display === "chat" || display === "work" ? display : "studio";`) ||
 		!strings.Contains(markup, `if (mode === "chat" && !state.githubReposReady) {`) ||
 		!strings.Contains(markup, `mode = "studio";`) ||
 		!strings.Contains(markup, `appLayout.hidden = false;`) ||
 		!strings.Contains(markup, `promptWrap.hidden = !showStudio;`) ||
-		!strings.Contains(markup, `const showTaskPanel = state.appDisplay === "studio" || state.appDisplay === "chat";`) {
-		t.Fatalf("expected index html to switch main views while hiding Current Work on dashboard")
+		!strings.Contains(markup, `const showTaskPanel = state.appDisplay === "work";`) {
+		t.Fatalf("expected index html to switch main views while isolating Current Work")
 	}
 	if !strings.Contains(markup, `function syncTaskVisibilityForAppDisplay()`) ||
-		!strings.Contains(markup, "if (state.appDisplay === \"chat\") {\n        state.taskVisible = false;\n        return;\n      }") ||
-		!strings.Contains(markup, "if (state.appDisplay === \"studio\") {\n        state.taskVisible = true;\n      }") ||
+		!strings.Contains(markup, "if (state.appDisplay === \"work\") {\n        state.taskVisible = true;\n        return;\n      }") ||
+		!strings.Contains(markup, "if (state.appDisplay === \"studio\" || state.appDisplay === \"chat\") {\n        state.taskVisible = false;\n      }") ||
 		!strings.Contains(markup, `syncTaskVisibilityForAppDisplay();`) {
-		t.Fatalf("expected index html to minimize Current Work on chat entry while expanding it in Studio views")
+		t.Fatalf("expected index html to expand Current Work only on the Current Work view")
 	}
 	if !strings.Contains(markup, `function syncPromptTitleModes()`) ||
 		!strings.Contains(markup, `item.hidden = !active;`) ||
@@ -1888,8 +1888,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, `<span class="sr-only">GitHub</span>`) {
 		t.Fatalf("expected index html to keep the GitHub dock item screen-reader accessible without visible text")
 	}
-	if strings.Index(markup, `id="task-panel"`) > strings.Index(markup, `class="panel prompt-wrap`) {
-		t.Fatalf("expected index html to render Current Work before Studio in the page layout")
+	currentWorkDockIndex := strings.Index(markup, `data-app-display="work"`)
+	dashboardDockIndex := strings.Index(markup, `data-app-display="dashboard"`)
+	if currentWorkDockIndex < 0 || dashboardDockIndex < 0 || currentWorkDockIndex > dashboardDockIndex {
+		t.Fatalf("expected Current Work to render as a dock view before Dashboard")
+	}
+	if !strings.Contains(markup, `href="#current-work" data-app-display="work"`) ||
+		!strings.Contains(markup, `data-lucide="combine"`) ||
+		!strings.Contains(markup, `<span class="prompt-mode-link-tooltip" aria-hidden="true">Current Work</span>`) {
+		t.Fatalf("expected Current Work dock view to use the combine icon and label")
 	}
 	if !strings.Contains(markup, `id="builder-repo-select"`) {
 		t.Fatalf("expected index html to include repo history select")

@@ -794,6 +794,22 @@ body[data-app-display="chat"] .chat-shell {
   overflow: hidden;
 }
 
+body[data-app-display="work"] .layout,
+body[data-app-display="work"] .right-col {
+  min-height: calc(100vh - 150px);
+  min-height: calc(100dvh - 150px);
+}
+
+body[data-app-display="work"] .right-col {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+body[data-app-display="work"] #task-panel {
+  min-height: min(720px, calc(100vh - 150px));
+  min-height: min(720px, calc(100dvh - 150px));
+  height: 100%;
+}
+
 .panel {
   border-radius: var(--radius-card);
   overflow: hidden;
