@@ -3229,6 +3229,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 	if !strings.Contains(css, ".panel-header,\n.task-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 8px;\n  padding: 13px 16px;\n  border-bottom: 1px solid var(--surface-header-border);\n  background: var(--surface-header);\n  color: var(--surface-label);") {
 		t.Fatalf("expected stylesheet to style task and output headers with theme-aware surface tokens")
 	}
+	if !strings.Contains(css, ".task-head {\n  letter-spacing: 0;\n  text-transform: none;\n}") {
+		t.Fatalf("expected terminal output header to preserve prompt casing")
+	}
 	if !strings.Contains(css, ".theme-toggle") || !strings.Contains(css, ".theme-toggle-icon") {
 		t.Fatalf("expected stylesheet to include theme toggle styles")
 	}

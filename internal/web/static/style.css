@@ -810,8 +810,16 @@ body[data-app-display="chat"] .chat-shell {
   color: var(--surface-label);
   font-weight: 700;
   font-size: 0.86rem;
+}
+
+.panel-header {
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.task-head {
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .panel-header-copy {
