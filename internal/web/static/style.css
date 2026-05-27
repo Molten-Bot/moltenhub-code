@@ -1856,44 +1856,65 @@ select.prompt-control {
 .speech-stream {
   --speech-level: 0;
   position: absolute;
-  top: 9px;
-  left: 10px;
-  right: 10px;
-  height: 18px;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(3px, 0.8vw, 8px);
+  padding: 16px 18px;
   overflow: hidden;
-  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--running) 46%, transparent);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-control-bg-strong) 82%, transparent), color-mix(in srgb, var(--bg-elevated) 72%, transparent)),
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--running) 14%, transparent), transparent 62%);
   opacity: 0;
   pointer-events: none;
-  transform: translateY(-2px);
+  transform: scale(0.995);
   transition: opacity 0.16s ease, transform 0.16s ease;
+  z-index: 1;
 }
 
 .speech-stream.is-active {
-  opacity: calc(0.28 + (var(--speech-level) * 0.72));
-  transform: translateY(0);
+  opacity: 1;
+  transform: scale(1);
 }
 
-.speech-stream::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  width: 220%;
-  background:
-    linear-gradient(90deg, transparent 0%, rgba(10, 132, 255, 0.2) 12%, rgba(10, 132, 255, 0.68) 22%, transparent 34%),
-    repeating-linear-gradient(90deg, transparent 0 8px, rgba(10, 132, 255, 0.32) 8px 10px, transparent 10px 16px);
-  filter: drop-shadow(0 0 5px rgba(10, 132, 255, 0.28));
-  transform: translateX(0);
-  animation: speech-stream-flow 1.1s linear infinite;
-}
-
+.speech-stream::before,
 .speech-stream::after {
   content: "";
   position: absolute;
-  inset: 4px 0;
-  background: linear-gradient(90deg, transparent, rgba(10, 132, 255, 0.54), transparent);
-  opacity: calc(0.16 + var(--speech-level) * 0.38);
-  transform: scaleY(calc(0.35 + (var(--speech-level) * 0.9)));
+  left: 18px;
+  right: 18px;
+  top: 50%;
+  height: 1px;
+  background: color-mix(in srgb, var(--running) 56%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--running) 18%, transparent);
+}
+
+.speech-stream::after {
+  height: min(36%, 42px);
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--running) 18%, transparent), transparent);
+  opacity: calc(0.18 + var(--speech-level) * 0.34);
+  transform: translateY(-50%) scaleY(calc(0.25 + (var(--speech-level) * 1.2)));
+}
+
+.speech-stream-bar {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: clamp(3px, 0.45vw, 7px);
+  height: calc(16px + (var(--bar-level) * 76%));
+  min-height: 10px;
+  max-height: 88%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(38, 175, 220, 0.88), rgba(68, 61, 150, 0.92));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--running) 20%, transparent);
+  opacity: calc(0.38 + (var(--bar-level) * 0.58));
+  transform: scaleY(calc(0.5 + (var(--bar-level) * 1.1)));
   transform-origin: center;
+  transition: height 0.08s linear, opacity 0.08s linear, transform 0.08s linear;
 }
 
 @keyframes speech-stream-flow {
@@ -3232,7 +3253,7 @@ select.prompt-control {
   position: absolute;
   right: clamp(14px, 2.2vw, 22px);
   bottom: clamp(14px, 2.2vw, 22px);
-  z-index: 2;
+  z-index: 3;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3894,7 +3915,7 @@ select.prompt-control {
   width: 100%;
   min-height: 88px;
   resize: vertical;
-  padding: 10px 12px;
+  padding: 10px 72px 10px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
@@ -3905,6 +3926,7 @@ select.prompt-control {
 }
 
 .chat-repo-prompt-wrap {
+  position: relative;
   display: block;
 }
 
