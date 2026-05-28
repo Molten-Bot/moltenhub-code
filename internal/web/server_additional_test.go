@@ -880,11 +880,14 @@ func TestEmbeddedChatPromptLogStylesHideEmptyAndScrollHistory(t *testing.T) {
 	html := string(markup)
 	for _, want := range []string{
 		`const CHAT_PROMPT_LOG_STICKY_SCROLL_PX = 24;`,
+		`function renderChatRepoPromptLog(repo, logNode, options = {})`,
+		`const forceScrollBottom = Boolean(options?.forceScrollBottom);`,
 		`const previousScrollTop = logNode.scrollTop;`,
 		`const wasNearBottom = previousScrollHeight <= previousClientHeight ||`,
 		`previousScrollHeight - previousScrollTop - previousClientHeight <= CHAT_PROMPT_LOG_STICKY_SCROLL_PX;`,
-		`logNode.scrollTop = wasEmpty || wasNearBottom`,
+		`logNode.scrollTop = forceScrollBottom || wasEmpty || wasNearBottom`,
 		`: Math.min(previousScrollTop, maxScrollTop);`,
+		`renderChatRepoPromptLog(repo, logNode, { forceScrollBottom: true });`,
 	} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("embedded index.html missing %q", want)

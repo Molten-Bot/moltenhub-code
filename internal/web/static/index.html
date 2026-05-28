@@ -7521,12 +7521,13 @@
       });
     }
 
-    function renderChatRepoPromptLog(repo, logNode) {
+    function renderChatRepoPromptLog(repo, logNode, options = {}) {
       if (!logNode) return;
       const messages = chatRepoPromptMessages(repo);
       const previousScrollTop = logNode.scrollTop;
       const previousScrollHeight = logNode.scrollHeight;
       const previousClientHeight = logNode.clientHeight;
+      const forceScrollBottom = Boolean(options?.forceScrollBottom);
       const wasEmpty = logNode.dataset.empty === "true" || logNode.childElementCount === 0;
       const wasNearBottom = previousScrollHeight <= previousClientHeight ||
         previousScrollHeight - previousScrollTop - previousClientHeight <= CHAT_PROMPT_LOG_STICKY_SCROLL_PX;
@@ -7568,7 +7569,7 @@
         logNode.appendChild(bubble);
       }
       const maxScrollTop = Math.max(0, logNode.scrollHeight - logNode.clientHeight);
-      logNode.scrollTop = wasEmpty || wasNearBottom
+      logNode.scrollTop = forceScrollBottom || wasEmpty || wasNearBottom
         ? maxScrollTop
         : Math.min(previousScrollTop, maxScrollTop);
     }
@@ -8196,7 +8197,7 @@
         state.chatPromptedRepos = dedupeRepoValues([repoValue, ...state.chatPromptedRepos]);
         state.chatActiveRepoTab = chatRepoKey(repoValue) || state.chatActiveRepoTab;
         state.chatRepoPage = 1;
-        renderChatRepoPromptLog(repo, logNode);
+        renderChatRepoPromptLog(repo, logNode, { forceScrollBottom: true });
         input.value = "";
         state.chatPromptDrafts.delete(chatRepoKey(repoValue));
         if (typeof setImages === "function") {
