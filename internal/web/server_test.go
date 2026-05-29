@@ -1262,6 +1262,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "renderTaskCollection(tasks, taskFullscreenList, null, {") {
 		t.Fatalf("expected index html to render the full task list in fullscreen mode")
 	}
+	if !strings.Contains(markup, `id="task-image-viewer"`) ||
+		!strings.Contains(markup, `data-lucide="chevron-left"`) ||
+		!strings.Contains(markup, `data-lucide="chevron-right"`) ||
+		!strings.Contains(markup, `function openTaskImageViewer(requestID, index = 0)`) ||
+		!strings.Contains(markup, `showImageAction: true,`) ||
+		!strings.Contains(markup, `image: "image",`) {
+		t.Fatalf("expected full screen task view to expose attached images through an image viewer")
+	}
 	if strings.Contains(markup, "renderTaskCollection(selected ? [selected] : [], taskFullscreenList, null, {") {
 		t.Fatalf("expected index html to stop collapsing fullscreen mode to a single selected task")
 	}

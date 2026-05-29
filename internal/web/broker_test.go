@@ -59,6 +59,48 @@ func TestBrokerTracksTaskLifecycleAndCommandOutput(t *testing.T) {
 	}
 }
 
+func TestBrokerIncludesPromptImagesInTaskSnapshots(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.RecordTaskRunConfig("req-images", []byte(`{
+		"repo":"git@github.com:acme/repo.git",
+		"prompt":"inspect screenshot",
+		"images":[
+			{"name":" shot.png ","mediaType":" image/png ","dataBase64":" ZGF0YQ== "},
+			{"name":"blank.png","mediaType":"image/png","dataBase64":" "}
+		]
+	}`))
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	images := snap.Tasks[0].Images
+	if len(images) != 1 {
+		t.Fatalf("len(images) = %d, want 1", len(images))
+	}
+	if got, want := images[0].Name, "shot.png"; got != want {
+		t.Fatalf("images[0].Name = %q, want %q", got, want)
+	}
+	if got, want := images[0].MediaType, "image/png"; got != want {
+		t.Fatalf("images[0].MediaType = %q, want %q", got, want)
+	}
+	if got, want := images[0].DataBase64, "ZGF0YQ=="; got != want {
+		t.Fatalf("images[0].DataBase64 = %q, want %q", got, want)
+	}
+
+	task, ok := b.Task("req-images")
+	if !ok {
+		t.Fatal("Task(req-images) ok = false, want true")
+	}
+	task.Images[0].Name = "mutated.png"
+	next, _ := b.Task("req-images")
+	if got, want := next.Images[0].Name, "shot.png"; got != want {
+		t.Fatalf("Task returned mutable images slice, got %q want %q", got, want)
+	}
+}
+
 func TestBrokerTracksTaskRuntimeAndSavedTimeStats(t *testing.T) {
 	t.Parallel()
 

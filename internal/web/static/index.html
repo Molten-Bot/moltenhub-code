@@ -476,6 +476,33 @@
           <div id="task-fullscreen-terminal" class="term task-scroll" role="log" aria-label="Task output terminal logs"></div>
         </section>
       </div>
+      <div
+        id="task-image-viewer"
+        class="task-image-viewer hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="task-image-viewer-title"
+        aria-hidden="true">
+        <div class="task-image-viewer-backdrop" data-task-image-viewer-close></div>
+        <div class="task-image-viewer-shell">
+          <div class="task-image-viewer-head">
+            <span id="task-image-viewer-title" class="task-image-viewer-title">Task image</span>
+            <button id="task-image-viewer-close" class="task-image-viewer-close" type="button" aria-label="Close image viewer" title="Close">
+              <i data-lucide="x" aria-hidden="true"></i>
+            </button>
+          </div>
+          <div class="task-image-viewer-stage">
+            <button id="task-image-viewer-prev" class="task-image-viewer-nav task-image-viewer-prev" type="button" aria-label="Previous image" title="Previous image">
+              <i data-lucide="chevron-left" aria-hidden="true"></i>
+            </button>
+            <img id="task-image-viewer-image" class="task-image-viewer-image" alt="">
+            <button id="task-image-viewer-next" class="task-image-viewer-nav task-image-viewer-next" type="button" aria-label="Next image" title="Next image">
+              <i data-lucide="chevron-right" aria-hidden="true"></i>
+            </button>
+          </div>
+          <div id="task-image-viewer-count" class="task-image-viewer-count"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -787,6 +814,7 @@
       play: "play",
       pause: "pause",
       stop: "square",
+      image: "image",
       loader: "loader-circle",
       default: "loader-circle",
     });
@@ -1792,6 +1820,7 @@
       taskOrderPendingSince: 0,
       taskOrderPendingDesired: [],
       taskOrderLastSyncBucket: Math.floor(Date.now() / TASK_ORDER_SYNC_INTERVAL_MS),
+      taskImageViewer: { requestID: "", index: 0 },
       dashboardLastInteractionAt: Date.now(),
       dashboardNoActiveTasksSince: Date.now(),
       dashboardRuntimeActiveTasks: 0,
@@ -1918,6 +1947,13 @@
     const taskFullscreenResult = document.getElementById("task-fullscreen-result");
     const taskFullscreenTerminal = document.getElementById("task-fullscreen-terminal");
     const taskFullscreenOutputPanel = document.getElementById("task-fullscreen-output-panel");
+    const taskImageViewer = document.getElementById("task-image-viewer");
+    const taskImageViewerTitle = document.getElementById("task-image-viewer-title");
+    const taskImageViewerClose = document.getElementById("task-image-viewer-close");
+    const taskImageViewerPrev = document.getElementById("task-image-viewer-prev");
+    const taskImageViewerNext = document.getElementById("task-image-viewer-next");
+    const taskImageViewerImage = document.getElementById("task-image-viewer-image");
+    const taskImageViewerCount = document.getElementById("task-image-viewer-count");
     const libraryPromptModal = document.getElementById("library-prompt-modal");
     const libraryPromptModalTitle = document.getElementById("library-prompt-modal-title");
     const libraryPromptModalBody = document.getElementById("library-prompt-modal-body");
@@ -5151,6 +5187,17 @@
         });
       }
       return out;
+    }
+
+    function taskImages(task) {
+      return normalizePromptImages(task?.images);
+    }
+
+    function taskImageDataURL(image) {
+      const mediaType = String(image?.mediaType || "").trim() || "image/png";
+      const dataBase64 = String(image?.dataBase64 || "").trim();
+      if (!dataBase64) return "";
+      return `data:${mediaType};base64,${dataBase64}`;
     }
 
     function promptImageName(image, index) {
@@ -9414,6 +9461,71 @@
       setTaskFullscreen(true, "console");
     }
 
+    function selectedTaskImageViewerTask() {
+      const requestID = String(state.taskImageViewer?.requestID || "").trim();
+      if (!requestID) return null;
+      return (fullscreenTasks(state.snapshot) || []).find((task) => taskRequestID(task) === requestID) || null;
+    }
+
+    function renderTaskImageViewer() {
+      if (!taskImageViewer || !taskImageViewerImage) return;
+      const task = selectedTaskImageViewerTask();
+      const images = taskImages(task);
+      const isOpen = Boolean(task && images.length > 0);
+      taskImageViewer.classList.toggle("hidden", !isOpen);
+      taskImageViewer.setAttribute("aria-hidden", isOpen ? "false" : "true");
+      if (!isOpen) {
+        taskImageViewerImage.removeAttribute("src");
+        taskImageViewerImage.alt = "";
+        return;
+      }
+
+      const maxIndex = images.length - 1;
+      const index = Math.min(Math.max(0, Number(state.taskImageViewer.index) || 0), maxIndex);
+      state.taskImageViewer.index = index;
+      const image = images[index];
+      const name = promptImageName(image, index);
+      taskImageViewerImage.src = taskImageDataURL(image);
+      taskImageViewerImage.alt = name;
+      if (taskImageViewerTitle) {
+        taskImageViewerTitle.textContent = name;
+      }
+      if (taskImageViewerCount) {
+        taskImageViewerCount.textContent = `${index + 1} / ${images.length}`;
+      }
+      if (taskImageViewerPrev) {
+        taskImageViewerPrev.disabled = images.length < 2;
+      }
+      if (taskImageViewerNext) {
+        taskImageViewerNext.disabled = images.length < 2;
+      }
+      replaceLucideIcons(taskImageViewer);
+    }
+
+    function openTaskImageViewer(requestID, index = 0) {
+      requestID = String(requestID || "").trim();
+      if (!requestID) return;
+      state.selectedTaskId = requestID;
+      state.taskImageViewer = { requestID, index: Math.max(0, Number(index) || 0) };
+      trackAnalyticsEvent("task_images_opened", { request_id: requestID });
+      renderTaskImageViewer();
+    }
+
+    function closeTaskImageViewer() {
+      if (!state.taskImageViewer?.requestID) return;
+      state.taskImageViewer = { requestID: "", index: 0 };
+      renderTaskImageViewer();
+    }
+
+    function stepTaskImageViewer(direction) {
+      const task = selectedTaskImageViewerTask();
+      const images = taskImages(task);
+      if (images.length < 2) return;
+      const nextIndex = (Number(state.taskImageViewer.index) + direction + images.length) % images.length;
+      state.taskImageViewer = { requestID: state.taskImageViewer.requestID, index: nextIndex };
+      renderTaskImageViewer();
+    }
+
     function taskFullscreenMode(mode) {
       return String(mode || "").trim().toLowerCase() === "console" ? "console" : "work";
     }
@@ -9470,6 +9582,7 @@
         document.body.classList.add("task-fullscreen-open");
       } else {
         document.body.classList.remove("task-fullscreen-open");
+        closeTaskImageViewer();
       }
       applyTaskVisibility();
       render(state.snapshot);
@@ -10894,6 +11007,7 @@
 
     function taskCollectionRenderSig(tasks, options = {}) {
       const showOutputAction = options.showOutputAction !== false;
+      const showImageAction = Boolean(options.showImageAction);
       const allowCollapse = options.allowCollapse !== false;
       const viewMode = normalizeTaskPanelView(state.taskPanelView);
       const statusFilter = normalizeTaskStatusFilter(state.taskStatusFilter);
@@ -10902,6 +11016,7 @@
         viewMode,
         statusFilter,
         showOutputAction,
+        showImageAction,
         allowCollapse,
         tasks: tasks.map((task) => {
           const requestID = String(task?.request_id || "").trim();
@@ -10921,6 +11036,7 @@
             branch: formatTaskBranch(task),
             skill: String(task?.skill || ""),
             timing: taskTimingSignature(task),
+            imageCount: taskImages(task).length,
             prURL: String(task?.pr_url || "").trim(),
             githubURL: taskGitHubLinkURL(task),
             canRerun: canRerunTask(task),
@@ -10943,6 +11059,7 @@
 
     function renderTaskCollection(tasks, listNode, countNode, options = {}) {
       const showOutputAction = options.showOutputAction !== false;
+      const showImageAction = Boolean(options.showImageAction);
       const allowCollapse = options.allowCollapse !== false;
       const promptOnly = normalizeTaskPanelView(state.taskPanelView) === "prompt";
       const historyView = normalizeTaskStatusFilter(state.taskStatusFilter) === "completed";
@@ -11044,6 +11161,28 @@
         return outputToggle;
       };
 
+      const renderImageToggle = (task, requestID) => {
+        const images = taskImages(task);
+        if (!showImageAction || !requestID || images.length === 0) {
+          return null;
+        }
+        const imageToggle = document.createElement("button");
+        imageToggle.type = "button";
+        imageToggle.className = "task-image-toggle task-icon-button";
+        imageToggle.title = images.length === 1 ? "Open attached image." : `Open ${images.length} attached images.`;
+        imageToggle.setAttribute("aria-label", imageToggle.title);
+        imageToggle.appendChild(createTaskActionIcon("image"));
+        const imageLabel = document.createElement("span");
+        imageLabel.className = "sr-only";
+        imageLabel.textContent = "Images";
+        imageToggle.appendChild(imageLabel);
+        imageToggle.addEventListener("click", (event) => {
+          event.stopPropagation();
+          openTaskImageViewer(requestID);
+        });
+        return imageToggle;
+      };
+
       if (!tasks.length) {
         renderEmptyState();
         restoreTaskScrollAnchor(listNode, scrollAnchor);
@@ -11120,6 +11259,10 @@
             });
             promptActions.appendChild(cloneButton);
           }
+          const imageAction = renderImageToggle(task, requestID);
+          if (imageAction) {
+            promptActions.appendChild(imageAction);
+          }
           const githubAction = renderTaskPullRequestAction(task);
           if (githubAction) {
             promptActions.appendChild(githubAction);
@@ -11162,6 +11305,10 @@
         const outputAction = renderOutputToggle(requestID);
         if (outputAction) {
           topActions.appendChild(outputAction);
+        }
+        const imageAction = renderImageToggle(task, requestID);
+        if (imageAction) {
+          topActions.appendChild(imageAction);
         }
 
         const showTaskCloneAction = canCopyTaskCloneCommand(task);
@@ -11453,10 +11600,12 @@
           : "New runs will appear here with their progress, replay controls, local clone actions, and PR links.";
       renderTaskCollection(tasks, taskFullscreenList, null, {
         showOutputAction: state.taskFullscreenMode !== "console",
+        showImageAction: true,
         emptyEyebrow,
         emptyTitle,
         emptyCopy,
       });
+      renderTaskImageViewer();
     }
 
     function clearFullscreenTerminalRender() {
@@ -12478,6 +12627,22 @@
       setTaskFullscreen(false);
       trackAnalyticsEvent("task_fullscreen_toggled", { open: false, source: "close_button" });
     });
+    if (taskImageViewerClose) {
+      taskImageViewerClose.addEventListener("click", closeTaskImageViewer);
+    }
+    if (taskImageViewer) {
+      taskImageViewer.addEventListener("click", (event) => {
+        if (event.target?.hasAttribute?.("data-task-image-viewer-close")) {
+          closeTaskImageViewer();
+        }
+      });
+    }
+    if (taskImageViewerPrev) {
+      taskImageViewerPrev.addEventListener("click", () => stepTaskImageViewer(-1));
+    }
+    if (taskImageViewerNext) {
+      taskImageViewerNext.addEventListener("click", () => stepTaskImageViewer(1));
+    }
     if (libraryPromptModalClose) {
       libraryPromptModalClose.addEventListener("click", closeLibraryPromptModal);
     }
@@ -12493,6 +12658,23 @@
         event.preventDefault();
         closeLibraryPromptModal();
         return;
+      }
+      if (state.taskImageViewer?.requestID) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closeTaskImageViewer();
+          return;
+        }
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          stepTaskImageViewer(-1);
+          return;
+        }
+        if (event.key === "ArrowRight") {
+          event.preventDefault();
+          stepTaskImageViewer(1);
+          return;
+        }
       }
       if (event.key === "Escape" && state.taskFullscreenOpen) {
         event.preventDefault();

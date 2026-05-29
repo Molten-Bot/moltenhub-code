@@ -63,30 +63,38 @@ type TaskControls struct {
 
 // Task represents one hub dispatch execution state.
 type Task struct {
-	RequestID         string       `json:"request_id"`
-	Source            string       `json:"source,omitempty"`
-	Prompt            string       `json:"prompt,omitempty"`
-	PromptIsUserInput bool         `json:"prompt_is_user_input"`
-	Skill             string       `json:"skill,omitempty"`
-	Workflow          string       `json:"workflow,omitempty"`
-	AgentHarness      string       `json:"agent_harness,omitempty"`
-	Repo              string       `json:"repo,omitempty"`
-	Repos             []string     `json:"repos,omitempty"`
-	BaseBranch        string       `json:"base_branch,omitempty"`
-	Status            string       `json:"status"`
-	Stage             string       `json:"stage,omitempty"`
-	StageStatus       string       `json:"stage_status,omitempty"`
-	ExitCode          int          `json:"exit_code,omitempty"`
-	WorkspaceDir      string       `json:"workspace_dir,omitempty"`
-	Branch            string       `json:"branch,omitempty"`
-	PRURL             string       `json:"pr_url,omitempty"`
-	Error             string       `json:"error,omitempty"`
-	StartedAt         string       `json:"started_at"`
-	UpdatedAt         string       `json:"updated_at"`
-	DurationSeconds   float64      `json:"duration_seconds,omitempty"`
-	CanRerun          bool         `json:"can_rerun,omitempty"`
-	Controls          TaskControls `json:"controls,omitempty"`
-	Logs              []TaskLog    `json:"logs"`
+	RequestID         string        `json:"request_id"`
+	Source            string        `json:"source,omitempty"`
+	Prompt            string        `json:"prompt,omitempty"`
+	PromptIsUserInput bool          `json:"prompt_is_user_input"`
+	Images            []PromptImage `json:"images,omitempty"`
+	Skill             string        `json:"skill,omitempty"`
+	Workflow          string        `json:"workflow,omitempty"`
+	AgentHarness      string        `json:"agent_harness,omitempty"`
+	Repo              string        `json:"repo,omitempty"`
+	Repos             []string      `json:"repos,omitempty"`
+	BaseBranch        string        `json:"base_branch,omitempty"`
+	Status            string        `json:"status"`
+	Stage             string        `json:"stage,omitempty"`
+	StageStatus       string        `json:"stage_status,omitempty"`
+	ExitCode          int           `json:"exit_code,omitempty"`
+	WorkspaceDir      string        `json:"workspace_dir,omitempty"`
+	Branch            string        `json:"branch,omitempty"`
+	PRURL             string        `json:"pr_url,omitempty"`
+	Error             string        `json:"error,omitempty"`
+	StartedAt         string        `json:"started_at"`
+	UpdatedAt         string        `json:"updated_at"`
+	DurationSeconds   float64       `json:"duration_seconds,omitempty"`
+	CanRerun          bool          `json:"can_rerun,omitempty"`
+	Controls          TaskControls  `json:"controls,omitempty"`
+	Logs              []TaskLog     `json:"logs"`
+}
+
+// PromptImage captures one prompt image attachment shown in task views.
+type PromptImage struct {
+	Name       string `json:"name,omitempty"`
+	MediaType  string `json:"mediaType,omitempty"`
+	DataBase64 string `json:"dataBase64,omitempty"`
 }
 
 // Release represents a merged pull request that shipped from one originating prompt.
@@ -274,6 +282,7 @@ type taskState struct {
 	Source            string
 	Prompt            string
 	PromptIsUserInput bool
+	Images            []PromptImage
 	Skill             string
 	Workflow          string
 	AgentHarness      string
@@ -434,6 +443,7 @@ func (b *Broker) Snapshot() Snapshot {
 			Source:            t.Source,
 			Prompt:            t.Prompt,
 			PromptIsUserInput: t.PromptIsUserInput,
+			Images:            append([]PromptImage(nil), t.Images...),
 			Skill:             t.Skill,
 			Workflow:          taskWorkflow(t),
 			AgentHarness:      taskAgentHarness(t),
@@ -491,6 +501,7 @@ func (b *Broker) Task(requestID string) (Task, bool) {
 		Source:            t.Source,
 		Prompt:            t.Prompt,
 		PromptIsUserInput: t.PromptIsUserInput,
+		Images:            append([]PromptImage(nil), t.Images...),
 		Skill:             t.Skill,
 		Workflow:          taskWorkflow(t),
 		AgentHarness:      taskAgentHarness(t),
@@ -530,6 +541,7 @@ func (b *Broker) RecordTaskRunConfigWithSource(requestID string, runConfigJSON [
 	}
 	cfgCopy := append([]byte(nil), runConfigJSON...)
 	prompt := promptFromRunConfigJSON(cfgCopy)
+	images := imagesFromRunConfigJSON(cfgCopy)
 	baseBranch := branchFromRunConfigJSON(cfgCopy)
 	repos := reposFromRunConfigJSON(cfgCopy)
 	workflow := workflowFromRunConfigJSON(cfgCopy)
@@ -565,6 +577,7 @@ func (b *Broker) RecordTaskRunConfigWithSource(requestID string, runConfigJSON [
 			Source:            source,
 			Prompt:            prompt,
 			PromptIsUserInput: promptIsUserInputForTask(requestID, prompt),
+			Images:            append([]PromptImage(nil), images...),
 			Workflow:          workflow,
 			AgentHarness:      agentHarness,
 			Repo:              firstRepo(repos),
@@ -598,6 +611,10 @@ func (b *Broker) RecordTaskRunConfigWithSource(requestID string, runConfigJSON [
 				changed = true
 			}
 		}
+	}
+	if t != nil && !samePromptImages(t.Images, images) {
+		t.Images = append([]PromptImage(nil), images...)
+		changed = true
 	}
 	if workflow != "" && t != nil && t.Workflow != workflow {
 		t.Workflow = workflow
@@ -684,6 +701,7 @@ func (b *Broker) RecordRejectedPromptSubmissionWithSource(runConfigJSON []byte, 
 	repos := reposFromRunConfigJSON(runConfigJSON)
 	baseBranch := branchFromRunConfigJSON(runConfigJSON)
 	prompt := promptFromRunConfigJSON(runConfigJSON)
+	images := imagesFromRunConfigJSON(runConfigJSON)
 	workflow := workflowFromRunConfigJSON(runConfigJSON)
 	agentHarness := agentHarnessFromRunConfigJSON(runConfigJSON)
 	errText := strings.TrimSpace(errorText(err))
@@ -702,6 +720,7 @@ func (b *Broker) RecordRejectedPromptSubmissionWithSource(runConfigJSON []byte, 
 		Source:            firstNonEmpty(normalizeTaskSource(source), sourceFromRunConfigJSON(runConfigJSON), defaultTaskSourceForRequestID(requestID)),
 		Prompt:            prompt,
 		PromptIsUserInput: promptIsUserInputForTask(requestID, prompt),
+		Images:            append([]PromptImage(nil), images...),
 		Workflow:          workflow,
 		AgentHarness:      agentHarness,
 		Repo:              firstRepo(repos),
@@ -1484,6 +1503,9 @@ func (b *Broker) ensureTaskLocked(requestID string, now time.Time) *taskState {
 			existing.Prompt = b.taskPromptLocked(requestID)
 			existing.PromptIsUserInput = promptIsUserInputForTask(requestID, existing.Prompt)
 		}
+		if len(existing.Images) == 0 {
+			existing.Images = imagesFromRunConfigJSON(b.runConfigs[requestID])
+		}
 		if existing.Workflow == "" {
 			existing.Workflow = workflowFromRunConfigJSON(b.runConfigs[requestID])
 		}
@@ -1505,11 +1527,13 @@ func (b *Broker) ensureTaskLocked(requestID string, now time.Time) *taskState {
 	}
 
 	prompt := b.taskPromptLocked(requestID)
+	images := imagesFromRunConfigJSON(b.runConfigs[requestID])
 	t := &taskState{
 		RequestID:         requestID,
 		Source:            firstNonEmpty(sourceFromRunConfigJSON(b.runConfigs[requestID]), defaultTaskSourceForRequestID(requestID)),
 		Prompt:            prompt,
 		PromptIsUserInput: promptIsUserInputForTask(requestID, prompt),
+		Images:            images,
 		Workflow:          workflowFromRunConfigJSON(b.runConfigs[requestID]),
 		AgentHarness:      agentHarnessFromRunConfigJSON(b.runConfigs[requestID]),
 		BaseBranch:        b.taskBaseBranchLocked(requestID),
@@ -2340,6 +2364,50 @@ func promptFromRunConfigJSON(runConfigJSON []byte) string {
 		return prompt
 	}
 	return ""
+}
+
+func imagesFromRunConfigJSON(runConfigJSON []byte) []PromptImage {
+	if len(runConfigJSON) == 0 {
+		return nil
+	}
+	var raw struct {
+		Images []PromptImage `json:"images"`
+	}
+	if err := json.Unmarshal(runConfigJSON, &raw); err != nil {
+		return nil
+	}
+	out := make([]PromptImage, 0, len(raw.Images))
+	for _, image := range raw.Images {
+		dataBase64 := strings.TrimSpace(image.DataBase64)
+		if dataBase64 == "" {
+			continue
+		}
+		mediaType := strings.TrimSpace(image.MediaType)
+		if mediaType == "" {
+			mediaType = "image/png"
+		}
+		out = append(out, PromptImage{
+			Name:       strings.TrimSpace(image.Name),
+			MediaType:  mediaType,
+			DataBase64: dataBase64,
+		})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func samePromptImages(a, b []PromptImage) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func libraryTaskDisplayText(task library.TaskSummary) string {

@@ -2054,6 +2054,7 @@ select.prompt-control {
 .prompt-action-button,
 .task-rerun,
 .task-output-toggle,
+.task-image-toggle,
 .task-terminal-toggle,
 .task-fullscreen-toggle,
 .prompt-visibility-toggle {
@@ -2222,6 +2223,7 @@ select.prompt-control {
 .prompt-action-button:hover,
 .task-rerun:hover,
 .task-output-toggle:hover,
+.task-image-toggle:hover,
 .task-terminal-toggle:hover,
 .task-fullscreen-toggle:hover,
 .prompt-visibility-toggle:hover {
@@ -2318,6 +2320,7 @@ select.prompt-control {
 .prompt-action-button:disabled,
 .prompt-input-action:disabled,
 .task-rerun:disabled,
+.task-image-toggle:disabled,
 .task-control-toggle:disabled,
 .task-stop:disabled,
 .task-close:disabled,
@@ -2865,6 +2868,7 @@ select.prompt-control {
 }
 
 .task-rerun,
+.task-image-toggle,
 .task-output-toggle {
   border-radius: 999px;
   padding: 4px 9px;
@@ -2876,6 +2880,7 @@ select.prompt-control {
 }
 
 .task-output-toggle.task-icon-button,
+.task-image-toggle.task-icon-button,
 .task-rerun.task-icon-button,
 .task-control-toggle.task-icon-button,
 .task-stop.task-icon-button {
@@ -2883,6 +2888,7 @@ select.prompt-control {
 }
 
 .task-rerun.task-icon-button,
+.task-image-toggle.task-icon-button,
 .task-output-toggle.task-icon-button {
   width: 34px;
   min-width: 34px;
@@ -2906,6 +2912,11 @@ select.prompt-control {
 .task-output-toggle.task-icon-button .task-action-glyph {
   width: 21px;
   height: 21px;
+}
+
+.task-image-toggle.task-icon-button .task-action-glyph {
+  width: 19px;
+  height: 19px;
 }
 
 .task-side-actions {
@@ -5010,6 +5021,145 @@ html.pink .task-progress-step.current .task-progress-step-icon.is-agent-logo {
   overflow: hidden;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.task-image-viewer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(14px, 3vw, 28px);
+}
+
+.task-image-viewer.hidden {
+  display: none !important;
+}
+
+.task-image-viewer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 9, 17, 0.78);
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+}
+
+.task-image-viewer-shell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(1120px, 100%);
+  height: min(780px, calc(100dvh - 40px));
+  min-height: 0;
+  border-radius: var(--radius-card);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(10, 17, 31, 0.92);
+  box-shadow: 0 28px 72px rgba(4, 9, 17, 0.42);
+  overflow: hidden;
+}
+
+.task-image-viewer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.task-image-viewer-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.task-image-viewer-close,
+.task-image-viewer-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  transition: border-color 0.14s ease, background-color 0.14s ease, opacity 0.14s ease;
+}
+
+.task-image-viewer-close {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.task-image-viewer-close svg,
+.task-image-viewer-nav svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
+}
+
+.task-image-viewer-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 14px 58px;
+}
+
+.task-image-viewer-image {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius);
+}
+
+.task-image-viewer-nav {
+  position: absolute;
+  top: 50%;
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  padding: 0;
+  border-radius: 999px;
+  transform: translateY(-50%);
+}
+
+.task-image-viewer-prev {
+  left: 12px;
+}
+
+.task-image-viewer-next {
+  right: 12px;
+}
+
+.task-image-viewer-close:hover,
+.task-image-viewer-close:focus-visible,
+.task-image-viewer-nav:hover,
+.task-image-viewer-nav:focus-visible {
+  border-color: rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.task-image-viewer-nav:disabled {
+  opacity: 0.42;
+}
+
+.task-image-viewer-count {
+  padding: 0 14px 14px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-align: center;
 }
 
 .library-prompt-modal {
