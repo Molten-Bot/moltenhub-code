@@ -1508,6 +1508,62 @@ func TestRunNoChangesSkipsPR(t *testing.T) {
 	}
 }
 
+func TestRunAgentClaimsChangesButGitIsCleanFails(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+
+	agentOutput := strings.Join([]string{
+		"Changed [AGENTS.md](" + filepath.ToSlash(filepath.Join(repoDir, "AGENTS.md")) + ":1).",
+		"diff --git a/AGENTS.md b/AGENTS.md",
+		"--- a/AGENTS.md",
+		"+++ b/AGENTS.md",
+		"+# Project Agent Guide",
+	}, "\n")
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath)), res: execx.Result{Stdout: agentOutput}},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## " + branch + "\n"}},
+		{cmd: commitsAheadOfBaseCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "0\n"}},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err == nil {
+		t.Fatal("Run() err = nil, want codex mismatch failure")
+	}
+	if res.ExitCode != ExitCodex {
+		t.Fatalf("ExitCode = %d, want %d", res.ExitCode, ExitCodex)
+	}
+	if res.NoChanges {
+		t.Fatal("NoChanges = true, want false")
+	}
+	if !strings.Contains(res.Err.Error(), "reported file changes") {
+		t.Fatalf("Run() err = %v, want reported file changes detail", res.Err)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
 func TestRunAgentAwaitingTaskReturnsCodexFailure(t *testing.T) {
 	t.Parallel()
 
