@@ -313,7 +313,8 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 
 	h.logf("stage=%s status=start target=%s", agentStage, codexTargetLabel)
 	codexStart := time.Now()
-	if err := h.runCodex(ctx, runtime, codexDir, codexBasePrompt, codexOpts, agentsPath, cfg.ResponseMode); err != nil {
+	agentRes, err := h.runCodexCapture(ctx, runtime, codexDir, codexBasePrompt, codexOpts, agentsPath, cfg.ResponseMode)
+	if err != nil {
 		return h.fail(ExitCodex, agentStage, err, runDir)
 	}
 	h.logf("stage=%s status=ok elapsed_s=%d", agentStage, int(time.Since(codexStart).Seconds()))
@@ -340,6 +341,14 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		}
 	}
 	if changedCount == 0 {
+		if agentOutputClaimsFileChanges(agentRes) {
+			return h.fail(
+				ExitCodex,
+				agentStage,
+				fmt.Errorf("%s reported file changes, but git detected no worktree or branch changes", agentStage),
+				runDir,
+			)
+		}
 		h.populateNoChangePRURLs(ctx, repos)
 		h.logf("stage=git status=no_changes")
 		res := buildResult(runDir, repos, true)
@@ -693,7 +702,8 @@ func (h Harness) processChangedRepo(
 			repo.RelDir,
 		)
 		codexStart := time.Now()
-		if err := h.runCodex(ctx, runtime, codexDir, repairPrompt, codexOpts, agentsPath, cfg.ResponseMode); err != nil {
+		agentRes, err := h.runCodexCapture(ctx, runtime, codexDir, repairPrompt, codexOpts, agentsPath, cfg.ResponseMode)
+		if err != nil {
 			return ExitCodex, agentStage, err
 		}
 		h.logf(
@@ -710,6 +720,9 @@ func (h Harness) processChangedRepo(
 			return ExitGit, "git", err
 		}
 		if strings.TrimSpace(statusRes.Stdout) == "" {
+			if agentOutputClaimsFileChanges(agentRes) {
+				return ExitCodex, agentStage, fmt.Errorf("%s reported remediation file changes, but git detected no worktree or branch changes for repo %s", agentStage, repo.URL)
+			}
 			return ExitPR, "checks", fmt.Errorf("required PR checks failed and agent produced no remediation changes for repo %s", repo.URL)
 		}
 
@@ -2761,6 +2774,19 @@ func (h Harness) runCodex(
 	agentsPath string,
 	responseMode string,
 ) error {
+	_, err := h.runCodexCapture(ctx, runtime, targetDir, prompt, opts, agentsPath, responseMode)
+	return err
+}
+
+func (h Harness) runCodexCapture(
+	ctx context.Context,
+	runtime agentruntime.Runtime,
+	targetDir string,
+	prompt string,
+	opts codexRunOptions,
+	agentsPath string,
+	responseMode string,
+) (execx.Result, error) {
 	finalPrompt := strings.TrimSpace(prompt)
 	cleanup := func() error { return nil }
 
@@ -2802,7 +2828,7 @@ func (h Harness) runCodex(
 				cleanupErr,
 			)
 		}
-		return err
+		return execx.Result{}, err
 	} else {
 		finalPrompt = promptWithResponseMode
 	}
@@ -2815,7 +2841,8 @@ func (h Harness) runCodex(
 			agentStage,
 			"detected bubblewrap namespace sandbox failure; retrying with danger-full-access",
 		)
-		_, retryErr := h.runCodexWithHeartbeat(ctx, runtime, targetDir, finalPrompt, opts, "danger-full-access")
+		retryRes, retryErr := h.runCodexWithHeartbeat(ctx, runtime, targetDir, finalPrompt, opts, "danger-full-access")
+		res = retryRes
 		err = retryErr
 	}
 	if cleanupErr := cleanup(); cleanupErr != nil {
@@ -2825,7 +2852,27 @@ func (h Harness) runCodex(
 			cleanupErr,
 		)
 	}
-	return err
+	return res, err
+}
+
+func agentOutputClaimsFileChanges(res execx.Result) bool {
+	text := strings.ReplaceAll(strings.Join([]string{res.Stdout, res.Stderr}, "\n"), "\r\n", "\n")
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return false
+	}
+	lower := strings.ToLower(trimmed)
+	if strings.Contains(lower, "\ndiff --git a/") || strings.HasPrefix(lower, "diff --git a/") {
+		return true
+	}
+	for _, line := range splitOutputLines(trimmed) {
+		line = strings.TrimSpace(line)
+		lineLower := strings.ToLower(line)
+		if strings.HasPrefix(lineLower, "changed [") || strings.HasPrefix(lineLower, "changed `") {
+			return true
+		}
+	}
+	return false
 }
 
 func combineCleanupFns(cleanups ...func() error) func() error {
