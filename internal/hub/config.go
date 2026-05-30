@@ -101,7 +101,7 @@ type DispatcherConfig struct {
 
 // ReviewWatchConfig controls local GitHub notification polling for review requests.
 type ReviewWatchConfig struct {
-	Enabled        bool   `json:"enabled"`
+	Enabled        *bool  `json:"enabled,omitempty"`
 	PollIntervalMS int    `json:"poll_interval_ms,omitempty"`
 	Writeback      string `json:"writeback,omitempty"`
 	AutoMerge      *bool  `json:"auto_merge,omitempty"`
@@ -109,10 +109,20 @@ type ReviewWatchConfig struct {
 	ResponseMode   string `json:"response_mode,omitempty"`
 }
 
+// EnabledValue returns the effective local review watcher setting. The watcher
+// defaults on so a GitHub-authenticated hub can respond to review requests
+// without extra config.
+func (c ReviewWatchConfig) EnabledValue() bool {
+	if c.Enabled == nil {
+		return true
+	}
+	return *c.Enabled
+}
+
 // AutoMergeEnabled returns the effective clean-review merge setting.
 func (c ReviewWatchConfig) AutoMergeEnabled() bool {
 	if c.AutoMerge == nil {
-		return true
+		return false
 	}
 	return *c.AutoMerge
 }
@@ -327,7 +337,7 @@ func (c InitConfig) Validate() error {
 	if c.Dispatcher.DiskIOHighWatermarkMBs <= 0 {
 		return fmt.Errorf("dispatcher.disk_io_high_watermark_mb_s must be > 0")
 	}
-	if c.ReviewWatch.Enabled && c.ReviewWatch.PollIntervalMS < 5000 {
+	if c.ReviewWatch.EnabledValue() && c.ReviewWatch.PollIntervalMS < 5000 {
 		return fmt.Errorf("review_watch.poll_interval_ms must be >= 5000")
 	}
 	if c.ReviewWatch.Writeback != "" && normalizeReviewWatchWriteback(c.ReviewWatch.Writeback) == "" {

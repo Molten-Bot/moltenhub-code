@@ -44,6 +44,12 @@ go build -o bin/harness ./cmd/harness
 
 Local `harness hub` listens on `127.0.0.1:7777` by default.
 
+With GitHub auth configured, local hub mode also watches GitHub review-request
+notifications by default. When the authenticated GitHub user is still requested
+as a PR reviewer, the harness queues the bundled `code-review` task and posts a
+summary comment back to the original PR. Auto-merge is off by default; opt in
+with `review_watch.auto_merge: true` in the runtime config.
+
 ### Go Module
 
 MoltenHub Code is distributed as a Go module from this Git repository. Use a

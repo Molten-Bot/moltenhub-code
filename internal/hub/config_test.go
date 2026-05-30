@@ -66,8 +66,8 @@ func TestLoadInitDefaults(t *testing.T) {
 	if cfg.Dispatcher.DiskIOHighWatermarkMBs != 120 {
 		t.Fatalf("Dispatcher.DiskIOHighWatermarkMBs = %.2f, want 120", cfg.Dispatcher.DiskIOHighWatermarkMBs)
 	}
-	if cfg.ReviewWatch.Enabled {
-		t.Fatal("ReviewWatch.Enabled = true, want false by default")
+	if !cfg.ReviewWatch.EnabledValue() {
+		t.Fatal("ReviewWatch.EnabledValue() = false, want true by default")
 	}
 	if cfg.ReviewWatch.PollIntervalMS != 60000 {
 		t.Fatalf("ReviewWatch.PollIntervalMS = %d, want 60000", cfg.ReviewWatch.PollIntervalMS)
@@ -75,8 +75,8 @@ func TestLoadInitDefaults(t *testing.T) {
 	if cfg.ReviewWatch.Writeback != "summary-comment" {
 		t.Fatalf("ReviewWatch.Writeback = %q, want summary-comment", cfg.ReviewWatch.Writeback)
 	}
-	if !cfg.ReviewWatch.AutoMergeEnabled() {
-		t.Fatal("ReviewWatch.AutoMergeEnabled() = false, want true by default")
+	if cfg.ReviewWatch.AutoMergeEnabled() {
+		t.Fatal("ReviewWatch.AutoMergeEnabled() = true, want false by default")
 	}
 }
 
@@ -104,8 +104,8 @@ func TestLoadInitSupportsReviewWatchConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadInit() error = %v", err)
 	}
-	if !cfg.ReviewWatch.Enabled {
-		t.Fatal("ReviewWatch.Enabled = false, want true")
+	if !cfg.ReviewWatch.EnabledValue() {
+		t.Fatal("ReviewWatch.EnabledValue() = false, want true")
 	}
 	if cfg.ReviewWatch.PollIntervalMS != 30000 {
 		t.Fatalf("ReviewWatch.PollIntervalMS = %d, want 30000", cfg.ReviewWatch.PollIntervalMS)
@@ -118,6 +118,30 @@ func TestLoadInitSupportsReviewWatchConfig(t *testing.T) {
 	}
 	if cfg.ReviewWatch.MergeMethod != "rebase" {
 		t.Fatalf("ReviewWatch.MergeMethod = %q, want rebase", cfg.ReviewWatch.MergeMethod)
+	}
+}
+
+func TestLoadInitCanDisableDefaultReviewWatch(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "init.json")
+	data := `{
+  "base_url": "https://na.hub.molten.bot/v1",
+  "review_watch": {
+    "enabled": false
+  }
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("write init: %v", err)
+	}
+
+	cfg, err := LoadInit(path)
+	if err != nil {
+		t.Fatalf("LoadInit() error = %v", err)
+	}
+	if cfg.ReviewWatch.EnabledValue() {
+		t.Fatal("ReviewWatch.EnabledValue() = true, want false")
 	}
 }
 

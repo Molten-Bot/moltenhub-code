@@ -2508,7 +2508,7 @@ func startGitHubReviewWatcher(
 	enqueueLocalRun func(context.Context, config.Config, bool, string, bool) (string, error),
 	logf func(string, ...any),
 ) {
-	if !cfg.ReviewWatch.Enabled {
+	if !cfg.ReviewWatch.EnabledValue() {
 		return
 	}
 	if runner == nil || enqueueLocalRun == nil {
