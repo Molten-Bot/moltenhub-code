@@ -1626,6 +1626,7 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 		"name":        normalizeSkillName(skillCfg.Name),
 		"handle":      normalizeSkillName(skillCfg.Name),
 		"mode":        "prompt",
+		"displayName": "Happy to Code",
 		"description": "Repository task run. Send repo+prompt for ad hoc work, or repos+librarytaskname for a checked-in library task. Omitted or `default` `responsemode` uses bundled `caveman-full`; set `off` for normal prose.",
 		"activation": buildActivation(skillCfg.Name, map[string]any{
 			"repo":   "<git@github.com:owner/repo.git>",
@@ -1637,7 +1638,7 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 		"name":        normalizeSkillName(codeReviewSkillName),
 		"handle":      normalizeSkillName(codeReviewSkillName),
 		"mode":        "review",
-		"displayName": "Pull Request Code Review",
+		"displayName": "Happy to Review",
 		"description": fmt.Sprintf("Runs the %s workflow for an explicit pull request. Hub activations do not require the runtime GitHub user to be assigned as reviewer.", codeReviewLibraryTaskName),
 		"activation": buildActivation(codeReviewSkillName, map[string]any{
 			"repo": "<git@github.com:owner/repo.git>",

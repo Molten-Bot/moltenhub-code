@@ -3,6 +3,7 @@
     "name": "code_for_me",
     "handle": "code_for_me",
     "mode": "prompt",
+    "displayName": "Happy to Code",
     "description": "Repository task run. Send repo+prompt for ad hoc work, or repos+librarytaskname for a checked-in library task. Omitted or `default` `responsemode` uses bundled `caveman-full`; set `off` for normal prose.",
     "activation": {
       "type": "skill_request",
@@ -20,7 +21,7 @@
     "name": "code_review",
     "handle": "code_review",
     "mode": "review",
-    "displayName": "Pull Request Code Review",
+    "displayName": "Happy to Review",
     "description": "Runs the code-review workflow for an explicit pull request. Hub activations do not require the runtime GitHub user to be assigned as reviewer.",
     "activation": {
       "type": "skill_request",
