@@ -33,16 +33,17 @@ type PRMergeMonitor struct {
 }
 
 type prViewState struct {
-	State          string           `json:"state"`
-	MergedAt       string           `json:"mergedAt"`
-	URL            string           `json:"url"`
-	Number         int              `json:"number"`
-	Title          string           `json:"title"`
-	HeadRefName    string           `json:"headRefName"`
-	BaseRefName    string           `json:"baseRefName"`
-	ReviewDecision string           `json:"reviewDecision"`
-	LatestReviews  []prReviewEntry  `json:"latestReviews"`
-	Comments       []prCommentEntry `json:"comments"`
+	State          string                 `json:"state"`
+	MergedAt       string                 `json:"mergedAt"`
+	URL            string                 `json:"url"`
+	Number         int                    `json:"number"`
+	Title          string                 `json:"title"`
+	HeadRefName    string                 `json:"headRefName"`
+	BaseRefName    string                 `json:"baseRefName"`
+	ReviewDecision string                 `json:"reviewDecision"`
+	LatestReviews  []prReviewEntry        `json:"latestReviews"`
+	Comments       []prCommentEntry       `json:"comments"`
+	ReviewComments []prReviewCommentEntry `json:"-"`
 }
 
 type prReviewEntry struct {
@@ -59,6 +60,17 @@ type prCommentEntry struct {
 	Body      string  `json:"body"`
 	CreatedAt string  `json:"createdAt"`
 	UpdatedAt string  `json:"updatedAt"`
+}
+
+type prReviewCommentEntry struct {
+	ID           int64   `json:"id"`
+	User         prActor `json:"user"`
+	Body         string  `json:"body"`
+	Path         string  `json:"path"`
+	Line         int     `json:"line"`
+	OriginalLine int     `json:"original_line"`
+	CreatedAt    string  `json:"created_at"`
+	UpdatedAt    string  `json:"updated_at"`
 }
 
 type prActor struct {
@@ -311,7 +323,39 @@ func (m *PRMergeMonitor) prState(ctx context.Context, prURL string) (prViewState
 	if decodeErr := json.Unmarshal([]byte(strings.TrimSpace(res.Stdout)), &state); decodeErr != nil {
 		return prViewState{}, fmt.Errorf("decode gh pr view response: %w", decodeErr)
 	}
+	if state.Open() {
+		reviewComments, commentsErr := m.prReviewComments(ctx, prURL)
+		if commentsErr != nil {
+			m.Logf("hub.ui status=warn event=pr_monitor_review_comments pr_url=%s err=%q", prURL, commentsErr)
+		} else {
+			state.ReviewComments = reviewComments
+		}
+	}
 	return state, nil
+}
+
+func (m *PRMergeMonitor) prReviewComments(ctx context.Context, prURL string) ([]prReviewCommentEntry, error) {
+	repo := githubutil.PullRequestRepository(prURL)
+	selector := githubutil.PullRequestSelector(prURL)
+	if repo == "" || selector == "" {
+		return nil, nil
+	}
+	res, err := m.Runner.Run(ctx, execx.Command{
+		Name: "gh",
+		Args: []string{"api", fmt.Sprintf("repos/%s/pulls/%s/comments", repo, selector), "-F", "per_page=100"},
+	})
+	if err != nil {
+		return nil, err
+	}
+	raw := strings.TrimSpace(res.Stdout)
+	if raw == "" {
+		return nil, nil
+	}
+	var comments []prReviewCommentEntry
+	if decodeErr := json.Unmarshal([]byte(raw), &comments); decodeErr != nil {
+		return nil, fmt.Errorf("decode pull request review comments response: %w", decodeErr)
+	}
+	return comments, nil
 }
 
 func (s prViewState) Merged() bool {
@@ -372,6 +416,22 @@ func actionablePRReviewFeedback(task Task, state prViewState) PRReviewFeedback {
 			Kind:      "comment",
 			ID:        strings.TrimSpace(comment.ID),
 			Author:    strings.TrimSpace(comment.Author.Login),
+			CreatedAt: firstNonEmpty(comment.UpdatedAt, comment.CreatedAt),
+			Body:      body,
+		})
+	}
+	for _, comment := range state.ReviewComments {
+		body := conciseReviewFeedbackBody(comment.Body)
+		if body == "" || !commentBodyNeedsFollowUp(comment.Body) {
+			continue
+		}
+		if location := reviewCommentLocation(comment); location != "" {
+			body = location + " - " + body
+		}
+		feedback.Items = append(feedback.Items, PRReviewFeedbackItem{
+			Kind:      "review_comment",
+			ID:        fmt.Sprint(comment.ID),
+			Author:    strings.TrimSpace(comment.User.Login),
 			CreatedAt: firstNonEmpty(comment.UpdatedAt, comment.CreatedAt),
 			Body:      body,
 		})
@@ -487,6 +547,21 @@ func conciseReviewFeedbackBody(body string) string {
 		return truncateFeedbackText(strings.Join(negativeBullets, "\n"))
 	}
 	return truncateFeedbackText(body)
+}
+
+func reviewCommentLocation(comment prReviewCommentEntry) string {
+	path := strings.TrimSpace(comment.Path)
+	if path == "" {
+		return ""
+	}
+	line := comment.Line
+	if line <= 0 {
+		line = comment.OriginalLine
+	}
+	if line <= 0 {
+		return path
+	}
+	return fmt.Sprintf("%s:%d", path, line)
 }
 
 func truncateFeedbackText(value string) string {

@@ -275,6 +275,40 @@ func TestPRMergeMonitorIgnoresCleanReviewFeedback(t *testing.T) {
 	}
 }
 
+func TestActionablePRReviewFeedbackIncludesInlineReviewComments(t *testing.T) {
+	t.Parallel()
+
+	task := Task{PRURL: "https://github.com/acme/repo/pull/120", Branch: "feature"}
+	feedback := actionablePRReviewFeedback(task, prViewState{
+		State:       "OPEN",
+		URL:         "https://github.com/acme/repo/pull/120",
+		HeadRefName: "feature",
+		BaseRefName: "main",
+		ReviewComments: []prReviewCommentEntry{{
+			ID:        123,
+			User:      prActor{Login: "reviewer"},
+			Path:      "src/main.jsx",
+			Line:      1139,
+			Body:      "Please add arrow-key navigation for the custom theme radiogroup.",
+			UpdatedAt: "2026-05-30T12:00:00Z",
+		}},
+	})
+
+	if got := len(feedback.Items); got != 1 {
+		t.Fatalf("len(feedback.Items) = %d, want 1", got)
+	}
+	item := feedback.Items[0]
+	if got, want := item.Kind, "review_comment"; got != want {
+		t.Fatalf("item.Kind = %q, want %q", got, want)
+	}
+	if !strings.Contains(item.Body, "src/main.jsx:1139") || !strings.Contains(item.Body, "arrow-key navigation") {
+		t.Fatalf("item.Body = %q, want location and comment text", item.Body)
+	}
+	if feedback.Digest == "" {
+		t.Fatal("feedback.Digest is empty")
+	}
+}
+
 func TestPRMergeMonitorDoesNotQueueFeedbackForReviewTasks(t *testing.T) {
 	t.Parallel()
 
