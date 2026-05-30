@@ -1281,6 +1281,9 @@ func TestStudioStylesKeepPromptActionsVisible(t *testing.T) {
 	if !strings.Contains(css, ".prompt-field-reviewer-history {\n  flex: 0 1 clamp(170px, 19%, 240px);\n  min-width: 190px;\n  max-width: clamp(190px, 20%, 250px);\n}") {
 		t.Fatalf("expected reviewer selector to keep enough desktop width for select and delete controls")
 	}
+	if !strings.Contains(css, ".prompt-field-reviewer-manual {\n  flex: 1 1 240px;\n  min-width: 220px;\n}") {
+		t.Fatalf("expected manual reviewer input to share the reviewer row with flexible width")
+	}
 	if !strings.Contains(css, ".prompt-field-target-subdir {\n  flex: 0 1 clamp(110px, 11%, 150px);\n  min-width: 120px;\n  max-width: clamp(120px, 12%, 160px);\n}") {
 		t.Fatalf("expected directory input to keep enough desktop width beside reviewer controls")
 	}

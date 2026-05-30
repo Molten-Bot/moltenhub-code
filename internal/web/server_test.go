@@ -2015,6 +2015,18 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `id="library-reviewer-input" class="prompt-control prompt-input"`) {
 		t.Fatalf("expected index html to include reviewer history and manual entry controls for prompt and library modes")
 	}
+	builderReviewerSelectIdx := strings.Index(markup, `id="builder-reviewer-select"`)
+	builderReviewerInputIdx := strings.Index(markup, `id="builder-reviewer-input"`)
+	builderPromptIdx := strings.Index(markup, `id="builder-prompt-field"`)
+	libraryReviewerSelectIdx := strings.Index(markup, `id="library-reviewer-select"`)
+	libraryReviewerInputIdx := strings.Index(markup, `id="library-reviewer-input"`)
+	libraryCopyIdx := strings.Index(markup, `Library tasks provide a preset prompt`)
+	if builderReviewerSelectIdx == -1 || builderReviewerInputIdx == -1 || builderPromptIdx == -1 ||
+		builderReviewerSelectIdx > builderReviewerInputIdx || builderReviewerInputIdx > builderPromptIdx ||
+		libraryReviewerSelectIdx == -1 || libraryReviewerInputIdx == -1 || libraryCopyIdx == -1 ||
+		libraryReviewerSelectIdx > libraryReviewerInputIdx || libraryReviewerInputIdx > libraryCopyIdx {
+		t.Fatalf("expected manual reviewer inputs to render inline with reviewer selectors before the next prompt section")
+	}
 	if !strings.Contains(markup, `id="builder-repo-delete"`) ||
 		!strings.Contains(markup, `id="library-repo-delete"`) ||
 		!strings.Contains(markup, `id="builder-reviewer-delete"`) ||

@@ -1657,6 +1657,11 @@ html.pink .hub-dock-group[data-configured="true"] #moltenbot-hub-link:focus-visi
   max-width: clamp(190px, 20%, 250px);
 }
 
+.prompt-field-reviewer-manual {
+  flex: 1 1 240px;
+  min-width: 220px;
+}
+
 .prompt-field-target-subdir {
   flex: 0 1 clamp(110px, 11%, 150px);
   min-width: 120px;
@@ -5314,6 +5319,7 @@ html.pink .task-progress-step.current .task-progress-step-icon.is-agent-logo {
   .prompt-field-repo-history,
   .prompt-field-base-branch,
   .prompt-field-reviewer-history,
+  .prompt-field-reviewer-manual,
   .prompt-field-target-subdir {
     min-width: 0;
     max-width: none;
