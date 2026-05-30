@@ -353,7 +353,12 @@
             <div class="dashboard-stat-card dashboard-stat-card-primary" tabindex="0" aria-describedby="dashboard-time-saved-meta">
               <span class="dashboard-stat-label">Time Saved</span>
               <strong id="dashboard-time-saved">0m</strong>
-              <span id="dashboard-time-saved-meta" class="dashboard-stat-meta">Successful agent runtime</span>
+              <span id="dashboard-time-saved-meta" class="dashboard-stat-meta">Agent and review runtime counted as saved</span>
+            </div>
+            <div class="dashboard-stat-card dashboard-stat-card-primary" tabindex="0" aria-describedby="dashboard-review-saved-meta">
+              <span class="dashboard-stat-label">Review Saved</span>
+              <strong id="dashboard-review-saved">0m</strong>
+              <span id="dashboard-review-saved-meta" class="dashboard-stat-meta">Pull request review runtime</span>
             </div>
             <div class="dashboard-stat-card" tabindex="0" aria-describedby="dashboard-throughput-meta">
               <span class="dashboard-stat-label">Throughput</span>
@@ -781,6 +786,7 @@
       entry_prompt: { id: "entry_prompt", label: "Prompt", detail: "Queued from Prompt Studio.", icon: "entry_prompt" },
       entry_library: { id: "entry_library", label: "Library", detail: "Queued from Library Studio.", icon: "entry_library" },
       entry_json: { id: "entry_json", label: "JSON", detail: "Queued from JSON Studio.", icon: "entry_json" },
+      entry_review: { id: "entry_review", label: "Review", detail: "Queued from a pull request review request.", icon: "entry_review" },
       prepare: { id: "prepare", label: "Prepare", detail: "Local auth and workspace conditioning.", icon: "prepare" },
       clone: { id: "clone", label: "Clone", detail: "Repository clone and sync.", icon: "clone" },
       branch: { id: "branch", label: "Branch", detail: "Branch selection or creation.", icon: "branch" },
@@ -832,6 +838,7 @@
       entry_prompt: "pencil",
       entry_library: "book-open",
       entry_json: "braces",
+      entry_review: "git-pull-request",
       prepare: "wrench",
       clone: "git-branch-plus",
       branch: "git-branch",
@@ -1980,6 +1987,8 @@
     const dashboardThroughput = document.getElementById("dashboard-throughput");
     const dashboardVelocity = document.getElementById("dashboard-velocity");
     const dashboardTimeSaved = document.getElementById("dashboard-time-saved");
+    const dashboardReviewSaved = document.getElementById("dashboard-review-saved");
+    const dashboardReviewSavedMeta = document.getElementById("dashboard-review-saved-meta");
     const dashboardAverageRuntime = document.getElementById("dashboard-average-runtime");
     const dashboardWorkflowTimes = document.getElementById("dashboard-workflow-times");
     const dashboardAgentTimes = document.getElementById("dashboard-agent-times");
@@ -4784,6 +4793,7 @@
       json: "--dashboard-chart-json",
       library: "--dashboard-chart-library",
       prompt: "--dashboard-chart-prompt",
+      review: "--dashboard-chart-review",
       other: "--dashboard-chart-other",
     };
     const DASHBOARD_SOURCE_COLOR_FALLBACKS = {
@@ -4792,6 +4802,7 @@
       json: "#e8b35a",
       library: "#6fb0f4",
       prompt: "#7bc99a",
+      review: "#f08fb2",
       other: "#8ca0bd",
     };
 
@@ -4831,6 +4842,8 @@
           return "braces";
         case "library":
           return "book-open";
+        case "review":
+          return "git-pull-request";
         case "prompt":
           return "pencil";
         default:
@@ -5028,6 +5041,15 @@
       }
       if (dashboardTimeSaved) {
         dashboardTimeSaved.textContent = dashboardDuration(Number(stats.total_saved_seconds || 0));
+      }
+      if (dashboardReviewSaved) {
+        dashboardReviewSaved.textContent = dashboardDuration(Number(stats.review_saved_seconds || 0));
+      }
+      if (dashboardReviewSavedMeta) {
+        const reviewTasks = Number(stats.review_tasks || 0);
+        const activeReviewTasks = Number(stats.review_active_tasks || 0);
+        const activeCopy = activeReviewTasks > 0 ? `, ${activeReviewTasks} active` : "";
+        dashboardReviewSavedMeta.textContent = `${reviewTasks} review task${reviewTasks === 1 ? "" : "s"}${activeCopy}`;
       }
       if (dashboardAverageRuntime) {
         dashboardAverageRuntime.textContent = dashboardDuration(Number(stats.average_duration_seconds || 0));
@@ -7066,6 +7088,8 @@
           return "Hub";
         case "library":
           return "Library";
+        case "review":
+          return "Review";
         case "json":
           return "JSON";
         case "prompt":
@@ -9809,6 +9833,11 @@
         case "library_task":
         case "librarytask":
           return "library";
+        case "review":
+        case "code_review":
+        case "pull_request_review":
+        case "pr_review":
+          return "review";
         case "json":
         case "raw":
           return "json";
@@ -10419,6 +10448,8 @@
           return "entry_library";
         case "json":
           return "entry_json";
+        case "review":
+          return "entry_review";
         case "prompt":
           return "entry_prompt";
         default:

@@ -215,6 +215,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		return h.fail(ExitConfig, "config", fmt.Errorf("one of repo, repoUrl, or repos[] is required"), runDir)
 	}
 	runCfg := cfg
+	reviewRun := runCfg.Review != nil
 	cloneBaseBranch := strings.TrimSpace(runCfg.BaseBranch)
 
 	repos := make([]repoWorkspace, 0, len(repoURLs))
@@ -249,12 +250,12 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	branchCollisionSuffix := runBranchCollisionSuffix(runNow, guid)
 	for i := range repos {
 		branch := strings.TrimSpace(repos[i].BaseBranch)
-		if repos[i].CreateWorkBranch {
+		if repos[i].CreateWorkBranch && !reviewRun {
 			branch = generatedBranch
 			repos[i].BranchCollisionSuffix = branchCollisionSuffix
 		}
 		repos[i].Branch = branch
-		if !repos[i].CreateWorkBranch {
+		if !repos[i].CreateWorkBranch || reviewRun {
 			h.logf(
 				"stage=git status=ok action=branch_reuse branch=%s baseBranch=%s repo=%s repo_dir=%s",
 				branch,
@@ -270,17 +271,19 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		}
 		h.logf("stage=git status=ok action=branch branch=%s repo=%s repo_dir=%s", branch, repos[i].URL, repos[i].RelDir)
 	}
-	for i := range repos {
-		if err := h.preparePublishWorkflow(ctx, &repos[i]); err != nil {
-			return h.fail(ExitGit, "workflow", err, runDir)
+	if !reviewRun {
+		for i := range repos {
+			if err := h.preparePublishWorkflow(ctx, &repos[i]); err != nil {
+				return h.fail(ExitGit, "workflow", err, runDir)
+			}
 		}
-	}
-	for i := range repos {
-		screenshotSnapshot, err := prCommentScreenshotSnapshot(repos[i].Dir)
-		if err != nil {
-			return h.fail(ExitGit, "git", err, runDir)
+		for i := range repos {
+			screenshotSnapshot, err := prCommentScreenshotSnapshot(repos[i].Dir)
+			if err != nil {
+				return h.fail(ExitGit, "git", err, runDir)
+			}
+			repos[i].PRCommentScreenshotBaseline = screenshotSnapshot
 		}
-		repos[i].PRCommentScreenshotBaseline = screenshotSnapshot
 	}
 
 	codexDir := targetDir
@@ -304,10 +307,12 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 	codexBasePrompt := workspaceCodexPrompt(cfg.Prompt, cfg.TargetSubdir, repos)
 	codexBasePrompt = withPromptImagePaths(codexBasePrompt, imageArgs)
-	if reviewPrompt, err := h.prepareReviewPrompt(ctx, runCfg, repos, codexBasePrompt); err != nil {
+	var reviewContext *preparedReviewContext
+	if reviewPrompt, preparedContext, err := h.prepareReviewPrompt(ctx, runCfg, repos, codexBasePrompt); err != nil {
 		return h.fail(ExitPR, "review", err, runDir)
 	} else {
 		codexBasePrompt = reviewPrompt
+		reviewContext = preparedContext
 	}
 	codexTargetLabel := codexTargetLabel(cfg.TargetSubdir, len(repos) > 1)
 
@@ -326,9 +331,15 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		}
 		repos[i].Branch = pickFirstNonEmpty(localBranchFromStatus(statusRes.Stdout), repos[i].Branch)
 		syncRepoPublishHeadRef(&repos[i])
-		changed, detectErr := h.repoHasPendingChanges(ctx, repos[i], statusRes.Stdout)
-		if detectErr != nil {
-			return h.fail(ExitGit, "git", detectErr, runDir)
+		var changed bool
+		if reviewRun {
+			changed = hasTrackedWorktreeChanges(statusRes.Stdout)
+		} else {
+			detected, detectErr := h.repoHasPendingChanges(ctx, repos[i], statusRes.Stdout)
+			if detectErr != nil {
+				return h.fail(ExitGit, "git", detectErr, runDir)
+			}
+			changed = detected
 		}
 		repos[i].Changed = changed
 		h.logf("stage=git status=scan repo=%s repo_dir=%s changed=%t", repos[i].URL, repos[i].RelDir, repos[i].Changed)
@@ -339,6 +350,22 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		if repo.Changed {
 			changedCount++
 		}
+	}
+	if reviewRun {
+		if changedCount > 0 {
+			return h.fail(
+				ExitCodex,
+				agentStage,
+				fmt.Errorf("review task modified files; review tasks must be read-only"),
+				runDir,
+			)
+		}
+		if err := h.completeReviewRun(ctx, runCfg, &repos[0], reviewContext, agentRes, runDir); err != nil {
+			return h.failWithRepos(ExitPR, "review", err, runDir, repos)
+		}
+		res := buildResult(runDir, repos, true)
+		res.ExitCode = ExitSuccess
+		return res
 	}
 	if changedCount == 0 {
 		if agentOutputClaimsFileChanges(agentRes) {
@@ -2073,29 +2100,29 @@ func (h Harness) prepareReviewPrompt(
 	cfg config.Config,
 	repos []repoWorkspace,
 	basePrompt string,
-) (string, error) {
+) (string, *preparedReviewContext, error) {
 	if cfg.Review == nil {
-		return basePrompt, nil
+		return basePrompt, nil, nil
 	}
 	if len(repos) != 1 {
-		return "", fmt.Errorf("review tasks support exactly one repository")
+		return "", nil, fmt.Errorf("review tasks support exactly one repository")
 	}
 
 	repo := repos[0]
 	h.logf("stage=review status=start repo=%s repo_dir=%s", repo.URL, repo.RelDir)
 	reviewContext, err := h.buildReviewPromptContext(ctx, repo, *cfg.Review)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	h.logf("stage=review status=ok repo=%s repo_dir=%s", repo.URL, repo.RelDir)
 
-	if strings.TrimSpace(reviewContext) == "" {
-		return basePrompt, nil
+	if strings.TrimSpace(reviewContext.Prompt) == "" {
+		return basePrompt, reviewContext, nil
 	}
 	if strings.TrimSpace(basePrompt) == "" {
-		return reviewContext, nil
+		return reviewContext.Prompt, reviewContext, nil
 	}
-	return strings.TrimSpace(basePrompt + "\n\n" + reviewContext), nil
+	return strings.TrimSpace(basePrompt + "\n\n" + reviewContext.Prompt), reviewContext, nil
 }
 
 func withAgentsPrompt(prompt, agentsPath string) string {
@@ -2127,47 +2154,54 @@ type reviewPRMetadata struct {
 	IsDraft     bool   `json:"isDraft"`
 	BaseRefName string `json:"baseRefName"`
 	HeadRefName string `json:"headRefName"`
+	HeadRefOID  string `json:"headRefOid"`
 	Author      struct {
 		Login string `json:"login"`
 	} `json:"author"`
+}
+
+type preparedReviewContext struct {
+	Selector string
+	Metadata reviewPRMetadata
+	Prompt   string
 }
 
 func (h Harness) buildReviewPromptContext(
 	ctx context.Context,
 	repo repoWorkspace,
 	reviewCfg config.ReviewConfig,
-) (string, error) {
+) (*preparedReviewContext, error) {
 	selector := reviewSelector(reviewCfg)
 	if selector == "" {
-		return "", fmt.Errorf("review selector is required")
+		return nil, fmt.Errorf("review selector is required")
 	}
 
 	metaRes, err := h.runCommand(ctx, "review", prReviewMetadataCommand(repo.Dir, selector))
 	if err != nil {
-		return "", fmt.Errorf("load pull request metadata: %w", err)
+		return nil, fmt.Errorf("load pull request metadata: %w", err)
 	}
 
 	var metadata reviewPRMetadata
 	if err := json.Unmarshal([]byte(strings.TrimSpace(metaRes.Stdout)), &metadata); err != nil {
-		return "", fmt.Errorf("decode pull request metadata: %w", err)
+		return nil, fmt.Errorf("decode pull request metadata: %w", err)
 	}
 	if metadata.Number <= 0 {
-		return "", fmt.Errorf("pull request metadata did not include a valid number")
+		return nil, fmt.Errorf("pull request metadata did not include a valid number")
 	}
 	if strings.TrimSpace(metadata.BaseRefName) == "" {
-		return "", fmt.Errorf("pull request metadata did not include a base branch")
+		return nil, fmt.Errorf("pull request metadata did not include a base branch")
 	}
 
 	if _, err := h.runCommand(ctx, "review", fetchRemoteBranchCommand(repo.Dir, metadata.BaseRefName)); err != nil {
-		return "", fmt.Errorf("fetch pull request base branch %q: %w", metadata.BaseRefName, err)
+		return nil, fmt.Errorf("fetch pull request base branch %q: %w", metadata.BaseRefName, err)
 	}
 	if _, err := h.runCommand(ctx, "review", fetchPullRequestHeadCommand(repo.Dir, metadata.Number)); err != nil {
-		return "", fmt.Errorf("fetch pull request head for #%d: %w", metadata.Number, err)
+		return nil, fmt.Errorf("fetch pull request head for #%d: %w", metadata.Number, err)
 	}
 
 	commentsRes, err := h.runCommand(ctx, "review", prReviewCommentsCommand(repo.Dir, selector))
 	if err != nil {
-		return "", fmt.Errorf("load pull request comments: %w", err)
+		return nil, fmt.Errorf("load pull request comments: %w", err)
 	}
 
 	baseRef := remoteTrackingRef(metadata.BaseRefName)
@@ -2175,16 +2209,16 @@ func (h Harness) buildReviewPromptContext(
 
 	diffStatRes, err := h.runCommand(ctx, "review", reviewDiffStatCommand(repo.Dir, baseRef, headRef))
 	if err != nil {
-		return "", fmt.Errorf("summarize pull request diff: %w", err)
+		return nil, fmt.Errorf("summarize pull request diff: %w", err)
 	}
 	diffPatchRes, err := h.runCommand(ctx, "review", reviewDiffPatchCommand(repo.Dir, baseRef, headRef))
 	if err != nil {
-		return "", fmt.Errorf("load pull request diff: %w", err)
+		return nil, fmt.Errorf("load pull request diff: %w", err)
 	}
 
 	metadataJSON, err := json.MarshalIndent(metadata, "", "  ")
 	if err != nil {
-		return "", fmt.Errorf("encode pull request metadata: %w", err)
+		return nil, fmt.Errorf("encode pull request metadata: %w", err)
 	}
 
 	var b strings.Builder
@@ -2194,6 +2228,12 @@ func (h Harness) buildReviewPromptContext(
 	b.WriteString(fmt.Sprintf("- Pull request URL: %s\n", pickFirstNonEmpty(metadata.URL, reviewCfg.PRURL)))
 	b.WriteString(fmt.Sprintf("- Base branch: %s\n", metadata.BaseRefName))
 	b.WriteString(fmt.Sprintf("- Head branch: %s\n", pickFirstNonEmpty(metadata.HeadRefName, reviewCfg.HeadBranch)))
+	if trigger := strings.TrimSpace(reviewCfg.Trigger); trigger != "" {
+		b.WriteString(fmt.Sprintf("- Review trigger: %s\n", trigger))
+	}
+	if reviewer := strings.TrimSpace(reviewCfg.RequestedReviewer); reviewer != "" {
+		b.WriteString(fmt.Sprintf("- Verified requested reviewer: %s\n", reviewer))
+	}
 	b.WriteString("- Existing PR discussion has already been fetched for you below.\n")
 	b.WriteString("- The git diff below was generated locally after fetching the PR head and base refs.\n")
 	b.WriteString("- Treat this prepared context as a starting point and verify important claims yourself before concluding.\n\n")
@@ -2209,7 +2249,372 @@ func (h Harness) buildReviewPromptContext(
 	b.WriteString("Local git diff patch:\n```diff\n")
 	b.WriteString(truncateForPrompt(nonEmptyOrDefault(diffPatchRes.Stdout, "No diff patch output was returned by git diff."), maxReviewDiffPatchChars))
 	b.WriteString("\n```")
-	return strings.TrimSpace(b.String()), nil
+	return &preparedReviewContext{
+		Selector: selector,
+		Metadata: metadata,
+		Prompt:   strings.TrimSpace(b.String()),
+	}, nil
+}
+
+type reviewFinding struct {
+	Severity string `json:"severity"`
+	Path     string `json:"path"`
+	Line     int    `json:"line"`
+	Title    string `json:"title"`
+}
+
+type reviewOutcome struct {
+	Status     string          `json:"status"`
+	MergeReady bool            `json:"mergeReady"`
+	Summary    string          `json:"summary"`
+	Positives  []string        `json:"positives"`
+	Findings   []reviewFinding `json:"findings"`
+}
+
+func (h Harness) completeReviewRun(
+	ctx context.Context,
+	cfg config.Config,
+	repo *repoWorkspace,
+	reviewContext *preparedReviewContext,
+	agentRes execx.Result,
+	runDir string,
+) error {
+	if repo == nil {
+		return fmt.Errorf("repo workspace is required")
+	}
+	if cfg.Review == nil {
+		return fmt.Errorf("review config is required")
+	}
+
+	selector := reviewSelector(*cfg.Review)
+	var metadata reviewPRMetadata
+	if reviewContext != nil {
+		selector = pickFirstNonEmpty(reviewContext.Selector, selector)
+		metadata = reviewContext.Metadata
+	}
+	if selector == "" {
+		return fmt.Errorf("review selector is required")
+	}
+
+	prURL := pickFirstNonEmpty(metadata.URL, cfg.Review.PRURL)
+	repo.PRURL = prURL
+	if head := strings.TrimSpace(metadata.HeadRefName); head != "" {
+		repo.Branch = head
+	}
+
+	outcome, outcomeOK := parseReviewOutcome(reviewOutputText(agentRes))
+	if reviewWritebackMode(cfg.Review.Writeback) == "summary-comment" {
+		body := reviewCommentBody(agentRes, outcome, outcomeOK)
+		bodyPath := reviewSummaryBodyPath(runDir, metadata.Number)
+		if err := h.writeWorkspaceFile(bodyPath, []byte(body), 0o600); err != nil {
+			return fmt.Errorf("write review summary body: %w", err)
+		}
+		h.logf("stage=review status=start action=comment pr_url=%s", prURL)
+		if _, err := h.runCommand(ctx, "review", prReviewSummaryCommand(repo.Dir, selector, bodyPath)); err != nil {
+			return fmt.Errorf("post pull request review summary: %w", err)
+		}
+		h.logf("stage=review status=ok action=comment pr_url=%s", prURL)
+	}
+
+	if cfg.Review.AutoMerge {
+		if err := h.autoMergeCleanReview(ctx, *repo, selector, cfg.Review.MergeMethod, metadata, outcome); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h Harness) autoMergeCleanReview(
+	ctx context.Context,
+	repo repoWorkspace,
+	selector string,
+	mergeMethod string,
+	metadata reviewPRMetadata,
+	outcome reviewOutcome,
+) error {
+	if !reviewOutcomeAllowsAutoMerge(outcome) {
+		h.logf("stage=review status=skip action=auto_merge reason=review_not_clean pr_url=%s status=%s", metadata.URL, outcome.Status)
+		return nil
+	}
+	if !strings.EqualFold(strings.TrimSpace(metadata.State), "OPEN") {
+		h.logf("stage=review status=skip action=auto_merge reason=pr_not_open pr_url=%s state=%s", metadata.URL, metadata.State)
+		return nil
+	}
+	if metadata.IsDraft {
+		h.logf("stage=review status=skip action=auto_merge reason=draft pr_url=%s", metadata.URL)
+		return nil
+	}
+	headRefOID := strings.TrimSpace(metadata.HeadRefOID)
+	if headRefOID == "" {
+		h.logf("stage=review status=skip action=auto_merge reason=missing_head_ref_oid pr_url=%s", metadata.URL)
+		return nil
+	}
+
+	method := reviewMergeMethod(mergeMethod)
+	h.logf("stage=review status=start action=auto_merge method=%s pr_url=%s", method, metadata.URL)
+	if _, err := h.runCommand(ctx, "review", prMergeAutoCommand(repo.Dir, selector, method, headRefOID)); err != nil {
+		return fmt.Errorf("enable clean-review auto-merge: %w", err)
+	}
+	h.logf("stage=review status=ok action=auto_merge method=%s pr_url=%s", method, metadata.URL)
+	return nil
+}
+
+func (h Harness) writeWorkspaceFile(path string, data []byte, perm os.FileMode) error {
+	writeFile := h.Workspace.WriteFile
+	if writeFile == nil {
+		writeFile = os.WriteFile
+	}
+	return writeFile(path, data, perm)
+}
+
+func reviewWritebackMode(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "summary", "comment", "summary-comment":
+		return "summary-comment"
+	case "off", "none", "disabled":
+		return "off"
+	default:
+		return strings.ToLower(strings.TrimSpace(value))
+	}
+}
+
+func reviewMergeMethod(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "merge", "rebase":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return "squash"
+	}
+}
+
+func reviewOutputText(res execx.Result) string {
+	stdout := strings.TrimSpace(res.Stdout)
+	stderr := strings.TrimSpace(res.Stderr)
+	switch {
+	case stdout != "" && stderr != "":
+		return strings.TrimSpace(stdout + "\n\n" + stderr)
+	case stdout != "":
+		return stdout
+	default:
+		return stderr
+	}
+}
+
+func reviewCommentBody(res execx.Result, outcome reviewOutcome, outcomeOK bool) string {
+	if outcomeOK {
+		return truncateReviewCommentBody(conciseReviewCommentBody(outcome))
+	}
+
+	body := strings.TrimSpace(stripReviewOutcomeJSON(reviewOutputText(res)))
+	if body == "" {
+		body = strings.TrimSpace(outcome.Summary)
+	}
+	if body == "" {
+		if reviewOutcomeAllowsAutoMerge(outcome) {
+			body = "Review completed. No material issues were found."
+		} else {
+			body = "Review completed, but no review summary was returned by the agent."
+		}
+	}
+	return truncateReviewCommentBody(body)
+}
+
+func conciseReviewCommentBody(outcome reviewOutcome) string {
+	positives := normalizeReviewCommentPoints(outcome.Positives, 3)
+	if len(positives) == 0 {
+		if reviewOutcomeAllowsAutoMerge(outcome) || (strings.EqualFold(outcome.Status, "clean") && len(outcome.Findings) == 0) {
+			positives = []string{"No material issues found."}
+		} else if summary := cleanReviewCommentPoint(outcome.Summary); summary != "" {
+			positives = []string{summary}
+		} else {
+			positives = []string{"Review completed."}
+		}
+	}
+
+	negatives := reviewFindingPoints(outcome.Findings, 6)
+	if len(negatives) == 0 {
+		if strings.EqualFold(outcome.Status, "blocked") && strings.TrimSpace(outcome.Summary) != "" {
+			negatives = []string{cleanReviewCommentPoint(outcome.Summary)}
+		} else {
+			negatives = []string{"No material issues found."}
+		}
+	}
+
+	var b strings.Builder
+	b.WriteString("**Positive**\n")
+	writeReviewCommentBullets(&b, positives)
+	b.WriteString("\n**Negative**\n")
+	writeReviewCommentBullets(&b, negatives)
+	return strings.TrimSpace(b.String())
+}
+
+func writeReviewCommentBullets(b *strings.Builder, points []string) {
+	for _, point := range points {
+		point = cleanReviewCommentPoint(point)
+		if point == "" {
+			continue
+		}
+		b.WriteString("- ")
+		b.WriteString(point)
+		b.WriteString("\n")
+	}
+}
+
+func normalizeReviewCommentPoints(points []string, limit int) []string {
+	if limit <= 0 {
+		return nil
+	}
+	out := make([]string, 0, min(len(points), limit))
+	for _, point := range points {
+		point = cleanReviewCommentPoint(point)
+		if point == "" {
+			continue
+		}
+		out = append(out, point)
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out
+}
+
+func reviewFindingPoints(findings []reviewFinding, limit int) []string {
+	if limit <= 0 {
+		return nil
+	}
+	out := make([]string, 0, min(len(findings), limit))
+	for _, finding := range findings {
+		point := cleanReviewCommentPoint(reviewFindingPoint(finding))
+		if point == "" {
+			continue
+		}
+		out = append(out, point)
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out
+}
+
+func reviewFindingPoint(finding reviewFinding) string {
+	title := cleanReviewCommentPoint(finding.Title)
+	if title == "" {
+		return ""
+	}
+	severity := strings.TrimSpace(finding.Severity)
+	if severity == "" {
+		severity = "Finding"
+	}
+	location := strings.TrimSpace(finding.Path)
+	if location != "" && finding.Line > 0 {
+		location = fmt.Sprintf("%s:%d", location, finding.Line)
+	}
+	if location == "" {
+		return fmt.Sprintf("[%s] %s", severity, title)
+	}
+	return fmt.Sprintf("[%s] %s - %s", severity, location, title)
+}
+
+func cleanReviewCommentPoint(point string) string {
+	point = strings.TrimSpace(point)
+	point = strings.TrimLeft(point, "-* \t")
+	point = strings.Join(strings.Fields(point), " ")
+	const maxPointChars = 220
+	if len(point) <= maxPointChars {
+		return point
+	}
+	return strings.TrimSpace(point[:maxPointChars-3]) + "..."
+}
+
+const maxReviewCommentBodyChars = 60000
+
+func truncateReviewCommentBody(body string) string {
+	body = strings.TrimSpace(body)
+	if len(body) <= maxReviewCommentBodyChars {
+		return body
+	}
+	return strings.TrimSpace(body[:maxReviewCommentBodyChars]) + "\n\n...(truncated)"
+}
+
+func reviewSummaryBodyPath(runDir string, prNumber int) string {
+	if prNumber > 0 {
+		return filepath.Join(runDir, fmt.Sprintf("review-summary-pr-%d.md", prNumber))
+	}
+	return filepath.Join(runDir, "review-summary.md")
+}
+
+var fencedJSONBlockPattern = regexp.MustCompile("(?s)```(?:json)?\\s*(\\{.*?\\})\\s*```")
+
+func parseReviewOutcome(text string) (reviewOutcome, bool) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return reviewOutcome{}, false
+	}
+	matches := fencedJSONBlockPattern.FindAllStringSubmatch(text, -1)
+	for i := len(matches) - 1; i >= 0; i-- {
+		if len(matches[i]) < 2 {
+			continue
+		}
+		if outcome, ok := parseReviewOutcomeJSON(matches[i][1]); ok {
+			return outcome, true
+		}
+	}
+	if start := strings.LastIndex(text, "{"); start >= 0 {
+		if outcome, ok := parseReviewOutcomeJSON(text[start:]); ok {
+			return outcome, true
+		}
+	}
+	return reviewOutcome{}, false
+}
+
+func parseReviewOutcomeJSON(raw string) (reviewOutcome, bool) {
+	var outcome reviewOutcome
+	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &outcome); err != nil {
+		return reviewOutcome{}, false
+	}
+	if strings.TrimSpace(outcome.Status) == "" && !outcome.MergeReady && strings.TrimSpace(outcome.Summary) == "" && len(outcome.Positives) == 0 && len(outcome.Findings) == 0 {
+		return reviewOutcome{}, false
+	}
+	outcome.Status = strings.ToLower(strings.TrimSpace(outcome.Status))
+	outcome.Positives = normalizeReviewCommentPoints(outcome.Positives, 3)
+	return outcome, true
+}
+
+func stripReviewOutcomeJSON(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	matches := fencedJSONBlockPattern.FindAllStringSubmatchIndex(text, -1)
+	for i := len(matches) - 1; i >= 0; i-- {
+		match := matches[i]
+		if len(match) < 4 {
+			continue
+		}
+		if _, ok := parseReviewOutcomeJSON(text[match[2]:match[3]]); !ok {
+			continue
+		}
+		return strings.TrimSpace(text[:match[0]] + text[match[1]:])
+	}
+	return text
+}
+
+func reviewOutcomeAllowsAutoMerge(outcome reviewOutcome) bool {
+	if !outcome.MergeReady {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(outcome.Status)) {
+	case "clean", "merge-ready", "merge_ready":
+	default:
+		return false
+	}
+	for _, finding := range outcome.Findings {
+		switch strings.ToLower(strings.TrimSpace(finding.Severity)) {
+		case "critical", "high", "medium":
+			return false
+		}
+	}
+	return true
 }
 
 func repoWorkspaceDirName(repoURL string, index, total int) string {
@@ -2235,7 +2640,7 @@ func prReviewMetadataCommand(repoDir, selector string) execx.Command {
 		Name: "gh",
 		Args: []string{
 			"pr", "view", selector,
-			"--json", "number,title,body,url,state,isDraft,baseRefName,headRefName,author",
+			"--json", "number,title,body,url,state,isDraft,baseRefName,headRefName,headRefOid,author",
 		},
 	}
 }
@@ -2245,6 +2650,31 @@ func prReviewCommentsCommand(repoDir, selector string) execx.Command {
 		Dir:  repoDir,
 		Name: "gh",
 		Args: []string{"pr", "view", selector, "--comments"},
+	}
+}
+
+func prReviewSummaryCommand(repoDir, selector, bodyFile string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: []string{"pr", "review", selector, "--comment", "--body-file", bodyFile},
+	}
+}
+
+func prMergeAutoCommand(repoDir, selector, method, headRefOID string) execx.Command {
+	args := []string{"pr", "merge", selector, "--auto", "--match-head-commit", headRefOID}
+	switch reviewMergeMethod(method) {
+	case "merge":
+		args = append(args, "--merge")
+	case "rebase":
+		args = append(args, "--rebase")
+	default:
+		args = append(args, "--squash")
+	}
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: args,
 	}
 }
 

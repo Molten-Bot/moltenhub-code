@@ -154,6 +154,11 @@ type DashboardStats struct {
 	MaxConcurrentTasks     int               `json:"max_concurrent_tasks"`
 	SessionRuntimeSeconds  float64           `json:"session_runtime_seconds"`
 	TotalSavedSeconds      float64           `json:"total_saved_seconds"`
+	ReviewTasks            int               `json:"review_tasks"`
+	ReviewActiveTasks      int               `json:"review_active_tasks"`
+	ReviewCompletedTasks   int               `json:"review_completed_tasks"`
+	ReviewFailedTasks      int               `json:"review_failed_tasks"`
+	ReviewSavedSeconds     float64           `json:"review_saved_seconds"`
 	SuccessRate            float64           `json:"success_rate"`
 	AverageDurationSeconds float64           `json:"average_duration_seconds"`
 	VelocityPerHour        float64           `json:"velocity_per_hour"`
@@ -829,17 +834,32 @@ func (b *Broker) dashboardStatsLocked(now time.Time, tasks []*taskState) Dashboa
 		} else if isFailedTaskStatus(status) {
 			stats.FailedTasks++
 		}
+		reviewAttempt := isReviewTaskAttempt(attempt)
+		if reviewAttempt {
+			stats.ReviewTasks++
+			if isActiveTaskStatus(status) {
+				stats.ReviewActiveTasks++
+			}
+			if isSuccessfulTaskStatus(status) {
+				stats.ReviewCompletedTasks++
+			}
+			if isFailedTaskStatus(status) {
+				stats.ReviewFailedTasks++
+			}
+		}
 		if isCompletedTaskStatus(status) && !startedAt.IsZero() && !updatedAt.IsZero() && !updatedAt.Before(startedAt) {
 			duration := updatedAt.Sub(startedAt)
 			totalDuration += duration
 			durationCount++
-			if isSuccessfulTaskStatus(status) {
-				stats.TotalSavedSeconds += duration.Seconds()
-			}
 		}
 		duration := taskDuration(startedAt, updatedAt, now, status)
-		addTimeStatsGroup(workflowGroups, workflowStatsGroupName(attempt.Workflow), status, duration)
-		addTimeStatsGroup(agentGroups, normalizedGroupName(attempt.Agent, "Unknown Agent"), status, duration)
+		savedDuration := savedDurationForAttempt(attempt, status, duration)
+		stats.TotalSavedSeconds += savedDuration.Seconds()
+		if reviewAttempt {
+			stats.ReviewSavedSeconds += savedDuration.Seconds()
+		}
+		addTimeStatsGroupWithSavedDuration(workflowGroups, workflowStatsGroupName(attempt.Workflow), status, duration, savedDuration)
+		addTimeStatsGroupWithSavedDuration(agentGroups, normalizedGroupName(attempt.Agent, "Unknown Agent"), status, duration, savedDuration)
 		addCountStatsGroup(sourceGroups, sourceGroupName(attempt.Source), status)
 	}
 	for _, repo := range b.repositories {
@@ -896,6 +916,31 @@ func isFailedTaskStatus(status string) bool {
 	default:
 		return false
 	}
+}
+
+func isReviewTaskAttempt(attempt taskAttemptState) bool {
+	if normalizeTaskSource(attempt.Source) == "review" {
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(attempt.Workflow)) {
+	case "code-review", "code_review", "pull request code review":
+		return true
+	default:
+		return false
+	}
+}
+
+func savedDurationForAttempt(attempt taskAttemptState, status string, duration time.Duration) time.Duration {
+	if duration <= 0 {
+		return 0
+	}
+	if isSuccessfulTaskStatus(status) {
+		return duration
+	}
+	if isReviewTaskAttempt(attempt) && isActiveTaskStatus(status) {
+		return duration
+	}
+	return 0
 }
 
 func taskDuration(startedAt, updatedAt, now time.Time, status string) time.Duration {
@@ -1075,11 +1120,11 @@ func addRepositoryAttemptStats(stats *RepositoryStats, attempt taskAttemptState,
 	}
 	if isSuccessfulTaskStatus(status) {
 		stats.CompletedTasks++
-		stats.TotalSavedSeconds += duration.Seconds()
 	}
 	if isFailedTaskStatus(status) {
 		stats.FailedTasks++
 	}
+	stats.TotalSavedSeconds += savedDurationForAttempt(attempt, status, duration).Seconds()
 	stats.TotalDurationSeconds += duration.Seconds()
 	completed := stats.TotalTasks - stats.ActiveTasks
 	if completed > 0 {
@@ -1128,6 +1173,14 @@ func libraryTaskDisplayNameByName(name string) string {
 }
 
 func addTimeStatsGroup(groups map[string]*TimeStatsGroup, name, status string, duration time.Duration) {
+	savedDuration := time.Duration(0)
+	if isSuccessfulTaskStatus(status) {
+		savedDuration = duration
+	}
+	addTimeStatsGroupWithSavedDuration(groups, name, status, duration, savedDuration)
+}
+
+func addTimeStatsGroupWithSavedDuration(groups map[string]*TimeStatsGroup, name, status string, duration, savedDuration time.Duration) {
 	if groups == nil {
 		return
 	}
@@ -1143,8 +1196,8 @@ func addTimeStatsGroup(groups map[string]*TimeStatsGroup, name, status string, d
 	}
 	if isSuccessfulTaskStatus(status) {
 		group.CompletedTasks++
-		group.TotalSavedSeconds += duration.Seconds()
 	}
+	group.TotalSavedSeconds += savedDuration.Seconds()
 	group.TotalDurationSeconds += duration.Seconds()
 	completed := group.Tasks - group.ActiveTasks
 	if completed > 0 {
@@ -1224,6 +1277,8 @@ func sourceGroupName(source string) string {
 		return "JSON"
 	case "library":
 		return "Library"
+	case "review":
+		return "Review"
 	case "prompt":
 		return "Prompt"
 	default:
@@ -2550,6 +2605,8 @@ func normalizeTaskSource(source string) string {
 		return "prompt"
 	case "library", "library_task", "librarytask":
 		return "library"
+	case "review", "code_review", "pull_request_review", "pr_review":
+		return "review"
 	case "json", "raw":
 		return "json"
 	default:

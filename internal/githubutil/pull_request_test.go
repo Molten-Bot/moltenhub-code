@@ -36,3 +36,37 @@ func TestPullRequestSelectorLeavesNonPRSelectorsUntouched(t *testing.T) {
 		}
 	}
 }
+
+func TestPullRequestRepositoryExtractsOwnerRepoForGitHubPRURLs(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]string{
+		"https://github.com/acme/repo/pull/42":             "acme/repo",
+		"https://github.com/acme/repo/pull/42/files":       "acme/repo",
+		"https://www.github.com/acme/repo/pull/42?foo=bar": "acme/repo",
+	}
+	for raw, want := range tests {
+		if got := PullRequestRepository(raw); got != want {
+			t.Fatalf("PullRequestRepository(%q) = %q, want %q", raw, got, want)
+		}
+	}
+}
+
+func TestPullRequestRepositoryLeavesNonPRSelectorsEmpty(t *testing.T) {
+	t.Parallel()
+
+	tests := []string{
+		"",
+		"17",
+		"feature/my-branch",
+		"https://github.com/acme/repo",
+		"https://github.com/acme/repo/pull/0",
+		"https://github.com/acme/repo/pull/not-a-number",
+		"https://example.com/acme/repo/42",
+	}
+	for _, raw := range tests {
+		if got := PullRequestRepository(raw); got != "" {
+			t.Fatalf("PullRequestRepository(%q) = %q, want empty", raw, got)
+		}
+	}
+}

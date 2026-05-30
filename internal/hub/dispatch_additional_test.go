@@ -85,14 +85,47 @@ func TestNormalizeRunConfigMapAppliesCodeReviewSkillDefaults(t *testing.T) {
 	if got, want := stringAt(review, "headBranch"), "review-branch"; got != want {
 		t.Fatalf("review.headBranch = %q, want %q", got, want)
 	}
+	if got, want := stringAt(review, "trigger"), "hub"; got != want {
+		t.Fatalf("review.trigger = %q, want %q", got, want)
+	}
 
-	normalized, err = normalizeRunConfigMap(`{"repo":"git@github.com:acme/repo.git","prNumber":123}`, "code_review")
+	normalized, err = normalizeRunConfigMap(`{"repo":"git@github.com:acme/repo.git","prNumber":123,"review.writeback":"summary-comment","review.automerge":true,"review.mergemethod":"squash"}`, "code_review")
 	if err != nil {
 		t.Fatalf("normalizeRunConfigMap(code_review prNumber) error = %v", err)
 	}
 	review, _ = normalized["review"].(map[string]any)
 	if got, ok := positiveIntValue(review["prNumber"]); !ok || got != 123 {
 		t.Fatalf("review.prNumber = %#v, want 123", review["prNumber"])
+	}
+	if got, want := stringAt(review, "writeback"), "summary-comment"; got != want {
+		t.Fatalf("review.writeback = %q, want %q", got, want)
+	}
+	if got, want := review["autoMerge"], true; got != want {
+		t.Fatalf("review.autoMerge = %#v, want %#v", got, want)
+	}
+	if got, want := stringAt(review, "mergeMethod"), "squash"; got != want {
+		t.Fatalf("review.mergeMethod = %q, want %q", got, want)
+	}
+
+	normalized, err = normalizeRunConfigMap(`{"repo":"git@github.com:acme/repo.git","prurl":"https://github.com/acme/repo/pull/55","review.notificationthreadid":"thread-55","review.requestedreviewer":"octocat","review.requirerequestedreviewer":true,"review.trigger":"github-notification"}`, "code_review")
+	if err != nil {
+		t.Fatalf("normalizeRunConfigMap(code_review prurl) error = %v", err)
+	}
+	review, _ = normalized["review"].(map[string]any)
+	if got, want := stringAt(review, "prUrl"), "https://github.com/acme/repo/pull/55"; got != want {
+		t.Fatalf("review.prUrl = %q, want %q", got, want)
+	}
+	if got, want := stringAt(review, "notificationThreadId"), "thread-55"; got != want {
+		t.Fatalf("review.notificationThreadId = %q, want %q", got, want)
+	}
+	if got, want := stringAt(review, "requestedReviewer"), "octocat"; got != want {
+		t.Fatalf("review.requestedReviewer = %q, want %q", got, want)
+	}
+	if got, want := review["requireRequestedReviewer"], true; got != want {
+		t.Fatalf("review.requireRequestedReviewer = %#v, want %#v", got, want)
+	}
+	if got, want := stringAt(review, "trigger"), "github-notification"; got != want {
+		t.Fatalf("review.trigger = %q, want %q", got, want)
 	}
 
 	if _, err := normalizeRunConfigMap(`{"repo":"git@github.com:acme/repo.git","prompt":"x"}`, "code_review"); err == nil || !strings.Contains(err.Error(), "does not accept prompt") {
@@ -561,6 +594,9 @@ func TestParseSkillDispatchAcceptsHubNormalizedReviewParameters(t *testing.T) {
 	}
 	if got, want := dispatch.Config.Review.PRNumber, 42; got != want {
 		t.Fatalf("Review.PRNumber = %d, want %d", got, want)
+	}
+	if got, want := dispatch.Config.Review.Trigger, "hub"; got != want {
+		t.Fatalf("Review.Trigger = %q, want %q", got, want)
 	}
 	if got, want := dispatch.Config.ResponseMode, "off"; got != want {
 		t.Fatalf("ResponseMode = %q, want %q", got, want)

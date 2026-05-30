@@ -614,7 +614,6 @@ func TestRunBuildsReviewContextBeforeInvokingCodex(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-review-the-pull-request"
 	metadataJSON := `{"number":42,"title":"Improve tests","body":"Adds stronger coverage.","url":"https://github.com/acme/repo/pull/42","state":"OPEN","isDraft":false,"baseRefName":"main","headRefName":"feature/improve-tests","author":{"login":"octocat"}}`
 	commentsText := "reviewer: Please add one more regression test."
 	diffStat := " internal/service_test.go | 12 ++++++++++++\n 1 file changed, 12 insertions(+)"
@@ -626,8 +625,6 @@ func TestRunBuildsReviewContextBeforeInvokingCodex(t *testing.T) {
 		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
-		{cmd: branchCommand(repoDir, branch)},
-		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: prReviewMetadataCommand(repoDir, "42"), res: execx.Result{Stdout: metadataJSON}},
 		{cmd: fetchRemoteBranchCommand(repoDir, "main")},
 		{cmd: fetchPullRequestHeadCommand(repoDir, 42)},
@@ -635,12 +632,8 @@ func TestRunBuildsReviewContextBeforeInvokingCodex(t *testing.T) {
 		{cmd: reviewDiffStatCommand(repoDir, remoteTrackingRef("main"), pullRequestTrackingRef(42)), res: execx.Result{Stdout: diffStat}},
 		{cmd: reviewDiffPatchCommand(repoDir, remoteTrackingRef("main"), pullRequestTrackingRef(42)), res: execx.Result{Stdout: diffPatch}},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(strings.TrimSpace(cfg.Prompt+"\n\n"+expectedPreparedReviewContext(repoURLFromConfig(cfg), metadataJSON, commentsText, diffStat, diffPatch)), agentsPath))},
-		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M docs/reviews/pr-42.md\n"}},
-		{cmd: addCommand(repoDir)},
-		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
-		{cmd: pushCommand(repoDir, branch)},
-		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: "https://github.com/acme/repo/pull/43\n"}},
-		{cmd: prChecksCommand(repoDir, "https://github.com/acme/repo/pull/43")},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## main\n"}},
+		{cmd: prReviewSummaryCommand(repoDir, "42", reviewSummaryBodyPath(runDir, 42))},
 	}}
 
 	h := New(fake)
@@ -654,6 +647,12 @@ func TestRunBuildsReviewContextBeforeInvokingCodex(t *testing.T) {
 	}
 	if res.ExitCode != ExitSuccess {
 		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if !res.NoChanges {
+		t.Fatal("NoChanges = false, want true for review-only run")
+	}
+	if got, want := res.PRURL, "https://github.com/acme/repo/pull/42"; got != want {
+		t.Fatalf("PRURL = %q, want %q", got, want)
 	}
 	if len(fake.exps) != 0 {
 		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
@@ -666,7 +665,7 @@ func TestRunBuildsReviewContextFromHeadBranchSelector(t *testing.T) {
 	cfg := sampleConfig()
 	cfg.Prompt = "Review the pull request"
 	cfg.PRBody = "Proposed changes from Molten.Bot\n\nThis PR implements the requested changes described below.\nBuilt using AI-assisted engineering and reviewed before submission.\nOnly relevant files were modified.\n\nAutomated by MoltenHub Code\n\nOriginal task prompt:\n```text\nReview the pull request\n```\n\nCurious how this was built? See how AI agents can help with your own projects: [MoltenBot Code](https://molten.bot/code?source=pr)"
-	cfg.Review = &config.ReviewConfig{HeadBranch: "feature/improve-tests"}
+	cfg.Review = &config.ReviewConfig{HeadBranch: "feature/improve-tests", AutoMerge: true, MergeMethod: "squash"}
 
 	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
 	guid := "abcdef123456"
@@ -674,11 +673,11 @@ func TestRunBuildsReviewContextFromHeadBranchSelector(t *testing.T) {
 	agentsPath := filepath.Join(runDir, "AGENTS.md")
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
-	branch := "moltenhub-review-the-pull-request"
-	metadataJSON := `{"number":42,"title":"Improve tests","body":"Adds stronger coverage.","url":"https://github.com/acme/repo/pull/42","state":"OPEN","isDraft":false,"baseRefName":"main","headRefName":"feature/improve-tests","author":{"login":"octocat"}}`
+	metadataJSON := `{"number":42,"title":"Improve tests","body":"Adds stronger coverage.","url":"https://github.com/acme/repo/pull/42","state":"OPEN","isDraft":false,"baseRefName":"main","headRefName":"feature/improve-tests","headRefOid":"abc123","author":{"login":"octocat"}}`
 	commentsText := "reviewer: Please add one more regression test."
 	diffStat := " internal/service_test.go | 12 ++++++++++++\n 1 file changed, 12 insertions(+)"
 	diffPatch := "diff --git a/internal/service_test.go b/internal/service_test.go\n+func TestServiceRegression(t *testing.T) {}\n"
+	reviewOutput := "No material issues found.\n\n```json\n{\"status\":\"clean\",\"mergeReady\":true,\"summary\":\"No material issues found.\",\"findings\":[]}\n```"
 
 	fake := &fakeRunner{t: t, exps: []expectedRun{
 		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
@@ -686,21 +685,16 @@ func TestRunBuildsReviewContextFromHeadBranchSelector(t *testing.T) {
 		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
 		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
 		{cmd: cloneCommand(cfg, repoDir)},
-		{cmd: branchCommand(repoDir, branch)},
-		{cmd: pushDryRunCommand(repoDir, branch)},
 		{cmd: prReviewMetadataCommand(repoDir, "feature/improve-tests"), res: execx.Result{Stdout: metadataJSON}},
 		{cmd: fetchRemoteBranchCommand(repoDir, "main")},
 		{cmd: fetchPullRequestHeadCommand(repoDir, 42)},
 		{cmd: prReviewCommentsCommand(repoDir, "feature/improve-tests"), res: execx.Result{Stdout: commentsText}},
 		{cmd: reviewDiffStatCommand(repoDir, remoteTrackingRef("main"), pullRequestTrackingRef(42)), res: execx.Result{Stdout: diffStat}},
 		{cmd: reviewDiffPatchCommand(repoDir, remoteTrackingRef("main"), pullRequestTrackingRef(42)), res: execx.Result{Stdout: diffPatch}},
-		{cmd: codexCommand(targetDir, withAgentsPrompt(strings.TrimSpace(cfg.Prompt+"\n\n"+expectedPreparedReviewContext(repoURLFromConfig(cfg), metadataJSON, commentsText, diffStat, diffPatch)), agentsPath))},
-		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M docs/reviews/pr-42.md\n"}},
-		{cmd: addCommand(repoDir)},
-		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
-		{cmd: pushCommand(repoDir, branch)},
-		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: "https://github.com/acme/repo/pull/43\n"}},
-		{cmd: prChecksCommand(repoDir, "https://github.com/acme/repo/pull/43")},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(strings.TrimSpace(cfg.Prompt+"\n\n"+expectedPreparedReviewContext(repoURLFromConfig(cfg), metadataJSON, commentsText, diffStat, diffPatch)), agentsPath)), res: execx.Result{Stdout: reviewOutput}},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## main\n"}},
+		{cmd: prReviewSummaryCommand(repoDir, "feature/improve-tests", reviewSummaryBodyPath(runDir, 42))},
+		{cmd: prMergeAutoCommand(repoDir, "feature/improve-tests", "squash", "abc123")},
 	}}
 
 	h := New(fake)
@@ -715,8 +709,71 @@ func TestRunBuildsReviewContextFromHeadBranchSelector(t *testing.T) {
 	if res.ExitCode != ExitSuccess {
 		t.Fatalf("ExitCode = %d", res.ExitCode)
 	}
+	if got, want := res.PRURL, "https://github.com/acme/repo/pull/42"; got != want {
+		t.Fatalf("PRURL = %q, want %q", got, want)
+	}
 	if len(fake.exps) != 0 {
 		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestReviewCommentBodyUsesStructuredPositiveNegativePoints(t *testing.T) {
+	t.Parallel()
+
+	output := `Here is extra analysis that should not be posted.
+
+` + "```json" + `
+{
+  "status": "findings",
+  "mergeReady": false,
+  "summary": "Review found one issue.",
+  "positives": [
+    "Adds focused regression coverage.",
+    "Keeps the existing public API unchanged."
+  ],
+  "findings": [
+    {
+      "severity": "Medium",
+      "path": "src/worker.js",
+      "line": 42,
+      "title": "Redaction misses query strings"
+    }
+  ]
+}
+` + "```"
+
+	outcome, ok := parseReviewOutcome(output)
+	if !ok {
+		t.Fatal("parseReviewOutcome() ok = false, want true")
+	}
+	got := reviewCommentBody(execx.Result{Stdout: output}, outcome, ok)
+	want := "**Positive**\n" +
+		"- Adds focused regression coverage.\n" +
+		"- Keeps the existing public API unchanged.\n" +
+		"\n" +
+		"**Negative**\n" +
+		"- [Medium] src/worker.js:42 - Redaction misses query strings"
+	if got != want {
+		t.Fatalf("reviewCommentBody() = %q, want %q", got, want)
+	}
+}
+
+func TestReviewCommentBodyCleanOutcomeKeepsPositiveNegativeShape(t *testing.T) {
+	t.Parallel()
+
+	output := "Verbose text that should be ignored.\n\n```json\n{\"status\":\"clean\",\"mergeReady\":true,\"summary\":\"No material issues found.\",\"findings\":[]}\n```"
+	outcome, ok := parseReviewOutcome(output)
+	if !ok {
+		t.Fatal("parseReviewOutcome() ok = false, want true")
+	}
+	got := reviewCommentBody(execx.Result{Stdout: output}, outcome, ok)
+	want := "**Positive**\n" +
+		"- No material issues found.\n" +
+		"\n" +
+		"**Negative**\n" +
+		"- No material issues found."
+	if got != want {
+		t.Fatalf("reviewCommentBody(clean) = %q, want %q", got, want)
 	}
 }
 

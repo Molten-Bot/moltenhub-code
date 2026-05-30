@@ -351,6 +351,10 @@ func applySkillSpecificRunConfigDefaults(parsed map[string]any, skillName string
 		if !ensureReviewSelector(parsed) {
 			return fmt.Errorf("%s skill requires branch, prnumber, or review.prurl", codeReviewSkillName)
 		}
+		review := ensureReviewMap(parsed)
+		if firstNonEmpty(stringAt(review, "trigger")) == "" {
+			review["trigger"] = "hub"
+		}
 		if firstNonEmpty(stringAt(parsed, "libraryTaskName")) == "" {
 			parsed["libraryTaskName"] = codeReviewLibraryTaskName
 		}
@@ -417,9 +421,41 @@ func looksLikeRunConfigMap(v map[string]any) bool {
 		repo := firstNonEmpty(stringAtAny(v, "repo", "repoUrl", "repourl"))
 		return repo != "" || hasSingleNonEmptyStringArray(v["repos"])
 	}
-	prompt := firstNonEmpty(stringAt(v, "prompt"))
 	repo := firstNonEmpty(stringAtAny(v, "repo", "repoUrl", "repourl"))
+	if repo != "" && runConfigMapHasReviewSelector(v) {
+		return true
+	}
+	prompt := firstNonEmpty(stringAt(v, "prompt"))
 	return prompt != "" && (repo != "" || hasNonEmptyStringArray(v["repos"]))
+}
+
+func runConfigMapHasReviewSelector(v map[string]any) bool {
+	if v == nil {
+		return false
+	}
+	if _, ok := positiveIntValue(firstPresentValue(v, "prNumber", "prnumber")); ok {
+		return true
+	}
+	if firstNonEmpty(stringAtAny(v, "prUrl", "prurl", "headBranch", "headbranch", "branch", "baseBranch", "basebranch")) != "" {
+		return true
+	}
+	review := toMap(v["review"])
+	if _, ok := positiveIntValue(firstPresentValue(review, "prNumber", "prnumber")); ok {
+		return true
+	}
+	return firstNonEmpty(stringAtAny(review, "prUrl", "prurl", "headBranch", "headbranch")) != ""
+}
+
+func firstPresentValue(root map[string]any, keys ...string) any {
+	for _, key := range keys {
+		if root == nil {
+			return nil
+		}
+		if value, ok := root[key]; ok {
+			return value
+		}
+	}
+	return nil
 }
 
 func normalizeA2ADispatchMessage(msg map[string]any, expectedType, expectedSkill string) map[string]any {
@@ -787,6 +823,14 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 					"type":    "integer",
 					"minimum": 1,
 				},
+				"prNumber": map[string]any{
+					"type":    "integer",
+					"minimum": 1,
+				},
+				"prurl":        propertyNonEmptyString(),
+				"prUrl":        propertyNonEmptyString(),
+				"headbranch":   propertyNonEmptyString(),
+				"headBranch":   propertyNonEmptyString(),
 				"targetsubdir": propertyNonEmptyString(),
 				"agentharness": propertyStringEnum("codex", "claude"),
 				"agentcommand": propertyNonEmptyString(),
@@ -828,13 +872,34 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 							"type":    "integer",
 							"minimum": 1,
 						},
-						"prurl":      propertyNonEmptyString(),
-						"headbranch": propertyNonEmptyString(),
+						"prNumber": map[string]any{
+							"type":    "integer",
+							"minimum": 1,
+						},
+						"prurl":                    propertyNonEmptyString(),
+						"prUrl":                    propertyNonEmptyString(),
+						"headbranch":               propertyNonEmptyString(),
+						"headBranch":               propertyNonEmptyString(),
+						"trigger":                  propertyStringEnum("hub", "github-notification", "manual"),
+						"notificationthreadid":     propertyNonEmptyString(),
+						"notificationThreadId":     propertyNonEmptyString(),
+						"requestedreviewer":        propertyNonEmptyString(),
+						"requestedReviewer":        propertyNonEmptyString(),
+						"requirerequestedreviewer": propertyBoolean(),
+						"requireRequestedReviewer": propertyBoolean(),
+						"writeback":                propertyStringEnum("summary-comment", "off"),
+						"automerge":                propertyBoolean(),
+						"autoMerge":                propertyBoolean(),
+						"mergemethod":              propertyStringEnum("merge", "squash", "rebase"),
+						"mergeMethod":              propertyStringEnum("merge", "squash", "rebase"),
 					},
 					"anyOf": []map[string]any{
 						{"required": []string{"prnumber"}},
+						{"required": []string{"prNumber"}},
 						{"required": []string{"prurl"}},
+						{"required": []string{"prUrl"}},
 						{"required": []string{"headbranch"}},
+						{"required": []string{"headBranch"}},
 					},
 				},
 			},
@@ -864,6 +929,12 @@ func propertyStringEnum(values ...string) map[string]any {
 	return map[string]any{
 		"type": "string",
 		"enum": filtered,
+	}
+}
+
+func propertyBoolean() map[string]any {
+	return map[string]any{
+		"type": "boolean",
 	}
 }
 
@@ -941,6 +1012,8 @@ func normalizeRunConfigAliases(m map[string]any) error {
 	copyRunConfigAlias(m, "responseMode", "responsemode")
 	copyRunConfigAlias(m, "libraryTaskName", "librarytaskname")
 	copyRunConfigAlias(m, "prNumber", "prnumber")
+	copyRunConfigAlias(m, "prUrl", "prurl")
+	copyRunConfigAlias(m, "headBranch", "headbranch")
 	copyRunConfigAlias(m, "githubHandle", "githubhandle")
 	copyRunConfigAlias(m, "agentHarness", "agentharness")
 	copyRunConfigAlias(m, "agentCommand", "agentcommand")
@@ -961,6 +1034,18 @@ func normalizeRunConfigAliases(m map[string]any) error {
 		review := ensureReviewMap(m)
 		if _, exists := review["prNumber"]; !exists {
 			review["prNumber"] = prNumber
+		}
+	}
+	if prURL := firstNonEmpty(stringAt(m, "prUrl")); prURL != "" {
+		review := ensureReviewMap(m)
+		if !runConfigAliasValueSet(review["prUrl"]) {
+			review["prUrl"] = prURL
+		}
+	}
+	if headBranch := firstNonEmpty(stringAt(m, "headBranch")); headBranch != "" {
+		review := ensureReviewMap(m)
+		if !runConfigAliasValueSet(review["headBranch"]) {
+			review["headBranch"] = headBranch
 		}
 	}
 	return nil
@@ -996,6 +1081,11 @@ func normalizeReviewRunConfigAliases(m map[string]any) {
 		copyRunConfigAlias(review, "prNumber", "prnumber")
 		copyRunConfigAlias(review, "prUrl", "prurl")
 		copyRunConfigAlias(review, "headBranch", "headbranch")
+		copyRunConfigAlias(review, "notificationThreadId", "notificationthreadid")
+		copyRunConfigAlias(review, "requestedReviewer", "requestedreviewer")
+		copyRunConfigAlias(review, "requireRequestedReviewer", "requirerequestedreviewer")
+		copyRunConfigAlias(review, "autoMerge", "automerge")
+		copyRunConfigAlias(review, "mergeMethod", "mergemethod")
 	}
 	for _, source := range []struct {
 		alias     string
@@ -1004,6 +1094,13 @@ func normalizeReviewRunConfigAliases(m map[string]any) {
 		{alias: "review.prnumber", canonical: "prNumber"},
 		{alias: "review.prurl", canonical: "prUrl"},
 		{alias: "review.headbranch", canonical: "headBranch"},
+		{alias: "review.trigger", canonical: "trigger"},
+		{alias: "review.notificationthreadid", canonical: "notificationThreadId"},
+		{alias: "review.requestedreviewer", canonical: "requestedReviewer"},
+		{alias: "review.requirerequestedreviewer", canonical: "requireRequestedReviewer"},
+		{alias: "review.writeback", canonical: "writeback"},
+		{alias: "review.automerge", canonical: "autoMerge"},
+		{alias: "review.mergemethod", canonical: "mergeMethod"},
 	} {
 		value, exists := m[source.alias]
 		if !exists || !runConfigAliasValueSet(value) {

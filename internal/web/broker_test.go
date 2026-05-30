@@ -162,6 +162,7 @@ func TestBrokerTracksDashboardSourceMix(t *testing.T) {
 	b.RecordTaskRunConfigWithSource("local-json", []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"from json"}`), "json")
 	b.RecordTaskRunConfigWithSource("local-library", []byte(`{"repo":"git@github.com:acme/repo.git","libraryTaskName":"unit-test-coverage"}`), "library")
 	b.RecordTaskRunConfigWithSource("local-prompt", []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"from prompt"}`), "prompt")
+	b.RecordTaskRunConfigWithSource("local-review", []byte(`{"repo":"git@github.com:acme/repo.git","libraryTaskName":"code-review"}`), "review")
 	b.RecordTaskRunConfigWithSource("req-hub", []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"from hub"}`), "hub")
 
 	snap := b.Snapshot()
@@ -169,10 +170,62 @@ func TestBrokerTracksDashboardSourceMix(t *testing.T) {
 	for _, group := range snap.Stats.SourceMix {
 		got[group.Name] = group.Tasks
 	}
-	for _, name := range []string{"Chat", "Hub", "JSON", "Library", "Prompt"} {
+	for _, name := range []string{"Chat", "Hub", "JSON", "Library", "Prompt", "Review"} {
 		if got[name] != 1 {
 			t.Fatalf("source_mix[%q] = %d, want 1 (all groups: %#v)", name, got[name], snap.Stats.SourceMix)
 		}
+	}
+}
+
+func TestBrokerTracksReviewRuntimeAsDashboardSavedTime(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	b := NewBroker()
+	b.now = func() time.Time { return now }
+
+	b.RecordTaskRunConfigWithSource("req-hub-review", []byte(`{
+		"repo":"git@github.com:acme/repo.git",
+		"libraryTaskName":"code-review",
+		"agentHarness":"codex",
+		"review":{"prNumber":42}
+	}`), "hub")
+	b.IngestLog("dispatch status=start request_id=req-hub-review skill=library_task repo=git@github.com:acme/repo.git")
+	now = now.Add(2 * time.Minute)
+	b.IngestLog("dispatch status=no_changes request_id=req-hub-review workspace=/tmp/review branch=feature pr_url=https://github.com/acme/repo/pull/42")
+
+	b.RecordTaskRunConfigWithSource("local-review", []byte(`{
+		"repo":"git@github.com:acme/repo.git",
+		"libraryTaskName":"code-review",
+		"agentHarness":"codex",
+		"review":{"prNumber":43}
+	}`), "review")
+	now = now.Add(30 * time.Second)
+
+	snap := b.Snapshot()
+	if got, want := snap.Stats.TotalTasks, 2; got != want {
+		t.Fatalf("stats.total_tasks = %d, want %d", got, want)
+	}
+	if got, want := snap.Stats.TotalSavedSeconds, 150.0; got != want {
+		t.Fatalf("stats.total_saved_seconds = %v, want %v", got, want)
+	}
+	if got, want := snap.Stats.ReviewTasks, 2; got != want {
+		t.Fatalf("stats.review_tasks = %d, want %d", got, want)
+	}
+	if got, want := snap.Stats.ReviewCompletedTasks, 1; got != want {
+		t.Fatalf("stats.review_completed_tasks = %d, want %d", got, want)
+	}
+	if got, want := snap.Stats.ReviewActiveTasks, 1; got != want {
+		t.Fatalf("stats.review_active_tasks = %d, want %d", got, want)
+	}
+	if got, want := snap.Stats.ReviewSavedSeconds, 150.0; got != want {
+		t.Fatalf("stats.review_saved_seconds = %v, want %v", got, want)
+	}
+	if len(snap.Stats.WorkflowTimes) == 0 || snap.Stats.WorkflowTimes[0].Name != "Pull Request Code Review" {
+		t.Fatalf("stats.workflow_times = %#v, want Pull Request Code Review first", snap.Stats.WorkflowTimes)
+	}
+	if got, want := snap.Stats.WorkflowTimes[0].TotalSavedSeconds, 150.0; got != want {
+		t.Fatalf("review workflow total_saved_seconds = %v, want %v", got, want)
 	}
 }
 

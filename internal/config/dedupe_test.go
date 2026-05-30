@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestDedupeKeyNormalizesTaskIdentity(t *testing.T) {
 	t.Parallel()
@@ -32,6 +35,45 @@ func TestDedupeKeyDefaultsEmptyBranchAndTarget(t *testing.T) {
 	want := `{"repos":["git@github.com:acme/repo.git"],"baseBranch":"default","targetSubdir":".","promptHash":"ee9cbc728602f8e7e3e355c3916d8a4866c51955db5badefe9ef0d25f127d639"}`
 	if got != want {
 		t.Fatalf("DedupeKey(empty defaults) = %q, want %q", got, want)
+	}
+}
+
+func TestDedupeKeyIncludesReviewSelector(t *testing.T) {
+	t.Parallel()
+
+	got := DedupeKey(Config{
+		RepoURL:    "git@github.com:acme/repo.git",
+		BaseBranch: "main",
+		Prompt:     "review pull request",
+		Review: &ReviewConfig{
+			PRNumber:   42,
+			PRURL:      " https://github.com/acme/repo/pull/42 ",
+			HeadBranch: "refs/heads/feature/review-me",
+		},
+	})
+	want := `"review":{"prNumber":42,"prUrl":"https://github.com/acme/repo/pull/42","headBranch":"feature/review-me"}`
+	if !strings.Contains(got, want) {
+		t.Fatalf("DedupeKey(review) = %q, want it to contain %q", got, want)
+	}
+}
+
+func TestDedupeKeyDiffersByReviewPullRequest(t *testing.T) {
+	t.Parallel()
+
+	base := Config{
+		RepoURL:    "git@github.com:acme/repo.git",
+		BaseBranch: "main",
+		Prompt:     "review pull request",
+	}
+	pr112 := base
+	pr112.Review = &ReviewConfig{PRNumber: 112}
+	pr114 := base
+	pr114.Review = &ReviewConfig{PRNumber: 114}
+
+	key112 := DedupeKey(pr112)
+	key114 := DedupeKey(pr114)
+	if key112 == "" || key112 == key114 {
+		t.Fatalf("dedupe keys should differ by review PR\nPR 112: %q\nPR 114: %q", key112, key114)
 	}
 }
 

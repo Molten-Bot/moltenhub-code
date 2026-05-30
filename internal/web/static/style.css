@@ -133,6 +133,7 @@
   --dashboard-chart-json: #e8b35a;
   --dashboard-chart-library: #6fb0f4;
   --dashboard-chart-prompt: #7bc99a;
+  --dashboard-chart-review: #f08fb2;
   --dashboard-chart-other: #8ca0bd;
   --dashboard-chart-border: rgba(255, 255, 255, 0.76);
   --radius: 4px;
@@ -4116,7 +4117,7 @@ select.prompt-control {
 
 .dashboard-stats-grid {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(9, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -4321,6 +4322,10 @@ select.prompt-control {
 
 .dashboard-source-legend-item-prompt .dashboard-source-legend-icon {
   color: var(--dashboard-chart-prompt);
+}
+
+.dashboard-source-legend-item-review .dashboard-source-legend-icon {
+  color: var(--dashboard-chart-review);
 }
 
 .dashboard-source-legend-icon svg {
@@ -6831,6 +6836,7 @@ html.dark {
   --dashboard-chart-json: #ddb466;
   --dashboard-chart-library: #74afea;
   --dashboard-chart-prompt: #87c99f;
+  --dashboard-chart-review: #e995b5;
   --dashboard-chart-other: #8fa2bf;
   --dashboard-chart-border: rgba(20, 30, 52, 0.9);
   --foreground: rgba(245, 245, 247, 1);
@@ -6986,6 +6992,7 @@ html.night {
   --dashboard-chart-json: #d4aa5f;
   --dashboard-chart-library: #6aa4de;
   --dashboard-chart-prompt: #7cbe96;
+  --dashboard-chart-review: #dc89aa;
   --dashboard-chart-other: #8798b4;
   --dashboard-chart-border: rgba(12, 18, 31, 0.92);
   --foreground: rgba(220, 220, 225, 1);
@@ -7173,6 +7180,7 @@ html.pink {
   --dashboard-chart-json: #e7b365;
   --dashboard-chart-library: #f3a4ce;
   --dashboard-chart-prompt: #c994db;
+  --dashboard-chart-review: #f08cad;
   --dashboard-chart-other: #c487a8;
   --dashboard-chart-border: rgba(48, 18, 35, 0.92);
   --glass-icon-shadow:

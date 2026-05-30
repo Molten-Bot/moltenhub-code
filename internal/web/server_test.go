@@ -263,6 +263,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `Session Runtime`) ||
 		!strings.Contains(markup, `stats.session_runtime_seconds`) ||
 		!strings.Contains(markup, `id="dashboard-time-saved"`) ||
+		!strings.Contains(markup, `id="dashboard-review-saved"`) ||
 		!strings.Contains(markup, `id="dashboard-workflow-times"`) ||
 		!strings.Contains(markup, `id="dashboard-agent-times"`) ||
 		!strings.Contains(markup, `id="dashboard-task-chart"`) ||
@@ -274,11 +275,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `<strong id="dashboard-total-tasks">0</strong>`) ||
 		!strings.Contains(markup, `<span class="dashboard-stat-label">Pull Requests</span>`) ||
 		!strings.Contains(markup, `<strong id="dashboard-total-prs">0</strong>`) ||
+		!strings.Contains(markup, `<span class="dashboard-stat-label">Review Saved</span>`) ||
+		!strings.Contains(markup, `<strong id="dashboard-review-saved">0m</strong>`) ||
 		!strings.Contains(markup, "function dashboardPullRequestCount(snapshot)") ||
 		!strings.Contains(markup, `const dashboardTotalPRs = document.getElementById("dashboard-total-prs");`) ||
+		!strings.Contains(markup, `const dashboardReviewSaved = document.getElementById("dashboard-review-saved");`) ||
 		!strings.Contains(markup, "dashboardTotalTasks.textContent = String(Number(stats.total_tasks || 0));") ||
-		!strings.Contains(markup, "dashboardTotalPRs.textContent = String(dashboardPullRequestCount(snapshot));") {
-		t.Fatalf("expected dashboard to show task and pull-request totals in separate stat cards")
+		!strings.Contains(markup, "dashboardTotalPRs.textContent = String(dashboardPullRequestCount(snapshot));") ||
+		!strings.Contains(markup, "dashboardReviewSaved.textContent = dashboardDuration(Number(stats.review_saved_seconds || 0));") {
+		t.Fatalf("expected dashboard to show task, pull-request, and review saved-time totals in separate stat cards")
 	}
 	if strings.Contains(markup, `<span class="dashboard-stat-label">Max Concurrent Tasks</span>`) {
 		t.Fatalf("expected dashboard max concurrency label to use concise copy")
@@ -289,6 +294,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	lastDashboardStatLabel := -1
 	for _, label := range []string{
 		"Time Saved",
+		"Review Saved",
 		"Throughput",
 		"Velocity",
 		"Max Concurrency",

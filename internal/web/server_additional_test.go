@@ -812,6 +812,7 @@ func TestDashboardSourceLegendStylesLiveInGlobalStylesheet(t *testing.T) {
 		".dashboard-source-legend-item-json .dashboard-source-legend-icon {\n  color: var(--dashboard-chart-json);\n}",
 		".dashboard-source-legend-item-library .dashboard-source-legend-icon {\n  color: var(--dashboard-chart-library);\n}",
 		".dashboard-source-legend-item-prompt .dashboard-source-legend-icon {\n  color: var(--dashboard-chart-prompt);\n}",
+		".dashboard-source-legend-item-review .dashboard-source-legend-icon {\n  color: var(--dashboard-chart-review);\n}",
 	} {
 		if !strings.Contains(css, want) {
 			t.Fatalf("embedded style.css missing %q", want)

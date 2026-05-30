@@ -20,6 +20,10 @@
   // code review example: provide either "branch" or "prNumber"
   // "prNumber": 123,
   // "review": {
-  //   "prNumber": 123
+  //   "prNumber": 123,
+  //   "trigger": "hub",
+  //   "writeback": "summary-comment",
+  //   "autoMerge": true,
+  //   "mergeMethod": "squash"
   // }
 }

@@ -1638,10 +1638,17 @@ func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskS
 		"handle":      normalizeSkillName(codeReviewSkillName),
 		"mode":        "review",
 		"displayName": "Pull Request Code Review",
-		"description": fmt.Sprintf("Runs the %s workflow using repo + either branch or prnumber context. Omitted or `default` `responsemode` uses bundled `caveman-full`; set `off` for normal prose.", codeReviewLibraryTaskName),
+		"description": fmt.Sprintf("Runs the %s workflow for an explicit pull request. Hub activations do not require the runtime GitHub user to be assigned as reviewer.", codeReviewLibraryTaskName),
 		"activation": buildActivation(codeReviewSkillName, map[string]any{
-			"repo":   "<git@github.com:owner/repo.git>",
-			"branch": "<pull-request-head-branch>",
+			"repo": "<git@github.com:owner/repo.git>",
+			"review": map[string]any{
+				"prNumber":    123,
+				"trigger":     "hub",
+				"writeback":   "summary-comment",
+				"autoMerge":   true,
+				"mergeMethod": "squash",
+			},
+			"responseMode": "off",
 		}),
 	})
 
@@ -1672,15 +1679,25 @@ func buildSupportedSkillsMetadata() []map[string]any {
 		},
 		{
 			"name":        normalizeSkillName(codeReviewSkillName),
-			"description": "Repository code review run that targets the checked-in review workflow. Defaults to `caveman-full`; set `responsemode=off` for normal prose.",
+			"description": "Repository code review run for an explicit pull request. Hub activations bypass reviewer-assignment discovery; notification polling should set review.trigger=github-notification and requireRequestedReviewer=true.",
 			"parameters": runtimeSkillParameters(
 				[]map[string]any{
 					skillParameter("repo", "Git repository URL containing the pull request."),
 				},
 				[]map[string]any{
-					skillParameter("branch", "Pull request head branch; required when prnumber or review.prurl is omitted."),
-					skillParameter("prnumber", "Pull request number; required when branch or review.prurl is omitted."),
-					skillParameter("review.prurl", "Pull request URL; required when branch or prnumber is omitted."),
+					skillParameter("branch", "Legacy pull request head branch alias; copied to review.headBranch when no PR number or URL is provided."),
+					skillParameter("prnumber", "Top-level alias for review.prNumber."),
+					skillParameter("prurl", "Top-level alias for review.prUrl."),
+					skillParameter("review.prnumber", "Pull request number; preferred selector for hub-triggered review runs."),
+					skillParameter("review.prurl", "Pull request URL selector."),
+					skillParameter("review.headbranch", "Pull request head branch selector when the PR number or URL is unavailable."),
+					skillParameter("review.trigger", "Review activation source: hub, github-notification, or manual. Hub dispatches default to hub."),
+					skillParameter("review.notificationthreadid", "GitHub notification thread ID for poller-triggered runs."),
+					skillParameter("review.requestedreviewer", "GitHub login that was verified as requested reviewer for notification-triggered runs."),
+					skillParameter("review.requirerequestedreviewer", "Require the requested reviewer check before running; intended for GitHub notification polling."),
+					skillParameter("review.writeback", "Review publication mode: summary-comment or off."),
+					skillParameter("review.automerge", "When true, allow clean-review auto-merge policy to run after writeback."),
+					skillParameter("review.mergemethod", "Merge method for clean auto-merge: squash, merge, or rebase."),
 					skillParameter("responsemode", "Agent prose mode such as off, caveman-full, or default."),
 				},
 			),

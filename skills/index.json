@@ -21,7 +21,7 @@
     "handle": "code_review",
     "mode": "review",
     "displayName": "Pull Request Code Review",
-    "description": "Runs the code-review workflow using repo + either branch or prnumber context. Omitted or `default` `responsemode` uses bundled `caveman-full`; set `off` for normal prose.",
+    "description": "Runs the code-review workflow for an explicit pull request. Hub activations do not require the runtime GitHub user to be assigned as reviewer.",
     "activation": {
       "type": "skill_request",
       "request_id": "<caller-generated-request-id>",
@@ -29,7 +29,14 @@
       "reply_required": true,
       "payload": {
         "repo": "<git@github.com:owner/repo.git>",
-        "branch": "<pull-request-head-branch>"
+        "review": {
+          "prNumber": 123,
+          "trigger": "hub",
+          "writeback": "summary-comment",
+          "autoMerge": true,
+          "mergeMethod": "squash"
+        },
+        "responseMode": "off"
       },
       "payload_format": "json"
     }

@@ -92,6 +92,21 @@ func TestLoadAndValidateErrorPaths(t *testing.T) {
 	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "invalid review.prUrl") {
 		t.Fatalf("Validate(bad review URL) error = %v", err)
 	}
+	cfg.Review = &ReviewConfig{PRNumber: 1, Trigger: "webhook"}
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "unsupported review.trigger") {
+		t.Fatalf("Validate(bad review trigger) error = %v", err)
+	}
+	cfg.Review = &ReviewConfig{PRNumber: 1, Writeback: "inline"}
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "unsupported review.writeback") {
+		t.Fatalf("Validate(bad review writeback) error = %v", err)
+	}
+	cfg.Review = &ReviewConfig{PRNumber: 1, MergeMethod: "fast-forward"}
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "unsupported review.mergeMethod") {
+		t.Fatalf("Validate(bad review merge method) error = %v", err)
+	}
 
 	cfg.Review = nil
 	cfg.Images = []PromptImage{{DataBase64: base64.StdEncoding.EncodeToString([]byte("img")), MediaType: "image/png"}}

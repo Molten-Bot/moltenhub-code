@@ -280,7 +280,12 @@ func TestLoadSupportsStructuredReviewConfig(t *testing.T) {
   "prompt": "review pull request",
   "review": {
     "prNumber": 42,
-    "headBranch": "feature/improve-tests"
+    "headBranch": "feature/improve-tests",
+    "trigger": "github_notification",
+    "notificationThreadId": "thread-123",
+    "requestedReviewer": "@octocat",
+    "writeback": "summary",
+    "autoMerge": true
   }
 }`
 	if err := os.WriteFile(path, []byte(json), 0o644); err != nil {
@@ -299,6 +304,27 @@ func TestLoadSupportsStructuredReviewConfig(t *testing.T) {
 	}
 	if got, want := cfg.Review.HeadBranch, "feature/improve-tests"; got != want {
 		t.Fatalf("Review.HeadBranch = %q, want %q", got, want)
+	}
+	if got, want := cfg.Review.Trigger, "github-notification"; got != want {
+		t.Fatalf("Review.Trigger = %q, want %q", got, want)
+	}
+	if got, want := cfg.Review.NotificationThreadID, "thread-123"; got != want {
+		t.Fatalf("Review.NotificationThreadID = %q, want %q", got, want)
+	}
+	if got, want := cfg.Review.RequestedReviewer, "octocat"; got != want {
+		t.Fatalf("Review.RequestedReviewer = %q, want %q", got, want)
+	}
+	if !cfg.Review.RequireRequestedReviewer {
+		t.Fatal("Review.RequireRequestedReviewer = false, want true for github-notification trigger")
+	}
+	if got, want := cfg.Review.Writeback, "summary-comment"; got != want {
+		t.Fatalf("Review.Writeback = %q, want %q", got, want)
+	}
+	if !cfg.Review.AutoMerge {
+		t.Fatal("Review.AutoMerge = false, want true")
+	}
+	if got, want := cfg.Review.MergeMethod, "squash"; got != want {
+		t.Fatalf("Review.MergeMethod = %q, want %q", got, want)
 	}
 }
 

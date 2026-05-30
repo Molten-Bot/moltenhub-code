@@ -19,16 +19,18 @@ func DedupeKey(cfg Config) string {
 	repos := normalizeRepoListForDeduper(cfg.RepoList())
 	targetSubdir := normalizeTargetSubdirForDeduper(cfg.TargetSubdir)
 	payload := struct {
-		Repos        []string `json:"repos"`
-		BaseBranch   string   `json:"baseBranch"`
-		TargetSubdir string   `json:"targetSubdir"`
-		AgentHarness string   `json:"agentHarness,omitempty"`
-		AgentCommand string   `json:"agentCommand,omitempty"`
-		PromptHash   string   `json:"promptHash"`
+		Repos        []string             `json:"repos"`
+		BaseBranch   string               `json:"baseBranch"`
+		TargetSubdir string               `json:"targetSubdir"`
+		Review       *reviewDedupePayload `json:"review,omitempty"`
+		AgentHarness string               `json:"agentHarness,omitempty"`
+		AgentCommand string               `json:"agentCommand,omitempty"`
+		PromptHash   string               `json:"promptHash"`
 	}{
 		Repos:        repos,
 		BaseBranch:   baseBranch,
 		TargetSubdir: targetSubdir,
+		Review:       reviewDedupePayloadForDeduper(cfg.Review),
 		AgentHarness: strings.ToLower(strings.TrimSpace(cfg.AgentHarness)),
 		AgentCommand: strings.TrimSpace(cfg.AgentCommand),
 		PromptHash:   promptHashForDeduper(cfg.Prompt),
@@ -39,6 +41,27 @@ func DedupeKey(cfg Config) string {
 		return ""
 	}
 	return string(encoded)
+}
+
+type reviewDedupePayload struct {
+	PRNumber   int    `json:"prNumber,omitempty"`
+	PRURL      string `json:"prUrl,omitempty"`
+	HeadBranch string `json:"headBranch,omitempty"`
+}
+
+func reviewDedupePayloadForDeduper(review *ReviewConfig) *reviewDedupePayload {
+	if review == nil {
+		return nil
+	}
+	payload := &reviewDedupePayload{
+		PRNumber:   review.PRNumber,
+		PRURL:      strings.TrimSpace(review.PRURL),
+		HeadBranch: normalizeBranchRefForDeduper(review.HeadBranch),
+	}
+	if payload.PRNumber <= 0 && payload.PRURL == "" && payload.HeadBranch == "" {
+		return nil
+	}
+	return payload
 }
 
 func normalizeBranchRefForDeduper(branch string) string {

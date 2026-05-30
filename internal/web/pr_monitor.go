@@ -178,9 +178,13 @@ func (m *PRMergeMonitor) prState(ctx context.Context, prURL string) (prViewState
 	if prURL == "" {
 		return prViewState{}, fmt.Errorf("pull request url is required")
 	}
+	args := []string{"pr", "view", githubutil.PullRequestSelector(prURL), "--json", "state,mergedAt"}
+	if repo := githubutil.PullRequestRepository(prURL); repo != "" {
+		args = append(args, "--repo", repo)
+	}
 	res, err := m.Runner.Run(ctx, execx.Command{
 		Name: "gh",
-		Args: []string{"pr", "view", githubutil.PullRequestSelector(prURL), "--json", "state,mergedAt"},
+		Args: args,
 	})
 	if err != nil {
 		return prViewState{}, err

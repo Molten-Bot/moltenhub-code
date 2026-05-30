@@ -25,21 +25,22 @@ const (
 
 // InitConfig is the init.json contract for hub runtime mode.
 type InitConfig struct {
-	Version           string           `json:"version"`
-	BaseURL           string           `json:"base_url"`
-	BindToken         string           `json:"bind_token"`
-	AgentToken        string           `json:"agent_token"`
-	LogLevel          string           `json:"log_level,omitempty"`
-	AgentHarness      string           `json:"agent_harness,omitempty"`
-	AgentCommand      string           `json:"agent_command,omitempty"`
-	SessionKey        string           `json:"session_key"`
-	Handle            string           `json:"handle"`
-	Profile           ProfileConfig    `json:"profile"`
-	GitHubToken       string           `json:"github_token,omitempty"`
-	OpenAIAPIKey      string           `json:"openai_api_key,omitempty"`
-	Skill             SkillConfig      `json:"-"`
-	RuntimeConfigPath string           `json:"-"`
-	Dispatcher        DispatcherConfig `json:"dispatcher"`
+	Version           string            `json:"version"`
+	BaseURL           string            `json:"base_url"`
+	BindToken         string            `json:"bind_token"`
+	AgentToken        string            `json:"agent_token"`
+	LogLevel          string            `json:"log_level,omitempty"`
+	AgentHarness      string            `json:"agent_harness,omitempty"`
+	AgentCommand      string            `json:"agent_command,omitempty"`
+	SessionKey        string            `json:"session_key"`
+	Handle            string            `json:"handle"`
+	Profile           ProfileConfig     `json:"profile"`
+	GitHubToken       string            `json:"github_token,omitempty"`
+	OpenAIAPIKey      string            `json:"openai_api_key,omitempty"`
+	Skill             SkillConfig       `json:"-"`
+	RuntimeConfigPath string            `json:"-"`
+	Dispatcher        DispatcherConfig  `json:"dispatcher"`
+	ReviewWatch       ReviewWatchConfig `json:"review_watch,omitempty"`
 }
 
 // ProfileConfig controls optional agent profile sync on startup.
@@ -96,6 +97,34 @@ type DispatcherConfig struct {
 	CPUHighWatermark       float64 `json:"cpu_high_watermark"`
 	MemoryHighWatermark    float64 `json:"memory_high_watermark"`
 	DiskIOHighWatermarkMBs float64 `json:"disk_io_high_watermark_mb_s"`
+}
+
+// ReviewWatchConfig controls local GitHub notification polling for review requests.
+type ReviewWatchConfig struct {
+	Enabled        *bool  `json:"enabled,omitempty"`
+	PollIntervalMS int    `json:"poll_interval_ms,omitempty"`
+	Writeback      string `json:"writeback,omitempty"`
+	AutoMerge      *bool  `json:"auto_merge,omitempty"`
+	MergeMethod    string `json:"merge_method,omitempty"`
+	ResponseMode   string `json:"response_mode,omitempty"`
+}
+
+// EnabledValue returns the effective local review watcher setting. The watcher
+// defaults on so a GitHub-authenticated hub can respond to review requests
+// without extra config.
+func (c ReviewWatchConfig) EnabledValue() bool {
+	if c.Enabled == nil {
+		return true
+	}
+	return *c.Enabled
+}
+
+// AutoMergeEnabled returns the effective clean-review merge setting.
+func (c ReviewWatchConfig) AutoMergeEnabled() bool {
+	if c.AutoMerge == nil {
+		return false
+	}
+	return *c.AutoMerge
 }
 
 // LoadInit reads and validates JSON/JSONC init config.
@@ -190,6 +219,32 @@ func (c *InitConfig) ApplyDefaults() {
 	if c.Dispatcher.DiskIOHighWatermarkMBs <= 0 {
 		c.Dispatcher.DiskIOHighWatermarkMBs = 120
 	}
+
+	rawReviewWriteback := strings.TrimSpace(c.ReviewWatch.Writeback)
+	rawReviewMergeMethod := strings.TrimSpace(c.ReviewWatch.MergeMethod)
+	if normalized := normalizeReviewWatchWriteback(rawReviewWriteback); normalized != "" || rawReviewWriteback == "" {
+		c.ReviewWatch.Writeback = normalized
+	} else {
+		c.ReviewWatch.Writeback = strings.ReplaceAll(strings.ToLower(rawReviewWriteback), "_", "-")
+	}
+	if normalized := normalizeReviewWatchMergeMethod(rawReviewMergeMethod); normalized != "" || rawReviewMergeMethod == "" {
+		c.ReviewWatch.MergeMethod = normalized
+	} else {
+		c.ReviewWatch.MergeMethod = strings.ToLower(rawReviewMergeMethod)
+	}
+	c.ReviewWatch.ResponseMode = strings.TrimSpace(c.ReviewWatch.ResponseMode)
+	if c.ReviewWatch.PollIntervalMS <= 0 {
+		c.ReviewWatch.PollIntervalMS = 60000
+	}
+	if c.ReviewWatch.Writeback == "" {
+		c.ReviewWatch.Writeback = "summary-comment"
+	}
+	if c.ReviewWatch.MergeMethod == "" {
+		c.ReviewWatch.MergeMethod = "squash"
+	}
+	if c.ReviewWatch.ResponseMode == "" {
+		c.ReviewWatch.ResponseMode = "off"
+	}
 }
 
 func normalizeProfileConfig(profile *ProfileConfig, agentHarness, agentCommand string) {
@@ -282,7 +337,42 @@ func (c InitConfig) Validate() error {
 	if c.Dispatcher.DiskIOHighWatermarkMBs <= 0 {
 		return fmt.Errorf("dispatcher.disk_io_high_watermark_mb_s must be > 0")
 	}
+	if c.ReviewWatch.EnabledValue() && c.ReviewWatch.PollIntervalMS < 5000 {
+		return fmt.Errorf("review_watch.poll_interval_ms must be >= 5000")
+	}
+	if c.ReviewWatch.Writeback != "" && normalizeReviewWatchWriteback(c.ReviewWatch.Writeback) == "" {
+		return fmt.Errorf("review_watch.writeback must be summary-comment or off")
+	}
+	if c.ReviewWatch.MergeMethod != "" && normalizeReviewWatchMergeMethod(c.ReviewWatch.MergeMethod) == "" {
+		return fmt.Errorf("review_watch.merge_method must be merge, squash, or rebase")
+	}
 	return nil
+}
+
+func normalizeReviewWatchWriteback(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	normalized = strings.ReplaceAll(normalized, "_", "-")
+	switch normalized {
+	case "":
+		return ""
+	case "summary", "comment", "summary-comment":
+		return "summary-comment"
+	case "off", "none", "disabled":
+		return "off"
+	default:
+		return ""
+	}
+}
+
+func normalizeReviewWatchMergeMethod(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "":
+		return ""
+	case "merge", "squash", "rebase":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return ""
+	}
 }
 
 func defaultDispatcherMaxParallel() int {

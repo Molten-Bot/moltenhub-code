@@ -955,14 +955,30 @@ func TestRegisterRuntimePublishesLibraryTaskMetadata(t *testing.T) {
 	if got := secondPayload["repo"]; got != "<git@github.com:owner/repo.git>" {
 		t.Fatalf("skill_catalog[1].activation.payload.repo = %#v, want repository placeholder", got)
 	}
-	if got := secondPayload["branch"]; got != "<pull-request-head-branch>" {
-		t.Fatalf("skill_catalog[1].activation.payload.branch = %#v, want pull request head placeholder", got)
+	reviewPayload, ok := secondPayload["review"].(map[string]any)
+	if !ok {
+		t.Fatalf("skill_catalog[1].activation.payload.review = %#v, want map[string]any", secondPayload["review"])
 	}
-	if _, exists := secondPayload["responseMode"]; exists {
-		t.Fatalf("skill_catalog[1].activation.payload.responseMode unexpectedly present: %#v", secondPayload["responseMode"])
+	if got := reviewPayload["prNumber"]; got != float64(123) {
+		t.Fatalf("skill_catalog[1].activation.payload.review.prNumber = %#v, want 123", got)
 	}
-	if _, exists := secondPayload["prNumber"]; exists {
-		t.Fatalf("skill_catalog[1].activation.payload.prNumber unexpectedly present: %#v", secondPayload["prNumber"])
+	if got := reviewPayload["trigger"]; got != "hub" {
+		t.Fatalf("skill_catalog[1].activation.payload.review.trigger = %#v, want hub", got)
+	}
+	if got := reviewPayload["writeback"]; got != "summary-comment" {
+		t.Fatalf("skill_catalog[1].activation.payload.review.writeback = %#v, want summary-comment", got)
+	}
+	if got := reviewPayload["autoMerge"]; got != true {
+		t.Fatalf("skill_catalog[1].activation.payload.review.autoMerge = %#v, want true", got)
+	}
+	if got := reviewPayload["mergeMethod"]; got != "squash" {
+		t.Fatalf("skill_catalog[1].activation.payload.review.mergeMethod = %#v, want squash", got)
+	}
+	if got := secondPayload["responseMode"]; got != "off" {
+		t.Fatalf("skill_catalog[1].activation.payload.responseMode = %#v, want off", got)
+	}
+	if _, exists := secondPayload["branch"]; exists {
+		t.Fatalf("skill_catalog[1].activation.payload.branch unexpectedly present: %#v", secondPayload["branch"])
 	}
 }
 

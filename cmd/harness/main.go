@@ -26,6 +26,7 @@ import (
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
 	"github.com/Molten-Bot/moltenhub-code/internal/failurefollowup"
+	"github.com/Molten-Bot/moltenhub-code/internal/githubreview"
 	"github.com/Molten-Bot/moltenhub-code/internal/hub"
 	"github.com/Molten-Bot/moltenhub-code/internal/library"
 	"github.com/Molten-Bot/moltenhub-code/internal/multiplex"
@@ -47,6 +48,7 @@ const moltenHubTokenEnv = "MOLTEN_HUB_TOKEN"
 const moltenHubURLEnv = "MOLTEN_HUB_URL"
 const moltenHubRegionEnv = "MOLTEN_HUB_REGION"
 const localSubmitSource = "local_submit"
+const reviewWatchSource = "github_review_watch"
 const rerunSource = "rerun"
 const failureFollowUpSource = "failure_followup"
 const noChangesFollowUpSource = "no_changes_followup"
@@ -887,6 +889,7 @@ func runHub(args []string) int {
 	}
 
 	maybeStartAgentAuth(ctx, runtimeCfg, authGate, daemonLogger)
+	startGitHubReviewWatcher(ctx, runner, cfg, enqueueLocalRun, daemonLogger)
 	bootDiag := runHubBootDiagnosticsWithRuntimeLoaderDetailed(ctx, runner, daemonLogger, cfg, runtimeCfgLoader)
 	forceLocalOnlyMode := shouldRunHubInLocalOnlyMode(bootDiag.PingChecked, bootDiag.PingOK, *uiListen, hubConfigured)
 	if bootDiag.PingChecked && !bootDiag.PingOK {
@@ -2486,6 +2489,8 @@ func taskStartSourceForSubmission(source string, runCfg config.Config) string {
 	switch strings.TrimSpace(source) {
 	case "hub_dispatch":
 		return "hub"
+	case reviewWatchSource:
+		return "review"
 	case localSubmitSource:
 		if strings.TrimSpace(runCfg.LibraryTaskName) != "" {
 			return "library"
@@ -2494,6 +2499,47 @@ func taskStartSourceForSubmission(source string, runCfg config.Config) string {
 	default:
 		return ""
 	}
+}
+
+func startGitHubReviewWatcher(
+	ctx context.Context,
+	runner execx.Runner,
+	cfg hub.InitConfig,
+	enqueueLocalRun func(context.Context, config.Config, bool, string, bool) (string, error),
+	logf func(string, ...any),
+) {
+	if !cfg.ReviewWatch.EnabledValue() {
+		return
+	}
+	if runner == nil || enqueueLocalRun == nil {
+		if logf != nil {
+			logf("review_watch status=warn action=start err=%q", "runner or enqueue function unavailable")
+		}
+		return
+	}
+
+	watcher := &githubreview.Watcher{
+		Runner: runner,
+		Enqueue: func(reqCtx context.Context, runCfg config.Config) (string, error) {
+			return enqueueLocalRun(reqCtx, runCfg, true, reviewWatchSource, false)
+		},
+		Logf: logf,
+		Options: githubreview.Options{
+			PollInterval: time.Duration(cfg.ReviewWatch.PollIntervalMS) * time.Millisecond,
+			Writeback:    cfg.ReviewWatch.Writeback,
+			AutoMerge:    cfg.ReviewWatch.AutoMergeEnabled(),
+			MergeMethod:  cfg.ReviewWatch.MergeMethod,
+			ResponseMode: cfg.ReviewWatch.ResponseMode,
+		},
+	}
+	go func() {
+		if logf != nil {
+			logf("review_watch status=start interval_ms=%d", cfg.ReviewWatch.PollIntervalMS)
+		}
+		if err := watcher.Run(ctx); err != nil && logf != nil {
+			logf("review_watch status=error err=%q", err)
+		}
+	}()
 }
 
 type runtimeConfigLoader func() (hub.RuntimeConfig, error)

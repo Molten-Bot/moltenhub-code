@@ -63,9 +63,16 @@ type PromptImage struct {
 
 // ReviewConfig captures structured pull-request review context for review tasks.
 type ReviewConfig struct {
-	PRNumber   int    `json:"prNumber,omitempty"`
-	PRURL      string `json:"prUrl,omitempty"`
-	HeadBranch string `json:"headBranch,omitempty"`
+	PRNumber                 int    `json:"prNumber,omitempty"`
+	PRURL                    string `json:"prUrl,omitempty"`
+	HeadBranch               string `json:"headBranch,omitempty"`
+	Trigger                  string `json:"trigger,omitempty"`
+	NotificationThreadID     string `json:"notificationThreadId,omitempty"`
+	RequestedReviewer        string `json:"requestedReviewer,omitempty"`
+	RequireRequestedReviewer bool   `json:"requireRequestedReviewer,omitempty"`
+	Writeback                string `json:"writeback,omitempty"`
+	AutoMerge                bool   `json:"autoMerge,omitempty"`
+	MergeMethod              string `json:"mergeMethod,omitempty"`
 }
 
 // UnmarshalJSON supports canonical camelCase keys plus the "branch" alias for baseBranch.
@@ -365,12 +372,41 @@ func normalizeReviewConfig(review *ReviewConfig) *ReviewConfig {
 		return nil
 	}
 
-	normalized := &ReviewConfig{
-		PRNumber:   review.PRNumber,
-		PRURL:      strings.TrimSpace(review.PRURL),
-		HeadBranch: strings.TrimSpace(review.HeadBranch),
+	rawTrigger := strings.TrimSpace(review.Trigger)
+	trigger := normalizeReviewTrigger(rawTrigger)
+	if trigger == "" && rawTrigger != "" {
+		trigger = strings.ReplaceAll(strings.ToLower(rawTrigger), "_", "-")
 	}
-	if normalized.PRNumber <= 0 && normalized.PRURL == "" && normalized.HeadBranch == "" {
+	rawWriteback := strings.TrimSpace(review.Writeback)
+	writeback := normalizeReviewWriteback(rawWriteback)
+	if writeback == "" && rawWriteback != "" {
+		writeback = strings.ReplaceAll(strings.ToLower(rawWriteback), "_", "-")
+	}
+	rawMergeMethod := strings.TrimSpace(review.MergeMethod)
+	mergeMethod := normalizeReviewMergeMethod(rawMergeMethod)
+	if mergeMethod == "" && rawMergeMethod != "" {
+		mergeMethod = strings.ToLower(rawMergeMethod)
+	}
+
+	normalized := &ReviewConfig{
+		PRNumber:                 review.PRNumber,
+		PRURL:                    strings.TrimSpace(review.PRURL),
+		HeadBranch:               strings.TrimSpace(review.HeadBranch),
+		Trigger:                  trigger,
+		NotificationThreadID:     strings.TrimSpace(review.NotificationThreadID),
+		RequestedReviewer:        normalizeReviewer(review.RequestedReviewer),
+		RequireRequestedReviewer: review.RequireRequestedReviewer,
+		Writeback:                writeback,
+		AutoMerge:                review.AutoMerge,
+		MergeMethod:              mergeMethod,
+	}
+	if normalized.Trigger == "github-notification" {
+		normalized.RequireRequestedReviewer = true
+	}
+	if normalized.AutoMerge && normalized.MergeMethod == "" {
+		normalized.MergeMethod = "squash"
+	}
+	if !reviewConfigHasMeaningfulValue(normalized) {
 		return nil
 	}
 	return normalized
@@ -398,7 +434,78 @@ func validateReviewConfig(review *ReviewConfig, repos []string) error {
 			return fmt.Errorf("invalid review.prUrl %q", review.PRURL)
 		}
 	}
+	if review.Trigger != "" && normalizeReviewTrigger(review.Trigger) == "" {
+		return fmt.Errorf("unsupported review.trigger %q; supported values: hub, github-notification, manual", review.Trigger)
+	}
+	if review.Trigger == "github-notification" && review.RequireRequestedReviewer && review.RequestedReviewer == "" {
+		return fmt.Errorf("review.requestedReviewer is required when review.trigger is github-notification")
+	}
+	if review.Writeback != "" && normalizeReviewWriteback(review.Writeback) == "" {
+		return fmt.Errorf("unsupported review.writeback %q; supported values: summary-comment, off", review.Writeback)
+	}
+	if review.MergeMethod != "" && normalizeReviewMergeMethod(review.MergeMethod) == "" {
+		return fmt.Errorf("unsupported review.mergeMethod %q; supported values: merge, squash, rebase", review.MergeMethod)
+	}
 	return nil
+}
+
+func reviewConfigHasMeaningfulValue(review *ReviewConfig) bool {
+	if review == nil {
+		return false
+	}
+	return review.PRNumber > 0 ||
+		strings.TrimSpace(review.PRURL) != "" ||
+		strings.TrimSpace(review.HeadBranch) != "" ||
+		strings.TrimSpace(review.Trigger) != "" ||
+		strings.TrimSpace(review.NotificationThreadID) != "" ||
+		strings.TrimSpace(review.RequestedReviewer) != "" ||
+		review.RequireRequestedReviewer ||
+		strings.TrimSpace(review.Writeback) != "" ||
+		review.AutoMerge ||
+		strings.TrimSpace(review.MergeMethod) != ""
+}
+
+func normalizeReviewTrigger(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	normalized = strings.ReplaceAll(normalized, "_", "-")
+	switch normalized {
+	case "":
+		return ""
+	case "hub", "remote":
+		return "hub"
+	case "github-notification", "github-notifications", "notification", "notifications":
+		return "github-notification"
+	case "manual", "local":
+		return "manual"
+	default:
+		return ""
+	}
+}
+
+func normalizeReviewWriteback(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	normalized = strings.ReplaceAll(normalized, "_", "-")
+	switch normalized {
+	case "":
+		return ""
+	case "summary", "comment", "summary-comment":
+		return "summary-comment"
+	case "off", "none", "disabled":
+		return "off"
+	default:
+		return ""
+	}
+}
+
+func normalizeReviewMergeMethod(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "":
+		return ""
+	case "merge", "squash", "rebase":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return ""
+	}
 }
 
 func validatePromptImage(image PromptImage, index int) error {
