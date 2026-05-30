@@ -1193,25 +1193,36 @@ body[data-app-display="studio"] .prompt-panel:not(.hidden) {
 }
 
 body[data-app-display="studio"][data-prompt-mode="builder"] #prompt-builder-panel {
-  grid-template-rows: auto auto auto;
-  align-content: start;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  align-content: stretch;
+  min-height: 0;
+  overflow: hidden;
 }
 
 body[data-app-display="studio"][data-prompt-mode="builder"] #builder-prompt-field {
   min-height: 0;
-  grid-template-rows: auto auto;
-  align-content: start;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: stretch;
 }
 
 body[data-app-display="studio"][data-prompt-mode="builder"] #builder-prompt-field .speech-stream-wrap {
   display: grid;
   min-height: 0;
+  height: 100%;
+}
+
+body[data-app-display="studio"][data-prompt-mode="json"] #prompt-raw-panel {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
 }
 
 body[data-app-display="studio"][data-prompt-mode="builder"] #builder-prompt-input,
 body[data-app-display="studio"][data-prompt-mode="json"] #local-prompt-input {
-  align-self: start;
-  height: auto;
+  min-height: 0;
+  height: 100% !important;
+  max-width: 100%;
 }
 
 body[data-app-display="studio"][data-prompt-mode="library"] #prompt-library-panel {
