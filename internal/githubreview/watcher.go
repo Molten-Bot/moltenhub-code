@@ -304,7 +304,7 @@ type pullRequestDetails struct {
 func notificationsCommand() execx.Command {
 	return execx.Command{
 		Name: "gh",
-		Args: []string{"api", "notifications", "-F", "participating=true", "-F", "per_page=50"},
+		Args: []string{"api", "--method", "GET", "notifications", "-F", "participating=true", "-F", "per_page=50"},
 	}
 }
 
