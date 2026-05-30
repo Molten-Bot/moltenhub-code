@@ -49,6 +49,7 @@ const moltenHubURLEnv = "MOLTEN_HUB_URL"
 const moltenHubRegionEnv = "MOLTEN_HUB_REGION"
 const localSubmitSource = "local_submit"
 const reviewWatchSource = "github_review_watch"
+const prReviewFeedbackSource = "pr_review_feedback"
 const rerunSource = "rerun"
 const failureFollowUpSource = "failure_followup"
 const noChangesFollowUpSource = "no_changes_followup"
@@ -880,6 +881,21 @@ func runHub(args []string) int {
 			Broker:      monitorBroker,
 			Logf:        daemonLogger,
 			CleanupTask: cleanupTaskLogs,
+			OnReviewFeedback: func(reqCtx context.Context, task web.Task, feedback web.PRReviewFeedback) (string, error) {
+				runConfigJSON, ok := monitorBroker.TaskRunConfig(task.RequestID)
+				if !ok {
+					return "", fmt.Errorf("stored run config not found for request %s", task.RequestID)
+				}
+				originalCfg, err := hub.ParseRunConfigJSON(runConfigJSON)
+				if err != nil {
+					return "", fmt.Errorf("parse stored run config for request %s: %w", task.RequestID, err)
+				}
+				followUpCfg, err := prReviewFeedbackRunConfig(originalCfg, task, feedback)
+				if err != nil {
+					return "", err
+				}
+				return enqueueLocalRun(reqCtx, followUpCfg, true, prReviewFeedbackSource, false)
+			},
 		}
 		go func() {
 			if err := prMonitor.Run(ctx); err != nil {
@@ -2489,7 +2505,7 @@ func taskStartSourceForSubmission(source string, runCfg config.Config) string {
 	switch strings.TrimSpace(source) {
 	case "hub_dispatch":
 		return "hub"
-	case reviewWatchSource:
+	case reviewWatchSource, prReviewFeedbackSource:
 		return "review"
 	case localSubmitSource:
 		if strings.TrimSpace(runCfg.LibraryTaskName) != "" {

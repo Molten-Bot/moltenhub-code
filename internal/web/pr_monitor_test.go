@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -114,7 +115,7 @@ func TestPRMergeMonitorRemovesMergedTaskFromQueueAndRunsCleanup(t *testing.T) {
 	if got, want := commands[0].Name, "gh"; got != want {
 		t.Fatalf("command name = %q, want %q", got, want)
 	}
-	if got, want := commands[0].Args, []string{"pr", "view", "42", "--json", "state,mergedAt", "--repo", "acme/repo"}; !slices.Equal(got, want) {
+	if got, want := commands[0].Args, []string{"pr", "view", "42", "--json", "state,mergedAt,url,number,title,headRefName,baseRefName,reviewDecision,latestReviews,comments", "--repo", "acme/repo"}; !slices.Equal(got, want) {
 		t.Fatalf("command args = %v, want %v", got, want)
 	}
 }
@@ -164,6 +165,152 @@ func TestPRMergeMonitorKeepsTaskVisibleUntilPRIsMerged(t *testing.T) {
 		}
 	case <-time.After(200 * time.Millisecond):
 		t.Fatal("timed out waiting for monitor shutdown")
+	}
+}
+
+func TestPRMergeMonitorQueuesActionableReviewFeedbackOncePerPR(t *testing.T) {
+	t.Parallel()
+
+	broker := NewBroker()
+	broker.RecordTaskRunConfig("req-feedback", []byte(`{"repo":"git@github.com:acme/repo.git","baseBranch":"main","prompt":"ship it"}`))
+	broker.IngestLog("dispatch status=start request_id=req-feedback repo=git@github.com:acme/repo.git")
+	broker.IngestLog("dispatch status=completed request_id=req-feedback workspace=/tmp/run branch=moltenhub-ship pr_url=https://github.com/acme/repo/pull/117")
+
+	reviewBody := "**Positive**\n- Good scope.\n\n**Negative**\n- [Medium] src/main.jsx:1139 - Custom theme radiogroup lacks arrow-key navigation."
+	runner := &stubPRMonitorRunner{
+		result: execx.Result{Stdout: fmt.Sprintf(`{
+			"state":"OPEN",
+			"mergedAt":"",
+			"url":"https://github.com/acme/repo/pull/117",
+			"number":117,
+			"title":"Ship it",
+			"headRefName":"moltenhub-ship",
+			"baseRefName":"main",
+			"reviewDecision":"REVIEW_REQUIRED",
+			"latestReviews":[{"id":"review-1","author":{"login":"reviewer"},"state":"COMMENTED","submittedAt":"2026-05-30T12:00:00Z","body":%q}],
+			"comments":[]
+		}`, reviewBody)},
+	}
+
+	calls := 0
+	var gotTask Task
+	var gotFeedback PRReviewFeedback
+	monitor := PRMergeMonitor{
+		Runner: runner,
+		Broker: broker,
+		Logf:   func(string, ...any) {},
+		OnReviewFeedback: func(_ context.Context, task Task, feedback PRReviewFeedback) (string, error) {
+			calls++
+			gotTask = task
+			gotFeedback = feedback
+			return "local-follow-up", nil
+		},
+	}
+
+	task := broker.Snapshot().Tasks[0]
+	monitor.checkTaskPR(context.Background(), task)
+	monitor.checkTaskPR(context.Background(), task)
+
+	if got, want := calls, 1; got != want {
+		t.Fatalf("OnReviewFeedback calls = %d, want %d", got, want)
+	}
+	if got, want := gotTask.RequestID, "req-feedback"; got != want {
+		t.Fatalf("feedback task request_id = %q, want %q", got, want)
+	}
+	if got, want := gotFeedback.PRURL, "https://github.com/acme/repo/pull/117"; got != want {
+		t.Fatalf("feedback.PRURL = %q, want %q", got, want)
+	}
+	if got, want := gotFeedback.HeadBranch, "moltenhub-ship"; got != want {
+		t.Fatalf("feedback.HeadBranch = %q, want %q", got, want)
+	}
+	if got, want := gotFeedback.BaseBranch, "main"; got != want {
+		t.Fatalf("feedback.BaseBranch = %q, want %q", got, want)
+	}
+	if got := len(gotFeedback.Items); got != 1 {
+		t.Fatalf("len(feedback.Items) = %d, want 1", got)
+	}
+	if !strings.Contains(gotFeedback.Items[0].Body, "Custom theme radiogroup lacks arrow-key navigation") {
+		t.Fatalf("feedback item body = %q", gotFeedback.Items[0].Body)
+	}
+	if gotFeedback.Digest == "" {
+		t.Fatal("feedback.Digest is empty")
+	}
+}
+
+func TestPRMergeMonitorIgnoresCleanReviewFeedback(t *testing.T) {
+	t.Parallel()
+
+	broker := NewBroker()
+	broker.IngestLog("dispatch status=start request_id=req-clean repo=git@github.com:acme/repo.git")
+	broker.IngestLog("dispatch status=completed request_id=req-clean workspace=/tmp/run branch=moltenhub-clean pr_url=https://github.com/acme/repo/pull/118")
+
+	reviewBody := "**Positive**\n- Looks safe.\n\n**Negative**\n- No material issues found."
+	runner := &stubPRMonitorRunner{
+		result: execx.Result{Stdout: fmt.Sprintf(`{
+			"state":"OPEN",
+			"mergedAt":"",
+			"url":"https://github.com/acme/repo/pull/118",
+			"headRefName":"moltenhub-clean",
+			"baseRefName":"main",
+			"latestReviews":[{"id":"review-1","author":{"login":"reviewer"},"state":"COMMENTED","submittedAt":"2026-05-30T12:00:00Z","body":%q}],
+			"comments":[]
+		}`, reviewBody)},
+	}
+
+	calls := 0
+	monitor := PRMergeMonitor{
+		Runner: runner,
+		Broker: broker,
+		Logf:   func(string, ...any) {},
+		OnReviewFeedback: func(_ context.Context, _ Task, _ PRReviewFeedback) (string, error) {
+			calls++
+			return "local-follow-up", nil
+		},
+	}
+
+	monitor.checkTaskPR(context.Background(), broker.Snapshot().Tasks[0])
+
+	if calls != 0 {
+		t.Fatalf("OnReviewFeedback calls = %d, want 0", calls)
+	}
+}
+
+func TestPRMergeMonitorDoesNotQueueFeedbackForReviewTasks(t *testing.T) {
+	t.Parallel()
+
+	broker := NewBroker()
+	broker.RecordTaskRunConfigWithSource("req-review", []byte(`{"repo":"git@github.com:acme/repo.git","libraryTaskName":"code-review","review":{"prNumber":117}}`), "review")
+	broker.IngestLog("dispatch status=start request_id=req-review repo=git@github.com:acme/repo.git")
+	broker.IngestLog("dispatch status=no_changes request_id=req-review workspace=/tmp/run branch=feature pr_url=https://github.com/acme/repo/pull/117")
+
+	reviewBody := "**Negative**\n- [Medium] src/main.jsx:1139 - Custom theme radiogroup lacks arrow-key navigation."
+	runner := &stubPRMonitorRunner{
+		result: execx.Result{Stdout: fmt.Sprintf(`{
+			"state":"OPEN",
+			"mergedAt":"",
+			"url":"https://github.com/acme/repo/pull/117",
+			"headRefName":"feature",
+			"baseRefName":"main",
+			"latestReviews":[{"id":"review-1","author":{"login":"reviewer"},"state":"COMMENTED","submittedAt":"2026-05-30T12:00:00Z","body":%q}],
+			"comments":[]
+		}`, reviewBody)},
+	}
+
+	calls := 0
+	monitor := PRMergeMonitor{
+		Runner: runner,
+		Broker: broker,
+		Logf:   func(string, ...any) {},
+		OnReviewFeedback: func(_ context.Context, _ Task, _ PRReviewFeedback) (string, error) {
+			calls++
+			return "local-follow-up", nil
+		},
+	}
+
+	monitor.checkTaskPR(context.Background(), broker.Snapshot().Tasks[0])
+
+	if calls != 0 {
+		t.Fatalf("OnReviewFeedback calls = %d, want 0", calls)
 	}
 }
 
