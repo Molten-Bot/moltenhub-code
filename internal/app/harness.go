@@ -109,6 +109,7 @@ type repoWorkspace struct {
 	PRHeadOwner                 string
 	PRTargetRepo                string
 	BaseBranch                  string
+	BaselineHead                string
 	CreateWorkBranch            bool
 	Changed                     bool
 	BranchCollisionSuffix       string
@@ -278,6 +279,13 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 			}
 		}
 		for i := range repos {
+			if !repos[i].CreateWorkBranch {
+				head, err := h.currentHead(ctx, repos[i])
+				if err != nil {
+					return h.fail(ExitGit, "git", err, runDir)
+				}
+				repos[i].BaselineHead = head
+			}
 			screenshotSnapshot, err := prCommentScreenshotSnapshot(repos[i].Dir)
 			if err != nil {
 				return h.fail(ExitGit, "git", err, runDir)
@@ -1970,6 +1978,11 @@ func (h Harness) repoHasPendingChanges(
 	if strings.TrimSpace(localBranchFromStatus(statusStdout)) == "" {
 		return false, nil
 	}
+	if changed, err := h.repoHeadChangedSinceBaseline(ctx, repo); err != nil {
+		return false, err
+	} else if changed {
+		return true, nil
+	}
 	if !repo.CreateWorkBranch {
 		return false, nil
 	}
@@ -1978,6 +1991,35 @@ func (h Harness) repoHasPendingChanges(
 		return false, err
 	}
 	return commitsAhead > 0, nil
+}
+
+func (h Harness) repoHeadChangedSinceBaseline(ctx context.Context, repo repoWorkspace) (bool, error) {
+	baseline := strings.TrimSpace(repo.BaselineHead)
+	if baseline == "" {
+		return false, nil
+	}
+	head, err := h.currentHead(ctx, repo)
+	if err != nil {
+		return false, err
+	}
+	return head != baseline, nil
+}
+
+func (h Harness) currentHead(ctx context.Context, repo repoWorkspace) (string, error) {
+	res, err := h.runCommand(ctx, "git", headCommitSHACommand(repo.Dir))
+	if err != nil {
+		return "", commandErrorWithDetails(
+			fmt.Sprintf("read current HEAD for repo %s", repo.URL),
+			err,
+			res,
+			maxGitErrorDetailChars,
+		)
+	}
+	head := strings.TrimSpace(res.Stdout)
+	if head == "" {
+		return "", fmt.Errorf("read current HEAD for repo %s: git rev-parse HEAD returned empty output", repo.URL)
+	}
+	return head, nil
 }
 
 func (h Harness) countCommitsAheadOfBase(ctx context.Context, repo repoWorkspace, baseBranch string) (int, error) {

@@ -991,6 +991,7 @@ func TestRunNonMainBranchReusesExistingBranchAndPR(t *testing.T) {
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: fetchBaseBranchCommand(repoDir, cfg.BaseBranch)},
 		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
+		{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: "1111111111111111111111111111111111111111\n"}},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## release/2026.04-hotfix...origin/release/2026.04-hotfix\n M file.go\n"}},
 		{cmd: addCommand(repoDir)},
@@ -1015,6 +1016,68 @@ func TestRunNonMainBranchReusesExistingBranchAndPR(t *testing.T) {
 	}
 	if got, want := res.Branch, cfg.BaseBranch; got != want {
 		t.Fatalf("Branch = %q, want %q", got, want)
+	}
+	if got, want := res.PRURL, prURL; got != want {
+		t.Fatalf("PRURL = %q, want %q", got, want)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunNonMainBranchDetectsAgentCommittedAndPushedChange(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.BaseBranch = "release/2026.04-hotfix"
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	prURL := "https://github.com/acme/repo/pull/77"
+	oldHead := "1111111111111111111111111111111111111111"
+	newHead := "2222222222222222222222222222222222222222"
+	agentOutput := "Commit pushed: `2222222 fix: update branch`"
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: fetchBaseBranchCommand(repoDir, cfg.BaseBranch)},
+		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
+		{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: oldHead + "\n"}},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath)), res: execx.Result{Stdout: agentOutput}},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## release/2026.04-hotfix...origin/release/2026.04-hotfix\n"}},
+		{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: newHead + "\n"}},
+		{cmd: addCommand(repoDir)},
+		{
+			cmd: commitCommand(repoDir, cfg.CommitMessage),
+			res: execx.Result{Stdout: "On branch release/2026.04-hotfix\nnothing to commit, working tree clean\n"},
+			err: errors.New("exit status 1"),
+		},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## release/2026.04-hotfix...origin/release/2026.04-hotfix\n"}},
+		{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: newHead + "\n"}},
+		{cmd: pushCommand(repoDir, cfg.BaseBranch)},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "abc123\trefs/heads/" + cfg.BaseBranch + "\n"}},
+		{cmd: prLookupByHeadCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL)},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.NoChanges {
+		t.Fatal("NoChanges = true, want false")
 	}
 	if got, want := res.PRURL, prURL; got != want {
 		t.Fatalf("PRURL = %q, want %q", got, want)
@@ -1096,6 +1159,7 @@ func TestRunNonMainBranchPushNonFastForwardRetriesWithMergeSync(t *testing.T) {
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: fetchBaseBranchCommand(repoDir, cfg.BaseBranch)},
 		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch), res: pushRejected, err: errors.New("push rejected")},
+		{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: "1111111111111111111111111111111111111111\n"}},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
@@ -1823,6 +1887,7 @@ func TestRunNonMainBranchNoChangesReportsExistingPR(t *testing.T) {
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: fetchBaseBranchCommand(repoDir, cfg.BaseBranch)},
 		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
+		{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: "1111111111111111111111111111111111111111\n"}},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "\n"}},
 		{cmd: remoteBranchExistsOnOriginCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "abc123\trefs/heads/" + cfg.BaseBranch + "\n"}},
@@ -2873,6 +2938,7 @@ func TestRunNonMainBranchReusesExistingPR(t *testing.T) {
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: fetchBaseBranchCommand(repoDir, cfg.BaseBranch)},
 		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
+		{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: "1111111111111111111111111111111111111111\n"}},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
@@ -2928,6 +2994,7 @@ func TestRunNonMainBranchCreatesPRWithoutExplicitBaseWhenNoOpenPR(t *testing.T) 
 		{cmd: cloneCommand(cfg, repoDir)},
 		{cmd: fetchBaseBranchCommand(repoDir, cfg.BaseBranch)},
 		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
+		{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: "1111111111111111111111111111111111111111\n"}},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
 		{cmd: addCommand(repoDir)},
