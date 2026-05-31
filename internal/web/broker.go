@@ -934,10 +934,10 @@ func savedDurationForAttempt(attempt taskAttemptState, status string, duration t
 	if duration <= 0 {
 		return 0
 	}
-	if isSuccessfulTaskStatus(status) {
+	if isReviewTaskAttempt(attempt) {
 		return duration
 	}
-	if isReviewTaskAttempt(attempt) && isActiveTaskStatus(status) {
+	if isSuccessfulTaskStatus(status) {
 		return duration
 	}
 	return 0
