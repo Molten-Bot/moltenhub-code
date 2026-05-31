@@ -1773,3 +1773,33 @@ func TestNewHubTasksShowCurrentWorkAndHighlight(t *testing.T) {
 		t.Fatalf("expected stylesheet to add green border treatment for new hub tasks")
 	}
 }
+
+func TestNewHubTasksPlayDistinctStartSounds(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.Code)
+	}
+
+	html := resp.Body.String()
+	for _, want := range []string{
+		"function playCodeTaskStartSound() {",
+		"function playReviewTaskStartSound() {",
+		"function playHubTaskStartSound(task) {",
+		"function isReviewTask(task) {",
+		`return source === "hub" || source === "review";`,
+		"playHubTaskStartSound(task);",
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("expected index html to contain %q", want)
+		}
+	}
+	if !strings.Contains(html, "if (state.taskSoundMuted) {\n        return;\n      }\n      const audio = ensureTaskAudioContext();") {
+		t.Fatalf("expected hub task start sounds to keep using the task sound mute gate")
+	}
+}

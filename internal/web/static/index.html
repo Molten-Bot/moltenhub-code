@@ -9229,6 +9229,22 @@
       return taskStartSource(task) === "hub";
     }
 
+    function isHubDeliveredTask(task) {
+      const source = taskStartSource(task);
+      return source === "hub" || source === "review";
+    }
+
+    function isReviewTask(task) {
+      if (taskStartSource(task) === "review") {
+        return true;
+      }
+      const workflow = String(task?.workflow || task?.libraryTaskName || task?.library_task || task?.skill || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/g, "_");
+      return workflow === "code_review" || workflow === "pull_request_code_review";
+    }
+
     function triggerNewHubTaskHighlight(requestID) {
       requestID = String(requestID || "").trim();
       if (!requestID) return;
@@ -9268,10 +9284,13 @@
 
       for (const task of nextSnapshot?.tasks || []) {
         const requestID = taskRequestID(task);
-        if (!requestID || previousIDs.has(requestID) || !isHubTask(task)) {
+        if (!requestID || previousIDs.has(requestID) || !isHubDeliveredTask(task)) {
           continue;
         }
-        triggerNewHubTaskHighlight(requestID);
+        if (isHubTask(task)) {
+          triggerNewHubTaskHighlight(requestID);
+        }
+        playHubTaskStartSound(task);
       }
     }
 
@@ -9498,6 +9517,29 @@
         { frequency: 329.63, duration: 0.15, offset: 0, type: "sawtooth", gain: 0.066 },
         { frequency: 246.94, duration: 0.2, offset: 0.06, type: "sawtooth", gain: 0.078 },
       ]);
+    }
+
+    function playCodeTaskStartSound() {
+      playTaskTone([
+        { frequency: 392, duration: 0.07, offset: 0, type: "square", gain: 0.036 },
+        { frequency: 523.25, duration: 0.09, offset: 0.055, type: "square", gain: 0.04 },
+      ]);
+    }
+
+    function playReviewTaskStartSound() {
+      playTaskTone([
+        { frequency: 783.99, duration: 0.055, offset: 0, type: "sine", gain: 0.03 },
+        { frequency: 659.25, duration: 0.055, offset: 0.06, type: "sine", gain: 0.03 },
+        { frequency: 783.99, duration: 0.075, offset: 0.12, type: "sine", gain: 0.034 },
+      ]);
+    }
+
+    function playHubTaskStartSound(task) {
+      if (isReviewTask(task)) {
+        playReviewTaskStartSound();
+        return;
+      }
+      playCodeTaskStartSound();
     }
 
     function taskTerminalSound(task) {
