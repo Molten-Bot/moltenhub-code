@@ -229,6 +229,41 @@ func TestBrokerTracksReviewRuntimeAsDashboardSavedTime(t *testing.T) {
 	}
 }
 
+func TestBrokerCountsFailedReviewRuntimeAsSavedTime(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	b := NewBroker()
+	b.now = func() time.Time { return now }
+
+	b.RecordTaskRunConfigWithSource("req-review-error", []byte(`{
+		"repo":"git@github.com:acme/repo.git",
+		"libraryTaskName":"code-review",
+		"agentHarness":"codex",
+		"review":{"prNumber":42}
+	}`), "review")
+	b.IngestLog("dispatch status=start request_id=req-review-error skill=library_task repo=git@github.com:acme/repo.git")
+	now = now.Add(45 * time.Second)
+	b.IngestLog("dispatch status=error request_id=req-review-error error=blocked")
+
+	snap := b.Snapshot()
+	if got, want := snap.Stats.TotalSavedSeconds, 45.0; got != want {
+		t.Fatalf("stats.total_saved_seconds = %v, want %v", got, want)
+	}
+	if got, want := snap.Stats.ReviewSavedSeconds, 45.0; got != want {
+		t.Fatalf("stats.review_saved_seconds = %v, want %v", got, want)
+	}
+	if got, want := snap.Stats.ReviewFailedTasks, 1; got != want {
+		t.Fatalf("stats.review_failed_tasks = %d, want %d", got, want)
+	}
+	if len(snap.Stats.WorkflowTimes) == 0 || snap.Stats.WorkflowTimes[0].Name != "Pull Request Code Review" {
+		t.Fatalf("stats.workflow_times = %#v, want Pull Request Code Review first", snap.Stats.WorkflowTimes)
+	}
+	if got, want := snap.Stats.WorkflowTimes[0].TotalSavedSeconds, 45.0; got != want {
+		t.Fatalf("review workflow total_saved_seconds = %v, want %v", got, want)
+	}
+}
+
 func TestBrokerTracksRepositoryStatsAndPullRequests(t *testing.T) {
 	t.Parallel()
 
