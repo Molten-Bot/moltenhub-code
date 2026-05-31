@@ -36,8 +36,28 @@ type Watcher struct {
 	Logf    func(string, ...any)
 	Options Options
 
-	mu   sync.Mutex
-	seen map[string]struct{}
+	mu        sync.Mutex
+	seen      map[string]struct{}
+	optionsMu sync.RWMutex
+}
+
+func (w *Watcher) UpdateOptions(options Options) {
+	if w == nil {
+		return
+	}
+	w.optionsMu.Lock()
+	w.Options = options
+	w.optionsMu.Unlock()
+}
+
+func (w *Watcher) optionsSnapshot() Options {
+	if w == nil {
+		return Options{}
+	}
+	w.optionsMu.RLock()
+	options := w.Options
+	w.optionsMu.RUnlock()
+	return options
 }
 
 func (w *Watcher) Run(ctx context.Context) error {
@@ -51,7 +71,7 @@ func (w *Watcher) Run(ctx context.Context) error {
 		return fmt.Errorf("github review watcher enqueue function is required")
 	}
 
-	interval := w.Options.PollInterval
+	interval := w.optionsSnapshot().PollInterval
 	if interval <= 0 {
 		interval = defaultPollInterval
 	}
@@ -256,6 +276,7 @@ func (w *Watcher) pullRequestDetails(ctx context.Context, ownerRepo string, prNu
 }
 
 func (w *Watcher) runConfigForReview(candidate reviewCandidate, ownerRepo string, prNumber int, details pullRequestDetails, viewer string) (config.Config, error) {
+	options := w.optionsSnapshot()
 	repoURL := firstNonEmpty(
 		candidate.NotificationCloneURL,
 		details.Base.Repo.CloneURL,
@@ -271,7 +292,7 @@ func (w *Watcher) runConfigForReview(candidate reviewCandidate, ownerRepo string
 	if err != nil {
 		return config.Config{}, err
 	}
-	runCfg.ResponseMode = firstNonEmpty(w.Options.ResponseMode, "off")
+	runCfg.ResponseMode = firstNonEmpty(options.ResponseMode, "off")
 	runCfg.Review = &config.ReviewConfig{
 		PRNumber:                 prNumber,
 		PRURL:                    firstNonEmpty(candidate.PRURL, details.HTMLURL, fmt.Sprintf("https://github.com/%s/pull/%d", ownerRepo, prNumber)),
@@ -280,9 +301,9 @@ func (w *Watcher) runConfigForReview(candidate reviewCandidate, ownerRepo string
 		NotificationThreadID:     strings.TrimSpace(candidate.NotificationThreadID),
 		RequestedReviewer:        strings.TrimSpace(viewer),
 		RequireRequestedReviewer: true,
-		Writeback:                firstNonEmpty(w.Options.Writeback, "summary-comment"),
-		AutoMerge:                w.Options.AutoMerge,
-		MergeMethod:              firstNonEmpty(w.Options.MergeMethod, "squash"),
+		Writeback:                firstNonEmpty(options.Writeback, "summary-comment"),
+		AutoMerge:                options.AutoMerge,
+		MergeMethod:              firstNonEmpty(options.MergeMethod, "squash"),
 	}
 	runCfg.ApplyDefaults()
 	if err := runCfg.Validate(); err != nil {

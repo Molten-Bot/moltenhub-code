@@ -652,7 +652,39 @@
           </div>
         </header>
 
-        <form id="hub-setup-form" class="stack profile-shell onboarding-form" data-bound="false">
+        <div id="settings-tabbar" class="settings-tabbar hidden" role="tablist" aria-label="Settings">
+          <button id="settings-tab-review" class="settings-tab active" type="button" role="tab" aria-selected="true" data-settings-tab="review">Review</button>
+          <button id="settings-tab-hub" class="settings-tab" type="button" role="tab" aria-selected="false" data-settings-tab="hub">Hub</button>
+        </div>
+
+        <form id="review-settings-form" class="stack review-settings-form hidden" data-settings-panel="review">
+          <fieldset class="review-settings-section">
+            <legend>Automation</legend>
+            <label class="review-settings-toggle">
+              <input id="review-settings-auto-merge" type="checkbox">
+              <span>Auto-merge clean reviews</span>
+            </label>
+          </fieldset>
+          <label class="review-settings-section">
+            <span>Merge Method</span>
+            <select id="review-settings-merge-method">
+              <option value="squash">Squash</option>
+              <option value="merge">Merge commit</option>
+              <option value="rebase">Rebase</option>
+            </select>
+          </label>
+          <div class="onboarding-form-actions hub-setup-footer">
+            <p id="review-settings-status" class="hub-setup-status submit-status submit-status-inline onboarding-message" aria-live="polite"></p>
+            <div class="hub-setup-actions">
+              <button id="review-settings-close" class="settings-modal-close onboarding-modal-close" type="button" aria-label="Close settings" title="Close">
+                <i data-lucide="x" aria-hidden="true"></i>
+              </button>
+              <button id="review-settings-save" class="prompt-action-button prompt-submit" type="submit">Save</button>
+            </div>
+          </div>
+        </form>
+
+        <form id="hub-setup-form" class="stack profile-shell onboarding-form" data-bound="false" data-settings-panel="hub">
           <fieldset id="hub-setup-connect-region-row" class="runtime-toggle onboarding-section">
             <legend>Region</legend>
             <div class="runtime-toggle-options hub-setup-toggle-group" role="tablist" aria-label="Region">
@@ -1399,6 +1431,16 @@
       };
     }
 
+    function normalizeReviewSettings(raw) {
+      const settings = raw && typeof raw === "object" ? raw : {};
+      const method = String(settings.merge_method || settings.mergeMethod || "squash").trim().toLowerCase();
+      return {
+        autoMerge: Boolean(settings.auto_merge || settings.autoMerge),
+        mergeMethod: ["merge", "squash", "rebase"].includes(method) ? method : "squash",
+        message: String(settings.message || "").trim(),
+      };
+    }
+
     function hubSetupModeForToken(token, fallback = state.hubSetup.agentMode) {
       const trimmed = String(token || "").trim().toLowerCase();
       if (trimmed.startsWith("b_")) return "new";
@@ -1504,6 +1546,14 @@
 
     function isHubProfileDialogMode() {
       return normalizeHubSetupDialogMode(state.hubSetupDialogMode) === "profile";
+    }
+
+    function normalizeSettingsTab(value) {
+      return value === "hub" ? "hub" : "review";
+    }
+
+    function isReviewSettingsTab() {
+      return isHubProfileDialogMode() && normalizeSettingsTab(state.settingsTab) === "review";
     }
 
     function shouldOpenInitialHubProfileDialog() {
@@ -1791,6 +1841,8 @@
       ui: stateUI,
       agentAuth: normalizeAgentAuth({ required: false, ready: true, state: "ready" }),
       hubSetup: normalizeHubSetup({ configured: false }),
+      reviewSettings: normalizeReviewSettings({}),
+      settingsTab: "review",
       snapshot: null,
       selectedTaskId: "",
       dismissedTaskIDs: loadDismissedTaskIDs(),
@@ -2055,6 +2107,14 @@
     const agentAuthShell = document.getElementById("agent-auth-shell");
     const hubSetupGate = document.getElementById("hub-setup-gate");
     const hubSetupTitle = document.getElementById("hub-setup-title");
+    const settingsTabbar = document.getElementById("settings-tabbar");
+    const settingsTabs = Array.from(document.querySelectorAll("[data-settings-tab]"));
+    const reviewSettingsForm = document.getElementById("review-settings-form");
+    const reviewSettingsAutoMerge = document.getElementById("review-settings-auto-merge");
+    const reviewSettingsMergeMethod = document.getElementById("review-settings-merge-method");
+    const reviewSettingsStatus = document.getElementById("review-settings-status");
+    const reviewSettingsClose = document.getElementById("review-settings-close");
+    const reviewSettingsSave = document.getElementById("review-settings-save");
     const hubSetupForm = document.getElementById("hub-setup-form");
     const hubSetupMessage = document.getElementById("hub-setup-message");
     const hubSetupClose = document.getElementById("hub-setup-close");
@@ -2907,6 +2967,49 @@
       hubSetupStatus.textContent = value;
     }
 
+    function setReviewSettingsStatus(kind, text) {
+      if (!reviewSettingsStatus) return;
+      const value = String(text || "").trim();
+      reviewSettingsStatus.className = value
+        ? (kind ? `hub-setup-status submit-status submit-status-inline is-visible ${kind}${kind === "error" ? " is-error" : ""} onboarding-message` : "hub-setup-status submit-status submit-status-inline is-visible onboarding-message")
+        : "hub-setup-status submit-status submit-status-inline onboarding-message";
+      reviewSettingsStatus.textContent = value;
+    }
+
+    function applyReviewSettingsState(nextState) {
+      state.reviewSettings = normalizeReviewSettings(nextState);
+      if (reviewSettingsAutoMerge instanceof HTMLInputElement) {
+        reviewSettingsAutoMerge.checked = state.reviewSettings.autoMerge;
+      }
+      if (reviewSettingsMergeMethod instanceof HTMLSelectElement) {
+        reviewSettingsMergeMethod.value = state.reviewSettings.mergeMethod;
+      }
+      if (state.reviewSettings.message) {
+        setReviewSettingsStatus("ok", state.reviewSettings.message);
+      }
+    }
+
+    function setSettingsTab(tab) {
+      const nextTab = normalizeSettingsTab(tab);
+      state.settingsTab = nextTab;
+      const profileEditor = isHubProfileDialogMode();
+      if (settingsTabbar) {
+        settingsTabbar.classList.toggle("hidden", !profileEditor);
+      }
+      settingsTabs.forEach((button) => {
+        const active = profileEditor && button.getAttribute("data-settings-tab") === nextTab;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      if (reviewSettingsForm) {
+        reviewSettingsForm.classList.toggle("hidden", !profileEditor || nextTab !== "review");
+      }
+      if (hubSetupForm) {
+        hubSetupForm.classList.toggle("hidden", profileEditor && nextTab !== "hub");
+      }
+      syncHubSetupSubmitState();
+    }
+
     function setHubSetupBusy(busy) {
       state.hubSetupBusy = Boolean(busy);
       if (hubSetupForm) hubSetupForm.setAttribute("aria-busy", state.hubSetupBusy ? "true" : "false");
@@ -2937,6 +3040,10 @@
         hubSetupProfile.readOnly = state.hubSetupBusy;
         hubSetupProfile.setAttribute("aria-readonly", state.hubSetupBusy ? "true" : "false");
       }
+      if (reviewSettingsAutoMerge) reviewSettingsAutoMerge.disabled = state.hubSetupBusy;
+      if (reviewSettingsMergeMethod) reviewSettingsMergeMethod.disabled = state.hubSetupBusy;
+      if (reviewSettingsSave) reviewSettingsSave.disabled = state.hubSetupBusy;
+      if (reviewSettingsClose) reviewSettingsClose.disabled = state.hubSetupBusy;
       syncHubSetupSubmitState();
     }
 
@@ -2995,12 +3102,17 @@
         hubSetupSigninLink.classList.toggle("hidden", profileEditor);
       }
       if (hubSetupTitle) {
-        hubSetupTitle.textContent = profileEditor ? "Agent Profile" : "Connect to Hub";
+        hubSetupTitle.textContent = profileEditor ? "Settings" : "Connect to Hub";
       }
       if (hubSetupMessage) {
         hubSetupMessage.textContent = state.hubSetup.message || (profileEditor
-          ? "Update how this agent appears in Molten Hub."
+          ? "Review automation and Hub profile settings."
           : "Connect this runtime to Molten Hub.");
+      }
+      if (!profileEditor) {
+        state.settingsTab = "hub";
+      } else {
+        state.settingsTab = normalizeSettingsTab(state.settingsTab);
       }
       if (hubSetupHandle) {
         hubSetupHandle.value = state.hubSetup.handle || "";
@@ -3061,6 +3173,7 @@
         hubSetupProfileBaseline = null;
         syncHubSetupSubmitState();
       }
+      setSettingsTab(state.settingsTab);
       applyHubDockState();
       renderHubSetupConnectionToggle();
       renderHubConnection(state.snapshot);
@@ -3081,7 +3194,7 @@
         setHubSetupStatus("", "");
         return;
       }
-      const focusTarget = isHubProfileDialogMode() ? hubSetupHandle : hubSetupToken;
+      const focusTarget = isReviewSettingsTab() ? reviewSettingsAutoMerge : (isHubProfileDialogMode() ? hubSetupHandle : hubSetupToken);
       if (focusTarget instanceof HTMLElement) {
         window.requestAnimationFrame(() => {
           focusTarget.focus({ preventScroll: true });
@@ -3138,13 +3251,86 @@
       }
     }
 
+    async function loadReviewSettings() {
+      try {
+        const response = await fetch("/api/review-settings", {
+          method: "GET",
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        });
+        let body = null;
+        try {
+          body = await response.json();
+        } catch (_parseError) {
+          body = null;
+        }
+        if (body?.settings) {
+          applyReviewSettingsState(body.settings);
+        }
+        if (!response.ok) {
+          const detail = String(body?.error || `review settings failed with ${response.status}`).trim();
+          throw new Error(detail);
+        }
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : "Unable to load review settings.";
+        setReviewSettingsStatus("error", detail);
+      }
+    }
+
     function openHubProfileDialog(source = "dock") {
       state.hubSetupDialogMode = "profile";
+      state.settingsTab = "review";
       trackAnalyticsEvent("hub_profile_opened", { source });
       setHubSetupOpen(true);
       applyHubSetupState(state.hubSetup);
       setHubSetupStatus("", "");
+      setReviewSettingsStatus("", "");
+      void loadReviewSettings();
       void refreshHubSetupProfile();
+    }
+
+    function currentReviewSettingsPayload() {
+      return {
+        auto_merge: Boolean(reviewSettingsAutoMerge?.checked),
+        merge_method: String(reviewSettingsMergeMethod?.value || "squash").trim().toLowerCase() || "squash",
+      };
+    }
+
+    async function submitReviewSettings(event) {
+      if (event && typeof event.preventDefault === "function") {
+        event.preventDefault();
+      }
+      const payload = currentReviewSettingsPayload();
+      setHubSetupBusy(true);
+      setReviewSettingsStatus("ok", "Saving review settings...");
+      try {
+        const response = await fetch("/api/review-settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        let body = null;
+        try {
+          body = await response.json();
+        } catch (_parseError) {
+          body = null;
+        }
+        if (!response.ok) {
+          throw new Error(body?.error || `review settings http ${response.status}`);
+        }
+        applyReviewSettingsState(body?.settings);
+        setReviewSettingsStatus("ok", body?.settings?.message || "Review settings saved.");
+        trackAnalyticsEvent("review_settings_saved", {
+          auto_merge: payload.auto_merge,
+          merge_method: payload.merge_method,
+        });
+      } catch (err) {
+        const message = err && err.message ? err.message : "Review settings save failed.";
+        setReviewSettingsStatus("error", message);
+        trackAnalyticsEvent("review_settings_failed", { merge_method: payload.merge_method });
+      } finally {
+        setHubSetupBusy(false);
+      }
     }
 
     function currentHubSetupPayload() {
@@ -12510,6 +12696,26 @@
     if (hubSetupForm) {
       hubSetupForm.addEventListener("submit", submitHubSetup);
     }
+    if (reviewSettingsForm) {
+      reviewSettingsForm.addEventListener("submit", submitReviewSettings);
+    }
+    if (reviewSettingsClose) {
+      reviewSettingsClose.addEventListener("click", () => {
+        trackAnalyticsEvent("hub_setup_closed", { source: "review_settings_close", dialog_mode: state.hubSetupDialogMode });
+        setHubSetupOpen(false);
+        state.hubSetupDialogMode = "connect";
+      });
+    }
+    settingsTabs.forEach((button) => {
+      button.addEventListener("click", () => {
+        const tab = normalizeSettingsTab(button.getAttribute("data-settings-tab"));
+        trackAnalyticsEvent("settings_tab_changed", { tab });
+        setSettingsTab(tab);
+        if (tab === "review") {
+          void loadReviewSettings();
+        }
+      });
+    });
     [
       hubSetupHandle,
       hubSetupDisplayName,

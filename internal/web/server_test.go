@@ -592,11 +592,17 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if profileButtonIndex == -1 || profileButtonIndex < moltenbotIndex {
 		t.Fatalf("expected hub profile button to render to the right of the hub dock icon")
 	}
-	if !strings.Contains(markup, `Agent Profile`) {
-		t.Fatalf("expected index html to include connected profile editor copy")
+	if !strings.Contains(markup, `id="settings-tab-review"`) || !strings.Contains(markup, `id="settings-tab-hub"`) {
+		t.Fatalf("expected index html to include Review and Hub settings tabs")
 	}
-	if !strings.Contains(markup, `Update how this agent appears in Molten Hub.`) {
-		t.Fatalf("expected index html to include updated profile editor message")
+	if strings.Index(markup, `id="settings-tab-review"`) > strings.Index(markup, `id="settings-tab-hub"`) {
+		t.Fatalf("expected Review settings tab to render before Hub tab")
+	}
+	if !strings.Contains(markup, `Auto-merge clean reviews`) || !strings.Contains(markup, `id="review-settings-merge-method"`) {
+		t.Fatalf("expected index html to include review automation controls")
+	}
+	if !strings.Contains(markup, `Review automation and Hub profile settings.`) {
+		t.Fatalf("expected index html to include settings modal message")
 	}
 	if strings.Contains(markup, `Update how this runtime appears in Molten Hub`) {
 		t.Fatalf("expected index html to remove the old runtime profile editor copy")

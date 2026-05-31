@@ -89,6 +89,60 @@ func TestHandleHubSetupStatusAndConfigure(t *testing.T) {
 	}
 }
 
+func TestHandleReviewSettingsStatusAndConfigure(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("127.0.0.1:0", nil)
+	srv.ReviewSettingsStatus = func(context.Context) (ReviewSettingsState, error) {
+		return ReviewSettingsState{AutoMerge: false, MergeMethod: "squash"}, nil
+	}
+	srv.ConfigureReviewSettings = func(_ context.Context, req ReviewSettingsRequest) (ReviewSettingsState, error) {
+		if !req.AutoMerge {
+			return ReviewSettingsState{}, fmt.Errorf("unexpected auto_merge false")
+		}
+		if req.MergeMethod != "rebase" {
+			return ReviewSettingsState{}, fmt.Errorf("unexpected merge method %q", req.MergeMethod)
+		}
+		return ReviewSettingsState{AutoMerge: true, MergeMethod: "rebase", Message: "Review settings saved."}, nil
+	}
+	handler := srv.Handler()
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/review-settings", nil)
+	getRes := httptest.NewRecorder()
+	handler.ServeHTTP(getRes, getReq)
+	if getRes.Code != http.StatusOK {
+		t.Fatalf("GET /api/review-settings status = %d", getRes.Code)
+	}
+	var getBody struct {
+		OK       bool                `json:"ok"`
+		Settings ReviewSettingsState `json:"settings"`
+	}
+	if err := json.Unmarshal(getRes.Body.Bytes(), &getBody); err != nil {
+		t.Fatalf("decode get response: %v", err)
+	}
+	if !getBody.OK || getBody.Settings.AutoMerge || getBody.Settings.MergeMethod != "squash" {
+		t.Fatalf("GET settings = %#v", getBody)
+	}
+
+	postReq := httptest.NewRequest(http.MethodPost, "/api/review-settings", strings.NewReader(`{"auto_merge":true,"merge_method":"rebase"}`))
+	postReq.Header.Set("Content-Type", "application/json")
+	postRes := httptest.NewRecorder()
+	handler.ServeHTTP(postRes, postReq)
+	if postRes.Code != http.StatusOK {
+		t.Fatalf("POST /api/review-settings status = %d body=%s", postRes.Code, postRes.Body.String())
+	}
+	var postBody struct {
+		OK       bool                `json:"ok"`
+		Settings ReviewSettingsState `json:"settings"`
+	}
+	if err := json.Unmarshal(postRes.Body.Bytes(), &postBody); err != nil {
+		t.Fatalf("decode post response: %v", err)
+	}
+	if !postBody.OK || !postBody.Settings.AutoMerge || postBody.Settings.MergeMethod != "rebase" {
+		t.Fatalf("POST settings = %#v", postBody)
+	}
+}
+
 func TestHandlerBottomDockUsesHubSetupStatus(t *testing.T) {
 	t.Parallel()
 

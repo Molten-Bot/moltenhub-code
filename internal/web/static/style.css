@@ -6114,6 +6114,9 @@ body.onboarding-modal-open {
 .onboarding-modal-backdrop[hidden],
 .onboarding-modal-backdrop.hidden,
 .onboarding-profile-fields.hidden,
+.settings-tabbar.hidden,
+.review-settings-form.hidden,
+#hub-setup-form.hidden,
 #hub-setup-token-field.hidden,
 #hub-setup-connect-region-row.hidden,
 #hub-setup-signin-link.hidden,
@@ -6241,6 +6244,72 @@ body.onboarding-modal-open {
     "actions actions";
   align-items: stretch;
   gap: 14px 16px;
+}
+
+.settings-tabbar {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(110px, 1fr));
+  gap: 8px;
+  justify-self: start;
+  padding: 4px;
+  border: 1px solid var(--surface-control-border);
+  border-radius: var(--radius-card);
+  background: var(--surface-control-bg);
+}
+
+.settings-tab {
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-soft);
+  font-weight: 700;
+}
+
+.settings-tab:hover,
+.settings-tab:focus-visible {
+  color: var(--text);
+}
+
+.settings-tab.active,
+.settings-tab[aria-selected="true"] {
+  border-color: color-mix(in srgb, var(--running) 44%, var(--surface-control-border));
+  background: var(--surface-control-bg-strong);
+  color: var(--text);
+  box-shadow: var(--surface-control-shadow);
+}
+
+.review-settings-form {
+  display: grid;
+  gap: 16px;
+}
+
+.review-settings-section {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--surface-label);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.review-settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  color: var(--text);
+  font-size: 0.94rem;
+  font-weight: 700;
+}
+
+.review-settings-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--running);
 }
 
 .stack {
@@ -6566,6 +6635,10 @@ body.onboarding-modal-open {
       "token"
       "profile"
       "actions";
+  }
+
+  .settings-tabbar {
+    width: 100%;
   }
 
   .onboarding-profile-grid,

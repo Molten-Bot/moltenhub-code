@@ -2329,3 +2329,88 @@ func TestDisconnectHubSetupStopsLiveRuntime(t *testing.T) {
 		t.Fatalf("agent_harness = %#v, want %q", got, want)
 	}
 }
+
+func TestConfigureReviewSettingsPersistsOnlyNonDefaults(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	state, err := configureReviewSettings(hub.InitConfig{
+		RuntimeConfigPath: configPath,
+		BaseURL:           "https://na.hub.molten.bot/v1",
+		AgentHarness:      "codex",
+	}, web.ReviewSettingsRequest{
+		AutoMerge:   true,
+		MergeMethod: "merge",
+	})
+	if err != nil {
+		t.Fatalf("configureReviewSettings() error = %v", err)
+	}
+	if !state.AutoMerge || state.MergeMethod != "merge" {
+		t.Fatalf("state = %#v, want auto merge with merge method", state)
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("parse config: %v", err)
+	}
+	reviewDoc, ok := doc["review_watch"].(map[string]any)
+	if !ok {
+		t.Fatalf("review_watch = %#v, want object", doc["review_watch"])
+	}
+	if got, ok := reviewDoc["auto_merge"].(bool); !ok || !got {
+		t.Fatalf("review_watch.auto_merge = %#v, want true", reviewDoc["auto_merge"])
+	}
+	if got := strings.TrimSpace(reviewDoc["merge_method"].(string)); got != "merge" {
+		t.Fatalf("review_watch.merge_method = %q, want merge", got)
+	}
+
+	state, err = configureReviewSettings(hub.InitConfig{
+		RuntimeConfigPath: configPath,
+		BaseURL:           "https://na.hub.molten.bot/v1",
+		AgentHarness:      "codex",
+	}, web.ReviewSettingsRequest{
+		AutoMerge:   false,
+		MergeMethod: "squash",
+	})
+	if err != nil {
+		t.Fatalf("configureReviewSettings(defaults) error = %v", err)
+	}
+	if state.AutoMerge || state.MergeMethod != "squash" {
+		t.Fatalf("default state = %#v", state)
+	}
+	data, err = os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read default config: %v", err)
+	}
+	doc = map[string]any{}
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("parse default config: %v", err)
+	}
+	if _, ok := doc["review_watch"]; ok {
+		t.Fatalf("review_watch persisted for defaults: %#v", doc["review_watch"])
+	}
+}
+
+func TestConfigureReviewSettingsRejectsInvalidMergeMethod(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	_, err := configureReviewSettings(hub.InitConfig{
+		RuntimeConfigPath: configPath,
+		BaseURL:           "https://na.hub.molten.bot/v1",
+		AgentHarness:      "codex",
+	}, web.ReviewSettingsRequest{
+		AutoMerge:   true,
+		MergeMethod: "octopus",
+	})
+	if err == nil {
+		t.Fatal("configureReviewSettings() error = nil, want non-nil")
+	}
+	if got := err.Error(); !strings.Contains(got, "merge, squash, or rebase") {
+		t.Fatalf("configureReviewSettings() error = %q", got)
+	}
+}

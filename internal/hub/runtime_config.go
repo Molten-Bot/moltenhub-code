@@ -333,6 +333,84 @@ func SaveRuntimeConfigAgentRuntime(path string, initCfg InitConfig, harness, com
 	return writeRuntimeConfigDoc(path, doc)
 }
 
+// SaveRuntimeConfigReviewSettings persists user-editable review automation
+// settings while omitting fields whose values match runtime defaults.
+func SaveRuntimeConfigReviewSettings(path string, initCfg InitConfig, reviewCfg ReviewWatchConfig) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		path = defaultRuntimeConfigPath()
+	}
+
+	rawMergeMethod := strings.TrimSpace(reviewCfg.MergeMethod)
+	reviewCfg.MergeMethod = normalizeReviewWatchMergeMethod(rawMergeMethod)
+	if rawMergeMethod != "" && reviewCfg.MergeMethod == "" {
+		return fmt.Errorf("review_watch.merge_method must be merge, squash, or rebase")
+	}
+	if reviewCfg.MergeMethod == "" {
+		reviewCfg.MergeMethod = "squash"
+	}
+
+	doc, err := loadRuntimeConfigDoc(path, initCfg)
+	if err != nil {
+		return err
+	}
+
+	reviewDoc := map[string]any{}
+	if existing, ok := doc["review_watch"].(map[string]any); ok {
+		for key, value := range existing {
+			reviewDoc[key] = value
+		}
+	}
+
+	if reviewCfg.AutoMergeEnabled() {
+		reviewDoc["auto_merge"] = true
+	} else {
+		delete(reviewDoc, "auto_merge")
+	}
+
+	switch normalizeReviewWatchMergeMethod(reviewCfg.MergeMethod) {
+	case "", "squash":
+		delete(reviewDoc, "merge_method")
+	default:
+		reviewDoc["merge_method"] = normalizeReviewWatchMergeMethod(reviewCfg.MergeMethod)
+	}
+
+	if len(reviewDoc) == 0 || runtimeConfigReviewDocOnlyDefaults(reviewDoc) {
+		delete(doc, "review_watch")
+	} else {
+		doc["review_watch"] = reviewDoc
+	}
+	ensureRuntimeConfigLogLevel(doc, initCfg.LogLevel)
+
+	return writeRuntimeConfigDoc(path, doc)
+}
+
+func runtimeConfigReviewDocOnlyDefaults(doc map[string]any) bool {
+	if len(doc) == 0 {
+		return true
+	}
+	for key, value := range doc {
+		switch key {
+		case "poll_interval_ms":
+			count, ok := runtimeConfigLibraryTaskUsageCount(value)
+			if !ok || count != 60000 {
+				return false
+			}
+		case "writeback":
+			if docStringValue(value) != "summary-comment" {
+				return false
+			}
+		case "response_mode":
+			if docStringValue(value) != "off" {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // ReadRuntimeConfigString returns the first non-empty string for the provided
 // keys from a runtime config file. It returns an empty string when the file
 // cannot be read or parsed.

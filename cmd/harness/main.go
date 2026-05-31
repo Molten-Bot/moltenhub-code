@@ -741,6 +741,7 @@ func runHub(args []string) int {
 		}
 	}
 
+	var reviewWatcher *githubreview.Watcher
 	if strings.TrimSpace(*uiListen) != "" {
 		uiServer := web.NewServer(*uiListen, monitorBroker)
 		uiReady := make(chan error, 1)
@@ -805,6 +806,21 @@ func runHub(args []string) int {
 		}
 		uiServer.DisconnectHubSetup = func(reqCtx context.Context) (web.HubSetupState, error) {
 			return disconnectHubSetup(reqCtx, cfg, hubController.Stop)
+		}
+		uiServer.ReviewSettingsStatus = func(context.Context) (web.ReviewSettingsState, error) {
+			return currentReviewSettingsState(cfg), nil
+		}
+		uiServer.ConfigureReviewSettings = func(_ context.Context, req web.ReviewSettingsRequest) (web.ReviewSettingsState, error) {
+			state, err := configureReviewSettings(cfg, req)
+			if err == nil && reviewWatcher != nil {
+				activeCfg, loadErr := effectiveHubSetupConfig(cfg)
+				if loadErr != nil {
+					err = loadErr
+				} else {
+					reviewWatcher.UpdateOptions(reviewWatcherOptions(activeCfg.ReviewWatch))
+				}
+			}
+			return state, err
 		}
 		recordLibraryUsage := func(runCfg config.Config) {
 			if strings.TrimSpace(runCfg.LibraryTaskName) == "" {
@@ -905,7 +921,13 @@ func runHub(args []string) int {
 	}
 
 	maybeStartAgentAuth(ctx, runtimeCfg, authGate, daemonLogger)
-	startGitHubReviewWatcher(ctx, runner, cfg, enqueueLocalRun, daemonLogger)
+	reviewWatcherCfg := cfg
+	if activeCfg, err := effectiveHubSetupConfig(cfg); err == nil {
+		reviewWatcherCfg = activeCfg
+	} else {
+		daemonLogger("review_watch status=warn action=load_runtime_config err=%q", err)
+	}
+	reviewWatcher = startGitHubReviewWatcher(ctx, runner, reviewWatcherCfg, enqueueLocalRun, daemonLogger)
 	bootDiag := runHubBootDiagnosticsWithRuntimeLoaderDetailed(ctx, runner, daemonLogger, cfg, runtimeCfgLoader)
 	forceLocalOnlyMode := shouldRunHubInLocalOnlyMode(bootDiag.PingChecked, bootDiag.PingOK, *uiListen, hubConfigured)
 	if bootDiag.PingChecked && !bootDiag.PingOK {
@@ -2536,15 +2558,15 @@ func startGitHubReviewWatcher(
 	cfg hub.InitConfig,
 	enqueueLocalRun func(context.Context, config.Config, bool, string, bool) (string, error),
 	logf func(string, ...any),
-) {
+) *githubreview.Watcher {
 	if !cfg.ReviewWatch.EnabledValue() {
-		return
+		return nil
 	}
 	if runner == nil || enqueueLocalRun == nil {
 		if logf != nil {
 			logf("review_watch status=warn action=start err=%q", "runner or enqueue function unavailable")
 		}
-		return
+		return nil
 	}
 
 	watcher := &githubreview.Watcher{
@@ -2552,14 +2574,8 @@ func startGitHubReviewWatcher(
 		Enqueue: func(reqCtx context.Context, runCfg config.Config) (string, error) {
 			return enqueueLocalRun(reqCtx, runCfg, true, reviewWatchSource, false)
 		},
-		Logf: logf,
-		Options: githubreview.Options{
-			PollInterval: time.Duration(cfg.ReviewWatch.PollIntervalMS) * time.Millisecond,
-			Writeback:    cfg.ReviewWatch.Writeback,
-			AutoMerge:    cfg.ReviewWatch.AutoMergeEnabled(),
-			MergeMethod:  cfg.ReviewWatch.MergeMethod,
-			ResponseMode: cfg.ReviewWatch.ResponseMode,
-		},
+		Logf:    logf,
+		Options: reviewWatcherOptions(cfg.ReviewWatch),
 	}
 	go func() {
 		if logf != nil {
@@ -2569,6 +2585,30 @@ func startGitHubReviewWatcher(
 			logf("review_watch status=error err=%q", err)
 		}
 	}()
+	return watcher
+}
+
+func reviewWatcherOptions(cfg hub.ReviewWatchConfig) githubreview.Options {
+	cfg.MergeMethod = normalizeReviewSettingsMergeMethod(cfg.MergeMethod)
+	if cfg.MergeMethod == "" {
+		cfg.MergeMethod = "squash"
+	}
+	if cfg.PollIntervalMS <= 0 {
+		cfg.PollIntervalMS = 60000
+	}
+	if strings.TrimSpace(cfg.Writeback) == "" {
+		cfg.Writeback = "summary-comment"
+	}
+	if strings.TrimSpace(cfg.ResponseMode) == "" {
+		cfg.ResponseMode = "off"
+	}
+	return githubreview.Options{
+		PollInterval: time.Duration(cfg.PollIntervalMS) * time.Millisecond,
+		Writeback:    cfg.Writeback,
+		AutoMerge:    cfg.AutoMergeEnabled(),
+		MergeMethod:  cfg.MergeMethod,
+		ResponseMode: cfg.ResponseMode,
+	}
 }
 
 type runtimeConfigLoader func() (hub.RuntimeConfig, error)
@@ -3490,6 +3530,52 @@ func disconnectHubSetup(ctx context.Context, cfg hub.InitConfig, stopLive func(c
 	state.NeedsRestart = false
 	state.ActivationReady = false
 	return state, nil
+}
+
+func currentReviewSettingsState(cfg hub.InitConfig) web.ReviewSettingsState {
+	activeCfg, err := effectiveHubSetupConfig(cfg)
+	if err != nil {
+		activeCfg = cfg
+	}
+	activeCfg.ApplyDefaults()
+	return web.ReviewSettingsState{
+		AutoMerge:   activeCfg.ReviewWatch.AutoMergeEnabled(),
+		MergeMethod: activeCfg.ReviewWatch.MergeMethod,
+	}
+}
+
+func configureReviewSettings(cfg hub.InitConfig, req web.ReviewSettingsRequest) (web.ReviewSettingsState, error) {
+	method := normalizeReviewSettingsMergeMethod(req.MergeMethod)
+	if method == "" {
+		state := currentReviewSettingsState(cfg)
+		return state, fmt.Errorf("review merge method must be merge, squash, or rebase")
+	}
+
+	autoMerge := req.AutoMerge
+	reviewCfg := hub.ReviewWatchConfig{
+		AutoMerge:   &autoMerge,
+		MergeMethod: method,
+	}
+	if err := hub.SaveRuntimeConfigReviewSettings(cfg.RuntimeConfigPath, cfg, reviewCfg); err != nil {
+		state := currentReviewSettingsState(cfg)
+		return state, err
+	}
+	state := currentReviewSettingsState(cfg)
+	state.Message = "Review settings saved."
+	return state, nil
+}
+
+func normalizeReviewSettingsMergeMethod(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "squash":
+		return "squash"
+	case "merge":
+		return "merge"
+	case "rebase":
+		return "rebase"
+	default:
+		return ""
+	}
 }
 
 func hubSetupMarkStep(state *web.HubSetupState, stepID, status, detail string) {

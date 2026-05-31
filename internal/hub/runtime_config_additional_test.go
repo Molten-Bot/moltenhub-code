@@ -338,6 +338,121 @@ func TestSaveRuntimeConfigHubSettingsRejectsUnboundAgentWithoutWriting(t *testin
 	}
 }
 
+func TestSaveRuntimeConfigReviewSettingsOmitsDefaults(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "moltenhub", "config.json")
+	err := SaveRuntimeConfigReviewSettings(path, InitConfig{
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		AgentHarness: "codex",
+	}, ReviewWatchConfig{})
+	if err != nil {
+		t.Fatalf("SaveRuntimeConfigReviewSettings() error = %v", err)
+	}
+
+	doc := readJSONDocForTest(t, path)
+	if _, ok := doc["review_watch"]; ok {
+		t.Fatalf("review_watch persisted for defaults: %#v", doc["review_watch"])
+	}
+}
+
+func TestSaveRuntimeConfigReviewSettingsPersistsOnlyNonDefaults(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(`{"review_watch":{"enabled":false,"writeback":"off"}}`), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	autoMerge := true
+	err := SaveRuntimeConfigReviewSettings(path, InitConfig{
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		AgentHarness: "codex",
+	}, ReviewWatchConfig{
+		AutoMerge:   &autoMerge,
+		MergeMethod: "rebase",
+	})
+	if err != nil {
+		t.Fatalf("SaveRuntimeConfigReviewSettings() error = %v", err)
+	}
+
+	doc := readJSONDocForTest(t, path)
+	reviewDoc, ok := doc["review_watch"].(map[string]any)
+	if !ok {
+		t.Fatalf("review_watch = %#v, want object", doc["review_watch"])
+	}
+	if got, ok := reviewDoc["auto_merge"].(bool); !ok || !got {
+		t.Fatalf("review_watch.auto_merge = %#v, want true", reviewDoc["auto_merge"])
+	}
+	if got := docStringValue(reviewDoc["merge_method"]); got != "rebase" {
+		t.Fatalf("review_watch.merge_method = %q, want rebase", got)
+	}
+	if got, ok := reviewDoc["enabled"].(bool); !ok || got {
+		t.Fatalf("review_watch.enabled = %#v, want preserved false", reviewDoc["enabled"])
+	}
+	if got := docStringValue(reviewDoc["writeback"]); got != "off" {
+		t.Fatalf("review_watch.writeback = %q, want preserved off", got)
+	}
+
+	autoMerge = false
+	err = SaveRuntimeConfigReviewSettings(path, InitConfig{
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		AgentHarness: "codex",
+	}, ReviewWatchConfig{
+		AutoMerge:   &autoMerge,
+		MergeMethod: "squash",
+	})
+	if err != nil {
+		t.Fatalf("SaveRuntimeConfigReviewSettings(defaults) error = %v", err)
+	}
+	doc = readJSONDocForTest(t, path)
+	reviewDoc, ok = doc["review_watch"].(map[string]any)
+	if !ok {
+		t.Fatalf("review_watch = %#v, want object preserving unrelated keys", doc["review_watch"])
+	}
+	if _, ok := reviewDoc["auto_merge"]; ok {
+		t.Fatalf("review_watch.auto_merge persisted for default false: %#v", reviewDoc)
+	}
+	if _, ok := reviewDoc["merge_method"]; ok {
+		t.Fatalf("review_watch.merge_method persisted for default squash: %#v", reviewDoc)
+	}
+	if got := docStringValue(reviewDoc["writeback"]); got != "off" {
+		t.Fatalf("review_watch.writeback = %q, want preserved off", got)
+	}
+}
+
+func TestSaveRuntimeConfigReviewSettingsRejectsInvalidMergeMethod(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "moltenhub", "config.json")
+	err := SaveRuntimeConfigReviewSettings(path, InitConfig{
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		AgentHarness: "codex",
+	}, ReviewWatchConfig{MergeMethod: "octopus"})
+	if err == nil {
+		t.Fatal("SaveRuntimeConfigReviewSettings() error = nil, want non-nil")
+	}
+	if _, statErr := os.Stat(path); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("config stat error = %v, want not exist", statErr)
+	}
+}
+
+func readJSONDocForTest(t *testing.T, path string) map[string]any {
+	t.Helper()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	doc := map[string]any{}
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("parse config: %v", err)
+	}
+	return doc
+}
+
 func TestReadRuntimeConfigString(t *testing.T) {
 	t.Parallel()
 

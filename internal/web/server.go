@@ -107,6 +107,8 @@ type Server struct {
 	ConnectHubSetup         func(context.Context) (HubSetupState, error)
 	DisconnectHubSetup      func(context.Context) (HubSetupState, error)
 	RenderHubSetupStatus    func(context.Context) (HubSetupState, error)
+	ReviewSettingsStatus    func(context.Context) (ReviewSettingsState, error)
+	ConfigureReviewSettings func(context.Context, ReviewSettingsRequest) (ReviewSettingsState, error)
 	ResolveGitHubProfileURL func(context.Context) (string, error)
 	ResolveGitHubRepos      func(context.Context) ([]GitHubRepo, error)
 	gitHubRepos             *gitHubRepoCache
@@ -208,6 +210,17 @@ type HubSetupRequest struct {
 	} `json:"profile"`
 }
 
+type ReviewSettingsState struct {
+	AutoMerge   bool   `json:"auto_merge"`
+	MergeMethod string `json:"merge_method"`
+	Message     string `json:"message,omitempty"`
+}
+
+type ReviewSettingsRequest struct {
+	AutoMerge   bool   `json:"auto_merge"`
+	MergeMethod string `json:"merge_method"`
+}
+
 // NewServer returns a monitor HTTP server.
 func NewServer(addr string, broker *Broker) Server {
 	return Server{
@@ -301,6 +314,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/api/hub-setup", s.handleHubSetup)
 	mux.HandleFunc("/api/hub-setup/connect", s.handleHubSetupConnect)
 	mux.HandleFunc("/api/hub-setup/disconnect", s.handleHubSetupDisconnect)
+	mux.HandleFunc("/api/review-settings", s.handleReviewSettings)
 	mux.HandleFunc("/api/agent-auth", s.handleAgentAuthStatus)
 	mux.HandleFunc("/api/agent-auth/start-device", s.handleAgentAuthStart)
 	mux.HandleFunc("/api/agent-auth/verify", s.handleAgentAuthVerify)
@@ -1692,6 +1706,78 @@ func (s Server) handleHubSetup(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"ok":  true,
 			"hub": state,
+		})
+	default:
+		w.Header().Set("Allow", strings.Join([]string{http.MethodGet, http.MethodPost}, ", "))
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s Server) handleReviewSettings(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		state := ReviewSettingsState{MergeMethod: "squash"}
+		if s.ReviewSettingsStatus != nil {
+			next, err := s.ReviewSettingsStatus(r.Context())
+			if strings.TrimSpace(next.MergeMethod) == "" {
+				next.MergeMethod = state.MergeMethod
+			}
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]any{
+					"ok":       false,
+					"error":    fmt.Sprintf("load review settings: %v", err),
+					"settings": next,
+				})
+				return
+			}
+			state = next
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":       true,
+			"settings": state,
+		})
+	case http.MethodPost:
+		if s.ConfigureReviewSettings == nil {
+			writeJSON(w, http.StatusNotImplemented, map[string]any{
+				"ok":       false,
+				"error":    "review settings are unavailable",
+				"settings": ReviewSettingsState{MergeMethod: "squash"},
+			})
+			return
+		}
+		body, err := io.ReadAll(io.LimitReader(r.Body, maxHubSetupConfigureBodyBytes))
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"ok":       false,
+				"error":    fmt.Sprintf("read request body: %v", err),
+				"settings": ReviewSettingsState{MergeMethod: "squash"},
+			})
+			return
+		}
+		var req ReviewSettingsRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"ok":       false,
+				"error":    fmt.Sprintf("decode request body: %v", err),
+				"settings": ReviewSettingsState{MergeMethod: "squash"},
+			})
+			return
+		}
+		state, err := s.ConfigureReviewSettings(r.Context(), req)
+		if strings.TrimSpace(state.MergeMethod) == "" {
+			state.MergeMethod = "squash"
+		}
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"ok":       false,
+				"error":    err.Error(),
+				"settings": state,
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":       true,
+			"settings": state,
 		})
 	default:
 		w.Header().Set("Allow", strings.Join([]string{http.MethodGet, http.MethodPost}, ", "))
