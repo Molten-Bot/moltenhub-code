@@ -874,6 +874,35 @@ func TestDashboardSourceLegendStylesLiveInGlobalStylesheet(t *testing.T) {
 	}
 }
 
+func TestDashboardD3DonutPathTweenGuardsInvalidArcData(t *testing.T) {
+	t.Parallel()
+
+	markup, err := staticFiles.ReadFile("static/index.html")
+	if err != nil {
+		t.Fatalf("read index.html: %v", err)
+	}
+	html := string(markup)
+	for _, want := range []string{
+		"const isRenderableArcDatum = (datum) => Boolean(datum) &&",
+		"Number.isFinite(datum.startAngle) &&",
+		"Number.isFinite(datum.endAngle) &&",
+		"Number.isFinite(datum.padAngle == null ? 0 : datum.padAngle);",
+		"d3.select(this).interrupt().attr(\"d\", hoverArc).classed(\"is-active\", true);",
+		"d3.select(this).interrupt().attr(\"d\", arc).classed(\"is-active\", false);",
+		"const previous = isRenderableArcDatum(this.__dashboardArcDatum) ? this.__dashboardArcDatum : datum;",
+		"if (!isRenderableArcDatum(current)) {",
+		"this.__dashboardArcDatum = datum;",
+		"return arc(datum);",
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("embedded index.html missing %q", want)
+		}
+	}
+	if strings.Contains(html, "this.__dashboardArcDatum = current;") {
+		t.Fatalf("expected dashboard D3 tween to avoid persisting partial arc frames")
+	}
+}
+
 func TestEmbeddedTaskNoChangesUsesSuccessTone(t *testing.T) {
 	t.Parallel()
 

@@ -5125,6 +5125,10 @@
         .cornerRadius(6)
         .padAngle(0.02);
       const slices = total > 0 ? pie(entries) : [];
+      const isRenderableArcDatum = (datum) => Boolean(datum) &&
+        Number.isFinite(datum.startAngle) &&
+        Number.isFinite(datum.endAngle) &&
+        Number.isFinite(datum.padAngle == null ? 0 : datum.padAngle);
 
       root.selectAll("path.dashboard-d3-slice")
         .data(slices, (datum) => datum.data.label)
@@ -5143,23 +5147,29 @@
         .attr("stroke", border)
         .attr("aria-label", (datum) => `${datum.data.label}: ${datum.data.value}`)
         .on("mouseenter focus", function (_event, datum) {
-          d3.select(this).attr("d", hoverArc).classed("is-active", true);
+          d3.select(this).interrupt().attr("d", hoverArc).classed("is-active", true);
           root.select(".dashboard-d3-center-value").text(String(datum.data.value));
           root.select(".dashboard-d3-center-label").text(datum.data.label);
         })
         .on("mouseleave blur", function () {
-          d3.select(this).attr("d", arc).classed("is-active", false);
+          d3.select(this).interrupt().attr("d", arc).classed("is-active", false);
           root.select(".dashboard-d3-center-value").text(total > 0 ? String(total) : "0");
           root.select(".dashboard-d3-center-label").text(options.centerLabel || "tasks");
         })
         .transition()
         .duration(220)
         .attrTween("d", function (datum) {
-          const previous = this.__dashboardArcDatum || datum;
+          const previous = isRenderableArcDatum(this.__dashboardArcDatum) ? this.__dashboardArcDatum : datum;
           const interpolate = d3.interpolateObject(previous, datum);
           return (time) => {
             const current = interpolate(time);
-            this.__dashboardArcDatum = current;
+            if (!isRenderableArcDatum(current)) {
+              this.__dashboardArcDatum = datum;
+              return arc(datum);
+            }
+            if (time === 1) {
+              this.__dashboardArcDatum = datum;
+            }
             return arc(current);
           };
         });
