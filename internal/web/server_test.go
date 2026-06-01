@@ -1047,8 +1047,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected completed-history empty state to render only when the displayed task list is empty")
 	}
 	if !strings.Contains(markup, "function historyFilterTasks(snapshot)") ||
-		!strings.Contains(markup, "return [...runningTasks(snapshot), ...completedTasks(snapshot)];") {
-		t.Fatalf("expected index html history filter to include current work plus completed task history")
+		!strings.Contains(markup, "function taskHistoryDedupeKeys(task)") ||
+		!strings.Contains(markup, "return [...running, ...completed];") {
+		t.Fatalf("expected index html history filter to include current work plus deduped completed task history")
 	}
 	if !strings.Contains(markup, "if (filter === \"completed\") {") || !strings.Contains(markup, "return historyFilterTasks(snapshot);") {
 		t.Fatalf("expected index html to route displayTasks through the additive history filter when requested")

@@ -10193,6 +10193,7 @@
     function taskActivityRank(task) {
       const status = normalizedTaskStatus(task?.status);
       if (status === "running") return 0;
+      if (status === "merged") return 0;
       if (status === "pending" || status === "active" || status === "paused") return 1;
       if (status === "error" || status === "invalid" || status === "stopped") return 2;
       if (status === "duplicate") return 3;
@@ -10498,6 +10499,14 @@
         return taskListByOrder(currentOrder, tasks);
       }
 
+      if (sameTaskOrder([...currentOrder].sort(), [...desiredOrder].sort())) {
+        state.taskDisplayOrder = currentOrder;
+        state.taskOrderPendingSince = 0;
+        state.taskOrderPendingDesired = [];
+        state.taskOrderLastSyncBucket = syncBucket;
+        return taskListByOrder(currentOrder, tasks);
+      }
+
       if (!sameTaskOrder(state.taskOrderPendingDesired, desiredOrder)) {
         state.taskOrderPendingDesired = [...desiredOrder];
         state.taskOrderPendingSince = nowMs;
@@ -10752,6 +10761,12 @@
       return out.filter((task) => !isCompletedTask(task) || isMergedTask(task));
     }
 
+    function taskHistoryDedupeKeys(task) {
+      const requestID = String(task?.request_id || "").trim();
+      const historyKey = completedTaskHistoryKey(task);
+      return [requestID ? `id:${requestID}` : "", historyKey ? `history:${historyKey}` : ""].filter(Boolean);
+    }
+
     function completedTaskHistoryKey(task) {
       const prompt = String(task?.prompt || "").trim().toLowerCase();
       const repos = Array.isArray(task?.repos)
@@ -10811,7 +10826,26 @@
     }
 
     function historyFilterTasks(snapshot) {
-      return [...runningTasks(snapshot), ...completedTasks(snapshot)];
+      const running = runningTasks(snapshot);
+      const seen = new Set();
+      for (const task of running) {
+        for (const key of taskHistoryDedupeKeys(task)) {
+          seen.add(key);
+        }
+      }
+
+      const completed = [];
+      for (const task of completedTasks(snapshot)) {
+        const keys = taskHistoryDedupeKeys(task);
+        if (keys.some((key) => seen.has(key))) {
+          continue;
+        }
+        for (const key of keys) {
+          seen.add(key);
+        }
+        completed.push(task);
+      }
+      return [...running, ...completed];
     }
 
     function displayTasks(snapshot) {
