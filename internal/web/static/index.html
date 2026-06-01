@@ -19,7 +19,7 @@
   </script>
   <script src="/static/lucide.min.js"></script>
   <script src="/static/xterm.js" data-xterm-version="6.0.0"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
   <script src="/static/site-header.js"></script>
   <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -412,14 +412,14 @@
                 <span>Task Mix</span>
                 <span id="dashboard-success-rate">0% success</span>
               </div>
-              <canvas id="dashboard-task-chart" aria-label="Task status chart"></canvas>
+              <svg id="dashboard-task-chart" class="dashboard-d3-chart" role="img" aria-label="Task status chart" tabindex="0"></svg>
             </div>
             <div class="dashboard-chart-shell">
               <div class="dashboard-chart-head">
                 <span>Source Mix</span>
                 <span id="dashboard-source-total">0 prompts</span>
               </div>
-              <canvas id="dashboard-source-chart" aria-label="Prompt source chart"></canvas>
+              <svg id="dashboard-source-chart" class="dashboard-d3-chart" role="img" aria-label="Prompt source chart" tabindex="0"></svg>
               <div id="dashboard-source-legend" class="dashboard-source-legend" aria-label="Prompt source legend"></div>
             </div>
           </div>
@@ -1969,8 +1969,6 @@
     let taskTimingRefreshTimer = null;
     let deferredSelectionRenderTimer = null;
     let taskAudioContext = null;
-    let dashboardChart = null;
-    let dashboardSourceChart = null;
     let githubReposLoadPromise = null;
     let githubReposLoadSequence = 0;
     let chatRepoResizeRenderQueued = false;
@@ -2053,7 +2051,7 @@
     const dashboardSuccessRate = document.getElementById("dashboard-success-rate");
     const dashboardTaskChart = document.getElementById("dashboard-task-chart");
     const dashboardSourceTotal = document.getElementById("dashboard-source-total");
-    const dashboardSourceChartCanvas = document.getElementById("dashboard-source-chart");
+    const dashboardSourceChart = document.getElementById("dashboard-source-chart");
     const dashboardSourceLegend = document.getElementById("dashboard-source-legend");
     const dashboardShareX = document.getElementById("dashboard-share-x");
     const dashboardShareFacebook = document.getElementById("dashboard-share-facebook");
@@ -5083,98 +5081,146 @@
       replaceLucideIcons(dashboardSourceLegend);
     }
 
-    function applyDashboardChartTheme(chart) {
-      if (!chart) return;
-      const dataset = chart.data.datasets[0];
-      if (chart === dashboardChart) {
-        dataset.backgroundColor = dashboardTaskColors();
-      } else {
-        dataset.backgroundColor = chart.data.labels.map(dashboardSourceColor);
-      }
-      dataset.borderColor = dashboardCSSValue("--dashboard-chart-border", "rgba(255, 255, 255, 0.76)");
-      const legendLabels = chart.options?.plugins?.legend?.labels;
-      if (legendLabels) {
-        legendLabels.color = dashboardCSSValue("--muted", "#5a6f95");
-      }
-      chart.update("none");
-      if (chart === dashboardSourceChart) {
-        renderDashboardSourceLegend(chart.data.labels);
-      }
+    function dashboardChartNodeSize(svgNode) {
+      const rect = svgNode.getBoundingClientRect();
+      const width = Math.max(260, Math.floor(rect.width || svgNode.clientWidth || 0));
+      const height = Math.max(220, Math.floor(rect.height || svgNode.clientHeight || 0));
+      return { width, height };
+    }
+
+    function renderDashboardD3Donut(svgNode, rows, options = {}) {
+      if (!svgNode || !window.d3) return;
+      const d3 = window.d3;
+      const entries = Array.isArray(rows) ? rows.filter((row) => Number(row?.value || 0) > 0) : [];
+      const total = entries.reduce((sum, row) => sum + Number(row.value || 0), 0);
+      const { width, height } = dashboardChartNodeSize(svgNode);
+      const margin = 18;
+      const radius = Math.max(72, Math.min(width, height) / 2 - margin);
+      const innerRadius = radius * 0.62;
+      const centerX = width / 2;
+      const centerY = height / 2 - 8;
+      const svg = d3.select(svgNode)
+        .attr("viewBox", `0 0 ${width} ${height}`)
+        .attr("preserveAspectRatio", "xMidYMid meet");
+
+      svg.selectAll("g.dashboard-d3-root")
+        .data([null])
+        .join("g")
+        .attr("class", "dashboard-d3-root")
+        .attr("transform", `translate(${centerX},${centerY})`);
+
+      const root = svg.select("g.dashboard-d3-root");
+      const border = dashboardCSSValue("--dashboard-chart-border", "rgba(255, 255, 255, 0.76)");
+      const pie = d3.pie()
+        .sort(null)
+        .value((row) => Number(row.value || 0));
+      const arc = d3.arc()
+        .innerRadius(innerRadius)
+        .outerRadius(radius)
+        .cornerRadius(5)
+        .padAngle(0.02);
+      const hoverArc = d3.arc()
+        .innerRadius(innerRadius - 2)
+        .outerRadius(radius + 8)
+        .cornerRadius(6)
+        .padAngle(0.02);
+      const slices = total > 0 ? pie(entries) : [];
+
+      root.selectAll("path.dashboard-d3-slice")
+        .data(slices, (datum) => datum.data.label)
+        .join(
+          (enter) => enter.append("path")
+            .attr("class", "dashboard-d3-slice")
+            .attr("fill", (datum) => datum.data.color)
+            .attr("stroke", border)
+            .attr("stroke-width", 2)
+            .attr("tabindex", 0)
+            .attr("d", arc),
+          (update) => update,
+          (exit) => exit.remove(),
+        )
+        .attr("fill", (datum) => datum.data.color)
+        .attr("stroke", border)
+        .attr("aria-label", (datum) => `${datum.data.label}: ${datum.data.value}`)
+        .on("mouseenter focus", function (_event, datum) {
+          d3.select(this).attr("d", hoverArc).classed("is-active", true);
+          root.select(".dashboard-d3-center-value").text(String(datum.data.value));
+          root.select(".dashboard-d3-center-label").text(datum.data.label);
+        })
+        .on("mouseleave blur", function () {
+          d3.select(this).attr("d", arc).classed("is-active", false);
+          root.select(".dashboard-d3-center-value").text(total > 0 ? String(total) : "0");
+          root.select(".dashboard-d3-center-label").text(options.centerLabel || "tasks");
+        })
+        .transition()
+        .duration(220)
+        .attrTween("d", function (datum) {
+          const previous = this.__dashboardArcDatum || datum;
+          const interpolate = d3.interpolateObject(previous, datum);
+          return (time) => {
+            const current = interpolate(time);
+            this.__dashboardArcDatum = current;
+            return arc(current);
+          };
+        });
+
+      root.selectAll("circle.dashboard-d3-empty")
+        .data(total > 0 ? [] : [null])
+        .join("circle")
+        .attr("class", "dashboard-d3-empty")
+        .attr("r", radius)
+        .attr("fill", "none")
+        .attr("stroke", dashboardCSSValue("--border", "rgba(17, 34, 68, 0.14)"))
+        .attr("stroke-width", Math.max(18, radius - innerRadius));
+
+      root.selectAll(".dashboard-d3-center-value")
+        .data([null])
+        .join("text")
+        .attr("class", "dashboard-d3-center-value")
+        .attr("text-anchor", "middle")
+        .attr("dy", "-0.1em")
+        .text(total > 0 ? String(total) : "0");
+
+      root.selectAll(".dashboard-d3-center-label")
+        .data([null])
+        .join("text")
+        .attr("class", "dashboard-d3-center-label")
+        .attr("text-anchor", "middle")
+        .attr("dy", "1.55em")
+        .text(options.centerLabel || "tasks");
+
+      const labelRows = total > 0 ? entries : [{ label: "No data", value: 0, color: dashboardCSSValue("--dashboard-chart-other", "#8ca0bd") }];
+      const legend = svg.selectAll("g.dashboard-d3-legend")
+        .data([null])
+        .join("g")
+        .attr("class", "dashboard-d3-legend");
+      const legendItems = legend.selectAll("g.dashboard-d3-legend-item")
+        .data(labelRows, (row) => row.label)
+        .join(
+          (enter) => {
+            const item = enter.append("g").attr("class", "dashboard-d3-legend-item");
+            item.append("rect").attr("rx", 3).attr("ry", 3).attr("width", 10).attr("height", 10);
+            item.append("text").attr("x", 16).attr("y", 9);
+            return item;
+          },
+          (update) => update,
+          (exit) => exit.remove(),
+        );
+      const legendWidth = Math.min(width - 20, labelRows.length * 96);
+      legendItems
+        .attr("transform", (_row, index) => {
+          const x = (width - legendWidth) / 2 + (index * legendWidth / Math.max(1, labelRows.length));
+          return `translate(${x},${height - 24})`;
+        });
+      legendItems.select("rect").attr("fill", (row) => row.color);
+      legendItems.select("text")
+        .attr("fill", dashboardCSSValue("--muted", "#5a6f95"))
+        .text((row) => `${row.label} ${row.value}`);
+
     }
 
     function refreshDashboardChartTheme() {
-      applyDashboardChartTheme(dashboardChart);
-      applyDashboardChartTheme(dashboardSourceChart);
-    }
-
-    function ensureDashboardChart() {
-      if (dashboardChart || !dashboardTaskChart || !window.Chart) {
-        return dashboardChart;
-      }
-      if (dashboardDisplay && dashboardDisplay.classList.contains("hidden")) {
-        return null;
-      }
-      dashboardChart = new window.Chart(dashboardTaskChart, {
-        type: "doughnut",
-        data: {
-          labels: ["Active", "Completed", "Failed"],
-          datasets: [{
-            data: [0, 0, 0],
-            backgroundColor: dashboardTaskColors(),
-            borderColor: dashboardCSSValue("--dashboard-chart-border", "rgba(255, 255, 255, 0.76)"),
-            borderWidth: 2,
-          }],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          cutout: "64%",
-          plugins: {
-            legend: {
-              position: "bottom",
-              labels: {
-                boxWidth: 10,
-                color: dashboardCSSValue("--muted", "#5a6f95"),
-                usePointStyle: true,
-              },
-            },
-          },
-        },
-      });
-      return dashboardChart;
-    }
-
-    function ensureDashboardSourceChart() {
-      if (dashboardSourceChart || !dashboardSourceChartCanvas || !window.Chart) {
-        return dashboardSourceChart;
-      }
-      if (dashboardDisplay && dashboardDisplay.classList.contains("hidden")) {
-        return null;
-      }
-      dashboardSourceChart = new window.Chart(dashboardSourceChartCanvas, {
-        type: "doughnut",
-        data: {
-          labels: ["Chat", "Hub", "JSON", "Library", "Prompt", "Other"],
-          datasets: [{
-            data: [0, 0, 0, 0, 0, 0],
-            backgroundColor: ["Chat", "Hub", "JSON", "Library", "Prompt", "Other"].map(dashboardSourceColor),
-            borderColor: dashboardCSSValue("--dashboard-chart-border", "rgba(255, 255, 255, 0.76)"),
-            borderWidth: 2,
-          }],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          cutout: "64%",
-          plugins: {
-            legend: {
-              display: false,
-            },
-          },
-        },
-      });
-      renderDashboardSourceLegend(dashboardSourceChart.data.labels);
-      return dashboardSourceChart;
+      renderDashboardStats(state.snapshot);
     }
 
     function renderDashboardSourceMix(stats) {
@@ -5194,17 +5240,20 @@
       if (dashboardSourceTotal) {
         dashboardSourceTotal.textContent = `${total} ${total === 1 ? "prompt" : "prompts"}`;
       }
-      const chart = ensureDashboardSourceChart();
-      if (!chart) {
-        return;
-      }
-      chart.data.labels = labels.length > 0 ? labels : ["No prompts"];
-      chart.data.datasets[0].data = data.length > 0 ? data : [0];
-      chart.data.datasets[0].backgroundColor = labels.length > 0
-        ? labels.map(dashboardSourceColor)
-        : [dashboardSourceColor("other")];
-      chart.update("none");
-      renderDashboardSourceLegend(chart.data.labels);
+      const rows = labels.length > 0
+        ? labels.map((label, index) => ({ label, value: data[index], color: dashboardSourceColor(label) }))
+        : [{ label: "No prompts", value: 0, color: dashboardSourceColor("other") }];
+      renderDashboardSourceLegend(rows.map((row) => row.label));
+      renderDashboardD3Donut(dashboardSourceChart, rows, { centerLabel: "prompts" });
+    }
+
+    function setDashboardStatMeter(node, value, maxValue) {
+      const card = node?.closest?.(".dashboard-stat-card");
+      if (!card) return;
+      const max = Number(maxValue || 0);
+      const current = Math.max(0, Number(value || 0));
+      const ratio = max > 0 ? Math.min(1, current / max) : 0;
+      card.style.setProperty("--dashboard-stat-meter", `${Math.round(ratio * 100)}%`);
     }
 
     function dashboardPullRequestCount(snapshot) {
@@ -5223,6 +5272,14 @@
       const active = Number(stats.active_tasks || 0);
       const completed = Number(stats.completed_tasks || 0);
       const failed = Number(stats.failed_tasks || 0);
+      const totalTasks = Number(stats.total_tasks || 0);
+      const maxConcurrent = Number(stats.max_concurrent_tasks || 0);
+      const totalSavedSeconds = Number(stats.total_saved_seconds || 0);
+      const reviewSavedSeconds = Number(stats.review_saved_seconds || 0);
+      const sessionRuntimeSeconds = Number(stats.session_runtime_seconds || 0);
+      const throughputPerHour = Number(stats.throughput_per_hour || 0);
+      const velocityPerHour = Number(stats.velocity_per_hour || 0);
+      const averageDurationSeconds = Number(stats.average_duration_seconds || 0);
       syncDashboardRuntimeTaskActivity(dashboardActiveTaskCount(snapshot));
       if (dashboardUpdated) {
         const dashboardUpdatedAt = stats.updated_at || snapshot?.generated_at;
@@ -5230,30 +5287,39 @@
         refreshDashboardUpdatedLabel();
       }
       if (dashboardMaxConcurrent) {
-        dashboardMaxConcurrent.textContent = String(Number(stats.max_concurrent_tasks || 0));
+        dashboardMaxConcurrent.textContent = String(maxConcurrent);
+        setDashboardStatMeter(dashboardMaxConcurrent, maxConcurrent, Math.max(maxConcurrent, active, 1));
       }
       if (dashboardTotalTasks) {
-        dashboardTotalTasks.textContent = String(Number(stats.total_tasks || 0));
+        dashboardTotalTasks.textContent = String(totalTasks);
+        setDashboardStatMeter(dashboardTotalTasks, totalTasks, Math.max(totalTasks, 1));
       }
       if (dashboardTotalPRs) {
-        dashboardTotalPRs.textContent = String(dashboardPullRequestCount(snapshot));
+        const prCount = dashboardPullRequestCount(snapshot);
+        dashboardTotalPRs.textContent = String(prCount);
+        setDashboardStatMeter(dashboardTotalPRs, prCount, Math.max(totalTasks, prCount, 1));
       }
       if (dashboardSessionRuntime) {
-        dashboardSessionRuntime.dataset.runtimeSeconds = String(Number(stats.session_runtime_seconds || 0));
+        dashboardSessionRuntime.dataset.runtimeSeconds = String(sessionRuntimeSeconds);
         dashboardSessionRuntime.dataset.updatedAt = String(stats.updated_at || snapshot?.generated_at || "");
         refreshDashboardSessionRuntime();
+        setDashboardStatMeter(dashboardSessionRuntime, sessionRuntimeSeconds, Math.max(sessionRuntimeSeconds, totalSavedSeconds, 1));
       }
       if (dashboardThroughput) {
-        dashboardThroughput.textContent = dashboardRate(Number(stats.throughput_per_hour || 0));
+        dashboardThroughput.textContent = dashboardRate(throughputPerHour);
+        setDashboardStatMeter(dashboardThroughput, throughputPerHour, Math.max(throughputPerHour, velocityPerHour, 1));
       }
       if (dashboardVelocity) {
-        dashboardVelocity.textContent = dashboardRate(Number(stats.velocity_per_hour || 0));
+        dashboardVelocity.textContent = dashboardRate(velocityPerHour);
+        setDashboardStatMeter(dashboardVelocity, velocityPerHour, Math.max(throughputPerHour, velocityPerHour, 1));
       }
       if (dashboardTimeSaved) {
-        dashboardTimeSaved.textContent = dashboardDuration(Number(stats.total_saved_seconds || 0));
+        dashboardTimeSaved.textContent = dashboardDuration(totalSavedSeconds);
+        setDashboardStatMeter(dashboardTimeSaved, totalSavedSeconds, Math.max(totalSavedSeconds, sessionRuntimeSeconds, 1));
       }
       if (dashboardReviewSaved) {
-        dashboardReviewSaved.textContent = dashboardDuration(Number(stats.review_saved_seconds || 0));
+        dashboardReviewSaved.textContent = dashboardDuration(reviewSavedSeconds);
+        setDashboardStatMeter(dashboardReviewSaved, reviewSavedSeconds, Math.max(totalSavedSeconds, reviewSavedSeconds, 1));
       }
       if (dashboardReviewSavedMeta) {
         const reviewTasks = Number(stats.review_tasks || 0);
@@ -5262,7 +5328,8 @@
         dashboardReviewSavedMeta.textContent = `${reviewTasks} review task${reviewTasks === 1 ? "" : "s"}${activeCopy}`;
       }
       if (dashboardAverageRuntime) {
-        dashboardAverageRuntime.textContent = dashboardDuration(Number(stats.average_duration_seconds || 0));
+        dashboardAverageRuntime.textContent = dashboardDuration(averageDurationSeconds);
+        setDashboardStatMeter(dashboardAverageRuntime, averageDurationSeconds, Math.max(averageDurationSeconds, totalSavedSeconds / Math.max(1, completed), 1));
       }
       if (dashboardSuccessRate) {
         dashboardSuccessRate.textContent = `${dashboardPercent(Number(stats.success_rate || 0))} success`;
@@ -5271,11 +5338,12 @@
       renderDashboardTimeList(dashboardWorkflowTimes, stats.workflow_times);
       renderDashboardTimeList(dashboardAgentTimes, stats.agent_times);
       renderDashboardSourceMix(stats);
-      const chart = ensureDashboardChart();
-      if (chart) {
-        chart.data.datasets[0].data = [active, completed, failed];
-        chart.update("none");
-      }
+      const rows = [
+        { label: "Active", value: active, color: dashboardTaskColors()[0] },
+        { label: "Completed", value: completed, color: dashboardTaskColors()[1] },
+        { label: "Failed", value: failed, color: dashboardTaskColors()[2] },
+      ];
+      renderDashboardD3Donut(dashboardTaskChart, rows, { centerLabel: "tasks" });
     }
 
     function escapeLiteralNewlinesInJSONStrings(raw) {

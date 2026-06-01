@@ -253,8 +253,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `<meta name="twitter:image" content="https://app.molten.bot/logo.svg">`) {
 		t.Fatalf("expected index html to use the molten hub logo for social previews")
 	}
-	if !strings.Contains(markup, `src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"`) {
-		t.Fatalf("expected index html to load Chart.js for dashboard stats")
+	if !strings.Contains(markup, `src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"`) {
+		t.Fatalf("expected index html to load D3.js for dashboard stats")
 	}
 	if !strings.Contains(markup, `id="dashboard-display"`) ||
 		!strings.Contains(markup, `<h1 id="dashboard-title">Session Dashboard</h1>`) ||
@@ -280,9 +280,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "function dashboardPullRequestCount(snapshot)") ||
 		!strings.Contains(markup, `const dashboardTotalPRs = document.getElementById("dashboard-total-prs");`) ||
 		!strings.Contains(markup, `const dashboardReviewSaved = document.getElementById("dashboard-review-saved");`) ||
-		!strings.Contains(markup, "dashboardTotalTasks.textContent = String(Number(stats.total_tasks || 0));") ||
-		!strings.Contains(markup, "dashboardTotalPRs.textContent = String(dashboardPullRequestCount(snapshot));") ||
-		!strings.Contains(markup, "dashboardReviewSaved.textContent = dashboardDuration(Number(stats.review_saved_seconds || 0));") {
+		!strings.Contains(markup, "dashboardTotalTasks.textContent = String(totalTasks);") ||
+		!strings.Contains(markup, "dashboardTotalPRs.textContent = String(prCount);") ||
+		!strings.Contains(markup, "dashboardReviewSaved.textContent = dashboardDuration(reviewSavedSeconds);") {
 		t.Fatalf("expected dashboard to show task, pull-request, and review saved-time totals in separate stat cards")
 	}
 	if strings.Contains(markup, `<span class="dashboard-stat-label">Max Concurrent Tasks</span>`) {
