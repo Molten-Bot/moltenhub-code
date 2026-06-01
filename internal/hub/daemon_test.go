@@ -802,6 +802,40 @@ func TestChildWorkflowStatusStateMapping(t *testing.T) {
 	}
 }
 
+func TestAgentInvocationErrorLogKeepsParentStatusWorking(t *testing.T) {
+	t.Parallel()
+
+	line := `stage=codex status=error agent_run_id=agent-implementation-1 agent_harness=codex mode=implementation attempt=1 repo=repo repo_dir=repo err="sandbox blocked local commands"`
+	status, state, message, details, ok := dispatchStatusFromHarnessLogLine(line)
+	if !ok {
+		t.Fatal("dispatchStatusFromHarnessLogLine() ok = false, want true")
+	}
+	if status != "working" {
+		t.Fatalf("parent status = %q, want working", status)
+	}
+	if state != a2a.TaskStateWorking {
+		t.Fatalf("parent state = %s, want TASK_STATE_WORKING", state)
+	}
+	if message != "Task status updated." {
+		t.Fatalf("parent message = %q, want non-terminal update", message)
+	}
+	if got := details["stage_status"]; got != "error" {
+		t.Fatalf("details.stage_status = %#v, want error", got)
+	}
+
+	parent := SkillDispatch{RequestID: "req-parent", HubTaskID: "task-parent", ContextID: "ctx-parent"}
+	child, childStatus, childState, _, _, ok := dispatchChildWorkflowStatusFromHarnessLogLine(parent, line)
+	if !ok {
+		t.Fatal("dispatchChildWorkflowStatusFromHarnessLogLine() ok = false, want true")
+	}
+	if child.HubTaskID != "task-parent-child-agent-implementation-1" {
+		t.Fatalf("child task id = %q", child.HubTaskID)
+	}
+	if childStatus != "error" || childState != a2a.TaskStateFailed {
+		t.Fatalf("child status/state = (%q, %s), want error/TASK_STATE_FAILED", childStatus, childState)
+	}
+}
+
 type workflowVisibilityRunner struct {
 	targetSubdir string
 }

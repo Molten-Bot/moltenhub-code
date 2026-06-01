@@ -4773,12 +4773,23 @@ func TestRunCodexRetriesWithoutSandboxOnBwrapFailure(t *testing.T) {
 		},
 	}}
 
+	var logs []string
 	h := New(fake)
+	h.Logf = func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
 	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
 		t.Fatalf("runCodex() error = %v", err)
 	}
 	if got := len(fake.exps); got != 0 {
 		t.Fatalf("expected all fake runner commands to be consumed, remaining=%d", got)
+	}
+	joinedLogs := strings.Join(logs, "\n")
+	if strings.Contains(joinedLogs, "status=error") {
+		t.Fatalf("retryable sandbox failure logged terminal error before retry:\n%s", joinedLogs)
+	}
+	if !strings.Contains(joinedLogs, "status=warn action=retry_without_sandbox") {
+		t.Fatalf("retry log missing retry_without_sandbox warning:\n%s", joinedLogs)
 	}
 }
 

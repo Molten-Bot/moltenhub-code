@@ -1519,7 +1519,7 @@ func dispatchStatusFromHarnessLogLine(line string) (string, a2a.TaskState, strin
 	state := a2a.TaskStateWorking
 	message := "Task status updated."
 	details["status_action"] = dispatchStageStatusMessage(stage, stageStatus)
-	if stageStatus == "error" || stageStatus == "failed" {
+	if (stageStatus == "error" || stageStatus == "failed") && !isAgentInvocationLogFields(stage, fields) {
 		status = "error"
 		state = a2a.TaskStateFailed
 		errText := firstNonEmpty(fields["err"], fields["error"], message)
@@ -1527,6 +1527,10 @@ func dispatchStatusFromHarnessLogLine(line string) (string, a2a.TaskState, strin
 		message = failureResponseMessage(errText)
 	}
 	return status, state, message, details, true
+}
+
+func isAgentInvocationLogFields(stage string, fields map[string]string) bool {
+	return isAgentInvocationStage(stage) && strings.TrimSpace(fields["agent_run_id"]) != ""
 }
 
 func dispatchChildWorkflowStatusFromHarnessLogLine(
@@ -1542,7 +1546,7 @@ func dispatchChildWorkflowStatusFromHarnessLogLine(
 	stage := strings.TrimSpace(fields["stage"])
 	stageStatus := strings.TrimSpace(fields["status"])
 	agentRunID := strings.TrimSpace(fields["agent_run_id"])
-	if !isAgentInvocationStage(stage) || stageStatus == "" || agentRunID == "" {
+	if !isAgentInvocationLogFields(stage, fields) || stageStatus == "" || agentRunID == "" {
 		return SkillDispatch{}, "", a2a.TaskStateUnspecified, "", nil, false
 	}
 
