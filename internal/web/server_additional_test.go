@@ -853,6 +853,14 @@ func TestDashboardSourceLegendStylesLiveInGlobalStylesheet(t *testing.T) {
 	if !strings.Contains(html, "dashboard-source-legend-item-${dashboardSourceKey(label)}") {
 		t.Fatalf("expected dashboard source legend to choose source-specific global classes")
 	}
+	if !strings.Contains(html, `clearDashboardSourceLegend();`) ||
+		!strings.Contains(html, `legendIconName: dashboardSourceIconName,`) {
+		t.Fatalf("expected dashboard source chart to hide the duplicate external legend and render icons inside the chart legend")
+	}
+	if !strings.Contains(html, `.attr("class", "dashboard-d3-legend-icon-foreign")`) ||
+		!strings.Contains(html, `.attr("data-lucide", (row) => legendIconName ? legendIconName(row.label) : null)`) {
+		t.Fatalf("expected dashboard d3 legend to include source icons in the chart")
+	}
 
 	data, err := fs.ReadFile(staticFiles, "static/style.css")
 	if err != nil {
@@ -867,6 +875,8 @@ func TestDashboardSourceLegendStylesLiveInGlobalStylesheet(t *testing.T) {
 		".dashboard-source-legend-item-library .dashboard-source-legend-icon {\n  color: var(--dashboard-chart-library);\n}",
 		".dashboard-source-legend-item-prompt .dashboard-source-legend-icon {\n  color: var(--dashboard-chart-prompt);\n}",
 		".dashboard-source-legend-item-review .dashboard-source-legend-icon {\n  color: var(--dashboard-chart-review);\n}",
+		".dashboard-d3-legend-icon-foreign {\n  color: var(--dashboard-chart-other);\n  overflow: visible;\n  pointer-events: none;\n}",
+		".dashboard-source-legend[hidden] {\n  display: none;\n}",
 	} {
 		if !strings.Contains(css, want) {
 			t.Fatalf("embedded style.css missing %q", want)

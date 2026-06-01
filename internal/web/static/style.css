@@ -4376,6 +4376,25 @@ select.prompt-control {
   text-transform: uppercase;
 }
 
+.dashboard-d3-legend-icon-foreign {
+  color: var(--dashboard-chart-other);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.dashboard-d3-legend-icon-shell,
+.dashboard-d3-legend-icon-shell svg {
+  display: block;
+  height: 14px;
+  width: 14px;
+}
+
+.dashboard-d3-legend-icon-shell svg {
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 2.2;
+}
+
 .dashboard-source-legend {
   display: flex;
   align-items: center;
@@ -4383,6 +4402,10 @@ select.prompt-control {
   flex-wrap: wrap;
   gap: 8px 14px;
   min-height: 18px;
+}
+
+.dashboard-source-legend[hidden] {
+  display: none;
 }
 
 .dashboard-source-legend-item {

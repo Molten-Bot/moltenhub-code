@@ -5061,6 +5061,7 @@
 
     function renderDashboardSourceLegend(labels = []) {
       if (!dashboardSourceLegend) return;
+      dashboardSourceLegend.hidden = false;
       const entries = labels.length > 0 ? labels : ["No prompts"];
       dashboardSourceLegend.replaceChildren(...entries.map((label) => {
         const item = document.createElement("span");
@@ -5079,6 +5080,12 @@
         return item;
       }));
       replaceLucideIcons(dashboardSourceLegend);
+    }
+
+    function clearDashboardSourceLegend() {
+      if (!dashboardSourceLegend) return;
+      dashboardSourceLegend.replaceChildren();
+      dashboardSourceLegend.hidden = true;
     }
 
     function dashboardChartNodeSize(svgNode) {
@@ -5194,12 +5201,23 @@
         .data([null])
         .join("g")
         .attr("class", "dashboard-d3-legend");
+      const legendIconName = typeof options.legendIconName === "function" ? options.legendIconName : null;
       const legendItems = legend.selectAll("g.dashboard-d3-legend-item")
         .data(labelRows, (row) => row.label)
         .join(
           (enter) => {
             const item = enter.append("g").attr("class", "dashboard-d3-legend-item");
             item.append("rect").attr("rx", 3).attr("ry", 3).attr("width", 10).attr("height", 10);
+            const icon = item.append("foreignObject")
+              .attr("class", "dashboard-d3-legend-icon-foreign")
+              .attr("width", 14)
+              .attr("height", 14)
+              .attr("x", 0)
+              .attr("y", -2);
+            icon.append("xhtml:span")
+              .attr("class", "dashboard-d3-legend-icon-shell")
+              .append("xhtml:i")
+              .attr("aria-hidden", "true");
             item.append("text").attr("x", 16).attr("y", 9);
             return item;
           },
@@ -5212,10 +5230,22 @@
           const x = (width - legendWidth) / 2 + (index * legendWidth / Math.max(1, labelRows.length));
           return `translate(${x},${height - 24})`;
         });
-      legendItems.select("rect").attr("fill", (row) => row.color);
+      legendItems.select("rect")
+        .attr("fill", (row) => row.color)
+        .attr("display", legendIconName ? "none" : null);
+      legendItems.select("foreignObject.dashboard-d3-legend-icon-foreign")
+        .attr("display", legendIconName ? null : "none");
+      legendItems.select(".dashboard-d3-legend-icon-shell")
+        .style("color", (row) => row.color);
+      legendItems.select(".dashboard-d3-legend-icon-shell i")
+        .attr("data-lucide", (row) => legendIconName ? legendIconName(row.label) : null);
       legendItems.select("text")
+        .attr("x", legendIconName ? 20 : 16)
         .attr("fill", dashboardCSSValue("--muted", "#5a6f95"))
         .text((row) => `${row.label} ${row.value}`);
+      if (legendIconName) {
+        replaceLucideIcons(svgNode);
+      }
 
     }
 
@@ -5243,8 +5273,11 @@
       const rows = labels.length > 0
         ? labels.map((label, index) => ({ label, value: data[index], color: dashboardSourceColor(label) }))
         : [{ label: "No prompts", value: 0, color: dashboardSourceColor("other") }];
-      renderDashboardSourceLegend(rows.map((row) => row.label));
-      renderDashboardD3Donut(dashboardSourceChart, rows, { centerLabel: "prompts" });
+      clearDashboardSourceLegend();
+      renderDashboardD3Donut(dashboardSourceChart, rows, {
+        centerLabel: "prompts",
+        legendIconName: dashboardSourceIconName,
+      });
     }
 
     function setDashboardStatMeter(node, value, maxValue) {
