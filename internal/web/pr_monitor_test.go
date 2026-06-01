@@ -33,7 +33,7 @@ func (s *stubPRMonitorRunner) Commands() []execx.Command {
 	return slices.Clone(s.commands)
 }
 
-func TestPRMergeMonitorRemovesMergedTaskFromQueueAndRunsCleanup(t *testing.T) {
+func TestPRMergeMonitorMarksMergedTaskDoneAndRunsCleanup(t *testing.T) {
 	t.Parallel()
 
 	broker := NewBroker()
@@ -92,8 +92,14 @@ func TestPRMergeMonitorRemovesMergedTaskFromQueueAndRunsCleanup(t *testing.T) {
 	}
 
 	snap := broker.Snapshot()
-	if got, want := len(snap.Tasks), 0; got != want {
+	if got, want := len(snap.Tasks), 1; got != want {
 		t.Fatalf("len(tasks) after merged PR observation = %d, want %d", got, want)
+	}
+	if got, want := snap.Tasks[0].Status, "merged"; got != want {
+		t.Fatalf("task.Status after merged PR observation = %q, want %q", got, want)
+	}
+	if got, want := snap.Tasks[0].Stage, "finalize"; got != want {
+		t.Fatalf("task.Stage after merged PR observation = %q, want %q", got, want)
 	}
 	if got, want := len(snap.Releases), 1; got != want {
 		t.Fatalf("len(releases) after merged PR observation = %d, want %d", got, want)

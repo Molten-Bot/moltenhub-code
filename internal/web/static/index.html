@@ -805,7 +805,7 @@
     const DASHBOARD_SHARE_URL = "https://molten.bot/code";
     const DASHBOARD_SHARE_IMAGE_URL = "https://app.molten.bot/logo.svg";
     const GOOGLE_ANALYTICS_MEASUREMENT_ID = "G-BY33RFG2WB";
-    const COMPLETED_STATUSES = new Set(["completed", "no_changes", "error", "invalid", "duplicate", "stopped"]);
+    const COMPLETED_STATUSES = new Set(["completed", "no_changes", "merged", "error", "invalid", "duplicate", "stopped"]);
     const TASK_PROGRESS_PREP_STAGES = new Set(["preflight", "auth", "workspace", "config", "submit", "dispatch"]);
     const TASK_PROGRESS_AGENT_STAGES = new Set(["codex", "claude", "agent", "review"]);
     const LIBRARY_TASK_TYPE_ORDER = Object.freeze(["quality", "maintenance", "security", "review"]);
@@ -1130,6 +1130,9 @@
     function taskStatusIconKey(status) {
       if (status === "completed" || status === "no_changes") {
         return "completed";
+      }
+      if (status === "merged") {
+        return "stopped";
       }
       if (status === "stopped") {
         return "stopped";
@@ -9157,9 +9160,13 @@
       return COMPLETED_STATUSES.has(normalizedTaskStatus(task.status));
     }
 
+    function isMergedTask(task) {
+      return normalizedTaskStatus(task?.status) === "merged";
+    }
+
     function isSuccessfulTaskStatus(status) {
       const normalized = normalizedTaskStatus(status);
-      return normalized === "completed" || normalized === "no_changes";
+      return normalized === "completed" || normalized === "no_changes" || normalized === "merged";
     }
 
     function isTaskClosing(requestID) {
@@ -10590,7 +10597,7 @@
 
     function runningTasks(snapshot) {
       const out = currentTasks(snapshot);
-      return out.filter((task) => !isCompletedTask(task));
+      return out.filter((task) => !isCompletedTask(task) || isMergedTask(task));
     }
 
     function completedTaskHistoryKey(task) {
@@ -11030,7 +11037,7 @@
       }
 
       const status = normalizedTaskStatus(task.status);
-      if (status !== "completed" && status !== "no_changes" && status !== "error" && status !== "invalid" && status !== "duplicate" && status !== "stopped") {
+      if (status !== "completed" && status !== "no_changes" && status !== "merged" && status !== "error" && status !== "invalid" && status !== "duplicate" && status !== "stopped") {
         return;
       }
 
@@ -11050,6 +11057,9 @@
       } else if (status === "no_changes") {
         title.textContent = "Task Complete";
         detail.textContent = "No code changes were detected.";
+      } else if (status === "merged") {
+        title.textContent = "PR Merged";
+        detail.textContent = prURL ? "Pull request merged." : "Done.";
       } else if (status === "stopped") {
         title.textContent = "Task Stopped";
         detail.textContent = task.error ? task.error : "Task was stopped by operator.";
@@ -11062,7 +11072,7 @@
       }
       node.appendChild(detail);
 
-      if ((status === "completed" || status === "no_changes") && prURL) {
+      if ((status === "completed" || status === "no_changes" || status === "merged") && prURL) {
         const link = document.createElement("a");
         link.className = "task-result-link task-result-github-link";
         link.href = prURL;
@@ -11448,6 +11458,7 @@
         const closing = isTaskClosing(requestID);
         const node = document.createElement("article");
         node.className = "task";
+        node.classList.toggle("task-merged", normalizedTaskStatus(task?.status) === "merged");
         node.classList.toggle("task-ui-only", Boolean(task?.ui_only));
         if (requestID) {
           node.dataset.requestId = requestID;
