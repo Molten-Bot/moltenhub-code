@@ -9556,6 +9556,14 @@
       ]);
     }
 
+    function playTaskMergedSound() {
+      playTaskTone([
+        { frequency: 587.33, duration: 0.08, offset: 0, type: "sine", gain: 0.05 },
+        { frequency: 739.99, duration: 0.08, offset: 0.07, type: "sine", gain: 0.054 },
+        { frequency: 987.77, duration: 0.12, offset: 0.15, type: "triangle", gain: 0.062 },
+      ]);
+    }
+
     function playCodeTaskStartSound() {
       playTaskTone([
         { frequency: 392, duration: 0.07, offset: 0, type: "square", gain: 0.036 },
@@ -9581,6 +9589,9 @@
 
     function taskTerminalSound(task) {
       const status = normalizedTaskStatus(task?.status);
+      if (status === "merged") {
+        return "merged";
+      }
       if (status === "completed" || status === "no_changes") {
         return "success";
       }
@@ -9611,7 +9622,9 @@
           continue;
         }
         const sound = taskTerminalSound(task);
-        if (sound === "success") {
+        if (sound === "merged") {
+          playTaskMergedSound();
+        } else if (sound === "success") {
           playTaskSuccessSound();
         } else if (sound === "error") {
           playTaskErrorSound();

@@ -1685,6 +1685,11 @@ func TestCurrentWorkHeaderIncludesTaskSoundMuteToggle(t *testing.T) {
 		!strings.Contains(html, "frequency: 246.94") {
 		t.Fatalf("expected failed work error sound sequence")
 	}
+	if !strings.Contains(html, "function playTaskMergedSound() {") ||
+		!strings.Contains(html, "frequency: 587.33") ||
+		!strings.Contains(html, "frequency: 987.77") {
+		t.Fatalf("expected merged PR sound sequence distinct from task success and error sounds")
+	}
 	if !strings.Contains(html, "function toggleTaskSoundMuted() {") ||
 		!strings.Contains(html, "persistTaskSoundMuted();") ||
 		!strings.Contains(html, "taskSoundToggle.addEventListener(\"click\", () => {") {
@@ -1700,8 +1705,9 @@ func TestCurrentWorkHeaderIncludesTaskSoundMuteToggle(t *testing.T) {
 	}
 	if !strings.Contains(html, "function syncTaskCompletionSounds(snapshot) {") ||
 		!strings.Contains(html, "playTaskSuccessSound();") ||
+		!strings.Contains(html, "playTaskMergedSound();") ||
 		!strings.Contains(html, "playTaskErrorSound();") {
-		t.Fatalf("expected task completion updates to trigger success and error sounds")
+		t.Fatalf("expected task completion updates to trigger success, merged, and error sounds")
 	}
 	if !strings.Contains(html, "document.addEventListener(\"click\", primeTaskAudioContextFromInteraction, true);") ||
 		!strings.Contains(html, "document.removeEventListener(\"click\", primeTaskAudioContextFromInteraction, true);") {
@@ -1733,6 +1739,35 @@ func TestTaskSoundToggleStylesShowMutedState(t *testing.T) {
 	}
 	if !strings.Contains(css, ".task-sound-toggle-muted .task-sound-toggle-icon {\n  opacity: 0.7;\n}") {
 		t.Fatalf("expected muted task sound icon styling")
+	}
+}
+
+func TestMergedTaskCardsUseMutedTreatment(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("", NewBroker())
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	resp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.Code)
+	}
+	html := resp.Body.String()
+	if !strings.Contains(html, `node.classList.toggle("task-merged", normalizedTaskStatus(task?.status) === "merged");`) {
+		t.Fatalf("expected merged tasks to receive task-merged class")
+	}
+
+	cssReq := httptest.NewRequest(http.MethodGet, "/static/style.css", nil)
+	cssResp := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(cssResp, cssReq)
+	if cssResp.Code != http.StatusOK {
+		t.Fatalf("style status = %d, want 200", cssResp.Code)
+	}
+	css := cssResp.Body.String()
+	if !strings.Contains(css, ".task.task-merged {\n  opacity: 0.62;") ||
+		!strings.Contains(css, "filter: saturate(0.72);") ||
+		!strings.Contains(css, `html[data-hover-mode="on"] .task:not(.task-closing):not(.task-merged)`) {
+		t.Fatalf("expected merged tasks to use muted styling and skip active hover treatment")
 	}
 }
 
