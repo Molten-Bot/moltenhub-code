@@ -3730,6 +3730,10 @@ func (h Harness) runCodexCapture(
 		res = retryRes
 		err = retryErr
 	}
+	if err != nil {
+		agentStage := runtimeLogStage(runtime)
+		h.logf("stage=%s status=error%s err=%q", agentStage, invocation.logFieldsSuffix(), err)
+	}
 	if cleanupErr := cleanup(); cleanupErr != nil {
 		h.logf(
 			"stage=workspace status=warn action=cleanup_agents_for_agent target=%s err=%q",
@@ -4072,7 +4076,6 @@ func (h Harness) runCodexWithHeartbeat(
 			if failed, detail := codexReportedFailure(run.res); failed {
 				detail = codexFailureDetailWithErrorDetails(run.res, detail)
 				if isImplementationTargetFailure(detail) {
-					h.logf("stage=%s status=error%s err=%q", agentStage, invocation.logFieldsSuffix(), detail)
 					return run.res, fmt.Errorf("%s reported failure: %s", agentStage, detail)
 				}
 				if isNonFatalValidationToolingFailure(detail, run.res) {
@@ -4102,7 +4105,6 @@ func (h Harness) runCodexWithHeartbeat(
 					)
 					return run.res, nil
 				}
-				h.logf("stage=%s status=error%s err=%q", agentStage, invocation.logFieldsSuffix(), detail)
 				return run.res, fmt.Errorf("%s reported failure: %s", agentStage, detail)
 			}
 			if run.err != nil {
@@ -4115,7 +4117,6 @@ func (h Harness) runCodexWithHeartbeat(
 					)
 					return run.res, nil
 				}
-				h.logf("stage=%s status=error%s err=%q", agentStage, invocation.logFieldsSuffix(), run.err)
 				return run.res, run.err
 			}
 			return run.res, nil
@@ -4124,10 +4125,8 @@ func (h Harness) runCodexWithHeartbeat(
 		case <-runCtx.Done():
 			cause := context.Cause(runCtx)
 			if cause != nil {
-				h.logf("stage=%s status=error%s err=%q", agentStage, invocation.logFieldsSuffix(), cause)
 				return execx.Result{}, cause
 			}
-			h.logf("stage=%s status=error%s err=%q", agentStage, invocation.logFieldsSuffix(), runCtx.Err())
 			return execx.Result{}, runCtx.Err()
 		}
 	}

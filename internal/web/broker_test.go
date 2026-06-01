@@ -747,6 +747,33 @@ func TestBrokerParsesStageErrorText(t *testing.T) {
 	}
 }
 
+func TestBrokerKeepsAgentInvocationStageErrorRunning(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.IngestLog("dispatch status=start request_id=req-agent-stage-err")
+	b.IngestLog(`dispatch request_id=req-agent-stage-err stage=codex status=error agent_run_id=agent-implementation-1 agent_harness=codex mode=implementation attempt=1 repo=repo repo_dir=repo err="sandbox blocked local commands"`)
+	b.IngestLog(`dispatch request_id=req-agent-stage-err stage=codex status=warn action=retry_without_sandbox agent_run_id=agent-implementation-1 agent_harness=codex mode=implementation attempt=1 repo=repo repo_dir=repo`)
+
+	snap := b.Snapshot()
+	if len(snap.Tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(snap.Tasks))
+	}
+	task := snap.Tasks[0]
+	if task.Status != "running" {
+		t.Fatalf("status = %q, want running", task.Status)
+	}
+	if task.Stage != "codex" {
+		t.Fatalf("stage = %q, want codex", task.Stage)
+	}
+	if task.StageStatus != "warn" {
+		t.Fatalf("stage status = %q, want warn after retry log", task.StageStatus)
+	}
+	if task.Error != "" {
+		t.Fatalf("error = %q, want empty parent task error", task.Error)
+	}
+}
+
 func TestBrokerParsesStageErrorTextWithEscapedQuotes(t *testing.T) {
 	t.Parallel()
 

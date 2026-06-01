@@ -1764,19 +1764,22 @@ func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[
 	}
 
 	if strings.HasPrefix(line, "dispatch request_id=") {
+		agentInvocationLine := isAgentInvocationWorkflowStatusFields(fields)
 		if stage := fields["stage"]; stage != "" {
 			t.Stage = stage
 			t.AgentHarness = firstNonEmpty(t.AgentHarness, agentHarnessFromStage(stage))
 		}
 		if stageStatus := fields["status"]; stageStatus != "" {
 			t.StageStatus = stageStatus
-			if stageStatus == "error" && t.Status == "running" {
+			if stageStatus == "error" && t.Status == "running" && !agentInvocationLine {
 				t.Status = "error"
 			}
 		}
 		t.Branch = firstNonEmpty(fields["branch"], t.Branch)
 		t.PRURL = firstNonEmpty(taskPRURLFromFields(fields), t.PRURL)
-		t.Error = firstNonEmpty(fields["err"], fields["error"], t.Error)
+		if !agentInvocationLine {
+			t.Error = firstNonEmpty(fields["err"], fields["error"], t.Error)
+		}
 	}
 
 	if strings.Contains(line, " cmd ") {
@@ -2356,6 +2359,13 @@ func agentHarnessFromStage(stage string) string {
 	default:
 		return ""
 	}
+}
+
+func isAgentInvocationWorkflowStatusFields(fields map[string]string) bool {
+	if strings.TrimSpace(fields["agent_run_id"]) == "" {
+		return false
+	}
+	return agentHarnessFromStage(fields["stage"]) != ""
 }
 
 func taskPRURLFromFields(fields map[string]string) string {
