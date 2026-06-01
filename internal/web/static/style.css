@@ -2682,6 +2682,17 @@ select.prompt-control {
     0 16px 34px rgba(43, 182, 115, 0.16);
 }
 
+.task.task-merged {
+  opacity: 0.68;
+  border-color: color-mix(in srgb, var(--border) 78%, #6b7280);
+  background: color-mix(in srgb, var(--bg-elevated) 86%, #9ca3af);
+}
+
+.task.task-merged:hover {
+  border-color: color-mix(in srgb, var(--border-strong) 74%, #6b7280);
+  box-shadow: var(--shadow-sm);
+}
+
 .task.task-reflow-offset {
   transition: none;
 }
@@ -3123,6 +3134,11 @@ select.prompt-control {
   color: #fff;
 }
 
+.badge.merged {
+  background: color-mix(in srgb, var(--surface-badge-idle) 90%, #4b5563);
+  color: #fff;
+}
+
 .badge.error,
 .badge.invalid {
   background: var(--bad);
@@ -3144,6 +3160,10 @@ select.prompt-control {
 
 .task-current-state.pending {
   background: var(--surface-badge-idle);
+}
+
+.task-current-state.merged {
+  background: color-mix(in srgb, var(--surface-badge-idle) 90%, #4b5563);
 }
 
 .task-current-state.paused {
@@ -4755,6 +4775,11 @@ html.pink .task-progress-step.current .task-progress-step-icon.is-agent-logo {
 }
 
 .task-result.stopped {
+  color: var(--surface-badge-idle);
+  background: rgba(113, 136, 177, 0.13);
+}
+
+.task-result.merged {
   color: var(--surface-badge-idle);
   background: rgba(113, 136, 177, 0.13);
 }

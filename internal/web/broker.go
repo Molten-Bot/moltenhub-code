@@ -1352,8 +1352,7 @@ func (b *Broker) DropTaskRunConfig(requestID string) {
 	delete(b.runConfigs, requestID)
 }
 
-// RecordReleaseFromTask stores a release entry for a merged pull request before
-// the originating task is removed from the live task list.
+// RecordReleaseFromTask stores a release entry for a merged pull request.
 func (b *Broker) RecordReleaseFromTask(task Task, mergedAt string) {
 	if b == nil {
 		return
@@ -1412,6 +1411,54 @@ func (b *Broker) RecordReleaseFromTask(task Task, mergedAt string) {
 		b.releases = b.releases[:defaultMaxReleases]
 	}
 	b.notifySubscribersLocked()
+}
+
+// MarkTaskPRMerged marks the originating task as done after its pull request merges.
+func (b *Broker) MarkTaskPRMerged(requestID string, mergedAt string) error {
+	if b == nil {
+		return ErrTaskNotFound
+	}
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return ErrTaskNotFound
+	}
+
+	now := b.now().UTC()
+	mergedTime := parseTimeOrZero(mergedAt)
+	if mergedTime.IsZero() {
+		mergedTime = now
+	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	task, ok := b.tasks[requestID]
+	if !ok || task == nil {
+		return ErrTaskNotFound
+	}
+	if !isCompletedTaskStatus(task.Status) {
+		return ErrTaskNotCompleted
+	}
+
+	task.Status = "merged"
+	task.Stage = "finalize"
+	task.StageStatus = "merged"
+	task.UpdatedAt = mergedTime
+	b.recordTaskAttemptLocked(
+		b.taskAttemptRootLocked(requestID),
+		requestID,
+		"",
+		task.Status,
+		task.Error,
+		task.Workflow,
+		task.AgentHarness,
+		task.Source,
+		task.Repos,
+		task.PRURL,
+		mergedTime,
+	)
+	b.notifySubscribersLocked()
+	return nil
 }
 
 // TaskAttempts returns a copy of internal attempt records for requestID's root task.
@@ -2633,7 +2680,7 @@ func errorText(err error) string {
 
 func isCompletedTaskStatus(status string) bool {
 	switch normalizeTaskTerminalStatus(status) {
-	case "completed", "no_changes", "error", "invalid", "duplicate", "stopped":
+	case "completed", "no_changes", "merged", "error", "invalid", "duplicate", "stopped":
 		return true
 	default:
 		return false

@@ -16,8 +16,7 @@ import (
 
 const defaultPRMergePollInterval = 2 * time.Minute
 
-// PRMergeMonitor watches task pull requests and closes merged tasks so they
-// disappear from queue/UI automatically.
+// PRMergeMonitor watches task pull requests and marks merged tasks as done.
 type PRMergeMonitor struct {
 	Runner           execx.Runner
 	Broker           *Broker
@@ -228,13 +227,13 @@ func (m *PRMergeMonitor) checkTaskPR(ctx context.Context, task Task) {
 		return
 	}
 	m.Broker.RecordReleaseFromTask(task, state.MergedAt)
-	if err := m.Broker.CloseTask(task.RequestID); err != nil {
+	if err := m.Broker.MarkTaskPRMerged(task.RequestID, state.MergedAt); err != nil {
 		switch {
 		case err == ErrTaskNotFound:
 			m.markMerged(task.RequestID)
 			return
 		default:
-			m.Logf("hub.ui status=warn event=pr_monitor_close request_id=%s pr_url=%s err=%q", task.RequestID, task.PRURL, err)
+			m.Logf("hub.ui status=warn event=pr_monitor_mark_merged request_id=%s pr_url=%s err=%q", task.RequestID, task.PRURL, err)
 			return
 		}
 	}
