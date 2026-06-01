@@ -1642,8 +1642,18 @@ func buildAgentMetadata(cfg InitConfig) map[string]any {
 	metadata[agentVisibilityKey] = agentVisibilityValue
 
 	metadata["skills"] = buildSupportedSkillsMetadata()
+	mergeWorkflowVisibilityMetadata(metadata)
 
 	return metadata
+}
+
+func mergeWorkflowVisibilityMetadata(metadata map[string]any) {
+	if metadata == nil {
+		return
+	}
+	metadata["workflow_model"] = "single_agent_child_tasks"
+	metadata["workflow_node_types"] = []string{workflowNodeTypeAgentInvocation}
+	metadata["workflow_child_harnesses"] = agentruntime.SupportedHarnesses()
 }
 
 func mergeRuntimeRegistrationMetadata(metadata map[string]any, cfg InitConfig, libraryTasks []library.TaskSummary) {
@@ -1668,6 +1678,7 @@ func mergeRuntimeRegistrationMetadata(metadata map[string]any, cfg InitConfig, l
 	metadata["skill_catalog"] = buildRuntimeSkillCatalog(cfg.Skill, libraryTasks)
 	metadata["run_config_modes"] = []string{"prompt", "review"}
 	metadata["supports_branch_key"] = true
+	mergeWorkflowVisibilityMetadata(metadata)
 }
 
 func buildRuntimeSkillCatalog(skillCfg SkillConfig, libraryTasks []library.TaskSummary) []map[string]any {

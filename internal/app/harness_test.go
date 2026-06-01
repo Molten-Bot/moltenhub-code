@@ -34,6 +34,19 @@ type fakeRunner struct {
 	mu                   sync.Mutex
 }
 
+type blockingAgentRunner struct {
+	started chan struct{}
+	once    sync.Once
+}
+
+func (r *blockingAgentRunner) Run(ctx context.Context, _ execx.Command) (execx.Result, error) {
+	r.once.Do(func() {
+		close(r.started)
+	})
+	<-ctx.Done()
+	return execx.Result{}, ctx.Err()
+}
+
 func (f *fakeRunner) Run(_ context.Context, cmd execx.Command) (execx.Result, error) {
 	f.t.Helper()
 	f.mu.Lock()
@@ -404,6 +417,117 @@ func TestRunPRCreatePermissionDeniedAfterPushCompletesWithBranch(t *testing.T) {
 	}
 	if len(fake.exps) != 0 {
 		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunNoChangesLogsInitialAgentInvocationWorkflowMetadata(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+
+	fake := &fakeRunner{t: t, allowUnorderedClones: true, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir)},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch)},
+		{cmd: prLookupAnyByHeadCommand(repoDir, branch)},
+	}}
+
+	var logs []string
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+	h.Logf = func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	joined := strings.Join(logs, "\n")
+	for _, want := range []string{
+		"stage=codex status=start target=services/api agent_run_id=agent-implementation-1 agent_harness=codex mode=implementation attempt=1 repo=repo repo_dir=repo target=services/api",
+		"stage=codex status=ok elapsed_s=",
+		"agent_run_id=agent-implementation-1",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("logs missing %q:\n%s", want, joined)
+		}
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunCodexCaptureHeartbeatLogsAgentInvocationWorkflowMetadata(t *testing.T) {
+	t.Parallel()
+
+	runner := &blockingAgentRunner{started: make(chan struct{})}
+	h := New(runner)
+	h.AgentHeartbeatInterval = time.Millisecond
+	var (
+		mu   sync.Mutex
+		logs []string
+	)
+	h.Logf = func(format string, args ...any) {
+		mu.Lock()
+		logs = append(logs, fmt.Sprintf(format, args...))
+		mu.Unlock()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	runtime := agentruntime.Default()
+	targetDir := t.TempDir()
+	invocation := newAgentInvocationLogMetadata(runtime, "implementation", 1, "repo", "repo", "services/api")
+	go func() {
+		_, err := h.runCodexCapture(ctx, runtime, targetDir, "Build API", codexRunOptions{}, "", "", invocation)
+		done <- err
+	}()
+
+	select {
+	case <-runner.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("agent runner did not start")
+	}
+
+	deadline := time.After(2 * time.Second)
+	for {
+		mu.Lock()
+		joined := strings.Join(logs, "\n")
+		mu.Unlock()
+		if strings.Contains(joined, "stage=codex status=running") {
+			if !strings.Contains(joined, "agent_run_id=agent-implementation-1 agent_harness=codex mode=implementation attempt=1 repo=repo repo_dir=repo target=services/api") {
+				t.Fatalf("running log missing workflow metadata:\n%s", joined)
+			}
+			cancel()
+			if err := <-done; !errors.Is(err, context.Canceled) {
+				t.Fatalf("runCodexCapture() err = %v, want context.Canceled", err)
+			}
+			return
+		}
+		select {
+		case <-deadline:
+			cancel()
+			t.Fatalf("running heartbeat log missing:\n%s", joined)
+		case <-time.After(time.Millisecond):
+		}
 	}
 }
 
@@ -2071,10 +2195,14 @@ func TestRunFailedChecksTriggersCodexRemediation(t *testing.T) {
 		{cmd: prChecksCommand(repoDir, prURL)},
 	}}
 
+	var logs []string
 	h := New(fake)
 	h.Now = func() time.Time { return now }
 	h.Workspace = testWorkspaceManager(guid)
 	h.TargetDirOK = func(path string) bool { return path == targetDir }
+	h.Logf = func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
 
 	res := h.Run(context.Background(), cfg)
 	if res.Err != nil {
@@ -2088,6 +2216,17 @@ func TestRunFailedChecksTriggersCodexRemediation(t *testing.T) {
 	}
 	if len(fake.exps) != 0 {
 		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+	joinedLogs := strings.Join(logs, "\n")
+	for _, want := range []string{
+		"mode=remediation",
+		"agent_run_id=agent-remediation-repo-1",
+		"repo=repo",
+		"repo_dir=repo",
+	} {
+		if !strings.Contains(joinedLogs, want) {
+			t.Fatalf("logs missing remediation workflow metadata %q:\n%s", want, joinedLogs)
+		}
 	}
 }
 
@@ -4257,10 +4396,14 @@ func TestRunUsesConfiguredRuntimeCommand(t *testing.T) {
 		{cmd: prLookupAnyByHeadCommand(repoDir, branch)},
 	}}
 
+	var logs []string
 	h := New(fake)
 	h.Now = func() time.Time { return now }
 	h.Workspace = testWorkspaceManager(guid)
 	h.TargetDirOK = func(path string) bool { return path == targetDir }
+	h.Logf = func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
 
 	res := h.Run(context.Background(), cfg)
 	if res.Err != nil {
@@ -4268,6 +4411,15 @@ func TestRunUsesConfiguredRuntimeCommand(t *testing.T) {
 	}
 	if !res.NoChanges {
 		t.Fatal("NoChanges = false, want true")
+	}
+	joinedLogs := strings.Join(logs, "\n")
+	for _, want := range []string{
+		"stage=claude status=start target=services/api agent_run_id=agent-implementation-1 agent_harness=claude mode=implementation attempt=1 repo=repo repo_dir=repo target=services/api",
+		"stage=claude status=ok elapsed_s=",
+	} {
+		if !strings.Contains(joinedLogs, want) {
+			t.Fatalf("logs missing claude workflow metadata %q:\n%s", want, joinedLogs)
+		}
 	}
 }
 
@@ -6178,7 +6330,11 @@ func TestSyncGeneratedWorkBranchResolvesMergeConflictWithAgent(t *testing.T) {
 		{cmd: mergeFetchedBranchCommand(repoDir)},
 	}}
 
+	var logs []string
 	h := New(fake)
+	h.Logf = func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
 	exitCode, stage, err := h.syncGeneratedWorkBranchWithBase(context.Background(), repo, agentruntime.Default(), repoDir, codexRunOptions{}, "Build API", "", "", ".", "codex")
 	if err != nil {
 		t.Fatalf("syncGeneratedWorkBranchWithBase() err = %v", err)
@@ -6188,6 +6344,18 @@ func TestSyncGeneratedWorkBranchResolvesMergeConflictWithAgent(t *testing.T) {
 	}
 	if len(fake.exps) != 0 {
 		t.Fatalf("remaining expected commands = %d", len(fake.exps))
+	}
+	joinedLogs := strings.Join(logs, "\n")
+	for _, want := range []string{
+		"mode=base_sync_conflict",
+		"agent_run_id=agent-base_sync_conflict-repo-1",
+		"repo=repo",
+		"repo_dir=repo",
+		"target=.",
+	} {
+		if !strings.Contains(joinedLogs, want) {
+			t.Fatalf("logs missing base-sync workflow metadata %q:\n%s", want, joinedLogs)
+		}
 	}
 }
 

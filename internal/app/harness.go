@@ -127,6 +127,16 @@ type repoWorkspace struct {
 
 type codexRunOptions = agentruntime.RunOptions
 
+type agentInvocationLogMetadata struct {
+	RunID   string
+	Harness string
+	Mode    string
+	Attempt int
+	Repo    string
+	RepoDir string
+	Target  string
+}
+
 // Harness executes the clone -> codex -> PR workflow.
 type Harness struct {
 	Runner      execx.Runner
@@ -138,17 +148,21 @@ type Harness struct {
 	// AgentStageTimeout bounds each agent execution attempt when positive;
 	// zero or negative disables the timeout.
 	AgentStageTimeout time.Duration
+	// AgentHeartbeatInterval controls running-status log cadence while an agent is executing.
+	// Zero or negative uses the default interval.
+	AgentHeartbeatInterval time.Duration
 }
 
 // New returns a harness configured with defaults.
 func New(runner execx.Runner) Harness {
 	return Harness{
-		Runner:      runner,
-		Workspace:   workspace.NewManager(),
-		Now:         time.Now,
-		Logf:        func(string, ...any) {},
-		TargetDirOK: pathIsDir,
-		Sleep:       sleepWithContext,
+		Runner:                 runner,
+		Workspace:              workspace.NewManager(),
+		Now:                    time.Now,
+		Logf:                   func(string, ...any) {},
+		TargetDirOK:            pathIsDir,
+		Sleep:                  sleepWithContext,
+		AgentHeartbeatInterval: 15 * time.Second,
 	}
 }
 
@@ -326,14 +340,16 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 	codexBasePrompt = withBackpressurePrompt(codexBasePrompt, h.collectBackpressureRequirements(repos, cfg.TargetSubdir))
 	codexTargetLabel := codexTargetLabel(cfg.TargetSubdir, len(repos) > 1)
+	initialRepo, initialRepoDir := initialAgentInvocationRepoMetadata(repos)
+	initialAgentInvocation := newAgentInvocationLogMetadata(runtime, "implementation", 1, initialRepo, initialRepoDir, codexTargetLabel)
 
-	h.logf("stage=%s status=start target=%s", agentStage, codexTargetLabel)
+	h.logf("stage=%s status=start target=%s%s", agentStage, codexTargetLabel, initialAgentInvocation.logFieldsSuffix())
 	codexStart := time.Now()
-	agentRes, err := h.runCodexCapture(ctx, runtime, codexDir, codexBasePrompt, codexOpts, agentsPath, cfg.ResponseMode)
+	agentRes, err := h.runCodexCapture(ctx, runtime, codexDir, codexBasePrompt, codexOpts, agentsPath, cfg.ResponseMode, initialAgentInvocation)
 	if err != nil {
 		return h.fail(ExitCodex, agentStage, err, runDir)
 	}
-	h.logf("stage=%s status=ok elapsed_s=%d", agentStage, int(time.Since(codexStart).Seconds()))
+	h.logf("stage=%s status=ok elapsed_s=%d%s", agentStage, int(time.Since(codexStart).Seconds()), initialAgentInvocation.logFieldsSuffix())
 
 	for i := range repos {
 		statusRes, err := h.runCommand(ctx, "git", statusCommand(repos[i].Dir))
@@ -745,26 +761,29 @@ func (h Harness) processChangedRepo(
 			attempt+1,
 			multiRepo,
 		)
+		remediationInvocation := newAgentInvocationLogMetadata(runtime, "remediation", attempt+1, repo.RelDir, repo.RelDir, codexTargetLabel)
 		h.logf(
-			"stage=%s status=start target=%s mode=remediation attempt=%d repo=%s repo_dir=%s",
+			"stage=%s status=start target=%s mode=remediation attempt=%d repo=%s repo_dir=%s%s",
 			agentStage,
 			codexTargetLabel,
 			attempt+1,
 			repo.URL,
 			repo.RelDir,
+			remediationInvocation.logFieldsSuffix(),
 		)
 		codexStart := time.Now()
-		agentRes, err := h.runCodexCapture(ctx, runtime, codexDir, repairPrompt, codexOpts, agentsPath, cfg.ResponseMode)
+		agentRes, err := h.runCodexCapture(ctx, runtime, codexDir, repairPrompt, codexOpts, agentsPath, cfg.ResponseMode, remediationInvocation)
 		if err != nil {
 			return ExitCodex, agentStage, err
 		}
 		h.logf(
-			"stage=%s status=ok elapsed_s=%d mode=remediation attempt=%d repo=%s repo_dir=%s",
+			"stage=%s status=ok elapsed_s=%d mode=remediation attempt=%d repo=%s repo_dir=%s%s",
 			agentStage,
 			int(time.Since(codexStart).Seconds()),
 			attempt+1,
 			repo.URL,
 			repo.RelDir,
+			remediationInvocation.logFieldsSuffix(),
 		)
 
 		statusRes, err := h.runCommand(ctx, "git", statusCommand(repo.Dir))
@@ -934,25 +953,28 @@ func (h Harness) resolveBaseSyncConflictWithAgent(
 		baseBranch,
 		mergeRes,
 	)
+	invocation := newAgentInvocationLogMetadata(runtime, "base_sync_conflict", attempt, repo.RelDir, repo.RelDir, codexTargetLabel)
 	h.logf(
-		"stage=%s status=start target=%s mode=base_sync_conflict attempt=%d repo=%s repo_dir=%s",
+		"stage=%s status=start target=%s mode=base_sync_conflict attempt=%d repo=%s repo_dir=%s%s",
 		agentStage,
 		codexTargetLabel,
 		attempt,
 		repo.URL,
 		repo.RelDir,
+		invocation.logFieldsSuffix(),
 	)
 	agentStart := time.Now()
-	if _, err := h.runCodexCapture(ctx, runtime, codexDir, prompt, codexOpts, agentsPath, responseMode); err != nil {
+	if _, err := h.runCodexCapture(ctx, runtime, codexDir, prompt, codexOpts, agentsPath, responseMode, invocation); err != nil {
 		return ExitCodex, agentStage, err
 	}
 	h.logf(
-		"stage=%s status=ok elapsed_s=%d mode=base_sync_conflict attempt=%d repo=%s repo_dir=%s",
+		"stage=%s status=ok elapsed_s=%d mode=base_sync_conflict attempt=%d repo=%s repo_dir=%s%s",
 		agentStage,
 		int(time.Since(agentStart).Seconds()),
 		attempt,
 		repo.URL,
 		repo.RelDir,
+		invocation.logFieldsSuffix(),
 	)
 
 	statusRes, err := h.runCommand(ctx, "git", statusCommand(repo.Dir))
@@ -3634,7 +3656,7 @@ func (h Harness) runCodex(
 	agentsPath string,
 	responseMode string,
 ) error {
-	_, err := h.runCodexCapture(ctx, runtime, targetDir, prompt, opts, agentsPath, responseMode)
+	_, err := h.runCodexCapture(ctx, runtime, targetDir, prompt, opts, agentsPath, responseMode, agentInvocationLogMetadata{})
 	return err
 }
 
@@ -3646,6 +3668,7 @@ func (h Harness) runCodexCapture(
 	opts codexRunOptions,
 	agentsPath string,
 	responseMode string,
+	invocation agentInvocationLogMetadata,
 ) (execx.Result, error) {
 	finalPrompt := withBackpressurePrompt(prompt, nil)
 	cleanup := func() error { return nil }
@@ -3693,15 +3716,17 @@ func (h Harness) runCodexCapture(
 		finalPrompt = promptWithResponseMode
 	}
 
-	res, err := h.runCodexWithHeartbeat(ctx, runtime, targetDir, finalPrompt, opts, "")
+	invocation = invocation.withRuntimeDefaults(runtime)
+	res, err := h.runCodexWithHeartbeat(ctx, runtime, targetDir, finalPrompt, opts, "", invocation)
 	if shouldRetryCodexWithoutSandbox(res, err) {
 		agentStage := runtimeLogStage(runtime)
 		h.logf(
-			"stage=%s status=warn action=retry_without_sandbox reason=%q",
+			"stage=%s status=warn action=retry_without_sandbox reason=%q%s",
 			agentStage,
 			"detected bubblewrap namespace sandbox failure; retrying with danger-full-access",
+			invocation.logFieldsSuffix(),
 		)
-		retryRes, retryErr := h.runCodexWithHeartbeat(ctx, runtime, targetDir, finalPrompt, opts, "danger-full-access")
+		retryRes, retryErr := h.runCodexWithHeartbeat(ctx, runtime, targetDir, finalPrompt, opts, "danger-full-access", invocation)
 		res = retryRes
 		err = retryErr
 	}
@@ -3733,6 +3758,151 @@ func agentOutputClaimsFileChanges(res execx.Result) bool {
 		}
 	}
 	return false
+}
+
+func newAgentInvocationLogMetadata(
+	runtime agentruntime.Runtime,
+	mode string,
+	attempt int,
+	repo string,
+	repoDir string,
+	target string,
+) agentInvocationLogMetadata {
+	mode = strings.TrimSpace(mode)
+	return agentInvocationLogMetadata{
+		RunID:   agentInvocationRunID(mode, repoDir, attempt),
+		Harness: strings.TrimSpace(runtime.Harness),
+		Mode:    mode,
+		Attempt: attempt,
+		Repo:    pickFirstNonEmpty(strings.TrimSpace(repo), strings.TrimSpace(repoDir)),
+		RepoDir: strings.TrimSpace(repoDir),
+		Target:  strings.TrimSpace(target),
+	}
+}
+
+func initialAgentInvocationRepoMetadata(repos []repoWorkspace) (string, string) {
+	switch len(repos) {
+	case 0:
+		return "", ""
+	case 1:
+		repoDir := strings.TrimSpace(repos[0].RelDir)
+		return repoDir, repoDir
+	default:
+		return "multi-repo", "."
+	}
+}
+
+func agentInvocationRunID(mode, repoDir string, attempt int) string {
+	mode = sanitizeAgentInvocationIDPart(pickFirstNonEmpty(mode, "implementation"))
+	repoDir = sanitizeAgentInvocationIDPart(repoDir)
+	parts := []string{"agent", mode}
+	if repoDir != "" && mode != "implementation" {
+		parts = append(parts, repoDir)
+	}
+	if attempt > 0 {
+		parts = append(parts, strconv.Itoa(attempt))
+	}
+	return strings.Join(parts, "-")
+}
+
+func sanitizeAgentInvocationIDPart(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var b strings.Builder
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '-' || r == '_':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('-')
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+func (m agentInvocationLogMetadata) withRuntimeDefaults(runtime agentruntime.Runtime) agentInvocationLogMetadata {
+	if strings.TrimSpace(m.RunID) == "" {
+		return m
+	}
+	if strings.TrimSpace(m.Harness) == "" {
+		m.Harness = strings.TrimSpace(runtime.Harness)
+	}
+	if strings.TrimSpace(m.Mode) == "" {
+		m.Mode = "implementation"
+	}
+	if m.Attempt <= 0 {
+		m.Attempt = 1
+	}
+	if strings.TrimSpace(m.Repo) == "" {
+		m.Repo = strings.TrimSpace(m.RepoDir)
+	}
+	return m
+}
+
+func (m agentInvocationLogMetadata) logFieldsSuffix() string {
+	if strings.TrimSpace(m.RunID) == "" {
+		return ""
+	}
+	fields := []string{
+		logKV("agent_run_id", m.RunID),
+		logKV("agent_harness", m.Harness),
+		logKV("mode", m.Mode),
+	}
+	if m.Attempt > 0 {
+		fields = append(fields, logKV("attempt", strconv.Itoa(m.Attempt)))
+	}
+	fields = append(fields,
+		logKV("repo", m.Repo),
+		logKV("repo_dir", m.RepoDir),
+		logKV("target", m.Target),
+	)
+	fields = compactNonEmptyStrings(fields)
+	if len(fields) == 0 {
+		return ""
+	}
+	return " " + strings.Join(fields, " ")
+}
+
+func logKV(key, value string) string {
+	key = strings.TrimSpace(key)
+	value = strings.TrimSpace(value)
+	if key == "" || value == "" {
+		return ""
+	}
+	if isSimpleLogKVValue(value) {
+		return key + "=" + value
+	}
+	return key + "=" + strconv.Quote(value)
+}
+
+func isSimpleLogKVValue(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '-' || r == '_' || r == '.' || r == '/' || r == ':' || r == '@':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func compactNonEmptyStrings(values []string) []string {
+	out := values[:0]
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			out = append(out, value)
+		}
+	}
+	return out
 }
 
 func combineCleanupFns(cleanups ...func() error) func() error {
@@ -3859,6 +4029,7 @@ func (h Harness) runCodexWithHeartbeat(
 	targetDir, prompt string,
 	opts codexRunOptions,
 	sandboxOverride string,
+	invocation agentInvocationLogMetadata,
 ) (execx.Result, error) {
 	cmd, err := agentCommandWithOptions(runtime, targetDir, prompt, opts)
 	if err != nil {
@@ -3888,7 +4059,11 @@ func (h Harness) runCodexWithHeartbeat(
 	}()
 
 	start := time.Now()
-	ticker := time.NewTicker(15 * time.Second)
+	heartbeatInterval := h.AgentHeartbeatInterval
+	if heartbeatInterval <= 0 {
+		heartbeatInterval = 15 * time.Second
+	}
+	ticker := time.NewTicker(heartbeatInterval)
 	defer ticker.Stop()
 
 	for {
@@ -3897,53 +4072,62 @@ func (h Harness) runCodexWithHeartbeat(
 			if failed, detail := codexReportedFailure(run.res); failed {
 				detail = codexFailureDetailWithErrorDetails(run.res, detail)
 				if isImplementationTargetFailure(detail) {
+					h.logf("stage=%s status=error%s err=%q", agentStage, invocation.logFieldsSuffix(), detail)
 					return run.res, fmt.Errorf("%s reported failure: %s", agentStage, detail)
 				}
 				if isNonFatalValidationToolingFailure(detail, run.res) {
 					h.logf(
-						"stage=%s status=warn action=validation_tooling_unavailable detail=%q",
+						"stage=%s status=warn action=validation_tooling_unavailable detail=%q%s",
 						agentStage,
 						detail,
+						invocation.logFieldsSuffix(),
 					)
 					return run.res, nil
 				}
 				if isRecoveredTransientRegistryLookupFailure(detail, run.res) {
 					h.logf(
-						"stage=%s status=warn action=recovered_transient_registry_lookup detail=%q",
+						"stage=%s status=warn action=recovered_transient_registry_lookup detail=%q%s",
 						agentStage,
 						detail,
+						invocation.logFieldsSuffix(),
 					)
 					return run.res, nil
 				}
 				if isNonFatalHubSnapshotRefreshFailure(detail, run.res) {
 					h.logf(
-						"stage=%s status=warn action=hub_snapshot_refresh_unavailable detail=%q",
+						"stage=%s status=warn action=hub_snapshot_refresh_unavailable detail=%q%s",
 						agentStage,
 						detail,
+						invocation.logFieldsSuffix(),
 					)
 					return run.res, nil
 				}
+				h.logf("stage=%s status=error%s err=%q", agentStage, invocation.logFieldsSuffix(), detail)
 				return run.res, fmt.Errorf("%s reported failure: %s", agentStage, detail)
 			}
 			if run.err != nil {
 				if isNonFatalValidationToolingFailure("", run.res) {
 					h.logf(
-						"stage=%s status=warn action=validation_tooling_unavailable detail=%q",
+						"stage=%s status=warn action=validation_tooling_unavailable detail=%q%s",
 						agentStage,
 						strings.TrimSpace(strings.Join([]string{run.res.Stdout, run.res.Stderr}, "\n")),
+						invocation.logFieldsSuffix(),
 					)
 					return run.res, nil
 				}
+				h.logf("stage=%s status=error%s err=%q", agentStage, invocation.logFieldsSuffix(), run.err)
 				return run.res, run.err
 			}
 			return run.res, nil
 		case <-ticker.C:
-			h.logf("stage=%s status=running elapsed_s=%d", agentStage, int(time.Since(start).Seconds()))
+			h.logf("stage=%s status=running elapsed_s=%d%s", agentStage, int(time.Since(start).Seconds()), invocation.logFieldsSuffix())
 		case <-runCtx.Done():
 			cause := context.Cause(runCtx)
 			if cause != nil {
+				h.logf("stage=%s status=error%s err=%q", agentStage, invocation.logFieldsSuffix(), cause)
 				return execx.Result{}, cause
 			}
+			h.logf("stage=%s status=error%s err=%q", agentStage, invocation.logFieldsSuffix(), runCtx.Err())
 			return execx.Result{}, runCtx.Err()
 		}
 	}

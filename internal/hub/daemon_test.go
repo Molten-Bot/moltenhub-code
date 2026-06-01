@@ -671,6 +671,247 @@ func TestDispatchStatusPayloadIncludesStageMetadata(t *testing.T) {
 	}
 }
 
+func TestDispatchChildWorkflowStatusFromHarnessLogLineBuildsChildPayload(t *testing.T) {
+	t.Parallel()
+
+	parent := SkillDispatch{
+		RequestID: "req-parent",
+		HubTaskID: "task-parent",
+		ContextID: "ctx-parent",
+		Skill:     "code_for_me",
+		Config: config.Config{
+			LibraryTaskName: "unit-test-coverage",
+		},
+	}
+	line := `stage=codex status=start target=services/api agent_run_id=agent-implementation-1 agent_harness=codex mode=implementation attempt=1 repo=git@github.com:acme/private.git repo_dir=repo`
+
+	parentStatus, parentState, _, parentDetails, ok := dispatchStatusFromHarnessLogLine(line)
+	if !ok {
+		t.Fatal("dispatchStatusFromHarnessLogLine() ok = false, want true")
+	}
+	if parentStatus != "working" || parentState != a2a.TaskStateWorking {
+		t.Fatalf("parent status = (%q, %s), want working/TASK_STATE_WORKING", parentStatus, parentState)
+	}
+	if got := parentDetails["agent_run_id"]; got != "agent-implementation-1" {
+		t.Fatalf("parent details agent_run_id = %#v", got)
+	}
+
+	child, status, state, message, details, ok := dispatchChildWorkflowStatusFromHarnessLogLine(parent, line)
+	if !ok {
+		t.Fatal("dispatchChildWorkflowStatusFromHarnessLogLine() ok = false, want true")
+	}
+	childTaskID := "task-parent-child-agent-implementation-1"
+	if child.RequestID != childTaskID || child.HubTaskID != childTaskID {
+		t.Fatalf("child ids = request:%q hub:%q, want %q", child.RequestID, child.HubTaskID, childTaskID)
+	}
+	if child.ContextID != "ctx-parent" {
+		t.Fatalf("child context = %q, want ctx-parent", child.ContextID)
+	}
+	if status != "start" || state != a2a.TaskStateSubmitted {
+		t.Fatalf("child status = (%q, %s), want start/TASK_STATE_SUBMITTED", status, state)
+	}
+	if message != "Agent invocation queued." {
+		t.Fatalf("child message = %q", message)
+	}
+	for key, want := range map[string]any{
+		"parent_task_id":     "task-parent",
+		"parent_request_id":  "req-parent",
+		"workflow_node_type": workflowNodeTypeAgentInvocation,
+		"agent_harness":      "codex",
+		"agent_run_id":       "agent-implementation-1",
+		"mode":               "implementation",
+		"attempt":            "1",
+		"repo":               "repo",
+		"repo_dir":           "repo",
+		"target":             "services/api",
+		"stage":              "codex",
+		"stage_status":       "start",
+	} {
+		if got := details[key]; got != want {
+			t.Fatalf("details[%s] = %#v, want %#v", key, got, want)
+		}
+	}
+
+	payload := dispatchStatusPayload(InitConfig{Skill: runtimeSkillConfig()}, child, status, state, message, details)
+	if got := payload["a2a_task_id"]; got != childTaskID {
+		t.Fatalf("a2a_task_id = %#v, want %q", got, childTaskID)
+	}
+	if got := payload["context_id"]; got != "ctx-parent" {
+		t.Fatalf("context_id = %#v, want ctx-parent", got)
+	}
+	if got := payload["a2a_state"]; got != a2a.TaskStateSubmitted.String() {
+		t.Fatalf("a2a_state = %#v, want %s", got, a2a.TaskStateSubmitted)
+	}
+	payloadDetails, _ := payload["details"].(map[string]any)
+	if _, hasInternal := payloadDetails["_workflow_child_status"]; hasInternal {
+		t.Fatalf("payload details leaked internal workflow marker: %#v", payloadDetails)
+	}
+
+	statusUpdate, _ := payload["statusUpdate"].(map[string]any)
+	metadata, _ := statusUpdate["metadata"].(map[string]any)
+	for key, want := range map[string]any{
+		"parent_task_id":     "task-parent",
+		"workflow_node_type": workflowNodeTypeAgentInvocation,
+		"agent_harness":      "codex",
+		"agent_run_id":       "agent-implementation-1",
+		"mode":               "implementation",
+		"repo":               "repo",
+		"repo_dir":           "repo",
+		"target":             "services/api",
+		"stage":              "codex",
+		"stage_status":       "start",
+	} {
+		if got := metadata[key]; got != want {
+			t.Fatalf("statusUpdate.metadata[%s] = %#v, want %#v", key, got, want)
+		}
+	}
+}
+
+func TestChildWorkflowStatusStateMapping(t *testing.T) {
+	t.Parallel()
+
+	parent := SkillDispatch{RequestID: "req-parent", HubTaskID: "task-parent", ContextID: "ctx-parent"}
+	tests := []struct {
+		status string
+		state  a2a.TaskState
+		extra  string
+	}{
+		{status: "start", state: a2a.TaskStateSubmitted},
+		{status: "running", state: a2a.TaskStateWorking},
+		{status: "ok", state: a2a.TaskStateCompleted},
+		{status: "error", state: a2a.TaskStateFailed, extra: ` err="boom"`},
+		{status: "stopped", state: a2a.TaskStateCanceled},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.status, func(t *testing.T) {
+			t.Parallel()
+
+			line := fmt.Sprintf(`stage=claude status=%s agent_run_id=agent-run agent_harness=claude mode=implementation attempt=1%s`, tt.status, tt.extra)
+			_, status, state, _, details, ok := dispatchChildWorkflowStatusFromHarnessLogLine(parent, line)
+			if !ok {
+				t.Fatal("dispatchChildWorkflowStatusFromHarnessLogLine() ok = false, want true")
+			}
+			if status != tt.status || state != tt.state {
+				t.Fatalf("status/state = (%q, %s), want (%q, %s)", status, state, tt.status, tt.state)
+			}
+			if tt.status == "error" && details["error"] != "boom" {
+				t.Fatalf("error details = %#v, want boom", details["error"])
+			}
+		})
+	}
+}
+
+type workflowVisibilityRunner struct {
+	targetSubdir string
+}
+
+func (r *workflowVisibilityRunner) Run(_ context.Context, cmd execx.Command) (execx.Result, error) {
+	if cmd.Name == "git" && len(cmd.Args) > 0 {
+		switch cmd.Args[0] {
+		case "clone":
+			if len(cmd.Args) > 0 {
+				repoDir := cmd.Args[len(cmd.Args)-1]
+				if err := os.MkdirAll(filepath.Join(repoDir, r.targetSubdir), 0o755); err != nil {
+					return execx.Result{}, err
+				}
+			}
+		case "status":
+			return execx.Result{Stdout: ""}, nil
+		}
+	}
+	if cmd.Name == "gh" && len(cmd.Args) >= 2 && cmd.Args[0] == "pr" && cmd.Args[1] == "list" {
+		return execx.Result{Stdout: "[]"}, nil
+	}
+	return execx.Result{}, nil
+}
+
+func TestHandleDispatchPublishesParentAndChildWorkflowStatusesForAgentLogs(t *testing.T) {
+	t.Parallel()
+
+	runCfg := config.Config{
+		RepoURL:      "git@github.com:acme/repo.git",
+		Repo:         "git@github.com:acme/repo.git",
+		BaseBranch:   "main",
+		TargetSubdir: "services/api",
+		Prompt:       "Build API",
+	}
+	runCfg.ApplyDefaults()
+
+	api := &stubMoltenHubAPI{token: "t"}
+	d := NewDaemon(&workflowVisibilityRunner{targetSubdir: runCfg.TargetSubdir})
+	finalState := d.handleDispatch(
+		context.Background(),
+		api,
+		InitConfig{Skill: runtimeSkillConfig()},
+		SkillDispatch{
+			RequestID: "req-workflow",
+			HubTaskID: "task-workflow",
+			ContextID: "ctx-workflow",
+			Skill:     "code_for_me",
+			ReplyTo:   "caller-agent",
+			Config:    runCfg,
+		},
+		"",
+		false,
+	)
+	if finalState != "no_changes" {
+		t.Fatalf("handleDispatch() final state = %q, want no_changes", finalState)
+	}
+
+	api.mu.Lock()
+	statusUpdates := statusPayloads(api.published)
+	api.mu.Unlock()
+
+	var parentStart, childStart map[string]any
+	for _, payload := range statusUpdates {
+		details, _ := payload["details"].(map[string]any)
+		if details["stage"] != "codex" || details["stage_status"] != "start" {
+			continue
+		}
+		switch payload["a2a_task_id"] {
+		case "task-workflow":
+			parentStart = payload
+		case "task-workflow-child-agent-implementation-1":
+			childStart = payload
+		}
+	}
+	if parentStart == nil {
+		t.Fatalf("parent codex start status missing: %#v", statusUpdates)
+	}
+	parentStatusUpdate, _ := parentStart["statusUpdate"].(map[string]any)
+	parentMetadata, _ := parentStatusUpdate["metadata"].(map[string]any)
+	if _, hasWorkflowNode := parentMetadata["workflow_node_type"]; hasWorkflowNode {
+		t.Fatalf("parent metadata unexpectedly marked as workflow child: %#v", parentMetadata)
+	}
+
+	if childStart == nil {
+		t.Fatalf("child codex start status missing: %#v", statusUpdates)
+	}
+	if got := childStart["context_id"]; got != "ctx-workflow" {
+		t.Fatalf("child context_id = %#v, want ctx-workflow", got)
+	}
+	if got := childStart["a2a_state"]; got != a2a.TaskStateSubmitted.String() {
+		t.Fatalf("child a2a_state = %#v, want %s", got, a2a.TaskStateSubmitted)
+	}
+	childStatusUpdate, _ := childStart["statusUpdate"].(map[string]any)
+	childMetadata, _ := childStatusUpdate["metadata"].(map[string]any)
+	for key, want := range map[string]any{
+		"parent_task_id":     "task-workflow",
+		"workflow_node_type": workflowNodeTypeAgentInvocation,
+		"agent_harness":      "codex",
+		"agent_run_id":       "agent-implementation-1",
+		"mode":               "implementation",
+		"repo":               "repo",
+		"repo_dir":           "repo",
+		"target":             "services/api",
+	} {
+		if got := childMetadata[key]; got != want {
+			t.Fatalf("child metadata[%s] = %#v, want %#v", key, got, want)
+		}
+	}
+}
+
 func TestDispatchResultPayloadNoChangesIncludesExistingPRURLs(t *testing.T) {
 	t.Parallel()
 

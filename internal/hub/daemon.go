@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
 	"github.com/Molten-Bot/moltenhub-code/internal/app"
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
@@ -66,6 +67,7 @@ const failureFollowUpTargetSubdir = "."
 const transportOfflineReasonExecutionFailure = "task_execution_failure"
 const dispatchTaskStatusType = "task_status_update"
 const taskStoppedByOperatorReason = "task was stopped by operator"
+const workflowNodeTypeAgentInvocation = "agent_invocation"
 
 // NewDaemon returns a hub daemon with defaults.
 func NewDaemon(runner execx.Runner) Daemon {
@@ -1157,6 +1159,9 @@ func (d Daemon) handleDispatch(
 			if status, state, message, details, ok := dispatchStatusFromHarnessLogLine(line); ok {
 				d.publishDispatchStatus(ctx, api, cfg, dispatch, status, state, message, details)
 			}
+			if childDispatch, status, state, message, details, ok := dispatchChildWorkflowStatusFromHarnessLogLine(dispatch, line); ok {
+				d.publishDispatchStatus(ctx, api, cfg, childDispatch, status, state, message, details)
+			}
 			return
 		}
 		d.logf("dispatch %s", line)
@@ -1381,6 +1386,13 @@ func dispatchStatusPayload(
 	if stageStatus := firstString(details["stage_status"], details["status"]); stageStatus != "" {
 		metadata["stage_status"] = stageStatus
 	}
+	if includeWorkflowStatusMetadata(details) {
+		for _, key := range workflowStatusMetadataKeys() {
+			if value := firstString(details[key]); value != "" {
+				metadata[key] = value
+			}
+		}
+	}
 	if originator := dispatchOriginatorPayload(dispatch); originator != nil {
 		metadata["originator"] = originator
 	}
@@ -1412,7 +1424,7 @@ func dispatchStatusPayload(
 		payload["context_id"] = contextID
 	}
 	if len(details) > 0 {
-		payload["details"] = cloneMetadataMap(details)
+		payload["details"] = cloneStatusDetails(details)
 	}
 	if originator := dispatchOriginatorPayload(dispatch); originator != nil {
 		payload["originator"] = originator
@@ -1431,6 +1443,46 @@ func dispatchStatusPayload(
 	payload["ok"] = a2aTaskStateOK(state)
 	applyDispatchResponseRouting(payload, dispatch)
 	return payload
+}
+
+func workflowStatusMetadataKeys() []string {
+	return []string{
+		"parent_task_id",
+		"parent_request_id",
+		"workflow_node_type",
+		"agent_harness",
+		"agent_run_id",
+		"mode",
+		"attempt",
+		"repo",
+		"repo_dir",
+		"target",
+		"action",
+	}
+}
+
+func includeWorkflowStatusMetadata(details map[string]any) bool {
+	if details == nil {
+		return false
+	}
+	switch typed := details["_workflow_child_status"].(type) {
+	case bool:
+		return typed
+	case string:
+		return strings.EqualFold(strings.TrimSpace(typed), "true")
+	default:
+		return false
+	}
+}
+
+func cloneStatusDetails(details map[string]any) map[string]any {
+	out := cloneMetadataMap(details)
+	for key := range out {
+		if strings.HasPrefix(key, "_") {
+			delete(out, key)
+		}
+	}
+	return out
 }
 
 func dispatchStartStatusMessage(runCfg config.Config) string {
@@ -1475,6 +1527,169 @@ func dispatchStatusFromHarnessLogLine(line string) (string, a2a.TaskState, strin
 		message = failureResponseMessage(errText)
 	}
 	return status, state, message, details, true
+}
+
+func dispatchChildWorkflowStatusFromHarnessLogLine(
+	parent SkillDispatch,
+	line string,
+) (SkillDispatch, string, a2a.TaskState, string, map[string]any, bool) {
+	line = strings.TrimSpace(line)
+	if line == "" || !strings.Contains(line, "stage=") || !strings.Contains(line, "status=") || !strings.Contains(line, "agent_run_id=") {
+		return SkillDispatch{}, "", a2a.TaskStateUnspecified, "", nil, false
+	}
+
+	fields := parseDispatchLogKVFields(line)
+	stage := strings.TrimSpace(fields["stage"])
+	stageStatus := strings.TrimSpace(fields["status"])
+	agentRunID := strings.TrimSpace(fields["agent_run_id"])
+	if !isAgentInvocationStage(stage) || stageStatus == "" || agentRunID == "" {
+		return SkillDispatch{}, "", a2a.TaskStateUnspecified, "", nil, false
+	}
+
+	parentTaskID := dispatchStatusTaskID(parent)
+	childTaskID := childWorkflowTaskID(parentTaskID, agentRunID)
+	child := parent
+	child.RequestID = childTaskID
+	child.HubTaskID = childTaskID
+	child.ContextID = dispatchStatusContextID(parent)
+
+	status := stageStatus
+	state := childWorkflowTaskState(stageStatus)
+	message := childWorkflowStatusMessage(stageStatus, fields)
+	details := childWorkflowStatusDetails(parent, parentTaskID, stage, stageStatus, fields)
+	return child, status, state, message, details, true
+}
+
+func isAgentInvocationStage(stage string) bool {
+	switch strings.ToLower(strings.TrimSpace(stage)) {
+	case agentruntime.HarnessCodex, agentruntime.HarnessClaude:
+		return true
+	default:
+		return false
+	}
+}
+
+func childWorkflowTaskState(status string) a2a.TaskState {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "start", "queued", "waiting", "submitted":
+		return a2a.TaskStateSubmitted
+	case "ok", "completed", "complete", "success", "no_changes":
+		return a2a.TaskStateCompleted
+	case "error", "failed", "failure":
+		return a2a.TaskStateFailed
+	case "stopped", "canceled", "cancelled":
+		return a2a.TaskStateCanceled
+	default:
+		return a2a.TaskStateWorking
+	}
+}
+
+func childWorkflowStatusMessage(status string, fields map[string]string) string {
+	action := strings.TrimSpace(fields["action"])
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "start", "queued", "waiting", "submitted":
+		return "Agent invocation queued."
+	case "ok", "completed", "complete", "success", "no_changes":
+		return "Agent invocation completed."
+	case "error", "failed", "failure":
+		if errText := firstNonEmpty(strings.TrimSpace(fields["err"]), strings.TrimSpace(fields["error"])); errText != "" {
+			return failureResponseMessage(errText)
+		}
+		return "Failure: agent invocation failed. Error details: unknown error."
+	case "stopped", "canceled", "cancelled":
+		return "Agent invocation stopped."
+	case "warn":
+		if action != "" {
+			return "Agent invocation warning: " + action + "."
+		}
+		return "Agent invocation warning."
+	default:
+		if action != "" {
+			return "Agent invocation updated: " + action + "."
+		}
+		return "Agent invocation running."
+	}
+}
+
+func childWorkflowStatusDetails(parent SkillDispatch, parentTaskID, stage, stageStatus string, fields map[string]string) map[string]any {
+	details := map[string]any{
+		"_workflow_child_status": true,
+		"parent_task_id":         strings.TrimSpace(parentTaskID),
+		"parent_request_id":      strings.TrimSpace(parent.RequestID),
+		"workflow_node_type":     workflowNodeTypeAgentInvocation,
+		"agent_harness":          firstNonEmpty(strings.TrimSpace(fields["agent_harness"]), strings.TrimSpace(stage)),
+		"agent_run_id":           strings.TrimSpace(fields["agent_run_id"]),
+		"stage":                  strings.TrimSpace(stage),
+		"stage_status":           strings.TrimSpace(stageStatus),
+		"status_action":          dispatchStageStatusMessage(stage, stageStatus),
+	}
+	for _, key := range []string{"mode", "attempt", "repo_dir", "target", "action"} {
+		if value := strings.TrimSpace(fields[key]); value != "" {
+			details[key] = value
+		}
+	}
+	if repo := childWorkflowRepoLabel(fields); repo != "" {
+		details["repo"] = repo
+	}
+	if errText := firstNonEmpty(strings.TrimSpace(fields["err"]), strings.TrimSpace(fields["error"])); errText != "" {
+		details["error"] = errText
+	}
+	return details
+}
+
+func childWorkflowRepoLabel(fields map[string]string) string {
+	repo := strings.TrimSpace(fields["repo"])
+	repoDir := strings.TrimSpace(fields["repo_dir"])
+	if repo == "" {
+		return repoDir
+	}
+	if looksLikePrivateRepoReference(repo) {
+		return repoDir
+	}
+	return repo
+}
+
+func looksLikePrivateRepoReference(value string) bool {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return false
+	}
+	return strings.Contains(value, "://") ||
+		strings.Contains(value, "@") ||
+		strings.Contains(value, "github.com") ||
+		strings.HasSuffix(value, ".git")
+}
+
+func childWorkflowTaskID(parentTaskID, agentRunID string) string {
+	parentTaskID = sanitizeWorkflowTaskIDPart(parentTaskID)
+	agentRunID = sanitizeWorkflowTaskIDPart(agentRunID)
+	if agentRunID == "" {
+		agentRunID = "agent"
+	}
+	if parentTaskID == "" {
+		return agentRunID
+	}
+	return parentTaskID + "-child-" + agentRunID
+}
+
+func sanitizeWorkflowTaskIDPart(value string) string {
+	value = strings.TrimSpace(value)
+	var b strings.Builder
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= 'A' && r <= 'Z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '-' || r == '_' || r == '.':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('-')
+		}
+	}
+	return strings.Trim(b.String(), "-")
 }
 
 func dispatchStageStatusMessage(stage, status string) string {
