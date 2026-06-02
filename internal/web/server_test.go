@@ -1229,6 +1229,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "state.taskOrderPendingSince = nowMs;") {
 		t.Fatalf("expected index html to reset task reorder delay timing whenever the desired order changes")
 	}
+	if strings.Contains(markup, "sameTaskOrder([...currentOrder].sort(), [...desiredOrder].sort())") {
+		t.Fatalf("expected same-ID task reorders to stay pending until the delayed sync window instead of freezing current order")
+	}
 	if strings.Contains(markup, "TASK_REFLOW_TRANSITION_MS") ||
 		strings.Contains(markup, "TASK_REFLOW_TRANSITION_EASING") {
 		t.Fatalf("expected index html to keep task reflow transition styling in the global stylesheet")
