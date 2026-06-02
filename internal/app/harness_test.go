@@ -4619,7 +4619,7 @@ func TestStageAgentsPromptFileCopiesAndCleansUpStagedFile(t *testing.T) {
 	}
 }
 
-func TestEnsureTargetAgentsPromptFileCopiesAndCleansUp(t *testing.T) {
+func TestSelectAgentsPromptFileUsesStagedFileWhenTargetAgentsMissing(t *testing.T) {
 	t.Parallel()
 
 	targetDir := t.TempDir()
@@ -4628,26 +4628,18 @@ func TestEnsureTargetAgentsPromptFileCopiesAndCleansUp(t *testing.T) {
 		t.Fatalf("write source agents file: %v", err)
 	}
 
-	stagedPath, cleanup, err := ensureTargetAgentsPromptFile(targetDir, sourcePath)
+	stagedPath, cleanup, err := selectAgentsPromptFile(targetDir, sourcePath)
 	if err != nil {
-		t.Fatalf("ensureTargetAgentsPromptFile() error = %v", err)
+		t.Fatalf("selectAgentsPromptFile() error = %v", err)
 	}
-	if want := filepath.Join(targetDir, "AGENTS.md"); stagedPath != want {
-		t.Fatalf("stagedPath = %q, want %q", stagedPath, want)
+	if stagedPath != sourcePath {
+		t.Fatalf("stagedPath = %q, want %q", stagedPath, sourcePath)
 	}
-	data, err := os.ReadFile(stagedPath)
-	if err != nil {
-		t.Fatalf("read staged file: %v", err)
-	}
-	if got, want := string(data), "seeded instructions"; got != want {
-		t.Fatalf("staged file content = %q, want %q", got, want)
-	}
-
 	if err := cleanup(); err != nil {
 		t.Fatalf("cleanup() error = %v", err)
 	}
-	if _, err := os.Stat(stagedPath); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("staged file still exists after cleanup: err=%v", err)
+	if _, err := os.Stat(filepath.Join(targetDir, "AGENTS.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("target AGENTS.md was created: err=%v", err)
 	}
 }
 
@@ -4680,8 +4672,8 @@ func TestRunCodexStagesAgentsPromptWithinTargetDir(t *testing.T) {
 		t.Fatalf("staged agents prompt path missing from prompt: %q", prompt)
 	}
 	stagedPath := strings.TrimSpace(matches[1])
-	if got, want := stagedPath, "./AGENTS.md"; got != want {
-		t.Fatalf("staged agents path = %q, want %q", got, want)
+	if !strings.HasPrefix(stagedPath, "./.moltenhub-agents-") || !strings.HasSuffix(stagedPath, ".md") {
+		t.Fatalf("staged agents path = %q, want hidden moltenhub seed path", stagedPath)
 	}
 	if _, err := os.Stat(filepath.Join(targetDir, "AGENTS.md")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("target AGENTS.md still exists after codex run: err=%v", err)
@@ -6110,7 +6102,7 @@ func TestWithCompletionGatePromptPreservesTerseImplementationTarget(t *testing.T
 	got := withCompletionGatePrompt(withAgentsPrompt(prompt, "./AGENTS.md"))
 	wantSnippets := []string{
 		"Agent input:",
-		"you are ./AGENTS.md",
+		"Use ./AGENTS.md as your primary implementation instructions before making any changes.",
 		"in git chat",
 		"in the repo listing with long text -> truncate and put an elipsis (...) when the text is over -> 100 chars",
 		"Task packet handling:",

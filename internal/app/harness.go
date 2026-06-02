@@ -2442,7 +2442,7 @@ func withAgentsPrompt(prompt, agentsPath string) string {
 	}
 
 	directive := fmt.Sprintf(
-		"you are ./AGENTS.md\nUse %s as your primary implementation instructions before making any changes.\n%s",
+		"Use %s as your primary implementation instructions before making any changes.\n%s",
 		location,
 		agentsCredentialGuardInstruction,
 	)
@@ -3687,10 +3687,10 @@ func (h Harness) runCodexCapture(
 		}
 
 		promptAgentsPath := stagedAgentsPath
-		targetAgentsPath, targetAgentsCleanup, ensureErr := ensureTargetAgentsPromptFile(targetDir, stagedAgentsPath)
+		targetAgentsPath, targetAgentsCleanup, ensureErr := selectAgentsPromptFile(targetDir, stagedAgentsPath)
 		if ensureErr != nil {
 			h.logf(
-				"stage=workspace status=warn action=ensure_target_agents_for_agent target=%s source=%s err=%q",
+				"stage=workspace status=warn action=select_agents_for_agent target=%s source=%s err=%q",
 				targetDir,
 				stagedAgentsPath,
 				ensureErr,
@@ -3969,7 +3969,7 @@ func stageAgentsPromptFile(targetDir, agentsPath string) (string, func() error, 
 	return stagedPath, cleanup, nil
 }
 
-func ensureTargetAgentsPromptFile(targetDir, agentsPath string) (string, func() error, error) {
+func selectAgentsPromptFile(targetDir, agentsPath string) (string, func() error, error) {
 	targetDir = strings.TrimSpace(targetDir)
 	agentsPath = strings.TrimSpace(agentsPath)
 	if targetDir == "" {
@@ -3989,21 +3989,7 @@ func ensureTargetAgentsPromptFile(targetDir, agentsPath string) (string, func() 
 		return "", nil, fmt.Errorf("stat target agents file %s: %w", targetPath, err)
 	}
 
-	content, err := os.ReadFile(agentsPath)
-	if err != nil {
-		return "", nil, fmt.Errorf("read agents source file %s: %w", agentsPath, err)
-	}
-	if err := os.WriteFile(targetPath, content, 0o644); err != nil {
-		return "", nil, fmt.Errorf("write target agents file %s: %w", targetPath, err)
-	}
-
-	cleanup := func() error {
-		if err := os.Remove(targetPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("remove target agents file %s: %w", targetPath, err)
-		}
-		return nil
-	}
-	return targetPath, cleanup, nil
+	return agentsPath, func() error { return nil }, nil
 }
 
 func promptPathForCodex(targetDir, path string) string {
