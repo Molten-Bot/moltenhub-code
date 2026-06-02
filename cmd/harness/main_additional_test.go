@@ -363,6 +363,49 @@ func TestPublishLocalRunFailureResultPublishesExplicitFailurePayload(t *testing.
 	}
 }
 
+func TestPublishLocalRunFailureResultRetriesTransientRuntimePublishFailure(t *testing.T) {
+	t.Parallel()
+
+	var runtimePublishAttempts int
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/a2a":
+			http.NotFound(w, r)
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/runtime/messages/publish":
+			runtimePublishAttempts++
+			if runtimePublishAttempts == 1 {
+				http.Error(w, "temporary outage", http.StatusServiceUnavailable)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer ts.Close()
+
+	var logs []string
+	publishLocalRunFailureResult(context.Background(), hub.InitConfig{
+		BaseURL:    ts.URL + "/v1",
+		AgentToken: "token",
+		SessionKey: "local-session",
+		Handle:     "caller-agent",
+	}, "req-local-fail", app.Result{
+		ExitCode: app.ExitPR,
+		Err:      errors.New("checks: required PR checks failed"),
+	}, func() bool { return true }, func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	})
+
+	if runtimePublishAttempts != 2 {
+		t.Fatalf("runtime publish attempts = %d, want 2", runtimePublishAttempts)
+	}
+	if len(logs) != 1 || !strings.Contains(logs[0], "action=publish_failure_result") || !strings.Contains(logs[0], "status=ok") {
+		t.Fatalf("publish logs = %#v, want successful publish_failure_result log", logs)
+	}
+}
+
 func TestPublishLocalRunFailureResultSkipsWhenHubDisconnected(t *testing.T) {
 	t.Parallel()
 

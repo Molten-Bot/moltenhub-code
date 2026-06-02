@@ -56,6 +56,7 @@ const noChangesFollowUpSource = "no_changes_followup"
 const noChangesEscalationSource = "no_changes_escalation"
 const automaticFailureRerunDisabledReason = "automatic failure rerun disabled; queue failure follow-up in moltenhub-code"
 const localTransportOfflineReasonExecutionFailure = "task_execution_failure"
+const localFailurePublishTimeout = 75 * time.Second
 
 const hubBootDiagnosticTimeout = 10 * time.Second
 const hubPingDiagnosticTimeout = 5 * time.Second
@@ -2302,7 +2303,7 @@ func publishLocalRunFailureResult(ctx context.Context, cfg hub.InitConfig, reque
 		logf = func(string, ...any) {}
 	}
 
-	publishCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	publishCtx, cancel := context.WithTimeout(ctx, localFailurePublishTimeout)
 	defer cancel()
 
 	cfg.ApplyDefaults()

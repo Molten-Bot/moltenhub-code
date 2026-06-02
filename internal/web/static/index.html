@@ -10499,14 +10499,6 @@
         return taskListByOrder(currentOrder, tasks);
       }
 
-      if (sameTaskOrder([...currentOrder].sort(), [...desiredOrder].sort())) {
-        state.taskDisplayOrder = currentOrder;
-        state.taskOrderPendingSince = 0;
-        state.taskOrderPendingDesired = [];
-        state.taskOrderLastSyncBucket = syncBucket;
-        return taskListByOrder(currentOrder, tasks);
-      }
-
       if (!sameTaskOrder(state.taskOrderPendingDesired, desiredOrder)) {
         state.taskOrderPendingDesired = [...desiredOrder];
         state.taskOrderPendingSince = nowMs;
