@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -178,6 +179,60 @@ func TestHandlerBottomDockUsesHubSetupStatus(t *testing.T) {
         title="Edit agent profile"
         hidden>`) {
 		t.Fatalf("expected configured bottom dock to show the profile button")
+	}
+}
+
+func TestTaskOrderCadenceAppliesSameIDReorderAfterSyncWindow(t *testing.T) {
+	t.Parallel()
+
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skipf("node unavailable: %v", err)
+	}
+	markup, err := staticFiles.ReadFile("static/index.html")
+	if err != nil {
+		t.Fatalf("read index.html: %v", err)
+	}
+	source := string(markup)
+	start := strings.Index(source, "function taskOrderSyncBucket(nowMs) {")
+	end := strings.Index(source, "function cloneTaskLogsForHistory(logs) {")
+	if start < 0 || end < 0 || end <= start {
+		t.Fatalf("expected index html to contain task order cadence helpers")
+	}
+
+	script := `
+const assert = require("node:assert/strict");
+const TASK_ORDER_TRANSITION_DELAY_MS = 2_000;
+const TASK_ORDER_SYNC_INTERVAL_MS = 4_000;
+let nowMs = 0;
+Date.now = () => nowMs;
+const state = {
+  taskDisplayOrder: [],
+  taskOrderPendingSince: 0,
+  taskOrderPendingDesired: [],
+  taskOrderLastSyncBucket: Math.floor(Date.now() / TASK_ORDER_SYNC_INTERVAL_MS),
+};
+function taskRequestID(task) {
+  return String(task?.request_id || "").trim();
+}
+` + source[start:end] + `
+function ids(tasks) {
+  return tasks.map((task) => task.request_id);
+}
+const first = [{ request_id: "a" }, { request_id: "b" }];
+const reorderedWithDuplicate = [{ request_id: "b" }, { request_id: "a" }, { request_id: "a" }];
+assert.deepEqual(ids(applyTaskOrderCadence(first)), ["a", "b"]);
+nowMs = 100;
+assert.deepEqual(ids(applyTaskOrderCadence(reorderedWithDuplicate)), ["a", "b"]);
+assert.deepEqual(state.taskOrderPendingDesired, ["b", "a"]);
+nowMs = 2_500;
+assert.deepEqual(ids(applyTaskOrderCadence(reorderedWithDuplicate)), ["a", "b"]);
+nowMs = 4_100;
+assert.deepEqual(ids(applyTaskOrderCadence(reorderedWithDuplicate)), ["b", "a"]);
+assert.deepEqual(state.taskOrderPendingDesired, []);
+`
+	cmd := exec.Command("node", "-e", script)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("task order cadence script failed: %v\n%s", err, out)
 	}
 }
 
