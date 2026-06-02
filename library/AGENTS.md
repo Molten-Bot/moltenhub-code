@@ -50,6 +50,7 @@ You are working inside an existing repository. Solve the user's actual problem w
 - Python, `pip`, and `virtualenv` are available for Python workflows and validation.
 - Go is available for Go workflows and validation, including `go test` and `go build`.
 - `git-changes-by-day` is available for exporting git history to CSV, for example `git-changes-by-day -repo /path/to/repo -text-out /tmp/commit-text.csv`.
+- `railsmith` is available for AGENTS.md work, for example `railsmith guide`, `railsmith doctor --root .`, `railsmith diff --root . --mode detailed`, and `railsmith check --root .`.
 - Use the tooling that matches the repository. If a tool or dependency is unavailable in this runtime, continue with any useful alternative checks and report the validation gap instead of failing solely for missing tooling.
 
 ## Pull Request Screenshot Handoff

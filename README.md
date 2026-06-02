@@ -62,7 +62,19 @@ go install github.com/Molten-Bot/moltenhub-code/cmd/harness@v1.0.0
 
 ## Bundled Tools
 
-The Docker image includes `git-changes-by-day`, a Go CLI for exporting git
+The Docker image includes `railsmith`, an npm CLI for creating and maintaining
+repository `AGENTS.md` guardrails. Container startup also seeds a Codex skill
+from the package's `AGENT_GUIDE.md` into the persisted Codex home so agents can
+activate Railsmith guidance during coding sessions.
+
+```bash
+railsmith guide
+railsmith doctor --root .
+railsmith diff --root . --mode detailed
+railsmith check --root .
+```
+
+The image also includes `git-changes-by-day`, a Go CLI for exporting git
 history to CSV. Agents can use it when a task needs per-commit change data.
 
 ```bash

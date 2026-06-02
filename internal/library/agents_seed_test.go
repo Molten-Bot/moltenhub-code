@@ -31,6 +31,8 @@ func TestAgentsSeedSharesRuntimeToolingAndSafety(t *testing.T) {
 		"Python, `pip`, and `virtualenv`",
 		"Go is available",
 		"`git-changes-by-day` is available",
+		"`railsmith` is available",
+		"railsmith doctor --root .",
 		"`Failure:` and `Error details:`",
 		"`gh repo view OWNER/REPO --json isPrivate,nameWithOwner`",
 		"`https://molten.bot/hubs.json`",

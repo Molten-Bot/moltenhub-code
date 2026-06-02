@@ -13,6 +13,47 @@ if [ ! -w "${config_dir}" ]; then
     echo "warning: config directory ${config_dir} is not writable by uid=$(id -u) gid=$(id -g); persisted onboarding/auth settings may fail to save." >&2
 fi
 
+seed_railsmith_codex_skill() {
+    if [ "${HOME:-}" = "" ] || ! command -v npm >/dev/null 2>&1; then
+        return 0
+    fi
+
+    npm_root="$(npm root -g 2>/dev/null || true)"
+    if [ "${npm_root}" = "" ]; then
+        return 0
+    fi
+
+    guide_path="${npm_root}/@moltenbot/railsmith/AGENT_GUIDE.md"
+    if [ ! -f "${guide_path}" ]; then
+        return 0
+    fi
+
+    skill_dir="${HOME}/.codex/skills/railsmith"
+    skill_path="${skill_dir}/SKILL.md"
+    if [ -f "${skill_path}" ]; then
+        return 0
+    fi
+
+    if ! mkdir -p "${skill_dir}"; then
+        echo "warning: railsmith Codex skill directory ${skill_dir} could not be created; continuing" >&2
+        return 0
+    fi
+
+    {
+        printf '%s\n' '---'
+        printf '%s\n' 'name: railsmith'
+        printf '%s\n' 'description: Use Railsmith to create, maintain, validate, or improve AGENTS.md repository instructions and design-pattern guidance.'
+        printf '%s\n' '---'
+        printf '\n'
+        cat "${guide_path}"
+    } >"${skill_path}" || {
+        echo "warning: railsmith Codex skill ${skill_path} could not be written; continuing" >&2
+        return 0
+    }
+}
+
+seed_railsmith_codex_skill
+
 detect_init_path_from_args() {
     prev=""
     for arg in "$@"; do
