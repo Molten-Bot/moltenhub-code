@@ -5059,6 +5059,19 @@
       }
     }
 
+    function dashboardTaskIconName(label) {
+      switch (String(label || "").trim().toLowerCase()) {
+        case "active":
+          return "activity";
+        case "completed":
+          return "circle-check";
+        case "failed":
+          return "circle-x";
+        default:
+          return "circle";
+      }
+    }
+
     function renderDashboardSourceLegend(labels = []) {
       if (!dashboardSourceLegend) return;
       dashboardSourceLegend.hidden = false;
@@ -5242,7 +5255,7 @@
       legendItems.select("text")
         .attr("x", legendIconName ? 20 : 16)
         .attr("fill", dashboardCSSValue("--muted", "#5a6f95"))
-        .text((row) => `${row.label} ${row.value}`);
+        .text((row) => row.label);
       if (legendIconName) {
         replaceLucideIcons(svgNode);
       }
@@ -5376,7 +5389,10 @@
         { label: "Completed", value: completed, color: dashboardTaskColors()[1] },
         { label: "Failed", value: failed, color: dashboardTaskColors()[2] },
       ];
-      renderDashboardD3Donut(dashboardTaskChart, rows, { centerLabel: "tasks" });
+      renderDashboardD3Donut(dashboardTaskChart, rows, {
+        centerLabel: "tasks",
+        legendIconName: dashboardTaskIconName,
+      });
     }
 
     function escapeLiteralNewlinesInJSONStrings(raw) {
