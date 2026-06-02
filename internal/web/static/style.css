@@ -4373,6 +4373,9 @@ select.prompt-control {
   font-size: 0.74rem;
   font-weight: 850;
   letter-spacing: 0;
+}
+
+.dashboard-d3-center-label {
   text-transform: uppercase;
 }
 
