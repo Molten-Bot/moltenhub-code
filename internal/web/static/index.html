@@ -5623,7 +5623,6 @@
       if (!(input instanceof HTMLTextAreaElement)) {
         return;
       }
-      input.style.height = "auto";
       const styles = window.getComputedStyle(input);
       const minHeight = Number.parseFloat(styles.minHeight) || 0;
       const parsedMaxHeight = Number.parseFloat(styles.maxHeight);
@@ -5633,8 +5632,12 @@
       const borderHeight = styles.boxSizing === "border-box"
         ? (Number.parseFloat(styles.borderTopWidth) || 0) + (Number.parseFloat(styles.borderBottomWidth) || 0)
         : 0;
+      const previousHeight = input.classList.contains("prompt-textarea-manual-size")
+        ? input.getBoundingClientRect().height
+        : 0;
+      input.style.height = "auto";
       const contentHeight = (input.scrollHeight || minHeight) + borderHeight;
-      const nextHeight = Math.max(minHeight, Math.min(contentHeight, maxHeight));
+      const nextHeight = Math.max(minHeight, previousHeight, Math.min(contentHeight, maxHeight));
       input.style.height = `${Math.ceil(nextHeight)}px`;
       input.classList.toggle("prompt-textarea-scroll", contentHeight > nextHeight + 1);
     }
@@ -5656,12 +5659,32 @@
       syncBuilderDraftClearState();
     }
 
+    function watchPromptTextareaManualResize(input) {
+      if (!(input instanceof HTMLTextAreaElement)) {
+        return;
+      }
+      input.addEventListener("pointerdown", () => {
+        const startHeight = Math.round(input.getBoundingClientRect().height);
+        const startWidth = Math.round(input.getBoundingClientRect().width);
+        window.addEventListener("pointerup", () => {
+          const currentRect = input.getBoundingClientRect();
+          if (
+            Math.abs(Math.round(currentRect.height) - startHeight) > 1 ||
+            Math.abs(Math.round(currentRect.width) - startWidth) > 1
+          ) {
+            input.classList.add("prompt-textarea-manual-size");
+          }
+        }, { once: true });
+      });
+    }
+
     function resetPromptInputSize(input) {
       if (!input) {
         return;
       }
       input.style.removeProperty("height");
       input.style.removeProperty("width");
+      input.classList.remove("prompt-textarea-manual-size");
       input.classList.remove("prompt-textarea-scroll");
       syncPromptInputSize(input);
     }
@@ -12778,6 +12801,7 @@
     });
 
     builderPromptInput.addEventListener("input", () => handlePromptTextInput(builderPromptInput));
+    watchPromptTextareaManualResize(builderPromptInput);
     builderPromptInput.addEventListener("keydown", submitBuilderPromptOnEnter);
     if (promptSpeechToggle) {
       promptSpeechToggle.addEventListener("click", () => {
@@ -12796,6 +12820,7 @@
     builderImagePasteTarget.addEventListener("paste", handlePromptImagePaste);
     builderImagesClear.addEventListener("click", clearBuilderPromptDraft);
     localPromptInput.addEventListener("input", () => handlePromptTextInput(localPromptInput));
+    watchPromptTextareaManualResize(localPromptInput);
     if (agentAuthURL) {
       agentAuthURL.addEventListener("click", () => {
         markAgentAuthInteraction();

@@ -1221,8 +1221,8 @@ body[data-app-display="studio"][data-prompt-mode="json"] #prompt-raw-panel {
 
 body[data-app-display="studio"][data-prompt-mode="builder"] #builder-prompt-input,
 body[data-app-display="studio"][data-prompt-mode="json"] #local-prompt-input {
-  min-height: 0;
-  height: 100% !important;
+  min-height: calc(var(--prompt-text-min-lines) * 1.4em + var(--prompt-text-padding-y));
+  height: auto;
   max-width: 100%;
 }
 
@@ -1960,9 +1960,9 @@ select.prompt-control {
   padding: 10px;
   line-height: 1.4;
   min-height: calc(var(--prompt-text-min-lines) * 1.4em + var(--prompt-text-padding-y));
-  max-height: min(34vh, calc(var(--prompt-text-max-lines) * 1.4em + var(--prompt-text-padding-y)));
+  max-height: none;
   height: auto;
-  overflow-y: hidden;
+  overflow-y: auto;
 }
 
 #builder-prompt-input {
