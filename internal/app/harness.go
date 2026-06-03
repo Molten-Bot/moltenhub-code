@@ -1113,8 +1113,20 @@ func (h Harness) pushWithSync(ctx context.Context, repo *repoWorkspace, remediat
 		if _, syncErr := h.runCommand(ctx, "git", fetchBranchFromRemoteCommand(repo.Dir, pushRemote, repo.Branch)); syncErr != nil {
 			return fmt.Errorf("sync branch %q on remote %q before push retry: %w", repo.Branch, pushRemote, syncErr)
 		}
-		if _, syncErr := h.runCommand(ctx, "git", mergeFetchedBranchCommand(repo.Dir)); syncErr != nil {
-			return fmt.Errorf("sync branch %q on remote %q before push retry: %w", repo.Branch, pushRemote, syncErr)
+		if mergeRes, syncErr := h.runCommand(ctx, "git", mergeFetchedBranchCommand(repo.Dir)); syncErr != nil {
+			mergeErr := commandErrorWithDetails(
+				fmt.Sprintf("sync branch %q on remote %q before push retry", repo.Branch, pushRemote),
+				syncErr,
+				mergeRes,
+				maxGitErrorDetailChars,
+			)
+			if isMergeConflictResult(mergeRes, syncErr) {
+				if _, abortErr := h.runCommand(ctx, "git", mergeAbortCommand(repo.Dir)); abortErr != nil {
+					return fmt.Errorf("%w; abort merge after push retry conflict: %v", mergeErr, abortErr)
+				}
+				return fmt.Errorf("%w; merge conflict while syncing remote branch before push retry", mergeErr)
+			}
+			return mergeErr
 		}
 	}
 	return fmt.Errorf("push retries exhausted for branch %q on remote %q", repo.Branch, pushRemote)
@@ -5347,6 +5359,10 @@ func fetchBranchFromRemoteCommand(repoDir, remote, branch string) execx.Command 
 
 func mergeFetchedBranchCommand(repoDir string) execx.Command {
 	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"merge", "--no-edit", "FETCH_HEAD"}}
+}
+
+func mergeAbortCommand(repoDir string) execx.Command {
+	return execx.Command{Dir: repoDir, Name: "git", Args: []string{"merge", "--abort"}}
 }
 
 func gitRemoteAddCommand(repoDir, remote, remoteURL string) execx.Command {

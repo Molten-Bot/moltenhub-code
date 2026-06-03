@@ -50,6 +50,8 @@ const (
 const (
 	defaultPublishResultMaxAttempts = 12
 	defaultPublishResultRetryDelay  = 5 * time.Second
+	defaultOfflineMaxAttempts       = 3
+	defaultOfflineRetryDelay        = 2 * time.Second
 )
 
 type agentActivityPublish struct {
@@ -318,14 +320,25 @@ func (c APIClient) MarkRuntimeOffline(ctx context.Context, token, sessionKey, re
 		body["reason"] = strings.TrimSpace(reason)
 	}
 
-	ok, trace := c.tryRuntimeTransport(ctx, token, []apiAttempt{
-		{Method: http.MethodPost, Path: runtimeMessagesOfflinePath, Body: body},
-	})
-	if !ok {
-		return fmt.Errorf("mark runtime offline failed: %s", trace)
+	attempt := apiAttempt{Method: http.MethodPost, Path: runtimeMessagesOfflinePath, Body: body}
+	var trace string
+	for i := 1; i <= defaultOfflineMaxAttempts; i++ {
+		ok, attemptTrace := c.tryRuntimeTransport(ctx, token, []apiAttempt{attempt})
+		trace = attemptTrace
+		if ok {
+			return nil
+		}
+		if i == defaultOfflineMaxAttempts || !isRetryableRuntimeTransportTrace(attemptTrace) {
+			break
+		}
+		delay := defaultOfflineRetryDelay
+		c.logf("hub.runtime status=retrying action=mark_offline attempt=%d/%d retry_in=%s err=%q", i, defaultOfflineMaxAttempts, delay, attemptTrace)
+		if !sleepContext(ctx, delay) {
+			return fmt.Errorf("mark runtime offline failed: %s", ctx.Err())
+		}
 	}
 
-	return nil
+	return fmt.Errorf("mark runtime offline failed: %s", trace)
 }
 
 // RecordGitHubTaskCompleteActivity publishes a minimal completion activity.
@@ -524,6 +537,10 @@ func (c APIClient) publishResultRetryDelay() time.Duration {
 }
 
 func isRetryablePublishResultTrace(trace string) bool {
+	return isRetryableRuntimeTransportTrace(trace)
+}
+
+func isRetryableRuntimeTransportTrace(trace string) bool {
 	text := strings.ToLower(strings.TrimSpace(trace))
 	if text == "" {
 		return false

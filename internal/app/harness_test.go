@@ -1432,6 +1432,72 @@ func TestRunNonMainBranchPushNonFastForwardRetriesWithMergeSync(t *testing.T) {
 	}
 }
 
+func TestRunNonMainBranchPushSyncMergeConflictAbortsAndFailsWithDetails(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.BaseBranch = "release/2026.04-hotfix"
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+
+	pushRejected := execx.Result{
+		Stderr: "! [rejected]        release/2026.04-hotfix -> release/2026.04-hotfix (fetch first)\n",
+	}
+	mergeConflict := execx.Result{
+		Stdout: "Auto-merging test/worker.test.js\nCONFLICT (content): Merge conflict in test/worker.test.js\n",
+		Stderr: "Automatic merge failed; fix conflicts and then commit the result.\n",
+	}
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: fetchBaseBranchCommand(repoDir, cfg.BaseBranch)},
+		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch), res: pushRejected, err: errors.New("push rejected")},
+		{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: "1111111111111111111111111111111111111111\n"}},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, cfg.BaseBranch), res: pushRejected, err: errors.New("push rejected")},
+		{cmd: fetchBranchCommand(repoDir, cfg.BaseBranch)},
+		{cmd: mergeFetchedBranchCommand(repoDir), res: mergeConflict, err: errors.New("exit status 1")},
+		{cmd: mergeAbortCommand(repoDir)},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err == nil {
+		t.Fatal("Run() err = nil, want merge conflict failure")
+	}
+	if res.ExitCode != ExitGit {
+		t.Fatalf("ExitCode = %d, want %d", res.ExitCode, ExitGit)
+	}
+	errText := res.Err.Error()
+	for _, want := range []string{
+		`sync branch "release/2026.04-hotfix" on remote "origin" before push retry`,
+		"Merge conflict in test/worker.test.js",
+		"merge conflict while syncing remote branch before push retry",
+	} {
+		if !strings.Contains(errText, want) {
+			t.Fatalf("Run() err = %q, want substring %q", errText, want)
+		}
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
 func TestRunCodexFailureStopsBeforeCommitAndPR(t *testing.T) {
 	t.Parallel()
 

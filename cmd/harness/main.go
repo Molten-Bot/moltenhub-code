@@ -2494,7 +2494,7 @@ func markLocalRunRuntimeOffline(ctx context.Context, cfg hub.InitConfig, request
 		logf = func(string, ...any) {}
 	}
 
-	offlineCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	offlineCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	client := hub.NewAPIClient(baseURL)

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestUpdateAgentStatusUsesPrimaryEndpoint(t *testing.T) {
@@ -201,6 +202,36 @@ func TestMarkRuntimeOfflineUsesOfflineEndpoint(t *testing.T) {
 	}
 	if calls[0].Body["reason"] != "harness_shutdown" {
 		t.Fatalf("reason = %#v", calls[0].Body["reason"])
+	}
+}
+
+func TestMarkRuntimeOfflineRetriesTransientFailure(t *testing.T) {
+	t.Parallel()
+
+	var calls int
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/runtime/messages/offline" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		calls++
+		if calls == 1 {
+			http.Error(w, "moltenhub is starting", http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	client := NewAPIClient(ts.URL + "/v1")
+	if err := client.MarkRuntimeOffline(ctx, "token", "main", "execution_failure"); err != nil {
+		t.Fatalf("MarkRuntimeOffline() error = %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("calls = %d, want 2", calls)
 	}
 }
 
