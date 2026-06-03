@@ -278,11 +278,14 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `<strong id="dashboard-time-saved">0m</strong>`) ||
 		!strings.Contains(markup, "function dashboardPullRequestCount(snapshot)") ||
 		!strings.Contains(markup, `const dashboardTotalPRs = document.getElementById("dashboard-total-prs");`) ||
-		!strings.Contains(markup, "const combinedSavedSeconds = totalSavedSeconds + reviewSavedSeconds;") ||
+		!strings.Contains(markup, "const combinedSavedSeconds = totalSavedSeconds;") ||
 		!strings.Contains(markup, "dashboardTotalTasks.textContent = String(totalTasks);") ||
 		!strings.Contains(markup, "dashboardTotalPRs.textContent = String(prCount);") ||
 		!strings.Contains(markup, "dashboardTimeSaved.textContent = dashboardDuration(combinedSavedSeconds);") {
-		t.Fatalf("expected dashboard to show task, pull-request, and combined saved-time totals")
+		t.Fatalf("expected dashboard to show task, pull-request, and saved-time totals")
+	}
+	if strings.Contains(markup, "const combinedSavedSeconds = totalSavedSeconds + reviewSavedSeconds;") {
+		t.Fatalf("expected dashboard saved-time total to avoid double-counting review saved seconds")
 	}
 	if strings.Contains(markup, `id="dashboard-review-saved"`) ||
 		strings.Contains(markup, `<span class="dashboard-stat-label">Review Saved</span>`) {
@@ -321,7 +324,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `const DASHBOARD_SHARE_URL = "https://molten.bot/code";`) ||
 		!strings.Contains(markup, `const DASHBOARD_SHARE_IMAGE_URL = "https://app.molten.bot/logo.svg";`) ||
 		!strings.Contains(markup, `return DASHBOARD_SHARE_URL;`) ||
-		!strings.Contains(markup, `const saved = dashboardDuration(Number(stats.total_saved_seconds || 0) + Number(stats.review_saved_seconds || 0));`) ||
+		!strings.Contains(markup, `const saved = dashboardDuration(Number(stats.total_saved_seconds || 0));`) ||
 		!strings.Contains(markup, `function updateDashboardShareLinks(stats)`) ||
 		!strings.Contains(markup, `function trackDashboardShare(destination)`) ||
 		!strings.Contains(markup, `trackAnalyticsEvent("dashboard_share_opened", {`) ||
@@ -329,6 +332,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `https://www.facebook.com/sharer/sharer.php`) ||
 		!strings.Contains(markup, `https://wa.me/`) {
 		t.Fatalf("expected index html to render dashboard social sharing links")
+	}
+	if strings.Contains(markup, `const saved = dashboardDuration(Number(stats.total_saved_seconds || 0) + Number(stats.review_saved_seconds || 0));`) {
+		t.Fatalf("expected dashboard share saved-time total to avoid double-counting review saved seconds")
 	}
 	if strings.Contains(markup, `const current = new URL(window.location.href);`) ||
 		strings.Contains(markup, `current.hash = "dashboard";`) {

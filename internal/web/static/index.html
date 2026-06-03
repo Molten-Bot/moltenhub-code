@@ -4926,7 +4926,7 @@
     function dashboardShareText(stats) {
       const total = Number(stats.total_tasks || 0);
       const completed = Number(stats.completed_tasks || 0);
-      const saved = dashboardDuration(Number(stats.total_saved_seconds || 0) + Number(stats.review_saved_seconds || 0));
+      const saved = dashboardDuration(Number(stats.total_saved_seconds || 0));
       const success = dashboardPercent(Number(stats.success_rate || 0));
       return `Molten Hub session highlights: ${completed}/${total} tasks completed, ${saved} time saved, ${success} success.`;
     }
@@ -5314,8 +5314,7 @@
       const totalTasks = Number(stats.total_tasks || 0);
       const maxConcurrent = Number(stats.max_concurrent_tasks || 0);
       const totalSavedSeconds = Number(stats.total_saved_seconds || 0);
-      const reviewSavedSeconds = Number(stats.review_saved_seconds || 0);
-      const combinedSavedSeconds = totalSavedSeconds + reviewSavedSeconds;
+      const combinedSavedSeconds = totalSavedSeconds;
       const sessionRuntimeSeconds = Number(stats.session_runtime_seconds || 0);
       const throughputPerHour = Number(stats.throughput_per_hour || 0);
       const velocityPerHour = Number(stats.velocity_per_hour || 0);
