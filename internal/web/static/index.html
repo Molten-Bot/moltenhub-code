@@ -7118,7 +7118,7 @@
       const key = String(repoKey || "").trim();
       if (!key) return false;
       for (const task of state.snapshot?.tasks || []) {
-        if (!isSuccessfulTaskStatus(task?.status) || isMergedTask(task) || !taskPullRequestURL(task)) {
+        if (!isSuccessfulTaskStatus(task?.status) || normalizedTaskStatus(task?.status) === "merged" || !taskPullRequestURL(task)) {
           continue;
         }
         if (chatRepoKeysForTask(task).includes(key)) {
@@ -8101,7 +8101,7 @@
     function pendingReleaseChatRepoKeys() {
       const keys = new Set();
       for (const task of state.snapshot?.tasks || []) {
-        if (!isSuccessfulTaskStatus(task?.status) || isMergedTask(task) || !taskPullRequestURL(task)) {
+        if (!isSuccessfulTaskStatus(task?.status) || normalizedTaskStatus(task?.status) === "merged" || !taskPullRequestURL(task)) {
           continue;
         }
         for (const key of chatRepoKeysForTask(task)) {
@@ -9332,10 +9332,6 @@
         return false;
       }
       return COMPLETED_STATUSES.has(normalizedTaskStatus(task.status));
-    }
-
-    function isMergedTask(task) {
-      return normalizedTaskStatus(task?.status) === "merged";
     }
 
     function isSuccessfulTaskStatus(status) {
@@ -10785,7 +10781,7 @@
 
     function runningTasks(snapshot) {
       const out = currentTasks(snapshot);
-      return out.filter((task) => !isCompletedTask(task) || isMergedTask(task));
+      return out.filter((task) => !isCompletedTask(task));
     }
 
     function taskHistoryDedupeKeys(task) {

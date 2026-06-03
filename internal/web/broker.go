@@ -896,17 +896,15 @@ func (b *Broker) dashboardStatsLocked(now time.Time, tasks []*taskState) Dashboa
 }
 
 func isActiveTaskStatus(status string) bool {
-	switch normalizeTaskTerminalStatus(status) {
-	case "completed", "no_changes", "error", "invalid", "duplicate", "stopped":
+	if isCompletedTaskStatus(status) {
 		return false
-	default:
-		return true
 	}
+	return true
 }
 
 func isSuccessfulTaskStatus(status string) bool {
 	switch normalizeTaskTerminalStatus(status) {
-	case "completed", "no_changes":
+	case "completed", "no_changes", "merged":
 		return true
 	default:
 		return false

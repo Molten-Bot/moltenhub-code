@@ -1766,6 +1766,10 @@ func TestMergedTaskCardsUseMutedTreatment(t *testing.T) {
 	if !strings.Contains(html, `node.classList.toggle("task-merged", normalizedTaskStatus(task?.status) === "merged");`) {
 		t.Fatalf("expected merged tasks to receive task-merged class")
 	}
+	if !strings.Contains(html, "return out.filter((task) => !isCompletedTask(task));") ||
+		strings.Contains(html, "return out.filter((task) => !isCompletedTask(task) || isMergedTask(task));") {
+		t.Fatalf("expected current work display to omit merged tasks")
+	}
 
 	cssReq := httptest.NewRequest(http.MethodGet, "/static/style.css", nil)
 	cssResp := httptest.NewRecorder()

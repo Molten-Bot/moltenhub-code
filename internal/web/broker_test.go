@@ -478,6 +478,33 @@ func TestBrokerRecordsMergedPRReleaseFromTask(t *testing.T) {
 	}
 }
 
+func TestBrokerCountsMergedTasksAsCompletedNotActive(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	b.RecordTaskRunConfig("req-merged", []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"ship it"}`))
+	b.IngestLog("dispatch status=start request_id=req-merged repo=git@github.com:acme/repo.git")
+	b.IngestLog("dispatch status=completed request_id=req-merged workspace=/tmp/run branch=moltenhub-ship pr_url=https://github.com/acme/repo/pull/42")
+
+	if err := b.MarkTaskPRMerged("req-merged", "2026-05-07T12:04:00Z"); err != nil {
+		t.Fatalf("MarkTaskPRMerged() error = %v", err)
+	}
+
+	snap := b.Snapshot()
+	if got, want := snap.Stats.ActiveTasks, 0; got != want {
+		t.Fatalf("Stats.ActiveTasks = %d, want %d", got, want)
+	}
+	if got, want := snap.Stats.CompletedTasks, 1; got != want {
+		t.Fatalf("Stats.CompletedTasks = %d, want %d", got, want)
+	}
+	if got, want := snap.Repositories[0].Stats.ActiveTasks, 0; got != want {
+		t.Fatalf("repository ActiveTasks = %d, want %d", got, want)
+	}
+	if got, want := snap.Repositories[0].Stats.CompletedTasks, 1; got != want {
+		t.Fatalf("repository CompletedTasks = %d, want %d", got, want)
+	}
+}
+
 func TestBrokerNormalizesLegacyOKTerminalStatusToCompleted(t *testing.T) {
 	t.Parallel()
 
