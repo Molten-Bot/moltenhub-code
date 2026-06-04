@@ -1323,6 +1323,69 @@ func TestRunNonMainBranchDetectsAgentCommittedAndPushedChange(t *testing.T) {
 	}
 }
 
+func TestRunNonMainBranchTreatsTransientPRLookupAfterPushAsSuccess(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.BaseBranch = "release/2026.04-hotfix"
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	lookupErr := errors.New("exit status 128")
+	lookupRes := execx.Result{
+		Stderr: "fatal: unable to access 'https://github.com/acme/repo.git/': Failed to connect to github.com port 443 after 4518 ms: Could not connect to server",
+	}
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: fetchBaseBranchCommand(repoDir, cfg.BaseBranch)},
+		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
+		{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: "1111111111111111111111111111111111111111\n"}},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, cfg.BaseBranch)},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, cfg.BaseBranch), res: lookupRes, err: lookupErr},
+	}}
+
+	var logs []string
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+	h.Logf = func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if got, want := res.Branch, cfg.BaseBranch; got != want {
+		t.Fatalf("Branch = %q, want %q", got, want)
+	}
+	if res.PRURL != "" {
+		t.Fatalf("PRURL = %q, want empty after transient lookup failure", res.PRURL)
+	}
+	if !strings.Contains(strings.Join(logs, "\n"), "action=lookup_existing reason=transient_failed_after_push") {
+		t.Fatalf("logs missing transient lookup warning:\n%s", strings.Join(logs, "\n"))
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
 func TestRunTracksCurrentBranchFromLocalGitStatus(t *testing.T) {
 	t.Parallel()
 
