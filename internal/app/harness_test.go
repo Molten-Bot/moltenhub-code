@@ -4223,8 +4223,7 @@ func TestCommandBuilders(t *testing.T) {
 	}
 
 	pr := prCreateCommand(repoDir, cfg, branch)
-	normalizedPRBody := config.NormalizePRBody(cfg.PRBody, cfg.Prompt)
-	wantPrefix := []string{"pr", "create", "--base", "main", "--head", branch, "--title", cfg.PRTitle, "--body", normalizedPRBody}
+	wantPrefix := []string{"pr", "create", "--base", "main", "--head", branch, "--title", cfg.PRTitle, "--body-file", prBodyFilePath(repoDir)}
 	if pr.Name != "gh" || pr.Dir != repoDir {
 		t.Fatalf("pr command unexpected: %+v", pr)
 	}
@@ -4239,7 +4238,7 @@ func TestCommandBuilders(t *testing.T) {
 	}
 
 	prNoBase := prCreateWithoutBaseCommand(repoDir, cfg, branch)
-	wantNoBasePrefix := []string{"pr", "create", "--head", branch, "--title", cfg.PRTitle, "--body", normalizedPRBody}
+	wantNoBasePrefix := []string{"pr", "create", "--head", branch, "--title", cfg.PRTitle, "--body-file", prBodyFilePath(repoDir)}
 	if prNoBase.Name != "gh" || prNoBase.Dir != repoDir {
 		t.Fatalf("pr without base command unexpected: %+v", prNoBase)
 	}
@@ -4653,10 +4652,14 @@ func TestPRCreateCommandsEnforceStandardBodyFormat(t *testing.T) {
 	cfg.PRBody = "Hardened auth retry flow and fixed flaky assertions."
 
 	pr := prCreateCommand("/tmp/repo", cfg, "topic-branch")
-	body, ok := flagValue(pr.Args, "--body")
+	bodyFile, ok := flagValue(pr.Args, "--body-file")
 	if !ok {
-		t.Fatalf("pr create args missing --body: %v", pr.Args)
+		t.Fatalf("pr create args missing --body-file: %v", pr.Args)
 	}
+	if got, want := bodyFile, prBodyFilePath("/tmp/repo"); got != want {
+		t.Fatalf("pr body file = %q, want %q", got, want)
+	}
+	body := config.NormalizePRBody(cfg.PRBody, cfg.Prompt)
 
 	required := []string{
 		"Proposed changes from Molten.Bot",
@@ -4678,12 +4681,45 @@ func TestPRCreateCommandsEnforceStandardBodyFormat(t *testing.T) {
 	}
 
 	prNoBase := prCreateWithoutBaseCommand("/tmp/repo", cfg, "topic-branch")
-	noBaseBody, ok := flagValue(prNoBase.Args, "--body")
+	noBaseBodyFile, ok := flagValue(prNoBase.Args, "--body-file")
 	if !ok {
-		t.Fatalf("pr create without base args missing --body: %v", prNoBase.Args)
+		t.Fatalf("pr create without base args missing --body-file: %v", prNoBase.Args)
 	}
-	if noBaseBody != body {
-		t.Fatalf("normalized PR body mismatch between command variants: with-base=%q without-base=%q", body, noBaseBody)
+	if noBaseBodyFile != bodyFile {
+		t.Fatalf("PR body file mismatch between command variants: with-base=%q without-base=%q", bodyFile, noBaseBodyFile)
+	}
+}
+
+func TestWritePRBodyFileUsesNormalizedBodyAndCleansUp(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	cfg := sampleConfig()
+	cfg.Prompt = strings.Repeat("large prompt line\n", 2000)
+	cfg.PRBody = "Summary stays short."
+
+	bodyFile, cleanup, err := writePRBodyFile(repoDir, cfg)
+	if err != nil {
+		t.Fatalf("writePRBodyFile() error = %v", err)
+	}
+	if got, want := bodyFile, prBodyFilePath(repoDir); got != want {
+		t.Fatalf("body file = %q, want %q", got, want)
+	}
+	data, err := os.ReadFile(bodyFile)
+	if err != nil {
+		t.Fatalf("ReadFile(bodyFile) error = %v", err)
+	}
+	body := string(data)
+	if !strings.Contains(body, "Summary stays short.") {
+		t.Fatalf("body file missing custom summary: %q", body)
+	}
+	if !strings.Contains(body, "Original task prompt:\n```text\nlarge prompt line") {
+		t.Fatalf("body file missing normalized prompt block")
+	}
+
+	cleanup()
+	if _, err := os.Stat(bodyFile); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("body file still exists after cleanup: %v", err)
 	}
 }
 

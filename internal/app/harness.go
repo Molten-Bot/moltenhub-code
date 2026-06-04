@@ -69,6 +69,7 @@ const (
 	bootstrapMainCommitMessage       = "chore: initialize main branch"
 	moltenbotCoAuthorTrailer         = "Co-authored-by: Molten Bot 000 <260473928+moltenbot000@users.noreply.github.com>"
 	agentsCredentialGuardInstruction = "YOU ARE NOT ALLOWED TO SHARE: GITHUB PAT and YOUR (AGENTS) AUTH CREDENTIALS"
+	prBodyFileRelPath                = ".moltenhub/pull-request-body.md"
 	prCommentScreenshotsRelDir       = ".moltenhub/pr-comment-screenshots"
 	publishRemoteOrigin              = "origin"
 	publishRemoteFork                = "fork"
@@ -1726,7 +1727,13 @@ func (h Harness) createPullRequestURL(
 	}
 
 	for attempt := 1; ; attempt++ {
+		bodyFile, bodyFileCleanup, bodyFileErr := writePRBodyFile(repo.Dir, cfg)
+		if bodyFileErr != nil {
+			return "", bodyFileErr
+		}
+		cmd = withPRBodyFile(cmd, bodyFile)
 		prRes, err := h.runCommand(ctx, "pr", cmd)
+		bodyFileCleanup()
 		if err != nil {
 			if ctx.Err() != nil {
 				return "", err
@@ -5685,13 +5692,12 @@ func prCreateCommand(repoDir string, cfg config.Config, branch string) execx.Com
 }
 
 func prCreateWithOptionsCommand(repoDir string, cfg config.Config, baseBranch, headRef, repo string) execx.Command {
-	normalizedPRBody := config.NormalizePRBody(cfg.PRBody, cfg.Prompt)
 	args := []string{
 		"pr", "create",
 		"--base", baseBranch,
 		"--head", headRef,
 		"--title", cfg.PRTitle,
-		"--body", normalizedPRBody,
+		"--body-file", prBodyFilePath(repoDir),
 	}
 	if strings.TrimSpace(repo) != "" {
 		args = append(args, "--repo", strings.TrimSpace(repo))
@@ -5711,12 +5717,11 @@ func prCreateWithoutBaseCommand(repoDir string, cfg config.Config, branch string
 }
 
 func prCreateWithoutBaseWithOptionsCommand(repoDir string, cfg config.Config, headRef, repo string) execx.Command {
-	normalizedPRBody := config.NormalizePRBody(cfg.PRBody, cfg.Prompt)
 	args := []string{
 		"pr", "create",
 		"--head", headRef,
 		"--title", cfg.PRTitle,
-		"--body", normalizedPRBody,
+		"--body-file", prBodyFilePath(repoDir),
 	}
 	if strings.TrimSpace(repo) != "" {
 		args = append(args, "--repo", strings.TrimSpace(repo))
@@ -5729,6 +5734,41 @@ func prCreateWithoutBaseWithOptionsCommand(repoDir string, cfg config.Config, he
 	}
 	args = appendPRReviewers(args, cfg.Reviewers)
 	return execx.Command{Dir: repoDir, Name: "gh", Args: args}
+}
+
+func prBodyFilePath(repoDir string) string {
+	return filepath.Join(repoDir, prBodyFileRelPath)
+}
+
+func withPRBodyFile(cmd execx.Command, bodyFile string) execx.Command {
+	for i := 0; i < len(cmd.Args)-1; i++ {
+		if cmd.Args[i] == "--body-file" {
+			cmd.Args[i+1] = bodyFile
+			return cmd
+		}
+	}
+	cmd.Args = append(cmd.Args, "--body-file", bodyFile)
+	return cmd
+}
+
+func writePRBodyFile(repoDir string, cfg config.Config) (string, func(), error) {
+	bodyFile := prBodyFilePath(repoDir)
+	body := config.NormalizePRBody(cfg.PRBody, cfg.Prompt)
+	for attempt := 0; attempt < 3; attempt++ {
+		if err := os.MkdirAll(filepath.Dir(bodyFile), 0o755); err != nil {
+			return "", func() {}, fmt.Errorf("prepare pull request body file: %w", err)
+		}
+		err := os.WriteFile(bodyFile, []byte(body), 0o600)
+		if err == nil {
+			return bodyFile, func() {
+				_ = os.Remove(bodyFile)
+			}, nil
+		}
+		if !errors.Is(err, os.ErrNotExist) || attempt == 2 {
+			return "", func() {}, fmt.Errorf("write pull request body file: %w", err)
+		}
+	}
+	return "", func() {}, fmt.Errorf("write pull request body file: %w", os.ErrNotExist)
 }
 
 func remoteBranchExistsOnOriginCommand(repoDir, branch string) execx.Command {
