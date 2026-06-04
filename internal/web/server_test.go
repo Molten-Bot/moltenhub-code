@@ -899,8 +899,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "const TASK_HISTORY_LIMIT = 25;") {
 		t.Fatalf("expected index html to cap completed history display to the latest 25 tasks")
 	}
-	if !strings.Contains(markup, "const TASK_HISTORY_MAX_AGE_MS = 20 * 60 * 60 * 1000;") {
-		t.Fatalf("expected index html to define a 20-hour max age for completed task history")
+	if !strings.Contains(markup, "const TASK_HISTORY_MAX_AGE_MS = 10 * 60 * 1000;") {
+		t.Fatalf("expected index html to define a 10-minute max age for completed task history")
 	}
 	if !strings.Contains(markup, "function loadTaskHistory()") || !strings.Contains(markup, "function persistTaskHistory()") {
 		t.Fatalf("expected index html to include load/persist helpers for run history")
