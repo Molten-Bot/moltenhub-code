@@ -620,17 +620,17 @@ func (h Harness) processChangedRepo(
 						attempt+1,
 						timedOutChecksErr,
 					)
-					h.logf("stage=checks status=ok reason=watch_timeout repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt+1)
-					return ExitSuccess, "", nil
+					checkErr = fmt.Errorf("checks snapshot failed after watch timeout: %w", timedOutChecksErr)
+				} else {
+					if timedOutChecksSummary != "" {
+						checkSummary = timedOutChecksSummary
+					}
+					if timedOutChecksPassing {
+						h.logf("stage=checks status=ok reason=watch_timeout repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt+1)
+						return ExitSuccess, "", nil
+					}
+					checkErr = errors.New("checks failed after watch timeout")
 				}
-				if timedOutChecksSummary != "" {
-					checkSummary = timedOutChecksSummary
-				}
-				if timedOutChecksPassing {
-					h.logf("stage=checks status=ok reason=watch_timeout repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt+1)
-					return ExitSuccess, "", nil
-				}
-				checkErr = errors.New("checks failed after watch timeout")
 			}
 			if checkErr != nil && isNoRequiredChecksReported(checkRes, checkErr) {
 				h.logf(
@@ -685,17 +685,17 @@ func (h Harness) processChangedRepo(
 							attempt+1,
 							timedOutChecksErr,
 						)
-						h.logf("stage=checks status=ok reason=watch_timeout repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt+1)
-						return ExitSuccess, "", nil
+						checkErr = fmt.Errorf("checks snapshot failed after watch timeout: %w", timedOutChecksErr)
+					} else {
+						if timedOutChecksSummary != "" {
+							checkSummary = timedOutChecksSummary
+						}
+						if timedOutChecksPassing {
+							h.logf("stage=checks status=ok reason=watch_timeout repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt+1)
+							return ExitSuccess, "", nil
+						}
+						checkErr = errors.New("checks failed after watch timeout")
 					}
-					if timedOutChecksSummary != "" {
-						checkSummary = timedOutChecksSummary
-					}
-					if timedOutChecksPassing {
-						h.logf("stage=checks status=ok reason=watch_timeout repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt+1)
-						return ExitSuccess, "", nil
-					}
-					checkErr = errors.New("checks failed after watch timeout")
 				}
 			}
 			if checkErr == nil {

@@ -2613,6 +2613,139 @@ func TestRunTreatsChecksWatchTimeoutWithPendingChecksAsFailure(t *testing.T) {
 	}
 }
 
+func TestRunTreatsChecksWatchTimeoutSnapshotQueryFailureAsFailure(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+	prURL := "https://github.com/acme/repo/pull/42"
+	checkSummary := "No check output was provided by gh."
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL), err: errPRChecksWatchTimeout},
+		{cmd: prChecksJSONCommand(repoDir, prURL, true), err: errors.New("checks snapshot unavailable")},
+		{cmd: codexCommand(targetDir, remediationPrompt(withAgentsPrompt(cfg.Prompt, agentsPath), prURL, checkSummary, 1))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "\n"}},
+	}}
+
+	var logs []string
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+	h.Logf = func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if res.ExitCode != ExitPR {
+		t.Fatalf("ExitCode = %d, want %d", res.ExitCode, ExitPR)
+	}
+	if !strings.Contains(res.Err.Error(), "no remediation changes") {
+		t.Fatalf("error = %v", res.Err)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+	joinedLogs := strings.Join(logs, "\n")
+	if !strings.Contains(joinedLogs, "stage=checks status=warn action=watch_timeout_snapshot reason=query_failed") {
+		t.Fatalf("logs missing snapshot query failure:\n%s", joinedLogs)
+	}
+	if strings.Contains(joinedLogs, "stage=checks status=ok reason=watch_timeout") {
+		t.Fatalf("logs unexpectedly marked watch timeout ok:\n%s", joinedLogs)
+	}
+}
+
+func TestRunTreatsAnyChecksWatchTimeoutSnapshotQueryFailureAsFailure(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+	prURL := "https://github.com/acme/repo/pull/42"
+	noRequired := "no required checks reported on the 'moltenhub-build-api' branch"
+	checkSummary := "No check output was provided by gh."
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL), res: execx.Result{Stderr: noRequired + "\n"}, err: errors.New("checks unavailable")},
+		{cmd: requiredStatusChecksCommand(repoDir, "acme/repo", "main"), res: execx.Result{Stdout: `{"contexts":["test"],"checks":[]}`}},
+		{cmd: prChecksAnyCommand(repoDir, prURL), err: errPRChecksWatchTimeout},
+		{cmd: prChecksJSONCommand(repoDir, prURL, false), err: errors.New("checks snapshot unavailable")},
+		{cmd: codexCommand(targetDir, remediationPrompt(withAgentsPrompt(cfg.Prompt, agentsPath), prURL, checkSummary, 1))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "\n"}},
+	}}
+
+	var logs []string
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+	h.Logf = func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if res.ExitCode != ExitPR {
+		t.Fatalf("ExitCode = %d, want %d", res.ExitCode, ExitPR)
+	}
+	if !strings.Contains(res.Err.Error(), "no remediation changes") {
+		t.Fatalf("error = %v", res.Err)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+	joinedLogs := strings.Join(logs, "\n")
+	if !strings.Contains(joinedLogs, "stage=checks status=warn action=watch_timeout_snapshot reason=query_failed") {
+		t.Fatalf("logs missing snapshot query failure:\n%s", joinedLogs)
+	}
+	if strings.Contains(joinedLogs, "stage=checks status=ok reason=watch_timeout") {
+		t.Fatalf("logs unexpectedly marked watch timeout ok:\n%s", joinedLogs)
+	}
+}
+
 func TestRemediationPromptUsesCIFixLibraryTask(t *testing.T) {
 	t.Parallel()
 
