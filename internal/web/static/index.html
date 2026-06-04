@@ -4903,6 +4903,14 @@
       dashboardSessionRuntime.textContent = dashboardDuration(seconds);
     }
 
+    function dashboardTimeDisplayName(name) {
+      const rawName = String(name || "").trim();
+      if (rawName === "code_for_me") {
+        return "Code for me";
+      }
+      return rawName || "Unknown";
+    }
+
     function renderDashboardTimeList(container, rows) {
       if (!container) return;
       container.textContent = "";
@@ -4919,7 +4927,7 @@
         item.className = "dashboard-time-row";
         const label = document.createElement("span");
         label.className = "dashboard-time-name";
-        label.textContent = String(row?.name || "Unknown");
+        label.textContent = dashboardTimeDisplayName(row?.name);
         const meta = document.createElement("span");
         meta.className = "dashboard-time-meta";
         const tasks = Number(row?.completed_tasks || row?.tasks || 0);
