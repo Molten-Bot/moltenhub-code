@@ -80,6 +80,7 @@ type logFn func(string, ...any)
 var authSetupGitMu sync.Mutex
 
 var errPRCreatePermissionDenied = errors.New("pull request create permission denied")
+var errTransientPRLookup = errors.New("transient pull request lookup failure")
 
 // Result captures run output and status.
 type Result struct {
@@ -539,6 +540,16 @@ func (h Harness) processChangedRepo(
 	if !createWorkBranch {
 		prURL, err := h.lookupOpenPRURLByHead(ctx, *repo)
 		if err != nil {
+			if shouldTreatReusedBranchPRLookupFailureAsNonFatal(err) {
+				h.logf(
+					"stage=pr status=warn action=lookup_existing reason=transient_failed_after_push repo=%s repo_dir=%s branch=%s err=%q",
+					repo.URL,
+					repo.RelDir,
+					repo.Branch,
+					err,
+				)
+				return ExitSuccess, "", nil
+			}
 			return ExitPR, "pr", err
 		}
 		repo.PRURL = prURL
@@ -1738,6 +1749,9 @@ func (h Harness) lookupOpenPRURLByHead(ctx context.Context, repo repoWorkspace) 
 	pushRemote := repoPushRemote(repo)
 	remoteRes, remoteErr := h.runCommand(ctx, "git", remoteBranchExistsOnRemoteCommand(repo.Dir, pushRemote, branch))
 	if remoteErr != nil {
+		if shouldRetryPRCreate(remoteRes, remoteErr) {
+			return "", fmt.Errorf("%w: verify remote branch %q for repo %s on remote %q: %w", errTransientPRLookup, branch, repo.URL, pushRemote, remoteErr)
+		}
 		return "", fmt.Errorf("verify remote branch %q for repo %s on remote %q: %w", branch, repo.URL, pushRemote, remoteErr)
 	}
 	if !hasRemoteBranch(remoteRes) {
@@ -3427,6 +3441,8 @@ func shouldRetryPRCreate(res execx.Result, err error) bool {
 		"connection reset by peer",
 		"econnreset",
 		"etimedout",
+		"failed to connect",
+		"could not connect to server",
 		"temporary failure in name resolution",
 	}
 	for _, marker := range transientMarkers {
@@ -3435,6 +3451,10 @@ func shouldRetryPRCreate(res execx.Result, err error) bool {
 		}
 	}
 	return false
+}
+
+func shouldTreatReusedBranchPRLookupFailureAsNonFatal(err error) bool {
+	return errors.Is(err, errTransientPRLookup) || shouldRetryPRCreate(execx.Result{}, err)
 }
 
 func isNonFastForwardPush(res execx.Result, err error) bool {
