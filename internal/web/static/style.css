@@ -533,7 +533,8 @@ moltenhub-code-nav {
   overflow: visible;
 }
 
-.status-item-compact:focus-visible {
+.status-item-compact:focus-visible,
+.status-item-metrics:focus-visible {
   outline: 2px solid rgba(10, 132, 255, 0.34);
   outline-offset: 2px;
 }
@@ -676,6 +677,9 @@ moltenhub-code-nav {
 .status-item-metrics:hover .metric-label,
 .status-item-metrics:hover .metric-value,
 .status-item-metrics:hover .metric-unit,
+.status-item-metrics:focus-visible .metric-label,
+.status-item-metrics:focus-visible .metric-value,
+.status-item-metrics:focus-visible .metric-unit,
 .status-item-metrics:focus-within .metric-label,
 .status-item-metrics:focus-within .metric-value,
 .status-item-metrics:focus-within .metric-unit {
@@ -685,11 +689,13 @@ moltenhub-code-nav {
 }
 
 .status-item-metrics:hover .metric-label,
+.status-item-metrics:focus-visible .metric-label,
 .status-item-metrics:focus-within .metric-label {
   margin-right: 4px;
 }
 
 .status-item-metrics:hover .metric-unit,
+.status-item-metrics:focus-visible .metric-unit,
 .status-item-metrics:focus-within .metric-unit {
   margin-left: 3px;
 }

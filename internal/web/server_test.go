@@ -3773,7 +3773,7 @@ func TestHandlerServesStaticSiteHeaderComponent(t *testing.T) {
 		`id="local-conn-item" class="status-item status-item-compact status-item-compact-expandable"`,
 		`id="hub-conn-item" class="status-item status-item-compact status-item-compact-expandable"`,
 		`id="speech-conn-item" class="status-item status-item-compact status-item-compact-expandable hidden"`,
-		`id="resource-metrics-item" class="status-item status-item-metrics"`,
+		`id="resource-metrics-item" class="status-item status-item-metrics" title="Resource metrics" aria-label="Resource metrics" tabindex="0"`,
 		`data-lucide="cpu"`,
 		`data-lucide="memory-stick"`,
 		`data-lucide="hard-drive"`,

@@ -1514,8 +1514,8 @@ func TestHeaderStatusStylesStayReadable(t *testing.T) {
 	if !strings.Contains(css, ".metric-label,\n.metric-value,\n.metric-unit {\n  display: inline-block;\n  max-width: 0;\n  opacity: 0;\n  overflow: hidden;\n  transform: translateX(-6px);") {
 		t.Fatalf("expected metric labels, values, and units to remain hidden until the metrics pill expands")
 	}
-	if !strings.Contains(css, ".status-item-metrics:hover .metric-label,\n.status-item-metrics:hover .metric-value,\n.status-item-metrics:hover .metric-unit,\n.status-item-metrics:focus-within .metric-label,\n.status-item-metrics:focus-within .metric-value,\n.status-item-metrics:focus-within .metric-unit {\n  max-width: 64px;\n  opacity: 1;\n  transform: translateX(0);\n}") {
-		t.Fatalf("expected metric labels, values, and units to reveal only on metrics pill hover")
+	if !strings.Contains(css, ".status-item-metrics:hover .metric-label,\n.status-item-metrics:hover .metric-value,\n.status-item-metrics:hover .metric-unit,\n.status-item-metrics:focus-visible .metric-label,\n.status-item-metrics:focus-visible .metric-value,\n.status-item-metrics:focus-visible .metric-unit,\n.status-item-metrics:focus-within .metric-label,\n.status-item-metrics:focus-within .metric-value,\n.status-item-metrics:focus-within .metric-unit {\n  max-width: 64px;\n  opacity: 1;\n  transform: translateX(0);\n}") {
+		t.Fatalf("expected metric labels, values, and units to reveal on metrics pill hover or keyboard focus")
 	}
 	if !strings.Contains(css, ".status-item-metrics .status-value {\n  color: var(--text-soft);\n  font-size: 0.9rem;") {
 		t.Fatalf("expected metrics text to use readable status color tokens")

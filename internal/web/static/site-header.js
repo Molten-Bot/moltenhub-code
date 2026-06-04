@@ -148,7 +148,7 @@
             <span id="speech-conn-dot" class="dot online"></span>
             <span id="speech-conn-text" class="status-tooltip">Whisper: Connected</span>
           </div>
-          <div id="resource-metrics-item" class="status-item status-item-metrics" title="Resource metrics" aria-label="Resource metrics">
+          <div id="resource-metrics-item" class="status-item status-item-metrics" title="Resource metrics" aria-label="Resource metrics" tabindex="0">
             <span id="resource-cpu-chip" class="metric-chip">
               <span id="resource-cpu-icon" class="metric-icon metric-icon-neutral" aria-hidden="true">
                 <i data-lucide="cpu" class="metric-icon-glyph" aria-hidden="true"></i>
