@@ -1331,7 +1331,7 @@ func TestBrokerTracksTaskAttemptsAcrossRerunsAndFailures(t *testing.T) {
 	}
 }
 
-func TestBrokerKeepsCompletedTasksVisibleUntilClosed(t *testing.T) {
+func TestBrokerRemovesCompletedTasksAfterTimeout(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 4, 6, 12, 0, 0, 0, time.UTC)
@@ -1343,39 +1343,42 @@ func TestBrokerKeepsCompletedTasksVisibleUntilClosed(t *testing.T) {
 	b.IngestLog("dispatch status=completed request_id=req-ok workspace=/tmp/run branch=moltenhub-cleanup")
 
 	if got := len(b.Snapshot().Tasks); got != 1 {
-		t.Fatalf("len(tasks) before retention = %d, want 1", got)
+		t.Fatalf("len(tasks) before timeout = %d, want 1", got)
 	}
 
-	now = now.Add(10 * time.Minute)
-	snap := b.Snapshot()
-	if got := len(snap.Tasks); got != 1 {
-		t.Fatalf("len(tasks) after waiting = %d, want 1", got)
+	now = now.Add(defaultTerminalTaskTimeout - time.Second)
+	if got := len(b.Snapshot().Tasks); got != 1 {
+		t.Fatalf("len(tasks) before timeout expiry = %d, want 1", got)
 	}
-	if got, want := snap.Tasks[0].Status, "completed"; got != want {
-		t.Fatalf("task.Status = %q, want %q", got, want)
+
+	now = now.Add(time.Second)
+	snap := b.Snapshot()
+	if got := len(snap.Tasks); got != 0 {
+		t.Fatalf("len(tasks) after timeout = %d, want 0", got)
 	}
 	if _, ok := b.TaskRunConfig("req-ok"); !ok {
-		t.Fatal("TaskRunConfig() found = false for visible completed task, want true")
+		t.Fatal("TaskRunConfig() found = false for expired completed task, want true")
 	}
 }
 
-func TestBrokerKeepsFailedTasksAfterFiveMinutes(t *testing.T) {
+func TestBrokerRemovesFailedTasksAfterTimeout(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 4, 6, 12, 0, 0, 0, time.UTC)
 	b := NewBroker()
 	b.now = func() time.Time { return now }
 
+	b.RecordTaskRunConfig("req-error", []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"fail visibly"}`))
 	b.IngestLog("dispatch status=start request_id=req-error")
 	b.IngestLog(`dispatch status=error request_id=req-error exit_code=50 err="codex exploded"`)
 
-	now = now.Add(6 * time.Minute)
+	now = now.Add(defaultTerminalTaskTimeout)
 	snap := b.Snapshot()
-	if got := len(snap.Tasks); got != 1 {
-		t.Fatalf("len(tasks) after ttl for failed task = %d, want 1", got)
+	if got := len(snap.Tasks); got != 0 {
+		t.Fatalf("len(tasks) after timeout for failed task = %d, want 0", got)
 	}
-	if snap.Tasks[0].Status != "error" {
-		t.Fatalf("status = %q, want error", snap.Tasks[0].Status)
+	if _, ok := b.TaskRunConfig("req-error"); !ok {
+		t.Fatal("TaskRunConfig() found = false for expired failed task, want true")
 	}
 }
 

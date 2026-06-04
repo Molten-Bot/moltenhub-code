@@ -20,6 +20,7 @@ import (
 const (
 	defaultMaxEvents           = 600
 	defaultMaxTaskLogs         = 2000
+	defaultTerminalTaskTimeout = 10 * time.Minute
 	defaultClosedTaskRetention = 24 * time.Hour
 	defaultMaxReleases         = 100
 )
@@ -306,6 +307,7 @@ type taskState struct {
 	Error             string
 	StartedAt         time.Time
 	UpdatedAt         time.Time
+	TerminalAt        time.Time
 	Logs              []TaskLog
 }
 
@@ -1445,6 +1447,7 @@ func (b *Broker) MarkTaskPRMerged(requestID string, mergedAt string) error {
 	task.Status = "merged"
 	task.Stage = "finalize"
 	task.StageStatus = "merged"
+	task.TerminalAt = now
 	task.UpdatedAt = mergedTime
 	b.recordTaskAttemptLocked(
 		b.taskAttemptRootLocked(requestID),
@@ -1554,6 +1557,18 @@ func (b *Broker) CloseTask(requestID string) error {
 }
 
 func (b *Broker) pruneExpiredTasksLocked(now time.Time) {
+	for requestID, task := range b.tasks {
+		if task == nil || !isCompletedTaskStatus(task.Status) {
+			continue
+		}
+		terminalAt := task.TerminalAt
+		if terminalAt.IsZero() {
+			terminalAt = task.UpdatedAt
+		}
+		if !terminalAt.IsZero() && now.Sub(terminalAt) >= defaultTerminalTaskTimeout {
+			delete(b.tasks, requestID)
+		}
+	}
 	for requestID, closedAt := range b.closedTasks {
 		if now.Sub(closedAt) < defaultClosedTaskRetention {
 			continue
@@ -1654,6 +1669,9 @@ func (b *Broker) ensureTaskLocked(requestID string, now time.Time) *taskState {
 func (b *Broker) updateTaskFromLineLocked(t *taskState, line string, fields map[string]string, now time.Time) {
 	defer func() {
 		if t != nil {
+			if isFinalTaskDispatchLine(fields) && isCompletedTaskStatus(t.Status) {
+				t.TerminalAt = now
+			}
 			b.registerRepositoriesLocked(t.Repos, nil)
 			b.recordTaskAttemptLocked(b.taskAttemptRootLocked(t.RequestID), t.RequestID, "", t.Status, t.Error, t.Workflow, t.AgentHarness, t.Source, t.Repos, t.PRURL, now)
 		}
