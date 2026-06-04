@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -1511,13 +1510,7 @@ func shouldQueueUnexpectedNoChangesFollowUp(result app.Result, runCfg config.Con
 }
 
 func shouldQueueUnexpectedNoChangesFollowUpWithLogs(result app.Result, runCfg config.Config, logPaths []string) (bool, string) {
-	if ok, reason := shouldQueueUnexpectedNoChangesFollowUp(result, runCfg); !ok {
-		return false, reason
-	}
-	if noChangesLogsCiteConcreteNoOp(logPaths) {
-		return false, "agent cited concrete no-change evidence"
-	}
-	return true, ""
+	return shouldQueueUnexpectedNoChangesFollowUp(result, runCfg)
 }
 
 func shouldEscalateNoChangesFollowUp(source string, result app.Result, runCfg config.Config) (bool, string) {
@@ -1537,13 +1530,7 @@ func shouldEscalateNoChangesFollowUp(source string, result app.Result, runCfg co
 }
 
 func shouldEscalateNoChangesFollowUpWithLogs(source string, result app.Result, runCfg config.Config, logPaths []string) (bool, string) {
-	if ok, reason := shouldEscalateNoChangesFollowUp(source, result, runCfg); !ok {
-		return false, reason
-	}
-	if noChangesLogsCiteConcreteNoOp(logPaths) {
-		return false, "agent cited concrete no-change evidence"
-	}
-	return true, ""
+	return shouldEscalateNoChangesFollowUp(source, result, runCfg)
 }
 
 func failureFollowUpRepos(_ app.Result, _ config.Config) []string {
@@ -1767,117 +1754,6 @@ func promptPhraseText(text string) string {
 
 func promptPhraseTextContains(text, marker string) bool {
 	return strings.Contains(text, promptPhraseText(marker))
-}
-
-const maxNoChangesEvidenceLogBytes = 512 * 1024
-
-func noChangesLogsCiteConcreteNoOp(logPaths []string) bool {
-	for _, path := range logPaths {
-		if noChangesTextCitesConcreteNoOp(agentStdoutTextFromLogFile(path)) {
-			return true
-		}
-	}
-	return false
-}
-
-func agentStdoutTextFromLogFile(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return ""
-	}
-	stat, err := os.Stat(path)
-	if err != nil || stat.IsDir() {
-		return ""
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return ""
-	}
-	if len(data) > maxNoChangesEvidenceLogBytes {
-		data = data[len(data)-maxNoChangesEvidenceLogBytes:]
-	}
-	return agentStdoutTextFromLog(string(data))
-}
-
-func agentStdoutTextFromLog(text string) string {
-	if strings.TrimSpace(text) == "" {
-		return ""
-	}
-	var lines []string
-	for _, line := range strings.Split(text, "\n") {
-		fields := parseSimpleKVFields(line)
-		if !isAgentStdoutLogFields(fields) {
-			continue
-		}
-		if decoded := strings.TrimSpace(fields["text"]); decoded != "" {
-			lines = append(lines, decoded)
-			continue
-		}
-		encoded := strings.TrimSpace(fields["b64"])
-		if encoded == "" {
-			continue
-		}
-		decoded, err := base64.StdEncoding.DecodeString(encoded)
-		if err != nil {
-			continue
-		}
-		if decodedText := strings.TrimSpace(string(decoded)); decodedText != "" {
-			lines = append(lines, decodedText)
-		}
-	}
-	return strings.Join(lines, "\n")
-}
-
-func isAgentStdoutLogFields(fields map[string]string) bool {
-	if len(fields) == 0 || strings.ToLower(strings.TrimSpace(fields["stream"])) != "stdout" {
-		return false
-	}
-	phase := strings.ToLower(strings.TrimSpace(fields["phase"]))
-	name := strings.ToLower(strings.TrimSpace(fields["name"]))
-	switch phase {
-	case "agent", "codex", "claude":
-		return true
-	}
-	switch name {
-	case "codex", "claude":
-		return true
-	default:
-		return false
-	}
-}
-
-func noChangesTextCitesConcreteNoOp(text string) bool {
-	lower := strings.ToLower(strings.TrimSpace(text))
-	if lower == "" || strings.Contains(lower, "failure:") || strings.Contains(lower, "error details:") {
-		return false
-	}
-
-	noOpMarkers := []string{
-		"no tracked diff",
-		"no code diff",
-		"no file changes required",
-		"no repository changes required",
-		"no changes needed",
-		"no changes required",
-		"already true",
-		"already present",
-		"already satisfied",
-		"requested state already",
-	}
-	if !containsAny(lower, noOpMarkers) {
-		return false
-	}
-
-	evidenceMarkers := []string{
-		"](/", "src/", "app/", "pages/", "styles/", "internal/", "cmd/", "pkg/",
-		"components/", "global.css", "globals.css", "css module", "global stylesheet",
-		"`<style>`", "style=",
-		".astro", ".css", ".scss", ".sass", ".less", ".svelte", ".vue", ".tsx",
-		".jsx", ".ts", ".js", ".go", ".py", ".rs", ".java", ".kt", ".rb", ".json",
-		".yaml", ".yml", ".toml", ".md",
-	}
-	return containsAny(lower, evidenceMarkers)
 }
 
 func containsAny(text string, markers []string) bool {

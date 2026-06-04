@@ -1060,7 +1060,7 @@ func TestShouldQueueUnexpectedNoChangesFollowUpSkipsVerificationPrompt(t *testin
 	}
 }
 
-func TestShouldQueueUnexpectedNoChangesFollowUpSkipsConcreteNoOpEvidenceLog(t *testing.T) {
+func TestShouldQueueUnexpectedNoChangesFollowUpQueuesDespiteConcreteNoOpEvidenceLog(t *testing.T) {
 	t.Parallel()
 
 	logPath := writeNoChangeEvidenceLog(t)
@@ -1069,11 +1069,8 @@ func TestShouldQueueUnexpectedNoChangesFollowUpSkipsConcreteNoOpEvidenceLog(t *t
 	}
 
 	ok, reason := shouldQueueUnexpectedNoChangesFollowUpWithLogs(app.Result{NoChanges: true}, runCfg, []string{logPath})
-	if ok {
-		t.Fatal("shouldQueueUnexpectedNoChangesFollowUpWithLogs(concrete evidence) = true, want false")
-	}
-	if reason != "agent cited concrete no-change evidence" {
-		t.Fatalf("reason = %q, want concrete evidence skip", reason)
+	if !ok || reason != "" {
+		t.Fatalf("shouldQueueUnexpectedNoChangesFollowUpWithLogs(concrete evidence) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 }
 
@@ -1263,18 +1260,15 @@ func TestShouldEscalateNoChangesFollowUpRequiresFollowUpSourceAndMissingPR(t *te
 	}
 }
 
-func TestShouldEscalateNoChangesFollowUpSkipsConcreteNoOpEvidenceLog(t *testing.T) {
+func TestShouldEscalateNoChangesFollowUpQueuesDespiteConcreteNoOpEvidenceLog(t *testing.T) {
 	t.Parallel()
 
 	logPath := writeNoChangeEvidenceLog(t)
 	runCfg := config.Config{Prompt: "fix the broken no-change handler"}
 
 	ok, reason := shouldEscalateNoChangesFollowUpWithLogs(noChangesFollowUpSource, app.Result{NoChanges: true}, runCfg, []string{logPath})
-	if ok {
-		t.Fatal("shouldEscalateNoChangesFollowUpWithLogs(concrete evidence) = true, want false")
-	}
-	if reason != "agent cited concrete no-change evidence" {
-		t.Fatalf("reason = %q, want concrete evidence skip", reason)
+	if !ok || reason != "" {
+		t.Fatalf("shouldEscalateNoChangesFollowUpWithLogs(concrete evidence) = (%v, %q), want (true, \"\")", ok, reason)
 	}
 }
 
