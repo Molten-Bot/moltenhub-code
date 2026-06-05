@@ -7740,6 +7740,28 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
   }
 }
 
+@supports (-moz-appearance: none) {
+  body::before,
+  body::after,
+  .glow,
+  .grain,
+  .snowfall-canvas {
+    display: none !important;
+  }
+
+  .brand-login-card-shell,
+  .brand-login-badge,
+  .status-item,
+  .panel,
+  .task,
+  .event,
+  .theme-toggle,
+  .task-fullscreen {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
 @media (max-width: 900px) {
   body::before,
   body::after,

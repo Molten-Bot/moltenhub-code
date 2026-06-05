@@ -773,7 +773,7 @@
     const HOVER_MODES = ["auto", "on", "off"];
     const QUEUED_STATUS_TIMEOUT_MS = 12_000;
     const LOCAL_PROMPT_STATUS_FADE_MS = 240;
-    const STREAM_RENDER_INTERVAL_MS = 120;
+    const STREAM_RENDER_INTERVAL_MS = 250;
     const TASK_ORDER_TRANSITION_DELAY_MS = 2_000;
     const TASK_ORDER_SYNC_INTERVAL_MS = 4_000;
     const NEW_HUB_TASK_HIGHLIGHT_MS = 4_000;
@@ -11541,6 +11541,10 @@
       }
     }
 
+    function taskOrderRenderSig(tasks) {
+      return (tasks || []).map((task) => String(taskRequestID(task) || "")).join("|");
+    }
+
     function taskCollectionRenderSig(tasks, options = {}) {
       const showOutputAction = options.showOutputAction !== false;
       const showImageAction = Boolean(options.showImageAction);
@@ -11623,9 +11627,13 @@
         scheduleDeferredSelectionRenderFlush();
         return;
       }
-      const previousTaskRects = captureTaskRects(listNode);
+      const nextOrderSig = taskOrderRenderSig(tasks);
+      const previousOrderSig = String(listNode.dataset.taskOrderSig || "");
+      const shouldAnimateReflow = Boolean(previousOrderSig && previousOrderSig !== nextOrderSig);
+      const previousTaskRects = shouldAnimateReflow ? captureTaskRects(listNode) : new Map();
       const scrollAnchor = captureTaskScrollAnchor(listNode);
       listNode.dataset.renderSig = renderSig;
+      listNode.dataset.taskOrderSig = nextOrderSig;
       listNode.dataset.pendingRenderSig = "";
       listNode.replaceChildren();
 
@@ -12080,6 +12088,12 @@
         taskFullscreenOutputPanel.classList.toggle("hidden", !showConsole);
         taskFullscreenOutputPanel.setAttribute("aria-hidden", showConsole ? "false" : "true");
       }
+      if (!showTaskPanel) {
+        if (taskList) {
+          taskList.dataset.pendingRenderSig = "";
+        }
+        return;
+      }
       const taskStatusFilter = normalizeTaskStatusFilter(state.taskStatusFilter);
       const emptyEyebrow = promptOnly
         ? "Prompt View"
@@ -12524,7 +12538,9 @@
       renderResourceMetrics(snapshot);
       syncDashboardDockLinkAvailability(snapshot);
       syncTaskViewDockState(snapshot);
-      renderDashboardStats(snapshot);
+      if (state.appDisplay === "dashboard") {
+        renderDashboardStats(snapshot);
+      }
       renderTasks(snapshot);
       renderFullscreenTasks(snapshot);
       renderChatReposFromSnapshot();
@@ -12576,11 +12592,14 @@
         const snapshot = await response.json();
         await reviewSettingsPromise;
         render(snapshot);
-        if (appDisplayFromHash() === "dashboard") {
+        const initialDisplay = appDisplayFromHash();
+        if (initialDisplay === "dashboard") {
           setAppDisplay("dashboard");
+        } else if (initialDisplay === "work") {
+          setAppDisplay("work");
         }
         void githubReposPromise.then(() => {
-          if (appDisplayFromHash() === "chat") {
+          if (initialDisplay === "chat" && appDisplayFromHash() === "chat") {
             setAppDisplay("chat");
           }
         });
