@@ -785,7 +785,7 @@
     const TASK_SOURCE_HEADER = "X-MoltenHub-Task-Source";
     const BACKGROUND_PARTICLE_ANIMATION_ENABLED = false;
     const TASK_HISTORY_LIMIT = 25;
-    const TASK_HISTORY_MAX_AGE_MS = 10 * 60 * 1000;
+    const TASK_HISTORY_MAX_AGE_MS = 60 * 60 * 1000;
     const MAX_TERMINAL_LINES = 500;
     const TASK_XTERM_VERSION = "6.0.0";
     const TASK_XTERM_MIN_COLS = 24;
@@ -1737,6 +1737,9 @@
       const normalized = String(filter || "").trim().toLowerCase();
       if (normalized === "completed" || normalized === "history") {
         return "completed";
+      }
+      if (normalized === "removed" || normalized === "dismissed") {
+        return "removed";
       }
       return "running";
     }
@@ -9366,11 +9369,25 @@
     function completeTaskDismissal(requestID) {
       requestID = String(requestID || "").trim();
       if (!requestID) return;
-      state.dismissedTaskIDs.add(requestID);
-      if (state.taskHistoryByID instanceof Map) {
-        state.taskHistoryByID.delete(requestID);
-        persistTaskHistory();
+      const task = (state.snapshot?.tasks || []).find((candidate) => String(candidate?.request_id || "").trim() === requestID);
+      if (isCompletedTask(task)) {
+        const copy = cloneTaskForHistory(task);
+        if (copy) {
+          if (!(state.taskHistoryByID instanceof Map)) {
+            state.taskHistoryByID = new Map();
+          }
+          const existing = state.taskHistoryByID.get(requestID);
+          if (existing?.history_completed_at) {
+            copy.history_completed_at = existing.history_completed_at;
+          }
+          if (typeof existing?.prompt === "string" && existing.prompt.trim() !== "") {
+            copy.prompt = existing.prompt;
+          }
+          state.taskHistoryByID.set(requestID, copy);
+          persistTaskHistory();
+        }
       }
+      state.dismissedTaskIDs.add(requestID);
       if (state.taskHistoryUnseenIDs instanceof Set && state.taskHistoryUnseenIDs.delete(requestID)) {
         persistTaskHistoryUnseenIDs();
       }
@@ -9862,18 +9879,21 @@
       const statusFilter = normalizeTaskStatusFilter(state.taskStatusFilter);
       const unseenHistoryCount = taskHistoryUnseenCount();
       if (taskHistoryToggle) {
-        const showingHistory = statusFilter === "completed";
+        const showingHistory = statusFilter !== "running";
         const hasUnseenHistory = !showingHistory && unseenHistoryCount > 0;
-        const toggleLabel = showingHistory
-          ? "Hide completed task history"
-          : "Show completed task history";
+        const toggleLabel = statusFilter === "completed"
+          ? "Show removed task history"
+          : statusFilter === "removed"
+            ? "Show active tasks"
+            : "Show active and completed tasks";
         taskHistoryToggle.setAttribute("aria-pressed", showingHistory ? "true" : "false");
         taskHistoryToggle.setAttribute("aria-label", toggleLabel);
         taskHistoryToggle.setAttribute("title", toggleLabel);
+        taskHistoryToggle.dataset.filter = statusFilter;
         taskHistoryToggle.classList.toggle("task-history-toggle-unseen", hasUnseenHistory);
       }
       if (taskHistoryToggleBadge) {
-        const showingHistory = statusFilter === "completed";
+        const showingHistory = statusFilter !== "running";
         const hasUnseenHistory = !showingHistory && unseenHistoryCount > 0;
         taskHistoryToggleBadge.textContent = `${Math.min(99, unseenHistoryCount)}`;
         taskHistoryToggleBadge.classList.toggle("hidden", !hasUnseenHistory);
@@ -10077,8 +10097,14 @@
         event.stopPropagation();
         if (historyOnly) {
           trackAnalyticsEvent("task_history_removed", { request_id: requestID });
-          completeTaskDismissal(requestID);
+          state.dismissedTaskIDs.add(requestID);
+          if (state.taskHistoryByID instanceof Map) {
+            state.taskHistoryByID.delete(requestID);
+            persistTaskHistory();
+          }
+          persistDismissedTaskIDs();
           setLocalPromptStatus("ok", `Removed task ${requestID} from history`);
+          render(state.snapshot);
           return;
         }
         dismissTask(requestID);
@@ -10715,7 +10741,7 @@
           continue;
         }
         const requestID = String(task?.request_id || "").trim();
-        if (!requestID || state.dismissedTaskIDs.has(requestID) || isTaskHistoryExpired(task, nowMs)) {
+        if (!requestID || isTaskHistoryExpired(task, nowMs)) {
           continue;
         }
         const copy = cloneTaskForHistory(task);
@@ -10929,10 +10955,75 @@
       return [...running, ...completed];
     }
 
+    function removedTasks(snapshot) {
+      const nowMs = Date.now();
+      const liveByID = new Map();
+      for (const task of snapshot?.tasks || []) {
+        const requestID = String(task?.request_id || "").trim();
+        if (!requestID || liveByID.has(requestID)) {
+          continue;
+        }
+        liveByID.set(requestID, task);
+      }
+
+      const out = [];
+      for (const task of liveByID.values()) {
+        const requestID = String(task?.request_id || "").trim();
+        if (!requestID || !state.dismissedTaskIDs.has(requestID) || !isCompletedTask(task)) {
+          continue;
+        }
+        const historyCopy = state.taskHistoryByID.get(requestID);
+        if (isTaskHistoryExpired(historyCopy || task, nowMs)) {
+          continue;
+        }
+        const stablePrompt = typeof historyCopy?.prompt === "string" && historyCopy.prompt.trim() !== ""
+          ? historyCopy.prompt
+          : task.prompt;
+        out.push({
+          ...task,
+          prompt: stablePrompt,
+          history_completed_at: historyCopy?.history_completed_at || task.history_completed_at || task.updated_at || task.started_at || "",
+          history_only: false,
+          removed_history: true,
+          can_rerun: Boolean(task?.can_rerun),
+        });
+      }
+
+      for (const task of state.taskHistoryByID.values()) {
+        const requestID = String(task?.request_id || "").trim();
+        if (!requestID || liveByID.has(requestID) || !state.dismissedTaskIDs.has(requestID) || isTaskHistoryExpired(task, nowMs)) {
+          continue;
+        }
+        out.push({
+          ...task,
+          history_only: true,
+          removed_history: true,
+          can_rerun: Boolean(task?.can_rerun),
+        });
+      }
+
+      out.sort((a, b) => {
+        const completedDiff = historyTaskCompletedAt(b) - historyTaskCompletedAt(a);
+        if (completedDiff !== 0) return completedDiff;
+
+        const startedDiff = parseTaskTimestamp(b?.started_at) - parseTaskTimestamp(a?.started_at);
+        if (startedDiff !== 0) return startedDiff;
+
+        return String(b?.request_id || "").localeCompare(String(a?.request_id || ""));
+      });
+      if (Number.isFinite(TASK_HISTORY_LIMIT) && TASK_HISTORY_LIMIT > 0 && out.length > TASK_HISTORY_LIMIT) {
+        return out.slice(0, TASK_HISTORY_LIMIT);
+      }
+      return out;
+    }
+
     function displayTasks(snapshot) {
       const filter = normalizeTaskStatusFilter(state.taskStatusFilter);
       if (filter === "completed") {
         return historyFilterTasks(snapshot);
+      }
+      if (filter === "removed") {
+        return removedTasks(snapshot);
       }
       return runningTasks(snapshot);
     }
@@ -10946,7 +11037,7 @@
       if (completedCount > 0) {
         return true;
       }
-      return normalizeTaskStatusFilter(state.taskStatusFilter) === "completed" && runningCount === 0 && completedCount === 0;
+      return normalizeTaskStatusFilter(state.taskStatusFilter) !== "running" && runningCount === 0 && completedCount === 0;
     }
 
     function fullscreenTasks(snapshot) {
@@ -11603,7 +11694,7 @@
       const showImageAction = Boolean(options.showImageAction);
       const allowCollapse = options.allowCollapse !== false;
       const promptOnly = normalizeTaskPanelView(state.taskPanelView) === "prompt";
-      const historyView = normalizeTaskStatusFilter(state.taskStatusFilter) === "completed";
+      const historyView = normalizeTaskStatusFilter(state.taskStatusFilter) !== "running";
       const emptyEyebrow = String(options.emptyEyebrow || "Queue Ready");
       const emptyTitle = String(options.emptyTitle || "Lets get to work!");
       const emptyCopy = String(options.emptyCopy || "New runs will appear here with their progress, replay controls, local clone actions, and PR links.");
@@ -12097,15 +12188,21 @@
       const taskStatusFilter = normalizeTaskStatusFilter(state.taskStatusFilter);
       const emptyEyebrow = promptOnly
         ? "Prompt View"
-        : taskStatusFilter === "completed"
+        : taskStatusFilter === "removed"
+          ? "Removed"
+          : taskStatusFilter === "completed"
           ? "History"
           : "Queue Ready";
-      const emptyTitle = taskStatusFilter === "completed"
+      const emptyTitle = taskStatusFilter === "removed"
+        ? "No removed tasks."
+        : taskStatusFilter === "completed"
         ? "No completed tasks yet."
         : promptOnly
           ? "No task prompts yet."
           : "Lets get to work!";
-      const emptyCopy = taskStatusFilter === "completed"
+      const emptyCopy = taskStatusFilter === "removed"
+        ? "Closed completed tasks remain here for one hour."
+        : taskStatusFilter === "completed"
         ? (promptOnly
           ? "Completed task history appears here in compact mode."
           : "Completed task history appears here with links, logs, and run metadata.")
@@ -12131,15 +12228,21 @@
       const taskStatusFilter = normalizeTaskStatusFilter(state.taskStatusFilter);
       const emptyEyebrow = promptOnly
         ? "Prompt View"
-        : taskStatusFilter === "completed"
+        : taskStatusFilter === "removed"
+          ? "Removed"
+          : taskStatusFilter === "completed"
           ? "History"
           : "Queue Ready";
-      const emptyTitle = taskStatusFilter === "completed"
+      const emptyTitle = taskStatusFilter === "removed"
+        ? "No removed tasks."
+        : taskStatusFilter === "completed"
         ? "No completed tasks yet."
         : promptOnly
           ? "No task prompts yet."
           : "Lets get to work!";
-      const emptyCopy = taskStatusFilter === "completed"
+      const emptyCopy = taskStatusFilter === "removed"
+        ? "Closed completed tasks remain here for one hour."
+        : taskStatusFilter === "completed"
         ? (promptOnly
           ? "Completed task history appears here in compact mode."
           : "Completed task history appears here with links, logs, and run metadata.")
@@ -13180,9 +13283,12 @@
     promptVisibilityToggle.addEventListener("click", togglePromptVisibility);
     taskVisibilityToggle.addEventListener("click", toggleTaskVisibility);
     taskHistoryToggle.addEventListener("click", () => {
-      const nextFilter = normalizeTaskStatusFilter(state.taskStatusFilter) === "completed"
-        ? "running"
-        : "completed";
+      const currentFilter = normalizeTaskStatusFilter(state.taskStatusFilter);
+      const nextFilter = currentFilter === "running"
+        ? "completed"
+        : currentFilter === "completed"
+          ? "removed"
+          : "running";
       setTaskStatusFilter(nextFilter);
       trackAnalyticsEvent("task_status_filter_changed", { task_status_filter: nextFilter });
     });

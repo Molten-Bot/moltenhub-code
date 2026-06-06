@@ -2270,6 +2270,18 @@ select.prompt-control {
   background: rgba(10, 132, 255, 0.13);
 }
 
+.task-history-toggle[data-filter="completed"] {
+  color: var(--running);
+  background: rgba(10, 132, 255, 0.13);
+  box-shadow: inset 0 0 0 1px rgba(10, 132, 255, 0.16);
+}
+
+.task-history-toggle[data-filter="removed"] {
+  color: var(--surface-danger);
+  background: color-mix(in srgb, var(--surface-danger) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--surface-danger) 22%, transparent);
+}
+
 .task-sound-toggle-muted .task-sound-toggle-icon {
   opacity: 0.7;
 }

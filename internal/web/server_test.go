@@ -893,8 +893,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "const liveByID = new Map();") || !strings.Contains(markup, "for (const task of liveByID.values()) {") {
 		t.Fatalf("expected index html history mode to include live run tasks alongside saved history")
 	}
-	if !strings.Contains(markup, "if (!requestID || state.dismissedTaskIDs.has(requestID) || isTaskHistoryExpired(task, nowMs)) {") {
-		t.Fatalf("expected index html to skip dismissed and expired completed tasks while rebuilding history")
+	if !strings.Contains(markup, "if (!requestID || isTaskHistoryExpired(task, nowMs)) {") {
+		t.Fatalf("expected index html to skip invalid and expired completed tasks while rebuilding history")
 	}
 	if !strings.Contains(markup, "if (!requestID || liveByID.has(requestID) || state.dismissedTaskIDs.has(requestID) || isTaskHistoryExpired(task, nowMs)) {") {
 		t.Fatalf("expected index html history mode to exclude dismissed or expired tasks from persisted history output")
@@ -905,8 +905,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "const TASK_HISTORY_LIMIT = 25;") {
 		t.Fatalf("expected index html to cap completed history display to the latest 25 tasks")
 	}
-	if !strings.Contains(markup, "const TASK_HISTORY_MAX_AGE_MS = 10 * 60 * 1000;") {
-		t.Fatalf("expected index html to define a 10-minute max age for completed task history")
+	if !strings.Contains(markup, "const TASK_HISTORY_MAX_AGE_MS = 60 * 60 * 1000;") {
+		t.Fatalf("expected index html to define a one-hour max age for completed task history")
 	}
 	if !strings.Contains(markup, "function loadTaskHistory()") || !strings.Contains(markup, "function persistTaskHistory()") {
 		t.Fatalf("expected index html to include load/persist helpers for run history")
@@ -940,7 +940,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "if (!requestID || isTaskHistoryExpired(task, nowMs)) {") {
 		t.Fatalf("expected index html to prune expired task history entries from memory")
 	}
-	if !strings.Contains(markup, "if (!requestID || state.dismissedTaskIDs.has(requestID) || isTaskHistoryExpired(task, nowMs)) {") {
+	if !strings.Contains(markup, "if (!requestID || isTaskHistoryExpired(task, nowMs)) {") {
 		t.Fatalf("expected index html to skip expired completed tasks when rebuilding task history")
 	}
 	if !strings.Contains(markup, "if (isCompletedTask(task) && isTaskHistoryExpired(historyCopy || task, nowMs)) {") {
@@ -1027,8 +1027,9 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to define distinct success and error task sounds")
 	}
 	if !strings.Contains(markup, "taskHistoryToggle.addEventListener(\"click\", () => {") ||
-		!strings.Contains(markup, "const nextFilter = normalizeTaskStatusFilter(state.taskStatusFilter) === \"completed\"") {
-		t.Fatalf("expected index html to wire history icon toggle interactions for completed-history filtering")
+		!strings.Contains(markup, "const currentFilter = normalizeTaskStatusFilter(state.taskStatusFilter);") ||
+		!strings.Contains(markup, "currentFilter === \"completed\"\n          ? \"removed\"") {
+		t.Fatalf("expected index html to wire history icon toggle interactions for active, completed, and removed filters")
 	}
 	if !strings.Contains(markup, "taskSoundToggle.addEventListener(\"click\", () => {") {
 		t.Fatalf("expected index html to wire task sound toggle interactions")
@@ -1037,7 +1038,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected index html to prime task audio context from click interactions")
 	}
 	if !strings.Contains(markup, "setTaskStatusFilter(nextFilter);") {
-		t.Fatalf("expected index html history toggle to switch task filter between running and completed")
+		t.Fatalf("expected index html history toggle to switch task filters")
 	}
 	if !strings.Contains(markup, "const unseenHistoryCount = taskHistoryUnseenCount();") ||
 		!strings.Contains(markup, "taskHistoryToggle.classList.toggle(\"task-history-toggle-unseen\", hasUnseenHistory);") ||
@@ -1065,6 +1066,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "function taskHistoryDedupeKeys(task)") ||
 		!strings.Contains(markup, "return [...running, ...completed];") {
 		t.Fatalf("expected index html history filter to include current work plus deduped completed task history")
+	}
+	if !strings.Contains(markup, "function removedTasks(snapshot)") ||
+		!strings.Contains(markup, "state.dismissedTaskIDs.has(requestID)") ||
+		!strings.Contains(markup, "return removedTasks(snapshot);") {
+		t.Fatalf("expected index html to include removed completed-task history filter")
 	}
 	if !strings.Contains(markup, "if (filter === \"completed\") {") || !strings.Contains(markup, "return historyFilterTasks(snapshot);") {
 		t.Fatalf("expected index html to route displayTasks through the additive history filter when requested")
@@ -1350,8 +1356,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function hasTaskPanelContent(snapshot) {") ||
 		!strings.Contains(markup, "const runningCount = runningTasks(snapshot).length;") ||
 		!strings.Contains(markup, "const completedCount = completedTasks(snapshot).length;") ||
-		!strings.Contains(markup, "return normalizeTaskStatusFilter(state.taskStatusFilter) === \"completed\" && runningCount === 0 && completedCount === 0;") {
-		t.Fatalf("expected index html to keep completed-history empty state visible only in completed-history view")
+		!strings.Contains(markup, "return normalizeTaskStatusFilter(state.taskStatusFilter) !== \"running\" && runningCount === 0 && completedCount === 0;") {
+		t.Fatalf("expected index html to keep history empty states visible only in history views")
 	}
 	if !strings.Contains(markup, `const showTaskPanel = state.appDisplay === "work";`) ||
 		!strings.Contains(markup, "taskPanel.classList.toggle(\"hidden\", !showTaskPanel);") {
