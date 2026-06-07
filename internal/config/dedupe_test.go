@@ -77,6 +77,97 @@ func TestDedupeKeyDiffersByReviewPullRequest(t *testing.T) {
 	}
 }
 
+func TestDedupeKeyDiffersByReviewer(t *testing.T) {
+	t.Parallel()
+
+	base := Config{
+		RepoURL:    "git@github.com:acme/repo.git",
+		BaseBranch: "main",
+		Prompt:     "fix tests",
+	}
+	noReviewer := base
+	noneReviewer := base
+	noneReviewer.Reviewers = []string{"none", ""}
+	octocatReviewer := base
+	octocatReviewer.Reviewers = []string{"@OctoCat"}
+	hubotReviewer := base
+	hubotReviewer.Reviewers = []string{"hubot"}
+
+	keyNoReviewer := DedupeKey(noReviewer)
+	keyNoneReviewer := DedupeKey(noneReviewer)
+	keyOctocatReviewer := DedupeKey(octocatReviewer)
+	keyHubotReviewer := DedupeKey(hubotReviewer)
+
+	if keyNoReviewer != keyNoneReviewer {
+		t.Fatalf("none reviewer should not change dedupe key\nnone: %q\nempty: %q", keyNoneReviewer, keyNoReviewer)
+	}
+	if keyNoReviewer == keyOctocatReviewer {
+		t.Fatalf("dedupe keys should differ when reviewer is added\nno reviewer: %q\nwith reviewer: %q", keyNoReviewer, keyOctocatReviewer)
+	}
+	if keyOctocatReviewer == keyHubotReviewer {
+		t.Fatalf("dedupe keys should differ when reviewer differs\noctocat: %q\nhubot: %q", keyOctocatReviewer, keyHubotReviewer)
+	}
+}
+
+func TestDedupeKeyNormalizesReviewerIdentity(t *testing.T) {
+	t.Parallel()
+
+	base := Config{
+		RepoURL:    "git@github.com:acme/repo.git",
+		BaseBranch: "main",
+		Prompt:     "fix tests",
+	}
+	withHandle := base
+	withHandle.GitHubHandle = "@OctoCat"
+	withReviewer := base
+	withReviewer.Reviewers = []string{"octocat"}
+	withDuplicateReviewers := base
+	withDuplicateReviewers.Reviewers = []string{"hubot", "@OctoCat", "octocat"}
+
+	if got, want := DedupeKey(withHandle), DedupeKey(withReviewer); got != want {
+		t.Fatalf("githubHandle and reviewers should produce same dedupe key\ngot: %q\nwant: %q", got, want)
+	}
+	if got := DedupeKey(withDuplicateReviewers); !strings.Contains(got, `"reviewers":["hubot","octocat"]`) {
+		t.Fatalf("DedupeKey(reviewers) = %q, want sorted de-duped lowercase reviewers", got)
+	}
+}
+
+func TestDedupeKeyDiffersByRequestedReviewer(t *testing.T) {
+	t.Parallel()
+
+	base := Config{
+		RepoURL:    "git@github.com:acme/repo.git",
+		BaseBranch: "main",
+		Prompt:     "review pull request",
+		Review: &ReviewConfig{
+			PRNumber: 42,
+		},
+	}
+	octocat := base
+	octocat.Review = &ReviewConfig{
+		PRNumber:          42,
+		RequestedReviewer: "@OctoCat",
+	}
+	hubot := base
+	hubot.Review = &ReviewConfig{
+		PRNumber:          42,
+		RequestedReviewer: "hubot",
+	}
+
+	keyBase := DedupeKey(base)
+	keyOctocat := DedupeKey(octocat)
+	keyHubot := DedupeKey(hubot)
+	if keyBase == keyOctocat {
+		t.Fatalf("dedupe keys should differ when requested reviewer is added\nbase: %q\noctocat: %q", keyBase, keyOctocat)
+	}
+	if keyOctocat == keyHubot {
+		t.Fatalf("dedupe keys should differ when requested reviewer differs\noctocat: %q\nhubot: %q", keyOctocat, keyHubot)
+	}
+	if !strings.Contains(keyOctocat, `"requestedReviewer":"octocat"`) {
+		t.Fatalf("DedupeKey(requested reviewer) = %q, want requested reviewer in review payload", keyOctocat)
+	}
+}
+
 func TestDedupeHelpersHandleEmptyValues(t *testing.T) {
 	t.Parallel()
 

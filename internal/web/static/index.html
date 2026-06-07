@@ -10875,13 +10875,16 @@
       const repos = Array.isArray(task?.repos)
         ? task.repos.map((repo) => String(repo || "").trim()).filter(Boolean).sort().join(",")
         : "";
+      const reviewers = Array.isArray(task?.reviewers)
+        ? dedupeReviewerValues(task.reviewers).map((reviewer) => reviewer.toLowerCase()).sort().join(",")
+        : "";
       const repo = String(task?.repo || "").trim();
       const baseBranch = String(task?.base_branch || "").trim();
       const skill = String(task?.skill || "").trim();
-      if (!prompt && !repos && !repo && !baseBranch && !skill) {
+      if (!prompt && !repos && !repo && !reviewers && !baseBranch && !skill) {
         return String(task?.request_id || "").trim();
       }
-      return [skill, repos || repo, baseBranch, prompt].join("::");
+      return [skill, repos || repo, reviewers, baseBranch, prompt].join("::");
     }
 
     function preferCompletedHistoryTask(current, next) {

@@ -22,6 +22,7 @@ func DedupeKey(cfg Config) string {
 		Repos        []string             `json:"repos"`
 		BaseBranch   string               `json:"baseBranch"`
 		TargetSubdir string               `json:"targetSubdir"`
+		Reviewers    []string             `json:"reviewers,omitempty"`
 		Review       *reviewDedupePayload `json:"review,omitempty"`
 		AgentHarness string               `json:"agentHarness,omitempty"`
 		AgentCommand string               `json:"agentCommand,omitempty"`
@@ -30,6 +31,7 @@ func DedupeKey(cfg Config) string {
 		Repos:        repos,
 		BaseBranch:   baseBranch,
 		TargetSubdir: targetSubdir,
+		Reviewers:    normalizeReviewerListForDeduper(mergeReviewers(cfg.Reviewers, cfg.GitHubHandle)),
 		Review:       reviewDedupePayloadForDeduper(cfg.Review),
 		AgentHarness: strings.ToLower(strings.TrimSpace(cfg.AgentHarness)),
 		AgentCommand: strings.TrimSpace(cfg.AgentCommand),
@@ -44,9 +46,10 @@ func DedupeKey(cfg Config) string {
 }
 
 type reviewDedupePayload struct {
-	PRNumber   int    `json:"prNumber,omitempty"`
-	PRURL      string `json:"prUrl,omitempty"`
-	HeadBranch string `json:"headBranch,omitempty"`
+	PRNumber          int    `json:"prNumber,omitempty"`
+	PRURL             string `json:"prUrl,omitempty"`
+	HeadBranch        string `json:"headBranch,omitempty"`
+	RequestedReviewer string `json:"requestedReviewer,omitempty"`
 }
 
 func reviewDedupePayloadForDeduper(review *ReviewConfig) *reviewDedupePayload {
@@ -57,8 +60,11 @@ func reviewDedupePayloadForDeduper(review *ReviewConfig) *reviewDedupePayload {
 		PRNumber:   review.PRNumber,
 		PRURL:      strings.TrimSpace(review.PRURL),
 		HeadBranch: normalizeBranchRefForDeduper(review.HeadBranch),
+		RequestedReviewer: firstReviewerForDeduper([]string{
+			review.RequestedReviewer,
+		}),
 	}
-	if payload.PRNumber <= 0 && payload.PRURL == "" && payload.HeadBranch == "" {
+	if payload.PRNumber <= 0 && payload.PRURL == "" && payload.HeadBranch == "" && payload.RequestedReviewer == "" {
 		return nil
 	}
 	return payload
@@ -85,6 +91,38 @@ func normalizeRepoListForDeduper(repos []string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func normalizeReviewerListForDeduper(reviewers []string) []string {
+	if len(reviewers) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(reviewers))
+	seen := make(map[string]struct{}, len(reviewers))
+	for _, reviewer := range reviewers {
+		normalized := strings.ToLower(normalizeReviewer(reviewer))
+		if normalized == "" {
+			continue
+		}
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		out = append(out, normalized)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	sort.Strings(out)
+	return out
+}
+
+func firstReviewerForDeduper(reviewers []string) string {
+	normalized := normalizeReviewerListForDeduper(reviewers)
+	if len(normalized) == 0 {
+		return ""
+	}
+	return normalized[0]
 }
 
 func normalizeTargetSubdirForDeduper(subdir string) string {

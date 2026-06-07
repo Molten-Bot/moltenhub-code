@@ -1077,6 +1077,10 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, "return [...running, ...completed];") {
 		t.Fatalf("expected index html history filter to include current work plus deduped completed task history")
 	}
+	if !strings.Contains(markup, "const reviewers = Array.isArray(task?.reviewers)") ||
+		!strings.Contains(markup, "return [skill, repos || repo, reviewers, baseBranch, prompt].join(\"::\");") {
+		t.Fatalf("expected completed task history dedupe key to include reviewers")
+	}
 	if !strings.Contains(markup, "function removedTasks(snapshot)") ||
 		!strings.Contains(markup, "state.dismissedTaskIDs.has(requestID)") ||
 		!strings.Contains(markup, "return removedTasks(snapshot);") {

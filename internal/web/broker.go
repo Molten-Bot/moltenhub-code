@@ -74,6 +74,7 @@ type Task struct {
 	AgentHarness      string        `json:"agent_harness,omitempty"`
 	Repo              string        `json:"repo,omitempty"`
 	Repos             []string      `json:"repos,omitempty"`
+	Reviewers         []string      `json:"reviewers,omitempty"`
 	BaseBranch        string        `json:"base_branch,omitempty"`
 	Status            string        `json:"status"`
 	Stage             string        `json:"stage,omitempty"`
@@ -295,6 +296,7 @@ type taskState struct {
 	AgentHarness      string
 	Repo              string
 	Repos             []string
+	Reviewers         []string
 	BaseBranch        string
 	Status            string
 	Stage             string
@@ -458,6 +460,7 @@ func (b *Broker) Snapshot() Snapshot {
 			AgentHarness:      taskAgentHarness(t),
 			Repo:              t.Repo,
 			Repos:             append([]string(nil), t.Repos...),
+			Reviewers:         append([]string(nil), t.Reviewers...),
 			BaseBranch:        t.BaseBranch,
 			Status:            status,
 			Stage:             t.Stage,
@@ -517,6 +520,7 @@ func (b *Broker) Task(requestID string) (Task, bool) {
 		AgentHarness:      taskAgentHarness(t),
 		Repo:              t.Repo,
 		Repos:             append([]string(nil), t.Repos...),
+		Reviewers:         append([]string(nil), t.Reviewers...),
 		BaseBranch:        t.BaseBranch,
 		Status:            status,
 		Stage:             t.Stage,
@@ -555,6 +559,7 @@ func (b *Broker) RecordTaskRunConfigWithSource(requestID string, runConfigJSON [
 	images := imagesFromRunConfigJSON(cfgCopy)
 	baseBranch := branchFromRunConfigJSON(cfgCopy)
 	repos := reposFromRunConfigJSON(cfgCopy)
+	reviewers := reviewersFromRunConfigJSON(cfgCopy)
 	workflow := workflowFromRunConfigJSON(cfgCopy)
 	agentHarness := agentHarnessFromRunConfigJSON(cfgCopy)
 	source = firstNonEmpty(
@@ -593,6 +598,7 @@ func (b *Broker) RecordTaskRunConfigWithSource(requestID string, runConfigJSON [
 			AgentHarness:      agentHarness,
 			Repo:              firstRepo(repos),
 			Repos:             append([]string(nil), repos...),
+			Reviewers:         append([]string(nil), reviewers...),
 			BaseBranch:        baseBranch,
 			Branch:            baseBranch,
 			Status:            "pending",
@@ -644,6 +650,10 @@ func (b *Broker) RecordTaskRunConfigWithSource(requestID string, runConfigJSON [
 			t.Repo = repo
 			changed = true
 		}
+	}
+	if t != nil && !sameStringSlice(t.Reviewers, reviewers) {
+		t.Reviewers = append([]string(nil), reviewers...)
+		changed = true
 	}
 	if baseBranch != "" {
 		if t != nil {
@@ -713,6 +723,7 @@ func (b *Broker) RecordRejectedPromptSubmissionWithSource(runConfigJSON []byte, 
 	baseBranch := branchFromRunConfigJSON(runConfigJSON)
 	prompt := promptFromRunConfigJSON(runConfigJSON)
 	images := imagesFromRunConfigJSON(runConfigJSON)
+	reviewers := reviewersFromRunConfigJSON(runConfigJSON)
 	workflow := workflowFromRunConfigJSON(runConfigJSON)
 	agentHarness := agentHarnessFromRunConfigJSON(runConfigJSON)
 	errText := strings.TrimSpace(errorText(err))
@@ -736,6 +747,7 @@ func (b *Broker) RecordRejectedPromptSubmissionWithSource(runConfigJSON []byte, 
 		AgentHarness:      agentHarness,
 		Repo:              firstRepo(repos),
 		Repos:             append([]string(nil), repos...),
+		Reviewers:         append([]string(nil), reviewers...),
 		BaseBranch:        baseBranch,
 		Status:            status,
 		Branch:            baseBranch,
@@ -1632,6 +1644,9 @@ func (b *Broker) ensureTaskLocked(requestID string, now time.Time) *taskState {
 		if existing.AgentHarness == "" {
 			existing.AgentHarness = agentHarnessFromRunConfigJSON(b.runConfigs[requestID])
 		}
+		if len(existing.Reviewers) == 0 {
+			existing.Reviewers = reviewersFromRunConfigJSON(b.runConfigs[requestID])
+		}
 		if existing.Source == "" {
 			existing.Source = firstNonEmpty(sourceFromRunConfigJSON(b.runConfigs[requestID]), defaultTaskSourceForRequestID(requestID))
 		}
@@ -1656,6 +1671,7 @@ func (b *Broker) ensureTaskLocked(requestID string, now time.Time) *taskState {
 		Images:            images,
 		Workflow:          workflowFromRunConfigJSON(b.runConfigs[requestID]),
 		AgentHarness:      agentHarnessFromRunConfigJSON(b.runConfigs[requestID]),
+		Reviewers:         reviewersFromRunConfigJSON(b.runConfigs[requestID]),
 		BaseBranch:        b.taskBaseBranchLocked(requestID),
 		Branch:            b.taskInitialBranchLocked(requestID),
 		Status:            "pending",
@@ -2623,6 +2639,42 @@ func reposFromRunConfigJSON(runConfigJSON []byte) []string {
 		return nil
 	}
 	return appendNonEmptyUnique(nil, append([]string{raw.Repo, raw.RepoURL}, raw.Repos...)...)
+}
+
+func reviewersFromRunConfigJSON(runConfigJSON []byte) []string {
+	if len(runConfigJSON) == 0 {
+		return nil
+	}
+	var raw struct {
+		GitHubHandle      string   `json:"githubHandle"`
+		GitHubHandleLower string   `json:"githubhandle"`
+		Reviewers         []string `json:"reviewers"`
+	}
+	if err := json.Unmarshal(runConfigJSON, &raw); err != nil {
+		return nil
+	}
+	return appendReviewerValues(nil, append(raw.Reviewers, raw.GitHubHandle, raw.GitHubHandleLower)...)
+}
+
+func appendReviewerValues(values []string, candidates ...string) []string {
+	seen := make(map[string]struct{}, len(values)+len(candidates))
+	out := make([]string, 0, len(values)+len(candidates))
+	for _, value := range append(values, candidates...) {
+		normalized := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(value), "@"))
+		if normalized == "" || strings.EqualFold(normalized, "none") {
+			continue
+		}
+		key := strings.ToLower(normalized)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, normalized)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func branchFromRunConfigJSON(runConfigJSON []byte) string {

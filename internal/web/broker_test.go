@@ -991,6 +991,23 @@ func TestBrokerTaskRunConfigSupportsRerunMetadata(t *testing.T) {
 	}
 }
 
+func TestBrokerTaskRunConfigExposesReviewers(t *testing.T) {
+	t.Parallel()
+
+	b := NewBroker()
+	requestID := "req-reviewer"
+	b.RecordTaskRunConfig(requestID, []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"fix tests","reviewers":["@OctoCat","none","octocat","hubot"],"githubHandle":"Hubot"}`))
+
+	task, ok := b.Task(requestID)
+	if !ok {
+		t.Fatal("Task() found = false, want true")
+	}
+	want := []string{"OctoCat", "hubot"}
+	if !sameStringSlice(task.Reviewers, want) {
+		t.Fatalf("Task.Reviewers = %#v, want %#v", task.Reviewers, want)
+	}
+}
+
 func TestBrokerRecordTaskRunConfigCreatesPendingTaskAndNotifies(t *testing.T) {
 	t.Parallel()
 
