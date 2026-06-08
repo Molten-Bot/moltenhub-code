@@ -2464,6 +2464,64 @@ func TestRunNonMainBranchNoChangesReportsExistingPR(t *testing.T) {
 	}
 }
 
+func TestRunExistingPRNoChangesFailsWhenPRLookupFails(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.BaseBranch = "moltenhub-existing-pr"
+	cfg.Prompt = strings.Join([]string{
+		"Update the existing pull request to address review feedback.",
+		"Pull request:",
+		"- Head branch to update: moltenhub-existing-pr",
+		"- Base branch: main",
+	}, "\n")
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	lookupRes := execx.Result{Stderr: "HTTP 401: Bad credentials (https://api.github.com/graphql)\nTry authenticating with:  gh auth login\n"}
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: fetchBaseBranchCommand(repoDir, cfg.BaseBranch)},
+		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
+		{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: "1111111111111111111111111111111111111111\n"}},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "\n"}},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "abc123\trefs/heads/" + cfg.BaseBranch + "\n"}},
+		{cmd: prLookupByHeadCommand(repoDir, cfg.BaseBranch), res: lookupRes, err: errors.New("exit status 1")},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err == nil {
+		t.Fatal("Run() err = nil, want PR lookup failure")
+	}
+	if res.ExitCode != ExitPR {
+		t.Fatalf("ExitCode = %d, want %d", res.ExitCode, ExitPR)
+	}
+	if res.NoChanges {
+		t.Fatal("NoChanges = true, want false")
+	}
+	if !strings.Contains(res.Err.Error(), "verify existing pull request") ||
+		!strings.Contains(res.Err.Error(), "Bad credentials") {
+		t.Fatalf("Run() err = %v, want PR verification auth detail", res.Err)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
 func TestRunFailedChecksTriggersCodexRemediation(t *testing.T) {
 	t.Parallel()
 

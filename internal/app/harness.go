@@ -418,7 +418,9 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 				runDir,
 			)
 		}
-		h.populateNoChangePRURLs(ctx, repos)
+		if err := h.populateNoChangePRURLs(ctx, repos, requiresVerifiedNoChangePRURL(cfg.Prompt)); err != nil {
+			return h.failWithRepos(ExitPR, "pr", err, runDir, repos)
+		}
 		h.logf("stage=git status=no_changes")
 		res := buildResult(runDir, repos, true)
 		res.NoChangeEvidence = agentOutputCitesConcreteNoChangeEvidence(agentRes)
@@ -454,7 +456,9 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		}
 	}
 	if changedCount == 0 {
-		h.populateNoChangePRURLs(ctx, repos)
+		if err := h.populateNoChangePRURLs(ctx, repos, requiresVerifiedNoChangePRURL(cfg.Prompt)); err != nil {
+			return h.failWithRepos(ExitPR, "pr", err, runDir, repos)
+		}
 		h.logf("stage=git status=no_changes")
 		res := buildResult(runDir, repos, true)
 		res.ExitCode = ExitSuccess
@@ -1672,7 +1676,7 @@ func repoPRTargetRepo(repo repoWorkspace) string {
 	return strings.TrimSpace(repo.PRTargetRepo)
 }
 
-func (h Harness) populateNoChangePRURLs(ctx context.Context, repos []repoWorkspace) {
+func (h Harness) populateNoChangePRURLs(ctx context.Context, repos []repoWorkspace, requirePRURL bool) error {
 	for i := range repos {
 		prURL, err := h.lookupOpenPRURLByHead(ctx, repos[i])
 		if err != nil {
@@ -1683,6 +1687,9 @@ func (h Harness) populateNoChangePRURLs(ctx context.Context, repos []repoWorkspa
 				repos[i].Branch,
 				err,
 			)
+			if requirePRURL {
+				return fmt.Errorf("verify existing pull request for unchanged repo %s branch %q: %w", repos[i].URL, repos[i].Branch, err)
+			}
 			continue
 		}
 		if prURL == "" {
@@ -1695,10 +1702,16 @@ func (h Harness) populateNoChangePRURLs(ctx context.Context, repos []repoWorkspa
 					repos[i].Branch,
 					err,
 				)
+				if requirePRURL {
+					return fmt.Errorf("verify any pull request for unchanged repo %s branch %q: %w", repos[i].URL, repos[i].Branch, err)
+				}
 				continue
 			}
 		}
 		if prURL == "" {
+			if requirePRURL {
+				return fmt.Errorf("no pull request found for unchanged repo %s branch %q", repos[i].URL, repos[i].Branch)
+			}
 			continue
 		}
 		repos[i].PRURL = prURL
@@ -1710,6 +1723,7 @@ func (h Harness) populateNoChangePRURLs(ctx context.Context, repos []repoWorkspa
 			repos[i].PRURL,
 		)
 	}
+	return nil
 }
 
 func (h Harness) createPullRequestURL(
@@ -1831,7 +1845,12 @@ func (h Harness) lookupOpenPRURLByHead(ctx context.Context, repo repoWorkspace) 
 
 	lookupRes, err := h.runCommand(ctx, "pr", prLookupByHeadWithRepoCommand(repo.Dir, headRef, repoPRTargetRepo(repo)))
 	if err != nil {
-		return "", err
+		return "", commandErrorWithDetails(
+			fmt.Sprintf("lookup open pull request for repo %s branch %q", repo.URL, headRef),
+			err,
+			lookupRes,
+			maxGitErrorDetailChars,
+		)
 	}
 	if prURL := parsePRURLFromLookupOutput(lookupRes.Stdout); prURL != "" {
 		return prURL, nil
@@ -1847,7 +1866,12 @@ func (h Harness) lookupAnyPRURLByHead(ctx context.Context, repo repoWorkspace) (
 
 	lookupRes, err := h.runCommand(ctx, "pr", prLookupAnyByHeadWithRepoCommand(repo.Dir, headRef, repoPRTargetRepo(repo)))
 	if err != nil {
-		return "", err
+		return "", commandErrorWithDetails(
+			fmt.Sprintf("lookup any pull request for repo %s branch %q", repo.URL, headRef),
+			err,
+			lookupRes,
+			maxGitErrorDetailChars,
+		)
 	}
 	if prURL := parsePRURLFromLookupOutput(lookupRes.Stdout); prURL != "" {
 		return prURL, nil
@@ -3915,6 +3939,19 @@ func requiresConcreteNoChangeEvidence(prompt string) bool {
 	return strings.Contains(text, "fix the underlying moltenhub code application issue") &&
 		strings.Contains(text, "only return a no-op") &&
 		(strings.Contains(text, "no-change") || strings.Contains(text, "failed task"))
+}
+
+func requiresVerifiedNoChangePRURL(prompt string) bool {
+	text := strings.ToLower(strings.TrimSpace(prompt))
+	if text == "" {
+		return false
+	}
+	if strings.Contains(text, "existing pull request") ||
+		strings.Contains(text, "same pr branch") ||
+		strings.Contains(text, "head branch to update") {
+		return true
+	}
+	return strings.Contains(text, "pull request:") && strings.Contains(text, "head branch")
 }
 
 func agentOutputCitesConcreteNoChangeEvidence(res execx.Result) bool {
