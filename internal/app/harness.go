@@ -3540,6 +3540,13 @@ func isPRCreatePermissionDenied(res execx.Result, err error) bool {
 		return false
 	}
 	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
+	if strings.Contains(text, "requires authentication") ||
+		strings.Contains(text, "try authenticating with") ||
+		strings.Contains(text, "gh auth login") ||
+		strings.Contains(text, "bad credentials") ||
+		strings.Contains(text, "http 401") {
+		return true
+	}
 	if !strings.Contains(text, "createpullrequest") {
 		return false
 	}
