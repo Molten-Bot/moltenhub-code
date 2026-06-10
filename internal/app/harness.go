@@ -81,6 +81,7 @@ type logFn func(string, ...any)
 var authSetupGitMu sync.Mutex
 
 var errPRCreatePermissionDenied = errors.New("pull request create permission denied")
+var errPRCreateAuthRequired = errors.New("pull request create authentication required")
 var errTransientPRLookup = errors.New("transient pull request lookup failure")
 var errPRChecksWatchTimeout = errors.New("pull request checks watch timed out")
 
@@ -572,6 +573,18 @@ func (h Harness) processChangedRepo(
 			if errors.Is(err, errPRCreatePermissionDenied) {
 				h.logf(
 					"stage=pr status=warn action=manual_create_required reason=create_pull_request_permission_denied repo=%s repo_dir=%s branch=%s head=%s target_repo=%s err=%q",
+					repo.URL,
+					repo.RelDir,
+					repo.Branch,
+					headRef,
+					targetRepo,
+					err,
+				)
+				return ExitSuccess, "", nil
+			}
+			if errors.Is(err, errPRCreateAuthRequired) {
+				h.logf(
+					"stage=pr status=warn action=manual_create_required reason=create_pull_request_auth_required repo=%s repo_dir=%s branch=%s head=%s target_repo=%s err=%q",
 					repo.URL,
 					repo.RelDir,
 					repo.Branch,
@@ -1783,6 +1796,9 @@ func (h Harness) createPullRequestURL(
 			}
 
 			if !retryable || attempt >= maxPRCreateAttempts {
+				if isPRCreateAuthRequired(prRes, err) {
+					return "", fmt.Errorf("%w: %v", errPRCreateAuthRequired, err)
+				}
 				if isPRCreatePermissionDenied(prRes, err) {
 					return "", fmt.Errorf("%w: %v", errPRCreatePermissionDenied, err)
 				}
@@ -3547,6 +3563,17 @@ func isPRCreatePermissionDenied(res execx.Result, err error) bool {
 		strings.Contains(text, "resource not accessible by integration") ||
 		strings.Contains(text, "permission") ||
 		strings.Contains(text, "forbidden")
+}
+
+func isPRCreateAuthRequired(res execx.Result, err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
+	return strings.Contains(text, "http 401") ||
+		strings.Contains(text, "requires authentication") ||
+		strings.Contains(text, "try authenticating with") ||
+		strings.Contains(text, "bad credentials")
 }
 
 func shouldRetryPRCreate(res execx.Result, err error) bool {

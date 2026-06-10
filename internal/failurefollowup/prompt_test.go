@@ -254,3 +254,12 @@ func TestNonRemediableRepoAccessReasonDetectsWorkflowScopeRejection(t *testing.T
 		t.Fatalf("NonRemediableRepoAccessReason() = %q", got)
 	}
 }
+
+func TestNonRemediableRepoAccessReasonDetectsGitHubAuthRequired(t *testing.T) {
+	t.Parallel()
+
+	err := errors.New("pr: run gh [pr create]: exit status 1 (HTTP 401: Requires authentication (https://api.github.com/graphql) | Try authenticating with: gh auth login)")
+	if got := NonRemediableRepoAccessReason(err); got != "requires authentication" {
+		t.Fatalf("NonRemediableRepoAccessReason() = %q", got)
+	}
+}
