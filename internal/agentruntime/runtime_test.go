@@ -157,6 +157,7 @@ func TestBuildCommandCodex(t *testing.T) {
 		SkipGitRepoCheck: true,
 		ImagePaths:       []string{"a.png", "  ", "b.png"},
 		WritableDirs:     []string{"/tmp/run", "  "},
+		Env:              []string{"GH_CONFIG_DIR=/tmp/gh"},
 	})
 	if err != nil {
 		t.Fatalf("BuildCommand() error = %v", err)
@@ -173,6 +174,9 @@ func TestBuildCommandCodex(t *testing.T) {
 	wantArgs := []string{"exec", "--sandbox", "workspace-write", "--skip-git-repo-check", "--add-dir", "/tmp/run", "--image", "a.png", "--image", "b.png"}
 	if !reflect.DeepEqual(cmd.Args, wantArgs) {
 		t.Fatalf("Args = %#v, want %#v", cmd.Args, wantArgs)
+	}
+	if got, want := cmd.Env, []string{"GH_CONFIG_DIR=/tmp/gh"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Env = %#v, want %#v", got, want)
 	}
 }
 

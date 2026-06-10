@@ -345,6 +345,9 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		codexBasePrompt = reviewPrompt
 		reviewContext = preparedContext
 	}
+	if reviewContext != nil && reviewContext.GitHubTokenEnvSanitized {
+		codexOpts.Env = githubTokenSanitizedEnv()
+	}
 	codexBasePrompt = withBackpressurePrompt(codexBasePrompt, h.collectBackpressureRequirements(repos, cfg.TargetSubdir))
 	codexTargetLabel := codexTargetLabel(cfg.TargetSubdir, len(repos) > 1)
 	initialRepo, initialRepoDir := initialAgentInvocationRepoMetadata(repos)
@@ -2597,9 +2600,10 @@ type reviewPRMetadata struct {
 }
 
 type preparedReviewContext struct {
-	Selector string
-	Metadata reviewPRMetadata
-	Prompt   string
+	Selector                string
+	Metadata                reviewPRMetadata
+	Prompt                  string
+	GitHubTokenEnvSanitized bool
 }
 
 func (h Harness) buildReviewPromptContext(
@@ -2612,9 +2616,21 @@ func (h Harness) buildReviewPromptContext(
 		return nil, fmt.Errorf("review selector is required")
 	}
 
-	metaRes, err := h.runCommand(ctx, "review", prReviewMetadataCommand(repo.Dir, selector))
+	metadataCmd := prReviewMetadataCommand(repo.Dir, selector)
+	metaRes, err := h.runCommand(ctx, "review", metadataCmd)
+	gitHubTokenEnvSanitized := false
 	if err != nil {
-		return nil, fmt.Errorf("load pull request metadata: %w", err)
+		if !isGitHubUnauthorizedError(err) {
+			return nil, fmt.Errorf("load pull request metadata: %w", err)
+		}
+		retryCmd := commandWithoutGitHubTokenEnv(metadataCmd)
+		retryRes, retryErr := h.runCommand(ctx, "review", retryCmd)
+		if retryErr != nil {
+			return nil, fmt.Errorf("load pull request metadata: %w (retry without GH_TOKEN/GITHUB_TOKEN: %v)", err, retryErr)
+		}
+		h.logf("stage=review status=warn action=retry_without_env_github_token reason=github_auth_unauthorized repo=%s repo_dir=%s", repo.URL, repo.RelDir)
+		metaRes = retryRes
+		gitHubTokenEnvSanitized = true
 	}
 
 	var metadata reviewPRMetadata
@@ -2635,7 +2651,7 @@ func (h Harness) buildReviewPromptContext(
 		return nil, fmt.Errorf("fetch pull request head for #%d: %w", metadata.Number, err)
 	}
 
-	discussionText := h.loadPullRequestDiscussion(ctx, repo.Dir, metadata.Number)
+	discussionText := h.loadPullRequestDiscussion(ctx, repo.Dir, metadata.Number, gitHubTokenEnvSanitized)
 
 	baseRef := remoteTrackingRef(metadata.BaseRefName)
 	headRef := pullRequestTrackingRef(metadata.Number)
@@ -2683,13 +2699,14 @@ func (h Harness) buildReviewPromptContext(
 	b.WriteString(truncateForPrompt(nonEmptyOrDefault(diffPatchRes.Stdout, "No diff patch output was returned by git diff."), maxReviewDiffPatchChars))
 	b.WriteString("\n```")
 	return &preparedReviewContext{
-		Selector: selector,
-		Metadata: metadata,
-		Prompt:   strings.TrimSpace(b.String()),
+		Selector:                selector,
+		Metadata:                metadata,
+		Prompt:                  strings.TrimSpace(b.String()),
+		GitHubTokenEnvSanitized: gitHubTokenEnvSanitized,
 	}, nil
 }
 
-func (h Harness) loadPullRequestDiscussion(ctx context.Context, repoDir string, number int) string {
+func (h Harness) loadPullRequestDiscussion(ctx context.Context, repoDir string, number int, sanitizeGitHubTokenEnv bool) string {
 	if number <= 0 {
 		return "Pull-request discussion unavailable: invalid pull request number."
 	}
@@ -2708,7 +2725,11 @@ func (h Harness) loadPullRequestDiscussion(ctx context.Context, repoDir string, 
 		}
 		b.WriteString(section.title)
 		b.WriteString(":\n")
-		res, err := h.runCommand(ctx, "review", section.cmd)
+		cmd := section.cmd
+		if sanitizeGitHubTokenEnv {
+			cmd = commandWithoutGitHubTokenEnv(cmd)
+		}
+		res, err := h.runCommand(ctx, "review", cmd)
 		if err != nil {
 			b.WriteString("Unavailable: ")
 			b.WriteString(err.Error())
@@ -2778,14 +2799,14 @@ func (h Harness) completeReviewRun(
 			return fmt.Errorf("write review summary body: %w", err)
 		}
 		h.logf("stage=review status=start action=comment pr_url=%s", prURL)
-		if err := h.postReviewSummary(ctx, repo.Dir, writebackSelector, writebackRepo, metadata.Number, bodyPath, prURL); err != nil {
+		if err := h.postReviewSummary(ctx, repo.Dir, writebackSelector, writebackRepo, metadata.Number, bodyPath, prURL, reviewContext != nil && reviewContext.GitHubTokenEnvSanitized); err != nil {
 			return fmt.Errorf("post pull request review summary: %w", err)
 		}
 		h.logf("stage=review status=ok action=comment pr_url=%s", prURL)
 	}
 
 	if cfg.Review.AutoMerge {
-		if err := h.autoMergeCleanReview(ctx, *repo, writebackSelector, writebackRepo, cfg.Review.MergeMethod, metadata, outcome); err != nil {
+		if err := h.autoMergeCleanReview(ctx, *repo, writebackSelector, writebackRepo, cfg.Review.MergeMethod, metadata, outcome, reviewContext != nil && reviewContext.GitHubTokenEnvSanitized); err != nil {
 			return err
 		}
 	}
@@ -2811,12 +2832,21 @@ func (h Harness) postReviewSummary(
 	prNumber int,
 	bodyPath string,
 	prURL string,
+	sanitizeGitHubTokenEnv bool,
 ) error {
-	if _, err := h.runCommand(ctx, "review", prReviewSummaryCommand(repoDir, selector, targetRepo, bodyPath)); err == nil {
+	cmd := prReviewSummaryCommand(repoDir, selector, targetRepo, bodyPath)
+	if sanitizeGitHubTokenEnv {
+		cmd = commandWithoutGitHubTokenEnv(cmd)
+	}
+	if _, err := h.runCommand(ctx, "review", cmd); err == nil {
 		return nil
 	} else {
 		h.logf("stage=review status=warn action=comment_review_failed pr_url=%s err=%q", prURL, err)
-		if _, fallbackErr := h.runCommand(ctx, "review", prReviewSummaryFallbackCommand(repoDir, selector, targetRepo, prNumber, bodyPath)); fallbackErr != nil {
+		fallbackCmd := prReviewSummaryFallbackCommand(repoDir, selector, targetRepo, prNumber, bodyPath)
+		if sanitizeGitHubTokenEnv {
+			fallbackCmd = commandWithoutGitHubTokenEnv(fallbackCmd)
+		}
+		if _, fallbackErr := h.runCommand(ctx, "review", fallbackCmd); fallbackErr != nil {
 			return fmt.Errorf("review command failed: %w; fallback pull request comment failed: %v", err, fallbackErr)
 		}
 	}
@@ -2832,6 +2862,7 @@ func (h Harness) autoMergeCleanReview(
 	mergeMethod string,
 	metadata reviewPRMetadata,
 	outcome reviewOutcome,
+	sanitizeGitHubTokenEnv bool,
 ) error {
 	if !reviewOutcomeAllowsAutoMerge(outcome) {
 		h.logf("stage=review status=skip action=auto_merge reason=review_not_clean pr_url=%s status=%s", metadata.URL, outcome.Status)
@@ -2853,7 +2884,11 @@ func (h Harness) autoMergeCleanReview(
 
 	method := reviewMergeMethod(mergeMethod)
 	h.logf("stage=review status=start action=auto_merge method=%s pr_url=%s", method, metadata.URL)
-	if _, err := h.runCommand(ctx, "review", prMergeAutoCommand(repo.Dir, selector, targetRepo, method, headRefOID)); err != nil {
+	cmd := prMergeAutoCommand(repo.Dir, selector, targetRepo, method, headRefOID)
+	if sanitizeGitHubTokenEnv {
+		cmd = commandWithoutGitHubTokenEnv(cmd)
+	}
+	if _, err := h.runCommand(ctx, "review", cmd); err != nil {
 		if isAutoMergeUnsupportedError(err) {
 			h.logf("stage=review status=skip action=auto_merge reason=unsupported_or_unconfigured pr_url=%s err=%q", metadata.URL, err)
 			return nil
@@ -5088,6 +5123,50 @@ func isGitConfigLockContentionError(err error) bool {
 
 func hasGitHubAuthToken() bool {
 	return strings.TrimSpace(os.Getenv("GH_TOKEN")) != "" || strings.TrimSpace(os.Getenv("GITHUB_TOKEN")) != ""
+}
+
+func isGitHubUnauthorizedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "http 401") ||
+		strings.Contains(text, "requires authentication") ||
+		strings.Contains(text, "bad credentials")
+}
+
+func commandWithoutGitHubTokenEnv(cmd execx.Command) execx.Command {
+	cmd.Env = githubTokenSanitizedEnv()
+	return cmd
+}
+
+func githubTokenSanitizedEnv() []string {
+	return environWithoutKeys(os.Environ(), "GH_TOKEN", "GITHUB_TOKEN")
+}
+
+func environWithoutKeys(environ []string, keys ...string) []string {
+	if len(environ) == 0 || len(keys) == 0 {
+		return append([]string(nil), environ...)
+	}
+	blocked := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		key = strings.TrimSpace(key)
+		if key != "" {
+			blocked[key] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(environ))
+	for _, entry := range environ {
+		name, _, ok := strings.Cut(entry, "=")
+		if !ok {
+			name = entry
+		}
+		if _, skip := blocked[name]; skip {
+			continue
+		}
+		out = append(out, entry)
+	}
+	return out
 }
 
 func shouldSetupGitHubAuthForRepos(repoURLs []string) bool {
