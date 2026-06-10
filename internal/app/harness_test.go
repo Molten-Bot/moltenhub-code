@@ -17,6 +17,7 @@ import (
 	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
+	"github.com/Molten-Bot/moltenhub-code/internal/failurefollowup"
 	"github.com/Molten-Bot/moltenhub-code/internal/slug"
 	"github.com/Molten-Bot/moltenhub-code/internal/workspace"
 )
@@ -4179,6 +4180,70 @@ func TestRunEmptyBaseBranchClonesRemoteDefaultAndCreatesNewBranch(t *testing.T) 
 		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
 		{cmd: pushCommand(repoDir, branch)},
 		{cmd: prCreateWithOptionsCommand(repoDir, cfg, "master", branch, ""), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL)},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if res.ExitCode != ExitSuccess {
+		t.Fatalf("ExitCode = %d", res.ExitCode)
+	}
+	if got, want := res.Branch, branch; got != want {
+		t.Fatalf("Branch = %q, want %q", got, want)
+	}
+	if got, want := res.PRURL, prURL; got != want {
+		t.Fatalf("PRURL = %q, want %q", got, want)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunFailureFollowUpIgnoresStaleBranchAndTargetsDefaultRoot(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	cfg.RepoURL = "https://github.com/Molten-Bot/moltenhub-code.git"
+	cfg.BaseBranch = "client-logo-theme"
+	cfg.TargetSubdir = "internal/web"
+	cfg.Prompt = failurefollowup.RequiredPrompt
+
+	now := time.Date(2026, 6, 10, 19, 53, 52, 0, time.UTC)
+	guid := "3fcc0c7fb94ab58bf6c1fe88ef400f67"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := repoDir
+	branch := slug.BranchName(cfg.Prompt, now, guid)
+	prURL := "https://github.com/Molten-Bot/moltenhub-code/pull/116"
+	sanitizedCfg := cfg
+	sanitizedCfg.BaseBranch = "main"
+	sanitizedCfg.TargetSubdir = "."
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "setup-git"}}},
+		{cmd: cloneRepoDefaultBranchCommand(cfg.RepoURL, repoDir)},
+		{cmd: currentBranchCommand(repoDir), res: execx.Result{Stdout: "main\n"}},
+		{cmd: headCommitSHACommand(repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: " M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: pushCommand(repoDir, branch)},
+		{cmd: prCreateCommand(repoDir, sanitizedCfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
 		{cmd: prChecksCommand(repoDir, prURL)},
 	}}
 

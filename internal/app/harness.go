@@ -179,6 +179,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		return h.fail(ExitUsage, "usage", fmt.Errorf("runner is required"), "")
 	}
 	cfg.ApplyDefaults()
+	normalizeFailureFollowUpTargeting(&cfg)
 	if err := cfg.Validate(); err != nil {
 		return h.fail(ExitConfig, "config", err, "")
 	}
@@ -3758,6 +3759,37 @@ func parseGitHubRepoRef(repoURL string) (gitHubRepoRef, bool) {
 		urlStyle:     true,
 		urlValue:     *parsed,
 	}, true
+}
+
+func normalizeFailureFollowUpTargeting(cfg *config.Config) {
+	if cfg == nil {
+		return
+	}
+	if !isMoltenHubFailureFollowUpConfig(*cfg) {
+		return
+	}
+	cfg.BaseBranch = ""
+	cfg.TargetSubdir = "."
+}
+
+func isMoltenHubFailureFollowUpConfig(cfg config.Config) bool {
+	if !strings.Contains(cfg.Prompt, failurefollowup.RequiredPrompt) {
+		return false
+	}
+	for _, repoURL := range cfg.RepoList() {
+		if isMoltenHubCodeRepository(repoURL) {
+			return true
+		}
+	}
+	return false
+}
+
+func isMoltenHubCodeRepository(repoURL string) bool {
+	ref, ok := parseGitHubRepoRef(repoURL)
+	if !ok {
+		return false
+	}
+	return strings.EqualFold(ref.owner, "Molten-Bot") && strings.EqualFold(ref.name, "moltenhub-code")
 }
 
 func isGitHubSSHRemoteURL(rawURL string) bool {
