@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -14,6 +15,9 @@ type Command struct {
 	Dir  string
 	Name string
 	Args []string
+	// Env optionally replaces the subprocess environment. When empty, the
+	// subprocess inherits the current process environment.
+	Env []string
 	// Stdin is optional input piped to the command's stdin.
 	Stdin string
 }
@@ -58,6 +62,11 @@ func runWithStream(ctx context.Context, cmd Command, handler StreamLineHandler) 
 	configureCommandProcessGroup(c)
 	if cmd.Dir != "" {
 		c.Dir = cmd.Dir
+	}
+	if len(cmd.Env) > 0 {
+		c.Env = append([]string(nil), cmd.Env...)
+	} else {
+		c.Env = os.Environ()
 	}
 	if cmd.Stdin != "" {
 		c.Stdin = strings.NewReader(cmd.Stdin)

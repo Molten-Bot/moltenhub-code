@@ -32,6 +32,7 @@ type RunOptions struct {
 	SkipGitRepoCheck bool
 	ImagePaths       []string
 	WritableDirs     []string
+	Env              []string
 }
 
 // Runtime describes one executable LLM harness runtime.
@@ -206,6 +207,7 @@ func buildCodexCommand(targetDir, prompt string, opts RunOptions) (execx.Command
 	return execx.Command{
 		Dir:   targetDir,
 		Args:  args,
+		Env:   append([]string(nil), opts.Env...),
 		Stdin: prompt,
 	}, nil
 }
@@ -221,7 +223,7 @@ func buildClaudeCommand(targetDir, prompt string, opts RunOptions) (execx.Comman
 		"--dangerously-skip-permissions",
 		prompt,
 	}
-	return execx.Command{Dir: targetDir, Args: args}, nil
+	return execx.Command{Dir: targetDir, Args: args, Env: append([]string(nil), opts.Env...)}, nil
 }
 
 func countNonEmptyStrings(values []string) int {

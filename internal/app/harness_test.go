@@ -99,6 +99,16 @@ func commandsEqual(a, b execx.Command) bool {
 	return reflect.DeepEqual(a.Args, b.Args)
 }
 
+func envContainsKey(environ []string, key string) bool {
+	for _, entry := range environ {
+		name, _, _ := strings.Cut(entry, "=")
+		if name == key {
+			return true
+		}
+	}
+	return false
+}
+
 func isCloneGitCommand(cmd execx.Command) bool {
 	return cmd.Name == "git" && len(cmd.Args) > 0 && cmd.Args[0] == "clone"
 }
@@ -996,6 +1006,50 @@ func TestCompleteReviewRunFallsBackToIssueCommentWhenReviewWritebackFails(t *tes
 	}
 }
 
+func TestBuildReviewPromptContextRetriesMetadataWithoutInvalidGitHubTokenEnv(t *testing.T) {
+	t.Setenv("GH_TOKEN", "stale-token")
+	t.Setenv("GITHUB_TOKEN", "stale-token")
+
+	repoDir := t.TempDir()
+	metadataJSON := `{"number":2,"title":"Fix bug","body":"Body","url":"https://github.com/acme/repo/pull/2","state":"OPEN","baseRefName":"main","headRefName":"fix-bug","headRefOid":"abc123","author":{"login":"octocat"}}`
+	authErr := errors.New("run gh [pr view 2 --json number,title,body,url,state,isDraft,baseRefName,headRefName,headRefOid,author]: exit status 1 (HTTP 401: Requires authentication (https://api.github.com/graphql))")
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: prReviewMetadataCommand(repoDir, "2"), err: authErr},
+		{cmd: prReviewMetadataCommand(repoDir, "2"), res: execx.Result{Stdout: metadataJSON}},
+		{cmd: fetchRemoteBranchCommand(repoDir, "main")},
+		{cmd: fetchPullRequestHeadCommand(repoDir, 2)},
+		{cmd: prReviewIssueCommentsCommand(repoDir, 2), res: execx.Result{Stdout: "[]"}},
+		{cmd: prReviewReviewCommentsCommand(repoDir, 2), res: execx.Result{Stdout: "[]"}},
+		{cmd: prReviewReviewsCommand(repoDir, 2), res: execx.Result{Stdout: "[]"}},
+		{cmd: reviewDiffStatCommand(repoDir, "refs/remotes/origin/main", "refs/remotes/origin/moltenhub-pr-2"), res: execx.Result{Stdout: " file.go | 1 +"}},
+		{cmd: reviewDiffPatchCommand(repoDir, "refs/remotes/origin/main", "refs/remotes/origin/moltenhub-pr-2"), res: execx.Result{Stdout: "diff --git a/file.go b/file.go"}},
+	}}
+	var logs []string
+	h := New(fake)
+	h.Logf = func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	ctx, err := h.buildReviewPromptContext(context.Background(), repoWorkspace{URL: "https://github.com/acme/repo.git", Dir: repoDir, RelDir: "repo"}, config.ReviewConfig{PRNumber: 2})
+	if err != nil {
+		t.Fatalf("buildReviewPromptContext() err = %v", err)
+	}
+	if !ctx.GitHubTokenEnvSanitized {
+		t.Fatal("GitHubTokenEnvSanitized = false, want true")
+	}
+	if got := strings.Join(logs, "\n"); !strings.Contains(got, "action=retry_without_env_github_token") {
+		t.Fatalf("logs = %q, want sanitized retry warning", got)
+	}
+	if len(fake.calls) < 7 {
+		t.Fatalf("calls = %d, want at least 7", len(fake.calls))
+	}
+	for _, idx := range []int{1, 4, 5, 6} {
+		if envContainsKey(fake.calls[idx].Env, "GH_TOKEN") || envContainsKey(fake.calls[idx].Env, "GITHUB_TOKEN") {
+			t.Fatalf("call %d env contains GitHub token variables: %#v", idx, fake.calls[idx].Env)
+		}
+	}
+}
+
 func TestAutoMergeCleanReviewSkipsUnsupportedAutoMergeConfiguration(t *testing.T) {
 	t.Parallel()
 
@@ -1021,7 +1075,7 @@ func TestAutoMergeCleanReviewSkipsUnsupportedAutoMergeConfiguration(t *testing.T
 		logs = append(logs, fmt.Sprintf(format, args...))
 	}
 
-	if err := h.autoMergeCleanReview(context.Background(), repo, "42", "", "squash", metadata, outcome); err != nil {
+	if err := h.autoMergeCleanReview(context.Background(), repo, "42", "", "squash", metadata, outcome, false); err != nil {
 		t.Fatalf("autoMergeCleanReview() err = %v, want nil for unsupported auto-merge config", err)
 	}
 	if len(fake.exps) != 0 {
