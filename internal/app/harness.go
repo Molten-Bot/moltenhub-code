@@ -606,6 +606,17 @@ func (h Harness) processChangedRepo(
 			requiredChecksOnly := false
 			h.logf("stage=checks status=start repo=%s repo_dir=%s pr_url=%s attempt=%d", repo.URL, repo.RelDir, repo.PRURL, attempt+1)
 			checkRes, checkErr = h.runPRChecksWatch(ctx, repo.Dir, repo.PRURL)
+			if isGitHubAuthFailure(checkRes, checkErr) {
+				h.logf(
+					"stage=checks status=warn action=watch_skipped reason=github_auth_unavailable repo=%s repo_dir=%s pr_url=%s attempt=%d err=%q",
+					repo.URL,
+					repo.RelDir,
+					repo.PRURL,
+					attempt+1,
+					checkErr,
+				)
+				return ExitSuccess, "", nil
+			}
 			if errors.Is(checkErr, errPRChecksWatchTimeout) {
 				h.logf(
 					"stage=checks status=warn action=watch_timeout repo=%s repo_dir=%s pr_url=%s attempt=%d err=%q",
@@ -671,6 +682,17 @@ func (h Harness) processChangedRepo(
 				}
 				requiredChecksOnly = false
 				checkRes, checkErr = h.runPRChecksAnyWatch(ctx, repo.Dir, repo.PRURL)
+				if isGitHubAuthFailure(checkRes, checkErr) {
+					h.logf(
+						"stage=checks status=warn action=watch_skipped reason=github_auth_unavailable repo=%s repo_dir=%s pr_url=%s attempt=%d err=%q",
+						repo.URL,
+						repo.RelDir,
+						repo.PRURL,
+						attempt+1,
+						checkErr,
+					)
+					return ExitSuccess, "", nil
+				}
 				if errors.Is(checkErr, errPRChecksWatchTimeout) {
 					h.logf(
 						"stage=checks status=warn action=watch_timeout repo=%s repo_dir=%s pr_url=%s attempt=%d err=%q",
@@ -3539,6 +3561,9 @@ func isPRCreatePermissionDenied(res execx.Result, err error) bool {
 	if err == nil {
 		return false
 	}
+	if isGitHubAuthFailure(res, err) {
+		return true
+	}
 	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
 	if !strings.Contains(text, "createpullrequest") {
 		return false
@@ -3547,6 +3572,18 @@ func isPRCreatePermissionDenied(res execx.Result, err error) bool {
 		strings.Contains(text, "resource not accessible by integration") ||
 		strings.Contains(text, "permission") ||
 		strings.Contains(text, "forbidden")
+}
+
+func isGitHubAuthFailure(res execx.Result, err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(strings.Join([]string{res.Stdout, res.Stderr, err.Error()}, "\n"))
+	return strings.Contains(text, "requires authentication") ||
+		strings.Contains(text, "try authenticating with") ||
+		strings.Contains(text, "gh auth login") ||
+		strings.Contains(text, "bad credentials") ||
+		strings.Contains(text, "http 401")
 }
 
 func shouldRetryPRCreate(res execx.Result, err error) bool {
