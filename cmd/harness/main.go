@@ -522,7 +522,22 @@ func runHub(args []string) int {
 						}
 					}
 				case "no_changes":
-					recordLocalRunCompletedActivity(runCtx, activeCfg, runCfg, requestID, hubRuntimeConnected, daemonLogger)
+					if failureResult, failed := localNoChangesFailureResult(source, outcome.Result, runCfg); failed {
+						finalState = "error"
+						daemonLogger(
+							"dispatch status=error request_id=%s exit_code=%d workspace=%s branch=%s pr_url=%s err=%q",
+							requestID,
+							failureResult.ExitCode,
+							failureResult.WorkspaceDir,
+							failureResult.Branch,
+							failureResult.PRURL,
+							failureResult.Err,
+						)
+						publishLocalRunFailureResult(runCtx, activeCfg, requestID, failureResult, hubRuntimeConnected, daemonLogger)
+						markLocalRunRuntimeOffline(runCtx, activeCfg, requestID, hubRuntimeConnected, daemonLogger)
+					} else {
+						recordLocalRunCompletedActivity(runCtx, activeCfg, runCfg, requestID, hubRuntimeConnected, daemonLogger)
+					}
 					if source != noChangesFollowUpSource && source != noChangesEscalationSource && queueUnexpectedNoChangesFollowUp != nil {
 						queueUnexpectedNoChangesFollowUp(requestID, outcome.Result, runCfg)
 					}
@@ -1537,6 +1552,36 @@ func shouldEscalateNoChangesFollowUp(source string, result app.Result, runCfg co
 
 func shouldEscalateNoChangesFollowUpWithLogs(source string, result app.Result, runCfg config.Config, logPaths []string) (bool, string) {
 	return shouldEscalateNoChangesFollowUp(source, result, runCfg)
+}
+
+func localNoChangesFailureResult(source string, result app.Result, runCfg config.Config) (app.Result, bool) {
+	if !result.NoChanges {
+		return app.Result{}, false
+	}
+	if strings.TrimSpace(joinAllPRURLs(result.RepoResults)) != "" || strings.TrimSpace(result.PRURL) != "" {
+		return app.Result{}, false
+	}
+	if result.NoChangeEvidence {
+		return app.Result{}, false
+	}
+	if !promptRequestsRepositoryChange(runCfg.Prompt) {
+		return app.Result{}, false
+	}
+
+	detail := "task completed with no file changes and no pull request even though the prompt appears to require repository changes"
+	switch strings.TrimSpace(source) {
+	case noChangesFollowUpSource:
+		detail = "no-changes follow-up completed with no file changes and no pull request, without concrete evidence that no MoltenHub Code change is required"
+	case noChangesEscalationSource:
+		detail = "no-changes escalation completed with no file changes and no pull request, without concrete evidence that no MoltenHub Code change is required"
+	}
+
+	failed := result
+	if failed.ExitCode == app.ExitSuccess {
+		failed.ExitCode = app.ExitCodex
+	}
+	failed.Err = errors.New(detail)
+	return failed, true
 }
 
 func failureFollowUpRepos(_ app.Result, _ config.Config) []string {

@@ -1060,6 +1060,105 @@ func TestShouldQueueUnexpectedNoChangesFollowUpSkipsVerificationPrompt(t *testin
 	}
 }
 
+func TestLocalNoChangesFailureResultForActionablePrompt(t *testing.T) {
+	t.Parallel()
+
+	result, failed := localNoChangesFailureResult(localSubmitSource, app.Result{
+		NoChanges:    true,
+		WorkspaceDir: "/tmp/work",
+		Branch:       "moltenhub-build-release",
+	}, config.Config{Prompt: "fix broken release generation"})
+	if !failed {
+		t.Fatal("localNoChangesFailureResult(actionable) failed = false, want true")
+	}
+	if result.Err == nil {
+		t.Fatal("localNoChangesFailureResult(actionable) Err = nil, want error")
+	}
+	if result.ExitCode != app.ExitCodex {
+		t.Fatalf("ExitCode = %d, want %d", result.ExitCode, app.ExitCodex)
+	}
+	if !result.NoChanges {
+		t.Fatal("NoChanges = false, want true")
+	}
+	if !strings.Contains(result.Err.Error(), "no file changes and no pull request") {
+		t.Fatalf("Err = %v, want no-change failure detail", result.Err)
+	}
+}
+
+func TestLocalNoChangesFailureResultForGeneratedFollowUpPrompt(t *testing.T) {
+	t.Parallel()
+
+	prompt := unexpectedNoChangesFollowUpPrompt(nil, "local-1712345678-000001", app.Result{
+		NoChanges: true,
+	}, config.Config{
+		Prompt: "fix release generation",
+	})
+	_, failed := localNoChangesFailureResult(noChangesFollowUpSource, app.Result{
+		NoChanges: true,
+	}, config.Config{Prompt: prompt})
+	if !failed {
+		t.Fatal("localNoChangesFailureResult(generated follow-up prompt) failed = false, want true")
+	}
+}
+
+func TestLocalNoChangesFailureResultSkipsAllowedNoOps(t *testing.T) {
+	t.Parallel()
+
+	readOnly := config.Config{Prompt: "review logs and explain what happened"}
+	if _, failed := localNoChangesFailureResult(localSubmitSource, app.Result{NoChanges: true}, readOnly); failed {
+		t.Fatal("localNoChangesFailureResult(read-only) failed = true, want false")
+	}
+
+	verified := app.Result{NoChanges: true, NoChangeEvidence: true}
+	if _, failed := localNoChangesFailureResult(localSubmitSource, verified, config.Config{Prompt: "fix broken release generation"}); failed {
+		t.Fatal("localNoChangesFailureResult(concrete evidence) failed = true, want false")
+	}
+
+	withPR := app.Result{NoChanges: true, PRURL: "https://github.com/acme/repo/pull/1"}
+	if _, failed := localNoChangesFailureResult(localSubmitSource, withPR, config.Config{Prompt: "fix broken release generation"}); failed {
+		t.Fatal("localNoChangesFailureResult(existing PR) failed = true, want false")
+	}
+}
+
+func TestLocalNoChangesFailurePayloadIncludesExplicitFailureFields(t *testing.T) {
+	t.Parallel()
+
+	result, failed := localNoChangesFailureResult(noChangesFollowUpSource, app.Result{
+		NoChanges: true,
+		RepoResults: []app.RepoResult{
+			{RepoURL: "git@github.com:acme/repo.git", Branch: "moltenhub-build-release"},
+		},
+	}, config.Config{Prompt: "fix underlying MoltenHub Code no-change handling"})
+	if !failed {
+		t.Fatal("localNoChangesFailureResult(no-change follow-up) failed = false, want true")
+	}
+
+	payload := localRunFailurePayload(hub.InitConfig{
+		SessionKey: "local-session",
+		Handle:     "caller-agent",
+	}, "req-no-change", result)
+	if got := payload["status"]; got != "error" {
+		t.Fatalf("payload.status = %#v, want error", got)
+	}
+	if got := payload["Failure:"]; got != "task failed" {
+		t.Fatalf("payload.Failure: = %#v, want task failed", got)
+	}
+	if got := fmt.Sprint(payload["Error details:"]); !strings.Contains(got, "no-changes follow-up completed") {
+		t.Fatalf("payload.Error details: = %q, want no-changes follow-up detail", got)
+	}
+	msg, _ := payload["message"].(string)
+	if !strings.Contains(msg, "Failure: task failed. Error details:") {
+		t.Fatalf("payload.message = %q, want explicit failure message", msg)
+	}
+	resultPayload, _ := payload["result"].(map[string]any)
+	if resultPayload == nil {
+		t.Fatal("payload.result missing")
+	}
+	if got := resultPayload["noChanges"]; got != true {
+		t.Fatalf("payload.result.noChanges = %#v, want true", got)
+	}
+}
+
 func TestShouldQueueUnexpectedNoChangesFollowUpQueuesDespiteConcreteNoOpEvidenceLog(t *testing.T) {
 	t.Parallel()
 
