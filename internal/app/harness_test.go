@@ -810,6 +810,9 @@ func TestRunCommitNoOpWithExistingLocalCommitPushesAndCreatesPR(t *testing.T) {
 		},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## moltenhub-build-api\n"}},
 		{cmd: commitsAheadOfBaseCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "1\n"}},
+		{cmd: fetchBranchCommand(repoDir, cfg.BaseBranch)},
+		{cmd: mergeFetchedBranchCommand(repoDir)},
+		{cmd: commitsAheadOfBaseCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "1\n"}},
 		{cmd: pushCommand(repoDir, branch)},
 		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
 		{cmd: prChecksCommand(repoDir, prURL)},
@@ -829,6 +832,110 @@ func TestRunCommitNoOpWithExistingLocalCommitPushesAndCreatesPR(t *testing.T) {
 	}
 	if got, want := res.PRURL, prURL; got != want {
 		t.Fatalf("PRURL = %q, want %q", got, want)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunSkipsPRWhenWorkBranchHasNoDeltaFromRemoteBase(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## " + branch + "...origin/" + branch + " [ahead 1]\n"}},
+		{cmd: commitsAheadOfBaseCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "0\n"}},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch)},
+		{cmd: prLookupAnyByHeadCommand(repoDir, branch), res: execx.Result{Stdout: "[]\n"}},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if !res.NoChanges {
+		t.Fatal("NoChanges = false, want true")
+	}
+	if res.PRURL != "" {
+		t.Fatalf("PRURL = %q, want empty", res.PRURL)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestRunSkipsPRWhenPostSyncWorkBranchHasNoDeltaFromRemoteBase(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "abcdef123456"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	branch := "moltenhub-build-api"
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: branchCommand(repoDir, branch)},
+		{cmd: pushDryRunCommand(repoDir, branch)},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## " + branch + "\n M file.go\n"}},
+		{cmd: addCommand(repoDir)},
+		{
+			cmd: commitCommand(repoDir, cfg.CommitMessage),
+			res: execx.Result{Stdout: "On branch " + branch + "\nnothing to commit, working tree clean\n"},
+			err: errors.New("exit status 1"),
+		},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## " + branch + "\n"}},
+		{cmd: commitsAheadOfBaseCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "1\n"}},
+		{cmd: fetchBranchCommand(repoDir, cfg.BaseBranch)},
+		{cmd: mergeFetchedBranchCommand(repoDir)},
+		{cmd: commitsAheadOfBaseCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: "0\n"}},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, branch)},
+		{cmd: prLookupAnyByHeadCommand(repoDir, branch), res: execx.Result{Stdout: "[]\n"}},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() err = %v", res.Err)
+	}
+	if !res.NoChanges {
+		t.Fatal("NoChanges = false, want true")
+	}
+	if res.PRURL != "" {
+		t.Fatalf("PRURL = %q, want empty", res.PRURL)
 	}
 	if len(fake.exps) != 0 {
 		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
@@ -4789,7 +4896,7 @@ func TestCommandBuilders(t *testing.T) {
 	}
 
 	commitsAhead := commitsAheadOfBaseCommand(repoDir, "refs/heads/main")
-	wantCommitsAhead := []string{"rev-list", "--count", "main..HEAD"}
+	wantCommitsAhead := []string{"rev-list", "--count", "refs/remotes/origin/main..HEAD"}
 	if commitsAhead.Name != "git" || commitsAhead.Dir != repoDir || !reflect.DeepEqual(commitsAhead.Args, wantCommitsAhead) {
 		t.Fatalf("commits ahead command unexpected: %+v", commitsAhead)
 	}

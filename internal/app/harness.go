@@ -515,6 +515,7 @@ func (h Harness) processChangedRepo(
 		}
 	}
 	commitRes, commitErr := h.runCommand(ctx, "git", commitCommand(repo.Dir, cfg.CommitMessage))
+	alreadyCommitted := false
 	if commitErr != nil {
 		noChanges, statusErr := h.refreshRepoChangeStateAfterNoOpCommit(ctx, repo, commitRes, commitErr)
 		if statusErr != nil {
@@ -528,6 +529,7 @@ func (h Harness) processChangedRepo(
 			return ExitGit, "git", commitErr
 		}
 		h.logf("stage=git status=ok action=commit repo=%s repo_dir=%s reason=already_committed", repo.URL, repo.RelDir)
+		alreadyCommitted = true
 	}
 	if exitCode, stage, err := h.syncGeneratedWorkBranchWithBase(
 		ctx,
@@ -542,6 +544,21 @@ func (h Harness) processChangedRepo(
 		agentStage,
 	); err != nil {
 		return exitCode, stage, err
+	}
+	if alreadyCommitted {
+		if hasDelta, err := h.repoHasPullRequestDelta(ctx, *repo); err != nil {
+			return ExitGit, "git", err
+		} else if !hasDelta {
+			repo.Changed = false
+			h.logf(
+				"stage=git status=ok action=skip_pr reason=no_delta_from_base repo=%s repo_dir=%s branch=%s baseBranch=%s",
+				repo.URL,
+				repo.RelDir,
+				repo.Branch,
+				repo.BaseBranch,
+			)
+			return ExitSuccess, "", nil
+		}
 	}
 	if err := h.pushWithSync(ctx, repo, 0); err != nil {
 		return ExitGit, "git", err
@@ -2383,7 +2400,7 @@ func (h Harness) repoHasPendingChanges(
 	repo repoWorkspace,
 	statusStdout string,
 ) (bool, error) {
-	if hasTrackedWorktreeChanges(statusStdout) || hasAheadCommitsInStatus(statusStdout) {
+	if hasTrackedWorktreeChanges(statusStdout) {
 		return true, nil
 	}
 	screenshotFiles, err := changedPRCommentScreenshotFiles(repo.Dir, repo.PRCommentScreenshotBaseline)
@@ -2405,6 +2422,13 @@ func (h Harness) repoHasPendingChanges(
 	}
 	if !repo.CreateWorkBranch {
 		return false, nil
+	}
+	return h.repoHasPullRequestDelta(ctx, repo)
+}
+
+func (h Harness) repoHasPullRequestDelta(ctx context.Context, repo repoWorkspace) (bool, error) {
+	if !repo.CreateWorkBranch {
+		return true, nil
 	}
 	commitsAhead, err := h.countCommitsAheadOfBase(ctx, repo, normalizeBranchRef(repo.BaseBranch))
 	if err != nil {
@@ -5643,15 +5667,25 @@ func pushDryRunToRemoteCommand(repoDir, remote, branch string) execx.Command {
 }
 
 func commitsAheadOfBaseCommand(repoDir, baseBranch string) execx.Command {
-	baseBranch = normalizeBranchRef(baseBranch)
-	if baseBranch == "" {
-		baseBranch = "HEAD"
+	baseRef := remoteBaseComparisonRef(baseBranch)
+	if baseRef == "" {
+		baseRef = "HEAD"
 	}
 	return execx.Command{
 		Dir:  repoDir,
 		Name: "git",
-		Args: []string{"rev-list", "--count", fmt.Sprintf("%s..HEAD", baseBranch)},
+		Args: []string{"rev-list", "--count", fmt.Sprintf("%s..HEAD", baseRef)},
 	}
+}
+
+func remoteBaseComparisonRef(baseBranch string) string {
+	baseBranch = strings.TrimSpace(baseBranch)
+	baseBranch = strings.TrimPrefix(baseBranch, "refs/remotes/origin/")
+	baseBranch = normalizeBranchRef(baseBranch)
+	if baseBranch == "" {
+		return ""
+	}
+	return remoteTrackingRef(baseBranch)
 }
 
 func fetchBranchCommand(repoDir, branch string) execx.Command {
