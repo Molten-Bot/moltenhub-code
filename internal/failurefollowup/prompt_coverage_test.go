@@ -63,6 +63,9 @@ func TestNonRemediableFailureReasonRecognizesQuotaAndAllowsNoDelta(t *testing.T)
 	if got := NonRemediableFailureReason(errors.New("clone: run git [clone --single-branch git@github.com:Molten-Bot/forum.git /workspace/repo]: exit status 128 (fatal: unable to access 'https://github.com/Molten-Bot/forum.git/': Could not resolve host: github.com)")); got != "could not resolve host" {
 		t.Fatalf("NonRemediableFailureReason(clone DNS failure) = %q, want %q", got, "could not resolve host")
 	}
+	if got := NonRemediableFailureReason(errors.New("codex: codex reported failure: Failure: No June 14 release entry created. Error details: `git-changes-by-day` ran across all repos. `2026-06-14` UTC rows: `0` in every repo. Adding entry would require invented project/note content.")); got != "would require invented" {
+		t.Fatalf("NonRemediableFailureReason(invented content) = %q, want %q", got, "would require invented")
+	}
 	if got := NonRemediableFailureReason(errors.New("task failed because this branch has no delta from `main`; No commits between main and moltenhub-fix")); got != "" {
 		t.Fatalf("NonRemediableFailureReason(no delta) = %q, want empty", got)
 	}
