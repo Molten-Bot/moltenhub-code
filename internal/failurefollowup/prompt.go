@@ -77,6 +77,9 @@ var nonRemediableFailureMarkers = []string{
 	"temporary failure in name resolution",
 	"no such host",
 	"browser tool crawled public pages, but cannot save binary assets",
+	"would require invented",
+	"requires invented",
+	"require fabricating",
 }
 
 func WithExecutionContract(base string) string {

@@ -1634,6 +1634,13 @@ func TestShouldQueueFailureFollowUpSkipsNonRemediableFailures(t *testing.T) {
 	if ok || !strings.Contains(reason, "shell network blocked") {
 		t.Fatalf("shouldQueueFailureFollowUp(shell network blocked) = (%v, %q), want non-remediable network skip", ok, reason)
 	}
+
+	ok, reason = shouldQueueFailureFollowUp(dispatch, app.Result{
+		Err: errors.New("codex: codex reported failure: Failure: No June 14 release entry created. Error details: `git-changes-by-day` ran across all 10 repos after fetch. `2026-06-14` UTC rows: `0` in every repo. Raw `git log --all` confirmed same. `www` release schema rejects empty releases, so adding entry would require invented project/note content."),
+	})
+	if ok || !strings.Contains(reason, "would require invented") {
+		t.Fatalf("shouldQueueFailureFollowUp(invented content) = (%v, %q), want non-remediable invented-content skip", ok, reason)
+	}
 }
 
 func TestFailureFollowUpPromptIncludesWorkspaceAndTargetPath(t *testing.T) {
