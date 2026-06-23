@@ -2958,6 +2958,9 @@ func isAutoMergeUnsupportedError(err error) bool {
 		"auto merge is disabled",
 		"automerge is disabled",
 		"auto-merge is not enabled",
+		"does not have the correct permissions",
+		"mergepullrequest",
+		"resource not accessible by integration",
 	}
 	for _, fragment := range unsupportedFragments {
 		if strings.Contains(message, fragment) {
