@@ -1194,6 +1194,42 @@ func TestAutoMergeCleanReviewSkipsUnsupportedAutoMergeConfiguration(t *testing.T
 	}
 }
 
+func TestAutoMergeCleanReviewSkipsPermissionDeniedAutoMerge(t *testing.T) {
+	t.Parallel()
+
+	repo := repoWorkspace{Dir: "/repo"}
+	metadata := reviewPRMetadata{
+		URL:        "https://github.com/acme/repo/pull/42",
+		State:      "OPEN",
+		HeadRefOID: "abc123",
+	}
+	outcome := reviewOutcome{Status: "clean", MergeReady: true}
+	autoMergeErr := errors.New("run gh [pr merge 42 --auto --match-head-commit abc123 --squash --repo acme/repo]: exit status 1 (GraphQL: moltenbot000 does not have the correct permissions to execute `MergePullRequest` (mergePullRequest))")
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: prMergeAutoCommand(repo.Dir, "42", "acme/repo", "squash", "abc123"),
+			err: autoMergeErr,
+		},
+	}}
+
+	var logs []string
+	h := New(fake)
+	h.Logf = func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	if err := h.autoMergeCleanReview(context.Background(), repo, "42", "acme/repo", "squash", metadata, outcome, false); err != nil {
+		t.Fatalf("autoMergeCleanReview() err = %v, want nil for permission-denied auto-merge", err)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+	if got := strings.Join(logs, "\n"); !strings.Contains(got, "reason=unsupported_or_unconfigured") {
+		t.Fatalf("logs = %q, want permission-denied auto-merge skip reason", got)
+	}
+}
+
 func TestReviewCommentBodyUsesStructuredPositiveNegativePoints(t *testing.T) {
 	t.Parallel()
 
