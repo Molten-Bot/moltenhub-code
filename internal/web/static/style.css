@@ -341,6 +341,10 @@ body.library-prompt-modal-open {
   overflow: hidden;
 }
 
+body.task-prompt-modal-open {
+  overflow: hidden;
+}
+
 a {
   color: var(--running);
 }
@@ -1743,6 +1747,7 @@ html.pink .hub-dock-group[data-configured="true"] #moltenbot-hub-link:focus-visi
 .task-control-toggle:focus-visible,
 .task-stop:focus-visible,
 .task-output-toggle:focus-visible,
+.task-prompt-toggle:focus-visible,
 .task-terminal-toggle:focus-visible,
 .task-view-toggle:focus-visible,
 .task-fullscreen-toggle:focus-visible {
@@ -2074,6 +2079,7 @@ select.prompt-control {
 .task-rerun,
 .task-output-toggle,
 .task-image-toggle,
+.task-prompt-toggle,
 .task-terminal-toggle,
 .task-fullscreen-toggle,
 .prompt-visibility-toggle {
@@ -2243,6 +2249,7 @@ select.prompt-control {
 .task-rerun:hover,
 .task-output-toggle:hover,
 .task-image-toggle:hover,
+.task-prompt-toggle:hover,
 .task-terminal-toggle:hover,
 .task-fullscreen-toggle:hover,
 .prompt-visibility-toggle:hover {
@@ -2352,6 +2359,7 @@ select.prompt-control {
 .prompt-input-action:disabled,
 .task-rerun:disabled,
 .task-image-toggle:disabled,
+.task-prompt-toggle:disabled,
 .task-control-toggle:disabled,
 .task-stop:disabled,
 .task-close:disabled,
@@ -2929,6 +2937,7 @@ select.prompt-control {
 
 .task-rerun.task-icon-button,
 .task-image-toggle.task-icon-button,
+.task-prompt-toggle.task-icon-button,
 .task-output-toggle.task-icon-button {
   width: 34px;
   min-width: 34px;
@@ -2955,6 +2964,11 @@ select.prompt-control {
 }
 
 .task-image-toggle.task-icon-button .task-action-glyph {
+  width: 19px;
+  height: 19px;
+}
+
+.task-prompt-toggle.task-icon-button .task-action-glyph {
   width: 19px;
   height: 19px;
 }
@@ -5344,6 +5358,177 @@ html.pink .task-progress-step.current .task-progress-step-icon.is-agent-logo {
   line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.task-prompt-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 123;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(12px, 3vw, 28px);
+  background: var(--surface-auth-backdrop);
+  backdrop-filter: blur(10px) saturate(130%);
+  -webkit-backdrop-filter: blur(10px) saturate(130%);
+}
+
+.task-prompt-modal.hidden {
+  display: none !important;
+}
+
+.task-prompt-modal-shell {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(940px, 100%);
+  max-height: min(90vh, 800px);
+  border: 1px solid var(--surface-auth-panel-border);
+  border-radius: var(--radius-card);
+  background: var(--surface-auth-panel-bg);
+  box-shadow: var(--surface-auth-panel-shadow);
+  overflow: hidden;
+}
+
+.task-prompt-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.task-prompt-modal-head h2 {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-prompt-modal-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.task-prompt-modal-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-button-bg);
+}
+
+.task-prompt-modal-tab {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.task-prompt-modal-tab.active,
+.task-prompt-modal-tab:focus-visible {
+  color: var(--text);
+  background: var(--surface-control-bg-strong);
+  outline: none;
+  box-shadow: var(--surface-control-shadow);
+}
+
+.task-prompt-modal-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 18px;
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.58;
+  overflow-wrap: anywhere;
+}
+
+.task-prompt-modal-plain {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+}
+
+.task-prompt-modal-markdown {
+  display: block;
+}
+
+.task-prompt-modal-markdown > :first-child {
+  margin-top: 0;
+}
+
+.task-prompt-modal-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.task-prompt-modal-markdown h3,
+.task-prompt-modal-markdown h4,
+.task-prompt-modal-markdown h5 {
+  margin: 1em 0 0.45em;
+  color: var(--text);
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.task-prompt-modal-markdown h3 {
+  font-size: 1.05rem;
+}
+
+.task-prompt-modal-markdown h4,
+.task-prompt-modal-markdown h5 {
+  font-size: 0.96rem;
+}
+
+.task-prompt-modal-markdown p {
+  margin: 0 0 0.8em;
+}
+
+.task-prompt-modal-markdown ul {
+  margin: 0 0 0.8em;
+  padding-left: 1.2rem;
+}
+
+.task-prompt-modal-markdown li + li {
+  margin-top: 0.28em;
+}
+
+.task-prompt-modal-markdown code {
+  border-radius: 4px;
+  padding: 0.1em 0.28em;
+  background: rgba(113, 136, 177, 0.14);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  font-size: 0.88em;
+}
+
+.task-prompt-modal-markdown pre {
+  margin: 0 0 0.9em;
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(15, 27, 51, 0.06);
+}
+
+.task-prompt-modal-markdown pre code {
+  display: block;
+  padding: 12px;
+  background: transparent;
+  white-space: pre;
 }
 
 #task-fullscreen-terminal {
