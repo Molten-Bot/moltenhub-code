@@ -1199,6 +1199,7 @@ func (d Daemon) handleDispatch(
 	}
 	if res.Err != nil {
 		statusDetails["error"] = res.Err.Error()
+		addExplicitFailureFields(statusDetails, res.Err.Error())
 	}
 	d.publishDispatchStatus(ctx, api, cfg, dispatch, status, taskState, dispatchResultMessage(status, res), statusDetails)
 	payload := dispatchResultPayload(cfg, dispatch, res)
@@ -1521,6 +1522,7 @@ func dispatchStatusFromHarnessLogLine(line string) (string, a2a.TaskState, strin
 		state = a2a.TaskStateFailed
 		errText := firstNonEmpty(fields["err"], fields["error"], message)
 		details["error"] = errText
+		addExplicitFailureFields(details, errText)
 		message = failureResponseMessage(errText)
 	}
 	return status, state, message, details, true

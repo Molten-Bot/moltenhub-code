@@ -615,6 +615,40 @@ func TestDispatchStatusPayloadUsesA2AStatusUpdateAndOriginator(t *testing.T) {
 	}
 }
 
+func TestDispatchStatusPayloadFailureIncludesExplicitFields(t *testing.T) {
+	t.Parallel()
+
+	payload := dispatchStatusPayload(
+		InitConfig{Skill: SkillConfig{Name: "code_for_me"}},
+		SkillDispatch{RequestID: "req-status-failed", Skill: "code_for_me"},
+		"error",
+		a2a.TaskStateFailed,
+		"Failure: task failed.\nError details: checks: required PR checks failed",
+		map[string]any{
+			"error":          "checks: required PR checks failed",
+			"Failure:":       "task failed",
+			"Error details:": "checks: required PR checks failed",
+		},
+	)
+
+	if got := payload["Failure:"]; got != "task failed" {
+		t.Fatalf("Failure: = %#v", got)
+	}
+	if got := payload["Error details:"]; got != "checks: required PR checks failed" {
+		t.Fatalf("Error details: = %#v", got)
+	}
+	details, ok := payload["details"].(map[string]any)
+	if !ok {
+		t.Fatalf("details = %#v, want map", payload["details"])
+	}
+	if got := details["Failure:"]; got != "task failed" {
+		t.Fatalf("details.Failure: = %#v", got)
+	}
+	if got := details["Error details:"]; got != "checks: required PR checks failed" {
+		t.Fatalf("details.Error details: = %#v", got)
+	}
+}
+
 func TestDispatchStatusPayloadIncludesStageMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -668,6 +702,32 @@ func TestDispatchStatusPayloadIncludesStageMetadata(t *testing.T) {
 	clientMsgID := fmt.Sprint(payload["client_msg_id"])
 	if !strings.Contains(clientMsgID, "clone-warn") {
 		t.Fatalf("client_msg_id = %q, want stage-specific id", clientMsgID)
+	}
+}
+
+func TestDispatchStatusFromHarnessLogLineFailureDetailsIncludeExplicitFields(t *testing.T) {
+	t.Parallel()
+
+	status, state, message, details, ok := dispatchStatusFromHarnessLogLine(
+		`stage=checks status=error err="required PR checks failed after 3 remediation attempt(s)"`,
+	)
+	if !ok {
+		t.Fatal("dispatchStatusFromHarnessLogLine() ok = false, want true")
+	}
+	if status != "error" {
+		t.Fatalf("status = %q, want error", status)
+	}
+	if state != a2a.TaskStateFailed {
+		t.Fatalf("state = %s, want TASK_STATE_FAILED", state)
+	}
+	if message != "Failure: task failed.\nError details: required PR checks failed after 3 remediation attempt(s)" {
+		t.Fatalf("message = %q", message)
+	}
+	if got := details["Failure:"]; got != "task failed" {
+		t.Fatalf("details.Failure: = %#v", got)
+	}
+	if got := details["Error details:"]; got != "required PR checks failed after 3 remediation attempt(s)" {
+		t.Fatalf("details.Error details: = %#v", got)
 	}
 }
 
