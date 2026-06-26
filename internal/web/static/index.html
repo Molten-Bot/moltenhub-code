@@ -520,6 +520,30 @@
     </div>
   </div>
 
+  <div
+    id="task-prompt-modal"
+    class="task-prompt-modal hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="task-prompt-modal-title"
+    aria-hidden="true">
+    <div class="task-prompt-modal-shell">
+      <div class="task-prompt-modal-head">
+        <h2 id="task-prompt-modal-title">Task Prompt</h2>
+        <div class="task-prompt-modal-actions">
+          <div class="task-prompt-modal-tabs" role="tablist" aria-label="Prompt view mode">
+            <button id="task-prompt-modal-markdown" class="task-prompt-modal-tab active" type="button" role="tab" aria-selected="true">Markdown</button>
+            <button id="task-prompt-modal-plain" class="task-prompt-modal-tab" type="button" role="tab" aria-selected="false">Plain</button>
+          </div>
+          <button id="task-prompt-modal-close" class="settings-modal-close" type="button" aria-label="Close task prompt" title="Close">
+            <i data-lucide="x" aria-hidden="true"></i>
+          </button>
+        </div>
+      </div>
+      <div id="task-prompt-modal-body" class="task-prompt-modal-body task-prompt-modal-markdown"></div>
+    </div>
+  </div>
+
   <div id="agent-auth-gate" class="agent-auth-gate hidden" aria-live="polite">
     <div id="agent-auth-shell" class="agent-auth-shell">
       <h2 id="agent-auth-title">Authorize Agent to get started</h2>
@@ -794,6 +818,8 @@
     const TASK_XTERM_DEFAULT_ROWS = 24;
     const CHAT_PROMPT_LOG_STICKY_SCROLL_PX = 24;
     const TASK_PROGRESS_VISIBLE = true;
+    const TASK_PROMPT_PREVIEW_MAX_CHARS = 180;
+    const TASK_PROMPT_MODAL_TITLE_MAX_CHARS = 90;
     const HUB_LOGIN_URL = "https://molten.bot/login?target=hub";
     const HUB_DASHBOARD_URL = "https://app.molten.bot/hub";
     const DASHBOARD_SHARE_URL = "https://molten.bot/code";
@@ -851,6 +877,7 @@
       pause: "pause",
       stop: "square",
       image: "image",
+      prompt: "file-text",
       loader: "loader-circle",
       default: "loader-circle",
     });
@@ -1945,6 +1972,10 @@
       hubSetupBusy: false,
       hubSetupOpen: false,
       libraryPromptModalOpen: false,
+      taskPromptModalOpen: false,
+      taskPromptModalPrompt: "",
+      taskPromptModalTitle: "",
+      taskPromptModalMode: "markdown",
       hubSetupDialogMode: "connect",
       hubSetupAutoSubmitTimer: 0,
       hubSetupLastAutoSubmitKey: "",
@@ -2024,6 +2055,12 @@
     const libraryPromptModalTitle = document.getElementById("library-prompt-modal-title");
     const libraryPromptModalBody = document.getElementById("library-prompt-modal-body");
     const libraryPromptModalClose = document.getElementById("library-prompt-modal-close");
+    const taskPromptModal = document.getElementById("task-prompt-modal");
+    const taskPromptModalTitle = document.getElementById("task-prompt-modal-title");
+    const taskPromptModalBody = document.getElementById("task-prompt-modal-body");
+    const taskPromptModalClose = document.getElementById("task-prompt-modal-close");
+    const taskPromptModalMarkdown = document.getElementById("task-prompt-modal-markdown");
+    const taskPromptModalPlain = document.getElementById("task-prompt-modal-plain");
     const localPromptForm = document.getElementById("local-prompt-form");
     const localPromptInput = document.getElementById("local-prompt-input");
     const localPromptSubmit = document.getElementById("local-prompt-submit");
@@ -6469,6 +6506,154 @@
       }
     }
 
+    function escapeHTML(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function renderInlineMarkdown(value) {
+      let out = escapeHTML(value);
+      out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
+      out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+      out = out.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+      out = out.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+      return out;
+    }
+
+    function renderTaskPromptMarkdown(prompt) {
+      const lines = String(prompt || "").replace(/\r\n?/g, "\n").split("\n");
+      const html = [];
+      let paragraph = [];
+      let listOpen = false;
+      let fenceOpen = false;
+      let codeLines = [];
+
+      const flushParagraph = () => {
+        if (!paragraph.length) return;
+        html.push(`<p>${renderInlineMarkdown(paragraph.join(" "))}</p>`);
+        paragraph = [];
+      };
+      const closeList = () => {
+        if (!listOpen) return;
+        html.push("</ul>");
+        listOpen = false;
+      };
+      const closeFence = () => {
+        if (!fenceOpen) return;
+        html.push(`<pre><code>${escapeHTML(codeLines.join("\n"))}</code></pre>`);
+        codeLines = [];
+        fenceOpen = false;
+      };
+
+      for (const line of lines) {
+        if (/^\s*```/.test(line)) {
+          if (fenceOpen) {
+            closeFence();
+          } else {
+            flushParagraph();
+            closeList();
+            fenceOpen = true;
+            codeLines = [];
+          }
+          continue;
+        }
+        if (fenceOpen) {
+          codeLines.push(line);
+          continue;
+        }
+
+        const trimmed = line.trim();
+        if (!trimmed) {
+          flushParagraph();
+          closeList();
+          continue;
+        }
+
+        const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
+        if (heading) {
+          flushParagraph();
+          closeList();
+          const level = heading[1].length + 2;
+          html.push(`<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`);
+          continue;
+        }
+
+        const listItem = trimmed.match(/^[-*]\s+(.+)$/);
+        if (listItem) {
+          flushParagraph();
+          if (!listOpen) {
+            html.push("<ul>");
+            listOpen = true;
+          }
+          html.push(`<li>${renderInlineMarkdown(listItem[1])}</li>`);
+          continue;
+        }
+
+        closeList();
+        paragraph.push(trimmed);
+      }
+
+      closeFence();
+      flushParagraph();
+      closeList();
+      return html.join("") || "<p>No prompt text provided.</p>";
+    }
+
+    function syncTaskPromptModalMode() {
+      const markdown = state.taskPromptModalMode !== "plain";
+      if (taskPromptModalMarkdown) {
+        taskPromptModalMarkdown.classList.toggle("active", markdown);
+        taskPromptModalMarkdown.setAttribute("aria-selected", String(markdown));
+      }
+      if (taskPromptModalPlain) {
+        taskPromptModalPlain.classList.toggle("active", !markdown);
+        taskPromptModalPlain.setAttribute("aria-selected", String(!markdown));
+      }
+      if (!taskPromptModalBody) return;
+      taskPromptModalBody.classList.toggle("task-prompt-modal-markdown", markdown);
+      taskPromptModalBody.classList.toggle("task-prompt-modal-plain", !markdown);
+      if (markdown) {
+        taskPromptModalBody.innerHTML = renderTaskPromptMarkdown(state.taskPromptModalPrompt);
+      } else {
+        taskPromptModalBody.textContent = state.taskPromptModalPrompt || "No prompt text provided.";
+      }
+    }
+
+    function closeTaskPromptModal() {
+      if (state.taskPromptModalOpen) {
+        trackAnalyticsEvent("task_prompt_modal_closed", { prompt_mode: state.promptMode });
+      }
+      state.taskPromptModalOpen = false;
+      state.taskPromptModalPrompt = "";
+      state.taskPromptModalTitle = "";
+      if (taskPromptModal) {
+        taskPromptModal.classList.add("hidden");
+        taskPromptModal.setAttribute("aria-hidden", "true");
+      }
+      document.body.classList.remove("task-prompt-modal-open");
+    }
+
+    function openTaskPromptModal(task) {
+      if (!taskPromptModal || !taskPromptModalTitle || !taskPromptModalBody) return;
+      const prompt = taskPromptRawText(task);
+      state.taskPromptModalOpen = true;
+      state.taskPromptModalPrompt = prompt || "No prompt text provided.";
+      state.taskPromptModalTitle = taskPromptModalTitleText(task);
+      taskPromptModalTitle.textContent = state.taskPromptModalTitle || "Task Prompt";
+      syncTaskPromptModalMode();
+      taskPromptModal.classList.remove("hidden");
+      taskPromptModal.setAttribute("aria-hidden", "false");
+      document.body.classList.add("task-prompt-modal-open");
+      trackAnalyticsEvent("task_prompt_modal_opened", { request_id: taskRequestID(task) });
+      if (taskPromptModalClose) {
+        taskPromptModalClose.focus();
+      }
+    }
+
     function renderLibraryTaskOptions() {
       if (!libraryTaskList) return;
 
@@ -9278,6 +9463,33 @@
       return task.prompt.replace(/\s+/g, " ").trim();
     }
 
+    function taskPromptRawText(task) {
+      if (!task || typeof task.prompt !== "string") return "";
+      return task.prompt.trim();
+    }
+
+    function truncateText(value, maxChars) {
+      const text = String(value || "").trim();
+      const limit = Number(maxChars);
+      if (!text || !Number.isFinite(limit) || limit <= 1 || text.length <= limit) {
+        return text;
+      }
+      return `${text.slice(0, Math.max(1, limit - 1)).trimEnd()}...`;
+    }
+
+    function taskPromptPreviewText(task) {
+      return truncateText(taskPromptText(task), TASK_PROMPT_PREVIEW_MAX_CHARS);
+    }
+
+    function taskPromptModalTitleText(task) {
+      return truncateText(taskPromptText(task) || taskSystemLabel(task) || "Task Prompt", TASK_PROMPT_MODAL_TITLE_MAX_CHARS);
+    }
+
+    function taskHasTruncatedPrompt(task) {
+      const prompt = taskPromptText(task);
+      return prompt.length > TASK_PROMPT_PREVIEW_MAX_CHARS;
+    }
+
     function taskSystemLabel(task) {
       const requestID = taskRequestID(task);
       if (requestID.endsWith("-failure-review")) {
@@ -9287,7 +9499,7 @@
     }
 
     function taskDisplayLabel(task) {
-      const prompt = taskPromptText(task);
+      const prompt = taskPromptPreviewText(task);
       if (!prompt) {
         return taskSystemLabel(task) || "Task";
       }
@@ -11818,6 +12030,27 @@
         return imageToggle;
       };
 
+      const renderPromptToggle = (task) => {
+        if (!taskHasTruncatedPrompt(task)) {
+          return null;
+        }
+        const promptToggle = document.createElement("button");
+        promptToggle.type = "button";
+        promptToggle.className = "task-prompt-toggle task-icon-button";
+        promptToggle.title = "Open full task prompt.";
+        promptToggle.setAttribute("aria-label", "Open full task prompt.");
+        promptToggle.appendChild(createTaskActionIcon("prompt"));
+        const promptLabel = document.createElement("span");
+        promptLabel.className = "sr-only";
+        promptLabel.textContent = "Prompt";
+        promptToggle.appendChild(promptLabel);
+        promptToggle.addEventListener("click", (event) => {
+          event.stopPropagation();
+          openTaskPromptModal(task);
+        });
+        return promptToggle;
+      };
+
       if (!tasks.length) {
         renderEmptyState();
         restoreTaskScrollAnchor(listNode, scrollAnchor);
@@ -11875,6 +12108,10 @@
 
           const promptActions = document.createElement("div");
           promptActions.className = "task-top-actions";
+          const promptAction = renderPromptToggle(task);
+          if (promptAction) {
+            promptActions.appendChild(promptAction);
+          }
           if (taskHistoryView && canCopyTaskCloneCommand(task)) {
             const cloneButton = document.createElement("button");
             cloneButton.type = "button";
@@ -11937,6 +12174,10 @@
         const outputAction = renderOutputToggle(requestID);
         if (outputAction) {
           topActions.appendChild(outputAction);
+        }
+        const promptAction = renderPromptToggle(task);
+        if (promptAction) {
+          topActions.appendChild(promptAction);
         }
         const imageAction = renderImageToggle(task, requestID);
         if (imageAction) {
@@ -13340,7 +13581,34 @@
         }
       });
     }
+    if (taskPromptModalClose) {
+      taskPromptModalClose.addEventListener("click", closeTaskPromptModal);
+    }
+    if (taskPromptModalMarkdown) {
+      taskPromptModalMarkdown.addEventListener("click", () => {
+        state.taskPromptModalMode = "markdown";
+        syncTaskPromptModalMode();
+      });
+    }
+    if (taskPromptModalPlain) {
+      taskPromptModalPlain.addEventListener("click", () => {
+        state.taskPromptModalMode = "plain";
+        syncTaskPromptModalMode();
+      });
+    }
+    if (taskPromptModal) {
+      taskPromptModal.addEventListener("click", (event) => {
+        if (event.target === taskPromptModal) {
+          closeTaskPromptModal();
+        }
+      });
+    }
     document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && state.taskPromptModalOpen) {
+        event.preventDefault();
+        closeTaskPromptModal();
+        return;
+      }
       if (event.key === "Escape" && state.libraryPromptModalOpen) {
         event.preventDefault();
         closeLibraryPromptModal();
