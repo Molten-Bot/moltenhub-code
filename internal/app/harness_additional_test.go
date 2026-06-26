@@ -401,3 +401,51 @@ func TestRunClearsOldPRURLWhenRecreateFailsAfterBranchRename(t *testing.T) {
 		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
 	}
 }
+
+func TestRecreatePullRequestClearsOldPRURLWhenCreateFailsAfterBranchRename(t *testing.T) {
+	t.Parallel()
+
+	cfg := sampleConfig()
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	repoDir := filepath.Join(t.TempDir(), "repo")
+	branch := "moltenhub-build-api"
+	renamedBranch := "moltenhub-build-api-abcdef12"
+	oldPRURL := "https://github.com/acme/repo/pull/42"
+	createErr := errors.New("create failed")
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: prStateViewCommand(repoDir, oldPRURL), res: execx.Result{Stdout: `{"url":"` + oldPRURL + `","state":"MERGED","mergedAt":"2026-04-02T15:05:00Z"}`}},
+		{cmd: branchMoveCommand(repoDir, renamedBranch)},
+		{cmd: pushCommand(repoDir, renamedBranch)},
+		{cmd: prCreateCommand(repoDir, cfg, renamedBranch), err: createErr},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	repo := &repoWorkspace{
+		URL:                   cfg.RepoURL,
+		Dir:                   repoDir,
+		Branch:                branch,
+		PRURL:                 oldPRURL,
+		BaseBranch:            cfg.BaseBranch,
+		CreateWorkBranch:      true,
+		BranchCollisionSuffix: runBranchCollisionSuffix(now, "abcdef123456"),
+	}
+
+	recreated, err := h.recreatePullRequestIfClosed(context.Background(), repo, cfg)
+	if !errors.Is(err, createErr) {
+		t.Fatalf("recreatePullRequestIfClosed() error = %v, want %v", err, createErr)
+	}
+	if recreated {
+		t.Fatal("recreatePullRequestIfClosed() recreated = true, want false")
+	}
+	if got, want := repo.Branch, renamedBranch; got != want {
+		t.Fatalf("Branch = %q, want %q", got, want)
+	}
+	if got := repo.PRURL; got != "" {
+		t.Fatalf("PRURL = %q, want empty after create failure", got)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
