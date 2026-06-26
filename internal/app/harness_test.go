@@ -7001,6 +7001,72 @@ func TestRunCodexAllowsNonFatalPrebuildSnapshotRefreshWarning(t *testing.T) {
 	}
 }
 
+func TestRunCodexAllowsRemoteDeploymentAuthUnavailableAfterLocalPass(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "fix Cloudflare preview build failure"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: strings.Join([]string{
+					"No new repo diff. Existing branch already contains requested change.",
+					"Validation passed:",
+					"`npm test`",
+					"`npm run build`",
+					"`npm run cf:preview -- --dry-run`",
+					"Failure: Cloudflare Workers Builds check still reported failed remotely.",
+					"Error details: GitHub CI build passed. Cloudflare build logs require Cloudflare auth; local `wrangler whoami` says not authenticated, and `wrangler deployments list` needs `CLOUDFLARE_API_TOKEN`. Local Wrangler dry-run deploy passes, so no repo-side failure reproduced.",
+				}, "\n"),
+			},
+		},
+	}}
+
+	var logs []string
+	h := New(fake)
+	h.Logf = func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
+		t.Fatalf("runCodex() error = %v, want nil for remote deployment auth gap after local pass", err)
+	}
+	if !strings.Contains(strings.Join(logs, "\n"), "action=remote_deployment_auth_unavailable") {
+		t.Fatalf("logs missing remote deployment auth warning:\n%s", strings.Join(logs, "\n"))
+	}
+}
+
+func TestRunCodexKeepsRemoteDeploymentFailureFatalWhenRepoSideReproduced(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "fix Cloudflare preview build failure"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: strings.Join([]string{
+					"Failure: Cloudflare Workers Builds check still reported failed remotely.",
+					"Error details: Local `npm run build` also fails with TypeScript errors, so repo-side failure reproduced.",
+				}, "\n"),
+			},
+		},
+	}}
+
+	h := New(fake)
+	err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", "")
+	if err == nil {
+		t.Fatal("runCodex() error = nil, want fatal repo-side deployment failure")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "codex reported failure") {
+		t.Fatalf("runCodex() error = %v, want codex reported failure marker", err)
+	}
+}
+
 func TestCodexReportedFailureDoesNotIgnoreIncompleteHubSnapshotRefreshFailure(t *testing.T) {
 	t.Parallel()
 

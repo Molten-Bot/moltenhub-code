@@ -4561,6 +4561,15 @@ func (h Harness) runCodexWithHeartbeat(
 					)
 					return run.res, nil
 				}
+				if isNonFatalRemoteDeploymentAuthFailure(detail, run.res) {
+					h.logf(
+						"stage=%s status=warn action=remote_deployment_auth_unavailable detail=%q%s",
+						agentStage,
+						detail,
+						invocation.logFieldsSuffix(),
+					)
+					return run.res, nil
+				}
 				return run.res, fmt.Errorf("%s reported failure: %s", agentStage, detail)
 			}
 			if run.err != nil {
@@ -4958,6 +4967,55 @@ func isNonFatalHubSnapshotRefreshFailure(detail string, res execx.Result) bool {
 		return false
 	}
 	if !containsAny(text, existingSnapshotMarkers) {
+		return false
+	}
+	return true
+}
+
+func isNonFatalRemoteDeploymentAuthFailure(detail string, res execx.Result) bool {
+	text := strings.ToLower(strings.TrimSpace(strings.Join([]string{
+		detail,
+		res.Stdout,
+		res.Stderr,
+	}, "\n")))
+	if text == "" {
+		return false
+	}
+	remoteCheckMarkers := []string{
+		"remote check",
+		"reported failed remotely",
+		"still reported failed remotely",
+		"cloudflare workers builds check",
+		"cloudflare build",
+		"cloudflare builds",
+	}
+	authUnavailableMarkers := []string{
+		"require cloudflare auth",
+		"requires cloudflare auth",
+		"not authenticated",
+		"cloudflare_api_token",
+		"api token",
+		"auth unavailable",
+	}
+	localPassMarkers := []string{
+		"local wrangler dry-run deploy passes",
+		"wrangler dry-run deploy passes",
+		"local dry-run deploy passes",
+		"dry-run deploy passes",
+		"local validation passed",
+		"local checks passed",
+		"github ci build passed",
+		"github ci passed",
+		"no repo-side failure reproduced",
+		"no repository-side failure reproduced",
+	}
+	if !containsAny(text, remoteCheckMarkers) {
+		return false
+	}
+	if !containsAny(text, authUnavailableMarkers) {
+		return false
+	}
+	if !containsAny(text, localPassMarkers) {
 		return false
 	}
 	return true
