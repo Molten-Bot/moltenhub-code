@@ -148,6 +148,57 @@ func TestFirstConfiguredGitHubTokenAcceptsMalformedDockerComposeEnv(t *testing.T
 	}
 }
 
+func TestSetGitHubTokenEnvironmentTrimsAndRejectsEmpty(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+
+	if err := setGitHubTokenEnvironment("  github_token_configured  "); err != nil {
+		t.Fatalf("setGitHubTokenEnvironment() error = %v", err)
+	}
+	if got, want := os.Getenv("GH_TOKEN"), "github_token_configured"; got != want {
+		t.Fatalf("GH_TOKEN = %q, want %q", got, want)
+	}
+	if got, want := os.Getenv("GITHUB_TOKEN"), "github_token_configured"; got != want {
+		t.Fatalf("GITHUB_TOKEN = %q, want %q", got, want)
+	}
+
+	if err := setGitHubTokenEnvironment(" \t "); err == nil || err.Error() != "github token is required" {
+		t.Fatalf("setGitHubTokenEnvironment(empty) error = %v, want required", err)
+	}
+}
+
+func TestIsLikelyGitHubTokenRecognizesSupportedPrefixes(t *testing.T) {
+	t.Parallel()
+
+	for _, token := range []string{
+		"ghp_example",
+		"gho_example",
+		"ghu_example",
+		"ghs_example",
+		"ghr_example",
+		"github_pat_example",
+		"  ghp_trimmed  ",
+	} {
+		token := token
+		t.Run(token, func(t *testing.T) {
+			t.Parallel()
+			if !isLikelyGitHubToken(token) {
+				t.Fatalf("isLikelyGitHubToken(%q) = false, want true", token)
+			}
+		})
+	}
+
+	for _, token := range []string{"", "github_token_plain", "pat_github", "xghp_prefix"} {
+		token := token
+		t.Run("reject_"+token, func(t *testing.T) {
+			t.Parallel()
+			if isLikelyGitHubToken(token) {
+				t.Fatalf("isLikelyGitHubToken(%q) = true, want false", token)
+			}
+		})
+	}
+}
+
 func TestConfigurableAgentAuthStateSharedTransitions(t *testing.T) {
 	var state configurableAgentAuthState
 	options := []web.AgentAuthOption{{Value: "OPENAI_API_KEY", Label: "OpenAI"}}
@@ -175,6 +226,41 @@ func TestConfigurableAgentAuthStateSharedTransitions(t *testing.T) {
 	}
 	if state.configureCommand != "" || state.configurePlaceholder != "" || state.configureOptions != nil {
 		t.Fatalf("setReady() configure fields = %+v", state)
+	}
+}
+
+func TestConfigurableAgentAuthGateBaseSnapshotAndNilConfigure(t *testing.T) {
+	t.Parallel()
+
+	var nilGate *configurableAgentAuthGateBase
+	state, err := nilGate.configureGitHubTokenAndRefresh(context.Background(), "codex", "ignored", nil)
+	if err != nil {
+		t.Fatalf("configureGitHubTokenAndRefresh(nil) error = %v", err)
+	}
+	if !state.Ready || state.Required || state.State != "ready" {
+		t.Fatalf("configureGitHubTokenAndRefresh(nil) state = %+v, want ready", state)
+	}
+
+	gate := &configurableAgentAuthGateBase{}
+	gate.authState.setConfigureUI(
+		" paste ",
+		" configure ",
+		" token ",
+		[]web.AgentAuthOption{{Value: "one", Label: "One"}},
+	)
+	snapshot := gate.snapshotLocked("claude")
+	if got, want := snapshot.Harness, "claude"; got != want {
+		t.Fatalf("Harness = %q, want %q", got, want)
+	}
+	if got, want := snapshot.Message, "paste"; got != want {
+		t.Fatalf("Message = %q, want %q", got, want)
+	}
+	if got, want := snapshot.ConfigureCommand, "configure"; got != want {
+		t.Fatalf("ConfigureCommand = %q, want %q", got, want)
+	}
+	snapshot.ConfigureOptions[0].Label = "mutated"
+	if got, want := gate.authState.configureOptions[0].Label, "One"; got != want {
+		t.Fatalf("snapshot options alias state: got %q, want %q", got, want)
 	}
 }
 
