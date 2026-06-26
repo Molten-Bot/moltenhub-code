@@ -809,7 +809,6 @@
     const TASK_HISTORY_LIMIT = 25;
     const TASK_HISTORY_MAX_AGE_MS = 60 * 60 * 1000;
     const MAX_TERMINAL_LINES = 500;
-    const MAX_PROGRESS_SIGNAL_LOGS = 500;
     const TASK_XTERM_VERSION = "6.0.0";
     const TASK_XTERM_MIN_COLS = 24;
     const TASK_XTERM_MIN_ROWS = 6;
@@ -1901,6 +1900,7 @@
       rerunInFlight: new Set(),
       closeInFlight: new Set(),
       taskControlInFlight: new Set(),
+      taskProgressSignalCache: new Map(),
       taskProgressModelCache: new Map(),
       sparkleTaskIDs: new Set(),
       sparkleTimers: new Map(),
@@ -11250,8 +11250,8 @@
       return token;
     }
 
-    function taskProgressSignals(task) {
-      const signals = {
+    function newTaskProgressSignals() {
+      return {
         stages: new Set(),
         hasWorkflowSeen: false,
         hasForkFallback: false,
@@ -11263,67 +11263,130 @@
         hasChecksSeen: false,
         hasAutoMergeSeen: false,
       };
+    }
 
-      const rawLogs = Array.isArray(task?.logs) ? task.logs : [];
-      const logs = rawLogs.length > MAX_PROGRESS_SIGNAL_LOGS
-        ? rawLogs.slice(rawLogs.length - MAX_PROGRESS_SIGNAL_LOGS)
-        : rawLogs;
-      for (let i = 0; i < logs.length; i += 1) {
-        const line = String(logs[i]?.text || "").trim();
-        if (!line || !line.includes("stage=")) {
-          continue;
-        }
-        const stage = String(parseTaskProgressField(line, "stage") || "").trim().toLowerCase();
-        if (!stage) {
-          continue;
-        }
-        signals.stages.add(stage);
-        if (stage === "workflow") {
-          signals.hasWorkflowSeen = true;
-        }
-        if (stage === "pr") {
-          signals.hasPRSeen = true;
-        }
-        if (stage === "checks") {
-          signals.hasChecksSeen = true;
-        }
-        if (TASK_PROGRESS_AGENT_STAGES.has(stage)) {
-          signals.hasAgentSeen = true;
-          const action = String(parseTaskProgressField(line, "action") || "").trim().toLowerCase();
-          if (action === "auto_merge") {
-            signals.hasAutoMergeSeen = true;
-          }
-        }
-        if (stage === "git") {
-          const gitAction = String(parseTaskProgressField(line, "action") || "").trim().toLowerCase();
-          if (gitAction === "branch" || gitAction === "branch_reuse") {
-            signals.hasBranchSeen = true;
-          }
-          if (gitAction.includes("commit")) {
-            signals.hasCommitSeen = true;
-          }
-          if (gitAction === "probe_write_access" || gitAction === "push_sync") {
-            signals.hasPublishGitSeen = true;
-          }
-        }
-        if (stage === "workflow") {
-          const lower = line.toLowerCase();
-          const strategy = String(parseTaskProgressField(line, "strategy") || "").trim().toLowerCase();
-          const remote = String(parseTaskProgressField(line, "remote") || "").trim().toLowerCase();
-          const action = String(parseTaskProgressField(line, "action") || "").trim().toLowerCase();
-          if (
-            strategy === "fork-fallback" ||
-            remote === "fork" ||
-            action.includes("fork") ||
-            lower.includes("reason=direct_write_unavailable") ||
-            lower.includes("strategy=fork-fallback") ||
-            lower.includes("remote=fork")
-          ) {
-            signals.hasForkFallback = true;
-          }
+    function cloneTaskProgressSignals(signals) {
+      const clone = newTaskProgressSignals();
+      const stages = signals?.stages instanceof Set ? signals.stages : new Set();
+      stages.forEach((stage) => clone.stages.add(stage));
+      clone.hasWorkflowSeen = Boolean(signals?.hasWorkflowSeen);
+      clone.hasForkFallback = Boolean(signals?.hasForkFallback);
+      clone.hasAgentSeen = Boolean(signals?.hasAgentSeen);
+      clone.hasBranchSeen = Boolean(signals?.hasBranchSeen);
+      clone.hasCommitSeen = Boolean(signals?.hasCommitSeen);
+      clone.hasPublishGitSeen = Boolean(signals?.hasPublishGitSeen);
+      clone.hasPRSeen = Boolean(signals?.hasPRSeen);
+      clone.hasChecksSeen = Boolean(signals?.hasChecksSeen);
+      clone.hasAutoMergeSeen = Boolean(signals?.hasAutoMergeSeen);
+      return clone;
+    }
+
+    function taskProgressLogKey(log) {
+      return [
+        String(log?.time || ""),
+        String(log?.stream || ""),
+        String(log?.text || "").slice(0, 240),
+      ].join("\u001f");
+    }
+
+    function applyTaskProgressLogSignal(signals, rawLine) {
+      const line = String(rawLine || "").trim();
+      if (!line || !line.includes("stage=")) {
+        return;
+      }
+      const stage = String(parseTaskProgressField(line, "stage") || "").trim().toLowerCase();
+      if (!stage) {
+        return;
+      }
+      signals.stages.add(stage);
+      if (stage === "workflow") {
+        signals.hasWorkflowSeen = true;
+      }
+      if (stage === "pr") {
+        signals.hasPRSeen = true;
+      }
+      if (stage === "checks") {
+        signals.hasChecksSeen = true;
+      }
+      if (TASK_PROGRESS_AGENT_STAGES.has(stage)) {
+        signals.hasAgentSeen = true;
+        const action = String(parseTaskProgressField(line, "action") || "").trim().toLowerCase();
+        if (action === "auto_merge") {
+          signals.hasAutoMergeSeen = true;
         }
       }
+      if (stage === "git") {
+        const gitAction = String(parseTaskProgressField(line, "action") || "").trim().toLowerCase();
+        if (gitAction === "branch" || gitAction === "branch_reuse") {
+          signals.hasBranchSeen = true;
+        }
+        if (gitAction.includes("commit")) {
+          signals.hasCommitSeen = true;
+        }
+        if (gitAction === "probe_write_access" || gitAction === "push_sync") {
+          signals.hasPublishGitSeen = true;
+        }
+      }
+      if (stage === "workflow") {
+        const lower = line.toLowerCase();
+        const strategy = String(parseTaskProgressField(line, "strategy") || "").trim().toLowerCase();
+        const remote = String(parseTaskProgressField(line, "remote") || "").trim().toLowerCase();
+        const action = String(parseTaskProgressField(line, "action") || "").trim().toLowerCase();
+        if (
+          strategy === "fork-fallback" ||
+          remote === "fork" ||
+          action.includes("fork") ||
+          lower.includes("reason=direct_write_unavailable") ||
+          lower.includes("strategy=fork-fallback") ||
+          lower.includes("remote=fork")
+        ) {
+          signals.hasForkFallback = true;
+        }
+      }
+    }
 
+    function taskProgressLogSignals(task) {
+      const logs = Array.isArray(task?.logs) ? task.logs : [];
+      const requestID = String(task?.request_id || "").trim();
+      if (!requestID) {
+        const signals = newTaskProgressSignals();
+        for (let i = 0; i < logs.length; i += 1) {
+          applyTaskProgressLogSignal(signals, logs[i]?.text);
+        }
+        return signals;
+      }
+
+      const firstKey = logs.length > 0 ? taskProgressLogKey(logs[0]) : "";
+      const lastKey = logs.length > 0 ? taskProgressLogKey(logs[logs.length - 1]) : "";
+      const cached = state.taskProgressSignalCache.get(requestID);
+      let signals = cached ? cloneTaskProgressSignals(cached.signals) : newTaskProgressSignals();
+      let startIndex = 0;
+      if (cached && logs.length >= cached.scannedCount && cached.firstKey === firstKey) {
+        startIndex = cached.scannedCount;
+        if (logs.length === cached.scannedCount && cached.lastKey === lastKey) {
+          return signals;
+        }
+      }
+      for (let i = startIndex; i < logs.length; i += 1) {
+        applyTaskProgressLogSignal(signals, logs[i]?.text);
+      }
+      state.taskProgressSignalCache.set(requestID, {
+        firstKey,
+        lastKey,
+        scannedCount: logs.length,
+        signals,
+      });
+      if (state.taskProgressSignalCache.size > 300) {
+        const oldest = state.taskProgressSignalCache.keys().next();
+        if (!oldest.done) {
+          state.taskProgressSignalCache.delete(oldest.value);
+        }
+      }
+      return cloneTaskProgressSignals(signals);
+    }
+
+    function taskProgressSignals(task) {
+      const signals = taskProgressLogSignals(task);
       const currentStage = String(task?.stage || "").trim().toLowerCase();
       if (currentStage) {
         signals.stages.add(currentStage);
@@ -11344,6 +11407,22 @@
         signals.hasPRSeen = true;
       }
       return signals;
+    }
+
+    function taskProgressSignalsSignature(signals) {
+      const stages = signals?.stages instanceof Set ? Array.from(signals.stages).sort().join(",") : "";
+      return [
+        stages,
+        signals?.hasWorkflowSeen ? "workflow" : "",
+        signals?.hasForkFallback ? "fork" : "",
+        signals?.hasAgentSeen ? "agent" : "",
+        signals?.hasBranchSeen ? "branch" : "",
+        signals?.hasCommitSeen ? "commit" : "",
+        signals?.hasPublishGitSeen ? "publish_git" : "",
+        signals?.hasPRSeen ? "pr" : "",
+        signals?.hasChecksSeen ? "checks" : "",
+        signals?.hasAutoMergeSeen ? "auto_merge" : "",
+      ].join(",");
     }
 
     function taskProgressStepsForTask(task, signals) {
@@ -11424,8 +11503,7 @@
       return taskProgressEntryStepID(task);
     }
 
-    function buildTaskProgressModel(task) {
-      const signals = taskProgressSignals(task);
+    function buildTaskProgressModel(task, signals = taskProgressSignals(task)) {
       const steps = taskProgressStepsForTask(task, signals);
       const currentStepID = taskProgressCurrentStepID(task, signals);
       let index = steps.findIndex((step) => String(step?.id || "") === currentStepID);
@@ -11435,7 +11513,7 @@
       return { steps, index };
     }
 
-    function taskProgressModelCacheKey(task) {
+    function taskProgressModelCacheKey(task, signals = taskProgressSignals(task)) {
       const logs = Array.isArray(task?.logs) ? task.logs : [];
       const lastLog = logs.length > 0 ? logs[logs.length - 1] : null;
       const tail = String(lastLog?.text || "").slice(0, 160);
@@ -11449,6 +11527,7 @@
         String(task?.pr_url || ""),
         String(logs.length),
         tail,
+        taskProgressSignalsSignature(signals),
       ].join("|");
     }
 
@@ -11457,7 +11536,8 @@
         return { steps: [], index: 0 };
       }
       const requestID = String(task?.request_id || "").trim();
-      const key = taskProgressModelCacheKey(task);
+      const signals = taskProgressSignals(task);
+      const key = taskProgressModelCacheKey(task, signals);
       if (requestID) {
         const cached = state.taskProgressModelCache.get(requestID);
         if (cached && cached.key === key) {
@@ -11465,7 +11545,7 @@
         }
       }
 
-      const value = buildTaskProgressModel(task);
+      const value = buildTaskProgressModel(task, signals);
 
       if (requestID) {
         state.taskProgressModelCache.set(requestID, { key, value });

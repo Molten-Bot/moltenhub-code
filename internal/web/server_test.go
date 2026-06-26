@@ -797,6 +797,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function taskProgressStepsForTask(") || !strings.Contains(markup, "function taskProgressCurrentStepID(") || !strings.Contains(markup, "function taskProgressModel(") {
 		t.Fatalf("expected index html to build dynamic progress steps per task")
 	}
+	if !strings.Contains(markup, "taskProgressSignalCache: new Map(),") ||
+		!strings.Contains(markup, "function taskProgressLogSignals(task)") ||
+		!strings.Contains(markup, "taskProgressSignalsSignature(signals)") ||
+		!strings.Contains(markup, "taskProgressModelCacheKey(task, signals)") {
+		t.Fatalf("expected task progress rendering to cache cumulative log signals and include them in model cache invalidation")
+	}
+	if strings.Contains(markup, "rawLogs.length > MAX_PROGRESS_SIGNAL_LOGS") {
+		t.Fatalf("expected task progress signal detection to avoid tail-only log scans that can forget earlier progress")
+	}
 	if !strings.Contains(markup, "task-progress-step-icon") {
 		t.Fatalf("expected index html to render task progress step icons")
 	}
