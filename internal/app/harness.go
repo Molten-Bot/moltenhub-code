@@ -782,6 +782,24 @@ func (h Harness) processChangedRepo(
 			}
 			noChecksReported := isNoChecksReported(checkRes, checkErr)
 			if noChecksReported && noReportRetry == 0 {
+				recreated, recreateErr := h.recreatePullRequestIfClosed(ctx, repo, cfg)
+				if recreateErr != nil {
+					h.logf(
+						"stage=checks status=warn action=recreate_closed_pr reason=failed repo=%s repo_dir=%s branch=%s pr_url=%s attempt=%d err=%q",
+						repo.URL,
+						repo.RelDir,
+						repo.Branch,
+						repo.PRURL,
+						attempt+1,
+						recreateErr,
+					)
+				}
+				if recreated {
+					noReportRetry = -1
+					continue
+				}
+			}
+			if noChecksReported && noReportRetry == 0 {
 				h.logf(
 					"stage=checks status=start action=workflow_dispatch reason=no_checks_reported repo=%s repo_dir=%s branch=%s workflow=%s attempt=%d",
 					repo.URL,
@@ -968,6 +986,77 @@ func (h Harness) processChangedRepo(
 		}
 		h.logf("stage=git status=ok action=repair_commit attempt=%d repo=%s repo_dir=%s", attempt+1, repo.URL, repo.RelDir)
 	}
+}
+
+type prStateView struct {
+	URL      string `json:"url"`
+	State    string `json:"state"`
+	MergedAt string `json:"mergedAt"`
+}
+
+func (h Harness) recreatePullRequestIfClosed(ctx context.Context, repo *repoWorkspace, cfg config.Config) (bool, error) {
+	if repo == nil {
+		return false, fmt.Errorf("repo workspace is required")
+	}
+	if !repo.CreateWorkBranch || strings.TrimSpace(repo.PRURL) == "" {
+		return false, nil
+	}
+	state, err := h.loadPullRequestState(ctx, repo.Dir, repo.PRURL)
+	if err != nil {
+		return false, err
+	}
+	if pullRequestStateIsOpen(state) {
+		return false, nil
+	}
+
+	oldPRURL := repo.PRURL
+	oldBranch := repo.Branch
+	pushRemote := repoPushRemote(*repo)
+	if err := h.renameGeneratedWorkBranch(ctx, repo, pushRemote, "closed_pr"); err != nil {
+		return false, err
+	}
+	if err := h.pushWithSync(ctx, repo, 0); err != nil {
+		return false, err
+	}
+	prURL, err := h.createPullRequestURL(ctx, *repo, cfg, true, repoPRHeadRef(*repo), repoPRTargetRepo(*repo))
+	if err != nil {
+		return false, err
+	}
+	repo.PRURL = prURL
+	h.logf(
+		"stage=pr status=ok action=recreate_closed_pr repo=%s repo_dir=%s old_branch=%s branch=%s old_pr_url=%s pr_url=%s",
+		repo.URL,
+		repo.RelDir,
+		oldBranch,
+		repo.Branch,
+		oldPRURL,
+		repo.PRURL,
+	)
+	return true, nil
+}
+
+func (h Harness) loadPullRequestState(ctx context.Context, repoDir, prURL string) (prStateView, error) {
+	res, err := h.runCommand(ctx, "pr", prStateViewCommand(repoDir, prURL))
+	if err != nil {
+		return prStateView{}, commandErrorWithDetails(
+			fmt.Sprintf("load pull request state for %s", prURL),
+			err,
+			res,
+			maxGitErrorDetailChars,
+		)
+	}
+	var state prStateView
+	if err := json.Unmarshal([]byte(strings.TrimSpace(res.Stdout)), &state); err != nil {
+		return prStateView{}, fmt.Errorf("decode pull request state for %s: %w", prURL, err)
+	}
+	return state, nil
+}
+
+func pullRequestStateIsOpen(state prStateView) bool {
+	if strings.TrimSpace(state.MergedAt) != "" {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(state.State), "open")
 }
 
 func (h Harness) syncGeneratedWorkBranchWithBase(
@@ -1262,6 +1351,10 @@ func (h Harness) pushWithSync(ctx context.Context, repo *repoWorkspace, remediat
 }
 
 func (h Harness) renameWorkBranchForRemoteCollision(ctx context.Context, repo *repoWorkspace, remote string) error {
+	return h.renameGeneratedWorkBranch(ctx, repo, remote, "remote_non_fast_forward")
+}
+
+func (h Harness) renameGeneratedWorkBranch(ctx context.Context, repo *repoWorkspace, remote, reason string) error {
 	if repo == nil {
 		return fmt.Errorf("repo workspace is required")
 	}
@@ -1278,8 +1371,13 @@ func (h Harness) renameWorkBranchForRemoteCollision(ctx context.Context, repo *r
 		return fmt.Errorf("cannot derive alternate branch for colliding work branch %q", oldBranch)
 	}
 	remote = normalizeGitRemoteName(remote)
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "branch_collision"
+	}
 	h.logf(
-		"stage=git status=start action=branch_rename reason=remote_non_fast_forward repo=%s repo_dir=%s branch=%s new_branch=%s remote=%s",
+		"stage=git status=start action=branch_rename reason=%s repo=%s repo_dir=%s branch=%s new_branch=%s remote=%s",
+		reason,
 		repo.URL,
 		repo.RelDir,
 		oldBranch,
@@ -1292,7 +1390,8 @@ func (h Harness) renameWorkBranchForRemoteCollision(ctx context.Context, repo *r
 	repo.Branch = newBranch
 	syncRepoPublishHeadRef(repo)
 	h.logf(
-		"stage=git status=ok action=branch_rename reason=remote_non_fast_forward repo=%s repo_dir=%s branch=%s previous_branch=%s remote=%s",
+		"stage=git status=ok action=branch_rename reason=%s repo=%s repo_dir=%s branch=%s previous_branch=%s remote=%s",
+		reason,
 		repo.URL,
 		repo.RelDir,
 		newBranch,
@@ -5990,6 +6089,19 @@ func prLookupAnyByHeadWithRepoCommand(repoDir, headRef, repo string) execx.Comma
 	args := []string{"pr", "list", "--state", "all", "--head", headRef, "--json", "url", "--limit", "1"}
 	if strings.TrimSpace(repo) != "" {
 		args = append(args, "--repo", strings.TrimSpace(repo))
+	}
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "gh",
+		Args: args,
+	}
+}
+
+func prStateViewCommand(repoDir, prURL string) execx.Command {
+	selector := githubutil.PullRequestSelector(prURL)
+	args := []string{"pr", "view", selector, "--json", "url,state,mergedAt"}
+	if repo := githubutil.PullRequestRepository(prURL); repo != "" {
+		args = append(args, "--repo", repo)
 	}
 	return execx.Command{
 		Dir:  repoDir,

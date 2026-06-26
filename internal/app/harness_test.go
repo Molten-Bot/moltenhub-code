@@ -3351,6 +3351,7 @@ func TestRunNoChecksReportedRetriesBeforePassing(t *testing.T) {
 		{cmd: pushCommand(repoDir, branch)},
 		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
 		{cmd: prChecksCommand(repoDir, prURL), res: execx.Result{Stderr: noChecks + "\n"}, err: errors.New("checks unavailable")},
+		{cmd: prStateViewCommand(repoDir, prURL), res: execx.Result{Stdout: `{"url":"` + prURL + `","state":"OPEN"}`}},
 		{cmd: workflowDispatchCommand(repoDir, branch)},
 		{cmd: prChecksCommand(repoDir, prURL), res: execx.Result{Stderr: noChecks + "\n"}, err: errors.New("checks unavailable")},
 		{cmd: prChecksCommand(repoDir, prURL)},
@@ -3413,6 +3414,7 @@ func TestRunNoChecksReportedAfterRetryWindowTriggersRemediation(t *testing.T) {
 		{cmd: pushCommand(repoDir, branch)},
 		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
 		{cmd: prChecksCommand(repoDir, prURL), res: execx.Result{Stderr: noChecks + "\n"}, err: errors.New("checks unavailable")},
+		{cmd: prStateViewCommand(repoDir, prURL), res: execx.Result{Stdout: `{"url":"` + prURL + `","state":"OPEN"}`}},
 		{cmd: workflowDispatchCommand(repoDir, branch)},
 	}
 	for i := 1; i <= maxPRChecksNoReportRetries; i++ {
@@ -3493,6 +3495,7 @@ func TestRunNoChecksReportedResolvesFromWorkflowDispatchSnapshot(t *testing.T) {
 		{cmd: pushCommand(repoDir, branch)},
 		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
 		{cmd: prChecksCommand(repoDir, prURL), res: execx.Result{Stderr: noChecks + "\n"}, err: errors.New("checks unavailable")},
+		{cmd: prStateViewCommand(repoDir, prURL), res: execx.Result{Stdout: `{"url":"` + prURL + `","state":"OPEN"}`}},
 		{cmd: workflowDispatchCommand(repoDir, branch)},
 	}
 	for i := 1; i <= maxPRChecksNoReportRetries; i++ {
@@ -3570,6 +3573,7 @@ func TestRunNoChecksReportedWithNoRequiredStatusChecksPasses(t *testing.T) {
 		{cmd: pushCommand(repoDir, branch)},
 		{cmd: prCreateCommand(repoDir, cfg, branch), res: execx.Result{Stdout: prURL + "\n"}},
 		{cmd: prChecksCommand(repoDir, prURL), res: execx.Result{Stderr: noChecks + "\n"}, err: errors.New("checks unavailable")},
+		{cmd: prStateViewCommand(repoDir, prURL), res: execx.Result{Stdout: `{"url":"` + prURL + `","state":"OPEN"}`}},
 		{cmd: workflowDispatchCommand(repoDir, branch), res: execx.Result{Stderr: "HTTP 422: Workflow does not have 'workflow_dispatch' trigger"}, err: errors.New("workflow dispatch failed")},
 	}
 	for i := 1; i <= maxPRChecksNoReportRetries; i++ {
