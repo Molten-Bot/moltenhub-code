@@ -802,8 +802,6 @@
     const TASK_ORDER_SYNC_INTERVAL_MS = 4_000;
     const NEW_HUB_TASK_HIGHLIGHT_MS = 4_000;
     const TASK_TIMING_REFRESH_INTERVAL_MS = 30_000;
-    const TASK_ICON_IDLE_SPIN_MS = 16_000;
-    const TASK_ICON_IDLE_REFRESH_MS = 1_000;
     const DASHBOARD_RUNTIME_IDLE_PAUSE_MS = 2 * 60 * 1000;
     const DEFERRED_SELECTION_RENDER_FLUSH_DELAY_MS = 32;
     const TASK_SOURCE_HEADER = "X-MoltenHub-Task-Source";
@@ -1902,8 +1900,6 @@
       rerunInFlight: new Set(),
       closeInFlight: new Set(),
       taskControlInFlight: new Set(),
-      taskIconStateSignatures: new Map(),
-      taskIconStateChangedAt: new Map(),
       taskProgressModelCache: new Map(),
       sparkleTaskIDs: new Set(),
       sparkleTimers: new Map(),
@@ -10573,68 +10569,12 @@
       return "prompt";
     }
 
-    function taskIconStateSignature(task) {
-      const status = normalizedTaskStatus(task?.status) || "pending";
-      const stage = String(task?.stage || "").trim().toLowerCase();
-      const controls = task?.controls || {};
-      return [
-        status,
-        stage,
-        Boolean(controls.pause),
-        Boolean(controls.run),
-        Boolean(controls.force_run),
-        Boolean(controls.stop),
-      ].join("|");
-    }
-
-    function syncTaskIconStateMemory(tasks) {
-      const nowMs = Date.now();
-      const seen = new Set();
-      for (const task of tasks || []) {
-        const requestID = taskRequestID(task);
-        if (!requestID) {
-          continue;
-        }
-        seen.add(requestID);
-
-        const nextSignature = taskIconStateSignature(task);
-        const previousSignature = state.taskIconStateSignatures.get(requestID);
-        if (previousSignature !== nextSignature) {
-          state.taskIconStateSignatures.set(requestID, nextSignature);
-          state.taskIconStateChangedAt.set(requestID, nowMs);
-          continue;
-        }
-        if (!state.taskIconStateChangedAt.has(requestID)) {
-          state.taskIconStateChangedAt.set(requestID, nowMs);
-        }
-      }
-
-      for (const requestID of Array.from(state.taskIconStateSignatures.keys())) {
-        if (seen.has(requestID)) {
-          continue;
-        }
-        state.taskIconStateSignatures.delete(requestID);
-        state.taskIconStateChangedAt.delete(requestID);
-      }
-    }
-
-    function taskIconsShouldIdleSpin(task, nowMs = Date.now()) {
-      const requestID = taskRequestID(task);
-      if (!requestID) {
-        return false;
-      }
+    function taskIconsShouldBreathe(task) {
       const status = normalizedTaskStatus(task?.status);
-      if (status !== "running" && status !== "active") {
-        return false;
-      }
-      const changedAtMs = Number(state.taskIconStateChangedAt.get(requestID) || 0);
-      if (!Number.isFinite(changedAtMs) || changedAtMs <= 0) {
-        return false;
-      }
-      return nowMs - changedAtMs >= TASK_ICON_IDLE_SPIN_MS;
+      return status === "running" || status === "active";
     }
 
-    function applyTaskIdleSpinClasses(listNode, tasks) {
+    function applyTaskIconActivityClasses(listNode, tasks) {
       if (!listNode) {
         return;
       }
@@ -10647,21 +10587,10 @@
         tasksByID.set(requestID, task);
       }
 
-      const nowMs = Date.now();
       for (const node of listNode.querySelectorAll(".task[data-request-id]")) {
         const requestID = String(node.dataset.requestId || "").trim();
         const task = tasksByID.get(requestID);
-        node.classList.toggle("task-icons-idle-spin", Boolean(task) && taskIconsShouldIdleSpin(task, nowMs));
-      }
-    }
-
-    function refreshTaskIdleSpinClasses() {
-      if (!state.snapshot) {
-        return;
-      }
-      applyTaskIdleSpinClasses(taskList, displayTasks(state.snapshot));
-      if (state.taskFullscreenOpen) {
-        applyTaskIdleSpinClasses(taskFullscreenList, fullscreenTasks(state.snapshot));
+        node.classList.toggle("task-icons-breathe", Boolean(task) && taskIconsShouldBreathe(task));
       }
     }
 
@@ -11941,7 +11870,7 @@
       const renderSig = taskCollectionRenderSig(tasks, options);
       if (listNode.dataset.renderSig === renderSig) {
         syncTaskTimingSummariesForList(listNode, tasks);
-        applyTaskIdleSpinClasses(listNode, tasks);
+        applyTaskIconActivityClasses(listNode, tasks);
         listNode.dataset.pendingRenderSig = "";
         return;
       }
@@ -12396,7 +12325,7 @@
       }
       restoreTaskScrollAnchor(listNode, scrollAnchor);
       animateTaskReflow(listNode, previousTaskRects);
-      applyTaskIdleSpinClasses(listNode, tasks);
+      applyTaskIconActivityClasses(listNode, tasks);
       replaceLucideIcons(listNode);
     }
 
@@ -12897,7 +12826,6 @@
       }
       dropReposFromHistory(failedRepoAccessRepos);
       rememberRepos(observedRepos);
-      syncTaskIconStateMemory(snapshot.tasks || []);
       renderHubConnection(snapshot);
       renderResourceMetrics(snapshot);
       syncDashboardDockLinkAvailability(snapshot);
@@ -13754,7 +13682,6 @@
     libraryTargetSubdir.value = builderTargetSubdir.value;
     libraryReviewerInput.value = builderReviewerInput.value;
     scheduleTaskTimingRefresh();
-    window.setInterval(refreshTaskIdleSpinClasses, TASK_ICON_IDLE_REFRESH_MS);
     pruneRepoHistoryToLoadedGitHubRepos();
     renderRepoHistoryOptions();
     renderReviewerHistoryOptions();

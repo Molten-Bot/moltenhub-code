@@ -3085,6 +3085,7 @@ select.prompt-control {
 }
 
 .badge-icon {
+  position: relative;
   width: 28px;
   min-width: 28px;
   height: 28px;
@@ -3093,6 +3094,12 @@ select.prompt-control {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
+}
+
+.badge-icon > *,
+.task-progress-step > * {
+  position: relative;
+  z-index: 1;
 }
 
 .task-status-glyph {
@@ -3122,10 +3129,24 @@ select.prompt-control {
 
 .badge.running .task-action-glyph-loader,
 .badge.active .task-action-glyph-loader {
-  animation: taskRunningSpinner 920ms linear infinite;
+  animation: taskIconBreathe 2.4s ease-in-out infinite;
   transform-origin: center;
   will-change: transform;
   filter: var(--task-icon-contrast-filter);
+}
+
+.badge.running::before,
+.badge.active::before,
+.task-current-state.is-running::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  z-index: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--running) 34%, transparent);
+  filter: blur(5px);
+  opacity: 0.48;
+  animation: taskIconGlowBreathe 2.4s ease-in-out infinite;
 }
 
 .badge.running,
@@ -3227,13 +3248,15 @@ select.prompt-control {
 
 .task-current-state.is-running .task-current-state-icon,
 .task-current-state.is-running .task-current-state-glyph {
-  animation: taskProgressCurrentSpin 10s linear infinite;
+  animation: taskIconBreathe 2.4s ease-in-out infinite;
   transform-origin: center;
   will-change: transform;
 }
 
-.task-icons-idle-spin .task-action-glyph-loader {
-  animation: taskIconIdleSpin 16s linear infinite;
+.task-icons-breathe .task-action-glyph-loader {
+  animation: taskIconBreathe 2.4s ease-in-out infinite;
+  transform-origin: center;
+  will-change: transform;
 }
 
 .task-sparklet {
@@ -4581,23 +4604,27 @@ select.prompt-control {
   }
 }
 
-@keyframes taskIconIdleSpin {
-  from {
-    transform: rotate(0deg);
+@keyframes taskIconBreathe {
+  0%,
+  100% {
+    transform: scale(1);
   }
 
-  to {
-    transform: rotate(360deg);
+  50% {
+    transform: scale(1.08);
   }
 }
 
-@keyframes taskRunningSpinner {
-  from {
-    transform: rotate(0deg);
+@keyframes taskIconGlowBreathe {
+  0%,
+  100% {
+    opacity: 0.28;
+    transform: scale(0.92);
   }
 
-  to {
-    transform: rotate(360deg);
+  50% {
+    opacity: 0.58;
+    transform: scale(1.08);
   }
 }
 
@@ -4607,12 +4634,19 @@ select.prompt-control {
     animation: none;
   }
 
-  .task-icons-idle-spin .task-action-glyph-loader {
+  .task-icons-breathe .task-action-glyph-loader {
     animation: none;
   }
 
   .task-current-state.is-running .task-current-state-icon,
   .task-current-state.is-running .task-current-state-glyph {
+    animation: none;
+  }
+
+  .badge.running::before,
+  .badge.active::before,
+  .task-current-state.is-running::before,
+  .task-progress.is-running .task-progress-step.current::before {
     animation: none;
   }
 }
@@ -4818,19 +4852,21 @@ html.pink .task-progress-step.current .task-progress-step-icon.is-agent-logo {
 
 .task-progress.is-running .task-progress-step.current .task-progress-step-icon,
 .task-progress.is-running .task-progress-step.current .task-progress-step-glyph {
-  animation: taskProgressCurrentSpin 10s linear infinite;
+  animation: taskIconBreathe 2.4s ease-in-out infinite;
   transform-origin: center;
   will-change: transform;
 }
 
-@keyframes taskProgressCurrentSpin {
-  0%,
-  80% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
+.task-progress.is-running .task-progress-step.current::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  z-index: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--running) 30%, transparent);
+  filter: blur(6px);
+  opacity: 0.44;
+  animation: taskIconGlowBreathe 2.4s ease-in-out infinite;
 }
 
 .task-output-list {

@@ -3504,9 +3504,14 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 		!strings.Contains(css, ".task-progress-step-glyph {\n  width: 21.33px;\n  height: 21.33px;") ||
 		!strings.Contains(css, ".task-progress-step.current .task-progress-step-icon {\n  width: 26.56px;\n  height: 26.56px;\n  opacity: 1;\n}") ||
 		!strings.Contains(css, ".task-progress-step.current .task-progress-step-glyph {\n  width: 26.56px;\n  height: 26.56px;\n  opacity: 1;\n}") ||
-		!strings.Contains(css, ".task-progress.is-running .task-progress-step.current .task-progress-step-icon,\n.task-progress.is-running .task-progress-step.current .task-progress-step-glyph {\n  animation: taskProgressCurrentSpin 10s linear infinite;\n  transform-origin: center;\n  will-change: transform;\n}") ||
-		!strings.Contains(css, "@keyframes taskProgressCurrentSpin {\n  0%,\n  80% {\n    transform: rotate(0deg);\n  }\n  100% {\n    transform: rotate(360deg);\n  }\n}") {
-		t.Fatalf("expected stylesheet to render larger progress icons, oversized active icons, and a running spin animation")
+		!strings.Contains(css, ".task-progress.is-running .task-progress-step.current .task-progress-step-icon,\n.task-progress.is-running .task-progress-step.current .task-progress-step-glyph {\n  animation: taskIconBreathe 2.4s ease-in-out infinite;\n  transform-origin: center;\n  will-change: transform;\n}") ||
+		!strings.Contains(css, ".task-progress.is-running .task-progress-step.current::before {\n  content: \"\";\n  position: absolute;\n  inset: -7px;") ||
+		!strings.Contains(css, "@keyframes taskIconBreathe {\n  0%,\n  100% {\n    transform: scale(1);\n  }\n\n  50% {\n    transform: scale(1.08);\n  }\n}") ||
+		!strings.Contains(css, "@keyframes taskIconGlowBreathe {\n  0%,\n  100% {\n    opacity: 0.28;\n    transform: scale(0.92);\n  }\n\n  50% {\n    opacity: 0.58;\n    transform: scale(1.08);\n  }\n}") ||
+		strings.Contains(css, "taskProgressCurrentSpin") ||
+		strings.Contains(css, "taskRunningSpinner") ||
+		strings.Contains(css, "taskIconIdleSpin") {
+		t.Fatalf("expected stylesheet to render larger progress icons with active breath/glow animation and no running spin animation")
 	}
 	if !strings.Contains(css, ".badge.stopped {\n  background: color-mix(in srgb, var(--surface-badge-idle) 82%, #5f7395);\n  color: #fff;\n}") || !strings.Contains(css, ".task-result.stopped {\n  color: var(--surface-badge-idle);\n  background: rgba(113, 136, 177, 0.13);\n}") {
 		t.Fatalf("expected stylesheet to distinguish user-stopped task visuals from hard error states")
@@ -3711,8 +3716,9 @@ func TestHandlerServesStaticCSS(t *testing.T) {
 		t.Fatalf("expected stylesheet to include collapsed task styles")
 	}
 	if !strings.Contains(css, ".task.task-compact-state-left {\n  align-items: center;\n  gap: 8px;\n}") ||
-		!strings.Contains(css, ".task-current-state.is-running .task-current-state-icon,\n.task-current-state.is-running .task-current-state-glyph {\n  animation: taskProgressCurrentSpin 10s linear infinite;") {
-		t.Fatalf("expected stylesheet to position compact task state icons on the left and keep the periodic running spin")
+		!strings.Contains(css, ".task-current-state.is-running .task-current-state-icon,\n.task-current-state.is-running .task-current-state-glyph {\n  animation: taskIconBreathe 2.4s ease-in-out infinite;") ||
+		!strings.Contains(css, ".task-current-state.is-running::before") {
+		t.Fatalf("expected stylesheet to position compact task state icons on the left and keep active running breath")
 	}
 	if strings.Contains(css, ".task-history-list") {
 		t.Fatalf("expected stylesheet to remove prompt history list styles")
