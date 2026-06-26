@@ -18,6 +18,10 @@ func TestNewDefaultTaskLogMirrorAndDefaultTerminalLogger(t *testing.T) {
 		t.Fatalf("Chdir(%q) error = %v", tmp, err)
 	}
 	t.Cleanup(func() { _ = os.Chdir(wd) })
+	logRoot, err := defaultLogRootForWorkingDir(tmp, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("defaultLogRootForWorkingDir() error = %v", err)
+	}
 
 	mirror, err := newDefaultTaskLogMirror()
 	if err != nil {
@@ -27,7 +31,7 @@ func TestNewDefaultTaskLogMirrorAndDefaultTerminalLogger(t *testing.T) {
 	if err := mirror.Close(); err != nil {
 		t.Fatalf("mirror.Close() error = %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(tmp, logDirectoryName, logFileName)); err != nil {
+	if _, err := os.Stat(filepath.Join(logRoot, logFileName)); err != nil {
 		t.Fatalf("aggregate log stat error = %v", err)
 	}
 

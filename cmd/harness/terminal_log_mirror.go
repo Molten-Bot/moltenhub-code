@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/Molten-Bot/moltenhub-code/internal/failurefollowup"
+	"github.com/Molten-Bot/moltenhub-code/internal/workspace"
 )
 
 const (
@@ -93,11 +94,11 @@ func defaultLogRoot() (string, error) {
 }
 
 func defaultLogRootForWorkingDir(wd string, reset func(string) error) (string, error) {
-	primary := filepath.Join(wd, logDirectoryName)
+	primary := filepath.Join(workspace.NewManager().SelectBase(), "moltenhub-code", "logs", logRootHash(wd), logDirectoryName)
 	if err := reset(primary); err == nil {
 		return primary, nil
 	} else {
-		fallback := filepath.Join(os.TempDir(), "moltenhub-code", "logs", logRootHash(wd), logDirectoryName)
+		fallback := filepath.Join(wd, logDirectoryName)
 		if fallbackErr := reset(fallback); fallbackErr == nil {
 			return fallback, nil
 		} else {

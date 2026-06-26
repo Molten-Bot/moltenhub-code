@@ -349,6 +349,11 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	if reviewContext != nil && reviewContext.GitHubTokenEnvSanitized {
 		codexOpts.Env = githubTokenSanitizedEnv()
 	}
+	if env, err := prepareAgentIOEnv(runDir, codexOpts.Env); err != nil {
+		return h.fail(ExitWorkspace, "workspace", err, runDir)
+	} else {
+		codexOpts.Env = env
+	}
 	codexBasePrompt = withBackpressurePrompt(codexBasePrompt, h.collectBackpressureRequirements(repos, cfg.TargetSubdir))
 	codexTargetLabel := codexTargetLabel(cfg.TargetSubdir, len(repos) > 1)
 	initialRepo, initialRepoDir := initialAgentInvocationRepoMetadata(repos)
@@ -5238,6 +5243,73 @@ func commandWithoutGitHubTokenEnv(cmd execx.Command) execx.Command {
 
 func githubTokenSanitizedEnv() []string {
 	return environWithoutKeys(os.Environ(), "GH_TOKEN", "GITHUB_TOKEN")
+}
+
+func prepareAgentIOEnv(runDir string, environ []string) ([]string, error) {
+	runDir = strings.TrimSpace(runDir)
+	if runDir == "" {
+		return nil, fmt.Errorf("run directory is required for agent io")
+	}
+
+	root := filepath.Join(runDir, ".moltenhub-agent-io")
+	tmpDir := filepath.Join(root, "tmp")
+	cacheDir := filepath.Join(root, "cache")
+	stateDir := filepath.Join(root, "state")
+	logDir := filepath.Join(root, "log")
+	runtimeDir := filepath.Join(root, "runtime")
+	for _, dir := range []string{tmpDir, cacheDir, stateDir, logDir, runtimeDir} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return nil, fmt.Errorf("prepare agent io dir %s: %w", dir, err)
+		}
+	}
+
+	if len(environ) == 0 {
+		environ = os.Environ()
+	}
+	return environWithOverrides(environ,
+		"MOLTENHUB_AGENT_IO_DIR="+root,
+		"TMPDIR="+tmpDir,
+		"TEMP="+tmpDir,
+		"TMP="+tmpDir,
+		"XDG_CACHE_HOME="+cacheDir,
+		"XDG_STATE_HOME="+stateDir,
+		"XDG_RUNTIME_DIR="+runtimeDir,
+		"npm_config_cache="+filepath.Join(cacheDir, "npm"),
+		"YARN_CACHE_FOLDER="+filepath.Join(cacheDir, "yarn"),
+		"PNPM_HOME="+filepath.Join(cacheDir, "pnpm"),
+		"PIP_CACHE_DIR="+filepath.Join(cacheDir, "pip"),
+		"UV_CACHE_DIR="+filepath.Join(cacheDir, "uv"),
+		"GOCACHE="+filepath.Join(cacheDir, "go-build"),
+		"GOMODCACHE="+filepath.Join(cacheDir, "go-mod"),
+		"CARGO_HOME="+filepath.Join(cacheDir, "cargo"),
+		"GRADLE_USER_HOME="+filepath.Join(cacheDir, "gradle"),
+		"PLAYWRIGHT_BROWSERS_PATH="+filepath.Join(cacheDir, "ms-playwright"),
+		"LOGDIR="+logDir,
+	), nil
+}
+
+func environWithOverrides(environ []string, overrides ...string) []string {
+	out := append([]string(nil), environ...)
+	index := make(map[string]int, len(out))
+	for i, entry := range out {
+		name, _, ok := strings.Cut(entry, "=")
+		if ok && name != "" {
+			index[name] = i
+		}
+	}
+	for _, entry := range overrides {
+		name, _, ok := strings.Cut(entry, "=")
+		if !ok || strings.TrimSpace(name) == "" {
+			continue
+		}
+		if existing, ok := index[name]; ok {
+			out[existing] = entry
+			continue
+		}
+		index[name] = len(out)
+		out = append(out, entry)
+	}
+	return out
 }
 
 func environWithoutKeys(environ []string, keys ...string) []string {

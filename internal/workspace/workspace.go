@@ -53,18 +53,14 @@ func PrepareDefaultRoots() error {
 	return NewManager().PrepareRoots()
 }
 
-// SelectBase chooses /dev/shm when available and executable, else /tmp.
+// SelectBase chooses /dev/shm when available, else /tmp.
 func (m Manager) SelectBase() string {
 	exists := m.PathExists
 	if exists == nil {
 		exists = pathExists
 	}
-	canExec := m.CanExec
-	if canExec == nil {
-		canExec = baseAllowsExec
-	}
 	ramBase := configuredRAMBase()
-	if exists(ramBase) && canExec(ramBase) {
+	if exists(ramBase) {
 		return ramBase
 	}
 	return configuredDiskBase()

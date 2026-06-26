@@ -74,7 +74,7 @@ func TestIdentifierSubdirAndSanitizeFallbacks(t *testing.T) {
 	}
 }
 
-func TestDefaultLogRootFallsBackToTempWhenWorkingDirectoryIsUnavailable(t *testing.T) {
+func TestDefaultLogRootFallsBackToWorkingDirectoryWhenMemoryRootUnavailable(t *testing.T) {
 	t.Parallel()
 
 	failingPrimary := true
@@ -94,9 +94,9 @@ func TestDefaultLogRootFallsBackToTempWhenWorkingDirectoryIsUnavailable(t *testi
 	if filepath.Base(root) != logDirectoryName {
 		t.Fatalf("base(defaultLogRootForWorkingDir()) = %q, want %q", filepath.Base(root), logDirectoryName)
 	}
-	wantPrefix := filepath.Join(os.TempDir(), "moltenhub-code", "logs")
-	if got := root; len(got) < len(wantPrefix) || got[:len(wantPrefix)] != wantPrefix {
-		t.Fatalf("defaultLogRootForWorkingDir() = %q, want prefix %q", got, wantPrefix)
+	want := filepath.Join("/workspace/project", logDirectoryName)
+	if root != want {
+		t.Fatalf("defaultLogRootForWorkingDir() = %q, want %q", root, want)
 	}
 }
 

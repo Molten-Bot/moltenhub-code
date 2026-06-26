@@ -28,14 +28,14 @@ func TestSelectBaseFallsBackToTmp(t *testing.T) {
 	}
 }
 
-func TestSelectBaseFallsBackToTmpWhenDevShmIsNoExec(t *testing.T) {
+func TestSelectBasePrefersDevShmWhenNoExec(t *testing.T) {
 	t.Parallel()
 
 	m := Manager{
 		PathExists: func(path string) bool { return path == defaultRAMBase },
 		CanExec:    func(path string) bool { return path != defaultRAMBase },
 	}
-	if got := m.SelectBase(); got != defaultDiskBase {
+	if got := m.SelectBase(); got != defaultRAMBase {
 		t.Fatalf("SelectBase() = %q", got)
 	}
 }

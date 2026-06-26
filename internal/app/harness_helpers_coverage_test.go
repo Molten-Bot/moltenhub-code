@@ -345,6 +345,39 @@ func TestShouldReplaceCheckSnapshotBranches(t *testing.T) {
 	}
 }
 
+func TestPrepareAgentIOEnvRootsVolatilePathsInRunDir(t *testing.T) {
+	t.Parallel()
+
+	runDir := t.TempDir()
+	env, err := prepareAgentIOEnv(runDir, []string{
+		"PATH=/bin",
+		"TMPDIR=/disk/tmp",
+		"GH_TOKEN=keep",
+	})
+	if err != nil {
+		t.Fatalf("prepareAgentIOEnv() error = %v", err)
+	}
+
+	wantRoot := filepath.Join(runDir, ".moltenhub-agent-io")
+	for _, rel := range []string{"tmp", "cache", "state", "log", "runtime"} {
+		if st, err := os.Stat(filepath.Join(wantRoot, rel)); err != nil || !st.IsDir() {
+			t.Fatalf("agent io dir %s stat = (%v, %v), want directory", rel, st, err)
+		}
+	}
+	if got, want := envValue(env, "TMPDIR"), filepath.Join(wantRoot, "tmp"); got != want {
+		t.Fatalf("TMPDIR = %q, want %q", got, want)
+	}
+	if got, want := envValue(env, "XDG_CACHE_HOME"), filepath.Join(wantRoot, "cache"); got != want {
+		t.Fatalf("XDG_CACHE_HOME = %q, want %q", got, want)
+	}
+	if got, want := envValue(env, "MOLTENHUB_AGENT_IO_DIR"), wantRoot; got != want {
+		t.Fatalf("MOLTENHUB_AGENT_IO_DIR = %q, want %q", got, want)
+	}
+	if got := envValue(env, "GH_TOKEN"); got != "keep" {
+		t.Fatalf("GH_TOKEN = %q, want preserved", got)
+	}
+}
+
 func slicesContains(values []string, target string) bool {
 	for _, value := range values {
 		if value == target {
@@ -352,4 +385,14 @@ func slicesContains(values []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func envValue(environ []string, key string) string {
+	for _, entry := range environ {
+		name, value, ok := strings.Cut(entry, "=")
+		if ok && name == key {
+			return value
+		}
+	}
+	return ""
 }
