@@ -995,9 +995,10 @@ func (h Harness) processChangedRepo(
 }
 
 type prStateView struct {
-	URL      string `json:"url"`
-	State    string `json:"state"`
-	MergedAt string `json:"mergedAt"`
+	URL         string `json:"url"`
+	State       string `json:"state"`
+	MergedAt    string `json:"mergedAt"`
+	HeadRefName string `json:"headRefName"`
 }
 
 func (h Harness) recreatePullRequestIfClosed(ctx context.Context, repo *repoWorkspace, cfg config.Config) (bool, error) {
@@ -1072,6 +1073,26 @@ func pullRequestStateIsOpen(state prStateView) bool {
 		return false
 	}
 	return strings.EqualFold(strings.TrimSpace(state.State), "open")
+}
+
+func promptPullRequestMatchesRepoBranch(state prStateView, repo repoWorkspace) bool {
+	actual := normalizeBranchRef(state.HeadRefName)
+	if actual == "" {
+		return false
+	}
+	expected := normalizeBranchRef(repo.Branch)
+	if expected == "" {
+		expected = branchNameFromHeadRef(repoPRHeadRef(repo))
+	}
+	return actual == expected
+}
+
+func branchNameFromHeadRef(headRef string) string {
+	headRef = strings.TrimSpace(headRef)
+	if _, branch, ok := strings.Cut(headRef, ":"); ok {
+		headRef = branch
+	}
+	return normalizeBranchRef(headRef)
 }
 
 func (h Harness) syncGeneratedWorkBranchWithBase(
@@ -1879,6 +1900,23 @@ func (h Harness) populateNoChangePRURLs(ctx context.Context, repos []repoWorkspa
 				)
 				if requirePRURL {
 					return fmt.Errorf("verify prompt pull request for unchanged repo %s branch %q: %w", repos[i].URL, repos[i].Branch, err)
+				}
+			} else if !promptPullRequestMatchesRepoBranch(state, repos[i]) {
+				h.logf(
+					"stage=pr status=warn action=lookup_existing reason=prompt_pr_branch_mismatch repo=%s repo_dir=%s branch=%s pr_url=%s pr_head=%s",
+					repos[i].URL,
+					repos[i].RelDir,
+					repos[i].Branch,
+					promptPRURL,
+					state.HeadRefName,
+				)
+				if requirePRURL {
+					return fmt.Errorf(
+						"verify prompt pull request for unchanged repo %s branch %q: prompt PR head branch %q did not match",
+						repos[i].URL,
+						repos[i].Branch,
+						strings.TrimSpace(state.HeadRefName),
+					)
 				}
 			} else {
 				prURL = pickFirstNonEmpty(state.URL, promptPRURL)
@@ -6466,7 +6504,7 @@ func prLookupAnyByHeadWithRepoCommand(repoDir, headRef, repo string) execx.Comma
 
 func prStateViewCommand(repoDir, prURL string) execx.Command {
 	selector := githubutil.PullRequestSelector(prURL)
-	args := []string{"pr", "view", selector, "--json", "url,state,mergedAt"}
+	args := []string{"pr", "view", selector, "--json", "url,state,mergedAt,headRefName"}
 	if repo := githubutil.PullRequestRepository(prURL); repo != "" {
 		args = append(args, "--repo", repo)
 	}
