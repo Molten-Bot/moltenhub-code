@@ -427,7 +427,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 				runDir,
 			)
 		}
-		if err := h.populateNoChangePRURLs(ctx, repos, requiresVerifiedNoChangePRURL(cfg.Prompt)); err != nil {
+		if err := h.populateNoChangePRURLs(ctx, repos, cfg.Prompt, requiresVerifiedNoChangePRURL(cfg.Prompt)); err != nil {
 			return h.failWithRepos(ExitPR, "pr", err, runDir, repos)
 		}
 		h.logf("stage=git status=no_changes")
@@ -465,7 +465,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		}
 	}
 	if changedCount == 0 {
-		if err := h.populateNoChangePRURLs(ctx, repos, requiresVerifiedNoChangePRURL(cfg.Prompt)); err != nil {
+		if err := h.populateNoChangePRURLs(ctx, repos, cfg.Prompt, requiresVerifiedNoChangePRURL(cfg.Prompt)); err != nil {
 			return h.failWithRepos(ExitPR, "pr", err, runDir, repos)
 		}
 		h.logf("stage=git status=no_changes")
@@ -1833,7 +1833,8 @@ func repoPRTargetRepo(repo repoWorkspace) string {
 	return strings.TrimSpace(repo.PRTargetRepo)
 }
 
-func (h Harness) populateNoChangePRURLs(ctx context.Context, repos []repoWorkspace, requirePRURL bool) error {
+func (h Harness) populateNoChangePRURLs(ctx context.Context, repos []repoWorkspace, prompt string, requirePRURL bool) error {
+	promptPRURL := pullRequestURLFromPrompt(prompt)
 	for i := range repos {
 		prURL, err := h.lookupOpenPRURLByHead(ctx, repos[i])
 		if err != nil {
@@ -1863,6 +1864,24 @@ func (h Harness) populateNoChangePRURLs(ctx context.Context, repos []repoWorkspa
 					return fmt.Errorf("verify any pull request for unchanged repo %s branch %q: %w", repos[i].URL, repos[i].Branch, err)
 				}
 				continue
+			}
+		}
+		if prURL == "" && promptPRURL != "" {
+			state, err := h.loadPullRequestState(ctx, repos[i].Dir, promptPRURL)
+			if err != nil {
+				h.logf(
+					"stage=pr status=warn action=lookup_existing reason=prompt_pr_lookup_failed repo=%s repo_dir=%s branch=%s pr_url=%s err=%q",
+					repos[i].URL,
+					repos[i].RelDir,
+					repos[i].Branch,
+					promptPRURL,
+					err,
+				)
+				if requirePRURL {
+					return fmt.Errorf("verify prompt pull request for unchanged repo %s branch %q: %w", repos[i].URL, repos[i].Branch, err)
+				}
+			} else {
+				prURL = pickFirstNonEmpty(state.URL, promptPRURL)
 			}
 		}
 		if prURL == "" {
@@ -4258,6 +4277,14 @@ func requiresVerifiedNoChangePRURL(prompt string) bool {
 		return true
 	}
 	return strings.Contains(text, "pull request:") && strings.Contains(text, "head branch")
+}
+
+func pullRequestURLFromPrompt(prompt string) string {
+	matches := regexp.MustCompile(`https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pull/[0-9]+`).FindAllString(prompt, -1)
+	if len(matches) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(matches[0])
 }
 
 func agentOutputCitesConcreteNoChangeEvidence(res execx.Result) bool {
