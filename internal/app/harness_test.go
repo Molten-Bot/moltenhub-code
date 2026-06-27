@@ -7154,6 +7154,35 @@ func TestRunCodexAllowsRemoteDeploymentAuthUnavailableAfterLocalPass(t *testing.
 	}
 }
 
+func TestRunCodexKeepsRemoteDeploymentApiTokenFailureFatal(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "fix Cloudflare preview build failure"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: strings.Join([]string{
+					"Failure: Cloudflare Workers Builds check still reported failed remotely.",
+					"Error details: GitHub CI build passed. Remote build failed because deployment API token is rejected by provider. Local Wrangler dry-run deploy passes.",
+				}, "\n"),
+			},
+		},
+	}}
+
+	h := New(fake)
+	err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", "")
+	if err == nil {
+		t.Fatal("runCodex() error = nil, want fatal remote deployment failure")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "codex reported failure") {
+		t.Fatalf("runCodex() error = %v, want codex reported failure marker", err)
+	}
+}
+
 func TestRunCodexKeepsRemoteDeploymentFailureFatalWhenRepoSideReproduced(t *testing.T) {
 	t.Parallel()
 

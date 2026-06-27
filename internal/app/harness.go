@@ -5060,7 +5060,8 @@ func isNonFatalRemoteDeploymentAuthFailure(detail string, res execx.Result) bool
 		"requires cloudflare auth",
 		"not authenticated",
 		"cloudflare_api_token",
-		"api token",
+		"cloudflare api token",
+		"wrangler api token",
 		"auth unavailable",
 	}
 	localPassMarkers := []string{
