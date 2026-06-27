@@ -1201,6 +1201,46 @@ func TestCompleteReviewRunReturnsNonTransientWritebackFailure(t *testing.T) {
 	}
 }
 
+func TestCompleteReviewRunDoesNotDeferWhenFallbackWritebackFailureIsPermanent(t *testing.T) {
+	t.Parallel()
+
+	runDir := t.TempDir()
+	repoDir := t.TempDir()
+	bodyPath := reviewSummaryBodyPath(runDir, 42)
+	reviewErr := errors.New("run gh [pr review 42 --comment --body-file body --repo acme/repo]: exit status 1 (error connecting to api.github.com | check your internet connection or https://githubstatus.com)")
+	fallbackErr := errors.New("run gh [api repos/acme/repo/issues/42/comments -F body=@body]: exit status 1 (HTTP 403: Resource not accessible by integration (https://api.github.com/graphql))")
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: prReviewSummaryCommand(repoDir, "42", "acme/repo", bodyPath),
+			err: reviewErr,
+		},
+		{
+			cmd: prReviewSummaryFallbackCommand(repoDir, "42", "acme/repo", 42, bodyPath),
+			err: fallbackErr,
+		},
+	}}
+	h := New(fake)
+
+	cfg := config.Config{Review: &config.ReviewConfig{PRNumber: 42}}
+	repo := repoWorkspace{Dir: repoDir}
+	reviewContext := &preparedReviewContext{
+		Selector: "42",
+		Metadata: reviewPRMetadata{
+			Number: 42,
+			URL:    "https://github.com/acme/repo/pull/42",
+		},
+	}
+	agentRes := execx.Result{Stdout: "```json\n{\"status\":\"clean\",\"mergeReady\":true,\"summary\":\"No material issues.\",\"positives\":[\"Focused tests pass.\"],\"findings\":[]}\n```"}
+
+	err := h.completeReviewRun(context.Background(), cfg, &repo, reviewContext, agentRes, runDir)
+	if err == nil {
+		t.Fatal("completeReviewRun() err = nil, want permanent fallback writeback failure")
+	}
+	if !strings.Contains(err.Error(), "post pull request review summary") {
+		t.Fatalf("completeReviewRun() err = %q, want writeback context", err)
+	}
+}
+
 func TestBuildReviewPromptContextRetriesMetadataWithoutInvalidGitHubTokenEnv(t *testing.T) {
 	t.Setenv("GH_TOKEN", "stale-token")
 	t.Setenv("GITHUB_TOKEN", "stale-token")

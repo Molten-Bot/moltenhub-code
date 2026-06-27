@@ -2961,7 +2961,7 @@ func (h Harness) completeReviewRun(
 		}
 		h.logf("stage=review status=start action=comment pr_url=%s", prURL)
 		if err := h.postReviewSummary(ctx, repo.Dir, writebackSelector, writebackRepo, metadata.Number, bodyPath, prURL, reviewContext != nil && reviewContext.GitHubTokenEnvSanitized); err != nil {
-			if isTransientGitHubCLIError(err) {
+			if isTransientReviewWritebackError(err) {
 				h.logf("stage=review status=warn action=comment_writeback_deferred pr_url=%s err=%q", prURL, err)
 			} else {
 				return fmt.Errorf("post pull request review summary: %w", err)
@@ -3013,11 +3013,32 @@ func (h Harness) postReviewSummary(
 			fallbackCmd = commandWithoutGitHubTokenEnv(fallbackCmd)
 		}
 		if _, fallbackErr := h.runCommand(ctx, "review", fallbackCmd); fallbackErr != nil {
-			return fmt.Errorf("review command failed: %w; fallback pull request comment failed: %v", err, fallbackErr)
+			return reviewSummaryWritebackError{reviewErr: err, fallbackErr: fallbackErr}
 		}
 	}
 	h.logf("stage=review status=ok action=comment_fallback pr_url=%s", prURL)
 	return nil
+}
+
+type reviewSummaryWritebackError struct {
+	reviewErr   error
+	fallbackErr error
+}
+
+func (e reviewSummaryWritebackError) Error() string {
+	return fmt.Sprintf("review command failed: %v; fallback pull request comment failed: %v", e.reviewErr, e.fallbackErr)
+}
+
+func (e reviewSummaryWritebackError) Unwrap() error {
+	return e.fallbackErr
+}
+
+func isTransientReviewWritebackError(err error) bool {
+	var writebackErr reviewSummaryWritebackError
+	if errors.As(err, &writebackErr) {
+		return isTransientGitHubCLIError(writebackErr.fallbackErr)
+	}
+	return isTransientGitHubCLIError(err)
 }
 
 func (h Harness) autoMergeCleanReview(
