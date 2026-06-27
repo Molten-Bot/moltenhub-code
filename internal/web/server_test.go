@@ -797,6 +797,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function taskProgressStepsForTask(") || !strings.Contains(markup, "function taskProgressCurrentStepID(") || !strings.Contains(markup, "function taskProgressModel(") {
 		t.Fatalf("expected index html to build dynamic progress steps per task")
 	}
+	if !strings.Contains(markup, "taskProgressSignalCache: new Map(),") ||
+		!strings.Contains(markup, "function taskProgressLogSignals(task)") ||
+		!strings.Contains(markup, "taskProgressSignalsSignature(signals)") ||
+		!strings.Contains(markup, "taskProgressModelCacheKey(task, signals)") {
+		t.Fatalf("expected task progress rendering to cache cumulative log signals and include them in model cache invalidation")
+	}
+	if strings.Contains(markup, "rawLogs.length > MAX_PROGRESS_SIGNAL_LOGS") {
+		t.Fatalf("expected task progress signal detection to avoid tail-only log scans that can forget earlier progress")
+	}
 	if !strings.Contains(markup, "task-progress-step-icon") {
 		t.Fatalf("expected index html to render task progress step icons")
 	}
@@ -1251,8 +1260,15 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(markup, "function sortTasksByActivity(") {
 		t.Fatalf("expected index html to include activity-based task sorting for list rendering")
 	}
-	if !strings.Contains(markup, "const STREAM_RENDER_INTERVAL_MS = 250;") {
-		t.Fatalf("expected index html to coalesce stream-driven renders at 250ms cadence")
+	if !strings.Contains(markup, "const STREAM_RENDER_INTERVAL_MS = 500;") ||
+		!strings.Contains(markup, "window.requestAnimationFrame(renderPendingStreamSnapshot)") ||
+		!strings.Contains(markup, "if (document.hidden)") {
+		t.Fatalf("expected index html to backpressure stream-driven renders")
+	}
+	if !strings.Contains(markup, "const MAX_TERMINAL_LINES = 500;") ||
+		!strings.Contains(markup, "function visibleTerminalLogs(logs)") ||
+		!strings.Contains(markup, "visibleLogs.slice(previousCount)") {
+		t.Fatalf("expected task terminal rendering to cap and append visible logs")
 	}
 	if !strings.Contains(markup, `if (!showTaskPanel) {`) ||
 		!strings.Contains(markup, `if (state.appDisplay === "dashboard") {`) {

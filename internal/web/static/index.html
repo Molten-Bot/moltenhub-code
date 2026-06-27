@@ -797,7 +797,7 @@
     const HOVER_MODES = ["auto", "on", "off"];
     const QUEUED_STATUS_TIMEOUT_MS = 12_000;
     const LOCAL_PROMPT_STATUS_FADE_MS = 240;
-    const STREAM_RENDER_INTERVAL_MS = 250;
+    const STREAM_RENDER_INTERVAL_MS = 500;
     const TASK_ORDER_TRANSITION_DELAY_MS = 2_000;
     const TASK_ORDER_SYNC_INTERVAL_MS = 4_000;
     const NEW_HUB_TASK_HIGHLIGHT_MS = 4_000;
@@ -1900,6 +1900,7 @@
       rerunInFlight: new Set(),
       closeInFlight: new Set(),
       taskControlInFlight: new Set(),
+      taskProgressSignalCache: new Map(),
       taskProgressModelCache: new Map(),
       sparkleTaskIDs: new Set(),
       sparkleTimers: new Map(),
@@ -1994,6 +1995,8 @@
     let claudePostSubmitVerifyAttempts = 0;
     let pendingStreamSnapshotText = "";
     let streamRenderTimer = null;
+    let streamRenderFrame = null;
+    let pendingStreamSnapshot = null;
     let taskHistoryPruneTimer = null;
     let taskTimingRefreshTimer = null;
     let deferredSelectionRenderTimer = null;
@@ -5225,16 +5228,9 @@
           root.select(".dashboard-d3-center-value").text(total > 0 ? String(total) : "0");
           root.select(".dashboard-d3-center-label").text(options.centerLabel || "tasks");
         })
-        .transition()
-        .duration(220)
-        .attrTween("d", function (datum) {
-          const previous = this.__dashboardArcDatum || datum;
-          const interpolate = d3.interpolateObject(previous, datum);
-          return (time) => {
-            const current = interpolate(time);
-            this.__dashboardArcDatum = current;
-            return arc(current);
-          };
+        .attr("d", function (datum) {
+          this.__dashboardArcDatum = datum;
+          return arc(datum);
         });
 
       root.selectAll("circle.dashboard-d3-empty")
@@ -11254,8 +11250,8 @@
       return token;
     }
 
-    function taskProgressSignals(task) {
-      const signals = {
+    function newTaskProgressSignals() {
+      return {
         stages: new Set(),
         hasWorkflowSeen: false,
         hasForkFallback: false,
@@ -11267,64 +11263,130 @@
         hasChecksSeen: false,
         hasAutoMergeSeen: false,
       };
+    }
 
-      const logs = Array.isArray(task?.logs) ? task.logs : [];
-      for (let i = 0; i < logs.length; i += 1) {
-        const line = String(logs[i]?.text || "").trim();
-        if (!line || !line.includes("stage=")) {
-          continue;
-        }
-        const stage = String(parseTaskProgressField(line, "stage") || "").trim().toLowerCase();
-        if (!stage) {
-          continue;
-        }
-        signals.stages.add(stage);
-        if (stage === "workflow") {
-          signals.hasWorkflowSeen = true;
-        }
-        if (stage === "pr") {
-          signals.hasPRSeen = true;
-        }
-        if (stage === "checks") {
-          signals.hasChecksSeen = true;
-        }
-        if (TASK_PROGRESS_AGENT_STAGES.has(stage)) {
-          signals.hasAgentSeen = true;
-          const action = String(parseTaskProgressField(line, "action") || "").trim().toLowerCase();
-          if (action === "auto_merge") {
-            signals.hasAutoMergeSeen = true;
-          }
-        }
-        if (stage === "git") {
-          const gitAction = String(parseTaskProgressField(line, "action") || "").trim().toLowerCase();
-          if (gitAction === "branch" || gitAction === "branch_reuse") {
-            signals.hasBranchSeen = true;
-          }
-          if (gitAction.includes("commit")) {
-            signals.hasCommitSeen = true;
-          }
-          if (gitAction === "probe_write_access" || gitAction === "push_sync") {
-            signals.hasPublishGitSeen = true;
-          }
-        }
-        if (stage === "workflow") {
-          const lower = line.toLowerCase();
-          const strategy = String(parseTaskProgressField(line, "strategy") || "").trim().toLowerCase();
-          const remote = String(parseTaskProgressField(line, "remote") || "").trim().toLowerCase();
-          const action = String(parseTaskProgressField(line, "action") || "").trim().toLowerCase();
-          if (
-            strategy === "fork-fallback" ||
-            remote === "fork" ||
-            action.includes("fork") ||
-            lower.includes("reason=direct_write_unavailable") ||
-            lower.includes("strategy=fork-fallback") ||
-            lower.includes("remote=fork")
-          ) {
-            signals.hasForkFallback = true;
-          }
+    function cloneTaskProgressSignals(signals) {
+      const clone = newTaskProgressSignals();
+      const stages = signals?.stages instanceof Set ? signals.stages : new Set();
+      stages.forEach((stage) => clone.stages.add(stage));
+      clone.hasWorkflowSeen = Boolean(signals?.hasWorkflowSeen);
+      clone.hasForkFallback = Boolean(signals?.hasForkFallback);
+      clone.hasAgentSeen = Boolean(signals?.hasAgentSeen);
+      clone.hasBranchSeen = Boolean(signals?.hasBranchSeen);
+      clone.hasCommitSeen = Boolean(signals?.hasCommitSeen);
+      clone.hasPublishGitSeen = Boolean(signals?.hasPublishGitSeen);
+      clone.hasPRSeen = Boolean(signals?.hasPRSeen);
+      clone.hasChecksSeen = Boolean(signals?.hasChecksSeen);
+      clone.hasAutoMergeSeen = Boolean(signals?.hasAutoMergeSeen);
+      return clone;
+    }
+
+    function taskProgressLogKey(log) {
+      return [
+        String(log?.time || ""),
+        String(log?.stream || ""),
+        String(log?.text || "").slice(0, 240),
+      ].join("\u001f");
+    }
+
+    function applyTaskProgressLogSignal(signals, rawLine) {
+      const line = String(rawLine || "").trim();
+      if (!line || !line.includes("stage=")) {
+        return;
+      }
+      const stage = String(parseTaskProgressField(line, "stage") || "").trim().toLowerCase();
+      if (!stage) {
+        return;
+      }
+      signals.stages.add(stage);
+      if (stage === "workflow") {
+        signals.hasWorkflowSeen = true;
+      }
+      if (stage === "pr") {
+        signals.hasPRSeen = true;
+      }
+      if (stage === "checks") {
+        signals.hasChecksSeen = true;
+      }
+      if (TASK_PROGRESS_AGENT_STAGES.has(stage)) {
+        signals.hasAgentSeen = true;
+        const action = String(parseTaskProgressField(line, "action") || "").trim().toLowerCase();
+        if (action === "auto_merge") {
+          signals.hasAutoMergeSeen = true;
         }
       }
+      if (stage === "git") {
+        const gitAction = String(parseTaskProgressField(line, "action") || "").trim().toLowerCase();
+        if (gitAction === "branch" || gitAction === "branch_reuse") {
+          signals.hasBranchSeen = true;
+        }
+        if (gitAction.includes("commit")) {
+          signals.hasCommitSeen = true;
+        }
+        if (gitAction === "probe_write_access" || gitAction === "push_sync") {
+          signals.hasPublishGitSeen = true;
+        }
+      }
+      if (stage === "workflow") {
+        const lower = line.toLowerCase();
+        const strategy = String(parseTaskProgressField(line, "strategy") || "").trim().toLowerCase();
+        const remote = String(parseTaskProgressField(line, "remote") || "").trim().toLowerCase();
+        const action = String(parseTaskProgressField(line, "action") || "").trim().toLowerCase();
+        if (
+          strategy === "fork-fallback" ||
+          remote === "fork" ||
+          action.includes("fork") ||
+          lower.includes("reason=direct_write_unavailable") ||
+          lower.includes("strategy=fork-fallback") ||
+          lower.includes("remote=fork")
+        ) {
+          signals.hasForkFallback = true;
+        }
+      }
+    }
 
+    function taskProgressLogSignals(task) {
+      const logs = Array.isArray(task?.logs) ? task.logs : [];
+      const requestID = String(task?.request_id || "").trim();
+      if (!requestID) {
+        const signals = newTaskProgressSignals();
+        for (let i = 0; i < logs.length; i += 1) {
+          applyTaskProgressLogSignal(signals, logs[i]?.text);
+        }
+        return signals;
+      }
+
+      const firstKey = logs.length > 0 ? taskProgressLogKey(logs[0]) : "";
+      const lastKey = logs.length > 0 ? taskProgressLogKey(logs[logs.length - 1]) : "";
+      const cached = state.taskProgressSignalCache.get(requestID);
+      let signals = cached ? cloneTaskProgressSignals(cached.signals) : newTaskProgressSignals();
+      let startIndex = 0;
+      if (cached && logs.length >= cached.scannedCount && cached.firstKey === firstKey) {
+        startIndex = cached.scannedCount;
+        if (logs.length === cached.scannedCount && cached.lastKey === lastKey) {
+          return signals;
+        }
+      }
+      for (let i = startIndex; i < logs.length; i += 1) {
+        applyTaskProgressLogSignal(signals, logs[i]?.text);
+      }
+      state.taskProgressSignalCache.set(requestID, {
+        firstKey,
+        lastKey,
+        scannedCount: logs.length,
+        signals,
+      });
+      if (state.taskProgressSignalCache.size > 300) {
+        const oldest = state.taskProgressSignalCache.keys().next();
+        if (!oldest.done) {
+          state.taskProgressSignalCache.delete(oldest.value);
+        }
+      }
+      return cloneTaskProgressSignals(signals);
+    }
+
+    function taskProgressSignals(task) {
+      const signals = taskProgressLogSignals(task);
       const currentStage = String(task?.stage || "").trim().toLowerCase();
       if (currentStage) {
         signals.stages.add(currentStage);
@@ -11345,6 +11407,22 @@
         signals.hasPRSeen = true;
       }
       return signals;
+    }
+
+    function taskProgressSignalsSignature(signals) {
+      const stages = signals?.stages instanceof Set ? Array.from(signals.stages).sort().join(",") : "";
+      return [
+        stages,
+        signals?.hasWorkflowSeen ? "workflow" : "",
+        signals?.hasForkFallback ? "fork" : "",
+        signals?.hasAgentSeen ? "agent" : "",
+        signals?.hasBranchSeen ? "branch" : "",
+        signals?.hasCommitSeen ? "commit" : "",
+        signals?.hasPublishGitSeen ? "publish_git" : "",
+        signals?.hasPRSeen ? "pr" : "",
+        signals?.hasChecksSeen ? "checks" : "",
+        signals?.hasAutoMergeSeen ? "auto_merge" : "",
+      ].join(",");
     }
 
     function taskProgressStepsForTask(task, signals) {
@@ -11425,8 +11503,7 @@
       return taskProgressEntryStepID(task);
     }
 
-    function buildTaskProgressModel(task) {
-      const signals = taskProgressSignals(task);
+    function buildTaskProgressModel(task, signals = taskProgressSignals(task)) {
       const steps = taskProgressStepsForTask(task, signals);
       const currentStepID = taskProgressCurrentStepID(task, signals);
       let index = steps.findIndex((step) => String(step?.id || "") === currentStepID);
@@ -11436,7 +11513,7 @@
       return { steps, index };
     }
 
-    function taskProgressModelCacheKey(task) {
+    function taskProgressModelCacheKey(task, signals = taskProgressSignals(task)) {
       const logs = Array.isArray(task?.logs) ? task.logs : [];
       const lastLog = logs.length > 0 ? logs[logs.length - 1] : null;
       const tail = String(lastLog?.text || "").slice(0, 160);
@@ -11450,6 +11527,7 @@
         String(task?.pr_url || ""),
         String(logs.length),
         tail,
+        taskProgressSignalsSignature(signals),
       ].join("|");
     }
 
@@ -11458,7 +11536,8 @@
         return { steps: [], index: 0 };
       }
       const requestID = String(task?.request_id || "").trim();
-      const key = taskProgressModelCacheKey(task);
+      const signals = taskProgressSignals(task);
+      const key = taskProgressModelCacheKey(task, signals);
       if (requestID) {
         const cached = state.taskProgressModelCache.get(requestID);
         if (cached && cached.key === key) {
@@ -11466,7 +11545,7 @@
         }
       }
 
-      const value = buildTaskProgressModel(task);
+      const value = buildTaskProgressModel(task, signals);
 
       if (requestID) {
         state.taskProgressModelCache.set(requestID, { key, value });
@@ -12518,6 +12597,9 @@
       taskFullscreenXtermMount = null;
       if (taskFullscreenTerminal) {
         taskFullscreenTerminal.classList.remove("task-xterm-ready");
+        taskFullscreenTerminal.dataset.xtermBaseSig = "";
+        taskFullscreenTerminal.dataset.xtermFirstKey = "";
+        taskFullscreenTerminal.dataset.xtermLogCount = "";
       }
     }
 
@@ -12646,17 +12728,60 @@
       return `${style}${prefix}${normalizeTerminalLogText(row?.text)}${reset}\r\n`;
     }
 
+    function visibleTerminalLogs(logs) {
+      const rows = Array.isArray(logs) ? logs : [];
+      if (rows.length <= MAX_TERMINAL_LINES) {
+        return rows;
+      }
+      return rows.slice(rows.length - MAX_TERMINAL_LINES);
+    }
+
+    function terminalLogKey(row) {
+      return [
+        String(row?.time || ""),
+        String(row?.stream || ""),
+        String(row?.text || ""),
+      ].join("\u001f");
+    }
+
     function renderXtermTaskLogs(logs, terminalNode) {
       const term = ensureTaskFullscreenXterm(terminalNode);
       if (!term) {
         return false;
       }
+      const visibleLogs = visibleTerminalLogs(logs);
+      const firstKey = visibleLogs.length ? terminalLogKey(visibleLogs[0]) : "";
+      const lastKey = visibleLogs.length ? terminalLogKey(visibleLogs[visibleLogs.length - 1]) : "";
+      const baseSig = [
+        String(state.selectedTaskId || ""),
+        String(visibleLogs.length),
+        firstKey,
+        lastKey,
+      ].join("|");
+      const previousBaseSig = String(terminalNode.dataset.xtermBaseSig || "");
+      const previousCount = Number(terminalNode.dataset.xtermLogCount || 0);
       const wasPinnedToBottom = taskFullscreenXtermPinnedToBottom(term);
-      const output = logs.length
-        ? logs.map(taskLogToTerminalText).join("")
+      let output = "";
+      let resetBuffer = true;
+      if (
+        previousBaseSig &&
+        visibleLogs.length > previousCount &&
+        previousCount > 0 &&
+        previousCount < visibleLogs.length &&
+        String(terminalNode.dataset.xtermFirstKey || "") === firstKey
+      ) {
+        output = visibleLogs.slice(previousCount).map(taskLogToTerminalText).join("");
+        resetBuffer = false;
+      } else {
+        output = visibleLogs.length
+        ? visibleLogs.map(taskLogToTerminalText).join("")
         : "\x1b[2mNo output captured yet.\x1b[0m\r\n";
+      }
+      terminalNode.dataset.xtermBaseSig = baseSig;
+      terminalNode.dataset.xtermFirstKey = firstKey;
+      terminalNode.dataset.xtermLogCount = String(visibleLogs.length);
       queueTaskFullscreenXtermResize();
-      term.write(`\x1bc${output}`, () => {
+      term.write(`${resetBuffer ? "\x1bc" : ""}${output}`, () => {
         if (wasPinnedToBottom) {
           term.scrollToBottom();
         }
@@ -12667,15 +12792,16 @@
     function renderPlainTaskLogs(logs, terminalNode, wasPinnedToBottom) {
       destroyTaskFullscreenXterm();
       terminalNode.replaceChildren();
+      const visibleLogs = visibleTerminalLogs(logs);
 
-      if (!logs.length) {
+      if (!visibleLogs.length) {
         terminalNode.textContent = "No output captured yet.";
         return;
       }
 
       const frag = document.createDocumentFragment();
-      for (let i = 0; i < logs.length; i += 1) {
-        const row = logs[i];
+      for (let i = 0; i < visibleLogs.length; i += 1) {
+        const row = visibleLogs[i];
         const line = document.createElement("div");
         const stream = row.stream || "meta";
         line.className = stream === "stderr" ? "stderr-line" : (stream === "stdout" ? "stdout-line" : "meta-line");
@@ -12900,16 +13026,38 @@
       }
     }
 
+    function renderPendingStreamSnapshot() {
+      streamRenderFrame = null;
+      if (document.hidden) {
+        return;
+      }
+      const snapshot = pendingStreamSnapshot;
+      pendingStreamSnapshot = null;
+      if (snapshot) {
+        render(snapshot);
+      }
+    }
+
+    function queuePendingStreamRender() {
+      if (document.hidden || streamRenderFrame !== null) {
+        return;
+      }
+      streamRenderFrame = window.requestAnimationFrame(renderPendingStreamSnapshot);
+    }
+
     function flushPendingStreamSnapshot() {
       streamRenderTimer = null;
+      if (document.hidden) {
+        return;
+      }
       const payload = pendingStreamSnapshotText;
       pendingStreamSnapshotText = "";
       if (!payload) {
         return;
       }
       try {
-        const snapshot = JSON.parse(payload);
-        render(snapshot);
+        pendingStreamSnapshot = JSON.parse(payload);
+        queuePendingStreamRender();
       } catch (_err) {
         // Ignore malformed event packets.
       }
@@ -12922,6 +13070,21 @@
       }
       streamRenderTimer = window.setTimeout(flushPendingStreamSnapshot, STREAM_RENDER_INTERVAL_MS);
     }
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        if (streamRenderFrame !== null) {
+          window.cancelAnimationFrame(streamRenderFrame);
+          streamRenderFrame = null;
+        }
+        return;
+      }
+      if (pendingStreamSnapshotText) {
+        flushPendingStreamSnapshot();
+        return;
+      }
+      queuePendingStreamRender();
+    });
 
     function startStream() {
       const stream = new EventSource("/api/stream");
