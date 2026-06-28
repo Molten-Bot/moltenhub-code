@@ -617,6 +617,8 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		t.Fatalf("expected Review settings tab to render before Hub tab")
 	}
 	if !strings.Contains(markup, `Auto-merge clean reviews`) ||
+		!strings.Contains(markup, `Delete merged branches`) ||
+		!strings.Contains(markup, `id="review-settings-delete-merged-branches" type="checkbox"`) ||
 		!strings.Contains(markup, `id="review-settings-merge-method" type="hidden" value="squash"`) ||
 		!strings.Contains(markup, `role="radiogroup" aria-labelledby="review-settings-merge-method-label"`) ||
 		!strings.Contains(markup, `data-review-settings-merge-method="squash">Squash</button>`) ||
@@ -627,6 +629,7 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	}
 	if !strings.Contains(markup, `reviewSettingsMergeOptions.forEach((button) => {`) ||
 		!strings.Contains(markup, `setReviewSettingsMergeMethod(button.getAttribute("data-review-settings-merge-method"));`) ||
+		!strings.Contains(markup, `delete_merged_branches: Boolean(reviewSettingsDeleteMergedBranches?.checked),`) ||
 		!strings.Contains(markup, `setHubSetupOpen(false);`) {
 		t.Fatalf("expected review settings save and merge method selection behavior")
 	}

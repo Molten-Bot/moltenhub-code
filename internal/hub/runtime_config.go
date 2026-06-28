@@ -368,6 +368,12 @@ func SaveRuntimeConfigReviewSettings(path string, initCfg InitConfig, reviewCfg 
 		delete(reviewDoc, "auto_merge")
 	}
 
+	if reviewCfg.DeleteMergedBranchesEnabled() {
+		reviewDoc["delete_merged_branches"] = true
+	} else {
+		delete(reviewDoc, "delete_merged_branches")
+	}
+
 	switch normalizeReviewWatchMergeMethod(reviewCfg.MergeMethod) {
 	case "", "squash":
 		delete(reviewDoc, "merge_method")

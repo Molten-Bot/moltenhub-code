@@ -367,12 +367,14 @@ func TestSaveRuntimeConfigReviewSettingsPersistsOnlyNonDefaults(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 	autoMerge := true
+	deleteMergedBranches := true
 	err := SaveRuntimeConfigReviewSettings(path, InitConfig{
 		BaseURL:      "https://na.hub.molten.bot/v1",
 		AgentHarness: "codex",
 	}, ReviewWatchConfig{
-		AutoMerge:   &autoMerge,
-		MergeMethod: "rebase",
+		AutoMerge:            &autoMerge,
+		DeleteMergedBranches: &deleteMergedBranches,
+		MergeMethod:          "rebase",
 	})
 	if err != nil {
 		t.Fatalf("SaveRuntimeConfigReviewSettings() error = %v", err)
@@ -386,6 +388,9 @@ func TestSaveRuntimeConfigReviewSettingsPersistsOnlyNonDefaults(t *testing.T) {
 	if got, ok := reviewDoc["auto_merge"].(bool); !ok || !got {
 		t.Fatalf("review_watch.auto_merge = %#v, want true", reviewDoc["auto_merge"])
 	}
+	if got, ok := reviewDoc["delete_merged_branches"].(bool); !ok || !got {
+		t.Fatalf("review_watch.delete_merged_branches = %#v, want true", reviewDoc["delete_merged_branches"])
+	}
 	if got := docStringValue(reviewDoc["merge_method"]); got != "rebase" {
 		t.Fatalf("review_watch.merge_method = %q, want rebase", got)
 	}
@@ -397,12 +402,14 @@ func TestSaveRuntimeConfigReviewSettingsPersistsOnlyNonDefaults(t *testing.T) {
 	}
 
 	autoMerge = false
+	deleteMergedBranches = false
 	err = SaveRuntimeConfigReviewSettings(path, InitConfig{
 		BaseURL:      "https://na.hub.molten.bot/v1",
 		AgentHarness: "codex",
 	}, ReviewWatchConfig{
-		AutoMerge:   &autoMerge,
-		MergeMethod: "squash",
+		AutoMerge:            &autoMerge,
+		DeleteMergedBranches: &deleteMergedBranches,
+		MergeMethod:          "squash",
 	})
 	if err != nil {
 		t.Fatalf("SaveRuntimeConfigReviewSettings(defaults) error = %v", err)
@@ -414,6 +421,9 @@ func TestSaveRuntimeConfigReviewSettingsPersistsOnlyNonDefaults(t *testing.T) {
 	}
 	if _, ok := reviewDoc["auto_merge"]; ok {
 		t.Fatalf("review_watch.auto_merge persisted for default false: %#v", reviewDoc)
+	}
+	if _, ok := reviewDoc["delete_merged_branches"]; ok {
+		t.Fatalf("review_watch.delete_merged_branches persisted for default false: %#v", reviewDoc)
 	}
 	if _, ok := reviewDoc["merge_method"]; ok {
 		t.Fatalf("review_watch.merge_method persisted for default squash: %#v", reviewDoc)

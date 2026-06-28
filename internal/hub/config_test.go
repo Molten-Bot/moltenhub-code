@@ -92,6 +92,7 @@ func TestLoadInitSupportsReviewWatchConfig(t *testing.T) {
     "poll_interval_ms": 30000,
     "writeback": "off",
     "auto_merge": false,
+    "delete_merged_branches": true,
     "merge_method": "rebase",
     "response_mode": "off"
   }
@@ -115,6 +116,9 @@ func TestLoadInitSupportsReviewWatchConfig(t *testing.T) {
 	}
 	if cfg.ReviewWatch.AutoMergeEnabled() {
 		t.Fatal("ReviewWatch.AutoMergeEnabled() = true, want false")
+	}
+	if !cfg.ReviewWatch.DeleteMergedBranchesEnabled() {
+		t.Fatal("ReviewWatch.DeleteMergedBranchesEnabled() = false, want true")
 	}
 	if cfg.ReviewWatch.MergeMethod != "rebase" {
 		t.Fatalf("ReviewWatch.MergeMethod = %q, want rebase", cfg.ReviewWatch.MergeMethod)

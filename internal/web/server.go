@@ -211,14 +211,16 @@ type HubSetupRequest struct {
 }
 
 type ReviewSettingsState struct {
-	AutoMerge   bool   `json:"auto_merge"`
-	MergeMethod string `json:"merge_method"`
-	Message     string `json:"message,omitempty"`
+	AutoMerge            bool   `json:"auto_merge"`
+	DeleteMergedBranches bool   `json:"delete_merged_branches"`
+	MergeMethod          string `json:"merge_method"`
+	Message              string `json:"message,omitempty"`
 }
 
 type ReviewSettingsRequest struct {
-	AutoMerge   bool   `json:"auto_merge"`
-	MergeMethod string `json:"merge_method"`
+	AutoMerge            bool   `json:"auto_merge"`
+	DeleteMergedBranches bool   `json:"delete_merged_branches"`
+	MergeMethod          string `json:"merge_method"`
 }
 
 // NewServer returns a monitor HTTP server.

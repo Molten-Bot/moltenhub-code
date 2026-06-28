@@ -18,12 +18,14 @@ const defaultPRMergePollInterval = 10 * time.Second
 
 // PRMergeMonitor watches task pull requests and marks merged tasks as done.
 type PRMergeMonitor struct {
-	Runner           execx.Runner
-	Broker           *Broker
-	Logf             func(string, ...any)
-	CleanupTask      func(context.Context, string) error
-	OnReviewFeedback func(context.Context, Task, PRReviewFeedback) (string, error)
-	PollInterval     time.Duration
+	Runner                      execx.Runner
+	Broker                      *Broker
+	Logf                        func(string, ...any)
+	CleanupTask                 func(context.Context, string) error
+	OnReviewFeedback            func(context.Context, Task, PRReviewFeedback) (string, error)
+	DeleteMergedBranches        bool
+	DeleteMergedBranchesEnabled func() bool
+	PollInterval                time.Duration
 
 	mu             sync.Mutex
 	inFlight       map[string]struct{}
@@ -39,10 +41,18 @@ type prViewState struct {
 	Title          string                 `json:"title"`
 	HeadRefName    string                 `json:"headRefName"`
 	BaseRefName    string                 `json:"baseRefName"`
+	HeadRepository prRepository           `json:"headRepository"`
+	HeadRepoOwner  prActor                `json:"headRepositoryOwner"`
 	ReviewDecision string                 `json:"reviewDecision"`
 	LatestReviews  []prReviewEntry        `json:"latestReviews"`
 	Comments       []prCommentEntry       `json:"comments"`
 	ReviewComments []prReviewCommentEntry `json:"-"`
+}
+
+type prRepository struct {
+	Name          string  `json:"name"`
+	NameWithOwner string  `json:"nameWithOwner"`
+	Owner         prActor `json:"owner"`
 }
 
 type prReviewEntry struct {
@@ -237,14 +247,90 @@ func (m *PRMergeMonitor) checkTaskPR(ctx context.Context, task Task) {
 			return
 		}
 	}
+	deleteMergedBranches := m.deleteMergedBranchesEnabled()
+	if deleteMergedBranches {
+		if err := m.deleteMergedBranch(ctx, task, state); err != nil {
+			m.Logf("hub.ui status=warn event=pr_monitor_delete_branch request_id=%s pr_url=%s err=%q", task.RequestID, task.PRURL, err)
+			return
+		}
+	}
 	m.Broker.DropTaskRunConfig(task.RequestID)
+	if deleteMergedBranches {
+		if err := m.Broker.CloseTask(task.RequestID); err != nil {
+			m.Logf("hub.ui status=warn event=pr_monitor_close_deleted_branch_task request_id=%s pr_url=%s err=%q", task.RequestID, task.PRURL, err)
+			return
+		}
+	}
 	if m.CleanupTask != nil {
 		if err := m.CleanupTask(ctx, task.RequestID); err != nil {
 			m.Logf("hub.ui status=warn event=pr_monitor_cleanup request_id=%s pr_url=%s err=%q", task.RequestID, task.PRURL, err)
 		}
 	}
 	m.markMerged(task.RequestID)
-	m.Logf("hub.ui status=ok event=pr_merged request_id=%s pr_url=%s", task.RequestID, task.PRURL)
+	m.Logf("hub.ui status=ok event=pr_merged request_id=%s pr_url=%s branch_deleted=%t", task.RequestID, task.PRURL, deleteMergedBranches)
+}
+
+func (m *PRMergeMonitor) deleteMergedBranchesEnabled() bool {
+	if m.DeleteMergedBranchesEnabled != nil {
+		return m.DeleteMergedBranchesEnabled()
+	}
+	return m.DeleteMergedBranches
+}
+
+func (m *PRMergeMonitor) deleteMergedBranch(ctx context.Context, task Task, state prViewState) error {
+	repo := state.HeadRepositoryNameWithOwner()
+	if repo == "" {
+		repo = githubutil.PullRequestRepository(task.PRURL)
+	}
+	if repo == "" {
+		return fmt.Errorf("pull request head repository is required")
+	}
+	branch := strings.TrimSpace(state.HeadRefName)
+	if branch == "" {
+		branch = strings.TrimSpace(task.Branch)
+	}
+	if owner, name, ok := strings.Cut(branch, ":"); ok && strings.TrimSpace(owner) != "" {
+		branch = strings.TrimSpace(name)
+	}
+	branch = strings.TrimPrefix(strings.TrimSpace(branch), "refs/heads/")
+	if branch == "" {
+		return fmt.Errorf("pull request head branch is required")
+	}
+	if base := strings.TrimSpace(state.BaseRefName); base != "" && branch == base {
+		return fmt.Errorf("refusing to delete base branch %q", branch)
+	}
+	_, err := m.Runner.Run(ctx, execx.Command{
+		Name: "gh",
+		Args: []string{"api", "-X", "DELETE", fmt.Sprintf("repos/%s/git/refs/heads/%s", repo, branch)},
+	})
+	if err != nil {
+		if isMissingGitHubRefError(err) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+func isMissingGitHubRefError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "reference does not exist") ||
+		strings.Contains(message, "not found (http 404)")
+}
+
+func (s prViewState) HeadRepositoryNameWithOwner() string {
+	if repo := strings.TrimSpace(s.HeadRepository.NameWithOwner); repo != "" {
+		return repo
+	}
+	owner := strings.TrimSpace(firstNonEmpty(s.HeadRepository.Owner.Login, s.HeadRepoOwner.Login))
+	name := strings.TrimSpace(s.HeadRepository.Name)
+	if owner == "" || name == "" {
+		return ""
+	}
+	return owner + "/" + name
 }
 
 func (m *PRMergeMonitor) maybeQueueReviewFeedback(ctx context.Context, task Task, state prViewState) {
@@ -307,7 +393,7 @@ func (m *PRMergeMonitor) prState(ctx context.Context, prURL string) (prViewState
 	if prURL == "" {
 		return prViewState{}, fmt.Errorf("pull request url is required")
 	}
-	args := []string{"pr", "view", githubutil.PullRequestSelector(prURL), "--json", "state,mergedAt,url,number,title,headRefName,baseRefName,reviewDecision,latestReviews,comments"}
+	args := []string{"pr", "view", githubutil.PullRequestSelector(prURL), "--json", "state,mergedAt,url,number,title,headRefName,baseRefName,headRepository,headRepositoryOwner,reviewDecision,latestReviews,comments"}
 	if repo := githubutil.PullRequestRepository(prURL); repo != "" {
 		args = append(args, "--repo", repo)
 	}

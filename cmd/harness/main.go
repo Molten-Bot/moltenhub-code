@@ -927,6 +927,14 @@ func runHub(args []string) int {
 			Broker:      monitorBroker,
 			Logf:        daemonLogger,
 			CleanupTask: cleanupTaskLogs,
+			DeleteMergedBranchesEnabled: func() bool {
+				activeCfg, err := effectiveHubSetupConfig(cfg)
+				if err != nil {
+					activeCfg = cfg
+				}
+				activeCfg.ApplyDefaults()
+				return activeCfg.ReviewWatch.DeleteMergedBranchesEnabled()
+			},
 			OnReviewFeedback: func(reqCtx context.Context, task web.Task, feedback web.PRReviewFeedback) (string, error) {
 				runConfigJSON, ok := monitorBroker.TaskRunConfig(task.RequestID)
 				if !ok {
@@ -3494,8 +3502,9 @@ func currentReviewSettingsState(cfg hub.InitConfig) web.ReviewSettingsState {
 	}
 	activeCfg.ApplyDefaults()
 	return web.ReviewSettingsState{
-		AutoMerge:   activeCfg.ReviewWatch.AutoMergeEnabled(),
-		MergeMethod: activeCfg.ReviewWatch.MergeMethod,
+		AutoMerge:            activeCfg.ReviewWatch.AutoMergeEnabled(),
+		DeleteMergedBranches: activeCfg.ReviewWatch.DeleteMergedBranchesEnabled(),
+		MergeMethod:          activeCfg.ReviewWatch.MergeMethod,
 	}
 }
 
@@ -3507,9 +3516,11 @@ func configureReviewSettings(cfg hub.InitConfig, req web.ReviewSettingsRequest) 
 	}
 
 	autoMerge := req.AutoMerge
+	deleteMergedBranches := req.DeleteMergedBranches
 	reviewCfg := hub.ReviewWatchConfig{
-		AutoMerge:   &autoMerge,
-		MergeMethod: method,
+		AutoMerge:            &autoMerge,
+		DeleteMergedBranches: &deleteMergedBranches,
+		MergeMethod:          method,
 	}
 	if err := hub.SaveRuntimeConfigReviewSettings(cfg.RuntimeConfigPath, cfg, reviewCfg); err != nil {
 		state := currentReviewSettingsState(cfg)

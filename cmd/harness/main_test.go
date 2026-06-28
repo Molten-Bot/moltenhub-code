@@ -2339,14 +2339,15 @@ func TestConfigureReviewSettingsPersistsOnlyNonDefaults(t *testing.T) {
 		BaseURL:           "https://na.hub.molten.bot/v1",
 		AgentHarness:      "codex",
 	}, web.ReviewSettingsRequest{
-		AutoMerge:   true,
-		MergeMethod: "merge",
+		AutoMerge:            true,
+		DeleteMergedBranches: true,
+		MergeMethod:          "merge",
 	})
 	if err != nil {
 		t.Fatalf("configureReviewSettings() error = %v", err)
 	}
-	if !state.AutoMerge || state.MergeMethod != "merge" {
-		t.Fatalf("state = %#v, want auto merge with merge method", state)
+	if !state.AutoMerge || !state.DeleteMergedBranches || state.MergeMethod != "merge" {
+		t.Fatalf("state = %#v, want auto merge, delete merged branches, and merge method", state)
 	}
 
 	data, err := os.ReadFile(configPath)
@@ -2364,6 +2365,9 @@ func TestConfigureReviewSettingsPersistsOnlyNonDefaults(t *testing.T) {
 	if got, ok := reviewDoc["auto_merge"].(bool); !ok || !got {
 		t.Fatalf("review_watch.auto_merge = %#v, want true", reviewDoc["auto_merge"])
 	}
+	if got, ok := reviewDoc["delete_merged_branches"].(bool); !ok || !got {
+		t.Fatalf("review_watch.delete_merged_branches = %#v, want true", reviewDoc["delete_merged_branches"])
+	}
 	if got := strings.TrimSpace(reviewDoc["merge_method"].(string)); got != "merge" {
 		t.Fatalf("review_watch.merge_method = %q, want merge", got)
 	}
@@ -2373,13 +2377,14 @@ func TestConfigureReviewSettingsPersistsOnlyNonDefaults(t *testing.T) {
 		BaseURL:           "https://na.hub.molten.bot/v1",
 		AgentHarness:      "codex",
 	}, web.ReviewSettingsRequest{
-		AutoMerge:   false,
-		MergeMethod: "squash",
+		AutoMerge:            false,
+		DeleteMergedBranches: false,
+		MergeMethod:          "squash",
 	})
 	if err != nil {
 		t.Fatalf("configureReviewSettings(defaults) error = %v", err)
 	}
-	if state.AutoMerge || state.MergeMethod != "squash" {
+	if state.AutoMerge || state.DeleteMergedBranches || state.MergeMethod != "squash" {
 		t.Fatalf("default state = %#v", state)
 	}
 	data, err = os.ReadFile(configPath)

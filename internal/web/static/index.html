@@ -689,6 +689,10 @@
               <input id="review-settings-auto-merge" type="checkbox">
               <span>Auto-merge clean reviews</span>
             </label>
+            <label class="review-settings-toggle">
+              <input id="review-settings-delete-merged-branches" type="checkbox">
+              <span>Delete merged branches</span>
+            </label>
           </fieldset>
           <div class="review-settings-section">
             <span id="review-settings-merge-method-label">Merge Method</span>
@@ -1471,6 +1475,7 @@
       const method = String(settings.merge_method || settings.mergeMethod || "squash").trim().toLowerCase();
       return {
         autoMerge: Boolean(settings.auto_merge || settings.autoMerge),
+        deleteMergedBranches: Boolean(settings.delete_merged_branches || settings.deleteMergedBranches),
         mergeMethod: ["merge", "squash", "rebase"].includes(method) ? method : "squash",
         message: String(settings.message || "").trim(),
       };
@@ -2156,6 +2161,7 @@
     const settingsTabs = Array.from(document.querySelectorAll("[data-settings-tab]"));
     const reviewSettingsForm = document.getElementById("review-settings-form");
     const reviewSettingsAutoMerge = document.getElementById("review-settings-auto-merge");
+    const reviewSettingsDeleteMergedBranches = document.getElementById("review-settings-delete-merged-branches");
     const reviewSettingsMergeMethod = document.getElementById("review-settings-merge-method");
     const reviewSettingsMergeOptions = Array.from(document.querySelectorAll("[data-review-settings-merge-method]"));
     const reviewSettingsStatus = document.getElementById("review-settings-status");
@@ -3043,6 +3049,9 @@
       if (reviewSettingsAutoMerge instanceof HTMLInputElement) {
         reviewSettingsAutoMerge.checked = state.reviewSettings.autoMerge;
       }
+      if (reviewSettingsDeleteMergedBranches instanceof HTMLInputElement) {
+        reviewSettingsDeleteMergedBranches.checked = state.reviewSettings.deleteMergedBranches;
+      }
       setReviewSettingsMergeMethod(state.reviewSettings.mergeMethod);
       if (state.reviewSettings.message) {
         setReviewSettingsStatus("ok", state.reviewSettings.message);
@@ -3105,6 +3114,7 @@
         hubSetupProfile.setAttribute("aria-readonly", state.hubSetupBusy ? "true" : "false");
       }
       if (reviewSettingsAutoMerge) reviewSettingsAutoMerge.disabled = state.hubSetupBusy;
+      if (reviewSettingsDeleteMergedBranches) reviewSettingsDeleteMergedBranches.disabled = state.hubSetupBusy;
       if (reviewSettingsMergeMethod) reviewSettingsMergeMethod.disabled = state.hubSetupBusy;
       reviewSettingsMergeOptions.forEach((button) => {
         button.disabled = state.hubSetupBusy;
@@ -3359,6 +3369,7 @@
     function currentReviewSettingsPayload() {
       return {
         auto_merge: Boolean(reviewSettingsAutoMerge?.checked),
+        delete_merged_branches: Boolean(reviewSettingsDeleteMergedBranches?.checked),
         merge_method: String(reviewSettingsMergeMethod?.value || "squash").trim().toLowerCase() || "squash",
       };
     }
@@ -3389,6 +3400,7 @@
         setReviewSettingsStatus("ok", body?.settings?.message || "Review settings saved.");
         trackAnalyticsEvent("review_settings_saved", {
           auto_merge: payload.auto_merge,
+          delete_merged_branches: payload.delete_merged_branches,
           merge_method: payload.merge_method,
         });
         setHubSetupOpen(false);

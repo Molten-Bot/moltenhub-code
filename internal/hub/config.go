@@ -101,12 +101,13 @@ type DispatcherConfig struct {
 
 // ReviewWatchConfig controls local GitHub notification polling for review requests.
 type ReviewWatchConfig struct {
-	Enabled        *bool  `json:"enabled,omitempty"`
-	PollIntervalMS int    `json:"poll_interval_ms,omitempty"`
-	Writeback      string `json:"writeback,omitempty"`
-	AutoMerge      *bool  `json:"auto_merge,omitempty"`
-	MergeMethod    string `json:"merge_method,omitempty"`
-	ResponseMode   string `json:"response_mode,omitempty"`
+	Enabled              *bool  `json:"enabled,omitempty"`
+	PollIntervalMS       int    `json:"poll_interval_ms,omitempty"`
+	Writeback            string `json:"writeback,omitempty"`
+	AutoMerge            *bool  `json:"auto_merge,omitempty"`
+	DeleteMergedBranches *bool  `json:"delete_merged_branches,omitempty"`
+	MergeMethod          string `json:"merge_method,omitempty"`
+	ResponseMode         string `json:"response_mode,omitempty"`
 }
 
 // EnabledValue returns the effective local review watcher setting. The watcher
@@ -125,6 +126,14 @@ func (c ReviewWatchConfig) AutoMergeEnabled() bool {
 		return false
 	}
 	return *c.AutoMerge
+}
+
+// DeleteMergedBranchesEnabled returns the effective merged-branch cleanup setting.
+func (c ReviewWatchConfig) DeleteMergedBranchesEnabled() bool {
+	if c.DeleteMergedBranches == nil {
+		return false
+	}
+	return *c.DeleteMergedBranches
 }
 
 // LoadInit reads and validates JSON/JSONC init config.

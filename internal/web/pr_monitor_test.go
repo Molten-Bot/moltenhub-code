@@ -17,6 +17,8 @@ type stubPRMonitorRunner struct {
 	mu       sync.Mutex
 	result   execx.Result
 	err      error
+	results  []execx.Result
+	errs     []error
 	commands []execx.Command
 }
 
@@ -24,6 +26,14 @@ func (s *stubPRMonitorRunner) Run(_ context.Context, cmd execx.Command) (execx.R
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.commands = append(s.commands, cmd)
+	idx := len(s.commands) - 1
+	if idx < len(s.results) {
+		var err error
+		if idx < len(s.errs) {
+			err = s.errs[idx]
+		}
+		return s.results[idx], err
+	}
 	return s.result, s.err
 }
 
@@ -129,8 +139,169 @@ func TestPRMergeMonitorMarksMergedTaskDoneAndRunsCleanup(t *testing.T) {
 	if got, want := commands[0].Name, "gh"; got != want {
 		t.Fatalf("command name = %q, want %q", got, want)
 	}
-	if got, want := commands[0].Args, []string{"pr", "view", "42", "--json", "state,mergedAt,url,number,title,headRefName,baseRefName,reviewDecision,latestReviews,comments", "--repo", "acme/repo"}; !slices.Equal(got, want) {
+	if got, want := commands[0].Args, []string{"pr", "view", "42", "--json", "state,mergedAt,url,number,title,headRefName,baseRefName,headRepository,headRepositoryOwner,reviewDecision,latestReviews,comments", "--repo", "acme/repo"}; !slices.Equal(got, want) {
 		t.Fatalf("command args = %v, want %v", got, want)
+	}
+}
+
+func TestPRMergeMonitorDeletesMergedBranchAndClosesTaskWhenEnabled(t *testing.T) {
+	t.Parallel()
+
+	broker := NewBroker()
+	broker.RecordTaskRunConfig("req-merged-delete", []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"ship it"}`))
+	broker.IngestLog("dispatch status=start request_id=req-merged-delete repo=git@github.com:acme/repo.git")
+	broker.IngestLog("dispatch status=completed request_id=req-merged-delete workspace=/tmp/run branch=moltenhub-ship pr_url=https://github.com/acme/repo/pull/42")
+
+	runner := &stubPRMonitorRunner{
+		results: []execx.Result{
+			{Stdout: `{"state":"MERGED","mergedAt":"2026-04-09T12:00:00Z","headRefName":"moltenhub-ship","baseRefName":"main"}`},
+			{Stdout: `{}`},
+		},
+	}
+
+	cleanupCalls := make(chan string, 1)
+	monitor := PRMergeMonitor{
+		Runner:               runner,
+		Broker:               broker,
+		PollInterval:         10 * time.Millisecond,
+		DeleteMergedBranches: true,
+		CleanupTask: func(_ context.Context, requestID string) error {
+			cleanupCalls <- requestID
+			return nil
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- monitor.Run(ctx)
+	}()
+
+	waitForHubUITest(t, 300*time.Millisecond, func() bool {
+		return len(runner.Commands()) >= 2
+	})
+
+	select {
+	case requestID := <-cleanupCalls:
+		if got, want := requestID, "req-merged-delete"; got != want {
+			t.Fatalf("cleanup requestID = %q, want %q", got, want)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("expected cleanup after branch deletion")
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("monitor.Run() error = %v", err)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timed out waiting for monitor shutdown")
+	}
+
+	snap := broker.Snapshot()
+	if got, want := len(snap.Tasks), 0; got != want {
+		t.Fatalf("len(tasks) after merged branch deletion = %d, want %d", got, want)
+	}
+	if got, want := len(snap.Releases), 1; got != want {
+		t.Fatalf("len(releases) after merged branch deletion = %d, want %d", got, want)
+	}
+
+	commands := runner.Commands()
+	if got, want := commands[1].Name, "gh"; got != want {
+		t.Fatalf("delete command name = %q, want %q", got, want)
+	}
+	if got, want := commands[1].Args, []string{"api", "-X", "DELETE", "repos/acme/repo/git/refs/heads/moltenhub-ship"}; !slices.Equal(got, want) {
+		t.Fatalf("delete command args = %v, want %v", got, want)
+	}
+}
+
+func TestPRMergeMonitorDeletesMergedForkBranchFromHeadRepository(t *testing.T) {
+	t.Parallel()
+
+	runner := &stubPRMonitorRunner{}
+	monitor := PRMergeMonitor{Runner: runner}
+
+	err := monitor.deleteMergedBranch(context.Background(), Task{
+		PRURL:  "https://github.com/acme/repo/pull/42",
+		Branch: "moltenhub-ship",
+	}, prViewState{
+		HeadRefName: "moltenhub-ship",
+		BaseRefName: "main",
+		HeadRepository: prRepository{
+			Name: "repo",
+		},
+		HeadRepoOwner: prActor{
+			Login: "contributor",
+		},
+	})
+	if err != nil {
+		t.Fatalf("deleteMergedBranch() error = %v", err)
+	}
+
+	commands := runner.Commands()
+	if got, want := len(commands), 1; got != want {
+		t.Fatalf("len(commands) = %d, want %d", got, want)
+	}
+	if got, want := commands[0].Args, []string{"api", "-X", "DELETE", "repos/contributor/repo/git/refs/heads/moltenhub-ship"}; !slices.Equal(got, want) {
+		t.Fatalf("delete command args = %v, want %v", got, want)
+	}
+}
+
+func TestPRMergeMonitorKeepsMergedTaskVisibleWhenBranchDeleteFails(t *testing.T) {
+	t.Parallel()
+
+	broker := NewBroker()
+	broker.IngestLog("dispatch status=start request_id=req-delete-fails repo=git@github.com:acme/repo.git")
+	broker.IngestLog("dispatch status=completed request_id=req-delete-fails workspace=/tmp/run branch=moltenhub-ship pr_url=https://github.com/acme/repo/pull/42")
+
+	runner := &stubPRMonitorRunner{
+		results: []execx.Result{
+			{Stdout: `{"state":"MERGED","mergedAt":"2026-04-09T12:00:00Z","headRefName":"moltenhub-ship","baseRefName":"main"}`},
+			{},
+		},
+		errs: []error{nil, errors.New("delete denied")},
+	}
+
+	monitor := PRMergeMonitor{
+		Runner:               runner,
+		Broker:               broker,
+		PollInterval:         10 * time.Millisecond,
+		DeleteMergedBranches: true,
+		Logf:                 func(string, ...any) {},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 160*time.Millisecond)
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- monitor.Run(ctx)
+	}()
+
+	waitForHubUITest(t, 120*time.Millisecond, func() bool {
+		return len(runner.Commands()) >= 2
+	})
+
+	snap := broker.Snapshot()
+	if got, want := len(snap.Tasks), 1; got != want {
+		t.Fatalf("len(tasks) after failed branch deletion = %d, want %d", got, want)
+	}
+	if got, want := snap.Tasks[0].Status, "merged"; got != want {
+		t.Fatalf("task.Status after failed branch deletion = %q, want %q", got, want)
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("monitor.Run() error = %v", err)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timed out waiting for monitor shutdown")
 	}
 }
 
