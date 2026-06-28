@@ -4674,6 +4674,82 @@ select.prompt-control {
   white-space: nowrap;
 }
 
+.task-meta > .task-meta-sites {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  overflow: visible;
+}
+
+.task-meta-sites-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-site-url-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.task-site-url-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(113, 136, 177, 0.34);
+  border-radius: 50%;
+  color: color-mix(in srgb, var(--meta) 74%, var(--text-soft));
+  background: color-mix(in srgb, var(--surface-progress-step) 88%, var(--surface-task-button-bg));
+  text-decoration: none;
+  transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, color 0.12s ease, transform 0.12s ease;
+}
+
+a.task-site-url-action:hover,
+a.task-site-url-action:focus-visible {
+  border-color: rgba(10, 132, 255, 0.45);
+  color: var(--running);
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.12);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.task-site-url-action[data-state="current"] {
+  border-color: rgba(10, 132, 255, 0.38);
+  color: #101626;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.14);
+}
+
+html.dark .task-site-url-action[data-state="current"],
+html.night .task-site-url-action[data-state="current"],
+html.pink .task-site-url-action[data-state="current"] {
+  color: #fff;
+  background: var(--running);
+  border-color: rgba(255, 255, 255, 0.24);
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.24);
+}
+
+.task-site-url-action[data-state="done"] {
+  border-color: rgba(43, 182, 115, 0.42);
+  color: var(--good);
+}
+
+.task-site-url-action[data-state="current"] .task-site-url-glyph {
+  animation: taskIconBreathe 2.4s ease-in-out infinite;
+}
+
+.task-site-url-glyph {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.2;
+  pointer-events: none;
+}
+
 .task-meta > div + div {
   position: relative;
   padding-left: 12px;

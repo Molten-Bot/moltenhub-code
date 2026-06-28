@@ -1237,6 +1237,51 @@
       return link;
     }
 
+    function renderTaskSiteURLAction(task, kind) {
+      const normalizedKind = String(kind || "").trim().toLowerCase();
+      const isConcept = normalizedKind === "concept";
+      const url = isConcept ? taskConceptSiteURL(task) : taskOriginalSiteURL(task);
+      if (isConcept && !shouldShowTaskConceptSiteLink(task)) {
+        return null;
+      }
+      if (!url && !isConcept) {
+        return null;
+      }
+
+      const state = isConcept ? taskConceptSiteState(task) : "done";
+      const label = isConcept ? "Concept URL" : "Original URL";
+      const node = document.createElement(url ? "a" : "span");
+      node.className = `task-site-url-action task-site-url-action-${isConcept ? "concept" : "original"}`;
+      if (state) {
+        node.dataset.state = state;
+      }
+      node.title = url || "Concept URL being created.";
+      node.setAttribute("aria-label", url ? `${label}: ${url}` : "Concept URL being created.");
+
+      if (url) {
+        node.href = url;
+        node.target = "_blank";
+        node.rel = "noopener noreferrer";
+        node.addEventListener("click", (event) => {
+          openExternalTaskLink(event, url, () => {
+            trackAnalyticsEvent(isConcept ? "task_concept_site_opened" : "task_original_site_opened", {
+              request_id: taskRequestID(task),
+            });
+          });
+        });
+      } else {
+        node.setAttribute("role", "img");
+      }
+
+      const icon = document.createElement("i");
+      icon.className = "task-site-url-glyph";
+      icon.setAttribute("data-lucide", isConcept ? "spotlight" : "link");
+      icon.setAttribute("aria-hidden", "true");
+      node.appendChild(icon);
+
+      return node;
+    }
+
     function renderTaskStatusBadge(task) {
       const status = normalizedTaskStatus(task?.status) || "pending";
       const statusLabel = taskStatusLabel(status);
@@ -9340,7 +9385,7 @@
 
     function taskRepoRootURL(task) {
       for (const repo of taskRepoValues(task)) {
-        const repoPath = githubRepoPathFromValue(repo);
+        const repoPath = githubRepoPathFromValue(stripTaskSiteAdminLabel(repo));
         if (repoPath) {
           return `https://github.com/${repoPath}`;
         }
@@ -9436,7 +9481,48 @@
     function formatTaskRepos(task) {
       const repos = normalizedTaskRepos(task);
       if (!repos.length) return "-";
-      return `[${repos.join(", ")}]`;
+      const displayRepos = repos.map(taskSiteDisplayName).filter(Boolean);
+      if (!displayRepos.length) return "-";
+      return `[${displayRepos.join(", ")}]`;
+    }
+
+    function taskSiteDisplayName(value) {
+      return stripTaskSiteAdminLabel(value)
+        .replace(/\s{2,}/g, " ")
+        .replace(/^[\s|/:-]+|[\s|/:-]+$/g, "")
+        .trim();
+    }
+
+    function stripTaskSiteAdminLabel(value) {
+      return String(value || "")
+        .replace(/\bEditorial brand\s*\|\s*Admin\b\s*(?:[|:/-]\s*)?/gi, "")
+        .trim();
+    }
+
+    function taskOriginalSiteURL(task) {
+      return taskRepoRootURL(task);
+    }
+
+    function taskConceptSiteURL(task) {
+      return taskLiveAppURL(task);
+    }
+
+    function shouldShowTaskConceptSiteLink(task) {
+      if (taskConceptSiteURL(task)) {
+        return true;
+      }
+      const status = normalizedTaskStatus(task?.status);
+      if (COMPLETED_STATUSES.has(status)) {
+        return false;
+      }
+      return taskProgressSignals(task).hasWorkflowSeen;
+    }
+
+    function taskConceptSiteState(task) {
+      if (taskConceptSiteURL(task)) {
+        return "done";
+      }
+      return shouldShowTaskConceptSiteLink(task) ? "current" : "";
     }
 
     function formatTaskBranch(task) {
@@ -11904,6 +11990,10 @@
             currentState: taskCurrentStateSignature(task),
             prompt: taskDisplayLabel(task),
             repos: formatTaskRepos(task),
+            originalSiteURL: taskOriginalSiteURL(task),
+            conceptSiteURL: taskConceptSiteURL(task),
+            conceptSiteVisible: shouldShowTaskConceptSiteLink(task),
+            conceptSiteState: taskConceptSiteState(task),
             branch: formatTaskBranch(task),
             skill: String(task?.skill || ""),
             timing: taskTimingSignature(task),
@@ -12348,7 +12438,24 @@
           meta.className = "task-meta";
 
           const repos = document.createElement("div");
-          repos.textContent = `repos: ${formatTaskRepos(task)}`;
+          repos.className = "task-meta-sites";
+          const reposLabel = document.createElement("span");
+          reposLabel.className = "task-meta-sites-label";
+          reposLabel.textContent = `sites: ${formatTaskRepos(task)}`;
+          repos.appendChild(reposLabel);
+          const siteLinks = document.createElement("span");
+          siteLinks.className = "task-site-url-actions";
+          const originalSiteAction = renderTaskSiteURLAction(task, "original");
+          if (originalSiteAction) {
+            siteLinks.appendChild(originalSiteAction);
+          }
+          const conceptSiteAction = renderTaskSiteURLAction(task, "concept");
+          if (conceptSiteAction) {
+            siteLinks.appendChild(conceptSiteAction);
+          }
+          if (siteLinks.childElementCount > 0) {
+            repos.appendChild(siteLinks);
+          }
           const branch = document.createElement("div");
           branch.textContent = `branch: ${formatTaskBranch(task)}`;
           const skill = document.createElement("div");
