@@ -419,7 +419,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 				runDir,
 			)
 		}
-		if requiresConcreteNoChangeEvidence(cfg.Prompt) && !agentOutputCitesConcreteNoChangeEvidence(agentRes) {
+		if requiresConcreteNoChangeEvidence(cfg.Prompt) && !agentOutputCitesMoltenHubCodeNoChangeEvidence(agentRes) {
 			return h.fail(
 				ExitCodex,
 				agentStage,
@@ -432,7 +432,7 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		}
 		h.logf("stage=git status=no_changes")
 		res := buildResult(runDir, repos, true)
-		res.NoChangeEvidence = agentOutputCitesConcreteNoChangeEvidence(agentRes)
+		res.NoChangeEvidence = agentOutputCitesConcreteNoChangeEvidence(agentRes, cfg.Prompt)
 		res.ExitCode = ExitSuccess
 		return res
 	}
@@ -4325,13 +4325,43 @@ func pullRequestURLFromPrompt(prompt string) string {
 	return strings.TrimSpace(matches[0])
 }
 
-func agentOutputCitesConcreteNoChangeEvidence(res execx.Result) bool {
+func agentOutputCitesConcreteNoChangeEvidence(res execx.Result, prompt string) bool {
+	if requiresConcreteNoChangeEvidence(prompt) {
+		return agentOutputCitesMoltenHubCodeNoChangeEvidence(res)
+	}
+	return agentOutputCitesGeneralNoChangeEvidence(res)
+}
+
+func agentOutputCitesMoltenHubCodeNoChangeEvidence(res execx.Result) bool {
 	text := strings.ToLower(strings.TrimSpace(res.Stdout))
+	if !agentOutputHasNoChangeClaim(text) {
+		return false
+	}
+
+	evidenceMarkers := []string{
+		"internal/", "cmd/", "library/", "na.hub.molten.bot.openapi.yaml",
+	}
+	return containsAnySubstring(text, evidenceMarkers)
+}
+
+func agentOutputCitesGeneralNoChangeEvidence(res execx.Result) bool {
+	text := strings.ToLower(strings.TrimSpace(res.Stdout))
+	if !agentOutputHasNoChangeClaim(text) {
+		return false
+	}
+	return agentOutputHasConcreteFileEvidence(text)
+}
+
+func agentOutputHasNoChangeClaim(text string) bool {
 	if text == "" || strings.Contains(text, "failure:") || strings.Contains(text, "error details:") {
 		return false
 	}
 
 	noOpMarkers := []string{
+		"no repo diff",
+		"no repository diff",
+		"no tracked file changes",
+		"git diff empty",
 		"no file changes required",
 		"no repository changes required",
 		"no changes needed",
@@ -4341,14 +4371,22 @@ func agentOutputCitesConcreteNoChangeEvidence(res execx.Result) bool {
 		"already satisfied",
 		"requested state already",
 	}
-	if !containsAnySubstring(text, noOpMarkers) {
-		return false
-	}
+	return containsAnySubstring(text, noOpMarkers)
+}
 
-	evidenceMarkers := []string{
-		"internal/", "cmd/", "library/", "na.hub.molten.bot.openapi.yaml",
+func agentOutputHasConcreteFileEvidence(text string) bool {
+	evidencePatterns := []*regexp.Regexp{
+		regexp.MustCompile(`\[[^\]\n]+\]\([^)]+:[0-9]+\)`),
+		regexp.MustCompile("`[^`\\n]+\\.[a-z0-9]+`"),
+		regexp.MustCompile(`(^|[\s(/])(?:src|app|pages|routes|components|styles|public|worker|internal|cmd|library|testdata)/[^\s)]+`),
+		regexp.MustCompile(`(^|[\s(/])(?:package\.json|go\.mod|vite\.config\.[jt]s|next\.config\.[jt]s|tsconfig\.json|index\.html)(:[0-9]+)?`),
 	}
-	return containsAnySubstring(text, evidenceMarkers)
+	for _, pattern := range evidencePatterns {
+		if pattern.MatchString(text) {
+			return true
+		}
+	}
+	return false
 }
 
 func containsAnySubstring(text string, markers []string) bool {
