@@ -155,7 +155,7 @@ func runSingle(args []string) int {
 		result = failureResult
 	}
 	if result.Err != nil {
-		writeStderrLine(logger, fmt.Sprintf("error: %v", result.Err))
+		writeStderrLine(logger, failureMessage(result.Err.Error()))
 		if result.WorkspaceDir != "" {
 			writeStderrLine(logger, fmt.Sprintf("workspace: %s", result.WorkspaceDir))
 		}

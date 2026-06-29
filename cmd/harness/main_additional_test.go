@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1262,6 +1263,50 @@ func TestRunSingleActionableNoChangesReturnsFailure(t *testing.T) {
 
 	if code := runSingle([]string{"--config", configPath}); code != app.ExitCodex {
 		t.Fatalf("runSingle() = %d, want %d", code, app.ExitCodex)
+	}
+}
+
+func TestRunSingleFailurePrintsExplicitFailureFields(t *testing.T) {
+	configPath := writeRunSingleConfig(t, "fix broken release generation")
+	previousHarness := runSingleHarness
+	t.Cleanup(func() { runSingleHarness = previousHarness })
+
+	runSingleHarness = func(_ context.Context, _ config.Config, _ func(string, ...any)) app.Result {
+		return app.Result{
+			ExitCode: app.ExitCodex,
+			Err:      errors.New("codex: process exited with status 1"),
+		}
+	}
+
+	previousStderr := os.Stderr
+	readPipe, writePipe, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stderr = writePipe
+	t.Cleanup(func() {
+		os.Stderr = previousStderr
+		_ = readPipe.Close()
+		_ = writePipe.Close()
+	})
+
+	if code := runSingle([]string{"--config", configPath}); code != app.ExitCodex {
+		t.Fatalf("runSingle() = %d, want %d", code, app.ExitCodex)
+	}
+	_ = writePipe.Close()
+	outputBytes, err := io.ReadAll(readPipe)
+	if err != nil {
+		t.Fatalf("read stderr: %v", err)
+	}
+	output := string(outputBytes)
+	if !strings.Contains(output, "Failure: task failed.") {
+		t.Fatalf("stderr = %q, want Failure field", output)
+	}
+	if !strings.Contains(output, "Error details: codex: process exited with status 1") {
+		t.Fatalf("stderr = %q, want Error details field", output)
+	}
+	if strings.Contains(output, "error: codex: process exited with status 1") {
+		t.Fatalf("stderr = %q, want no legacy error prefix", output)
 	}
 }
 
