@@ -59,6 +59,52 @@ func TestHubRuntimeConfigReloaderConnectsOnConfigChange(t *testing.T) {
 	}
 }
 
+func TestApplyEffectiveHubSetupConfigUsesReloadedRuntimeConfig(t *testing.T) {
+	t.Parallel()
+
+	baseCfg := hub.InitConfig{
+		BaseURL:      "https://na.hub.molten.bot/v1",
+		BindToken:    "stale_bind",
+		AgentHarness: "codex",
+	}
+	reloadedCfg := hub.InitConfig{
+		BaseURL:      "https://eu.hub.molten.bot/v1",
+		AgentToken:   "saved_agent",
+		AgentHarness: "claude",
+	}
+
+	var applied hub.InitConfig
+	err := applyEffectiveHubSetupConfig(
+		context.Background(),
+		baseCfg,
+		func(got hub.InitConfig) (hub.InitConfig, error) {
+			if got.BindToken != "stale_bind" {
+				t.Fatalf("loader base bind_token = %q, want stale_bind", got.BindToken)
+			}
+			return reloadedCfg, nil
+		},
+		func(_ context.Context, got hub.InitConfig) error {
+			applied = got
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("applyEffectiveHubSetupConfig() error = %v", err)
+	}
+	if got, want := applied.AgentToken, "saved_agent"; got != want {
+		t.Fatalf("applied agent_token = %q, want %q", got, want)
+	}
+	if got, want := applied.BindToken, ""; got != want {
+		t.Fatalf("applied bind_token = %q, want empty stale token", got)
+	}
+	if got, want := applied.BaseURL, "https://eu.hub.molten.bot/v1"; got != want {
+		t.Fatalf("applied base_url = %q, want %q", got, want)
+	}
+	if got, want := applied.AgentHarness, "claude"; got != want {
+		t.Fatalf("applied agent_harness = %q, want %q", got, want)
+	}
+}
+
 func TestHubRuntimeConfigReloaderDisconnectsWhenCredentialsDisappear(t *testing.T) {
 	t.Parallel()
 

@@ -778,6 +778,9 @@ func runHub(args []string) int {
 		}
 		return applyEffectiveHubSetupConfig(reqCtx, updateCfg, hubController.Update)
 	}
+	gatedEffectiveHubUpdate := func(reqCtx context.Context) error {
+		return applyEffectiveHubSetupConfig(reqCtx, cfg, effectiveHubSetupConfig, gatedHubUpdate)
+	}
 
 	hubRuntimeReloader := newHubRuntimeConfigReloader(cfg, gatedHubUpdate, hubController.Stop, daemonLogger)
 	go hubRuntimeReloader.Run(ctx, hubRuntimeConfigReloadInterval)
@@ -793,7 +796,7 @@ func runHub(args []string) int {
 				if !hubConfiguredNow() {
 					continue
 				}
-				if err := gatedHubUpdate(ctx, cfg); err != nil {
+				if err := gatedEffectiveHubUpdate(ctx); err != nil {
 					if shouldFallbackToLocalOnlyMode(*uiListen, err) {
 						daemonLogger(
 							"hub.auth status=local_only detail=%q",
@@ -808,7 +811,7 @@ func runHub(args []string) int {
 				if !hubConfiguredNow() || hubController.Running() {
 					continue
 				}
-				if err := gatedHubUpdate(ctx, cfg); err != nil {
+				if err := gatedEffectiveHubUpdate(ctx); err != nil {
 					if shouldFallbackToLocalOnlyMode(*uiListen, err) {
 						daemonLogger(
 							"hub.auth status=local_only detail=%q",
@@ -1071,7 +1074,7 @@ func runHub(args []string) int {
 		return waitForHubRuntime()
 	}
 
-	if err := gatedHubUpdate(ctx, cfg); err != nil {
+	if err := gatedEffectiveHubUpdate(ctx); err != nil {
 		if shouldFallbackToLocalOnlyMode(*uiListen, err) {
 			daemonLogger(
 				"hub.auth status=local_only detail=%q",
