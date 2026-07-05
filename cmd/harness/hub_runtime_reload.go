@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -37,6 +38,25 @@ func newHubRuntimeConfigReloader(
 		stop:          stop,
 		logf:          logf,
 	}
+}
+
+func applyEffectiveHubSetupConfig(
+	ctx context.Context,
+	baseCfg hub.InitConfig,
+	loadEffective func(hub.InitConfig) (hub.InitConfig, error),
+	apply func(context.Context, hub.InitConfig) error,
+) error {
+	if loadEffective == nil {
+		loadEffective = effectiveHubSetupConfig
+	}
+	if apply == nil {
+		return errors.New("live hub apply is unavailable")
+	}
+	activeCfg, err := loadEffective(baseCfg)
+	if err != nil {
+		return err
+	}
+	return apply(ctx, activeCfg)
 }
 
 func (r *hubRuntimeConfigReloader) Run(ctx context.Context, interval time.Duration) {
