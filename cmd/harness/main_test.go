@@ -582,32 +582,6 @@ func TestEffectiveHubSetupConfigKeepsBootstrapGitHubToken(t *testing.T) {
 	}
 }
 
-func TestLiveHubUpdateConfigUsesSavedRuntimeConfig(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
-	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
-		t.Fatalf("mkdir config dir: %v", err)
-	}
-	if err := os.WriteFile(configPath, []byte(`{"base_url":"https://eu.hub.molten.bot/v1","agent_token":"agent_saved","agent_harness":"codex"}`), 0o600); err != nil {
-		t.Fatalf("write runtime config: %v", err)
-	}
-
-	cfg, err := liveHubUpdateConfig(hub.InitConfig{
-		RuntimeConfigPath: configPath,
-		BaseURL:           "https://na.hub.molten.bot/v1",
-		AgentToken:        "agent_boot",
-		AgentHarness:      agentruntime.HarnessCodex,
-	})
-	if err != nil {
-		t.Fatalf("liveHubUpdateConfig() error = %v", err)
-	}
-	if got, want := cfg.AgentToken, "agent_saved"; got != want {
-		t.Fatalf("AgentToken = %q, want %q", got, want)
-	}
-	if got, want := cfg.BaseURL, "https://eu.hub.molten.bot/v1"; got != want {
-		t.Fatalf("BaseURL = %q, want %q", got, want)
-	}
-}
-
 func TestLoadHubBootConfigWithBadRuntimeConfigFallsBackToDefaults(t *testing.T) {
 	t.Setenv("HARNESS_RUNTIME_CONFIG_PATH", "")
 	t.Setenv("HARNESS_ALLOW_NON_MOLTEN_HUB_BASE_URL", "")
@@ -2136,6 +2110,49 @@ func TestConnectHubSetupUsesSavedRuntimeConfig(t *testing.T) {
 	}
 	if got, want := state.Message, "Molten Hub connected."; got != want {
 		t.Fatalf("Message = %q, want %q", got, want)
+	}
+}
+
+func TestApplyEffectiveHubSetupConfigUsesSavedRuntimeConfig(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), ".moltenhub", "config.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{
+  "version": "v1",
+  "base_url": "https://eu.hub.molten.bot/v1",
+  "agent_token": "agent_saved",
+  "agent_harness": "claude",
+  "session_key": "saved-session"
+}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	var liveCfg hub.InitConfig
+	err := applyEffectiveHubSetupConfig(context.Background(), hub.InitConfig{
+		BaseURL:           "https://na.hub.molten.bot/v1",
+		AgentHarness:      "codex",
+		RuntimeConfigPath: configPath,
+	}, func(_ context.Context, cfg hub.InitConfig) error {
+		liveCfg = cfg
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("applyEffectiveHubSetupConfig() error = %v", err)
+	}
+	if got, want := liveCfg.AgentToken, "agent_saved"; got != want {
+		t.Fatalf("liveCfg.AgentToken = %q, want %q", got, want)
+	}
+	if got, want := liveCfg.BaseURL, "https://eu.hub.molten.bot/v1"; got != want {
+		t.Fatalf("liveCfg.BaseURL = %q, want %q", got, want)
+	}
+	if got, want := liveCfg.AgentHarness, "claude"; got != want {
+		t.Fatalf("liveCfg.AgentHarness = %q, want %q", got, want)
+	}
+	if got, want := liveCfg.SessionKey, "saved-session"; got != want {
+		t.Fatalf("liveCfg.SessionKey = %q, want %q", got, want)
 	}
 }
 
