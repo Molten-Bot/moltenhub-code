@@ -2135,7 +2135,7 @@ func TestApplyEffectiveHubSetupConfigUsesSavedRuntimeConfig(t *testing.T) {
 		BaseURL:           "https://na.hub.molten.bot/v1",
 		AgentHarness:      "codex",
 		RuntimeConfigPath: configPath,
-	}, func(_ context.Context, cfg hub.InitConfig) error {
+	}, effectiveHubSetupConfig, func(_ context.Context, cfg hub.InitConfig) error {
 		liveCfg = cfg
 		return nil
 	})
