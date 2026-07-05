@@ -10416,8 +10416,7 @@
       close.setAttribute("aria-label", historyOnly ? "Remove task from history" : "Close task");
       close.hidden = closePending;
       close.disabled = closePending;
-      close.addEventListener("click", (event) => {
-        event.stopPropagation();
+      bindTaskActionButton(close, () => {
         if (historyOnly) {
           trackAnalyticsEvent("task_history_removed", { request_id: requestID });
           state.dismissedTaskIDs.add(requestID);
@@ -11847,6 +11846,37 @@
       return false;
     }
 
+    function bindTaskActionButton(button, handler) {
+      if (!button || typeof handler !== "function") {
+        return;
+      }
+      let handledPointerDown = false;
+      const run = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (button.disabled) {
+          return;
+        }
+        handler(event);
+      };
+      button.addEventListener("pointerdown", (event) => {
+        if (typeof event.button === "number" && event.button !== 0) {
+          return;
+        }
+        handledPointerDown = true;
+        run(event);
+      });
+      button.addEventListener("click", (event) => {
+        if (handledPointerDown) {
+          handledPointerDown = false;
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        run(event);
+      });
+    }
+
     function captureTaskRects(listNode) {
       const rects = new Map();
       if (!listNode) {
@@ -12023,6 +12053,7 @@
               stop: Boolean(task?.controls?.stop),
             },
             taskControlBusy: isTaskControlInFlight(requestID),
+            rerunPending: state.rerunInFlight.has(requestID),
             closePending: isTaskClosePending(requestID),
             uiOnly: Boolean(task?.ui_only),
             githubReposLoading: Boolean(task?.github_repos_loading),
@@ -12132,8 +12163,7 @@
         outputLabel.className = "sr-only";
         outputLabel.textContent = "Output";
         outputToggle.appendChild(outputLabel);
-        outputToggle.addEventListener("click", (event) => {
-          event.stopPropagation();
+        bindTaskActionButton(outputToggle, () => {
           openTaskOutput(requestID);
         });
         return outputToggle;
@@ -12154,8 +12184,7 @@
         imageLabel.className = "sr-only";
         imageLabel.textContent = "Images";
         imageToggle.appendChild(imageLabel);
-        imageToggle.addEventListener("click", (event) => {
-          event.stopPropagation();
+        bindTaskActionButton(imageToggle, () => {
           openTaskImageViewer(requestID);
         });
         return imageToggle;
@@ -12175,8 +12204,7 @@
         promptLabel.className = "sr-only";
         promptLabel.textContent = "Prompt";
         promptToggle.appendChild(promptLabel);
-        promptToggle.addEventListener("click", (event) => {
-          event.stopPropagation();
+        bindTaskActionButton(promptToggle, () => {
           openTaskPromptModal(task);
         });
         return promptToggle;
@@ -12253,8 +12281,7 @@
             const cloneLogo = createTaskCloneIcon();
             cloneButton.appendChild(cloneLogo);
 
-            cloneButton.addEventListener("click", (event) => {
-              event.stopPropagation();
+            bindTaskActionButton(cloneButton, () => {
               void copyTaskCloneCommand(task, cloneButton);
             });
             promptActions.appendChild(cloneButton);
@@ -12328,8 +12355,7 @@
           const cloneLogo = createTaskCloneIcon();
           cloneButton.appendChild(cloneLogo);
 
-          cloneButton.addEventListener("click", (event) => {
-            event.stopPropagation();
+          bindTaskActionButton(cloneButton, () => {
             void copyTaskCloneCommand(task, cloneButton);
           });
           topActions.appendChild(cloneButton);
@@ -12355,8 +12381,7 @@
             forceStartLabel.textContent = "Force start";
             forceStart.appendChild(forceStartLabel);
             forceStart.disabled = taskControlBusy;
-            forceStart.addEventListener("click", (event) => {
-              event.stopPropagation();
+            bindTaskActionButton(forceStart, () => {
               controlTask(requestID, "run", { force: true });
             });
             topActions.appendChild(forceStart);
@@ -12374,8 +12399,7 @@
           pauseRunLabel.textContent = canRun ? "Run" : "Pause";
           pauseRun.appendChild(pauseRunLabel);
           pauseRun.disabled = taskControlBusy;
-          pauseRun.addEventListener("click", (event) => {
-            event.stopPropagation();
+          bindTaskActionButton(pauseRun, () => {
             controlTask(requestID, canRun ? "run" : "pause");
           });
           if (canPause || canRun) {
@@ -12394,8 +12418,7 @@
             stopLabel.textContent = "Stop";
             stop.appendChild(stopLabel);
             stop.disabled = taskControlBusy;
-            stop.addEventListener("click", (event) => {
-              event.stopPropagation();
+            bindTaskActionButton(stop, () => {
               controlTask(requestID, "stop");
             });
             topActions.appendChild(stop);
@@ -12414,8 +12437,7 @@
           rerun.appendChild(rerunLabel);
           rerun.title = "Queue this task configuration again";
           rerun.disabled = state.rerunInFlight.has(requestID);
-          rerun.addEventListener("click", (event) => {
-            event.stopPropagation();
+          bindTaskActionButton(rerun, () => {
             rerunTask(requestID);
           });
           topActions.appendChild(rerun);
@@ -12510,8 +12532,7 @@
             const cloneLogo = createTaskCloneIcon();
             cloneButton.appendChild(cloneLogo);
 
-            cloneButton.addEventListener("click", (event) => {
-              event.stopPropagation();
+            bindTaskActionButton(cloneButton, () => {
               void copyTaskCloneCommand(task, cloneButton);
             });
             sideActions.appendChild(cloneButton);
