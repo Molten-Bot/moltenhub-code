@@ -776,7 +776,7 @@ func runHub(args []string) int {
 			startAgentAuthReadyWatch()
 			return nil
 		}
-		return hubController.Update(reqCtx, updateCfg)
+		return applyEffectiveHubSetupConfig(reqCtx, updateCfg, hubController.Update)
 	}
 
 	hubRuntimeReloader := newHubRuntimeConfigReloader(cfg, gatedHubUpdate, hubController.Stop, daemonLogger)
@@ -3581,6 +3581,17 @@ func connectHubSetup(ctx context.Context, cfg hub.InitConfig, applyLive func(con
 	state.NeedsRestart = false
 	state.ActivationReady = true
 	return state, nil
+}
+
+func applyEffectiveHubSetupConfig(ctx context.Context, cfg hub.InitConfig, applyLive func(context.Context, hub.InitConfig) error) error {
+	if applyLive == nil {
+		return fmt.Errorf("live hub connect is unavailable")
+	}
+	activeCfg, err := effectiveHubSetupConfig(cfg)
+	if err != nil {
+		return fmt.Errorf("load runtime config: %w", err)
+	}
+	return applyLive(ctx, activeCfg)
 }
 
 func disconnectHubSetup(ctx context.Context, cfg hub.InitConfig, stopLive func(context.Context) error) (web.HubSetupState, error) {
