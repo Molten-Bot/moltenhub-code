@@ -776,7 +776,11 @@ func runHub(args []string) int {
 			startAgentAuthReadyWatch()
 			return nil
 		}
-		return hubController.Update(reqCtx, updateCfg)
+		activeCfg, err := liveHubUpdateConfig(updateCfg)
+		if err != nil {
+			return err
+		}
+		return hubController.Update(reqCtx, activeCfg)
 	}
 
 	hubRuntimeReloader := newHubRuntimeConfigReloader(cfg, gatedHubUpdate, hubController.Stop, daemonLogger)
@@ -3398,6 +3402,14 @@ func effectiveHubSetupConfig(cfg hub.InitConfig) (hub.InitConfig, error) {
 	}
 	storedCfg.ApplyDefaults()
 	return storedCfg, nil
+}
+
+func liveHubUpdateConfig(cfg hub.InitConfig) (hub.InitConfig, error) {
+	activeCfg, err := effectiveHubSetupConfig(cfg)
+	if err != nil {
+		return hub.InitConfig{}, fmt.Errorf("load runtime config: %w", err)
+	}
+	return activeCfg, nil
 }
 
 func configureHubSetup(ctx context.Context, cfg hub.InitConfig, req web.HubSetupRequest, applyLive func(context.Context, hub.InitConfig) error) (web.HubSetupState, error) {
