@@ -341,6 +341,107 @@ func TestDaemonRunRetriesTransientBootstrapFailure(t *testing.T) {
 	}
 }
 
+func TestDaemonRunRetriesTransientBindTokenOnlyBootstrapFailure(t *testing.T) {
+	t.Parallel()
+
+	var (
+		mu          sync.Mutex
+		bindHits    int
+		retryLogged bool
+		wsHit       = make(chan struct{})
+		wsOnce      sync.Once
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/agents/bind-tokens", "/v1/agents/bind":
+			mu.Lock()
+			bindHits++
+			hit := bindHits
+			mu.Unlock()
+			if hit <= 7 {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_, _ = w.Write([]byte(`{"message":"moltenhub is starting"}`))
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"agent_token":"agent-token"}`))
+		case "/v1/a2a/agent-card":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"name":"agent","description":"ok","url":"http://example.test","version":"1.0.0","capabilities":{},"skills":[]}`))
+		case "/v1/agents/me":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"handle":"saved"}`))
+		case "/v1/agents/me/status", "/v1/agents/me/metadata":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case "/ping", "/health", "/v1/runtime/messages/pull":
+			w.WriteHeader(http.StatusNoContent)
+		case "/v1/runtime/messages/ws":
+			wsOnce.Do(func() { close(wsHit) })
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"message":"moltenhub is starting"}`))
+		case "/v1/runtime/messages/offline":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	d := NewDaemon(execx.OSRunner{})
+	d.ReconnectDelay = time.Millisecond
+	d.Logf = func(format string, args ...any) {
+		line := fmt.Sprintf(format, args...)
+		if strings.HasPrefix(line, "hub.connection status=retrying") {
+			mu.Lock()
+			retryLogged = true
+			mu.Unlock()
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	runDone := make(chan error, 1)
+	go func() {
+		runDone <- d.Run(ctx, InitConfig{
+			BaseURL:    server.URL + "/v1",
+			BindToken:  "bind-token",
+			SessionKey: "main",
+		})
+	}()
+
+	select {
+	case <-wsHit:
+		cancel()
+	case <-time.After(3 * time.Second):
+		cancel()
+		t.Fatal("timed out waiting for websocket attempt after bind-token bootstrap retry")
+	}
+
+	select {
+	case err := <-runDone:
+		if err != nil {
+			t.Fatalf("Daemon.Run() error = %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for daemon shutdown")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if bindHits < 8 {
+		t.Fatalf("bind hits = %d, want >= 8", bindHits)
+	}
+	if !retryLogged {
+		t.Fatal("missing hub.connection retrying log")
+	}
+}
+
 func TestDaemonRunRepeatsPingHealthPullBeforeEachWebsocketAttempt(t *testing.T) {
 	t.Parallel()
 
