@@ -437,8 +437,18 @@ func TestDispatchParseErrorPayloadIncludesRequiredSchema(t *testing.T) {
 	if !ok {
 		t.Fatalf("result missing or wrong type: %#v", payload["result"])
 	}
-	if _, ok := result["requiredSchema"]; !ok {
+	requiredSchema, ok := result["requiredSchema"].(map[string]any)
+	if !ok {
 		t.Fatalf("requiredSchema missing: %#v", result)
+	}
+	runConfigSchema, _ := requiredSchema["run_config_schema"].(map[string]any)
+	branchConditions, _ := runConfigSchema["allOf"].([]map[string]any)
+	encodedConditions, err := json.Marshal(branchConditions)
+	if err != nil {
+		t.Fatalf("json.Marshal(requiredSchema branch conditions) error = %v", err)
+	}
+	if !strings.Contains(string(encodedConditions), `"const":"fix-merge-main"`) {
+		t.Fatalf("requiredSchema branch conditions = %s, want fix-merge-main condition", encodedConditions)
 	}
 	if got := payload["status"]; got != "error" {
 		t.Fatalf("status = %#v, want %q", got, "error")

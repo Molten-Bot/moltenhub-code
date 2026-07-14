@@ -2897,16 +2897,16 @@ func dispatchParseErrorPayload(cfg InitConfig, dispatch SkillDispatch, parseErr 
 		Err:      fmt.Errorf("dispatch parse: %w", parseErr),
 	})
 	result := payload["result"].(map[string]any)
-	result["requiredSchema"] = requiredSkillPayloadSchema(cfg.Skill.DispatchType, cfg.Skill.Name, currentLibraryTaskNames())
+	result["requiredSchema"] = requiredSkillPayloadSchema(cfg.Skill.DispatchType, cfg.Skill.Name, currentLibraryTasks())
 	return payload
 }
 
-func currentLibraryTaskNames() []string {
+func currentLibraryTasks() []library.TaskSummary {
 	catalog, err := library.LoadCatalog(library.DefaultDir)
 	if err != nil {
 		return nil
 	}
-	return catalog.Names()
+	return catalog.Summaries()
 }
 
 func incomingSkillName(msg map[string]any) string {

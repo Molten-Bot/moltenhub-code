@@ -2434,10 +2434,24 @@ func (h Harness) cloneRepositories(ctx context.Context, repos []repoWorkspace, b
 }
 
 func (h Harness) validateRequiredNonDefaultBranches(ctx context.Context, cfg config.Config, repos []repoWorkspace) error {
-	if !cfg.RequiresNonDefaultBranch {
+	requiresNonDefaultBranch, err := libraryTaskRequiresNonDefaultBranch(cfg)
+	if err != nil {
+		return err
+	}
+	if !requiresNonDefaultBranch {
 		return nil
 	}
 	for _, repo := range repos {
+		baseBranch := normalizeBranchRef(repo.BaseBranch)
+		if isProtectedDefaultBranchName(baseBranch) {
+			return fmt.Errorf(
+				"library task %q requires a non-default branch; configured base branch %q is a protected default branch name for repo %s",
+				cfg.LibraryTaskName,
+				baseBranch,
+				repo.URL,
+			)
+		}
+
 		res, err := h.runCommand(ctx, "git", remoteDefaultBranchCommand(repo.Dir))
 		if err != nil {
 			return commandErrorWithDetails(
@@ -2451,7 +2465,6 @@ func (h Harness) validateRequiredNonDefaultBranches(ctx context.Context, cfg con
 		if defaultBranch == "" {
 			return fmt.Errorf("resolve repository default branch for repo %s: git ls-remote --symref origin HEAD returned no branch", repo.URL)
 		}
-		baseBranch := normalizeBranchRef(repo.BaseBranch)
 		if baseBranch == defaultBranch {
 			return fmt.Errorf(
 				"library task %q requires a non-default branch; configured base branch %q is repository default %q for repo %s",
@@ -2461,8 +2474,91 @@ func (h Harness) validateRequiredNonDefaultBranches(ctx context.Context, cfg con
 				repo.URL,
 			)
 		}
+
+		currentRes, currentErr := h.runCommand(ctx, "git", currentBranchCommand(repo.Dir))
+		if currentErr != nil {
+			return commandErrorWithDetails(
+				fmt.Sprintf("verify checked out branch for repo %s", repo.URL),
+				currentErr,
+				currentRes,
+				maxGitErrorDetailChars,
+			)
+		}
+		currentBranch := normalizeBranchRef(currentRes.Stdout)
+		if currentBranch == "" {
+			return fmt.Errorf(
+				"library task %q requires a checked-out non-default branch; configured base branch %q left HEAD detached for repo %s",
+				cfg.LibraryTaskName,
+				baseBranch,
+				repo.URL,
+			)
+		}
+		if currentBranch != baseBranch {
+			return fmt.Errorf(
+				"library task %q requires configured base branch %q to be checked out; current branch is %q for repo %s",
+				cfg.LibraryTaskName,
+				baseBranch,
+				currentBranch,
+				repo.URL,
+			)
+		}
+
+		remoteHeadRes, remoteHeadErr := h.runCommand(ctx, "git", remoteBranchExistsOnOriginCommand(repo.Dir, baseBranch))
+		if remoteHeadErr != nil {
+			return commandErrorWithDetails(
+				fmt.Sprintf("verify remote branch head %q for repo %s", baseBranch, repo.URL),
+				remoteHeadErr,
+				remoteHeadRes,
+				maxGitErrorDetailChars,
+			)
+		}
+		if !remoteBranchHeadExists(remoteHeadRes.Stdout, baseBranch) {
+			return fmt.Errorf(
+				"library task %q requires a remote branch head; configured base branch %q does not resolve to refs/heads/%s for repo %s",
+				cfg.LibraryTaskName,
+				baseBranch,
+				baseBranch,
+				repo.URL,
+			)
+		}
 	}
 	return nil
+}
+
+func libraryTaskRequiresNonDefaultBranch(cfg config.Config) (bool, error) {
+	taskName := strings.TrimSpace(cfg.LibraryTaskName)
+	if taskName == "" {
+		return cfg.RequiresNonDefaultBranch, nil
+	}
+
+	catalog, err := library.LoadCatalog(library.DefaultDir)
+	if err != nil {
+		return false, fmt.Errorf("load library task metadata for %q: %w", taskName, err)
+	}
+	if task, ok := catalog.Task(taskName); ok {
+		return cfg.RequiresNonDefaultBranch || task.RequiresNonDefaultBranch, nil
+	}
+	return cfg.RequiresNonDefaultBranch, nil
+}
+
+func isProtectedDefaultBranchName(branch string) bool {
+	switch normalizeBranchRef(branch) {
+	case "main", "master", "trunk":
+		return true
+	default:
+		return false
+	}
+}
+
+func remoteBranchHeadExists(output, branch string) bool {
+	wantRef := "refs/heads/" + normalizeBranchRef(branch)
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 2 && fields[1] == wantRef {
+			return true
+		}
+	}
+	return false
 }
 
 func remoteDefaultBranchFromLSRemote(output string) string {

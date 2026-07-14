@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/Molten-Bot/moltenhub-code/internal/app"
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
+	"github.com/Molten-Bot/moltenhub-code/internal/library"
 )
 
 func TestFailureFollowUpHelperBranches(t *testing.T) {
@@ -131,7 +133,7 @@ func TestDispatchAndProfileHelperBranches(t *testing.T) {
 		t.Fatal("normalizeRunConfigMap(blank string) error = nil, want non-nil")
 	}
 
-	schema := requiredSkillPayloadSchema("", "", []string{"unit-test-coverage"})
+	schema := requiredSkillPayloadSchema("", "", []library.TaskSummary{{Name: "unit-test-coverage"}})
 	envelope, ok := schema["dispatch_envelope"].(map[string]any)
 	if !ok || envelope["type"] != "skill_request" || envelope["skill_name"] != "code_for_me" || envelope["payload_format"] != "json" ||
 		envelope["request_id"] == "" || envelope["reply_required"] != true {
@@ -161,7 +163,10 @@ func TestDispatchAndProfileHelperBranches(t *testing.T) {
 	if got := buildSupportedSkillsMetadata(); len(got) != 2 {
 		t.Fatalf("buildSupportedSkillsMetadata() len = %d, want 2", len(got))
 	}
-	runConfigPayload := requiredSkillPayloadSchema("", "", []string{"unit-test-coverage"})
+	runConfigPayload := requiredSkillPayloadSchema("", "", []library.TaskSummary{
+		{Name: "unit-test-coverage"},
+		{Name: "fix-merge-main", RequiresNonDefaultBranch: true},
+	})
 	runConfigSchema, _ := runConfigPayload["run_config_schema"].(map[string]any)
 	properties, _ := runConfigSchema["properties"].(map[string]any)
 	responseMode, _ := properties["responsemode"].(map[string]any)
@@ -182,6 +187,20 @@ func TestDispatchAndProfileHelperBranches(t *testing.T) {
 	}
 	if !ok || len(enumValues) == 0 || enumValues[0] != "default" {
 		t.Fatalf("requiredSkillPayloadSchema().responsemode = %#v, want enum with default", responseMode)
+	}
+	branchConditions, ok := runConfigSchema["allOf"].([]map[string]any)
+	if !ok || len(branchConditions) != 1 {
+		t.Fatalf("requiredSkillPayloadSchema().allOf = %#v, want one task branch condition", runConfigSchema["allOf"])
+	}
+	conditionJSON, err := json.Marshal(branchConditions[0])
+	if err != nil {
+		t.Fatalf("json.Marshal(branch condition) error = %v", err)
+	}
+	condition := string(conditionJSON)
+	for _, marker := range []string{`"const":"fix-merge-main"`, `"required":["librarytaskname"]`, `"required":["basebranch"]`, `"required":["branch"]`} {
+		if !strings.Contains(condition, marker) {
+			t.Fatalf("requiredSkillPayloadSchema() branch condition = %s, want %s", condition, marker)
+		}
 	}
 }
 

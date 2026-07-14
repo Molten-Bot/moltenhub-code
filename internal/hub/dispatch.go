@@ -751,7 +751,7 @@ func valueAtPathAny(root map[string]any, path ...string) any {
 	return value
 }
 
-func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames []string) map[string]any {
+func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTasks []library.TaskSummary) map[string]any {
 	dispatchType = strings.TrimSpace(dispatchType)
 	if dispatchType == "" {
 		dispatchType = "skill_request"
@@ -759,6 +759,32 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 	skillName = strings.TrimSpace(skillName)
 	if skillName == "" {
 		skillName = "code_for_me"
+	}
+	libraryTaskNames := make([]string, 0, len(libraryTasks))
+	libraryTaskBranchConditions := make([]map[string]any, 0)
+	for _, task := range libraryTasks {
+		taskName := strings.TrimSpace(task.Name)
+		if taskName == "" {
+			continue
+		}
+		libraryTaskNames = append(libraryTaskNames, taskName)
+		if !task.RequiresNonDefaultBranch {
+			continue
+		}
+		libraryTaskBranchConditions = append(libraryTaskBranchConditions, map[string]any{
+			"if": map[string]any{
+				"properties": map[string]any{
+					"librarytaskname": map[string]any{"const": taskName},
+				},
+				"required": []string{"librarytaskname"},
+			},
+			"then": map[string]any{
+				"anyOf": []map[string]any{
+					{"required": []string{"basebranch"}},
+					{"required": []string{"branch"}},
+				},
+			},
+		})
 	}
 
 	return map[string]any{
@@ -796,6 +822,7 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTaskNames
 		"run_config_schema": map[string]any{
 			"type":                 "object",
 			"additionalProperties": true,
+			"allOf":                libraryTaskBranchConditions,
 			"oneOf": []map[string]any{
 				{"required": []string{"repo"}},
 				{"required": []string{"repourl"}},

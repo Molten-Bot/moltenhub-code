@@ -8192,57 +8192,102 @@ func TestHasAheadCommitsInStatus(t *testing.T) {
 }
 
 func TestValidateRequiredNonDefaultBranches(t *testing.T) {
-	t.Parallel()
-
 	tests := []struct {
-		name          string
-		baseBranch    string
-		remoteOutput  string
-		wantErrMarker string
+		name                string
+		baseBranch          string
+		defaultBranchOutput string
+		currentBranchOutput string
+		remoteHeadOutput    string
+		wantErrMarker       string
 	}{
 		{
-			name:          "rejects conventional default",
+			name:          "rejects main even when custom default",
 			baseBranch:    "main",
-			remoteOutput:  "ref: refs/heads/main\tHEAD\nabc123\tHEAD\n",
-			wantErrMarker: `configured base branch "main" is repository default "main"`,
+			wantErrMarker: `configured base branch "main" is a protected default branch name`,
 		},
 		{
-			name:          "rejects custom default",
+			name:          "rejects master even when custom default",
+			baseBranch:    "master",
+			wantErrMarker: `configured base branch "master" is a protected default branch name`,
+		},
+		{
+			name:          "rejects trunk even when custom default",
 			baseBranch:    "trunk",
-			remoteOutput:  "ref: refs/heads/trunk\tHEAD\nabc123\tHEAD\n",
-			wantErrMarker: `configured base branch "trunk" is repository default "trunk"`,
+			wantErrMarker: `configured base branch "trunk" is a protected default branch name`,
 		},
 		{
-			name:         "accepts feature branch",
-			baseBranch:   "feature/conflicted",
-			remoteOutput: "ref: refs/heads/main\tHEAD\nabc123\tHEAD\n",
+			name:                "rejects repository custom default",
+			baseBranch:          "release",
+			defaultBranchOutput: "ref: refs/heads/release\tHEAD\nabc123\tHEAD\n",
+			wantErrMarker:       `configured base branch "release" is repository default "release"`,
 		},
 		{
-			name:          "fails closed when default missing",
-			baseBranch:    "feature/conflicted",
-			remoteOutput:  "abc123\tHEAD\n",
-			wantErrMarker: "returned no branch",
+			name:                "accepts checked out remote feature branch",
+			baseBranch:          "feature/conflicted",
+			defaultBranchOutput: "ref: refs/heads/main\tHEAD\nabc123\tHEAD\n",
+			currentBranchOutput: "feature/conflicted\n",
+			remoteHeadOutput:    "def456\trefs/heads/feature/conflicted\n",
+		},
+		{
+			name:                "fails closed when default missing",
+			baseBranch:          "feature/conflicted",
+			defaultBranchOutput: "abc123\tHEAD\n",
+			wantErrMarker:       "returned no branch",
+		},
+		{
+			name:                "rejects detached tag checkout",
+			baseBranch:          "v1.2.3",
+			defaultBranchOutput: "ref: refs/heads/main\tHEAD\nabc123\tHEAD\n",
+			wantErrMarker:       `configured base branch "v1.2.3" left HEAD detached`,
+		},
+		{
+			name:                "rejects mismatched checkout",
+			baseBranch:          "feature/conflicted",
+			defaultBranchOutput: "ref: refs/heads/main\tHEAD\nabc123\tHEAD\n",
+			currentBranchOutput: "other-feature\n",
+			wantErrMarker:       `current branch is "other-feature"`,
+		},
+		{
+			name:                "rejects missing remote head",
+			baseBranch:          "v1.2.3",
+			defaultBranchOutput: "ref: refs/heads/main\tHEAD\nabc123\tHEAD\n",
+			currentBranchOutput: "v1.2.3\n",
+			wantErrMarker:       `does not resolve to refs/heads/v1.2.3`,
 		},
 	}
 
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
 			repo := repoWorkspace{
 				URL:        "git@github.com:acme/repo.git",
 				Dir:        "/tmp/repo",
 				BaseBranch: tt.baseBranch,
 			}
-			fake := &fakeRunner{t: t, exps: []expectedRun{{
-				cmd: remoteDefaultBranchCommand(repo.Dir),
-				res: execx.Result{Stdout: tt.remoteOutput},
-			}}}
+			var exps []expectedRun
+			if !isProtectedDefaultBranchName(tt.baseBranch) {
+				exps = append(exps, expectedRun{
+					cmd: remoteDefaultBranchCommand(repo.Dir),
+					res: execx.Result{Stdout: tt.defaultBranchOutput},
+				})
+				defaultBranch := remoteDefaultBranchFromLSRemote(tt.defaultBranchOutput)
+				if defaultBranch != "" && defaultBranch != normalizeBranchRef(tt.baseBranch) {
+					exps = append(exps, expectedRun{
+						cmd: currentBranchCommand(repo.Dir),
+						res: execx.Result{Stdout: tt.currentBranchOutput},
+					})
+					if normalizeBranchRef(tt.currentBranchOutput) == normalizeBranchRef(tt.baseBranch) {
+						exps = append(exps, expectedRun{
+							cmd: remoteBranchExistsOnOriginCommand(repo.Dir, tt.baseBranch),
+							res: execx.Result{Stdout: tt.remoteHeadOutput},
+						})
+					}
+				}
+			}
+			fake := &fakeRunner{t: t, exps: exps}
 			h := New(fake)
 			err := h.validateRequiredNonDefaultBranches(context.Background(), config.Config{
-				LibraryTaskName:          mergeMainLibraryTaskName,
-				RequiresNonDefaultBranch: true,
+				LibraryTaskName: mergeMainLibraryTaskName,
 			}, []repoWorkspace{repo})
 			if tt.wantErrMarker == "" {
 				if err != nil {
@@ -8255,6 +8300,54 @@ func TestValidateRequiredNonDefaultBranches(t *testing.T) {
 				t.Fatalf("unconsumed expectations: %d", len(fake.exps))
 			}
 		})
+	}
+}
+
+func TestLibraryTaskRequiresNonDefaultBranchUsesCatalogMetadata(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  config.Config
+		want bool
+	}{
+		{
+			name: "metadata enables gate when caller omits bool",
+			cfg:  config.Config{LibraryTaskName: mergeMainLibraryTaskName},
+			want: true,
+		},
+		{
+			name: "explicit requirement remains enabled for other task",
+			cfg:  config.Config{LibraryTaskName: "unit-test-coverage", RequiresNonDefaultBranch: true},
+			want: true,
+		},
+		{
+			name: "unnamed direct config preserves explicit requirement",
+			cfg:  config.Config{RequiresNonDefaultBranch: true},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := libraryTaskRequiresNonDefaultBranch(tt.cfg)
+			if err != nil {
+				t.Fatalf("libraryTaskRequiresNonDefaultBranch() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("libraryTaskRequiresNonDefaultBranch() = %t, want %t", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRemoteBranchHeadExistsRequiresExactHeadsRef(t *testing.T) {
+	t.Parallel()
+
+	output := "abc123\trefs/heads/release/feature\ndef456\trefs/tags/feature\n"
+	if remoteBranchHeadExists(output, "feature") {
+		t.Fatal("remoteBranchHeadExists(feature) = true for suffix branch or tag, want false")
+	}
+	if !remoteBranchHeadExists(output, "release/feature") {
+		t.Fatal("remoteBranchHeadExists(release/feature) = false, want true")
 	}
 }
 
