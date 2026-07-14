@@ -28,9 +28,20 @@ func TestExtractTokenFromJSONNested(t *testing.T) {
 func TestExtractAPIBaseFromJSONNested(t *testing.T) {
 	t.Parallel()
 
-	body := []byte(`{"result":{"api_base":"https://na.hub.molten.bot/v1"}}`)
-	got := extractAPIBaseFromJSON(body)
-	if got != "https://na.hub.molten.bot/v1" {
-		t.Fatalf("extractAPIBaseFromJSON() = %q", got)
+	for _, tt := range []struct {
+		name string
+		body string
+	}{
+		{name: "documented snake case", body: `{"result":{"api_base_url":"https://na.hub.molten.bot/v1"}}`},
+		{name: "documented camel case", body: `{"result":{"apiBaseUrl":"https://na.hub.molten.bot/v1"}}`},
+		{name: "legacy alias", body: `{"result":{"api_base":"https://na.hub.molten.bot/v1"}}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := extractAPIBaseFromJSON([]byte(tt.body))
+			if got != "https://na.hub.molten.bot/v1" {
+				t.Fatalf("extractAPIBaseFromJSON() = %q", got)
+			}
+		})
 	}
 }

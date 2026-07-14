@@ -274,7 +274,7 @@ func TestBindTokenFlowIgnoresNonMoltenAPIBaseWhenOverrideDisabled(t *testing.T) 
 		case "/v1/agents/bind-tokens":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"agent_token":"agent_bound","api_base":"http://127.0.0.1:37581/v1"}`))
+			_, _ = w.Write([]byte(`{"agent_token":"agent_bound","api_base_url":"http://127.0.0.1:37581/v1"}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -302,7 +302,7 @@ func TestBindTokenFlowCanonicalizesMoltenAPIBaseWhenOverrideDisabled(t *testing.
 		case "/v1/agents/bind-tokens":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"agent_token":"agent_bound","api_base":"https://eu.hub.molten.bot/v1/"}`))
+			_, _ = w.Write([]byte(`{"agent_token":"agent_bound","api_base_url":"https://eu.hub.molten.bot/v1/"}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

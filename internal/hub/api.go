@@ -110,12 +110,12 @@ func (c *APIClient) ResolveAgentToken(ctx context.Context, cfg InitConfig) (stri
 		c.logf("hub.auth source=agent_config status=unverified")
 
 		if bindToken != "" {
-			if bound, ok := c.bindTokenFallback(ctx, bindToken, "bind_config_fallback"); ok {
+			if bound, ok, _ := c.bindTokenFallback(ctx, bindToken, "bind_config_fallback"); ok {
 				return bound, nil
 			}
 		}
 		if bindToken == "" || bindToken != agentToken {
-			if bound, ok := c.bindTokenFallback(ctx, agentToken, "agent_config_bind_fallback"); ok {
+			if bound, ok, _ := c.bindTokenFallback(ctx, agentToken, "agent_config_bind_fallback"); ok {
 				return bound, nil
 			}
 		}
@@ -126,29 +126,33 @@ func (c *APIClient) ResolveAgentToken(ctx context.Context, cfg InitConfig) (stri
 		return "", fmt.Errorf("missing bind_token and agent_token")
 	}
 
-	if bound, ok := c.bindTokenFallback(ctx, bindToken, "bind"); ok {
+	bound, ok, err := c.bindTokenFallback(ctx, bindToken, "bind")
+	if ok {
 		return bound, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("bind flow failed for provided bind_token: %w", err)
 	}
 
 	return "", fmt.Errorf("bind flow failed for provided bind_token")
 }
 
-func (c *APIClient) bindTokenFallback(ctx context.Context, bindToken, source string) (string, bool) {
+func (c *APIClient) bindTokenFallback(ctx context.Context, bindToken, source string) (string, bool, error) {
 	bindToken = strings.TrimSpace(bindToken)
 	if bindToken == "" {
-		return "", false
+		return "", false, nil
 	}
 	bound, err := c.bindTokenFlow(ctx, bindToken)
 	if err != nil {
 		c.logf("hub.auth source=%s status=failed err=%q", source, err)
-		return "", false
+		return "", false, err
 	}
 	if c.verifyToken(ctx, bound) {
 		c.logf("hub.auth source=%s status=verified", source)
 	} else {
 		c.logf("hub.auth source=%s status=unverified", source)
 	}
-	return bound, true
+	return bound, true, nil
 }
 
 func (c *APIClient) bindTokenFlow(ctx context.Context, bindToken string) (string, error) {
@@ -176,8 +180,7 @@ func (c *APIClient) bindTokenFlow(ctx context.Context, bindToken string) (string
 	for _, attempt := range attempts {
 		status, body, err := c.doJSON(ctx, http.MethodPost, attempt.path, attempt.authToken, attempt.body)
 		if err != nil {
-			failures = append(failures, fmt.Sprintf("%s network error: %v", attempt.name, err))
-			continue
+			return "", fmt.Errorf("bind flow failed: %s network error: %w", attempt.name, err)
 		}
 
 		if status/100 == 2 {
@@ -201,7 +204,11 @@ func (c *APIClient) bindTokenFlow(ctx context.Context, bindToken string) (string
 			continue
 		}
 
-		failures = append(failures, fmt.Sprintf("%s status=%d", attempt.name, status))
+		failure := fmt.Sprintf("%s status=%d", attempt.name, status)
+		if isRetryableHubStatus(status) {
+			return "", fmt.Errorf("bind flow failed: %s", failure)
+		}
+		failures = append(failures, failure)
 	}
 
 	return "", fmt.Errorf("bind flow failed: %s", strings.Join(failures, "; "))
@@ -1316,7 +1323,7 @@ func extractAgentProfileFromJSON(body []byte) AgentProfile {
 func extractAPIBaseFromAny(v any) string {
 	switch typed := v.(type) {
 	case map[string]any:
-		for _, key := range []string{"api_base", "apiBase", "base_url", "baseUrl"} {
+		for _, key := range []string{"api_base_url", "apiBaseUrl", "api_base", "apiBase", "base_url", "baseUrl"} {
 			if raw, ok := typed[key]; ok {
 				if base, ok := raw.(string); ok && strings.TrimSpace(base) != "" {
 					return strings.TrimSpace(base)
