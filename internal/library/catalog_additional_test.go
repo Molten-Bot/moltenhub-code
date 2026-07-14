@@ -42,6 +42,34 @@ func TestExpandRunConfigDefaultsMissingTargetSubdir(t *testing.T) {
 	}
 }
 
+func TestExpandRunConfigRequiresConfiguredBaseBranch(t *testing.T) {
+	t.Parallel()
+
+	catalog := Catalog{
+		byName: map[string]TaskDefinition{
+			"fix-merge-main": {
+				Name:                     "fix-merge-main",
+				Prompt:                   "merge main into the current branch",
+				RequiresNonDefaultBranch: true,
+			},
+		},
+	}
+
+	if _, err := catalog.ExpandRunConfig("fix-merge-main", "git@github.com:acme/repo.git", ""); err == nil {
+		t.Fatal("ExpandRunConfig(empty branch) error = nil, want non-nil")
+	} else if !strings.Contains(err.Error(), `library task "fix-merge-main" requires a non-default base branch`) {
+		t.Fatalf("ExpandRunConfig(empty branch) error = %v", err)
+	}
+
+	cfg, err := catalog.ExpandRunConfig("fix-merge-main", "git@github.com:acme/repo.git", "feature/conflicted")
+	if err != nil {
+		t.Fatalf("ExpandRunConfig(feature branch) error = %v", err)
+	}
+	if got, want := cfg.BaseBranch, "feature/conflicted"; got != want {
+		t.Fatalf("BaseBranch = %q, want %q", got, want)
+	}
+}
+
 func TestLoadTaskDefinitionsRejectsEmptyFileObject(t *testing.T) {
 	t.Parallel()
 

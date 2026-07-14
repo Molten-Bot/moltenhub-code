@@ -32,26 +32,27 @@ const prBodyPromptHeading = "Original task prompt:"
 
 // Config is the v1 public contract for a harness run.
 type Config struct {
-	Version                string        `json:"version"`
-	RepoURL                string        `json:"repoUrl"`
-	Repo                   string        `json:"repo"`
-	Repos                  []string      `json:"repos"`
-	LibraryTaskName        string        `json:"libraryTaskName,omitempty"`
-	LibraryTaskDisplayName string        `json:"libraryTaskDisplayName,omitempty"`
-	ResponseMode           string        `json:"responseMode,omitempty"`
-	AgentHarness           string        `json:"agentHarness,omitempty"`
-	AgentCommand           string        `json:"agentCommand,omitempty"`
-	BaseBranch             string        `json:"baseBranch"`
-	TargetSubdir           string        `json:"targetSubdir"`
-	Prompt                 string        `json:"prompt"`
-	Images                 []PromptImage `json:"images,omitempty"`
-	CommitMessage          string        `json:"commitMessage"`
-	PRTitle                string        `json:"prTitle"`
-	PRBody                 string        `json:"prBody"`
-	Labels                 []string      `json:"labels"`
-	GitHubHandle           string        `json:"githubHandle"`
-	Reviewers              []string      `json:"reviewers"`
-	Review                 *ReviewConfig `json:"review,omitempty"`
+	Version                  string        `json:"version"`
+	RepoURL                  string        `json:"repoUrl"`
+	Repo                     string        `json:"repo"`
+	Repos                    []string      `json:"repos"`
+	LibraryTaskName          string        `json:"libraryTaskName,omitempty"`
+	LibraryTaskDisplayName   string        `json:"libraryTaskDisplayName,omitempty"`
+	RequiresNonDefaultBranch bool          `json:"requiresNonDefaultBranch,omitempty"`
+	ResponseMode             string        `json:"responseMode,omitempty"`
+	AgentHarness             string        `json:"agentHarness,omitempty"`
+	AgentCommand             string        `json:"agentCommand,omitempty"`
+	BaseBranch               string        `json:"baseBranch"`
+	TargetSubdir             string        `json:"targetSubdir"`
+	Prompt                   string        `json:"prompt"`
+	Images                   []PromptImage `json:"images,omitempty"`
+	CommitMessage            string        `json:"commitMessage"`
+	PRTitle                  string        `json:"prTitle"`
+	PRBody                   string        `json:"prBody"`
+	Labels                   []string      `json:"labels"`
+	GitHubHandle             string        `json:"githubHandle"`
+	Reviewers                []string      `json:"reviewers"`
+	Review                   *ReviewConfig `json:"review,omitempty"`
 }
 
 // PromptImage captures one prompt image attachment.
@@ -177,18 +178,19 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 
 func rejectSnakeCaseRunConfigFields(raw map[string]json.RawMessage) error {
 	forbidden := map[string]string{
-		"repo_url":                  "repoUrl",
-		"base_branch":               "baseBranch",
-		"target_subdir":             "targetSubdir",
-		"agent_harness":             "agentHarness",
-		"agent_command":             "agentCommand",
-		"commit_message":            "commitMessage",
-		"pr_title":                  "prTitle",
-		"pr_body":                   "prBody",
-		"github_handle":             "githubHandle",
-		"library_task_name":         "libraryTaskName",
-		"library_task_display_name": "libraryTaskDisplayName",
-		"response_mode":             "responseMode",
+		"repo_url":                    "repoUrl",
+		"base_branch":                 "baseBranch",
+		"target_subdir":               "targetSubdir",
+		"agent_harness":               "agentHarness",
+		"agent_command":               "agentCommand",
+		"commit_message":              "commitMessage",
+		"pr_title":                    "prTitle",
+		"pr_body":                     "prBody",
+		"github_handle":               "githubHandle",
+		"library_task_name":           "libraryTaskName",
+		"library_task_display_name":   "libraryTaskDisplayName",
+		"response_mode":               "responseMode",
+		"requires_non_default_branch": "requiresNonDefaultBranch",
 	}
 	for legacy, canonical := range forbidden {
 		if _, ok := raw[legacy]; ok {
@@ -319,6 +321,9 @@ func (c Config) Validate() error {
 	}
 	if strings.TrimSpace(c.Prompt) == "" {
 		return fmt.Errorf("prompt is required")
+	}
+	if c.RequiresNonDefaultBranch && strings.TrimSpace(c.BaseBranch) == "" {
+		return fmt.Errorf("baseBranch is required when requiresNonDefaultBranch is true")
 	}
 	if err := validateReviewConfig(c.Review, repos); err != nil {
 		return err

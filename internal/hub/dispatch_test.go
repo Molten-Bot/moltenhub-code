@@ -573,6 +573,31 @@ func TestParseRunConfigJSONExpandsLibraryTaskPayload(t *testing.T) {
 	}
 }
 
+func TestParseRunConfigJSONRequiresBranchForMergeMainLibraryTask(t *testing.T) {
+	// This test resolves the on-disk library catalog and must not race tests that
+	// temporarily change process working directory.
+
+	_, err := ParseRunConfigJSON([]byte(`{
+		"repo": "git@github.com:acme/repo.git",
+		"libraryTaskName": "fix-merge-main"
+	}`))
+	if err == nil || !strings.Contains(err.Error(), `library task "fix-merge-main" requires a non-default base branch`) {
+		t.Fatalf("ParseRunConfigJSON(missing branch) error = %v", err)
+	}
+
+	cfg, err := ParseRunConfigJSON([]byte(`{
+		"repo": "git@github.com:acme/repo.git",
+		"branch": "feature/conflicted",
+		"libraryTaskName": "fix-merge-main"
+	}`))
+	if err != nil {
+		t.Fatalf("ParseRunConfigJSON(feature branch) error = %v", err)
+	}
+	if got, want := cfg.BaseBranch, "feature/conflicted"; got != want {
+		t.Fatalf("BaseBranch = %q, want %q", got, want)
+	}
+}
+
 func TestParseRunConfigJSONExpandsLibraryTaskPayloadWithReposArray(t *testing.T) {
 	// This test resolves the on-disk library catalog and must not race tests that
 	// temporarily change process working directory.

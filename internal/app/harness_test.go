@@ -8191,6 +8191,84 @@ func TestHasAheadCommitsInStatus(t *testing.T) {
 	}
 }
 
+func TestValidateRequiredNonDefaultBranches(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		baseBranch    string
+		remoteOutput  string
+		wantErrMarker string
+	}{
+		{
+			name:          "rejects conventional default",
+			baseBranch:    "main",
+			remoteOutput:  "ref: refs/heads/main\tHEAD\nabc123\tHEAD\n",
+			wantErrMarker: `configured base branch "main" is repository default "main"`,
+		},
+		{
+			name:          "rejects custom default",
+			baseBranch:    "trunk",
+			remoteOutput:  "ref: refs/heads/trunk\tHEAD\nabc123\tHEAD\n",
+			wantErrMarker: `configured base branch "trunk" is repository default "trunk"`,
+		},
+		{
+			name:         "accepts feature branch",
+			baseBranch:   "feature/conflicted",
+			remoteOutput: "ref: refs/heads/main\tHEAD\nabc123\tHEAD\n",
+		},
+		{
+			name:          "fails closed when default missing",
+			baseBranch:    "feature/conflicted",
+			remoteOutput:  "abc123\tHEAD\n",
+			wantErrMarker: "returned no branch",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			repo := repoWorkspace{
+				URL:        "git@github.com:acme/repo.git",
+				Dir:        "/tmp/repo",
+				BaseBranch: tt.baseBranch,
+			}
+			fake := &fakeRunner{t: t, exps: []expectedRun{{
+				cmd: remoteDefaultBranchCommand(repo.Dir),
+				res: execx.Result{Stdout: tt.remoteOutput},
+			}}}
+			h := New(fake)
+			err := h.validateRequiredNonDefaultBranches(context.Background(), config.Config{
+				LibraryTaskName:          mergeMainLibraryTaskName,
+				RequiresNonDefaultBranch: true,
+			}, []repoWorkspace{repo})
+			if tt.wantErrMarker == "" {
+				if err != nil {
+					t.Fatalf("validateRequiredNonDefaultBranches() error = %v", err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tt.wantErrMarker) {
+				t.Fatalf("validateRequiredNonDefaultBranches() error = %v, want %q", err, tt.wantErrMarker)
+			}
+			if len(fake.exps) != 0 {
+				t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+			}
+		})
+	}
+}
+
+func TestRemoteDefaultBranchFromLSRemote(t *testing.T) {
+	t.Parallel()
+
+	if got, want := remoteDefaultBranchFromLSRemote("ref: refs/heads/release/v2\tHEAD\nabc123\tHEAD\n"), "release/v2"; got != want {
+		t.Fatalf("remoteDefaultBranchFromLSRemote() = %q, want %q", got, want)
+	}
+	if got := remoteDefaultBranchFromLSRemote("abc123\tHEAD\n"); got != "" {
+		t.Fatalf("remoteDefaultBranchFromLSRemote(no symref) = %q, want empty", got)
+	}
+}
+
 func TestNormalizeBranchRef(t *testing.T) {
 	t.Parallel()
 

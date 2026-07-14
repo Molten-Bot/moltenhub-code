@@ -268,6 +268,9 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	if err := h.cloneRepositories(ctx, repos, cloneBaseBranch); err != nil {
 		return h.fail(ExitClone, "clone", err, runDir)
 	}
+	if err := h.validateRequiredNonDefaultBranches(ctx, runCfg, repos); err != nil {
+		return h.fail(ExitGit, "git", err, runDir)
+	}
 	if len(repos) > 0 {
 		runCfg.BaseBranch = repos[0].BaseBranch
 	}
@@ -2428,6 +2431,49 @@ func (h Harness) cloneRepositories(ctx context.Context, repos []repoWorkspace, b
 	}
 
 	return nil
+}
+
+func (h Harness) validateRequiredNonDefaultBranches(ctx context.Context, cfg config.Config, repos []repoWorkspace) error {
+	if !cfg.RequiresNonDefaultBranch {
+		return nil
+	}
+	for _, repo := range repos {
+		res, err := h.runCommand(ctx, "git", remoteDefaultBranchCommand(repo.Dir))
+		if err != nil {
+			return commandErrorWithDetails(
+				fmt.Sprintf("resolve repository default branch for repo %s", repo.URL),
+				err,
+				res,
+				maxGitErrorDetailChars,
+			)
+		}
+		defaultBranch := remoteDefaultBranchFromLSRemote(res.Stdout)
+		if defaultBranch == "" {
+			return fmt.Errorf("resolve repository default branch for repo %s: git ls-remote --symref origin HEAD returned no branch", repo.URL)
+		}
+		baseBranch := normalizeBranchRef(repo.BaseBranch)
+		if baseBranch == defaultBranch {
+			return fmt.Errorf(
+				"library task %q requires a non-default branch; configured base branch %q is repository default %q for repo %s",
+				cfg.LibraryTaskName,
+				baseBranch,
+				defaultBranch,
+				repo.URL,
+			)
+		}
+	}
+	return nil
+}
+
+func remoteDefaultBranchFromLSRemote(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 3 || fields[0] != "ref:" || fields[2] != "HEAD" {
+			continue
+		}
+		return normalizeBranchRef(strings.TrimPrefix(fields[1], "refs/heads/"))
+	}
+	return ""
 }
 
 func (h Harness) cloneRepository(ctx context.Context, repo *repoWorkspace, branch string, repoOwnerHints []string) error {
@@ -6378,6 +6424,14 @@ func remoteRefsCommand(repoURL string) execx.Command {
 	return execx.Command{
 		Name: "git",
 		Args: []string{"ls-remote", "--heads", "--tags", repoURL},
+	}
+}
+
+func remoteDefaultBranchCommand(repoDir string) execx.Command {
+	return execx.Command{
+		Dir:  repoDir,
+		Name: "git",
+		Args: []string{"ls-remote", "--symref", "origin", "HEAD"},
 	}
 }
 

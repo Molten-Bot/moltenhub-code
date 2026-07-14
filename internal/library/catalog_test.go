@@ -23,7 +23,7 @@ func TestDefaultLibraryJSONFilesHaveCanonicalShape(t *testing.T) {
 		t.Fatalf("no library json files found in %q", dir)
 	}
 
-	wantFields := []string{"commitMessage", "description", "displayName", "icon", "prTitle", "prompt", "targetSubdir", "type"}
+	requiredFields := []string{"commitMessage", "description", "displayName", "icon", "prTitle", "prompt", "targetSubdir", "type"}
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -57,12 +57,17 @@ func TestDefaultLibraryJSONFilesHaveCanonicalShape(t *testing.T) {
 			t.Errorf("%s: task %q must be a JSON object: %v", path, taskName, err)
 			continue
 		}
+		wantFields := append([]string(nil), requiredFields...)
+		if _, ok := fields["requiresNonDefaultBranch"]; ok {
+			wantFields = append(wantFields, "requiresNonDefaultBranch")
+			sort.Strings(wantFields)
+		}
 		if gotFields := sortedKeys(fields); !reflect.DeepEqual(gotFields, wantFields) {
 			t.Errorf("%s: task fields = %v, want %v", path, gotFields, wantFields)
 			continue
 		}
 
-		for _, field := range wantFields {
+		for _, field := range requiredFields {
 			var value string
 			if err := json.Unmarshal(fields[field], &value); err != nil {
 				t.Errorf("%s: field %q must be a string: %v", path, field, err)
@@ -70,6 +75,14 @@ func TestDefaultLibraryJSONFilesHaveCanonicalShape(t *testing.T) {
 			}
 			if strings.TrimSpace(value) == "" {
 				t.Errorf("%s: field %q must not be empty", path, field)
+			}
+		}
+		if rawRequiresNonDefaultBranch, ok := fields["requiresNonDefaultBranch"]; ok {
+			var requiresNonDefaultBranch bool
+			if err := json.Unmarshal(rawRequiresNonDefaultBranch, &requiresNonDefaultBranch); err != nil {
+				t.Errorf("%s: requiresNonDefaultBranch must be a boolean: %v", path, err)
+			} else if !requiresNonDefaultBranch {
+				t.Errorf("%s: requiresNonDefaultBranch should be omitted when false", path)
 			}
 		}
 
@@ -126,6 +139,7 @@ func TestLoadCatalogReadsJSONTasks(t *testing.T) {
     "type": "security",
     "icon": "shield-check",
     "description": "Audit security boundaries.",
+    "requiresNonDefaultBranch": true,
     "targetSubdir": ".",
     "prompt": "Review the repository."
   }
@@ -156,6 +170,9 @@ func TestLoadCatalogReadsJSONTasks(t *testing.T) {
 	if got, want := catalog.Tasks[0].TargetSubdir, "."; got != want {
 		t.Fatalf("TargetSubdir = %q, want %q", got, want)
 	}
+	if !catalog.Tasks[0].RequiresNonDefaultBranch {
+		t.Fatal("RequiresNonDefaultBranch = false, want true")
+	}
 	if got, want := catalog.Names(), []string{"security-review"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Names() = %v, want %v", got, want)
 	}
@@ -174,6 +191,9 @@ func TestLoadCatalogReadsJSONTasks(t *testing.T) {
 	}
 	if got, want := summaries[0].Type, "security"; got != want {
 		t.Fatalf("Summaries()[0].Type = %q, want %q", got, want)
+	}
+	if !summaries[0].RequiresNonDefaultBranch {
+		t.Fatal("Summaries()[0].RequiresNonDefaultBranch = false, want true")
 	}
 }
 

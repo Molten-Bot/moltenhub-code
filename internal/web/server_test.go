@@ -140,7 +140,7 @@ func TestHandlerLibraryEndpointReturnsTasks(t *testing.T) {
 	srv := NewServer("", NewBroker())
 	srv.LoadLibraryTasks = func() ([]library.TaskSummary, error) {
 		return []library.TaskSummary{
-			{Name: "security-review", DisplayName: "Security Review", Type: "security", Icon: "shield-check", Prompt: "Review the repository."},
+			{Name: "security-review", DisplayName: "Security Review", Type: "security", Icon: "shield-check", Prompt: "Review the repository.", RequiresNonDefaultBranch: true},
 			{Name: "unit-test-coverage", DisplayName: "100% Unit Test Coverage", Type: "quality", Icon: "badge-check", Prompt: "Raise coverage."},
 		}, nil
 	}
@@ -174,6 +174,9 @@ func TestHandlerLibraryEndpointReturnsTasks(t *testing.T) {
 	}
 	if got, want := body.Tasks[0].Type, "security"; got != want {
 		t.Fatalf("tasks[0].type = %q, want %q", got, want)
+	}
+	if !body.Tasks[0].RequiresNonDefaultBranch {
+		t.Fatal("tasks[0].requiresNonDefaultBranch = false, want true")
 	}
 }
 
@@ -4005,6 +4008,10 @@ func TestIndexLibraryModeUsesDedicatedRunEndpointAndShowsLoadErrors(t *testing.T
 	}
 	if !strings.Contains(markup, `libraryTargetSubdir.value = targetSubdir;`) {
 		t.Fatalf("expected index html to restore the library directory when syncing from JSON payloads")
+	}
+	if !strings.Contains(markup, `if (selectedTask?.requiresNonDefaultBranch && !branch) {`) ||
+		!strings.Contains(markup, `throw new Error("Non-default branch is required for this library task.");`) {
+		t.Fatalf("expected index html to require a branch for branch-dependent library tasks")
 	}
 	if !strings.Contains(markup, `builderTargetSubdir.addEventListener("input", () => {`) ||
 		!strings.Contains(markup, `libraryTargetSubdir.value = builderTargetSubdir.value;`) {

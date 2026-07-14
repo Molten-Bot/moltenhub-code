@@ -34,6 +34,25 @@ func TestValidatePromptImageValidationPaths(t *testing.T) {
 	}
 }
 
+func TestValidateRequiresBaseBranchForNonDefaultBranchRuns(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		RepoURL:                  "git@github.com:acme/repo.git",
+		Prompt:                   "merge main into current branch",
+		RequiresNonDefaultBranch: true,
+	}
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "baseBranch is required when requiresNonDefaultBranch is true") {
+		t.Fatalf("Validate() error = %v", err)
+	}
+
+	cfg.BaseBranch = "feature/conflicted"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate(feature branch) error = %v", err)
+	}
+}
+
 func TestLoadAcceptsLegacyDataURIPromptImageStrings(t *testing.T) {
 	t.Parallel()
 

@@ -7124,6 +7124,10 @@
       }
 
       const branch = String(libraryBaseBranch.value || "").trim();
+      const selectedTask = (state.libraryTasks || []).find((task) => String(task?.name || "").trim() === libraryTaskName);
+      if (selectedTask?.requiresNonDefaultBranch && !branch) {
+        throw new Error("Non-default branch is required for this library task.");
+      }
       const payload = {
         repos: [repo],
         targetsubdir: String(libraryTargetSubdir.value || "").trim() || ".",

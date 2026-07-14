@@ -23,19 +23,20 @@ const (
 
 // TaskDefinition is one callable library entry loaded from ./library/*.json.
 type TaskDefinition struct {
-	Name          string   `json:"name"`
-	DisplayName   string   `json:"displayName"`
-	Type          string   `json:"type"`
-	Icon          string   `json:"icon"`
-	Description   string   `json:"description"`
-	TargetSubdir  string   `json:"targetSubdir"`
-	Prompt        string   `json:"prompt"`
-	CommitMessage string   `json:"commitMessage"`
-	PRTitle       string   `json:"prTitle"`
-	PRBody        string   `json:"prBody"`
-	Labels        []string `json:"labels"`
-	GitHubHandle  string   `json:"githubHandle"`
-	Reviewers     []string `json:"reviewers"`
+	Name                     string   `json:"name"`
+	DisplayName              string   `json:"displayName"`
+	Type                     string   `json:"type"`
+	Icon                     string   `json:"icon"`
+	Description              string   `json:"description"`
+	TargetSubdir             string   `json:"targetSubdir"`
+	Prompt                   string   `json:"prompt"`
+	CommitMessage            string   `json:"commitMessage"`
+	PRTitle                  string   `json:"prTitle"`
+	PRBody                   string   `json:"prBody"`
+	Labels                   []string `json:"labels"`
+	GitHubHandle             string   `json:"githubHandle"`
+	Reviewers                []string `json:"reviewers"`
+	RequiresNonDefaultBranch bool     `json:"requiresNonDefaultBranch"`
 }
 
 // UnmarshalJSON supports canonical camelCase keys.
@@ -62,12 +63,13 @@ func (t *TaskDefinition) UnmarshalJSON(data []byte) error {
 
 // TaskSummary is the public UI/runtime registration view of one library task.
 type TaskSummary struct {
-	Name        string `json:"name"`
-	DisplayName string `json:"displayName,omitempty"`
-	Type        string `json:"type,omitempty"`
-	Icon        string `json:"icon,omitempty"`
-	Description string `json:"description,omitempty"`
-	Prompt      string `json:"prompt,omitempty"`
+	Name                     string `json:"name"`
+	DisplayName              string `json:"displayName,omitempty"`
+	Type                     string `json:"type,omitempty"`
+	Icon                     string `json:"icon,omitempty"`
+	Description              string `json:"description,omitempty"`
+	Prompt                   string `json:"prompt,omitempty"`
+	RequiresNonDefaultBranch bool   `json:"requiresNonDefaultBranch,omitempty"`
 }
 
 // Catalog contains all loaded library task definitions.
@@ -77,19 +79,20 @@ type Catalog struct {
 }
 
 var taskDefinitionFieldNames = map[string]struct{}{
-	"name":          {},
-	"displayName":   {},
-	"type":          {},
-	"icon":          {},
-	"description":   {},
-	"targetSubdir":  {},
-	"prompt":        {},
-	"commitMessage": {},
-	"prTitle":       {},
-	"prBody":        {},
-	"labels":        {},
-	"githubHandle":  {},
-	"reviewers":     {},
+	"name":                     {},
+	"displayName":              {},
+	"type":                     {},
+	"icon":                     {},
+	"description":              {},
+	"targetSubdir":             {},
+	"prompt":                   {},
+	"commitMessage":            {},
+	"prTitle":                  {},
+	"prBody":                   {},
+	"labels":                   {},
+	"githubHandle":             {},
+	"reviewers":                {},
+	"requiresNonDefaultBranch": {},
 }
 
 // LoadCatalog loads and validates library tasks from ./library/*.json.
@@ -143,12 +146,13 @@ func (c Catalog) Summaries() []TaskSummary {
 	out := make([]TaskSummary, 0, len(c.Tasks))
 	for _, task := range c.Tasks {
 		out = append(out, TaskSummary{
-			Name:        task.Name,
-			DisplayName: task.DisplayName,
-			Type:        task.Type,
-			Icon:        task.Icon,
-			Description: task.Description,
-			Prompt:      task.Prompt,
+			Name:                     task.Name,
+			DisplayName:              task.DisplayName,
+			Type:                     task.Type,
+			Icon:                     task.Icon,
+			Description:              task.Description,
+			Prompt:                   task.Prompt,
+			RequiresNonDefaultBranch: task.RequiresNonDefaultBranch,
 		})
 	}
 	return out
@@ -185,20 +189,25 @@ func (c Catalog) ExpandRunConfig(taskName, repo, branch string) (config.Config, 
 	if repo == "" {
 		return config.Config{}, fmt.Errorf("repo is required for library tasks")
 	}
+	branch = strings.TrimSpace(branch)
+	if task.RequiresNonDefaultBranch && branch == "" {
+		return config.Config{}, fmt.Errorf("library task %q requires a non-default base branch", taskName)
+	}
 
 	cfg := config.Config{
-		RepoURL:                repo,
-		LibraryTaskName:        task.Name,
-		LibraryTaskDisplayName: task.DisplayName,
-		BaseBranch:             strings.TrimSpace(branch),
-		TargetSubdir:           task.TargetSubdir,
-		Prompt:                 task.Prompt,
-		CommitMessage:          task.CommitMessage,
-		PRTitle:                task.PRTitle,
-		PRBody:                 task.PRBody,
-		Labels:                 append([]string(nil), task.Labels...),
-		GitHubHandle:           task.GitHubHandle,
-		Reviewers:              append([]string(nil), task.Reviewers...),
+		RepoURL:                  repo,
+		LibraryTaskName:          task.Name,
+		LibraryTaskDisplayName:   task.DisplayName,
+		RequiresNonDefaultBranch: task.RequiresNonDefaultBranch,
+		BaseBranch:               branch,
+		TargetSubdir:             task.TargetSubdir,
+		Prompt:                   task.Prompt,
+		CommitMessage:            task.CommitMessage,
+		PRTitle:                  task.PRTitle,
+		PRBody:                   task.PRBody,
+		Labels:                   append([]string(nil), task.Labels...),
+		GitHubHandle:             task.GitHubHandle,
+		Reviewers:                append([]string(nil), task.Reviewers...),
 	}
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
