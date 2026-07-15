@@ -154,6 +154,9 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 	if err := rejectSnakeCaseRunConfigFields(raw); err != nil {
 		return err
 	}
+	if err := rejectNonCanonicalGuardFields(raw); err != nil {
+		return err
+	}
 
 	type configAlias Config
 	var parsed configAlias
@@ -198,6 +201,17 @@ func rejectSnakeCaseRunConfigFields(raw map[string]json.RawMessage) error {
 		}
 	}
 	return rejectSnakeCaseImageFields(raw["images"])
+}
+
+func rejectNonCanonicalGuardFields(raw map[string]json.RawMessage) error {
+	for _, canonical := range []string{"libraryTaskName", "requiresNonDefaultBranch"} {
+		for key := range raw {
+			if key != canonical && strings.EqualFold(key, canonical) {
+				return fmt.Errorf("json: unsupported field %q; use %q", key, canonical)
+			}
+		}
+	}
+	return nil
 }
 
 func rejectSnakeCaseImageFields(rawImages json.RawMessage) error {
@@ -322,8 +336,14 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.Prompt) == "" {
 		return fmt.Errorf("prompt is required")
 	}
-	if c.RequiresNonDefaultBranch && strings.TrimSpace(c.BaseBranch) == "" {
-		return fmt.Errorf("baseBranch is required when requiresNonDefaultBranch is true")
+	if c.RequiresNonDefaultBranch {
+		branch := normalizeRequiredNonDefaultBranch(c.BaseBranch)
+		if branch == "" {
+			return fmt.Errorf("baseBranch is required when requiresNonDefaultBranch is true")
+		}
+		if isProtectedDefaultBranchName(branch) {
+			return fmt.Errorf("baseBranch %q is a protected default branch name and cannot be used when requiresNonDefaultBranch is true", branch)
+		}
 	}
 	if err := validateReviewConfig(c.Review, repos); err != nil {
 		return err
@@ -353,6 +373,22 @@ func (c Config) Validate() error {
 		return fmt.Errorf("prBody is required")
 	}
 	return nil
+}
+
+func normalizeRequiredNonDefaultBranch(branch string) string {
+	branch = strings.TrimSpace(branch)
+	branch = strings.TrimPrefix(branch, "refs/heads/")
+	branch = strings.TrimPrefix(branch, "origin/")
+	return branch
+}
+
+func isProtectedDefaultBranchName(branch string) bool {
+	switch normalizeRequiredNonDefaultBranch(branch) {
+	case "main", "master", "trunk":
+		return true
+	default:
+		return false
+	}
 }
 
 // RepoList returns the normalized list of repositories for this run.

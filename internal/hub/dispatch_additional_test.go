@@ -233,6 +233,9 @@ func TestExpandLibraryTaskRunConfigBranches(t *testing.T) {
 	expanded, err := expandLibraryTaskRunConfig(map[string]any{
 		"libraryTaskName": "unit-test-coverage",
 		"repos":           []any{"git@github.com:acme/repo.git"},
+		"targetSubdir":    "cmd/harness",
+		"responseMode":    "off",
+		"reviewers":       []any{"octocat"},
 		"extra":           "kept",
 	}, "unit-test-coverage")
 	if err != nil {
@@ -243,6 +246,15 @@ func TestExpandLibraryTaskRunConfigBranches(t *testing.T) {
 	}
 	if got := nonEmptyStringArray(expanded["repos"]); len(got) != 1 || got[0] != "git@github.com:acme/repo.git" {
 		t.Fatalf("expanded repos = %#v, want original repo list", expanded["repos"])
+	}
+	if got := stringAt(expanded, "targetSubdir"); got != "cmd/harness" {
+		t.Fatalf("expanded targetSubdir = %q, want caller override", got)
+	}
+	if got := stringAt(expanded, "responseMode"); got != "off" {
+		t.Fatalf("expanded responseMode = %q, want caller override", got)
+	}
+	if got := nonEmptyStringArray(expanded["reviewers"]); len(got) != 1 || got[0] != "octocat" {
+		t.Fatalf("expanded reviewers = %#v, want caller override", expanded["reviewers"])
 	}
 
 	if _, err := expandLibraryTaskRunConfig(map[string]any{

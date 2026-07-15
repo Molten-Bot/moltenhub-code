@@ -2,11 +2,25 @@ package config
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestUnmarshalRejectsNonCanonicalGuardFieldCasing(t *testing.T) {
+	t.Parallel()
+
+	for _, field := range []string{"librarytaskname", "LibraryTaskName", "requiresnondefaultbranch"} {
+		payload := []byte(`{"repo":"git@github.com:acme/repo.git","prompt":"work","` + field + `":"value"}`)
+		var cfg Config
+		err := json.Unmarshal(payload, &cfg)
+		if err == nil || !strings.Contains(err.Error(), "unsupported field") {
+			t.Fatalf("json.Unmarshal(%q) error = %v, want noncanonical guard field rejection", field, err)
+		}
+	}
+}
 
 func TestValidatePromptImageValidationPaths(t *testing.T) {
 	t.Parallel()
@@ -50,6 +64,13 @@ func TestValidateRequiresBaseBranchForNonDefaultBranchRuns(t *testing.T) {
 	cfg.BaseBranch = "feature/conflicted"
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate(feature branch) error = %v", err)
+	}
+
+	for _, branch := range []string{"main", "refs/heads/master", "origin/trunk"} {
+		cfg.BaseBranch = branch
+		if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "protected default branch name") {
+			t.Fatalf("Validate(%q) error = %v, want protected branch rejection", branch, err)
+		}
 	}
 }
 

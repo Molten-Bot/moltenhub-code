@@ -139,6 +139,13 @@ func TestDispatchAndProfileHelperBranches(t *testing.T) {
 		envelope["request_id"] == "" || envelope["reply_required"] != true {
 		t.Fatalf("requiredSkillPayloadSchema() envelope = %#v", envelope)
 	}
+	ordinaryRunConfigSchema, ok := schema["run_config_schema"].(map[string]any)
+	if !ok {
+		t.Fatalf("requiredSkillPayloadSchema().run_config_schema = %#v, want object", schema["run_config_schema"])
+	}
+	if _, exists := ordinaryRunConfigSchema["allOf"]; exists {
+		t.Fatalf("requiredSkillPayloadSchema().allOf = %#v, want omitted without branch-dependent tasks", ordinaryRunConfigSchema["allOf"])
+	}
 
 	skills := normalizeSkillsMetadata([]any{
 		map[string]any{"name": " Code For Me ", "description": " fixes code "},

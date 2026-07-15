@@ -598,6 +598,54 @@ func TestParseRunConfigJSONRequiresBranchForMergeMainLibraryTask(t *testing.T) {
 	}
 }
 
+func TestParseRunConfigJSONCannotOverrideTrustedLibraryTaskGuardWithCaseAliases(t *testing.T) {
+	// This test resolves the on-disk library catalog and must not race tests that
+	// temporarily change process working directory.
+
+	cfg, err := ParseRunConfigJSON([]byte(`{
+		"repo": "git@github.com:acme/repo.git",
+		"branch": "feature/conflicted",
+		"libraryTaskName": "fix-merge-main",
+		"librarytaskname": "unit-test-coverage",
+		"requiresnondefaultbranch": false
+	}`))
+	if err != nil {
+		t.Fatalf("ParseRunConfigJSON(conflicting aliases) error = %v", err)
+	}
+	if got, want := cfg.LibraryTaskName, "fix-merge-main"; got != want {
+		t.Fatalf("LibraryTaskName = %q, want trusted expansion %q", got, want)
+	}
+	if !cfg.RequiresNonDefaultBranch {
+		t.Fatal("RequiresNonDefaultBranch = false, want trusted catalog requirement")
+	}
+	if !strings.Contains(strings.ToLower(cfg.Prompt), "merge") {
+		t.Fatalf("Prompt = %q, want fix-merge-main task prompt", cfg.Prompt)
+	}
+}
+
+func TestParseRunConfigJSONExpandsLowercaseLibraryTaskAlias(t *testing.T) {
+	// This test resolves the on-disk library catalog and must not race tests that
+	// temporarily change process working directory.
+
+	cfg, err := ParseRunConfigJSON([]byte(`{
+		"repo": "git@github.com:acme/repo.git",
+		"branch": "feature/conflicted",
+		"librarytaskname": "fix-merge-main"
+	}`))
+	if err != nil {
+		t.Fatalf("ParseRunConfigJSON(lowercase task alias) error = %v", err)
+	}
+	if got, want := cfg.LibraryTaskName, "fix-merge-main"; got != want {
+		t.Fatalf("LibraryTaskName = %q, want %q", got, want)
+	}
+	if !cfg.RequiresNonDefaultBranch {
+		t.Fatal("RequiresNonDefaultBranch = false, want catalog requirement")
+	}
+	if strings.TrimSpace(cfg.Prompt) == "" {
+		t.Fatal("Prompt is empty, want expanded library task prompt")
+	}
+}
+
 func TestParseRunConfigJSONExpandsLibraryTaskPayloadWithReposArray(t *testing.T) {
 	// This test resolves the on-disk library catalog and must not race tests that
 	// temporarily change process working directory.

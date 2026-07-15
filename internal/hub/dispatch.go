@@ -787,7 +787,7 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTasks []l
 		})
 	}
 
-	return map[string]any{
+	schema := map[string]any{
 		"dispatch_envelope": map[string]any{
 			"type":           dispatchType,
 			"request_id":     "<caller-generated-request-id>",
@@ -932,6 +932,10 @@ func requiredSkillPayloadSchema(dispatchType, skillName string, libraryTasks []l
 			},
 		},
 	}
+	if len(libraryTaskBranchConditions) == 0 {
+		delete(schema["run_config_schema"].(map[string]any), "allOf")
+	}
+	return schema
 }
 
 func propertyNonEmptyString() map[string]any {
@@ -1038,6 +1042,7 @@ func normalizeRunConfigAliases(m map[string]any) error {
 	copyRunConfigAlias(m, "targetSubdir", "targetsubdir")
 	copyRunConfigAlias(m, "responseMode", "responsemode")
 	copyRunConfigAlias(m, "libraryTaskName", "librarytaskname")
+	copyRunConfigAlias(m, "requiresNonDefaultBranch", "requiresnondefaultbranch")
 	copyRunConfigAlias(m, "prNumber", "prnumber")
 	copyRunConfigAlias(m, "prUrl", "prurl")
 	copyRunConfigAlias(m, "headBranch", "headbranch")
@@ -1082,20 +1087,19 @@ func copyRunConfigAlias(m map[string]any, canonical string, aliases ...string) {
 	if m == nil || strings.TrimSpace(canonical) == "" {
 		return
 	}
-	if runConfigAliasValueSet(m[canonical]) {
-		return
-	}
+	canonicalSet := runConfigAliasValueSet(m[canonical])
 	for _, alias := range aliases {
 		alias = strings.TrimSpace(alias)
 		if alias == "" {
 			continue
 		}
 		value, exists := m[alias]
-		if !exists || !runConfigAliasValueSet(value) {
+		delete(m, alias)
+		if canonicalSet || !exists || !runConfigAliasValueSet(value) {
 			continue
 		}
 		m[canonical] = value
-		return
+		canonicalSet = true
 	}
 }
 
@@ -1231,10 +1235,14 @@ func expandLibraryTaskRunConfig(m map[string]any, taskName string) (map[string]a
 		return nil, err
 	}
 	for key, value := range m {
-		if key == "libraryTaskName" {
+		if isTrustedLibraryExpansionField(key) {
 			continue
 		}
 		if _, exists := expanded[key]; exists {
+			expanded[key] = value
+			continue
+		}
+		if mapHasCaseInsensitiveKey(expanded, key) {
 			continue
 		}
 		expanded[key] = value
@@ -1243,6 +1251,30 @@ func expandLibraryTaskRunConfig(m map[string]any, taskName string) (map[string]a
 		expanded["repos"] = repos
 	}
 	return expanded, nil
+}
+
+func mapHasCaseInsensitiveKey(m map[string]any, key string) bool {
+	for existingKey := range m {
+		if strings.EqualFold(existingKey, key) {
+			return true
+		}
+	}
+	return false
+}
+
+func isTrustedLibraryExpansionField(key string) bool {
+	switch {
+	case strings.EqualFold(key, "libraryTaskName"):
+		return true
+	case strings.EqualFold(key, "libraryTaskDisplayName"):
+		return true
+	case strings.EqualFold(key, "requiresNonDefaultBranch"):
+		return true
+	case strings.EqualFold(key, "prompt"):
+		return true
+	default:
+		return false
+	}
 }
 
 func configToMap(cfg config.Config) (map[string]any, error) {

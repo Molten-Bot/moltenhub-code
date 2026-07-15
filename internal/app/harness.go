@@ -117,6 +117,9 @@ type repoWorkspace struct {
 	PRHeadOwner                 string
 	PRTargetRepo                string
 	BaseBranch                  string
+	RequiresNonDefaultBranch    bool
+	RequiredBranch              string
+	RequiredBranchTask          string
 	BaselineHead                string
 	CreateWorkBranch            bool
 	Changed                     bool
@@ -162,7 +165,8 @@ type Harness struct {
 	PRChecksWatchTimeout time.Duration
 	// FinalReviewPasses is the exact number of read-only review passes to run
 	// after a changed repository has a pull request and initial checks finish.
-	FinalReviewPasses int
+	FinalReviewPasses   int
+	agentRetryInvariant func(context.Context) error
 }
 
 // New returns a harness configured with defaults.
@@ -185,6 +189,11 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 	}
 	cfg.ApplyDefaults()
 	normalizeFailureFollowUpTargeting(&cfg)
+	requiresNonDefaultBranch, err := libraryTaskRequiresNonDefaultBranch(cfg)
+	if err != nil {
+		return h.fail(ExitConfig, "config", err, "")
+	}
+	cfg.RequiresNonDefaultBranch = requiresNonDefaultBranch
 	if err := cfg.Validate(); err != nil {
 		return h.fail(ExitConfig, "config", err, "")
 	}
@@ -258,11 +267,14 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		relDir := repoWorkspaceDirName(repoURL, i, len(repoURLs))
 		repoDir := filepath.Join(runDir, relDir)
 		repos = append(repos, repoWorkspace{
-			URL:             repoURL,
-			Dir:             repoDir,
-			RelDir:          relDir,
-			PushRemote:      publishRemoteOrigin,
-			PublishStrategy: publishStrategyDirect,
+			URL:                      repoURL,
+			Dir:                      repoDir,
+			RelDir:                   relDir,
+			RequiresNonDefaultBranch: runCfg.RequiresNonDefaultBranch,
+			RequiredBranch:           normalizeBranchRef(cloneBaseBranch),
+			RequiredBranchTask:       strings.TrimSpace(runCfg.LibraryTaskName),
+			PushRemote:               publishRemoteOrigin,
+			PublishStrategy:          publishStrategyDirect,
 		})
 	}
 	if err := h.cloneRepositories(ctx, repos, cloneBaseBranch); err != nil {
@@ -308,6 +320,11 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 			return h.fail(ExitGit, "git", err, runDir)
 		}
 		h.logf("stage=git status=ok action=branch branch=%s repo=%s repo_dir=%s", branch, repos[i].URL, repos[i].RelDir)
+	}
+	if runCfg.RequiresNonDefaultBranch {
+		h.agentRetryInvariant = func(ctx context.Context) error {
+			return h.validateEnforcedNonDefaultBranches(ctx, repos)
+		}
 	}
 	if !reviewRun {
 		for i := range repos {
@@ -389,14 +406,18 @@ func (h Harness) Run(ctx context.Context, cfg config.Config) Result {
 		return h.fail(ExitCodex, agentStage, err, runDir)
 	}
 	h.logf("stage=%s status=ok elapsed_s=%d%s", agentStage, int(time.Since(codexStart).Seconds()), initialAgentInvocation.logFieldsSuffix())
+	if err := h.validateEnforcedNonDefaultBranches(ctx, repos); err != nil {
+		return h.fail(ExitGit, "git", err, runDir)
+	}
 
 	for i := range repos {
 		statusRes, err := h.runCommand(ctx, "git", statusCommand(repos[i].Dir))
 		if err != nil {
 			return h.fail(ExitGit, "git", err, runDir)
 		}
-		repos[i].Branch = pickFirstNonEmpty(localBranchFromStatus(statusRes.Stdout), repos[i].Branch)
-		syncRepoPublishHeadRef(&repos[i])
+		if err := updateRepoBranchFromStatus(&repos[i], statusRes.Stdout); err != nil {
+			return h.fail(ExitGit, "git", err, runDir)
+		}
 		var changed bool
 		if reviewRun {
 			changed = hasTrackedWorktreeChanges(statusRes.Stdout)
@@ -552,6 +573,9 @@ func (h Harness) processChangedRepoWithoutFinalReviews(
 ) (int, string, error) {
 	if repo == nil {
 		return ExitConfig, "config", fmt.Errorf("repo workspace is required")
+	}
+	if err := h.validateEnforcedNonDefaultBranch(ctx, *repo); err != nil {
+		return ExitGit, "git", err
 	}
 	if repo.WriteAccessChecked && !repo.WriteAccessAllowed {
 		if repo.WriteAccessErr != nil {
@@ -1016,6 +1040,9 @@ func (h Harness) processChangedRepoWithoutFinalReviews(
 			repo.RelDir,
 			remediationInvocation.logFieldsSuffix(),
 		)
+		if err := h.validateEnforcedNonDefaultBranch(ctx, *repo); err != nil {
+			return ExitGit, "git", err
+		}
 
 		statusRes, err := h.runCommand(ctx, "git", statusCommand(repo.Dir))
 		if err != nil {
@@ -1320,6 +1347,9 @@ func (h Harness) resolveBaseSyncConflictWithAgent(
 		repo.RelDir,
 		invocation.logFieldsSuffix(),
 	)
+	if err := h.validateEnforcedNonDefaultBranch(ctx, *repo); err != nil {
+		return ExitGit, "git", err
+	}
 
 	statusRes, err := h.runCommand(ctx, "git", statusCommand(repo.Dir))
 	if err != nil {
@@ -1404,6 +1434,9 @@ func (h Harness) resolveRemoteBranchSyncConflictWithAgent(
 		repo.RelDir,
 		invocation.logFieldsSuffix(),
 	)
+	if err := h.validateEnforcedNonDefaultBranch(ctx, *repo); err != nil {
+		return ExitGit, "git", err
+	}
 
 	statusRes, err := h.runCommand(ctx, "git", statusCommand(repo.Dir))
 	if err != nil {
@@ -1576,6 +1609,9 @@ func (h Harness) pushWithSync(ctx context.Context, repo *repoWorkspace, remediat
 	}
 	pushRemote := repoPushRemote(*repo)
 	for pushAttempt := 1; pushAttempt <= maxPushSyncAttempts; pushAttempt++ {
+		if err := h.validateEnforcedNonDefaultBranch(ctx, *repo); err != nil {
+			return err
+		}
 		res, err := h.runCommand(ctx, "git", pushToRemoteCommand(repo.Dir, pushRemote, repo.Branch))
 		if err == nil {
 			return nil
@@ -2434,94 +2470,155 @@ func (h Harness) cloneRepositories(ctx context.Context, repos []repoWorkspace, b
 }
 
 func (h Harness) validateRequiredNonDefaultBranches(ctx context.Context, cfg config.Config, repos []repoWorkspace) error {
-	requiresNonDefaultBranch, err := libraryTaskRequiresNonDefaultBranch(cfg)
-	if err != nil {
-		return err
-	}
-	if !requiresNonDefaultBranch {
+	if !cfg.RequiresNonDefaultBranch {
 		return nil
 	}
-	for _, repo := range repos {
-		baseBranch := normalizeBranchRef(repo.BaseBranch)
-		if isProtectedDefaultBranchName(baseBranch) {
-			return fmt.Errorf(
-				"library task %q requires a non-default branch; configured base branch %q is a protected default branch name for repo %s",
-				cfg.LibraryTaskName,
-				baseBranch,
-				repo.URL,
-			)
-		}
-
-		res, err := h.runCommand(ctx, "git", remoteDefaultBranchCommand(repo.Dir))
-		if err != nil {
-			return commandErrorWithDetails(
-				fmt.Sprintf("resolve repository default branch for repo %s", repo.URL),
-				err,
-				res,
-				maxGitErrorDetailChars,
-			)
-		}
-		defaultBranch := remoteDefaultBranchFromLSRemote(res.Stdout)
-		if defaultBranch == "" {
-			return fmt.Errorf("resolve repository default branch for repo %s: git ls-remote --symref origin HEAD returned no branch", repo.URL)
-		}
-		if baseBranch == defaultBranch {
-			return fmt.Errorf(
-				"library task %q requires a non-default branch; configured base branch %q is repository default %q for repo %s",
-				cfg.LibraryTaskName,
-				baseBranch,
-				defaultBranch,
-				repo.URL,
-			)
-		}
-
-		currentRes, currentErr := h.runCommand(ctx, "git", currentBranchCommand(repo.Dir))
-		if currentErr != nil {
-			return commandErrorWithDetails(
-				fmt.Sprintf("verify checked out branch for repo %s", repo.URL),
-				currentErr,
-				currentRes,
-				maxGitErrorDetailChars,
-			)
-		}
-		currentBranch := normalizeBranchRef(currentRes.Stdout)
-		if currentBranch == "" {
-			return fmt.Errorf(
-				"library task %q requires a checked-out non-default branch; configured base branch %q left HEAD detached for repo %s",
-				cfg.LibraryTaskName,
-				baseBranch,
-				repo.URL,
-			)
-		}
-		if currentBranch != baseBranch {
-			return fmt.Errorf(
-				"library task %q requires configured base branch %q to be checked out; current branch is %q for repo %s",
-				cfg.LibraryTaskName,
-				baseBranch,
-				currentBranch,
-				repo.URL,
-			)
-		}
-
-		remoteHeadRes, remoteHeadErr := h.runCommand(ctx, "git", remoteBranchExistsOnOriginCommand(repo.Dir, baseBranch))
-		if remoteHeadErr != nil {
-			return commandErrorWithDetails(
-				fmt.Sprintf("verify remote branch head %q for repo %s", baseBranch, repo.URL),
-				remoteHeadErr,
-				remoteHeadRes,
-				maxGitErrorDetailChars,
-			)
-		}
-		if !remoteBranchHeadExists(remoteHeadRes.Stdout, baseBranch) {
-			return fmt.Errorf(
-				"library task %q requires a remote branch head; configured base branch %q does not resolve to refs/heads/%s for repo %s",
-				cfg.LibraryTaskName,
-				baseBranch,
-				baseBranch,
-				repo.URL,
-			)
+	for i := range repos {
+		requiredBranch := normalizeBranchRef(repos[i].BaseBranch)
+		repos[i].RequiresNonDefaultBranch = true
+		repos[i].RequiredBranch = requiredBranch
+		repos[i].RequiredBranchTask = strings.TrimSpace(cfg.LibraryTaskName)
+		if strings.TrimSpace(repos[i].Branch) == "" {
+			repos[i].Branch = requiredBranch
 		}
 	}
+	return h.validateEnforcedNonDefaultBranches(ctx, repos)
+}
+
+func (h Harness) validateEnforcedNonDefaultBranches(ctx context.Context, repos []repoWorkspace) error {
+	for _, repo := range repos {
+		if err := h.validateEnforcedNonDefaultBranch(ctx, repo); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h Harness) validateEnforcedNonDefaultBranchCheckouts(ctx context.Context, repos []repoWorkspace) error {
+	for _, repo := range repos {
+		if err := h.validateEnforcedNonDefaultBranchCheckout(ctx, repo); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h Harness) validateEnforcedNonDefaultBranch(ctx context.Context, repo repoWorkspace) error {
+	if !repo.RequiresNonDefaultBranch {
+		return nil
+	}
+
+	requiredBranch := normalizeBranchRef(repo.RequiredBranch)
+	taskName := strings.TrimSpace(repo.RequiredBranchTask)
+	if isProtectedDefaultBranchName(requiredBranch) {
+		return fmt.Errorf(
+			"library task %q requires a non-default branch; configured base branch %q is a protected default branch name for repo %s",
+			taskName,
+			requiredBranch,
+			repo.URL,
+		)
+	}
+
+	res, err := h.runCommand(ctx, "git", remoteDefaultBranchCommand(repo.Dir))
+	if err != nil {
+		return commandErrorWithDetails(
+			fmt.Sprintf("resolve repository default branch for repo %s", repo.URL),
+			err,
+			res,
+			maxGitErrorDetailChars,
+		)
+	}
+	defaultBranch := remoteDefaultBranchFromLSRemote(res.Stdout)
+	if defaultBranch == "" {
+		return fmt.Errorf("resolve repository default branch for repo %s: git ls-remote --symref origin HEAD returned no branch", repo.URL)
+	}
+	if requiredBranch == defaultBranch {
+		return fmt.Errorf(
+			"library task %q requires a non-default branch; configured base branch %q is repository default %q for repo %s",
+			taskName,
+			requiredBranch,
+			defaultBranch,
+			repo.URL,
+		)
+	}
+	if err := h.validateEnforcedNonDefaultBranchCheckout(ctx, repo); err != nil {
+		return err
+	}
+
+	remoteHeadRes, remoteHeadErr := h.runCommand(ctx, "git", remoteBranchExistsOnOriginCommand(repo.Dir, requiredBranch))
+	if remoteHeadErr != nil {
+		return commandErrorWithDetails(
+			fmt.Sprintf("verify remote branch head %q for repo %s", requiredBranch, repo.URL),
+			remoteHeadErr,
+			remoteHeadRes,
+			maxGitErrorDetailChars,
+		)
+	}
+	if !remoteBranchHeadExists(remoteHeadRes.Stdout, requiredBranch) {
+		return fmt.Errorf(
+			"library task %q requires a remote branch head; configured base branch %q does not resolve to refs/heads/%s for repo %s",
+			taskName,
+			requiredBranch,
+			requiredBranch,
+			repo.URL,
+		)
+	}
+	return nil
+}
+
+func (h Harness) validateEnforcedNonDefaultBranchCheckout(ctx context.Context, repo repoWorkspace) error {
+	if !repo.RequiresNonDefaultBranch {
+		return nil
+	}
+
+	requiredBranch := normalizeBranchRef(repo.RequiredBranch)
+	taskName := strings.TrimSpace(repo.RequiredBranchTask)
+	if isProtectedDefaultBranchName(requiredBranch) {
+		return fmt.Errorf(
+			"library task %q requires a non-default branch; configured base branch %q is a protected default branch name for repo %s",
+			taskName,
+			requiredBranch,
+			repo.URL,
+		)
+	}
+	if publishBranch := strings.TrimSpace(repo.Branch); publishBranch != requiredBranch {
+		return fmt.Errorf(
+			"library task %q requires publish branch %q to remain pinned; harness publish branch is %q for repo %s",
+			taskName,
+			requiredBranch,
+			publishBranch,
+			repo.URL,
+		)
+	}
+
+	currentRes, currentErr := h.runCommand(ctx, "git", currentBranchCommand(repo.Dir))
+	if currentErr != nil {
+		return commandErrorWithDetails(
+			fmt.Sprintf("verify checked out branch for repo %s", repo.URL),
+			currentErr,
+			currentRes,
+			maxGitErrorDetailChars,
+		)
+	}
+	currentBranch := strings.TrimSpace(currentRes.Stdout)
+	if currentBranch == "" {
+		return fmt.Errorf(
+			"library task %q requires a checked-out non-default branch; configured base branch %q left HEAD detached for repo %s",
+			taskName,
+			requiredBranch,
+			repo.URL,
+		)
+	}
+	if currentBranch != requiredBranch {
+		return fmt.Errorf(
+			"library task %q requires configured base branch %q to remain checked out; current branch is %q for repo %s",
+			taskName,
+			requiredBranch,
+			currentBranch,
+			repo.URL,
+		)
+	}
+
 	return nil
 }
 
@@ -2567,7 +2664,7 @@ func remoteDefaultBranchFromLSRemote(output string) string {
 		if len(fields) != 3 || fields[0] != "ref:" || fields[2] != "HEAD" {
 			continue
 		}
-		return normalizeBranchRef(strings.TrimPrefix(fields[1], "refs/heads/"))
+		return strings.TrimSpace(strings.TrimPrefix(fields[1], "refs/heads/"))
 	}
 	return ""
 }
@@ -2578,6 +2675,29 @@ func (h Harness) cloneRepository(ctx context.Context, repo *repoWorkspace, branc
 	}
 
 	branch = strings.TrimSpace(branch)
+	if repo.RequiresNonDefaultBranch {
+		requiredBranch := normalizeBranchRef(repo.RequiredBranch)
+		if requiredBranch == "" {
+			return fmt.Errorf("library task %q requires a non-default branch before clone", repo.RequiredBranchTask)
+		}
+		if isProtectedDefaultBranchName(requiredBranch) {
+			return fmt.Errorf(
+				"library task %q requires a non-default branch; configured base branch %q is a protected default branch name for repo %s",
+				repo.RequiredBranchTask,
+				requiredBranch,
+				repo.URL,
+			)
+		}
+		if normalizeBranchRef(branch) != requiredBranch {
+			return fmt.Errorf(
+				"library task %q requires branch %q, but clone requested branch %q for repo %s",
+				repo.RequiredBranchTask,
+				requiredBranch,
+				normalizeBranchRef(branch),
+				repo.URL,
+			)
+		}
+	}
 
 	repoURL := repo.URL
 	requestedRepoURL := repoURL
@@ -2713,6 +2833,15 @@ func (h Harness) cloneRepository(ctx context.Context, repo *repoWorkspace, branc
 		repo.CreateWorkBranch = shouldCreateWorkBranch(branch)
 		h.logf("stage=clone status=ok repo=%s repo_dir=%s", repoURL, repo.RelDir)
 		return nil
+	}
+	if repo.RequiresNonDefaultBranch {
+		return fmt.Errorf(
+			"library task %q requires existing remote branch %q for repo %s; refusing default-branch fallback: %w",
+			repo.RequiredBranchTask,
+			normalizeBranchRef(repo.RequiredBranch),
+			repo.URL,
+			cloneErr,
+		)
 	}
 	if shouldBootstrapUninitializedMainBranch(branch, cloneRes, cloneErr) {
 		hasRefs, refsErr := h.remoteRepositoryHasRefs(ctx, repoURL)
@@ -2924,14 +3053,47 @@ func (h Harness) refreshRepoChangeStateAfterNoOpCommit(
 	if err != nil {
 		return false, err
 	}
-	repo.Branch = pickFirstNonEmpty(localBranchFromStatus(statusRes.Stdout), repo.Branch)
-	syncRepoPublishHeadRef(repo)
+	if err := updateRepoBranchFromStatus(repo, statusRes.Stdout); err != nil {
+		return false, err
+	}
 	changed, detectErr := h.repoHasPendingChanges(ctx, *repo, statusRes.Stdout)
 	if detectErr != nil {
 		return false, detectErr
 	}
 	repo.Changed = changed
 	return !repo.Changed, nil
+}
+
+func updateRepoBranchFromStatus(repo *repoWorkspace, statusStdout string) error {
+	if repo == nil {
+		return fmt.Errorf("repo workspace is required")
+	}
+	observedBranch := strings.TrimSpace(localBranchFromStatus(statusStdout))
+	if repo.RequiresNonDefaultBranch {
+		requiredBranch := normalizeBranchRef(repo.RequiredBranch)
+		if observedBranch == "" {
+			return fmt.Errorf(
+				"library task %q requires branch %q to remain checked out; git status did not report a branch for repo %s",
+				repo.RequiredBranchTask,
+				requiredBranch,
+				repo.URL,
+			)
+		}
+		if observedBranch != requiredBranch {
+			return fmt.Errorf(
+				"library task %q requires branch %q to remain checked out; git status reported %q for repo %s",
+				repo.RequiredBranchTask,
+				requiredBranch,
+				observedBranch,
+				repo.URL,
+			)
+		}
+		repo.Branch = requiredBranch
+	} else {
+		repo.Branch = pickFirstNonEmpty(observedBranch, repo.Branch)
+	}
+	syncRepoPublishHeadRef(repo)
+	return nil
 }
 
 func syncRepoPublishHeadRef(repo *repoWorkspace) {
@@ -3246,6 +3408,9 @@ func (h Harness) runFinalReviewCycle(
 		if err != nil {
 			return ExitCodex, agentStage, err
 		}
+		if err := h.validateEnforcedNonDefaultBranch(ctx, *repo); err != nil {
+			return ExitGit, "git", err
+		}
 		statusRes, err := h.runCommand(ctx, "git", statusCommand(repo.Dir))
 		if err != nil {
 			return ExitGit, "git", err
@@ -3335,6 +3500,9 @@ func (h Harness) runFinalReviewCycle(
 			fixInvocation,
 		); err != nil {
 			return ExitCodex, agentStage, err
+		}
+		if err := h.validateEnforcedNonDefaultBranch(ctx, *repo); err != nil {
+			return ExitGit, "git", err
 		}
 		fixStatus, err := h.runCommand(ctx, "git", statusCommand(repo.Dir))
 		if err != nil {
@@ -3682,6 +3850,14 @@ func (h Harness) completeReviewRun(
 	prURL := pickFirstNonEmpty(metadata.URL, cfg.Review.PRURL)
 	repo.PRURL = prURL
 	if head := strings.TrimSpace(metadata.HeadRefName); head != "" {
+		if repo.RequiresNonDefaultBranch && head != normalizeBranchRef(repo.RequiredBranch) {
+			return fmt.Errorf(
+				"library task %q requires review branch %q; pull request metadata reported head branch %q",
+				repo.RequiredBranchTask,
+				normalizeBranchRef(repo.RequiredBranch),
+				head,
+			)
+		}
 		repo.Branch = head
 	}
 
@@ -4930,16 +5106,15 @@ func (h Harness) runCodexCapture(
 	invocation = invocation.withRuntimeDefaults(runtime)
 	res, err := h.runCodexWithHeartbeat(ctx, runtime, targetDir, finalPrompt, opts, "", invocation)
 	if shouldRetryCodexWithoutSandbox(res, err) {
-		agentStage := runtimeLogStage(runtime)
-		h.logf(
-			"stage=%s status=warn action=retry_without_sandbox reason=%q%s",
-			agentStage,
-			"detected bubblewrap namespace sandbox failure; retrying with danger-full-access",
-			invocation.logFieldsSuffix(),
-		)
-		retryRes, retryErr := h.runCodexWithHeartbeat(ctx, runtime, targetDir, finalPrompt, opts, "danger-full-access", invocation)
-		res = retryRes
-		err = retryErr
+		if h.agentRetryInvariant != nil {
+			if invariantErr := h.agentRetryInvariant(ctx); invariantErr != nil {
+				err = fmt.Errorf("verify required branch before agent sandbox retry: %w", invariantErr)
+			} else {
+				res, err = h.retryCodexWithoutSandbox(ctx, runtime, targetDir, finalPrompt, opts, invocation)
+			}
+		} else {
+			res, err = h.retryCodexWithoutSandbox(ctx, runtime, targetDir, finalPrompt, opts, invocation)
+		}
 	}
 	if err != nil {
 		agentStage := runtimeLogStage(runtime)
@@ -4953,6 +5128,24 @@ func (h Harness) runCodexCapture(
 		)
 	}
 	return res, err
+}
+
+func (h Harness) retryCodexWithoutSandbox(
+	ctx context.Context,
+	runtime agentruntime.Runtime,
+	targetDir string,
+	prompt string,
+	opts codexRunOptions,
+	invocation agentInvocationLogMetadata,
+) (execx.Result, error) {
+	agentStage := runtimeLogStage(runtime)
+	h.logf(
+		"stage=%s status=warn action=retry_without_sandbox reason=%q%s",
+		agentStage,
+		"detected bubblewrap namespace sandbox failure; retrying with danger-full-access",
+		invocation.logFieldsSuffix(),
+	)
+	return h.runCodexWithHeartbeat(ctx, runtime, targetDir, prompt, opts, "danger-full-access", invocation)
 }
 
 func agentOutputClaimsFileChanges(res execx.Result) bool {

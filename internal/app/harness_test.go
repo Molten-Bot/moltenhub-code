@@ -1590,6 +1590,209 @@ func TestRunWithPromptImagesKeepsArtifactsOutOfRepo(t *testing.T) {
 	}
 }
 
+func TestRunRequiredNonDefaultBranchRejectsUnsafeConfigBeforeCommands(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		baseBranch string
+		wantError  string
+	}{
+		{name: "missing branch", wantError: "baseBranch is required"},
+		{name: "main", baseBranch: "main", wantError: "protected default branch name"},
+		{name: "master ref", baseBranch: "refs/heads/master", wantError: "protected default branch name"},
+		{name: "trunk remote", baseBranch: "origin/trunk", wantError: "protected default branch name"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := sampleConfig()
+			cfg.LibraryTaskName = mergeMainLibraryTaskName
+			cfg.BaseBranch = tt.baseBranch
+			fake := &fakeRunner{t: t}
+
+			res := New(fake).Run(context.Background(), cfg)
+			if res.ExitCode != ExitConfig {
+				t.Fatalf("ExitCode = %d, want %d", res.ExitCode, ExitConfig)
+			}
+			if res.Err == nil || !strings.Contains(res.Err.Error(), tt.wantError) {
+				t.Fatalf("Run() error = %v, want %q", res.Err, tt.wantError)
+			}
+			if len(fake.calls) != 0 {
+				t.Fatalf("commands = %#v, want none before config rejection", fake.calls)
+			}
+		})
+	}
+}
+
+func TestRunRequiredNonDefaultBranchRejectsAgentBranchSwitchBeforeGitWrites(t *testing.T) {
+	cfg := sampleConfig()
+	cfg.LibraryTaskName = mergeMainLibraryTaskName
+	cfg.BaseBranch = "feature/conflicted"
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "requiredbranchswitch"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	defaultBranch := execx.Result{Stdout: "ref: refs/heads/main\tHEAD\nabc123\tHEAD\n"}
+	featureHead := execx.Result{Stdout: "def456\trefs/heads/" + cfg.BaseBranch + "\n"}
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: fetchBaseBranchCommand(repoDir, cfg.BaseBranch)},
+		{cmd: remoteDefaultBranchCommand(repoDir), res: defaultBranch},
+		{cmd: currentBranchCommand(repoDir), res: execx.Result{Stdout: cfg.BaseBranch + "\n"}},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, cfg.BaseBranch), res: featureHead},
+		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
+		{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: "1111111111111111111111111111111111111111\n"}},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: currentBranchCommand(repoDir), res: execx.Result{Stdout: "main\n"}},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.ExitCode != ExitGit {
+		t.Fatalf("ExitCode = %d, want %d", res.ExitCode, ExitGit)
+	}
+	if res.Err == nil || !strings.Contains(res.Err.Error(), `current branch is "main"`) {
+		t.Fatalf("Run() error = %v, want branch switch rejection", res.Err)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+	for _, call := range fake.calls {
+		if commandsEqual(call, addCommand(repoDir)) || commandsEqual(call, commitCommand(repoDir, cfg.CommitMessage)) || commandsEqual(call, pushCommand(repoDir, "main")) {
+			t.Fatalf("unsafe git write command executed after branch switch: %+v", call)
+		}
+	}
+}
+
+func TestRunRequiredNonDefaultBranchKeepsFeaturePublishPinned(t *testing.T) {
+	cfg := sampleConfig()
+	cfg.LibraryTaskName = mergeMainLibraryTaskName
+	cfg.BaseBranch = "feature/conflicted"
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "requiredbranchsuccess"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	prURL := "https://github.com/acme/repo/pull/88"
+	defaultBranch := execx.Result{Stdout: "ref: refs/heads/main\tHEAD\nabc123\tHEAD\n"}
+	featureHead := execx.Result{Stdout: "def456\trefs/heads/" + cfg.BaseBranch + "\n"}
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: fetchBaseBranchCommand(repoDir, cfg.BaseBranch)},
+		{cmd: remoteDefaultBranchCommand(repoDir), res: defaultBranch},
+		{cmd: currentBranchCommand(repoDir), res: execx.Result{Stdout: cfg.BaseBranch + "\n"}},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, cfg.BaseBranch), res: featureHead},
+		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
+		{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: "1111111111111111111111111111111111111111\n"}},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: currentBranchCommand(repoDir), res: execx.Result{Stdout: cfg.BaseBranch + "\n"}},
+		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## " + cfg.BaseBranch + "...origin/" + cfg.BaseBranch + "\n M file.go\n"}},
+		{cmd: currentBranchCommand(repoDir), res: execx.Result{Stdout: cfg.BaseBranch + "\n"}},
+		{cmd: addCommand(repoDir)},
+		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
+		{cmd: remoteDefaultBranchCommand(repoDir), res: defaultBranch},
+		{cmd: currentBranchCommand(repoDir), res: execx.Result{Stdout: cfg.BaseBranch + "\n"}},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, cfg.BaseBranch), res: featureHead},
+		{cmd: pushCommand(repoDir, cfg.BaseBranch)},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, cfg.BaseBranch), res: featureHead},
+		{cmd: prLookupByHeadCommand(repoDir, cfg.BaseBranch), res: execx.Result{Stdout: prURL + "\n"}},
+		{cmd: prChecksCommand(repoDir, prURL)},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.Err != nil {
+		t.Fatalf("Run() error = %v", res.Err)
+	}
+	if got, want := res.Branch, cfg.BaseBranch; got != want {
+		t.Fatalf("Branch = %q, want %q", got, want)
+	}
+	if got, want := res.PRURL, prURL; got != want {
+		t.Fatalf("PRURL = %q, want %q", got, want)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+	for _, call := range fake.calls {
+		if commandsEqual(call, pushCommand(repoDir, "main")) {
+			t.Fatalf("default branch push executed: %+v", call)
+		}
+	}
+}
+
+func TestRunRequiredNonDefaultBranchChecksCheckoutBeforeSandboxRetry(t *testing.T) {
+	cfg := sampleConfig()
+	cfg.LibraryTaskName = mergeMainLibraryTaskName
+	cfg.BaseBranch = "feature/conflicted"
+	now := time.Date(2026, 4, 2, 15, 4, 5, 0, time.UTC)
+	guid := "requiredbranchretry"
+	runDir := testRunDir(guid)
+	agentsPath := filepath.Join(runDir, "AGENTS.md")
+	repoDir := filepath.Join(runDir, "repo")
+	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
+	defaultBranch := execx.Result{Stdout: "ref: refs/heads/main\tHEAD\nabc123\tHEAD\n"}
+	featureHead := execx.Result{Stdout: "def456\trefs/heads/" + cfg.BaseBranch + "\n"}
+	bwrapFailure := execx.Result{
+		Stdout: "Failure: I could not start any local repository command.",
+		Stderr: "bwrap: namespace error: Operation not permitted",
+	}
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: execx.Command{Name: "git", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"--version"}}},
+		{cmd: execx.Command{Name: "codex", Args: []string{"--help"}}},
+		{cmd: execx.Command{Name: "gh", Args: []string{"auth", "status"}}},
+		{cmd: cloneCommand(cfg, repoDir)},
+		{cmd: fetchBaseBranchCommand(repoDir, cfg.BaseBranch)},
+		{cmd: remoteDefaultBranchCommand(repoDir), res: defaultBranch},
+		{cmd: currentBranchCommand(repoDir), res: execx.Result{Stdout: cfg.BaseBranch + "\n"}},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, cfg.BaseBranch), res: featureHead},
+		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
+		{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: "1111111111111111111111111111111111111111\n"}},
+		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath)), res: bwrapFailure},
+		{cmd: currentBranchCommand(repoDir), res: execx.Result{Stdout: "main\n"}},
+	}}
+
+	h := New(fake)
+	h.Now = func() time.Time { return now }
+	h.Workspace = testWorkspaceManager(guid)
+	h.TargetDirOK = func(path string) bool { return path == targetDir }
+
+	res := h.Run(context.Background(), cfg)
+	if res.ExitCode != ExitCodex {
+		t.Fatalf("ExitCode = %d, want %d", res.ExitCode, ExitCodex)
+	}
+	if res.Err == nil || !strings.Contains(res.Err.Error(), "verify required branch before agent sandbox retry") {
+		t.Fatalf("Run() error = %v, want pre-retry branch rejection", res.Err)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+	for _, call := range fake.calls {
+		if call.Name == "codex" && slicesContains(call.Args, "danger-full-access") {
+			t.Fatalf("danger-full-access retry executed after branch drift: %+v", call)
+		}
+	}
+}
+
 func TestRunNonMainBranchReusesExistingBranchAndPR(t *testing.T) {
 	t.Parallel()
 
@@ -4885,6 +5088,36 @@ func TestRunMissingMainBaseBranchFallsBackToRemoteDefaultAndCreatesNewBranch(t *
 	}
 }
 
+func TestCloneRequiredNonDefaultBranchRefusesDefaultFallback(t *testing.T) {
+	branch := "moltenhub-missing-feature"
+	repo := repoWorkspace{
+		URL:                      "git@github.com:acme/repo.git",
+		Dir:                      "/tmp/required-feature-repo",
+		RelDir:                   "repo",
+		RequiresNonDefaultBranch: true,
+		RequiredBranch:           branch,
+		RequiredBranchTask:       mergeMainLibraryTaskName,
+	}
+	cloneMissingBranch := execx.Result{
+		Stderr: "warning: Could not find remote branch " + branch + " to clone.\n" +
+			"fatal: Remote branch " + branch + " not found in upstream origin\n",
+	}
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: cloneRepoCommand(repo.URL, branch, repo.Dir), res: cloneMissingBranch, err: errors.New("clone failed")},
+	}}
+
+	err := New(fake).cloneRepository(context.Background(), &repo, branch, nil)
+	if err == nil || !strings.Contains(err.Error(), "refusing default-branch fallback") {
+		t.Fatalf("cloneRepository() error = %v, want fail-closed branch error", err)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+	if len(fake.calls) != 1 || !commandsEqual(fake.calls[0], cloneRepoCommand(repo.URL, branch, repo.Dir)) {
+		t.Fatalf("commands = %#v, want only exact feature-branch clone", fake.calls)
+	}
+}
+
 func TestRunMissingMainBaseBranchBootstrapsUninitializedRepository(t *testing.T) {
 	t.Parallel()
 
@@ -6315,6 +6548,43 @@ func TestRunCodexRetriesWithoutSandboxOnBwrapFailure(t *testing.T) {
 	}
 	if !strings.Contains(joinedLogs, "status=warn action=retry_without_sandbox") {
 		t.Fatalf("retry log missing retry_without_sandbox warning:\n%s", joinedLogs)
+	}
+}
+
+func TestRunCodexChecksBranchInvariantBeforeSandboxRetry(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "make home page pink"
+	firstCmd := codexCommand(targetDir, prompt)
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: I could not start any local repository command.",
+				Stderr: "bwrap: namespace error: Operation not permitted",
+			},
+		},
+	}}
+
+	invariantCalls := 0
+	h := New(fake)
+	h.agentRetryInvariant = func(context.Context) error {
+		invariantCalls++
+		return errors.New("required branch changed")
+	}
+	err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", "")
+	if err == nil || !strings.Contains(err.Error(), "verify required branch before agent sandbox retry") {
+		t.Fatalf("runCodex() error = %v, want branch invariant failure", err)
+	}
+	if invariantCalls != 1 {
+		t.Fatalf("invariant calls = %d, want 1", invariantCalls)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+	if len(fake.calls) != 1 {
+		t.Fatalf("agent commands = %d, want no danger-full-access retry", len(fake.calls))
 	}
 }
 
@@ -8248,6 +8518,13 @@ func TestValidateRequiredNonDefaultBranches(t *testing.T) {
 			wantErrMarker:       `current branch is "other-feature"`,
 		},
 		{
+			name:                "rejects origin-prefixed local branch",
+			baseBranch:          "feature/conflicted",
+			defaultBranchOutput: "ref: refs/heads/main\tHEAD\nabc123\tHEAD\n",
+			currentBranchOutput: "origin/feature/conflicted\n",
+			wantErrMarker:       `current branch is "origin/feature/conflicted"`,
+		},
+		{
 			name:                "rejects missing remote head",
 			baseBranch:          "v1.2.3",
 			defaultBranchOutput: "ref: refs/heads/main\tHEAD\nabc123\tHEAD\n",
@@ -8276,7 +8553,7 @@ func TestValidateRequiredNonDefaultBranches(t *testing.T) {
 						cmd: currentBranchCommand(repo.Dir),
 						res: execx.Result{Stdout: tt.currentBranchOutput},
 					})
-					if normalizeBranchRef(tt.currentBranchOutput) == normalizeBranchRef(tt.baseBranch) {
+					if strings.TrimSpace(tt.currentBranchOutput) == normalizeBranchRef(tt.baseBranch) {
 						exps = append(exps, expectedRun{
 							cmd: remoteBranchExistsOnOriginCommand(repo.Dir, tt.baseBranch),
 							res: execx.Result{Stdout: tt.remoteHeadOutput},
@@ -8287,7 +8564,8 @@ func TestValidateRequiredNonDefaultBranches(t *testing.T) {
 			fake := &fakeRunner{t: t, exps: exps}
 			h := New(fake)
 			err := h.validateRequiredNonDefaultBranches(context.Background(), config.Config{
-				LibraryTaskName: mergeMainLibraryTaskName,
+				LibraryTaskName:          mergeMainLibraryTaskName,
+				RequiresNonDefaultBranch: true,
 			}, []repoWorkspace{repo})
 			if tt.wantErrMarker == "" {
 				if err != nil {
@@ -8339,6 +8617,59 @@ func TestLibraryTaskRequiresNonDefaultBranchUsesCatalogMetadata(t *testing.T) {
 	}
 }
 
+func TestValidateEnforcedNonDefaultBranchCheckoutsRejectsAnyRepoDrift(t *testing.T) {
+	repos := []repoWorkspace{
+		{
+			URL:                      "git@github.com:acme/repo-a.git",
+			Dir:                      "/tmp/repo-a",
+			Branch:                   "feature/conflicted",
+			RequiresNonDefaultBranch: true,
+			RequiredBranch:           "feature/conflicted",
+			RequiredBranchTask:       mergeMainLibraryTaskName,
+		},
+		{
+			URL:                      "git@github.com:acme/repo-b.git",
+			Dir:                      "/tmp/repo-b",
+			Branch:                   "feature/conflicted",
+			RequiresNonDefaultBranch: true,
+			RequiredBranch:           "feature/conflicted",
+			RequiredBranchTask:       mergeMainLibraryTaskName,
+		},
+	}
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{cmd: currentBranchCommand(repos[0].Dir), res: execx.Result{Stdout: "feature/conflicted\n"}},
+		{cmd: currentBranchCommand(repos[1].Dir), res: execx.Result{Stdout: "main\n"}},
+	}}
+
+	err := New(fake).validateEnforcedNonDefaultBranchCheckouts(context.Background(), repos)
+	if err == nil || !strings.Contains(err.Error(), `current branch is "main"`) || !strings.Contains(err.Error(), repos[1].URL) {
+		t.Fatalf("validateEnforcedNonDefaultBranchCheckouts() error = %v, want second-repo drift", err)
+	}
+	if len(fake.exps) != 0 {
+		t.Fatalf("unconsumed expectations: %d", len(fake.exps))
+	}
+}
+
+func TestValidateEnforcedNonDefaultBranchCheckoutRejectsPublishRefDriftWithoutGit(t *testing.T) {
+	repo := repoWorkspace{
+		URL:                      "git@github.com:acme/repo.git",
+		Dir:                      "/tmp/repo",
+		Branch:                   "main",
+		RequiresNonDefaultBranch: true,
+		RequiredBranch:           "feature/conflicted",
+		RequiredBranchTask:       mergeMainLibraryTaskName,
+	}
+	fake := &fakeRunner{t: t}
+
+	err := New(fake).validateEnforcedNonDefaultBranchCheckout(context.Background(), repo)
+	if err == nil || !strings.Contains(err.Error(), `harness publish branch is "main"`) {
+		t.Fatalf("validateEnforcedNonDefaultBranchCheckout() error = %v, want publish-ref drift", err)
+	}
+	if len(fake.calls) != 0 {
+		t.Fatalf("git calls = %#v, want rejection before git command", fake.calls)
+	}
+}
+
 func TestRemoteBranchHeadExistsRequiresExactHeadsRef(t *testing.T) {
 	t.Parallel()
 
@@ -8356,6 +8687,9 @@ func TestRemoteDefaultBranchFromLSRemote(t *testing.T) {
 
 	if got, want := remoteDefaultBranchFromLSRemote("ref: refs/heads/release/v2\tHEAD\nabc123\tHEAD\n"), "release/v2"; got != want {
 		t.Fatalf("remoteDefaultBranchFromLSRemote() = %q, want %q", got, want)
+	}
+	if got, want := remoteDefaultBranchFromLSRemote("ref: refs/heads/origin/release\tHEAD\nabc123\tHEAD\n"), "origin/release"; got != want {
+		t.Fatalf("remoteDefaultBranchFromLSRemote(origin branch) = %q, want %q", got, want)
 	}
 	if got := remoteDefaultBranchFromLSRemote("abc123\tHEAD\n"); got != "" {
 		t.Fatalf("remoteDefaultBranchFromLSRemote(no symref) = %q, want empty", got)
