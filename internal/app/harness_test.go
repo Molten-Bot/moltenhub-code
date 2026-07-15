@@ -1647,6 +1647,7 @@ func TestRunRequiredNonDefaultBranchRejectsAgentBranchSwitchBeforeGitWrites(t *t
 		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
 		{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: "1111111111111111111111111111111111111111\n"}},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: remoteDefaultBranchCommand(repoDir), res: defaultBranch},
 		{cmd: currentBranchCommand(repoDir), res: execx.Result{Stdout: "main\n"}},
 	}}
 
@@ -1699,9 +1700,13 @@ func TestRunRequiredNonDefaultBranchKeepsFeaturePublishPinned(t *testing.T) {
 		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
 		{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: "1111111111111111111111111111111111111111\n"}},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath))},
+		{cmd: remoteDefaultBranchCommand(repoDir), res: defaultBranch},
 		{cmd: currentBranchCommand(repoDir), res: execx.Result{Stdout: cfg.BaseBranch + "\n"}},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, cfg.BaseBranch), res: featureHead},
 		{cmd: statusCommand(repoDir), res: execx.Result{Stdout: "## " + cfg.BaseBranch + "...origin/" + cfg.BaseBranch + "\n M file.go\n"}},
+		{cmd: remoteDefaultBranchCommand(repoDir), res: defaultBranch},
 		{cmd: currentBranchCommand(repoDir), res: execx.Result{Stdout: cfg.BaseBranch + "\n"}},
+		{cmd: remoteBranchExistsOnOriginCommand(repoDir, cfg.BaseBranch), res: featureHead},
 		{cmd: addCommand(repoDir)},
 		{cmd: commitCommand(repoDir, cfg.CommitMessage)},
 		{cmd: remoteDefaultBranchCommand(repoDir), res: defaultBranch},
@@ -1738,7 +1743,7 @@ func TestRunRequiredNonDefaultBranchKeepsFeaturePublishPinned(t *testing.T) {
 	}
 }
 
-func TestRunRequiredNonDefaultBranchChecksCheckoutBeforeSandboxRetry(t *testing.T) {
+func TestRunRequiredNonDefaultBranchChecksRemoteDefaultBeforeSandboxRetry(t *testing.T) {
 	cfg := sampleConfig()
 	cfg.LibraryTaskName = mergeMainLibraryTaskName
 	cfg.BaseBranch = "feature/conflicted"
@@ -1749,6 +1754,7 @@ func TestRunRequiredNonDefaultBranchChecksCheckoutBeforeSandboxRetry(t *testing.
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := filepath.Join(repoDir, cfg.TargetSubdir)
 	defaultBranch := execx.Result{Stdout: "ref: refs/heads/main\tHEAD\nabc123\tHEAD\n"}
+	changedDefaultBranch := execx.Result{Stdout: "ref: refs/heads/" + cfg.BaseBranch + "\tHEAD\ndef456\tHEAD\n"}
 	featureHead := execx.Result{Stdout: "def456\trefs/heads/" + cfg.BaseBranch + "\n"}
 	bwrapFailure := execx.Result{
 		Stdout: "Failure: I could not start any local repository command.",
@@ -1768,7 +1774,7 @@ func TestRunRequiredNonDefaultBranchChecksCheckoutBeforeSandboxRetry(t *testing.
 		{cmd: pushDryRunCommand(repoDir, cfg.BaseBranch)},
 		{cmd: headCommitSHACommand(repoDir), res: execx.Result{Stdout: "1111111111111111111111111111111111111111\n"}},
 		{cmd: codexCommand(targetDir, withAgentsPrompt(cfg.Prompt, agentsPath)), res: bwrapFailure},
-		{cmd: currentBranchCommand(repoDir), res: execx.Result{Stdout: "main\n"}},
+		{cmd: remoteDefaultBranchCommand(repoDir), res: changedDefaultBranch},
 	}}
 
 	h := New(fake)
