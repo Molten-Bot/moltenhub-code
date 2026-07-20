@@ -61,6 +61,12 @@ func TestWithExecutionContractIncludesValidationToolingInstruction(t *testing.T)
 	if !strings.Contains(got, "do not use `Failure:` solely for that validation gap") {
 		t.Fatalf("WithExecutionContract() missing validation-gap failure guidance: %q", got)
 	}
+	if !strings.Contains(got, "dependency installation cannot reach a package registry") {
+		t.Fatalf("WithExecutionContract() missing package-registry validation-gap guidance: %q", got)
+	}
+	if !strings.Contains(got, "does not apply when installing or updating dependency or package files is requested work") {
+		t.Fatalf("WithExecutionContract() missing required-dependency exception: %q", got)
+	}
 }
 
 func TestWithExecutionContractIncludesHubActivityPrivacyInstruction(t *testing.T) {

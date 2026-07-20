@@ -7231,6 +7231,61 @@ func TestRunCodexAllowsFocusedValidationUnavailableFailure(t *testing.T) {
 	}
 }
 
+func TestRunCodexAllowsNPMValidationGateUnavailableAfterRegistryOutage(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "add daily release notes"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: Full npm test/lint/typecheck/build gate unavailable. Error details: `npm install` failed three times with `getaddrinfo EAI_AGAIN registry.npmjs.org`; `vitest` and Astro dependencies remain missing. PR harness can create PR from ready diff.",
+			},
+		},
+	}}
+
+	var logs []string
+	h := New(fake)
+	h.Logf = func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+	if err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", ""); err != nil {
+		t.Fatalf("runCodex() error = %v, want nil for npm validation gate blocked by registry outage", err)
+	}
+	if !strings.Contains(strings.Join(logs, "\n"), "action=validation_tooling_unavailable") {
+		t.Fatalf("logs missing validation tooling warning:\n%s", strings.Join(logs, "\n"))
+	}
+}
+
+func TestRunCodexKeepsRequiredNPMDependencyInstallFailureFatal(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	prompt := "install Astro and update package lock"
+	firstCmd := codexCommand(targetDir, prompt)
+
+	fake := &fakeRunner{t: t, exps: []expectedRun{
+		{
+			cmd: firstCmd,
+			res: execx.Result{
+				Stdout: "Failure: Required dependency update not completed; full npm test/lint/typecheck/build gate unavailable. Error details: `npm install astro` failed three times with `getaddrinfo EAI_AGAIN registry.npmjs.org`; dependencies remain missing. Other repository changes are ready for PR.",
+			},
+		},
+	}}
+
+	h := New(fake)
+	err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", "")
+	if err == nil {
+		t.Fatal("runCodex() error = nil, want required dependency-install failure")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "codex reported failure") {
+		t.Fatalf("runCodex() error = %v, want codex reported failure marker", err)
+	}
+}
+
 func TestRunCodexAllowsRecoveredTransientRegistryLookupFailure(t *testing.T) {
 	t.Parallel()
 

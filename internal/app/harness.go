@@ -5852,9 +5852,14 @@ func isNonFatalValidationToolingFailure(detail string, res execx.Result) bool {
 		"local validation tooling unavailable in runtime",
 		"full build validation could not run",
 		"focused go validation unavailable in runtime",
+		"test/lint/typecheck/build gate unavailable",
+		"validation gate unavailable",
 		"node_modules missing",
 	}
 	validationUnavailable := containsAny(text, validationUnavailableMarkers)
+	if validationUnavailable && isTransientValidationDependencyInstallFailure(text) {
+		return true
+	}
 
 	missingTooling := strings.Contains(text, "command not found") ||
 		strings.Contains(text, ": not found") ||
@@ -5935,6 +5940,53 @@ func isNonFatalValidationToolingFailure(detail string, res execx.Result) bool {
 		return true
 	}
 	return false
+}
+
+func isTransientValidationDependencyInstallFailure(text string) bool {
+	installMarkers := []string{
+		"npm install",
+		"npm ci",
+		"pnpm install",
+		"yarn install",
+		"bun install",
+		"pip install",
+	}
+	transientNetworkMarkers := []string{
+		"eai_again",
+		"getaddrinfo",
+		"temporary failure in name resolution",
+		"could not resolve host",
+		"network is unreachable",
+		"etimedout",
+		"econnreset",
+	}
+	missingDependencyMarkers := []string{
+		"dependencies remain missing",
+		"dependency remains missing",
+		"deps remain missing",
+		"node_modules remains missing",
+		"node_modules still missing",
+	}
+	readyWorkMarkers := []string{
+		"pr harness can create pr from ready diff",
+		"repository work is otherwise ready",
+		"repository changes are ready",
+		"changes are ready for pr",
+		"ready repository diff",
+	}
+	requiredDependencyChangeFailureMarkers := []string{
+		"required dependency update not completed",
+		"required dependency install not completed",
+		"required dependency installation not completed",
+		"requested dependency update not completed",
+		"requested dependency install not completed",
+		"requested dependency installation not completed",
+	}
+	return containsAny(text, installMarkers) &&
+		containsAny(text, transientNetworkMarkers) &&
+		containsAny(text, missingDependencyMarkers) &&
+		containsAny(text, readyWorkMarkers) &&
+		!containsAny(text, requiredDependencyChangeFailureMarkers)
 }
 
 func isImplementationTargetFailure(detail string) bool {
