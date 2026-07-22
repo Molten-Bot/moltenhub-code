@@ -6947,6 +6947,11 @@ func TestRunCodexRejectsMissingCurlWithoutSuccessfulSmokeFallback(t *testing.T) 
 		"Failure: Initial `curl` smoke command unavailable; fallback success not confirmed.\nNotes: unrelated database fallback succeeded.\nError details: `/bin/bash: curl: command not found`",
 		"Failure: Initial `curl` smoke command unavailable; could not confirm fallback succeeded.\nError details: `/bin/bash: curl: command not found`",
 		"Failure: Initial `curl` smoke command unavailable; fallback succeeded: false.\nError details: `/bin/bash: curl: command not found`",
+		"Failure: Initial `curl` smoke command unavailable; fallback succeeded, but not verified.\nError details: `/bin/bash: curl: command not found`",
+		"Failure: Initial `curl` smoke command unavailable; fallback passed, apparently.\nError details: `/bin/bash: curl: command not found`",
+		"Failure: Initial `curl` smoke command unavailable; fallback succeeded, maybe.\nError details: `/bin/bash: curl: command not found`",
+		"Failure: Initial `curl` smoke command unavailable; fallback succeeded, probably.\nError details: `/bin/bash: curl: command not found`",
+		"Failure: Initial `curl` smoke command unavailable; fallback passed, status uncertain.\nError details: `/bin/bash: curl: command not found`",
 	} {
 		detail := detail
 		t.Run(detail, func(t *testing.T) {

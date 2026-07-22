@@ -5991,6 +5991,25 @@ func smokeFallbackSucceeded(text string) bool {
 			continue
 		}
 		if containsAny(line, []string{
+			"apparently",
+			"appears to",
+			"cannot verify",
+			"could not verify",
+			"likely",
+			"maybe",
+			"not sure",
+			"not verified",
+			"perhaps",
+			"possibly",
+			"probably",
+			"reportedly",
+			"seems to",
+			"uncertain",
+			"unknown",
+		}) {
+			continue
+		}
+		if containsAny(line, []string{
 			"fallback succeeded",
 			"fallback passed",
 			"fallback smoke check succeeded",
