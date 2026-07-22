@@ -1273,8 +1273,10 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(string(xtermStylesheet), `@import url("/static/xterm.css");`) {
 		t.Fatalf("expected global stylesheet to import xterm stylesheet")
 	}
-	if !strings.Contains(markup, "function sortTasksByActivity(") {
-		t.Fatalf("expected index html to include activity-based task sorting for list rendering")
+	if !strings.Contains(markup, "function sortTasksByStartTime(") ||
+		!strings.Contains(markup, "const startedDiff = parseTaskTimestamp(b?.started_at) - parseTaskTimestamp(a?.started_at);") ||
+		!strings.Contains(markup, "return sortTasksByStartTime(taskItems);") {
+		t.Fatalf("expected index html to keep current tasks in stable newest-to-oldest start order")
 	}
 	if !strings.Contains(markup, "const STREAM_RENDER_INTERVAL_MS = 500;") ||
 		!strings.Contains(markup, "window.requestAnimationFrame(renderPendingStreamSnapshot)") ||
@@ -1294,18 +1296,11 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 		!strings.Contains(markup, `} else if (initialDisplay === "work") {`) {
 		t.Fatalf("expected index html to restore direct current-work hash after initial snapshot load")
 	}
-	if !strings.Contains(markup, "const TASK_ORDER_TRANSITION_DELAY_MS = 2_000;") || !strings.Contains(markup, "const TASK_ORDER_SYNC_INTERVAL_MS = 4_000;") {
-		t.Fatalf("expected index html to delay and synchronize task reordering transitions")
-	}
-	if !strings.Contains(markup, "taskOrderPendingDesired: [],") {
-		t.Fatalf("expected index html state to track pending desired task order for stable transition delay windows")
-	}
-	if !strings.Contains(markup, "if (!sameTaskOrder(state.taskOrderPendingDesired, desiredOrder)) {") ||
-		!strings.Contains(markup, "state.taskOrderPendingSince = nowMs;") {
-		t.Fatalf("expected index html to reset task reorder delay timing whenever the desired order changes")
-	}
-	if strings.Contains(markup, "sameTaskOrder([...currentOrder].sort(), [...desiredOrder].sort())") {
-		t.Fatalf("expected same-ID task reorders to stay pending until the delayed sync window instead of freezing current order")
+	if strings.Contains(markup, "TASK_ORDER_TRANSITION_DELAY_MS") ||
+		strings.Contains(markup, "TASK_ORDER_SYNC_INTERVAL_MS") ||
+		strings.Contains(markup, "taskOrderPendingDesired") ||
+		strings.Contains(markup, "applyTaskOrderCadence(") {
+		t.Fatalf("expected index html to avoid status-driven current-task reordering")
 	}
 	if strings.Contains(markup, "TASK_REFLOW_TRANSITION_MS") ||
 		strings.Contains(markup, "TASK_REFLOW_TRANSITION_EASING") {
@@ -1318,9 +1313,6 @@ func TestHandlerIndexServesHTML(t *testing.T) {
 	if !strings.Contains(string(stylesheet), ".task.task-reflow-offset.task-reflow-animate") ||
 		!strings.Contains(string(stylesheet), "transition: translate 560ms cubic-bezier(0.16, 1, 0.3, 1);") {
 		t.Fatalf("expected global stylesheet to animate task reflow with translate-based transitions")
-	}
-	if !strings.Contains(markup, "function applyTaskOrderCadence(tasks)") {
-		t.Fatalf("expected index html to include cadence-based task order stabilization")
 	}
 	if !strings.Contains(markup, "function animateTaskReflow(listNode, previousRects)") {
 		t.Fatalf("expected index html to animate task reflow transitions")

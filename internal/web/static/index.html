@@ -812,8 +812,6 @@
     const QUEUED_STATUS_TIMEOUT_MS = 12_000;
     const LOCAL_PROMPT_STATUS_FADE_MS = 240;
     const STREAM_RENDER_INTERVAL_MS = 500;
-    const TASK_ORDER_TRANSITION_DELAY_MS = 2_000;
-    const TASK_ORDER_SYNC_INTERVAL_MS = 4_000;
     const NEW_HUB_TASK_HIGHLIGHT_MS = 4_000;
     const TASK_TIMING_REFRESH_INTERVAL_MS = 30_000;
     const DASHBOARD_RUNTIME_IDLE_PAUSE_MS = 2 * 60 * 1000;
@@ -1986,10 +1984,6 @@
       sparkleTimers: new Map(),
       newHubTaskHighlightIDs: new Set(),
       newHubTaskHighlightTimers: new Map(),
-      taskDisplayOrder: [],
-      taskOrderPendingSince: 0,
-      taskOrderPendingDesired: [],
-      taskOrderLastSyncBucket: Math.floor(Date.now() / TASK_ORDER_SYNC_INTERVAL_MS),
       taskImageViewer: { requestID: "", index: 0 },
       dashboardLastInteractionAt: Date.now(),
       dashboardNoActiveTasksSince: Date.now(),
@@ -10635,15 +10629,9 @@
       return 5;
     }
 
-    function sortTasksByActivity(tasks) {
+    function sortTasksByStartTime(tasks) {
       const out = Array.isArray(tasks) ? [...tasks] : [];
       out.sort((a, b) => {
-        const rankDiff = taskActivityRank(a) - taskActivityRank(b);
-        if (rankDiff !== 0) return rankDiff;
-
-        const updatedDiff = parseTaskTimestamp(b?.updated_at) - parseTaskTimestamp(a?.updated_at);
-        if (updatedDiff !== 0) return updatedDiff;
-
         const startedDiff = parseTaskTimestamp(b?.started_at) - parseTaskTimestamp(a?.started_at);
         if (startedDiff !== 0) return startedDiff;
 
@@ -10746,144 +10734,6 @@
         const task = tasksByID.get(requestID);
         node.classList.toggle("task-icons-breathe", Boolean(task) && taskIconsShouldBreathe(task));
       }
-    }
-
-    function taskOrderSyncBucket(nowMs) {
-      return Math.floor(nowMs / TASK_ORDER_SYNC_INTERVAL_MS);
-    }
-
-    function sameTaskOrder(left, right) {
-      if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
-        return false;
-      }
-      for (let i = 0; i < left.length; i += 1) {
-        if (left[i] !== right[i]) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    function taskListByOrder(order, tasks) {
-      const byID = new Map();
-      for (const task of tasks || []) {
-        const requestID = taskRequestID(task);
-        if (!requestID || byID.has(requestID)) {
-          continue;
-        }
-        byID.set(requestID, task);
-      }
-
-      const ordered = [];
-      for (const requestID of order || []) {
-        const task = byID.get(requestID);
-        if (!task) {
-          continue;
-        }
-        ordered.push(task);
-        byID.delete(requestID);
-      }
-
-      for (const task of tasks || []) {
-        const requestID = taskRequestID(task);
-        if (!requestID || !byID.has(requestID)) {
-          continue;
-        }
-        ordered.push(task);
-        byID.delete(requestID);
-      }
-
-      return ordered;
-    }
-
-    function mergeTaskOrder(currentOrder, desiredOrder) {
-      const desiredSet = new Set(desiredOrder || []);
-      const merged = [];
-      const mergedSet = new Set();
-      for (const requestID of currentOrder || []) {
-        if (!desiredSet.has(requestID) || mergedSet.has(requestID)) {
-          continue;
-        }
-        merged.push(requestID);
-        mergedSet.add(requestID);
-      }
-
-      for (const requestID of desiredOrder || []) {
-        if (mergedSet.has(requestID)) {
-          continue;
-        }
-        // Keep current task cards visually stable while a synced reorder is pending.
-        // New tasks can appear immediately, but existing cards keep their relative order.
-        merged.push(requestID);
-        mergedSet.add(requestID);
-      }
-
-      return merged;
-    }
-
-    function applyTaskOrderCadence(tasks) {
-      const nowMs = Date.now();
-      const syncBucket = taskOrderSyncBucket(nowMs);
-      if (!tasks.length) {
-        state.taskDisplayOrder = [];
-        state.taskOrderPendingSince = 0;
-        state.taskOrderPendingDesired = [];
-        state.taskOrderLastSyncBucket = syncBucket;
-        return [];
-      }
-
-      const desiredOrder = [];
-      const seen = new Set();
-      for (const task of tasks) {
-        const requestID = taskRequestID(task);
-        if (!requestID || seen.has(requestID)) {
-          continue;
-        }
-        seen.add(requestID);
-        desiredOrder.push(requestID);
-      }
-      if (!desiredOrder.length) {
-        state.taskDisplayOrder = [];
-        state.taskOrderPendingSince = 0;
-        state.taskOrderPendingDesired = [];
-        state.taskOrderLastSyncBucket = syncBucket;
-        return [];
-      }
-
-      if (!Array.isArray(state.taskDisplayOrder) || state.taskDisplayOrder.length === 0) {
-        state.taskDisplayOrder = [...desiredOrder];
-        state.taskOrderPendingSince = 0;
-        state.taskOrderPendingDesired = [];
-        state.taskOrderLastSyncBucket = syncBucket;
-        return taskListByOrder(state.taskDisplayOrder, tasks);
-      }
-
-      const currentOrder = mergeTaskOrder(state.taskDisplayOrder, desiredOrder);
-      if (sameTaskOrder(currentOrder, desiredOrder)) {
-        state.taskDisplayOrder = currentOrder;
-        state.taskOrderPendingSince = 0;
-        state.taskOrderPendingDesired = [];
-        return taskListByOrder(currentOrder, tasks);
-      }
-
-      if (!sameTaskOrder(state.taskOrderPendingDesired, desiredOrder)) {
-        state.taskOrderPendingDesired = [...desiredOrder];
-        state.taskOrderPendingSince = nowMs;
-      }
-
-      const delayElapsed = state.taskOrderPendingSince > 0 &&
-        (nowMs - state.taskOrderPendingSince) >= TASK_ORDER_TRANSITION_DELAY_MS;
-      const syncWindowReady = syncBucket > state.taskOrderLastSyncBucket;
-      if (delayElapsed && syncWindowReady) {
-        state.taskDisplayOrder = [...state.taskOrderPendingDesired];
-        state.taskOrderPendingSince = 0;
-        state.taskOrderPendingDesired = [];
-        state.taskOrderLastSyncBucket = syncBucket;
-        return taskListByOrder(state.taskDisplayOrder, tasks);
-      }
-
-      state.taskDisplayOrder = currentOrder;
-      return taskListByOrder(currentOrder, tasks);
     }
 
     function cloneTaskLogsForHistory(logs) {
@@ -11109,8 +10959,7 @@
         taskItems.push(task);
       }
 
-      const byActivity = sortTasksByActivity(taskItems);
-      return applyTaskOrderCadence(byActivity);
+      return sortTasksByStartTime(taskItems);
     }
 
     function historyTasks(snapshot) {
