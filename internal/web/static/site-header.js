@@ -117,7 +117,7 @@
   function headerTemplate() {
     return `
       <header class="header site-header">
-        <a class="brand-lockup site-header-home" href="/" aria-label="Molten Hub Code home" data-site-header-home>
+        <a class="brand-lockup site-header-home" href="/" aria-label="Agent_00 home" data-site-header-home>
           <span class="brand-logo-group">
             <img
               id="moltenhub-logo"
@@ -131,7 +131,7 @@
               alt="Codex logo">
           </span>
           <span class="site-header-copy">
-            <span class="title site-header-title">Molten Hub Code</span>
+            <span class="title site-header-title">Agent_00</span>
             <span id="configured-agent-gorilla-subtitle" class="site-header-subtitle">Codex is now a 600LB Gorilla!</span>
           </span>
         </a>
