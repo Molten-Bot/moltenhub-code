@@ -16,12 +16,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
-	"github.com/Molten-Bot/moltenhub-code/internal/app"
-	"github.com/Molten-Bot/moltenhub-code/internal/config"
-	"github.com/Molten-Bot/moltenhub-code/internal/execx"
-	"github.com/Molten-Bot/moltenhub-code/internal/hub"
-	"github.com/Molten-Bot/moltenhub-code/internal/web"
+	"github.com/Molten-Bot/agent_00/internal/agentruntime"
+	"github.com/Molten-Bot/agent_00/internal/app"
+	"github.com/Molten-Bot/agent_00/internal/config"
+	"github.com/Molten-Bot/agent_00/internal/execx"
+	"github.com/Molten-Bot/agent_00/internal/hub"
+	"github.com/Molten-Bot/agent_00/internal/web"
 )
 
 type stubAgentAuthGate struct {
@@ -978,7 +978,7 @@ func TestFailureFollowUpPromptDefaultWhenNoPaths(t *testing.T) {
 	if !strings.Contains(got, "Do not stop work just because you cannot create a pull request or watch remote CI/CD from inside this agent runtime.") {
 		t.Fatalf("prompt missing remote operations handoff: %q", got)
 	}
-	if !strings.Contains(got, `"repos":["git@github.com:Molten-Bot/moltenhub-code.git"],"targetSubdir":".","prompt":"`+failureFollowUpRequiredPrompt+`"`) {
+	if !strings.Contains(got, `"repos":["git@github.com:Molten-Bot/agent_00.git"],"targetSubdir":".","prompt":"`+failureFollowUpRequiredPrompt+`"`) {
 		t.Fatalf("prompt missing follow-up payload shape: %q", got)
 	}
 	if !strings.Contains(got, "Treat the original task prompt as failure context only; do not implement that requested product change here unless it is required to fix MoltenHub Code failure handling.") {

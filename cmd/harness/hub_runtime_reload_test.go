@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/hub"
+	"github.com/Molten-Bot/agent_00/internal/hub"
 )
 
 func TestHubRuntimeConfigReloaderConnectsOnConfigChange(t *testing.T) {

@@ -18,14 +18,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
-	"github.com/Molten-Bot/moltenhub-code/internal/config"
-	"github.com/Molten-Bot/moltenhub-code/internal/execx"
-	"github.com/Molten-Bot/moltenhub-code/internal/failurefollowup"
-	"github.com/Molten-Bot/moltenhub-code/internal/githubutil"
-	"github.com/Molten-Bot/moltenhub-code/internal/library"
-	"github.com/Molten-Bot/moltenhub-code/internal/slug"
-	"github.com/Molten-Bot/moltenhub-code/internal/workspace"
+	"github.com/Molten-Bot/agent_00/internal/agentruntime"
+	"github.com/Molten-Bot/agent_00/internal/config"
+	"github.com/Molten-Bot/agent_00/internal/execx"
+	"github.com/Molten-Bot/agent_00/internal/failurefollowup"
+	"github.com/Molten-Bot/agent_00/internal/githubutil"
+	"github.com/Molten-Bot/agent_00/internal/library"
+	"github.com/Molten-Bot/agent_00/internal/slug"
+	"github.com/Molten-Bot/agent_00/internal/workspace"
 )
 
 const (
@@ -4905,7 +4905,12 @@ func isMoltenHubCodeRepository(repoURL string) bool {
 	if !ok {
 		return false
 	}
-	return strings.EqualFold(ref.owner, "Molten-Bot") && strings.EqualFold(ref.name, "moltenhub-code")
+	return strings.EqualFold(ref.owner, config.DefaultRepositoryOwner) && isMoltenHubCodeRepositoryName(ref.name)
+}
+
+func isMoltenHubCodeRepositoryName(name string) bool {
+	return strings.EqualFold(name, config.DefaultRepositoryName) ||
+		strings.EqualFold(name, "moltenhub-code")
 }
 
 func isGitHubSSHRemoteURL(rawURL string) bool {
@@ -4914,15 +4919,22 @@ func isGitHubSSHRemoteURL(rawURL string) bool {
 }
 
 func (r gitHubRepoRef) withOwner(owner string) (string, bool) {
+	return r.withOwnerAndName(owner, r.name)
+}
+
+func (r gitHubRepoRef) withOwnerAndName(owner, name string) (string, bool) {
 	owner = strings.TrimSpace(owner)
-	if owner == "" || strings.EqualFold(owner, r.owner) {
+	name = strings.TrimSpace(name)
+	if owner == "" || name == "" ||
+		(strings.EqualFold(owner, r.owner) && strings.EqualFold(name, r.name)) {
 		return "", false
 	}
-	if strings.ContainsAny(owner, " \t\r\n") || strings.Contains(owner, "/") {
+	if strings.ContainsAny(owner, " \t\r\n") || strings.Contains(owner, "/") ||
+		strings.ContainsAny(name, " \t\r\n") || strings.Contains(name, "/") {
 		return "", false
 	}
 
-	repoName := r.name
+	repoName := name
 	if r.hasGitSuffix {
 		repoName += ".git"
 	}
@@ -4990,31 +5002,41 @@ func repoOwnerFallbackURL(repoURL string, ownerHints []string) (string, bool) {
 		return "", false
 	}
 
-	candidates := make([]string, 0, len(ownerHints)+1)
+	type candidate struct {
+		owner string
+		name  string
+	}
+	candidates := make([]candidate, 0, len(ownerHints)+1)
 	seen := make(map[string]struct{}, len(ownerHints)+2)
-	seen[strings.ToLower(strings.TrimSpace(ref.owner))] = struct{}{}
-	appendCandidate := func(owner string) {
+	seen[strings.ToLower(strings.TrimSpace(ref.owner))+"/"+strings.ToLower(strings.TrimSpace(ref.name))] = struct{}{}
+	appendCandidate := func(owner, name string) {
 		owner = strings.TrimSpace(owner)
-		if owner == "" {
+		name = strings.TrimSpace(name)
+		if owner == "" || name == "" {
 			return
 		}
-		key := strings.ToLower(owner)
+		key := strings.ToLower(owner) + "/" + strings.ToLower(name)
 		if _, exists := seen[key]; exists {
 			return
 		}
 		seen[key] = struct{}{}
-		candidates = append(candidates, owner)
+		candidates = append(candidates, candidate{owner: owner, name: name})
 	}
 
+	defaultRef, hasDefaultRef := parseGitHubRepoRef(config.DefaultRepositoryURL)
 	for _, owner := range ownerHints {
-		appendCandidate(owner)
+		name := ref.name
+		if hasDefaultRef && strings.EqualFold(owner, defaultRef.owner) && isMoltenHubCodeRepositoryName(ref.name) {
+			name = defaultRef.name
+		}
+		appendCandidate(owner, name)
 	}
-	if defaultRef, ok := parseGitHubRepoRef(config.DefaultRepositoryURL); ok && strings.EqualFold(defaultRef.name, ref.name) {
-		appendCandidate(defaultRef.owner)
+	if hasDefaultRef && isMoltenHubCodeRepositoryName(ref.name) {
+		appendCandidate(defaultRef.owner, defaultRef.name)
 	}
 
-	for _, owner := range candidates {
-		candidateURL, ok := ref.withOwner(owner)
+	for _, candidate := range candidates {
+		candidateURL, ok := ref.withOwnerAndName(candidate.owner, candidate.name)
 		if !ok {
 			continue
 		}

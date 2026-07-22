@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/library"
+	"github.com/Molten-Bot/agent_00/internal/library"
 )
 
 func TestCheckedInSkillCatalogMatchesRuntimeCatalog(t *testing.T) {

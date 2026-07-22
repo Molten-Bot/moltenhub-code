@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/execx"
-	"github.com/Molten-Bot/moltenhub-code/internal/hub"
-	"github.com/Molten-Bot/moltenhub-code/internal/web"
+	"github.com/Molten-Bot/agent_00/internal/execx"
+	"github.com/Molten-Bot/agent_00/internal/hub"
+	"github.com/Molten-Bot/agent_00/internal/web"
 )
 
 type sharedAuthGateRunnerStub struct {
@@ -68,6 +68,14 @@ func useSuccessfulGitHubStarTestServer(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
+}
+
+func TestMoltenHubCodeStarPathUsesRenamedRepository(t *testing.T) {
+	t.Parallel()
+
+	if got, want := moltenHubCodeStarPath, "/user/starred/Molten-Bot/agent_00"; got != want {
+		t.Fatalf("moltenHubCodeStarPath = %q, want %q", got, want)
+	}
 }
 
 func TestFirstConfiguredGitHubTokenPrefersEnvironmentOverRuntimeConfig(t *testing.T) {

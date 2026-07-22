@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/config"
+	"github.com/Molten-Bot/agent_00/internal/config"
 )
 
 const RequiredPrompt = "Review the failing log paths first, identify every root cause behind the failed task, fix the underlying MoltenHub Code application issues in this repository, validate locally where possible, and summarize the verified results. Treat the original task prompt as failure context only; do not implement that requested product change here unless it is required to fix MoltenHub Code failure handling."

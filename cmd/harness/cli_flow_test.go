@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/app"
+	"github.com/Molten-Bot/agent_00/internal/app"
 )
 
 func TestRunSingleReturnsPreflightWhenToolingUnavailable(t *testing.T) {

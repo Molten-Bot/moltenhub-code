@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/failurefollowup"
-	"github.com/Molten-Bot/moltenhub-code/internal/workspace"
+	"github.com/Molten-Bot/agent_00/internal/failurefollowup"
+	"github.com/Molten-Bot/agent_00/internal/workspace"
 )
 
 const (

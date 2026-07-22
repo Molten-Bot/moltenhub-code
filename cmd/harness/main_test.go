@@ -15,12 +15,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
-	"github.com/Molten-Bot/moltenhub-code/internal/app"
-	"github.com/Molten-Bot/moltenhub-code/internal/config"
-	"github.com/Molten-Bot/moltenhub-code/internal/execx"
-	"github.com/Molten-Bot/moltenhub-code/internal/hub"
-	"github.com/Molten-Bot/moltenhub-code/internal/web"
+	"github.com/Molten-Bot/agent_00/internal/agentruntime"
+	"github.com/Molten-Bot/agent_00/internal/app"
+	"github.com/Molten-Bot/agent_00/internal/config"
+	"github.com/Molten-Bot/agent_00/internal/execx"
+	"github.com/Molten-Bot/agent_00/internal/hub"
+	"github.com/Molten-Bot/agent_00/internal/web"
 )
 
 func useHubSetupLocationsLoaderForTest(t *testing.T, loader func(context.Context) ([]hubSetupLocation, error)) {

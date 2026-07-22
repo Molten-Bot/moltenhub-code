@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/failurefollowup"
+	"github.com/Molten-Bot/agent_00/internal/failurefollowup"
 )
 
 func TestResetLogRootRejectsUnsafeDirectories(t *testing.T) {

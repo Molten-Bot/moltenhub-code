@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/config"
-	"github.com/Molten-Bot/moltenhub-code/internal/library"
-	"github.com/Molten-Bot/moltenhub-code/internal/web"
+	"github.com/Molten-Bot/agent_00/internal/config"
+	"github.com/Molten-Bot/agent_00/internal/library"
+	"github.com/Molten-Bot/agent_00/internal/web"
 )
 
 const prReviewFeedbackCommitMessage = "fix: address pull request review feedback"

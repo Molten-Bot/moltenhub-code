@@ -5,7 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/execx"
+	"github.com/Molten-Bot/agent_00/internal/config"
+	"github.com/Molten-Bot/agent_00/internal/execx"
 )
 
 func TestCloneErrorWithDetails(t *testing.T) {
@@ -153,8 +154,32 @@ func TestRepoOwnerFallbackURL(t *testing.T) {
 	if !ok {
 		t.Fatal("repoOwnerFallbackURL() ok = false, want true")
 	}
-	if got != "git@github.com:Molten-Bot/moltenhub-code.git" {
-		t.Fatalf("repoOwnerFallbackURL() = %q, want %q", got, "git@github.com:Molten-Bot/moltenhub-code.git")
+	if got != "git@github.com:Molten-Bot/agent_00.git" {
+		t.Fatalf("repoOwnerFallbackURL() = %q, want %q", got, "git@github.com:Molten-Bot/agent_00.git")
+	}
+}
+
+func TestRepoOwnerFallbackURLMigratesLegacyCanonicalURL(t *testing.T) {
+	t.Parallel()
+
+	got, ok := repoOwnerFallbackURL("git@github.com:Molten-Bot/moltenhub-code.git", nil)
+	if !ok {
+		t.Fatal("repoOwnerFallbackURL() ok = false, want true")
+	}
+	if got != config.DefaultRepositoryURL {
+		t.Fatalf("repoOwnerFallbackURL() = %q, want %q", got, config.DefaultRepositoryURL)
+	}
+}
+
+func TestRepoOwnerFallbackURLFindsRenamedCanonicalOwner(t *testing.T) {
+	t.Parallel()
+
+	got, ok := repoOwnerFallbackURL("git@github.com:moltenbot000/agent_00.git", nil)
+	if !ok {
+		t.Fatal("repoOwnerFallbackURL() ok = false, want true")
+	}
+	if got != config.DefaultRepositoryURL {
+		t.Fatalf("repoOwnerFallbackURL() = %q, want %q", got, config.DefaultRepositoryURL)
 	}
 }
 
@@ -170,13 +195,13 @@ func TestRepoOwnerFallbackURLNoCandidate(t *testing.T) {
 func TestParseGitHubRepoRefSupportsSSHAndHTTPS(t *testing.T) {
 	t.Parallel()
 
-	if ref, ok := parseGitHubRepoRef("git@github.com:Molten-Bot/moltenhub-code.git"); !ok || ref.owner != "Molten-Bot" || ref.name != "moltenhub-code" {
+	if ref, ok := parseGitHubRepoRef("git@github.com:Molten-Bot/agent_00.git"); !ok || ref.owner != "Molten-Bot" || ref.name != "agent_00" {
 		t.Fatalf("parseGitHubRepoRef(scp) = (%+v, %v), want owner/name parsed", ref, ok)
 	}
-	if ref, ok := parseGitHubRepoRef("ssh://git@github.com/Molten-Bot/moltenhub-code.git"); !ok || ref.owner != "Molten-Bot" || ref.name != "moltenhub-code" {
+	if ref, ok := parseGitHubRepoRef("ssh://git@github.com/Molten-Bot/agent_00.git"); !ok || ref.owner != "Molten-Bot" || ref.name != "agent_00" {
 		t.Fatalf("parseGitHubRepoRef(ssh URL) = (%+v, %v), want owner/name parsed", ref, ok)
 	}
-	if ref, ok := parseGitHubRepoRef("https://github.com/Molten-Bot/moltenhub-code.git"); !ok || ref.owner != "Molten-Bot" || ref.name != "moltenhub-code" {
+	if ref, ok := parseGitHubRepoRef("https://github.com/Molten-Bot/agent_00.git"); !ok || ref.owner != "Molten-Bot" || ref.name != "agent_00" {
 		t.Fatalf("parseGitHubRepoRef(https URL) = (%+v, %v), want owner/name parsed", ref, ok)
 	}
 }
@@ -184,7 +209,7 @@ func TestParseGitHubRepoRefSupportsSSHAndHTTPS(t *testing.T) {
 func TestGitHubRepoRefWithHTTPSOwner(t *testing.T) {
 	t.Parallel()
 
-	ref, ok := parseGitHubRepoRef("git@github.com:Molten-Bot/moltenhub-code.git")
+	ref, ok := parseGitHubRepoRef("git@github.com:Molten-Bot/agent_00.git")
 	if !ok {
 		t.Fatal("parseGitHubRepoRef(scp) = false, want true")
 	}
@@ -192,8 +217,35 @@ func TestGitHubRepoRefWithHTTPSOwner(t *testing.T) {
 	if !ok {
 		t.Fatal("withHTTPSOwner() ok = false, want true")
 	}
-	if got != "https://github.com/octocat/moltenhub-code.git" {
-		t.Fatalf("withHTTPSOwner() = %q, want %q", got, "https://github.com/octocat/moltenhub-code.git")
+	if got != "https://github.com/octocat/agent_00.git" {
+		t.Fatalf("withHTTPSOwner() = %q, want %q", got, "https://github.com/octocat/agent_00.git")
+	}
+}
+
+func TestIsMoltenHubCodeRepositorySupportsRenamedAndLegacyURLs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		repoURL string
+		want    bool
+	}{
+		{name: "renamed SSH", repoURL: config.DefaultRepositoryURL, want: true},
+		{name: "renamed HTTPS", repoURL: "https://github.com/Molten-Bot/agent_00.git", want: true},
+		{name: "legacy redirect", repoURL: "git@github.com:Molten-Bot/moltenhub-code.git", want: true},
+		{name: "wrong owner", repoURL: "git@github.com:octocat/agent_00.git", want: false},
+		{name: "other repository", repoURL: "git@github.com:Molten-Bot/moltenhub.git", want: false},
+		{name: "invalid", repoURL: "not-a-repository", want: false},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := isMoltenHubCodeRepository(tt.repoURL); got != tt.want {
+				t.Fatalf("isMoltenHubCodeRepository(%q) = %v, want %v", tt.repoURL, got, tt.want)
+			}
+		})
 	}
 }
 

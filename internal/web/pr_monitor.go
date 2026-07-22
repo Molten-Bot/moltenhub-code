@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/execx"
-	"github.com/Molten-Bot/moltenhub-code/internal/githubutil"
+	"github.com/Molten-Bot/agent_00/internal/execx"
+	"github.com/Molten-Bot/agent_00/internal/githubutil"
 )
 
 const defaultPRMergePollInterval = 10 * time.Second

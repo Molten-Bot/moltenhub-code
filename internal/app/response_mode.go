@@ -7,7 +7,7 @@ import (
 	goruntime "runtime"
 	"strings"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/config"
+	"github.com/Molten-Bot/agent_00/internal/config"
 )
 
 const (

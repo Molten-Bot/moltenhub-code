@@ -12,15 +12,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/execx"
-	"github.com/Molten-Bot/moltenhub-code/internal/hub"
-	"github.com/Molten-Bot/moltenhub-code/internal/web"
+	"github.com/Molten-Bot/agent_00/internal/config"
+	"github.com/Molten-Bot/agent_00/internal/execx"
+	"github.com/Molten-Bot/agent_00/internal/hub"
+	"github.com/Molten-Bot/agent_00/internal/web"
 )
 
 const githubTokenPasteConfigureMessage = "GitHub token is required."
 const githubTokenValidationTimeout = 12 * time.Second
 const githubStarTimeout = 12 * time.Second
-const moltenHubCodeStarPath = "/user/starred/Molten-Bot/moltenhub-code"
+const moltenHubCodeRepository = config.DefaultRepositoryOwner + "/" + config.DefaultRepositoryName
+const moltenHubCodeStarPath = "/user/starred/" + moltenHubCodeRepository
 
 var githubTokenValidationMu sync.Mutex
 var githubStarAPIBaseURL = "https://api.github.com"
@@ -351,7 +353,7 @@ func starMoltenHubCodeRepository(ctx context.Context, token string) error {
 
 	req, err := http.NewRequestWithContext(starCtx, http.MethodPut, baseURL+moltenHubCodeStarPath, nil)
 	if err != nil {
-		return fmt.Errorf("star Molten-Bot/moltenhub-code: %w", err)
+		return fmt.Errorf("star %s: %w", moltenHubCodeRepository, err)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -363,7 +365,7 @@ func starMoltenHubCodeRepository(ctx context.Context, token string) error {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("star Molten-Bot/moltenhub-code: %w", err)
+		return fmt.Errorf("star %s: %w", moltenHubCodeRepository, err)
 	}
 	defer resp.Body.Close()
 
@@ -377,7 +379,7 @@ func starMoltenHubCodeRepository(ctx context.Context, token string) error {
 	if detail == "" {
 		detail = http.StatusText(resp.StatusCode)
 	}
-	return fmt.Errorf("star Molten-Bot/moltenhub-code: github API returned %s: %s", resp.Status, detail)
+	return fmt.Errorf("star %s: github API returned %s: %s", moltenHubCodeRepository, resp.Status, detail)
 }
 
 func configureGitHubTokenAndApply(

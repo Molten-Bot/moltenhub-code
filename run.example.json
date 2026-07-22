@@ -1,5 +1,5 @@
 {
-  "repo": "git@github.com:Molten-Bot/moltenhub-code.git",
+  "repo": "git@github.com:Molten-Bot/agent_00.git",
   "agentHarness": "codex",
   // optional override when executable name differs from harness default
   // "agentCommand": "codex",
@@ -10,7 +10,7 @@
   // library task example:
   // "repos": [
   //   "git@github.com:Molten-Bot/moltenhub.git",
-  //   "git@github.com:Molten-Bot/moltenhub-code.git"
+  //   "git@github.com:Molten-Bot/agent_00.git"
   // ],
   // "libraryTaskName": "unit-test-coverage",
   // optional for subdirectory-scoped runs:

@@ -13,9 +13,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
-	"github.com/Molten-Bot/moltenhub-code/internal/config"
-	"github.com/Molten-Bot/moltenhub-code/internal/library"
+	"github.com/Molten-Bot/agent_00/internal/agentruntime"
+	"github.com/Molten-Bot/agent_00/internal/config"
+	"github.com/Molten-Bot/agent_00/internal/library"
 )
 
 type apiAttempt struct {
