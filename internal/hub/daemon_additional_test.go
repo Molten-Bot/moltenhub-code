@@ -3,14 +3,12 @@ package hub
 import (
 	"bufio"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -20,7 +18,6 @@ import (
 	"github.com/Molten-Bot/moltenhub-code/internal/app"
 	"github.com/Molten-Bot/moltenhub-code/internal/config"
 	"github.com/Molten-Bot/moltenhub-code/internal/execx"
-	"github.com/Molten-Bot/moltenhub-code/internal/failurefollowup"
 	"github.com/Molten-Bot/moltenhub-code/internal/library"
 	"github.com/a2aproject/a2a-go/v2/a2a"
 )
@@ -1913,48 +1910,6 @@ func TestFailureFollowUpPromptIncludesWorkspaceAndTargetPath(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "If a repository is not initialized after clone, use only gh CLI/git tools to create and push a main branch, then continue once git state is ready for work.") {
 		t.Fatalf("prompt missing uninitialized-repo instruction: %q", prompt)
-	}
-}
-
-func TestFailureFollowUpPromptCarriesTaskLogEvidenceAcrossHub(t *testing.T) {
-	t.Parallel()
-
-	logRoot := filepath.Join(t.TempDir(), ".log")
-	paths := failurefollowup.TaskLogPaths(logRoot, "req-transport")
-	logDir, ok := failurefollowup.TaskLogDir(logRoot, "req-transport")
-	if !ok {
-		t.Fatal("TaskLogDir() ok = false")
-	}
-	if err := os.MkdirAll(logDir, 0o755); err != nil {
-		t.Fatalf("mkdir log dir: %v", err)
-	}
-	agentOutput := "No tracked diff. Target file was unchanged."
-	line := fmt.Sprintf(
-		"dispatch request_id=req-transport cmd phase=codex name=codex stream=stdout b64=%s\n",
-		base64.StdEncoding.EncodeToString([]byte(agentOutput)),
-	)
-	if err := os.WriteFile(filepath.Join(logDir, failurefollowup.LogFileName), []byte(line), 0o644); err != nil {
-		t.Fatalf("write task log: %v", err)
-	}
-
-	prompt := failureFollowUpPrompt(logRoot, SkillDispatch{
-		RequestID: "req-transport",
-		Config: config.Config{
-			Repo:   "git@github.com:acme/repo.git",
-			Prompt: "fix target file",
-		},
-	}, app.Result{Err: errors.New("no changes")})
-
-	if !strings.Contains(prompt, agentOutput) {
-		t.Fatalf("prompt missing transported log evidence: %q", prompt)
-	}
-	if !strings.Contains(prompt, "Prior task log excerpt") {
-		t.Fatalf("prompt missing log excerpt label: %q", prompt)
-	}
-	for _, path := range paths {
-		if !strings.Contains(prompt, path) {
-			t.Fatalf("prompt missing source log path %q: %q", path, prompt)
-		}
 	}
 }
 

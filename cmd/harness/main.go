@@ -1735,7 +1735,7 @@ func unexpectedNoChangesFollowUpPrompt(logPaths []string, requestID string, resu
 		logPaths,
 		nil,
 		"No local task log path was captured before the task completed without changes. Review the task history and runtime logs first.",
-		failurefollowup.AppendLogExcerpt(contextBlock.String(), logPaths),
+		contextBlock.String(),
 	)
 }
 
@@ -1798,7 +1798,7 @@ func escalatedNoChangesFollowUpPrompt(logPaths []string, requestID string, resul
 		logPaths,
 		nil,
 		"No local task log path was captured before repeated no-change completions. Review the task history and runtime logs first.",
-		failurefollowup.AppendLogExcerpt(contextBlock.String(), logPaths),
+		contextBlock.String(),
 	)
 }
 
@@ -1976,10 +1976,6 @@ func containsAny(text string, markers []string) bool {
 }
 
 func failureFollowUpPrompt(logPaths []string, failedResult app.Result, failedRunCfg config.Config) string {
-	contextBlock := failurefollowup.AppendLogExcerpt(
-		failureFollowUpFailureContext(failedResult, failedRunCfg),
-		logPaths,
-	)
 	return failurefollowup.ComposePrompt(
 		failureFollowUpRequiredPrompt,
 		logPaths,
@@ -1989,7 +1985,7 @@ func failureFollowUpPrompt(logPaths []string, failedResult app.Result, failedRun
 			".log/local/<request timestamp>/<request sequence>/terminal.log",
 		},
 		"",
-		contextBlock,
+		failureFollowUpFailureContext(failedResult, failedRunCfg),
 	)
 }
 

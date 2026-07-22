@@ -1671,8 +1671,6 @@ func TestUnexpectedNoChangesFollowUpRunConfigTargetsMoltenHubAndAddsContext(t *t
 		"- target_subdir=cmd/harness",
 		"Original task prompt:",
 		"fix the broken local no changes task handling",
-		"Prior task log excerpt",
-		"dispatch status=no_changes",
 		"Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
 	} {
 		if !strings.Contains(cfg.Prompt, want) {

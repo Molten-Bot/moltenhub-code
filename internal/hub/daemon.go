@@ -2689,7 +2689,7 @@ func failureFollowUpPrompt(logRoot string, dispatch SkillDispatch, res app.Resul
 		paths,
 		nil,
 		failureFollowUpNoPathGuidance,
-		failurefollowup.AppendLogExcerpt(failureFollowUpContext(dispatch, res), paths),
+		failureFollowUpContext(dispatch, res),
 	)
 }
 

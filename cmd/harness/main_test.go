@@ -738,9 +738,6 @@ func TestFailureFollowUpRunConfigUsesRequiredPayloadShapeAndLogContext(t *testin
 	if !strings.Contains(cfg.Prompt, filepath.Join(expectedLogDir, logFileName)) {
 		t.Fatalf("Prompt missing log file path: %q", cfg.Prompt)
 	}
-	if !strings.Contains(cfg.Prompt, "Prior task log excerpt") || !strings.Contains(cfg.Prompt, "stage=checks status=failed") {
-		t.Fatalf("Prompt missing transported task log evidence: %q", cfg.Prompt)
-	}
 	if !strings.Contains(cfg.Prompt, failureFollowUpRequiredPrompt) {
 		t.Fatalf("Prompt missing required instruction: %q", cfg.Prompt)
 	}
