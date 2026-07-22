@@ -3835,7 +3835,7 @@ func TestHandlerServesStaticSiteHeaderComponent(t *testing.T) {
 		`const LOGO_ROTATION_INTERVAL_MS = 8_000;`,
 		`localStorage.getItem(THEME_KEY)`,
 		`<header class="header site-header">`,
-		`<a class="brand-lockup site-header-home" href="/" aria-label="Molten Hub Code home" data-site-header-home>`,
+		`<a class="brand-lockup site-header-home" href="/" aria-label="Agent_00 home" data-site-header-home>`,
 		`id="moltenhub-logo"`,
 		`id="configured-agent-logo"`,
 		`<span class="title site-header-title">Agent_00</span>`,

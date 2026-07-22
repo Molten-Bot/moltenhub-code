@@ -117,7 +117,7 @@
   function headerTemplate() {
     return `
       <header class="header site-header">
-        <a class="brand-lockup site-header-home" href="/" aria-label="Molten Hub Code home" data-site-header-home>
+        <a class="brand-lockup site-header-home" href="/" aria-label="Agent_00 home" data-site-header-home>
           <span class="brand-logo-group">
             <img
               id="moltenhub-logo"
