@@ -1,6 +1,6 @@
 package hub
 
-import "github.com/Molten-Bot/moltenhub-code/internal/config"
+import "github.com/Molten-Bot/agent_00/internal/config"
 
 const (
 	libraryTaskActivityStartPrefix    = "working on library task: "

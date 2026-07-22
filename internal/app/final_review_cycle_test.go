@@ -9,9 +9,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
-	"github.com/Molten-Bot/moltenhub-code/internal/config"
-	"github.com/Molten-Bot/moltenhub-code/internal/execx"
+	"github.com/Molten-Bot/agent_00/internal/agentruntime"
+	"github.com/Molten-Bot/agent_00/internal/config"
+	"github.com/Molten-Bot/agent_00/internal/execx"
 )
 
 type cleanReviewCycleRunner struct {

@@ -14,12 +14,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/agentruntime"
-	"github.com/Molten-Bot/moltenhub-code/internal/config"
-	"github.com/Molten-Bot/moltenhub-code/internal/execx"
-	"github.com/Molten-Bot/moltenhub-code/internal/failurefollowup"
-	"github.com/Molten-Bot/moltenhub-code/internal/slug"
-	"github.com/Molten-Bot/moltenhub-code/internal/workspace"
+	"github.com/Molten-Bot/agent_00/internal/agentruntime"
+	"github.com/Molten-Bot/agent_00/internal/config"
+	"github.com/Molten-Bot/agent_00/internal/execx"
+	"github.com/Molten-Bot/agent_00/internal/failurefollowup"
+	"github.com/Molten-Bot/agent_00/internal/slug"
+	"github.com/Molten-Bot/agent_00/internal/workspace"
 )
 
 type expectedRun struct {
@@ -5031,7 +5031,7 @@ func TestRunFailureFollowUpIgnoresStaleBranchAndTargetsDefaultRoot(t *testing.T)
 	t.Parallel()
 
 	cfg := sampleConfig()
-	cfg.RepoURL = "https://github.com/Molten-Bot/moltenhub-code.git"
+	cfg.RepoURL = "https://github.com/Molten-Bot/agent_00.git"
 	cfg.BaseBranch = "client-logo-theme"
 	cfg.TargetSubdir = "internal/web"
 	cfg.Prompt = failurefollowup.RequiredPrompt
@@ -5043,7 +5043,7 @@ func TestRunFailureFollowUpIgnoresStaleBranchAndTargetsDefaultRoot(t *testing.T)
 	repoDir := filepath.Join(runDir, "repo")
 	targetDir := repoDir
 	branch := slug.BranchName(cfg.Prompt, now, guid)
-	prURL := "https://github.com/Molten-Bot/moltenhub-code/pull/116"
+	prURL := "https://github.com/Molten-Bot/agent_00/pull/116"
 	sanitizedCfg := cfg
 	sanitizedCfg.BaseBranch = "main"
 	sanitizedCfg.TargetSubdir = "."
@@ -5399,8 +5399,8 @@ func TestRunRepoNotFoundCloneFallsBackToKnownOwner(t *testing.T) {
 		{cmd: addCommand(repoDirB)},
 		{cmd: commitCommand(repoDirB, cfg.CommitMessage)},
 		{cmd: pushCommand(repoDirB, branch)},
-		{cmd: prCreateCommand(repoDirB, cfg, branch), res: execx.Result{Stdout: "https://github.com/Molten-Bot/moltenhub-code/pull/20\n"}},
-		{cmd: prChecksCommand(repoDirB, "https://github.com/Molten-Bot/moltenhub-code/pull/20")},
+		{cmd: prCreateCommand(repoDirB, cfg, branch), res: execx.Result{Stdout: "https://github.com/Molten-Bot/agent_00/pull/20\n"}},
+		{cmd: prChecksCommand(repoDirB, "https://github.com/Molten-Bot/agent_00/pull/20")},
 	}}
 
 	h := New(fake)
@@ -6010,7 +6010,7 @@ func TestPRCreateCommandsEnforceStandardBodyFormat(t *testing.T) {
 			t.Fatalf("normalized PR body missing %q: %q", item, body)
 		}
 	}
-	if strings.Contains(body, "Standard PR format reference: https://github.com/Molten-Bot/moltenhub-code/pull/580") {
+	if strings.Contains(body, "Standard PR format reference: https://github.com/Molten-Bot/agent_00/pull/580") {
 		t.Fatalf("normalized PR body retained deprecated format reference line: %q", body)
 	}
 	if strings.Contains(body, "Agent summary of issue resolution:") {

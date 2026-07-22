@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/hub"
-	"github.com/Molten-Bot/moltenhub-code/internal/web"
+	"github.com/Molten-Bot/agent_00/internal/hub"
+	"github.com/Molten-Bot/agent_00/internal/web"
 )
 
 func TestClassifyHubLogLine(t *testing.T) {

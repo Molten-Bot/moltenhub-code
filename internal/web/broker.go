@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Molten-Bot/moltenhub-code/internal/failurefollowup"
-	"github.com/Molten-Bot/moltenhub-code/internal/library"
+	"github.com/Molten-Bot/agent_00/internal/failurefollowup"
+	"github.com/Molten-Bot/agent_00/internal/library"
 )
 
 const (
