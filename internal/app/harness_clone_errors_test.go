@@ -153,8 +153,8 @@ func TestRepoOwnerFallbackURL(t *testing.T) {
 	if !ok {
 		t.Fatal("repoOwnerFallbackURL() ok = false, want true")
 	}
-	if got != "git@github.com:Molten-Bot/moltenhub-code.git" {
-		t.Fatalf("repoOwnerFallbackURL() = %q, want %q", got, "git@github.com:Molten-Bot/moltenhub-code.git")
+	if got != "git@github.com:Molten-Bot/agent_00.git" {
+		t.Fatalf("repoOwnerFallbackURL() = %q, want %q", got, "git@github.com:Molten-Bot/agent_00.git")
 	}
 }
 
@@ -170,7 +170,7 @@ func TestRepoOwnerFallbackURLNoCandidate(t *testing.T) {
 func TestParseGitHubRepoRefSupportsSSHAndHTTPS(t *testing.T) {
 	t.Parallel()
 
-	if ref, ok := parseGitHubRepoRef("git@github.com:Molten-Bot/moltenhub-code.git"); !ok || ref.owner != "Molten-Bot" || ref.name != "moltenhub-code" {
+	if ref, ok := parseGitHubRepoRef("git@github.com:Molten-Bot/agent_00.git"); !ok || ref.owner != "Molten-Bot" || ref.name != "moltenhub-code" {
 		t.Fatalf("parseGitHubRepoRef(scp) = (%+v, %v), want owner/name parsed", ref, ok)
 	}
 	if ref, ok := parseGitHubRepoRef("ssh://git@github.com/Molten-Bot/moltenhub-code.git"); !ok || ref.owner != "Molten-Bot" || ref.name != "moltenhub-code" {
@@ -184,7 +184,7 @@ func TestParseGitHubRepoRefSupportsSSHAndHTTPS(t *testing.T) {
 func TestGitHubRepoRefWithHTTPSOwner(t *testing.T) {
 	t.Parallel()
 
-	ref, ok := parseGitHubRepoRef("git@github.com:Molten-Bot/moltenhub-code.git")
+	ref, ok := parseGitHubRepoRef("git@github.com:Molten-Bot/agent_00.git")
 	if !ok {
 		t.Fatal("parseGitHubRepoRef(scp) = false, want true")
 	}

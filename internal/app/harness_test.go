@@ -5364,7 +5364,7 @@ func TestRunRepoNotFoundCloneFallsBackToKnownOwner(t *testing.T) {
 	repoRelB := repoWorkspaceDirName(cfg.Repos[1], 1, len(cfg.Repos))
 	repoDirA := filepath.Join(runDir, repoRelA)
 	repoDirB := filepath.Join(runDir, repoRelB)
-	fallbackRepoB := "git@github.com:Molten-Bot/moltenhub-code.git"
+	fallbackRepoB := "git@github.com:Molten-Bot/agent_00.git"
 
 	codexPrompt := workspaceCodexPrompt(cfg.Prompt, cfg.TargetSubdir, []repoWorkspace{
 		{URL: cfg.Repos[0], RelDir: repoRelA},

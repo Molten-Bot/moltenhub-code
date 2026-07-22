@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	DefaultRepositoryURL = "git@github.com:Molten-Bot/moltenhub-code.git"
+	DefaultRepositoryURL = "git@github.com:Molten-Bot/agent_00.git"
 	DefaultResponseMode  = "caveman-full"
 	DisabledResponseMode = "off"
 )

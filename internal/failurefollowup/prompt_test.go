@@ -144,7 +144,7 @@ func TestComposePromptUsesFallbackPathsAndContract(t *testing.T) {
 		RemoteOperationsInstruction,
 		ActionableChangeInstruction,
 		NoOpInstruction,
-		fmt.Sprintf(`{"repos":["git@github.com:Molten-Bot/moltenhub-code.git"],"targetSubdir":".","prompt":"%s"}`, RequiredPrompt),
+		fmt.Sprintf(`{"repos":["git@github.com:Molten-Bot/agent_00.git"],"targetSubdir":".","prompt":"%s"}`, RequiredPrompt),
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("ComposePrompt() missing %q: %q", want, got)
