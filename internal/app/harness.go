@@ -5851,7 +5851,6 @@ func isNonFatalValidationToolingFailure(detail string, res execx.Result) bool {
 	}
 
 	validationUnavailableMarkers := []string{
-		"smoke command unavailable",
 		"could not run automated test suite",
 		"could not run automated tests",
 		"could not run local automated tests",
@@ -5913,6 +5912,14 @@ func isNonFatalValidationToolingFailure(detail string, res execx.Result) bool {
 		strings.Contains(text, "node_modules missing")
 	if !missingTooling {
 		return false
+	}
+	if strings.Contains(text, "smoke command") {
+		return containsAny(text, []string{
+			"fallback succeeded",
+			"fallback passed",
+			"fallback smoke check succeeded",
+			"fallback smoke check passed",
+		})
 	}
 	if validationUnavailable {
 		return true

@@ -6938,6 +6938,38 @@ func TestRunCodexAllowsMissingCurlWhenSmokeFallbackSucceeded(t *testing.T) {
 	}
 }
 
+func TestRunCodexRejectsMissingCurlWithoutSuccessfulSmokeFallback(t *testing.T) {
+	t.Parallel()
+
+	for _, detail := range []string{
+		"Failure: Initial `curl` smoke command unavailable.\nError details: `/bin/bash: curl: command not found`",
+		"Failure: Initial `curl` smoke command unavailable; fallback failed.\nError details: `/bin/bash: curl: command not found`",
+	} {
+		detail := detail
+		t.Run(detail, func(t *testing.T) {
+			t.Parallel()
+
+			targetDir := t.TempDir()
+			prompt := "rename application title"
+			fake := &fakeRunner{t: t, exps: []expectedRun{
+				{
+					cmd: codexCommand(targetDir, prompt),
+					res: execx.Result{Stdout: detail},
+				},
+			}}
+
+			h := New(fake)
+			err := h.runCodex(context.Background(), agentruntime.Default(), targetDir, prompt, codexRunOptions{}, "", "")
+			if err == nil {
+				t.Fatal("runCodex() error = nil, want unconfirmed smoke fallback failure")
+			}
+			if !strings.Contains(err.Error(), "codex reported failure") {
+				t.Fatalf("runCodex() error = %v, want codex reported failure marker", err)
+			}
+		})
+	}
+}
+
 func TestRunCodexAllowsLocalAutomatedTestsValidationGap(t *testing.T) {
 	t.Parallel()
 
